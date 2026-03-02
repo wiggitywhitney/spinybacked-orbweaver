@@ -4,3 +4,4 @@ journal/
 *.local
 .commit-story/
 .vals.yaml
+.claude/CLAUDE.md
