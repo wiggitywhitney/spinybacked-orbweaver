@@ -12,7 +12,7 @@ Create implementation phase PRDs for the telemetry agent by assembling content f
 ## Critical Principles
 
 1. **Bounded context**: Read ONLY what this phase needs. Do not read the full spec or full tech stack document. Read the specific sections listed in the routing tables below.
-2. **No detail loss**: Version numbers, API patterns, config field names, and code snippets must be copied verbatim from source documents into the PRD. Do not summarize technical details.
+2. **No detail loss**: Version numbers, API patterns, config field names, and code snippets must be copied verbatim from source documents into the PRD. Do not summarize technical details. Inline comments on type definitions (example values, explanatory phrases) are part of the verbatim contract — preserve them exactly as they appear in the source document.
 3. **Excerpt, don't just reference**: Critical details (acceptance gates, API patterns, rubric rules) must be IN the PRD, not just referenced by section name.
 4. **One phase at a time**: Never create multiple phase PRDs in one session. Each phase gets a fresh context.
 5. **TypeScript and ESM**: The agent is TypeScript (`"type": "module"` in package.json, native Node.js type stripping via `erasableSyntaxOnly`). All code samples use ESM `import` syntax and TypeScript interface notation. ts-morph is used for AST analysis (it handles JavaScript target files via `allowJs: true`).
@@ -25,12 +25,14 @@ Parse the phase number (1-7) from the user's command.
 
 ### Step 2: Read the Phase Definition
 
-Read the specific phase section from `docs/specs/research/implementation-phasing.md`. Each phase contains:
-- What Gets Built
-- Acceptance Gate
-- Rubric Rules That Apply
-- Why This Boundary
+Read the specific phase section from `docs/specs/research/implementation-phasing.md`. Phases typically contain these subsections, though structure varies by phase:
+- What Gets Built (always present)
+- Acceptance Gate (always present)
+- Rubric Rules That Apply (sometimes a separate subsection; sometimes embedded in "What Gets Built" prose — extract the rule IDs regardless of where they appear)
+- Why This Boundary (sometimes has phase-specific variants, e.g., "Why Basic Weaver Validation Is Included Here")
 - Spec Sections (table mapping to spec sections and subsections)
+
+When an expected subsection is missing, look for the equivalent content in surrounding prose or phase-specific subsections. Extract the information regardless of structural placement.
 
 **Also read these cross-cutting sections** (they apply to every phase):
 - "Two-Tier Validation Architecture" section
@@ -183,6 +185,7 @@ Fill in each section using content gathered in Steps 2-3. Key rules:
 **Spec Reference section:**
 - Reproduce the spec section map table from the phasing document
 - Add line number ranges from the landmarks table above
+- Add rows for cross-cutting sections read in Step 2 (e.g., "Two-Tier Validation Architecture", "Validation Chain Types") when they contain type definitions or architecture directly needed for implementation and aren't already in the phasing document's table
 
 ### Step 5: Create GitHub Issue and PRD File
 
