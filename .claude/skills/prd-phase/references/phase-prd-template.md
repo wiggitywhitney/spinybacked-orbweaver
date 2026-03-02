@@ -60,7 +60,7 @@ For each relevant technology, include:
 ### [Technology Name]
 - **Version**: [exact version, e.g., "@anthropic-ai/sdk v0.78.0"]
 - **Why**: [1 sentence from recommendation]
-- **API Pattern**: [Include a javascript code block with the snippet copied verbatim from tech-stack-evaluation.md. All samples are JavaScript with ESM imports.]
+- **API Pattern**: [Include a TypeScript code block with the snippet copied verbatim from tech-stack-evaluation.md. All samples are TypeScript with ESM imports.]
 - **Caveats**: [list any limitations that affect THIS phase]
 
 ## Rubric Rules
@@ -98,6 +98,25 @@ Reproduce the table and add line number ranges:
 **Spec file**: `docs/specs/telemetry-agent-spec-v3.9.md`
 
 The implementing AI should read each listed section. "Full" means read the entire section. "Subsection only" means read only the named part. "Fields only" means extract just the configuration field definitions.
+
+## Interface Contract
+
+[FROM: design-document.md -> Phase N interface contract section (see Step 3e routing table)]
+
+Include the interface contract this phase exports for the next phase's consumption:
+- TypeScript type definitions (verbatim from design document)
+- Function signatures with parameter documentation
+- Any rationale notes from the design document explaining parameter choices
+
+> **Note**: If the acceptance gate uses shorthand function signatures (e.g., `instrumentFile(filePath, config)`), those are prose descriptions of test scenarios, not literal signatures. The interface contract below defines the actual API.
+
+## Module Organization
+
+[FROM: design-document.md -> Phase-to-Module Mapping table]
+
+List the module directories this phase creates (in a `text` code block showing the directory tree), with a brief description of each module's responsibility. Then list the module dependency rules as bullet points.
+
+Example structure: `src/config/` (Config loading), `src/agent/` (LLM interaction), `src/ast/` (AST helpers). Adapt to the phase's actual modules from the Phase-to-Module Mapping table.
 
 ## Milestones
 

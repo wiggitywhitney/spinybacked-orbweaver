@@ -18,6 +18,8 @@ This is the core AI capability in isolation. If the agent can't produce valid in
 
 Call `instrumentFile(filePath, config)` on a real JavaScript file in a real project. The output parses (`node --check`). No business logic is changed. OTel imports are from `@opentelemetry/api` only. Spans are closed in all paths.
 
+> **Note**: `instrumentFile(filePath, config)` above is prose shorthand from the phasing document describing the test scenario, not a literal function signature. The actual 4-parameter signature is defined in the [Interface Contract](#interface-contract) section below.
+
 | Criterion | Verification | Rubric Rules |
 |-----------|-------------|--------------|
 | Output parses (`node --check` exits 0) | Run `node --check` on the instrumented file; exit code 0 = pass | NDS-001 |
@@ -162,7 +164,7 @@ const response = await client.messages.create({
 | Agent Output Format | Full | 424–436 | Full file replacement rationale, large file handling |
 | System Prompt Structure | Full | 438–466 | Prompt sections, Claude 4.x prompt hygiene, what benefits from reasoning |
 | Known Failure Modes | Full | 468–482 | Table with frequency and mitigations |
-| Elision Detection | Full | 484–491 | Basic elision as output sanity check (Phase 2 formalizes as chain step) |
+| Elision Detection | Full | 484–493 | Basic elision as output sanity check (Phase 2 formalizes as chain step) |
 | What Gets Instrumented | Full | 528–569 | Priority hierarchy, review sensitivity, schema guidance, patterns not covered |
 | What the Agent Actually Does to Code | Full | 573–718 | Path 1 (auto-instrumentation), Path 2 (manual span), decision table |
 | Attribute Priority Chain | Full | 721–742 | Including schema extension guardrails |
@@ -287,9 +289,10 @@ Note: Phase 1 has no predecessor phase. Its dependencies are all external.
 
 ## Decision Log
 
+No implementation decisions yet — this log will be populated during Phase 1 development.
+
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| | | |
 
 ## Open Questions
 
