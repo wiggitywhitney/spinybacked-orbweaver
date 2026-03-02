@@ -194,7 +194,7 @@ F16 (no fix loop), F19 (shadowing feedback the agent could have used to fix its 
 | Validation Chain → maxTokensPerFile derivation | Full | Per-call token estimates, schema size variability, 2× headroom |
 | Configuration → maxFixAttempts, maxTokensPerFile, largeFileThresholdLines | Fields only | |
 | File/Directory Processing → File Revert Protocol | Full | Snapshot before agent, revert on failure |
-| Result Data → validation_attempts, validation_strategy_used, error_progression | Fields only | Fix loop telemetry in FileResult |
+| Result Data → validationAttempts, validationStrategyUsed, errorProgression | Fields only | Fix loop telemetry in FileResult |
 
 ---
 

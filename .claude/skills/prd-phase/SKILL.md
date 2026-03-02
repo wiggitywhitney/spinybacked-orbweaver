@@ -175,7 +175,7 @@ Fill in each section using content gathered in Steps 2-3. Key rules:
 - Map each gate criterion to the rubric rules that verify it
 
 **Milestones:**
-- Define 5-8 milestones that build toward the acceptance gate incrementally
+- Define 5-10 milestones that build toward the acceptance gate incrementally
 - Each milestone should be independently testable
 - Final milestone: "Acceptance gate passes end-to-end"
 - Include a milestone for the DX cross-cutting requirement specific to this phase
@@ -217,7 +217,7 @@ Follow the same workflow as `/prd-create`:
 
 Before presenting the PRD to the user, verify:
 
-- [ ] Every rubric rule ID listed in the phasing document appears with its full definition
+- [ ] Every rubric rule ID that Phase N builds as a validation stage appears with its full definition. Rules that apply as post-hoc evaluation criteria (not built as validation stages) are listed by ID with a note that they are not implemented as validation stages in this phase.
 - [ ] Every spec section from the phase's spec section map is referenced with line numbers
 - [ ] Tech stack version numbers are exact (not "latest" or "current")
 - [ ] API code snippets are present and use TypeScript ESM syntax
@@ -244,7 +244,7 @@ Before presenting the PRD to the user, verify:
 
 - **One phase per session.** Multiple phase PRDs in one context risks detail loss.
 - **The spec is the source of truth.** If the phasing document and spec disagree, the spec wins. Flag the discrepancy for the user.
-- **Don't include evaluation findings.** The implementing AI needs what to build, not why the last attempt failed.
+- **Don't include evaluation findings in technical sections.** The implementing AI needs what to build, not why the last attempt failed. Brief evaluation references in "Why This Phase Exists" are acceptable as motivation for specific requirements (e.g., explaining why the acceptance gate requires callbacks to actually fire). Keep evaluation context out of the tech stack, rubric rules, milestones, and spec reference sections.
 - **Don't include rejected alternatives.** No LangGraph comparisons, no Babel evaluations.
 - **Trust the routing tables.** Don't add "extra context that might be helpful."
 - **TypeScript for agent code, JavaScript for target files.** The agent code is TypeScript with ESM modules (native type stripping, `erasableSyntaxOnly`). ts-morph handles JavaScript target files via `allowJs: true`. Agent code samples use TypeScript; target file examples remain JavaScript.

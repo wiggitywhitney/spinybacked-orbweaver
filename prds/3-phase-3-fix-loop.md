@@ -67,6 +67,40 @@ Attempt 2 (multi-turn fix) appends validation errors to the existing conversatio
 
 Attempt 3 (fresh regeneration) starts a new API call with the same system prompt plus a failure category hint. The broken file is excluded to prevent the agent from patching rather than regenerating.
 
+```typescript
+// Attempt 1: initial generation
+const attempt1 = await client.messages.create({
+  model: "claude-sonnet-4-6",
+  max_tokens: 16000,
+  system: specKnowledgePrompt,    // cached after first file
+  messages: [
+    { role: "user", content: fileContent },
+  ],
+});
+
+// Attempt 2: multi-turn fix — grows the conversation
+const attempt2 = await client.messages.create({
+  model: "claude-sonnet-4-6",
+  max_tokens: 16000,
+  system: specKnowledgePrompt,    // cache hit
+  messages: [
+    { role: "user", content: fileContent },
+    { role: "assistant", content: attempt1Response },
+    { role: "user", content: formatFeedbackForAgent(validationResult) },
+  ],
+});
+
+// Attempt 3: fresh regeneration — new conversation, failure hint
+const attempt3 = await client.messages.create({
+  model: "claude-sonnet-4-6",
+  max_tokens: 16000,
+  system: specKnowledgePrompt,    // cache hit
+  messages: [
+    { role: "user", content: fileContent + failureCategoryHint },
+  ],
+});
+```
+
 **Token budget tracking:**
 
 Every API response includes a `usage` field with `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`. The fix loop sums these across all attempts for a given file and checks against `maxTokensPerFile` (default: 80,000) after each API call.
@@ -89,13 +123,22 @@ Phase 3 does not introduce new rubric rules. It consumes the validation results 
 
 The rubric connection is indirect: COV and RST quality becomes iterative through the fix loop. The agent's first attempt might miss an outbound call or instrument an internal function. Validation feedback from Tier 2 checks (added in Phase 4) gives the agent the information to fix these issues on retry.
 
-**Rules consumed by the fix loop (from Phase 2):**
+**Rubric rules consumed by the fix loop (from Phase 2):**
+
+These rules have full definitions in `research/evaluation-rubric.md` (impact levels, automation classification, failure examples).
 
 | Rule | Name | Tier | Blocking? | Fix Loop Role |
 |------|------|------|-----------|---------------|
 | NDS-001 | Compilation / Syntax Validation Succeeds | Tier 1 | Yes | Tier 1 failure triggers retry; if errors increase, triggers fresh regeneration |
 | NDS-003 | Non-Instrumentation Lines Unchanged | Tier 2 | Yes (blocking) | Tier 2 blocking failure triggers fix attempt; formatted as actionable feedback |
 | CDQ-001 | Spans Closed in All Code Paths | Tier 2 | Yes (Critical) | Tier 2 blocking failure triggers fix attempt; formatted as actionable feedback |
+
+**Validation chain stages consumed by the fix loop (from Phase 2):**
+
+These are `ruleId` values on `CheckResult` (spec line 945) that identify validation chain stages. They are defined by the spec's validation chain architecture, not the evaluation rubric.
+
+| ruleId | Validation Stage | Tier | Blocking? | Fix Loop Role |
+|--------|-----------------|------|-----------|---------------|
 | ELISION | Elision Detection | Tier 1 | Yes | Pre-validation rejection counts as a fix attempt |
 | LINT | Diff-Based Lint Check | Tier 1 | Yes | Tier 1 failure triggers retry |
 | WEAVER | Weaver Registry Check | Tier 1 | Yes | Tier 1 failure triggers retry |
@@ -129,7 +172,7 @@ Phase 2 delivers `ValidationResult` (containing `CheckResult` entries from both 
 interface ValidationResult {
   passed: boolean;                   // All blocking checks passed
   tier1Results: CheckResult[];       // Structural checks (elision, syntax, lint, Weaver static)
-  tier2Results: CheckResult[];       // Semantic checks (CDQ-001, NDS-003)
+  tier2Results: CheckResult[];       // Semantic checks (coverage, restraint, code quality)
   blockingFailures: CheckResult[];   // All failed blocking checks (filtered from both tiers)
   advisoryFindings: CheckResult[];   // All failed advisory checks (filtered from tier2Results)
 }
@@ -140,6 +183,8 @@ interface ValidationResult {
  */
 function formatFeedbackForAgent(result: ValidationResult): string;
 ```
+
+Phase 3 handles CDQ-001 and NDS-003 as the Tier 2 checks available from Phase 2. The `tier2Results` interface is generic — Phase 4 adds COV-002, RST-001, and COV-005 without changing the type.
 
 **Phase 3 input (from Phase 1):**
 
@@ -276,7 +321,7 @@ The module likely needs:
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-03-02 | Failure category hint uses first blocking failure's `ruleId` + first sentence of `message` — no category classification layer | The spec says the hint is intentionally high-level. Rule IDs (SYNTAX, LINT, WEAVER, CDQ-001, NDS-003) already *are* categories. Adding a mapping layer (syntax/import/formatting/semantic) is cosmetic renaming that needs maintenance and testing for marginal benefit. The purpose is to steer the agent away from the same failure mode, not to provide detailed repair instructions (that was attempt 2's job). |
+| 2026-03-02 | Failure category hint uses `blockingFailures[0].ruleId` + first sentence of `blockingFailures[0].message` — no category classification layer | The spec says the hint is intentionally high-level. Rule IDs (SYNTAX, LINT, WEAVER, CDQ-001, NDS-003) already *are* categories. Adding a mapping layer (syntax/import/formatting/semantic) is cosmetic renaming that needs maintenance and testing for marginal benefit. The purpose is to steer the agent away from the same failure mode, not to provide detailed repair instructions (that was attempt 2's job). Array order follows validation chain execution: Tier 1 checks run before Tier 2, so structural failures naturally surface first. |
 | 2026-03-02 | Snapshots use `os.tmpdir()` only — no project-local debug mode option | Project-local `.orb/snapshots/` creates a cleanup problem on process crash (stale snapshots confuse git, linters, next run). `os.tmpdir()` is cleaned by the OS. `FileResult.lastError` provides raw error output for debugging; re-running with verbose logging covers the debug use case. One code path, tested thoroughly — a second path doubles the surface area for snapshot/restore bugs in a module where correctness is critical. |
 
 ## Open Questions

@@ -120,7 +120,7 @@ Example structure: `src/config/` (Config loading), `src/agent/` (LLM interaction
 
 ## Milestones
 
-Define 5-8 milestones that incrementally build toward the acceptance gate. Each milestone must be independently testable.
+Define 5-10 milestones that incrementally build toward the acceptance gate. Each milestone must be independently testable.
 
 - [ ] **Milestone 1: [Name]** — [What to build and how to verify it]
 - [ ] **Milestone 2: [Name]** — [What to build and how to verify it]
