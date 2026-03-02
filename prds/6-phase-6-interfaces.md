@@ -105,8 +105,8 @@ await server.connect(transport);
 
 ### yargs (CLI Parsing)
 
-- **Version**: yargs (latest stable)
-- **Why**: CLI argument parsing for `orb init` and `orb instrument` commands. Already confirmed in spec via first-draft implementation.
+- **Version**: Pin at install time (`npm install yargs` and use whatever stable version resolves)
+- **Why**: CLI argument parsing for `orb init` and `orb instrument` commands. Already confirmed in spec via first-draft implementation. yargs is stable but has had breaking changes between majors (16 → 17 was ESM-breaking) — pin the exact version in `package.json` to avoid resolution conflicts.
 - **API Pattern**:
 
 ```typescript
@@ -230,7 +230,7 @@ src/
   interfaces/
     cli.ts          yargs-based CLI, wired to coordinator
     mcp.ts          MCP SDK server, wired to coordinator
-    action.ts       GitHub Action wrapper
+action.yml            GitHub Action (shell-based, invokes CLI)
 ```
 
 **Module dependency rules:**
@@ -238,7 +238,7 @@ src/
 - `interfaces/` calls `coordinate()` and formats `RunResult`. This is the "thin wrapper" principle from the spec.
 - `cli.ts` imports `config/` for init logic (prerequisite checks, config file creation).
 - `mcp.ts` uses `@modelcontextprotocol/sdk` for the MCP server setup.
-- `action.ts` wraps the CLI — it's a shell script / action.yml, not a separate TypeScript module that imports coordinator directly.
+- `action.yml` is a shell-based GitHub Action that invokes the CLI (`orb instrument --yes --output json`), not a TypeScript module. This guarantees interface equivalence by construction — the Action uses the same code path as a human running the CLI.
 
 ## Milestones
 
@@ -246,7 +246,7 @@ src/
 
 - [ ] **Milestone 2: `orb init` wired to real handlers** — Wire the `init` command to Phase 1's config module: prerequisite verification (package.json, OTel API, Weaver version, port availability, SDK init file), Weaver schema validation, project type detection, config file creation (`orb.yaml`). In non-interactive mode (`--yes`), auto-select dependency strategy from heuristic. In interactive mode, prompt for confirmation. Verify: (a) `orb init` in a valid project creates `orb.yaml` with correct fields, (b) missing prerequisites produce specific, actionable error messages ("package.json not found in /path — run orb init from the project root"), (c) `--yes` skips prompts and auto-detects project type.
 
-- [ ] **Milestone 3: `orb instrument` wired to coordinator** — Wire the `instrument` command to `coordinate()`. Parse path argument and CLI flags into `AgentConfig`. Call `coordinate(projectDir, config, callbacks)`. Map `RunResult` to exit codes: 0 = all success, 1 = partial, 2 = total failure, 3 = user abort. Verify: (a) `orb instrument ./src` invokes coordinator and processes files, (b) exit codes are correct for each scenario, (c) `--output json` dumps `RunResult` as parseable JSON to stdout.
+- [ ] **Milestone 3: `orb instrument` wired to coordinator** — Wire the `instrument` command to `coordinate()`. Parse path argument and CLI flags into `AgentConfig`. Call `coordinate(projectDir, config, callbacks)`. Map `RunResult` to exit codes: 0 = all success, 1 = partial, 2 = total failure, 3 = user abort. Note: `--dry-run` is parsed and passed through to the coordinator config, but the dry run behavior (revert-after-each-file, skip branch/PR) is Phase 7 — the flag is accepted but not yet functional. Verify: (a) `orb instrument ./src` invokes coordinator and processes files, (b) exit codes are correct for each scenario, (c) `--output json` dumps `RunResult` as parseable JSON to stdout.
 
 - [ ] **Milestone 4: CLI progress callbacks and cost ceiling** — Wire `CoordinatorCallbacks` to stderr output: `onFileStart` → "Processing file 3 of 12: src/api-client.ts", `onFileComplete` → status line, `onRunComplete` → summary. Implement cost ceiling confirmation flow: when `confirmEstimate: true` and `--yes` not passed, print ceiling to stderr and prompt "Proceed? [y/N]". On decline, exit 3 with no LLM calls. On `--yes`, skip prompt. Verify: (a) progress lines appear on stderr during a multi-file run, (b) cost ceiling is displayed before processing begins, (c) declining the prompt exits cleanly with code 3, (d) `--yes` suppresses the prompt.
 
@@ -284,13 +284,12 @@ src/
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-03-02 | yargs version: pin at install time, not in PRD | yargs is stable but has had breaking changes between majors (16 → 17 was ESM-breaking). Pin the exact version in `package.json` at `npm install` time. The PRD doesn't need to specify the version — the implementer resolves it. |
+| 2026-03-02 | MCP progress: use `server.sendLoggingMessage()`, not `notifications/progress` | MCP SDK v1.x supports server-initiated notifications via `server.sendLoggingMessage()` (the `notifications/message` method). Send `level: "info"` with JSON data payload containing `{stage, path, index, total}`. The `notifications/progress` method requires a `progressToken` from the client (client opt-in) — don't depend on it. Use logging/message: fire-and-forget, no client cooperation required. Verify `sendLoggingMessage` availability within tool handlers at implementation time. |
+| 2026-03-02 | GitHub Action Weaver: binary download, not `go install` | Use pre-built binaries from Weaver's GitHub releases (`open-telemetry/weaver`). `go install` requires a Go toolchain (~2 min setup), and the version depends on Go module proxy cache. Binary download is deterministic, fast (~5 seconds), and matches `weaverMinVersion` exactly. Verify exact binary name and archive structure from Weaver's releases page at implementation time. |
+| 2026-03-02 | GitHub Action: shell-based `action.yml` invoking CLI, not TypeScript entry point | The Action's job is: install Node, install deps, install Weaver, run `orb instrument --yes --output json <path>`, parse JSON into step outputs. This is ~15 lines of shell. A separate `action.ts` would need its own build step, its own `node_modules` resolution, and would create a fourth interface path diverging from the CLI. The Action uses the CLI to guarantee equivalence by construction. Removed `action.ts` from module organization. |
+| 2026-03-02 | `--dry-run` flag parsed in Phase 6, behavior implemented in Phase 7 | The yargs scaffold defines all flags up front (Milestone 1). `--dry-run` is accepted and passed through to the coordinator config, but the coordinator's revert-after-each-file logic is Phase 7. The flag is accepted but not yet functional in Phase 6. Noted explicitly in Milestone 3. |
 
 ## Open Questions
 
-1. **yargs version pinning**: The tech stack evaluation lists yargs as "latest" without a specific version. Should the PRD pin a specific version, or is `yargs@latest` acceptable given its stability track record?
-
-2. **MCP progress notifications**: The MCP SDK v1.x supports progress notifications via the protocol, but the exact API for sending progress from a tool handler needs verification against the SDK's current API. Confirm whether `server.notification()` or a similar method is available within tool handlers.
-
-3. **GitHub Action Weaver installation**: The spec says "install Weaver CLI" as a setup step in the GitHub Action. The installation method for Weaver CLI in CI (binary download, `go install`, package manager) needs to be determined during implementation. Verify the recommended approach from Weaver's documentation.
-
-4. **`action.yml` implementation approach**: The design document lists `action.ts` as a TypeScript file in `interfaces/`, but the GitHub Action is more naturally a shell-based `action.yml` that invokes the CLI. Determine whether `action.ts` is a thin Node.js entry point for the Action or if the Action directly calls `orb instrument` via shell.
+(None — all initial questions resolved.)

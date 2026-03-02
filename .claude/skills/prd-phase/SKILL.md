@@ -115,6 +115,8 @@ For each rule, extract: Rule ID, name, impact level, evaluation scope, full desc
 
 For Phase 2+, classify rules as Tier 1 (structural/blocking) vs Tier 2 (semantic/blocking or advisory) using the "Two-Tier Validation Architecture" section of implementation-phasing.md.
 
+**Inherited gate checks (Phase 2+):** The rubric defines four gate checks: NDS-001, NDS-002, NDS-003, and API-001. All have Impact: Gate. These apply to every phase regardless of whether Phase N builds them as validation stages. Always include all four in the PRD's Gate Checks table with their full definitions from the rubric. NDS-003 is implemented as a Tier 2 validation stage (Phase 2) but retains Gate impact — list it in Gate Checks, not Dimension Rules.
+
 #### 3d. Architectural Context (if needed)
 
 Read relevant sections of `docs/architecture/recommendations.md`:
@@ -218,6 +220,7 @@ Follow the same workflow as `/prd-create`:
 Before presenting the PRD to the user, verify:
 
 - [ ] Every rubric rule ID that Phase N builds as a validation stage appears with its full definition. Rules that apply as post-hoc evaluation criteria (not built as validation stages) are listed by ID with a note that they are not implemented as validation stages in this phase.
+- [ ] All four gate checks (NDS-001, NDS-002, NDS-003, API-001) appear in the Gate Checks table with full definitions (Phase 2+)
 - [ ] Every spec section from the phase's spec section map is referenced with line numbers
 - [ ] Tech stack version numbers are exact (not "latest" or "current")
 - [ ] API code snippets are present and use TypeScript ESM syntax

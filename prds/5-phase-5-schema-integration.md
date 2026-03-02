@@ -110,6 +110,7 @@ These gate checks were established in earlier phases and continue to apply:
 |------|------|-------|--------|-------------|
 | NDS-001 | Compilation / Syntax Validation Succeeds | Per-run | Gate | Run `node --check` on all instrumented files; exit code 0 = pass. |
 | NDS-002 | All Pre-Existing Tests Pass | Per-run | Gate | Run the existing test suite without modification; all tests pass = pass. |
+| NDS-003 | Non-Instrumentation Lines Unchanged | Per-file | Gate | Diff analysis: filter instrumentation-related additions (import lines, tracer acquisition, `startActiveSpan`/`startSpan` calls, `span.setAttribute`/`recordException`/`setStatus`/`end` calls, try/finally blocks wrapping span lifecycle); remaining diff lines must be empty. |
 | API-001 | Only `@opentelemetry/api` Imports | Per-file | Gate | All `@opentelemetry/*` imports resolve to `@opentelemetry/api` only. |
 
 ### Dimension Rules (Implemented in Phase 5)
