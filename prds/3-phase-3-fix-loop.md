@@ -276,8 +276,9 @@ The module likely needs:
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-03-02 | Failure category hint uses first blocking failure's `ruleId` + first sentence of `message` — no category classification layer | The spec says the hint is intentionally high-level. Rule IDs (SYNTAX, LINT, WEAVER, CDQ-001, NDS-003) already *are* categories. Adding a mapping layer (syntax/import/formatting/semantic) is cosmetic renaming that needs maintenance and testing for marginal benefit. The purpose is to steer the agent away from the same failure mode, not to provide detailed repair instructions (that was attempt 2's job). |
+| 2026-03-02 | Snapshots use `os.tmpdir()` only — no project-local debug mode option | Project-local `.beweave/snapshots/` creates a cleanup problem on process crash (stale snapshots confuse git, linters, next run). `os.tmpdir()` is cleaned by the OS. `FileResult.lastError` provides raw error output for debugging; re-running with verbose logging covers the debug use case. One code path, tested thoroughly — a second path doubles the surface area for snapshot/restore bugs in a module where correctness is critical. |
 
 ## Open Questions
 
-- **Failure category extraction for fresh regeneration hint:** The spec says attempt 3 includes a "failure category hint" (e.g., "syntax error in span creation"). How should the fix loop derive this category from the `ValidationResult`? The simplest approach: use the first blocking failure's `ruleId` + first sentence of `message`. A more sophisticated approach: classify failures into categories (syntax, import, formatting, semantic) and provide category-level guidance. The simpler approach is likely sufficient for PoC — the hint is intentionally high-level per the spec.
-- **Snapshot location:** The spec says "copies the file to a temp location." Should this use `os.tmpdir()` (standard temp directory, auto-cleaned) or a project-local `.beweave/snapshots/` directory (visible, debuggable)? The temp directory is cleaner; the project-local directory helps with debugging during development. Suggest: `os.tmpdir()` with an option to use a project-local directory in debug mode.
+(None — all initial questions resolved.)
