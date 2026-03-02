@@ -126,12 +126,12 @@ No new rubric rules are implemented as validation stages in Phase 7. The deliver
 |---------|-------|-------|-------|
 | Complete Workflow → steps 2, 4e, 5d, 6, 7 | Subsection | 334–397 | Branch creation, per-file commits, SDK/package.json commit, end-of-run validation, PR creation |
 | Result Data → PR Summary | Full | 1241–1260 | All PR description components: per-file status, span categories, schema diff, review sensitivity, agent notes, token usage, agent version |
-| Configuration → Dry Run Mode | Full | 1261–1380 | Revert all files, skip branch/PR, capture diff before revert |
-| Configuration → reviewSensitivity | Field only | 1261–1380 | PR annotation strictness levels: strict (flag tier 3+), moderate (outliers only), off (no warnings) |
+| Configuration → Dry Run Mode | Full | 1332–1340 | Revert all files, skip branch/PR, capture diff before revert |
+| Configuration → reviewSensitivity | Field only | 1292 | PR annotation strictness levels: strict (flag tier 3+), moderate (outliers only), off (no warnings) |
 | What Gets Instrumented → Review Sensitivity | Subsection | 543–553 | Defines what each reviewSensitivity level flags in the PR — needed for PR summary rendering |
 | What Gets Instrumented → Priority Hierarchy | Subsection | 530–541 | Defines the 4 span category tiers used in the per-file breakdown table |
-| Cost Visibility → post-run actuals | Subsection | 1367–1380 | Actual vs ceiling comparison in PR |
-| Agent Self-Instrumentation | Full | 1020–1078 | gen_ai.* attributes for token usage reporting in PR |
+| Cost Visibility → post-run actuals | Subsection | 1367–1379 | Actual vs ceiling comparison in PR |
+| Agent Self-Instrumentation | Full | 1020–1078 | gen_ai.* attributes for token usage reporting in PR. Phase 7 reads `gen_ai.usage.*` from API responses for cost data — does NOT implement the full span hierarchy (see Out of Scope). |
 | File/Directory Processing | "Per-file commits" note | 494–527 | "per-file commits are operational artifacts... PR should be squash-merged" |
 
 **Spec file**: `docs/specs/telemetry-agent-spec-v3.9.md`
@@ -198,11 +198,11 @@ Phase 7 also extends:
 
 - [ ] **Milestone 5: PR summary rendering** — Implement `src/deliverables/` module that renders `RunResult` into the complete PR description. All sections present: per-file status, span category breakdown table, schema changes summary (`weaver registry diff --diff-format markdown`), review sensitivity annotations (respecting `strict`/`moderate`/`off`), agent notes, token usage (ceiling + actuals side by side), agent version. Verify: unit tests render a known `RunResult` and assert all sections are present with correct content.
 
-- [ ] **Milestone 6: Dry-run mode** — Implement the dry-run behavior in the coordinator: run full analysis pipeline, revert every file from snapshot, skip branch/PR/npm install, capture `weaver registry diff` before reverting schema, output summary. Verify: run with `dryRun: true` → no git branch created, no files modified, summary output matches expected format. Note: Phase 6 already parses `--dry-run` flag and passes it to coordinator config.
+- [ ] **Milestone 6: Dry-run mode** — Implement the dry-run behavior in the coordinator: run full analysis pipeline, revert every file from snapshot, skip branch/PR/npm install, capture `weaver registry diff` before reverting schema (Decision: keep diff in dry-run), output summary. Verify: run with `dryRun: true` → no git branch created, no files modified, summary output matches expected format including schema diff. Note: Phase 6 already parses `--dry-run` flag and passes it to coordinator config.
 
-- [ ] **Milestone 7: Early abort on repeated failures** — Detect when consecutive files fail with the same error pattern and abort the run with a clear message (what failed, how many times, what to do). Verify: process 5 files where the first 3 fail identically → run aborts after detecting the pattern, remaining files skipped, partial results preserved.
+- [ ] **Milestone 7: Early abort on repeated failures** — Abort after 3 consecutive files fail with the same `CheckResult.ruleId` (Decision: hardcoded threshold, not configurable). Detect pattern, abort with clear message (what failed, how many times, what to do). Verify: process 5 files where the first 3 fail with the same ruleId → run aborts after file 3, remaining files skipped, partial results preserved.
 
-- [ ] **Milestone 8: End-to-end git workflow** — Full flow: create feature branch → process files with per-file commits → SDK/package.json commit → end-of-run validation → PR creation with rendered summary. Verify: integration test against a real test project produces a complete feature branch and PR description.
+- [ ] **Milestone 8: End-to-end git workflow** — Full flow: create feature branch → process files with per-file commits → SDK/package.json commit → end-of-run validation → PR creation via `gh pr create` (Decision: gh CLI, not GitHub API). Support `--no-pr` flag to skip PR creation when `gh` is unavailable. Verify: integration test against a real test project produces a complete feature branch and PR description.
 
 - [ ] **Milestone 9: DX verification** — Error messages are self-explanatory for AI intermediary consumption. Progress output is semantically meaningful. Cost ceiling displayed in dollars before processing. All failure scenarios produce actionable messages. Verify: trigger each failure mode (no config, invalid path, agent failure, schema checkpoint failure, budget exceeded) and confirm error output includes what failed, why, and what to do.
 
@@ -218,7 +218,7 @@ Phase 7 also extends:
 | **Phase 4** | `coordinator/` module (`coordinate()`, `RunResult`, `FileResult`, `CoordinatorCallbacks`, `CostCeiling`) — primary dependency |
 | **Phase 5** | Schema integration extending `RunResult` with `schemaDiff`, `schemaHashStart`, `schemaHashEnd`, `endOfRunValidation` and `onSchemaCheckpoint` callback wiring |
 | **Phase 6** | `interfaces/` module (CLI, MCP, GitHub Action) — Phase 7 wires deliverables into these interfaces. Phase 6 already parses `--dry-run` flag and passes it to coordinator config (Phase 6 Decision Log). |
-| **External** | Node.js >=24.0.0, simple-git, git binary on PATH, `gh` CLI (for PR creation), Anthropic API key, Weaver CLI >=0.21.2, test JavaScript project with Weaver schema |
+| **External** | Node.js >=24.0.0, simple-git, git binary on PATH, `gh` CLI (for PR creation — detected at init time, `--no-pr` fallback if absent), Anthropic API key, Weaver CLI >=0.21.2, test JavaScript project with Weaver schema |
 
 Phase 6 delivered interfaces as planned in the design document with the following modifications:
 - GitHub Action is shell-based `action.yml` invoking CLI, not a TypeScript entry point (`action.ts` removed from module organization)
@@ -238,11 +238,10 @@ Phase 6 delivered interfaces as planned in the design document with the followin
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-03-02 | **PR creation via `gh` CLI, not GitHub REST API** — Use `gh pr create` for PR creation. Add `--no-pr` fallback flag for environments without `gh`. Detect `gh` availability at init time (same pattern as Weaver check). | `gh` is already a dependency: GitHub Action uses `${{ github.token }}`, project workflow uses `gh` for CodeRabbit/issue management. Adding octokit introduces new dependency, auth management (PAT vs GitHub App vs GITHUB_TOKEN), and API versioning — all solved by `gh`. Implementation is one line: `gh pr create --title "..." --body "$(cat pr-body.md)"`. simple-git handles branch/commits; `gh` handles the PR. Clean separation. |
+| 2026-03-02 | **Early abort: 3 consecutive same-class failures, hardcoded** — Abort after 3 consecutive files fail with the same `CheckResult.ruleId` in their first blocking failure. Not configurable in PoC. | 3 matches `maxFixAttempts` per file. If 3 consecutive files fail identically, the problem is systemic (bad config, wrong model, missing dependency, schema issue), not file-specific. "Same error class" = same `ruleId` in the first blocking failure. SYNTAX+LINT+SYNTAX does not trigger (not consecutive same-class). Hardcoded because adding `maxConsecutiveFailures` config for an untested heuristic is premature — it's one constant to change if real usage proves it wrong. |
+| 2026-03-02 | **Keep Weaver registry diff in dry-run mode** — Do not skip `weaver registry diff` during dry run. The diff is the most valuable dry-run output. | The diff shows what schema changes the agent *would* make — the whole point of dry run. Network call concern (semconv dependency fetch) is manageable: cached locally by Weaver after first fetch, already triggered during normal validation. First dry run on a fresh clone may fetch, but so would the first real run. Air-gapped CI should pre-resolve semconv as a Weaver setup step — not a dry-run concern. |
 
 ## Open Questions
 
-1. **PR creation mechanism**: The spec says "Create PR with summary." Phase 7 needs to decide: use `gh pr create` (requires `gh` CLI installed) or GitHub REST API via `fetch`/`octokit`? The `gh` CLI is simpler and already assumed for the GitHub Action interface. Trade-off: external dependency vs library dependency.
-
-2. **Early abort threshold**: The spec mentions "early abort on repeated failures" but doesn't specify the exact threshold. A reasonable default: abort after N consecutive failures with the same error class (where N could be 3). This should be configurable or at least documented as a heuristic.
-
-3. **Weaver registry diff for PR**: The spec says to use `weaver registry diff --diff-format markdown` for the schema changes summary. Phase 7 needs to handle the case where Weaver diff triggers network calls (fetching semconv dependencies). Should dry-run mode skip the diff to avoid network calls, or is the diff important enough to keep?
+(All resolved — see Decision Log above.)
