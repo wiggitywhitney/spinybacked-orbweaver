@@ -217,12 +217,25 @@ interface ValidationResult {
 **Phase 2 API:**
 
 ```typescript
+/**
+ * Controls which checks run and their blocking/advisory classification.
+ * Phase 2 defines the shape; Phase 4+ extends with additional Tier 2 rules.
+ */
+interface ValidationConfig {
+  enableWeaver: boolean;                         // false when no schema exists
+  tier2Checks: Record<string, {                  // keyed by rule ID (e.g. "CDQ-001", "NDS-003")
+    enabled: boolean;
+    blocking: boolean;                           // true = failure reverts file; false = advisory
+  }>;
+  registryPath?: string;                         // Weaver registry directory (required if enableWeaver: true)
+}
+
 interface ValidateFileInput {
   originalCode: string;        // Original file before instrumentation (for diff-based lint)
   instrumentedCode: string;    // Agent's output
   filePath: string;            // For filesystem-based checks (syntax, lint)
   resolvedSchema: object;      // For Weaver static check
-  config: ValidationConfig;    // Which checks to run, blocking/advisory classification
+  config: ValidationConfig;    // Which checks to enable, blocking/advisory classification per rule
 }
 
 /**
@@ -272,11 +285,11 @@ src/
 
 - [ ] **Milestone 1: Elision detection** — Implement the pre-validation elision check: pattern scan for `// ...`, `// existing code`, `// rest of`, `/* ... */`, `// TODO: original code`; length comparison (output <80% of input lines when spans were added). Returns `CheckResult` with `ruleId: "ELISION"`, `tier: 1`, `blocking: true`. Verified by unit tests with known-elided and valid files.
 
-- [ ] **Milestone 2: Syntax checking on real filesystem** — Run `node --check` via `node:child_process` on the instrumented file written to disk (NOT in-memory). Parse exit code and stderr for line-number diagnostics. Returns `CheckResult` with `ruleId: "SYNTAX"`, `tier: 1`, `blocking: true`. Verified by unit tests AND integration test: Phase 1 instruments a real JS file with `@opentelemetry/api` imports → syntax check passes (this catches the F13 in-memory filesystem bug). → NDS-001
+- [ ] **Milestone 2: Syntax checking on real filesystem** — Run `node --check` via `node:child_process` on the instrumented file written to the original file path on disk (NOT in-memory). The caller (fix loop in Phase 3, coordinator in Phase 4) is responsible for snapshotting and restoring the original file — the syntax checker writes to the real path so `node --check` resolves `node_modules/` imports correctly. Parse exit code and stderr for line-number diagnostics. Returns `CheckResult` with `ruleId: "SYNTAX"`, `tier: 1`, `blocking: true`. Verified by unit tests AND integration test: Phase 1 instruments a real JS file with `@opentelemetry/api` imports → syntax check passes (this catches the F13 in-memory filesystem bug). → NDS-001
 
-- [ ] **Milestone 3: Diff-based lint checking** — Capture Prettier output for original file (pre-instrumentation), capture for instrumented file (post-instrumentation), compare. Only new formatting errors (not present in original) are flagged. Uses `prettier.resolveConfig(filePath)` to respect target project's `.prettierrc`. Returns `CheckResult` with `ruleId: "LINT"`, `tier: 1`, `blocking: true`. Verified by tests with: (a) file that was already non-Prettier-compliant → no new errors flagged, (b) agent-introduced formatting error → flagged with specific location.
+- [ ] **Milestone 3: Diff-based lint checking** — Use `prettier.check()` (boolean) on original and instrumented files. If the original was not Prettier-compliant and the output isn't either, that's not a new error — pass. If the original was compliant and the output isn't, the agent broke formatting — fail. Uses `prettier.resolveConfig(filePath)` to respect target project's `.prettierrc`. Returns `CheckResult` with `ruleId: "LINT"`, `tier: 1`, `blocking: true`. Message says "output doesn't match Prettier config" (LLMs are good at formatting from a boolean signal; line-level diff is a post-PoC refinement if the fix loop can't converge). Verified by tests with: (a) file that was already non-Prettier-compliant → no new errors flagged, (b) agent-introduced formatting error → flagged.
 
-- [ ] **Milestone 4: Weaver registry check** — Run `weaver registry check -r <path>` via `node:child_process`. Parse CLI output for pass/fail and specific rule violations. Gracefully skip if no schema exists (not an error). Returns `CheckResult` with `ruleId: "WEAVER"`, `tier: 1`, `blocking: true`. Verified by tests with valid and invalid schema conformance.
+- [ ] **Milestone 4: Weaver registry check** — Run `weaver registry check -r <path>` via `node:child_process`. Determine pass/fail from exit code. Pass raw CLI output (stdout/stderr) as the `CheckResult.message` — don't parse it. Weaver's output is already developer-readable and LLMs extract structured information from it well; parsing couples to a format that may change between versions (YAGNI until the fix loop proves it can't act on raw output). Gracefully skip if no schema exists (not an error). Returns `CheckResult` with `ruleId: "WEAVER"`, `tier: 1`, `blocking: true`. Verified by tests with valid and invalid schema conformance.
 
 - [ ] **Milestone 5: Tier 1 chain orchestration** — Wire elision → syntax → lint → Weaver into sequential chain (`chain.ts`). Short-circuit on first failure (if syntax fails, skip lint and Weaver). Produce `ValidationResult` with `tier1Results` populated. Tier 2 skipped if any Tier 1 check fails. Verified by tests confirming short-circuit behavior and correct result aggregation.
 
@@ -308,11 +321,12 @@ src/
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-03-02 | Lint checker uses `prettier.check()` (boolean), not `prettier.format()` + diff | Prettier is a binary formatter — code matches the config or it doesn't. The real check is: was the original compliant? Is the output? If the original wasn't and the output isn't, that's not a new error. LLMs are good at formatting from a boolean signal. Line-level diff is a post-PoC refinement if the fix loop can't converge. |
+| 2026-03-02 | Weaver check passes raw CLI output as `CheckResult.message` — no parsing | Weaver's output is already developer-readable. LLMs extract structured info from semi-structured text well. Parsing couples to a format that may change between versions. YAGNI until the fix loop proves it can't act on raw output. |
+| 2026-03-02 | NDS-003 uses conservative try/finally filter; accept known limitation | Conservative filter (only allow try/finally containing `span.end()` in finally) has false positives (safe — fix loop retries or developer reviews). A sophisticated filter risks false negatives (dangerous — broken code ships). The agent shouldn't be restructuring error handling anyway (NDS-005 is a Phase 1 rubric rule). The conservative filter doubles as a canary for prompt regression. |
+| 2026-03-02 | `ValidationConfig` type defined with `enableWeaver`, `tier2Checks`, `registryPath` | Closes the loose end where `ValidateFileInput.config` referenced an undefined type. Shape supports Phase 2 needs (Weaver toggle, per-rule blocking/advisory) and is extensible for Phase 4+ Tier 2 additions. |
+| 2026-03-02 | Syntax checker writes instrumented code to original file path; caller owns snapshots | `node --check` must resolve `node_modules/` imports, which requires the file to exist at its real path. Snapshot/restore responsibility belongs to the fix loop (Phase 3) and coordinator (Phase 4), not the validation chain. |
 
 ## Open Questions
 
-1. **Lint checker granularity**: The spec says "compare error codes and messages while ignoring line numbers" for PoC lint diffing. Should `prettier.check()` (boolean) be sufficient, or do we need `prettier.format()` + string comparison to produce line-level diagnostics for the LLM feedback?
-
-2. **Weaver check failure parsing**: Weaver CLI output format may vary between versions. How much effort should go into structured parsing of `weaver registry check` output vs. passing raw CLI output as the `message` field? The raw output may be sufficient for LLM consumption.
-
-3. **NDS-003 instrumentation pattern filter**: The conservative filter (only allow try/finally blocks containing `span.end()` in the finally clause) may miss cases where the agent restructured existing error handling. Should Phase 2 accept this known limitation, or invest in a more sophisticated filter?
+(None — all initial questions resolved.)
