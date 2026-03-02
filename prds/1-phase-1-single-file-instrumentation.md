@@ -262,11 +262,11 @@ src/
 
 - [ ] **Milestone 5: LLM integration and response parsing** — `instrumentFile` calls the Anthropic API with structured output (`zodOutputFormat`), adaptive thinking, and prompt caching. Response parsed into `InstrumentationOutput`. Basic elision rejection: pattern scan for `// ...`, `// existing code`, `// rest of`, `/* ... */`; length comparison (output <80% of input with spans added = rejection). Token usage captured from `message.usage`. Verified by integration test against a real JavaScript file.
 
-- [ ] **Milestone 6: Already-instrumented detection** — Agent detects existing OTel code (`tracer.startActiveSpan`, `tracer.startSpan`, imported tracer factories) and handles appropriately (skip or report). Verified by test with pre-instrumented file → RST-005.
+- [ ] **Milestone 6: Already-instrumented detection** — Agent detects existing OTel code (`tracer.startActiveSpan`, `tracer.startSpan`, imported tracer factories) and handles appropriately (skip or report). Verified by test with pre-instrumented file → RST-005. See Decision Log: test fixture project includes an already-instrumented file for RST-005.
 
 - [ ] **Milestone 7: DX verification** — Structured results for all outcomes: successful instrumentation (all `InstrumentationOutput` fields populated with meaningful content, not empty defaults), prerequisite failures (error says what's missing and what to do), elision rejection (error says what pattern was detected). No silent failures. Verified by asserting diagnostic fields contain meaningful content, not just `status === 'success'`.
 
-- [ ] **Milestone 8: Acceptance gate passes** — Full acceptance gate end-to-end: call `instrumentFile` on a real JavaScript file in a real project. Output parses (`node --check`). Diff analysis confirms no business logic changed. OTel imports from `@opentelemetry/api` only. Spans closed in all paths. AST checks for CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-007 pass. Already-instrumented file correctly handled. All `InstrumentationOutput` fields populated.
+- [ ] **Milestone 8: Acceptance gate passes** — Full acceptance gate end-to-end: call `instrumentFile` on a real JavaScript file in a real project. Output parses (`node --check`). Diff analysis confirms no business logic changed. OTel imports from `@opentelemetry/api` only. Spans closed in all paths. AST checks for CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-007 pass. Already-instrumented file correctly handled. All `InstrumentationOutput` fields populated. See Decision Log: purpose-built test fixture project in `test/fixtures/`.
 
 ## Dependencies
 
@@ -289,15 +289,12 @@ Note: Phase 1 has no predecessor phase. Its dependencies are all external.
 
 ## Decision Log
 
-No implementation decisions yet — this log will be populated during Phase 1 development.
-
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-03-02 | Purpose-built test fixture project in `test/fixtures/`, not an existing open-source project | An existing project introduces uncontrolled variables — its structure, dependencies, and code patterns aren't designed to exercise acceptance gate criteria. Build a small fixture (~5-10 JS files) with: Express routes (COV-001 entry points), fetch/pg.query calls (COV-002 outbound), a utility function (RST-001), an already-instrumented file (RST-005), and a matching Weaver schema using the Minimum Viable Schema Example from the spec (line 1381). Reused across all phase acceptance gates (1-7). Building it once as a deliberate fixture is cheaper than adapting a foreign codebase seven times. |
+| 2026-03-02 | Prompt caching + structured output: use both together, don't pre-verify compatibility | The SDK accepts both `cache_control` and `output_config.format` on the same request. These are server-side caches at different layers (prompt content vs output schema). The most likely failure mode is that it just works. If it doesn't, the Milestone 5 integration test (real API call) surfaces it immediately. Pre-verification provides no safety the integration test doesn't already provide. |
+| 2026-03-02 | Elision rejection threshold hardcoded at 80%, not configurable | The threshold is a sanity check, not a precision instrument. Real elision is dramatic — the model either returns the full file or something drastically shorter with placeholder comments. The pattern scan catches moderate cases the length check misses. Configurability means a config field, validation, documentation, and test cases for a knob nobody will tune. If 80% is wrong, change the constant — it's one line of code. |
 
 ## Open Questions
 
-1. **Test JavaScript project for acceptance gate**: The acceptance gate requires calling `instrumentFile` on a real JavaScript file in a real project with a matching Weaver schema. The spec includes a minimum viable schema example. Should we use a purpose-built test fixture project, or adapt an existing open-source JavaScript project?
-
-2. **Prompt caching with structured output**: The SDK supports both prompt caching and structured outputs simultaneously. Verify during implementation that `cache_control` and `output_config.format` work together as expected — this combination is not explicitly documented.
-
-3. **Elision rejection threshold**: The spec says "output <80% of input lines and spans were added." Should the threshold be configurable, or is 80% sufficient for the PoC?
+(None — all initial questions resolved.)
