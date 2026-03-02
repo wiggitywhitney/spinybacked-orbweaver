@@ -193,7 +193,7 @@ The principle: if the error means subsequent work will be invalid or wasted, abo
 ### Interfaces
 
 - **MCP server** (PoC) — invoked from Claude Code
-- **CLI** (PoC) — `telemetry-agent instrument src/`
+- **CLI** (PoC) — `orb instrument src/`
 - **GitHub Action** (PoC) — runs on workflow_dispatch (manual trigger)
 
 **Call chains:** Claude Code invokes MCP server tools → MCP server wraps the Coordinator → Coordinator runs the deterministic workflow (branch, file iteration, validation, PR) and spawns fresh Instrumentation Agent instances for each file. The MCP server is a thin interface layer; the Coordinator is where the orchestration logic lives. The CLI and GitHub Action follow the same pattern: parse their respective inputs into a Coordinator config object, call the Coordinator function, and format the result for their output channel.
@@ -289,7 +289,7 @@ To use the MCP server, the Coordinator would maintain an `@modelcontextprotocol/
 
 ## Init Phase (Required)
 
-Before instrumentation can begin, user must run `telemetry-agent init`. This is mandatory.
+Before instrumentation can begin, user must run `orb init`. This is mandatory.
 
 ### What Init Does
 
@@ -318,7 +318,7 @@ Before instrumentation can begin, user must run `telemetry-agent init`. This is 
    - Records choice as `dependencyStrategy` in config
 
 4. **Create config file**
-   - Writes `telemetry-agent.yaml` with schema path, SDK init file path, dependency strategy, and settings
+   - Writes `orb.yaml` with schema path, SDK init file path, dependency strategy, and settings
    - Config file is the gate for instrumentation phase
 
 ### Prerequisites (verified during init)
@@ -335,7 +335,7 @@ Before instrumentation can begin, user must run `telemetry-agent init`. This is 
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  telemetry-agent init (REQUIRED, ONE-TIME)                      │
+│  orb init (REQUIRED, ONE-TIME)                      │
 │                                                                 │
 │  1. Verify prerequisites (package.json, OTel deps, etc.)        │
 │  2. Locate and record SDK init file path                        │
@@ -343,11 +343,11 @@ Before instrumentation can begin, user must run `telemetry-agent init`. This is 
 │     - Schema must exist (PoC requirement)                       │
 │     - If missing → fail with error                              │
 │  4. Detect project type → set dependencyStrategy                │
-│  5. Create telemetry-agent.yaml config                          │
+│  5. Create orb.yaml config                          │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  telemetry-agent instrument <path> (REQUIRES INIT)              │
+│  orb instrument <path> (REQUIRES INIT)              │
 │                                                                 │
 │  COORDINATOR (deterministic script):                            │
 │  1. Validate config (Zod schema)                                │
@@ -397,7 +397,7 @@ Before instrumentation can begin, user must run `telemetry-agent init`. This is 
 ## How It Works
 
 ### Input
-- Config file (`telemetry-agent.yaml`) — must exist (created by init)
+- Config file (`orb.yaml`) — must exist (created by init)
 - Weaver schema (resolved from path in config)
 - File or directory path to instrument
 
@@ -517,7 +517,7 @@ If a checkpoint fails, the Coordinator stops processing new files by default. Fi
 
 ### SDK Init File Parsing Scope
 
-The Coordinator supports SDK init files using the `NodeSDK` constructor pattern with an `instrumentations` array literal. It uses ts-morph to find the array, append new entries, and add corresponding import statements. If the SDK init file doesn't match a recognized pattern (e.g., instrumentations are constructed dynamically, spread from another file, or use `registerInstrumentations()`), the Coordinator writes a separate file (e.g., `telemetry-agent-instrumentations.js`) exporting the new instrumentation instances, logs a warning with instructions for the user to integrate manually, and notes this in the PR summary. This keeps the Coordinator deterministic without requiring it to understand arbitrary SDK initialization patterns.
+The Coordinator supports SDK init files using the `NodeSDK` constructor pattern with an `instrumentations` array literal. It uses ts-morph to find the array, append new entries, and add corresponding import statements. If the SDK init file doesn't match a recognized pattern (e.g., instrumentations are constructed dynamically, spread from another file, or use `registerInstrumentations()`), the Coordinator writes a separate file (e.g., `orb-instrumentations.js`) exporting the new instrumentation instances, logs a warning with instructions for the user to integrate manually, and notes this in the PR summary. This keeps the Coordinator deterministic without requiring it to understand arbitrary SDK initialization patterns.
 
 ### Future: Parallel Processing
 
@@ -1260,10 +1260,10 @@ Each agent can extend the schema, and extensions propagate via git commits. The 
 
 ## Configuration
 
-The config file is created during `telemetry-agent init` and serves as the gate for instrumentation. If no config file exists, the Instrumentation Agent refuses to run.
+The config file is created during `orb init` and serves as the gate for instrumentation. If no config file exists, the Instrumentation Agent refuses to run.
 
 ```yaml
-# telemetry-agent.yaml (created by init, checked into repo)
+# orb.yaml (created by init, checked into repo)
 
 # Required
 schemaPath: ./telemetry/registry         # Path to Weaver registry directory
@@ -1351,7 +1351,7 @@ The Coordinator validates the config at startup using a Zod schema (or equivalen
 
 ### Dependency Strategy
 
-The `dependencyStrategy` config controls how the Coordinator adds OTel packages to `package.json`. This is set during `telemetry-agent init` based on the project type.
+The `dependencyStrategy` config controls how the Coordinator adds OTel packages to `package.json`. This is set during `orb init` based on the project type.
 
 **`@opentelemetry/api` is always a peerDependency** regardless of strategy. The OTel JS contrib GUIDELINES.md mandates this — multiple instances in `node_modules` cause silent trace loss via no-op fallbacks. The dependency strategy only affects **instrumentation packages** discovered and installed by the agent (e.g., `@opentelemetry/instrumentation-pg`, `@traceloop/instrumentation-anthropic`). The agent does not install or modify SDK packages — those are the user's responsibility (see Prerequisites).
 

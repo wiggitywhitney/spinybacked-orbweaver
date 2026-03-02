@@ -287,7 +287,7 @@ CLI with `init` and `instrument` commands wired to real handlers, MCP server wit
 
 ### Acceptance Gate
 
-`beweave init` creates a valid config. `beweave instrument ./src` invokes the coordinator and produces visible progress output at every stage. MCP tools produce the same results. GitHub Action runs end-to-end. MCP tool responses and CLI output both enable an AI intermediary (Claude Code) to provide the human with full visibility into what happened — the intermediary should not degrade the human's understanding of what happened, what's happening now, or what went wrong. (See [Designing for an AI Intermediary](#designing-for-an-ai-intermediary).)
+`orb init` creates a valid config. `orb instrument ./src` invokes the coordinator and produces visible progress output at every stage. MCP tools produce the same results. GitHub Action runs end-to-end. MCP tool responses and CLI output both enable an AI intermediary (Claude Code) to provide the human with full visibility into what happened — the intermediary should not degrade the human's understanding of what happened, what's happening now, or what went wrong. (See [Designing for an AI Intermediary](#designing-for-an-ai-intermediary).)
 
 ### Why All Interfaces in One Phase
 

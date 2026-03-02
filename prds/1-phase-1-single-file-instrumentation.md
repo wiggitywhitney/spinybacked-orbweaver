@@ -252,7 +252,7 @@ src/
 
 ## Milestones
 
-- [ ] **Milestone 1: Config validation** — Zod schema for `telemetry-agent.yaml` with all config fields. Invalid or unknown fields produce clear error messages (e.g., `Unknown config field 'maxSpanPerFile' — did you mean 'maxFixAttempts'?`). Verified by unit tests with valid, invalid, and typo'd configs.
+- [ ] **Milestone 1: Config validation** — Zod schema for `orb.yaml` with all config fields. Invalid or unknown fields produce clear error messages (e.g., `Unknown config field 'maxSpanPerFile' — did you mean 'maxFixAttempts'?`). Verified by unit tests with valid, invalid, and typo'd configs.
 
 - [ ] **Milestone 2: Prerequisite checks** — Library functions that verify: `package.json` exists, `@opentelemetry/api` in peerDependencies, OTel SDK init file exists at configured path, Weaver schema exists and is valid (`weaver registry check` passes). Each check returns structured results explaining what was checked and what failed. Verified by unit tests with missing/invalid prerequisites.
 
@@ -277,7 +277,7 @@ Note: Phase 1 has no predecessor phase. Its dependencies are all external.
 
 ## Out of Scope
 
-- CLI interface (`telemetry-agent init`, `telemetry-agent instrument`) → Phase 6
+- CLI interface (`orb init`, `orb instrument`) → Phase 6
 - Full validation chain (syntax → lint → Weaver static) → Phase 2
 - Fix loop (retry on validation failure) → Phase 3
 - Multi-file coordination, file discovery, SDK init writes, dependency installation → Phase 4
