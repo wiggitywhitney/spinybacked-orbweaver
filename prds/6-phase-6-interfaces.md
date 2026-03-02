@@ -102,6 +102,7 @@ await server.connect(transport);
   - MCP tools are request-response. No way to pause mid-tool-call for user input. The two-tool split (`get-cost-ceiling` → `instrument`) moves confirmation to between tool calls.
   - Pin to `^1.27` (matching >=1.27.0 to <2.0.0). Do not adopt v2 pre-alpha.
   - Supports stdio and Streamable HTTP transports. Use stdio for Claude Code integration.
+  - `sendLoggingMessage()` requires the server to declare logging capability. If using the low-level `Server` class, pass `capabilities: { logging: {} }` explicitly. The high-level `McpServer` may handle this automatically — verify at implementation time.
 
 ### yargs (CLI Parsing)
 
@@ -268,6 +269,7 @@ action.yml            GitHub Action (shell-based, invokes CLI)
 - **Phase 4**: Provides `coordinator/` module (`coordinate()`, `RunResult`, `CoordinatorCallbacks`, `CostCeiling`). This is the primary dependency — all interfaces call `coordinate()`.
 - **Phase 5**: Extends coordinator with schema integration. `RunResult` schema fields are populated. `onSchemaCheckpoint` callback is wired. Interfaces format these as part of `RunResult` output.
 - **External**: Node.js >=24.0.0, `@modelcontextprotocol/sdk` ^1.27, `yargs`, Anthropic API key, Weaver CLI >=0.21.2, a test JavaScript project with Weaver schema for acceptance testing.
+- **Design decisions**: Consolidated Decision Register entries #20 (interface layer pattern: preserve thin wrappers), #32 (yargs confirmed for CLI), #34 (MCP SDK v1.x), #45 (DX is cross-cutting, not a standalone phase), #46 (AI intermediary is default output consumer) are reflected throughout this PRD.
 
 ## Out of Scope
 
@@ -289,6 +291,7 @@ action.yml            GitHub Action (shell-based, invokes CLI)
 | 2026-03-02 | GitHub Action Weaver: binary download, not `go install` | Use pre-built binaries from Weaver's GitHub releases (`open-telemetry/weaver`). `go install` requires a Go toolchain (~2 min setup), and the version depends on Go module proxy cache. Binary download is deterministic, fast (~5 seconds), and matches `weaverMinVersion` exactly. Verify exact binary name and archive structure from Weaver's releases page at implementation time. |
 | 2026-03-02 | GitHub Action: shell-based `action.yml` invoking CLI, not TypeScript entry point | The Action's job is: install Node, install deps, install Weaver, run `orb instrument --yes --output json <path>`, parse JSON into step outputs. This is ~15 lines of shell. A separate `action.ts` would need its own build step, its own `node_modules` resolution, and would create a fourth interface path diverging from the CLI. The Action uses the CLI to guarantee equivalence by construction. Removed `action.ts` from module organization. |
 | 2026-03-02 | `--dry-run` flag parsed in Phase 6, behavior implemented in Phase 7 | The yargs scaffold defines all flags up front (Milestone 1). `--dry-run` is accepted and passed through to the coordinator config, but the coordinator's revert-after-each-file logic is Phase 7. The flag is accepted but not yet functional in Phase 6. Noted explicitly in Milestone 3. |
+| 2026-03-02 | MCP SDK v2: stay on v1.x even if v2 ships during implementation | MCP SDK v2 stable release was anticipated for Q1 2026. If v2 ships during Phase 6 implementation, do not upgrade — evaluate whether v2's `McpServer` API is backwards-compatible first. The v1.x branch will receive bug fixes for 6+ months post-v2 release, so staying on v1.x is safe. |
 
 ## Open Questions
 
