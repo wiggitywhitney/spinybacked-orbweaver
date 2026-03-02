@@ -1,0 +1,39 @@
+{
+  "name": "spinybacked-orbweaver",
+  "version": "0.1.0",
+  "description": "AI-powered telemetry instrumentation agent for JavaScript applications",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wiggitywhitney/spinybacked-orbweaver.git"
+  },
+  "keywords": [
+    "opentelemetry",
+    "telemetry",
+    "instrumentation",
+    "ai-agent"
+  ],
+  "author": "Whitney Lee",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/wiggitywhitney/spinybacked-orbweaver/issues"
+  },
+  "homepage": "https://github.com/wiggitywhitney/spinybacked-orbweaver#readme",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
+    "commit-story": "file:../commit-story-v2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

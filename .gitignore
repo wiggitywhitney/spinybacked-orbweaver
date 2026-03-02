@@ -1,0 +1,6 @@
+node_modules/
+journal/
+.env
+*.local
+.commit-story/
+.vals.yaml
