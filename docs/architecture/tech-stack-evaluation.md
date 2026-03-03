@@ -106,6 +106,37 @@ Note: The top-level `cache_control` enables automatic caching — the SDK determ
 `countTokens()` is free with separate rate limits (100–8000 RPM). Every API response includes a `usage` field with `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`. Together these solve F9 ("cost ceiling reports tokens but not dollars"): pre-flight budget checks via `countTokens()`, running totals via `usage` accumulation, dollar amounts via per-model pricing constants. ([Token counting docs](https://platform.claude.com/docs/en/build-with-claude/token-counting))
 — Confidence: **HIGH**
 
+```typescript
+// Pre-flight budget check: countTokens() is free with separate rate limits (100-8000 RPM)
+const tokenCount = await client.messages.countTokens({
+  model: config.agentModel,
+  system: systemPrompt,
+  messages: [{ role: "user", content: fileContent }],
+});
+// tokenCount.input_tokens → use with pricing table for dollar estimate
+
+// Running total: accumulate from every API response
+const usage = response.usage;
+// usage.input_tokens, usage.output_tokens,
+// usage.cache_creation_input_tokens, usage.cache_read_input_tokens
+
+// Dollar conversion: per-model pricing constants (from Model Selection table above)
+const PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number }> = {
+  "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15 },
+  "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5 },
+  "claude-opus-4-6": { inputPerMTok: 5, outputPerMTok: 25 },
+};
+
+function tokensToDollars(
+  tokens: number,
+  pricePerMTok: number,
+): number {
+  return (tokens / 1_000_000) * pricePerMTok;
+}
+```
+
+**Design implication:** The coordinator maintains a running `TokenUsage` total across all files. Pre-flight ceiling uses `countTokens()` on the first file to estimate per-file cost, then multiplies by file count. Post-run actuals sum `usage` from every response. Both are converted to dollars via the pricing table for display in the PR summary and cost ceiling output.
+
 ### Finding: Model Selection
 
 | Model | Input/MTok | Output/MTok | Max Output | Thinking | Best For |

@@ -328,7 +328,7 @@ src/
   interfaces/
     cli.ts          yargs, wired to coordinator
     mcp.ts          MCP SDK server, wired to coordinator
-    action.ts       GitHub Action wrapper
+                    (GitHub Action is shell-based action.yml invoking CLI — no action.ts; see Decision 53)
   git/              simple-git wrapper — branch, commit, PR operations
   ast/              ts-morph helpers — scope analysis, import detection, function classification
   deliverables/     PR summary rendering, cost formatting, dry-run handling
@@ -431,6 +431,7 @@ Every resolved decision across all research documents. The table is an index —
 | 50 | M8 as Milestone 8 of PRD #3: v3.8 spec edit batching all known-but-unapplied changes. (v3.9 produced by PRD #7 M0.) | This document | (resolved during M7 planning) |
 | 51 | Version numbering: M7 produces spec v3.7, M8 produces spec v3.8, M0 of PRD #7 produces spec v3.9 (TypeScript notation) | This document | (resolved during M7 planning) |
 | 52 | Two-pass spec edit discipline: Pass 1 mechanical notation conversion, field inventory verification, Pass 2 substantive changes | This document | (resolved during M7 planning) |
+| 53 | GitHub Action is shell-based `action.yml` invoking CLI, not TypeScript `action.ts`. Removed `action.ts` from module organization. | PRD #6 | Decision Log, 2026-03-02 |
 
 ---
 

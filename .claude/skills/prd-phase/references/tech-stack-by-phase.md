@@ -148,8 +148,42 @@ const filtered = files.filter(f => !excludePatterns.some(p => matches(f, p)));
 | 8. Git Operations: simple-git | Version (3.32.2), promise-based API, thin wrapper over git binary, why not isomorphic-git |
 | 2. AI SDK: @anthropic-ai/sdk | Cost tracking subsection — `countTokens()` for pre-flight budget, `message.usage` for running totals, per-model pricing constants for dollar amounts. Batch API note (50% discount, async only — suitable for CI/CD GitHub Action mode). |
 
+### Phase 7 Key Code Snippets
+
+These must appear verbatim in the PRD:
+
+**Cost tracking pattern** (from section 2, "Cost Tracking and Pre-Flight Budget"):
+```typescript
+// Pre-flight budget check: countTokens() is free with separate rate limits (100-8000 RPM)
+const tokenCount = await client.messages.countTokens({
+  model: config.agentModel,
+  system: systemPrompt,
+  messages: [{ role: "user", content: fileContent }],
+});
+// tokenCount.input_tokens → use with pricing table for dollar estimate
+
+// Running total: accumulate from every API response
+const usage = response.usage;
+// usage.input_tokens, usage.output_tokens,
+// usage.cache_creation_input_tokens, usage.cache_read_input_tokens
+
+// Dollar conversion: per-model pricing constants (from Model Selection table above)
+const PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number }> = {
+  "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15 },
+  "claude-haiku-4-5": { inputPerMTok: 1, outputPerMTok: 5 },
+  "claude-opus-4-6": { inputPerMTok: 5, outputPerMTok: 25 },
+};
+
+function tokensToDollars(
+  tokens: number,
+  pricePerMTok: number,
+): number {
+  return (tokens / 1_000_000) * pricePerMTok;
+}
+```
+
 ### Phase 7 Key Details
 
 - **simple-git**: "Promise-based API, thin wrapper over the git binary. Alternative `isomorphic-git` reimplements Git from scratch — subtle behavioral differences make it unsuitable for a tool that creates branches and PRs in real repositories."
-- **Dollar cost calculation**: Phase 7 resolves F9 ("cost ceiling reports tokens but not dollars"). The tech stack documents how: `countTokens()` for pre-flight + `message.usage` accumulation + per-model pricing constants.
+- **Dollar cost calculation**: Phase 7 resolves F9 ("cost ceiling reports tokens but not dollars"). The tech stack documents how: `countTokens()` for pre-flight + `message.usage` accumulation + per-model pricing constants. The cost tracking code snippet (above) is now in the tech stack evaluation document.
 - **Batch API**: 50% discount on all models, async only. Relevant for GitHub Action interface (non-interactive).

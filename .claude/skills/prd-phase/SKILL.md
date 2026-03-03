@@ -12,7 +12,7 @@ Create implementation phase PRDs for the telemetry agent by assembling content f
 ## Critical Principles
 
 1. **Bounded context**: Read ONLY what this phase needs. Do not read the full spec or full tech stack document. Read the specific sections listed in the routing tables below.
-2. **No detail loss**: Version numbers, API patterns, config field names, and code snippets must be copied verbatim from source documents into the PRD. Do not summarize technical details. Inline comments on type definitions (example values, explanatory phrases) are part of the verbatim contract — preserve them exactly as they appear in the source document.
+2. **No detail loss**: Version numbers, API patterns, config field names, and code snippets must be copied verbatim from source documents into the PRD. Do not summarize technical details. Inline comments on type definitions (example values, explanatory phrases) are part of the verbatim contract — preserve them exactly as they appear in the source document. When the source document provides tabular or prose data but no code snippet (e.g., a pricing table without a TypeScript constant), prefer adding the snippet to the source document first so future PRDs can copy verbatim. If that is not feasible in the current session, construct the snippet faithfully from the source data and annotate it with the source location (e.g., "pricing values from Model Selection table, §2").
 3. **Excerpt, don't just reference**: Critical details (acceptance gates, API patterns, rubric rules) must be IN the PRD, not just referenced by section name.
 4. **One phase at a time**: Never create multiple phase PRDs in one session. Each phase gets a fresh context.
 5. **TypeScript and ESM**: The agent is TypeScript (`"type": "module"` in package.json, native Node.js type stripping via `erasableSyntaxOnly`). All code samples use ESM `import` syntax and TypeScript interface notation. ts-morph is used for AST analysis (it handles JavaScript target files via `allowJs: true`).
@@ -161,7 +161,8 @@ Fill in each section using content gathered in Steps 2-3. Key rules:
 
 **Tech Stack section:**
 - Copy version numbers exactly (e.g., "Vitest 4.0.18", not "latest")
-- Copy API code snippets verbatim — all TypeScript, ESM imports
+- Copy API code snippets verbatim from the tech stack evaluation — all TypeScript, ESM imports. The `tech-stack-by-phase.md` routing table identifies which snippets must appear for each phase under "Key Code Snippets" headings.
+- If the tech stack evaluation has prose/tabular data for a pattern but no code snippet, check whether `tech-stack-by-phase.md` provides one. If neither document has a snippet, flag the gap for the user rather than silently constructing one.
 - Include caveats that affect THIS phase
 - Include only entries relevant to this phase
 
@@ -188,6 +189,7 @@ Fill in each section using content gathered in Steps 2-3. Key rules:
 - Reproduce the spec section map table from the phasing document
 - Add line number ranges from the landmarks table above
 - Add rows for cross-cutting sections read in Step 2 (e.g., "Two-Tier Validation Architecture", "Validation Chain Types") when they contain type definitions or architecture directly needed for implementation and aren't already in the phasing document's table
+- Add rows for spec sections not in the phasing document's table that the implementing AI needs for this phase's core deliverables — particularly sections that define rendering formats, output structures, or classification systems consumed by the phase (e.g., Phase 7 needs "Priority Hierarchy" and "Review Sensitivity" to render the PR summary, even though the phasing document didn't list them)
 
 ### Step 5: Create GitHub Issue and PRD File
 
