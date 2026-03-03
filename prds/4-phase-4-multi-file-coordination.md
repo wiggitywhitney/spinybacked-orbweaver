@@ -99,15 +99,15 @@ These gate checks were established in earlier phases and continue to apply acros
 | NDS-002 | All Pre-Existing Tests Pass | Per-run | Gate | Run the existing test suite without modification; all tests pass = pass. Without a test suite, the gate passes vacuously. |
 | NDS-003 | Non-Instrumentation Lines Unchanged | Per-file | Gate | Diff analysis: filter instrumentation-related additions (import lines, tracer acquisition, `startActiveSpan`/`startSpan` calls, `span.setAttribute`/`recordException`/`setStatus`/`end` calls, try/finally blocks wrapping span lifecycle); remaining diff lines must be empty. |
 | API-001 | Only `@opentelemetry/api` Imports | Per-file | Gate | All `@opentelemetry/*` imports resolve to `@opentelemetry/api` only. |
-| API-002 | Correct Dependency Declaration | Per-run | Important | Parse `package.json`: verify `@opentelemetry/api` is in `peerDependencies` (for libraries) or `dependencies` (for applications). The coordinator's bulk dependency installation must respect `dependencyStrategy`. |
 
 ### Dimension Rules (Implemented in Phase 4)
 
-Phase 4 implements all remaining automatable rubric rules as Tier 2 validation chain stages, completing the agent's self-correction capability. RST-005 (already-instrumented detection) is applied at the coordinator level. Blocking checks feed into the fix loop for automated correction; advisory checks are surfaced in `advisoryAnnotations`.
+Phase 4 implements all remaining automatable rubric rules as Tier 2 validation chain stages, completing the agent's self-correction capability. RST-005 (already-instrumented detection) is applied at the coordinator level (Milestone 2), not as a `validation/tier2/` checker — see Decision Log #2. Blocking checks feed into the fix loop for automated correction; advisory checks are surfaced in `advisoryAnnotations`.
 
 | Rule | Name | Tier | Blocking? | Description | Automation |
 |------|------|------|-----------|-------------|------------|
-| RST-005 | No Re-Instrumentation of Already-Instrumented Code | 2 | Yes (Important) | AST: detect functions that already contain `startActiveSpan`, `startSpan`, or `tracer.` calls in the pre-agent source; flag if the agent adds additional tracer calls. At the coordinator level, the quick file-level check detects already-instrumented files and returns `status: "skipped"`. | Automatable |
+| API-002 | Correct Dependency Declaration | 2 | Yes (Important) | Parse `package.json`: verify `@opentelemetry/api` is in `peerDependencies` (for libraries) or `dependencies` (for applications). The coordinator's bulk dependency installation must respect `dependencyStrategy`. | Automatable |
+| RST-005 | No Re-Instrumentation of Already-Instrumented Code | 2 | Yes (Important) | AST: detect functions that already contain `startActiveSpan`, `startSpan`, or `tracer.` calls in the pre-agent source; flag if the agent adds additional tracer calls. At the coordinator level, the quick file-level check detects already-instrumented files and returns `status: "skipped"` (Milestone 2, not a `validation/tier2/` checker — see Decision Log #2). | Automatable |
 | COV-002 | Outbound Calls Have Spans | 2 | Yes (Important) | AST: detect outbound call sites using dependency-derived patterns (`fetch()`, `axios.*()`, `pg.query()`, `redis.*()`, `amqp.publish()`, database client method calls, HTTP client methods); verify each has a span. The outbound call pattern list is enumerable per-dependency and maintained alongside the check. | Automatable |
 | RST-001 | No Spans on Utility Functions | 2 | Advisory (Important) | AST: flag spans on functions that are synchronous, under ~5 lines, unexported, and contain no I/O calls (no `await`, no calls to known I/O libraries). | Automatable |
 | COV-005 | Domain-Specific Attributes Present | 2 | Advisory (Normal) | Compare `setAttribute` calls against the project's telemetry registry: for each span, check whether required/recommended attributes from the registry definition are present. | Automatable |
@@ -204,19 +204,21 @@ interface RunResult {
   librariesInstalled: string[];          // Packages successfully installed
   libraryInstallFailures: string[];      // Packages that failed to install
   sdkInitUpdated: boolean;               // Whether the SDK init file was modified
-  schemaDiff?: string;                   // Weaver registry diff output (Phase 5 populates)
+  schemaDiff?: string;                   // Weaver registry diff output (markdown format; Phase 5 populates)
   schemaHashStart?: string;              // Registry hash at run start (Phase 5 populates)
   schemaHashEnd?: string;                // Registry hash at run end (Phase 5 populates)
-  endOfRunValidation?: string;           // Weaver live-check compliance report (Phase 5 populates)
+  endOfRunValidation?: string;           // Weaver live-check compliance report (raw CLI output; Phase 5 populates)
   warnings: string[];                    // Degraded conditions (skipped live-check, failed installs, etc.)
 }
 
 interface CostCeiling {
   fileCount: number;
   totalFileSizeBytes: number;
-  maxTokensCeiling: number; // Sum of per-file countTokens() estimates × attempt ceiling
+  maxTokensCeiling: number; // Sum of per-file countTokens() estimates × attempt ceiling (see Cost Visibility section)
 }
 ```
+
+> **Spec/design-doc discrepancy on `maxTokensCeiling` calculation:** The spec (line 142) defines this as `countTokens()` estimates per file × attempt ceiling (content-aware, requires reading file contents). The design document (line 274) defines it as `fileCount * maxTokensPerFile` (theoretical worst case, pure arithmetic). Per hierarchy, the spec wins. However, Phase 4 does not implement `countTokens()` pre-flight (deferred to Phase 7 — see Out of Scope). For Phase 4, use the simpler `fileCount * maxTokensPerFile` calculation as a placeholder; Phase 7 replaces it with the content-aware `countTokens()` approach.
 
 **Phase 4 API:**
 
