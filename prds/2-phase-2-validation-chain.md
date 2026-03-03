@@ -310,9 +310,8 @@ src/
 - Fix loop (retry on validation failure) → Phase 3
 - End-of-run validation (Weaver live-check as OTLP receiver) → Phase 5
 - Schema extensions, Weaver `registry diff`, periodic checkpoints → Phase 5
-- Additional Tier 2 checks: COV-002 (outbound calls), RST-001 (utility functions), COV-005 (domain attributes) → Phase 4 (requires multi-file context)
+- All remaining Tier 2 checks: COV-001 through COV-006, RST-001 through RST-004, CDQ-006, CDQ-008 → Phase 4 (multi-file context checks + per-instance checks placed there to keep Phase 2 focused on architecture and proof-of-concept)
 - Weaver-specific Tier 2 checks (SCH-001 through SCH-004) → Phase 5
-- Tier 2 advisory checks (Normal/Low impact rules) → Phase 4+
 - Multi-file coordination → Phase 4
 - CLI/MCP/GitHub Action interfaces → Phase 6
 - Variable shadowing check (pre-condition in the agent, not a validation chain stage) → already in Phase 1's scope via `ast/` module
