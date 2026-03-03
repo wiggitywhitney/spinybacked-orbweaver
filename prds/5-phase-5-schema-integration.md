@@ -35,6 +35,8 @@ Agent instruments a file and creates appropriate schema extension entries. Weave
 | `onSchemaCheckpoint` callback fires | Wire a test subscriber; verify `onSchemaCheckpoint` fires every `schemaCheckpointInterval` files with `filesProcessed` count and `passed` boolean | DX |
 | Callback return controls processing | Verify returning `false`/`void` from `onSchemaCheckpoint` stops processing; returning `true` continues despite failure | — |
 | API-only dependency maintained | Instrumented files import only `@opentelemetry/api`; no SDK or vendor imports introduced by schema-guided instrumentation | API-002, API-003, API-004 |
+| JSDoc on all exported functions | Every exported function in Phase 5 modules has JSDoc documenting parameters, return type, and purpose | DX |
+| CHANGELOG updated | CHANGELOG.md `[Unreleased]` section updated with Phase 5 additions during `/prd-update-progress` | DX |
 
 ## Cross-Cutting Requirements
 

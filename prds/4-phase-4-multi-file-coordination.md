@@ -34,6 +34,8 @@ Point at a real project directory. All discoverable files are processed. Already
 | Schema re-resolution between files | Verify the coordinator calls `weaver registry resolve` before each file (not once at startup), so agents that extend the schema don't create duplicates | — |
 | RunResult fully populated | Verify `filesProcessed`, `filesSucceeded`, `filesFailed`, `filesSkipped`, `librariesInstalled`, `libraryInstallFailures`, `sdkInitUpdated`, `actualTokenUsage`, and `warnings` fields contain meaningful content | DX |
 | Tier 2 semantic checks across project | All Tier 2 checkers produce results across multiple files in a real project: blocking checks (COV-001, COV-002, COV-003, COV-006) trigger fix loop retries, advisory checks (COV-004, COV-005, RST-001, RST-002, RST-003, RST-004, CDQ-006, CDQ-008) appear in `advisoryAnnotations` | COV-001–006, RST-001–004, CDQ-006, CDQ-008 |
+| JSDoc on all exported functions | Every exported function in Phase 4 modules has JSDoc documenting parameters, return type, and purpose | DX |
+| CHANGELOG updated | CHANGELOG.md `[Unreleased]` section updated with Phase 4 additions during `/prd-update-progress` | DX |
 
 ## Cross-Cutting Requirements
 

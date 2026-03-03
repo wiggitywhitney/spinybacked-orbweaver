@@ -29,6 +29,8 @@ Instrument a file that initially fails validation → agent retries with validat
 | FileResult fully populated | On both success and failure, verify `validationAttempts`, `validationStrategyUsed`, `errorProgression`, `reason`, `lastError`, `advisoryAnnotations`, and `tokenUsage` fields contain meaningful content | DX |
 | Tier 1 vs Tier 2 failure handling | Tier 1 failure triggers retry/regeneration; Tier 2 blocking failure triggers fix attempt but not fresh regeneration alone; Tier 2 advisory findings are collected but don't block | — |
 | Budget respected across all code paths | Whether the loop exits via success, exhaustion, or budget exceeded, cumulative token usage never exceeds `maxTokensPerFile` by more than one API call | — |
+| JSDoc on all exported functions | Every exported function in Phase 3 modules has JSDoc documenting parameters, return type, and purpose | DX |
+| CHANGELOG updated | CHANGELOG.md `[Unreleased]` section updated with Phase 3 additions during `/prd-update-progress` | DX |
 
 ## Cross-Cutting Requirements
 

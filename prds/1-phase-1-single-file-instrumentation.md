@@ -34,6 +34,8 @@ Call `instrumentFile(filePath, config)` on a real JavaScript file in a real proj
 | No unbounded or PII attributes | AST: flag full object spreads, `JSON.stringify` of request/response, PII field patterns | CDQ-007 |
 | Already-instrumented detection | Call `instrumentFile` on a file with existing OTel code; agent detects and skips or handles appropriately | RST-005 |
 | Structured results returned | Function returns `InstrumentationOutput` with all fields populated; failures explain why | DX |
+| JSDoc on all exported functions | Every exported function in Phase 1 modules has JSDoc documenting parameters, return type, and purpose | DX |
+| CHANGELOG updated | CHANGELOG.md `[Unreleased]` section updated with Phase 1 additions during `/prd-update-progress` | DX |
 
 ## Cross-Cutting Requirements
 
@@ -294,6 +296,7 @@ Note: Phase 1 has no predecessor phase. Its dependencies are all external.
 | 2026-03-02 | Purpose-built test fixture project in `test/fixtures/`, not an existing open-source project | An existing project introduces uncontrolled variables — its structure, dependencies, and code patterns aren't designed to exercise acceptance gate criteria. Build a small fixture (~5-10 JS files) with: Express routes (COV-001 entry points), fetch/pg.query calls (COV-002 outbound), a utility function (RST-001), an already-instrumented file (RST-005), and a matching Weaver schema using the Minimum Viable Schema Example from the spec (line 1381). Reused across all phase acceptance gates (1-7). Building it once as a deliberate fixture is cheaper than adapting a foreign codebase seven times. |
 | 2026-03-02 | Prompt caching + structured output: use both together, don't pre-verify compatibility | The SDK accepts both `cache_control` and `output_config.format` on the same request. These are server-side caches at different layers (prompt content vs output schema). The most likely failure mode is that it just works. If it doesn't, the Milestone 5 integration test (real API call) surfaces it immediately. Pre-verification provides no safety the integration test doesn't already provide. |
 | 2026-03-02 | Elision rejection threshold hardcoded at 80%, not configurable | The threshold is a sanity check, not a precision instrument. Real elision is dramatic — the model either returns the full file or something drastically shorter with placeholder comments. The pattern scan catches moderate cases the length check misses. Configurability means a config field, validation, documentation, and test cases for a knob nobody will tune. If 80% is wrong, change the constant — it's one line of code. |
+| 2026-03-02 | Run a prompt engineering spike within M4 before committing to the full milestone sequence | Phase 1 is the highest-risk phase. The research showed good output quality (CDQ 100%, NDS 100%), but that was with a different prompt surface. Structured output (Zod schemas + TypeScript types) is a materially different prompt than what the research validated. Use the `/write-prompt` skill to construct the system prompt in M4, then test it against 2-3 real JavaScript files before proceeding to M5 (LLM integration). If the prompt needs significant iteration, everything downstream shifts. Better to discover that in M4 than in the acceptance gate. |
 
 ## Open Questions
 

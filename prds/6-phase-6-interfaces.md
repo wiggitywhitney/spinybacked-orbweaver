@@ -37,6 +37,8 @@ The evaluation's F1 and F2 (unwired CLI) and F6 (MCP missing entry point) are th
 | GitHub Action logs cost ceiling | Verify cost ceiling logged via `core.info()` before processing begins | DX |
 | All interfaces produce same results | Run the same project through CLI, MCP, and direct `coordinate()` call; verify `RunResult` is equivalent | — |
 | No silent failures from any interface | Zero files discovered → clear warning (not exit 0 with no output); invalid path → clear error; missing config → clear error directing user to run `orb init` | DX |
+| JSDoc on all exported functions | Every exported function in Phase 6 modules has JSDoc documenting parameters, return type, and purpose | DX |
+| CHANGELOG updated | CHANGELOG.md `[Unreleased]` section updated with Phase 6 additions during `/prd-update-progress` | DX |
 
 ## Cross-Cutting Requirements
 

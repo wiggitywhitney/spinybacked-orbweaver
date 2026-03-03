@@ -34,6 +34,8 @@ Instrument a file → run full validation chain (both tiers) → passes. Also: i
 | Tier 2 runs only after Tier 1 passes | If syntax fails, Tier 2 checks are skipped entirely | — |
 | Validation produces actionable diagnostics | Every check failure includes rule ID, file path, line number (where applicable), and LLM-consumable message | DX |
 | Chain tested against real agent output | Integration test: Phase 1 instruments a real JS file, Phase 2 validates the result; chain passes | — |
+| JSDoc on all exported functions | Every exported function in Phase 2 modules has JSDoc documenting parameters, return type, and purpose | DX |
+| CHANGELOG updated | CHANGELOG.md `[Unreleased]` section updated with Phase 2 additions during `/prd-update-progress` | DX |
 
 ## Cross-Cutting Requirements
 
