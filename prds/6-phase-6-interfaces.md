@@ -240,7 +240,8 @@ action.yml            GitHub Action (shell-based, invokes CLI)
 ```
 
 **Module dependency rules:**
-- `interfaces/` imports from `coordinator/`, `deliverables/` (Phase 7 — not yet available), and `config/`. It does NOT import from `agent/`, `validation/`, or `fix-loop/`.
+- `interfaces/` imports from `coordinator/` and `config/`. It does NOT import from `agent/`, `validation/`, or `fix-loop/`.
+- Phase 7 adds `deliverables/` integration to `interfaces/` to preserve phase independence.
 - `interfaces/` calls `coordinate()` and formats `RunResult`. This is the "thin wrapper" principle from the spec.
 - `cli.ts` imports `config/` for init logic (prerequisite checks, config file creation).
 - `mcp.ts` uses `@modelcontextprotocol/sdk` for the MCP server setup.
