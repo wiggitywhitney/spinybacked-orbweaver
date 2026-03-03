@@ -513,12 +513,13 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 
 | Classification | Count | Rules |
 |---|---|---|
-| Automatable | 29 | NDS-001 through NDS-004, API-001, COV-001 through COV-006, RST-001 through RST-005, API-002 through API-004, SCH-001 through SCH-003, CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-008 |
+| Automatable | 28 | NDS-001 through NDS-004, API-001, COV-001 through COV-006, RST-001 through RST-005, API-002 through API-004, SCH-002, SCH-003, CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-008 |
+| Mixed-mode (automatable in registry mode, semi-automatable in naming quality fallback) | 1 | SCH-001 |
 | Semi-automatable | 2 | NDS-005, SCH-004 |
 
-**94% automatable (29/31), 6% semi-automatable (2/31), 0% human-only.**
+**90% fully automatable (28/31), 3% mixed-mode (1/31, SCH-001 — automatable when registry defines operation names, semi-automatable in naming quality fallback), 6% semi-automatable (2/31), 0% human-only.** Counts above reflect registry mode only; with naming quality fallback active, SCH-001 requires judgment.
 
-The two semi-automatable rules share a common trait: both involve semantic equivalence that structural/syntactic analysis cannot definitively resolve. Both are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 31/31, fully automatable with no specialized human knowledge required.
+The three non-fully-automatable rules share a common trait: they involve semantic equivalence or quality judgment that structural/syntactic analysis cannot definitively resolve. All are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 31/31, fully automatable with no specialized human knowledge required.
 
 The 29 automatable rules succeed because their definitions can be operationalized into deterministic checks: framework-specific patterns are enumerable from `package.json`, export keywords make public/internal unambiguous, the telemetry registry encodes domain knowledge, and field-name pattern lists enable over-flagging where the cost of a false positive is far lower than the cost of manual review on every agent iteration.
 

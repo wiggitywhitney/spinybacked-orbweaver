@@ -73,22 +73,24 @@ Tiers are internal to the coordinator; interfaces format the output. Phase 6 doe
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-const server = new McpServer({
-  name: "spinybacked-orbweaver",
-  version: "0.1.0",
-});
+const mcpServer = new McpServer(
+  { name: "spinybacked-orbweaver", version: "0.1.0" },
+  { capabilities: { logging: {} } },
+);
 
-server.tool("get-cost-ceiling", "Calculate cost ceiling for instrumentation run", {
-  projectDir: z.string(),
-  // ... config fields
+mcpServer.registerTool("get-cost-ceiling", {
+  title: "Get Cost Ceiling",
+  description: "Calculate cost ceiling for instrumentation run",
+  inputSchema: { projectDir: z.string() },
 }, async (params) => {
   // Parse params into AgentConfig, call coordinator's cost ceiling logic
   // Return CostCeiling object
 });
 
-server.tool("instrument", "Run full instrumentation workflow", {
-  projectDir: z.string(),
-  // ... config fields
+mcpServer.registerTool("instrument", {
+  title: "Instrument",
+  description: "Run full instrumentation workflow",
+  inputSchema: { projectDir: z.string() },
 }, async (params) => {
   // Parse params into AgentConfig with confirmEstimate: false
   // Call coordinate(projectDir, config, callbacks)
@@ -96,7 +98,7 @@ server.tool("instrument", "Run full instrumentation workflow", {
 });
 
 const transport = new StdioServerTransport();
-await server.connect(transport);
+await mcpServer.connect(transport);
 ```
 
 - **Caveats**:
@@ -104,7 +106,8 @@ await server.connect(transport);
   - MCP tools are request-response. No way to pause mid-tool-call for user input. The two-tool split (`get-cost-ceiling` → `instrument`) moves confirmation to between tool calls.
   - Pin to `^1.27` (matching >=1.27.0 to <2.0.0). Do not adopt v2 pre-alpha.
   - Supports stdio and Streamable HTTP transports. Use stdio for Claude Code integration.
-  - `sendLoggingMessage()` requires the server to declare logging capability. If using the low-level `Server` class, pass `capabilities: { logging: {} }` explicitly. The high-level `McpServer` may handle this automatically — verify at implementation time.
+  - `server.tool()` is deprecated in v1.27.x — use `server.registerTool()` with a config object (title, description, Zod `inputSchema`/`outputSchema`).
+  - `sendLoggingMessage()` requires the server to declare logging capability: pass `capabilities: { logging: {} }` when constructing `McpServer`. Access via `mcpServer.server.sendLoggingMessage()` (the underlying `Server` instance), not directly on `McpServer`.
 
 ### yargs (CLI Parsing)
 
@@ -289,7 +292,7 @@ action.yml            GitHub Action (shell-based, invokes CLI)
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-03-02 | yargs version: pin at install time, not in PRD | yargs is stable but has had breaking changes between majors (16 → 17 was ESM-breaking). Pin the exact version in `package.json` at `npm install` time. The PRD doesn't need to specify the version — the implementer resolves it. |
-| 2026-03-02 | MCP progress: use `server.sendLoggingMessage()`, not `notifications/progress` | MCP SDK v1.x supports server-initiated notifications via `server.sendLoggingMessage()` (the `notifications/message` method). Send `level: "info"` with JSON data payload containing `{stage, path, index, total}`. The `notifications/progress` method requires a `progressToken` from the client (client opt-in) — don't depend on it. Use logging/message: fire-and-forget, no client cooperation required. Verify `sendLoggingMessage` availability within tool handlers at implementation time. |
+| 2026-03-02 | MCP progress: use `mcpServer.server.sendLoggingMessage()`, not `notifications/progress` | MCP SDK v1.x supports server-initiated notifications via `sendLoggingMessage()` (the `notifications/message` method) on the underlying `Server` instance. Access via `mcpServer.server.sendLoggingMessage()`. Requires `capabilities: { logging: {} }` when constructing `McpServer`. Send `level: "info"` with JSON data payload containing `{stage, path, index, total}`. The `notifications/progress` method requires a `progressToken` from the client (client opt-in) — don't depend on it. Use logging/message: fire-and-forget, no client cooperation required. |
 | 2026-03-02 | GitHub Action Weaver: binary download, not `go install` | Use pre-built binaries from Weaver's GitHub releases (`open-telemetry/weaver`). `go install` requires a Go toolchain (~2 min setup), and the version depends on Go module proxy cache. Binary download is deterministic, fast (~5 seconds), and matches `weaverMinVersion` exactly. Verify exact binary name and archive structure from Weaver's releases page at implementation time. |
 | 2026-03-02 | GitHub Action: shell-based `action.yml` invoking CLI, not TypeScript entry point | The Action's job is: install Node, install deps, install Weaver, run `orb instrument --yes --output json <path>`, parse JSON into step outputs. This is ~15 lines of shell. A separate `action.ts` would need its own build step, its own `node_modules` resolution, and would create a fourth interface path diverging from the CLI. The Action uses the CLI to guarantee equivalence by construction. Removed `action.ts` from module organization. |
 | 2026-03-02 | `--dry-run` flag parsed in Phase 6, behavior implemented in Phase 7 | The yargs scaffold defines all flags up front (Milestone 1). `--dry-run` is accepted and passed through to the coordinator config, but the coordinator's revert-after-each-file logic is Phase 7. The flag is accepted but not yet functional in Phase 6. Noted explicitly in Milestone 3. |

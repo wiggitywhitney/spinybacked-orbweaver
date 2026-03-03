@@ -23,7 +23,7 @@ For architectural context, see `docs/architecture/recommendations.md`. For imple
 
 ### Spec Position
 
-The spec originally said "Plain TypeScript (Node.js)" for the Coordinator. The v3.6 update switched to JavaScript; the v3.9 update restored TypeScript using Node.js 24.x native type stripping (see [Agent Language](#1-agent-language-javascript-vs-typescript--resolved)).
+The spec originally said "Plain TypeScript (Node.js)" for the Coordinator. The v3.6 update switched to JavaScript; the v3.9 update restored TypeScript using Node.js 24.x native type stripping (see [Agent Language](#1-agent-language-javascript-vs-typescript--resolved-reopened)).
 
 ### Finding
 
@@ -579,7 +579,7 @@ Changes the spec should incorporate based on this evaluation:
 8. **Add yaml** to Technology Stack table (config parsing)
 9. **Add built-in node:fs glob and node:child_process** to Technology Stack table
 10. **Note ts-morph scope analysis limitation** (issues #561, #1351) — variable shadowing check should use compiler node `locals` access, not just `findReferences()`
-11. ~~**Clarify agent language**~~ — resolved: TypeScript with erasableSyntaxOnly, native Node.js 24.x type stripping (see [Agent Language](#1-agent-language-javascript-vs-typescript--resolved))
+11. ~~**Clarify agent language**~~ — resolved: TypeScript with erasableSyntaxOnly, native Node.js 24.x type stripping (see [Agent Language](#1-agent-language-javascript-vs-typescript--resolved-reopened))
 12. **Pin MCP SDK to v1.x** — v2 is pre-alpha
 13. **Note Prettier config resolution** — the agent should respect the target project's `.prettierrc`
 
