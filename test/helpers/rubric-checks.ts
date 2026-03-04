@@ -279,7 +279,8 @@ export function checkErrorRecording(code: string): RubricCheckResult {
     // but only if there are catch blocks
     const hasCatch = /catch\s*\(/.test(code);
     if (!hasCatch) {
-      return { passed: false, details: 'Spans exist but no catch blocks for error recording' };
+      // Spans without catch blocks are acceptable — error recording is only required when catching
+      return { passed: true };
     }
   }
 

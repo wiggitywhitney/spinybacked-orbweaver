@@ -17,7 +17,7 @@ export async function chargePayment(order) {
   if (!response.ok) {
     throw new Error(`Payment failed: ${response.status}`);
   }
-  return response.json();
+  return await response.json();
 }
 
 function validateOrder(order) {
