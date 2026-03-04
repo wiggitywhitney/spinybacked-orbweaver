@@ -264,7 +264,7 @@ src/
 
 - [x] **Milestone 5: LLM integration and response parsing** — `instrumentFile` calls the Anthropic API with structured output (`zodOutputFormat`), adaptive thinking, and prompt caching. Response parsed into `InstrumentationOutput`. Basic elision rejection: pattern scan for `// ...`, `// existing code`, `// rest of`, `/* ... */`; length comparison (output <80% of input with spans added = rejection). Token usage captured from `message.usage`. Verified by integration test against a real JavaScript file.
 
-- [ ] **Milestone 6: Already-instrumented detection** — Agent detects existing OTel code (`tracer.startActiveSpan`, `tracer.startSpan`, imported tracer factories) and handles appropriately (skip or report). Verified by test with pre-instrumented file → RST-005. See Decision Log: test fixture project includes an already-instrumented file for RST-005.
+- [x] **Milestone 6: Already-instrumented detection** — Agent detects existing OTel code (`tracer.startActiveSpan`, `tracer.startSpan`, imported tracer factories) and handles appropriately (skip or report). Verified by test with pre-instrumented file → RST-005. See Decision Log: test fixture project includes an already-instrumented file for RST-005.
 
 - [ ] **Milestone 7: DX verification** — Structured results for all outcomes: successful instrumentation (all `InstrumentationOutput` fields populated with meaningful content, not empty defaults), prerequisite failures (error says what's missing and what to do), elision rejection (error says what pattern was detected). No silent failures. Verified by asserting diagnostic fields contain meaningful content, not just `status === 'success'`.
 

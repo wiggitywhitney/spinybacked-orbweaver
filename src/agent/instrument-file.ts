@@ -3,7 +3,10 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { Project } from 'ts-morph';
 import type { AgentConfig } from '../config/schema.ts';
+import { detectOTelImports } from '../ast/import-detection.ts';
+import { classifyFunctions } from '../ast/function-classification.ts';
 import { LlmOutputSchema } from './schema.ts';
 import type { InstrumentationOutput, TokenUsage } from './schema.ts';
 import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
@@ -78,8 +81,42 @@ export async function instrumentFile(
 ): Promise<InstrumentFileResult> {
   const client = options?.client ?? new Anthropic();
 
+  // Detect existing OTel instrumentation before calling the LLM
+  const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+  const sourceFile = project.createSourceFile('input.js', originalCode);
+  const detectionResult = detectOTelImports(sourceFile);
+
+  // If all exported functions are already instrumented, skip the LLM call entirely
+  if (detectionResult.existingSpanPatterns.length > 0) {
+    const functions = classifyFunctions(sourceFile);
+    const exportedFunctions = functions.filter(f => f.isExported);
+    const instrumentedFunctionNames = new Set(
+      detectionResult.existingSpanPatterns
+        .map(p => p.enclosingFunction)
+        .filter((name): name is string => name !== undefined),
+    );
+    const allExportedInstrumented = exportedFunctions.length > 0
+      && exportedFunctions.every(f => instrumentedFunctionNames.has(f.name));
+
+    if (allExportedInstrumented) {
+      const skippedNames = exportedFunctions.map(f => f.name).join(', ');
+      return {
+        success: true,
+        output: {
+          instrumentedCode: originalCode,
+          librariesNeeded: [],
+          schemaExtensions: [],
+          attributesCreated: 0,
+          spanCategories: null,
+          notes: [`File already instrumented — all exported functions (${skippedNames}) have existing span patterns. No LLM call made.`],
+          tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+        },
+      };
+    }
+  }
+
   const systemPrompt = buildSystemPrompt(resolvedSchema);
-  const userMessage = buildUserMessage(filePath, originalCode, config);
+  const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult);
 
   let tokenUsage: TokenUsage | undefined;
 

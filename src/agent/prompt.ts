@@ -2,6 +2,7 @@
 // ABOUTME: Follows the spec's 7-section structure with Claude 4.x prompt hygiene.
 
 import type { AgentConfig } from '../config/schema.ts';
+import type { OTelImportDetectionResult } from '../ast/import-detection.ts';
 
 /**
  * Build the system prompt for the Instrumentation Agent.
@@ -127,16 +128,20 @@ You are returning structured JSON via the output schema. Fill in each field:
 /**
  * Build the user message for a specific file to instrument.
  * This changes per file — it contains the file path and source code.
+ * When OTel detection results are provided, includes already-instrumented context
+ * so the LLM knows which functions to skip.
  *
  * @param filePath - Absolute path to the JavaScript file
  * @param originalCode - File contents before instrumentation
  * @param config - Validated agent configuration (used for large file threshold)
+ * @param detectionResult - Optional OTel detection result from AST analysis
  * @returns The user message string
  */
 export function buildUserMessage(
   filePath: string,
   originalCode: string,
   config: AgentConfig,
+  detectionResult?: OTelImportDetectionResult,
 ): string {
   const lineCount = originalCode.split('\n').length;
   const isLargeFile = lineCount > config.largeFileThresholdLines;
@@ -148,6 +153,18 @@ export function buildUserMessage(
 
   if (isLargeFile) {
     message += `\n\n**Warning**: This is a large file (${lineCount} lines, threshold: ${config.largeFileThresholdLines}). Pay extra attention to returning the complete file. Every line of the original must be present in the output.`;
+  }
+
+  if (detectionResult && detectionResult.existingSpanPatterns.length > 0) {
+    const patternDescriptions = detectionResult.existingSpanPatterns.map(p => {
+      const fn = p.enclosingFunction ? ` in \`${p.enclosingFunction}\`` : '';
+      return `- \`${p.pattern}\`${fn} (line ${p.lineNumber})`;
+    });
+
+    message += `
+
+**Already instrumented**: The following span patterns were detected in this file. Do not add duplicate instrumentation to these functions. Report them in \`notes\` as skipped.
+${patternDescriptions.join('\n')}`;
   }
 
   message += `
