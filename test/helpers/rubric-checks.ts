@@ -395,7 +395,7 @@ export function checkAttributeSafety(code: string): RubricCheckResult {
   }
 
   // Check for PII field patterns in attribute keys
-  const piiPatterns = ['email', 'password', 'ssn', 'phone', 'creditCard', 'credit_card', 'address'];
+  const piiPatterns = ['email', 'password', 'ssn', 'phone', 'creditcard', 'credit_card', 'address'];
   const setAttrRegex = /\.setAttribute\s*\(\s*['"]([^'"]+)['"]/g;
   let match;
   while ((match = setAttrRegex.exec(code)) !== null) {

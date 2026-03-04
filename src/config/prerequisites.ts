@@ -87,7 +87,15 @@ async function checkOtelApiDependency(projectRoot: string): Promise<Prerequisite
   let parsed: Record<string, unknown>;
   try {
     const rawContent = await readFile(packagePath, 'utf-8');
-    parsed = JSON.parse(rawContent) as Record<string, unknown>;
+    const rawParsed: unknown = JSON.parse(rawContent);
+    if (typeof rawParsed !== 'object' || rawParsed === null || Array.isArray(rawParsed)) {
+      return {
+        id: PREREQUISITE_IDS.OTEL_API_DEPENDENCY,
+        passed: false,
+        message: `package.json at ${packagePath} is not a JSON object.`,
+      };
+    }
+    parsed = rawParsed as Record<string, unknown>;
   } catch {
     return {
       id: PREREQUISITE_IDS.OTEL_API_DEPENDENCY,
@@ -132,6 +140,14 @@ async function checkOtelApiDependency(projectRoot: string): Promise<Prerequisite
 async function checkSdkInitFile(projectRoot: string, sdkInitFile: string): Promise<PrerequisiteCheckResult> {
   const fullPath = resolve(projectRoot, sdkInitFile);
 
+  if (!fullPath.startsWith(projectRoot)) {
+    return {
+      id: PREREQUISITE_IDS.SDK_INIT_FILE,
+      passed: false,
+      message: `SDK init file path '${sdkInitFile}' resolves outside the project root. Use a relative path within the project.`,
+    };
+  }
+
   try {
     await access(fullPath);
   } catch {
@@ -159,6 +175,14 @@ async function checkSdkInitFile(projectRoot: string, sdkInitFile: string): Promi
  */
 async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promise<PrerequisiteCheckResult> {
   const fullPath = resolve(projectRoot, schemaPath);
+
+  if (!fullPath.startsWith(projectRoot)) {
+    return {
+      id: PREREQUISITE_IDS.WEAVER_SCHEMA,
+      passed: false,
+      message: `Schema path '${schemaPath}' resolves outside the project root. Use a relative path within the project.`,
+    };
+  }
 
   try {
     await access(fullPath);

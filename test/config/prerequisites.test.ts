@@ -144,6 +144,14 @@ describe('checkOtelApiDependency', () => {
     expect(result.id).toBe('OTEL_API_DEPENDENCY');
     expect(result.message).toContain('Cannot read package.json');
   });
+
+  it('fails when package.json is not a JSON object', async () => {
+    writeFile('package.json', '"just a string"');
+    const result = await checkOtelApiDependency(testDir);
+    expect(result.passed).toBe(false);
+    expect(result.id).toBe('OTEL_API_DEPENDENCY');
+    expect(result.message).toContain('not a JSON object');
+  });
 });
 
 describe('checkSdkInitFile', () => {
@@ -162,6 +170,13 @@ describe('checkSdkInitFile', () => {
     expect(result.message).toContain('not found');
     expect(result.message).toContain('sdkInitFile');
   });
+
+  it('fails when SDK init file path escapes project root', async () => {
+    const result = await checkSdkInitFile(testDir, '../../etc/passwd');
+    expect(result.passed).toBe(false);
+    expect(result.id).toBe('SDK_INIT_FILE');
+    expect(result.message).toContain('outside the project root');
+  });
 });
 
 describe('checkWeaverSchema', () => {
@@ -171,6 +186,13 @@ describe('checkWeaverSchema', () => {
     expect(result.id).toBe('WEAVER_SCHEMA');
     expect(result.message).toContain('not found');
     expect(result.message).toContain('schemaPath');
+  });
+
+  it('fails when schema path escapes project root', async () => {
+    const result = await checkWeaverSchema(testDir, '../../../etc');
+    expect(result.passed).toBe(false);
+    expect(result.id).toBe('WEAVER_SCHEMA');
+    expect(result.message).toContain('outside the project root');
   });
 
   it('reports when weaver CLI is not installed', async () => {
