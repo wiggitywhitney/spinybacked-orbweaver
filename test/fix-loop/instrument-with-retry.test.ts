@@ -1,5 +1,5 @@
-// ABOUTME: Tests for instrumentWithRetry — single-attempt, token budget, multi-turn fix, and fresh regeneration.
-// ABOUTME: Milestones 2-5 — verifies FileResult population, file revert, budget enforcement, retry, and fresh regen.
+// ABOUTME: Tests for instrumentWithRetry — single-attempt, token budget, multi-turn fix, fresh regen, oscillation.
+// ABOUTME: Milestones 2-6 — verifies FileResult population, file revert, budget enforcement, retry, and oscillation.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSync } from 'node:fs';
@@ -1239,5 +1239,317 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
 
     expect(result.status).toBe('success');
     expect(result.errorProgression).toEqual(['2 blocking errors', '1 blocking error', '0 errors']);
+  });
+});
+
+describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'orb-oscillation-test-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  const attempt1Tokens: TokenUsage = {
+    inputTokens: 1000,
+    outputTokens: 500,
+    cacheCreationInputTokens: 200,
+    cacheReadInputTokens: 100,
+  };
+
+  const attempt2Tokens: TokenUsage = {
+    inputTokens: 1500,
+    outputTokens: 600,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 300,
+  };
+
+  const attempt3Tokens: TokenUsage = {
+    inputTokens: 1200,
+    outputTokens: 700,
+    cacheCreationInputTokens: 100,
+    cacheReadInputTokens: 200,
+  };
+
+  const mockConversationContext: ConversationContext = {
+    userMessage: 'instrument this file',
+    assistantResponseBlocks: [{ type: 'text', text: '{"instrumentedCode": "..."}' }],
+  };
+
+  it('skips to fresh regeneration when attempt 2 has more errors at the same stage', async () => {
+    let callCount = 0;
+    let attempt3Received = false;
+    const badOutput1 = makeInstrumentationOutput({ instrumentedCode: 'bad1;\n', tokenUsage: attempt1Tokens });
+    const badOutput2 = makeInstrumentationOutput({ instrumentedCode: 'bad2;\n', tokenUsage: attempt2Tokens });
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt3Tokens });
+
+    // Attempt 1: 1 SYNTAX error; Attempt 2: 2 SYNTAX errors (oscillation)
+    const oneErrorValidation: ValidationResult = {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+
+    const twoErrorValidation: ValidationResult = {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Syntax error 2', tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Syntax error 2', tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+        callCount++;
+        if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
+        if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
+        attempt3Received = true;
+        // Attempt 3 should NOT have conversationContext (fresh regen after oscillation)
+        expect(options?.conversationContext).toBeUndefined();
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad1;\n') return oneErrorValidation;
+        if (input.instrumentedCode === 'bad2;\n') return twoErrorValidation;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(3);
+    expect(result.validationStrategyUsed).toBe('fresh-regeneration');
+    expect(attempt3Received).toBe(true);
+  });
+
+  it('bails when oscillation detected on fresh regeneration (attempt 3)', async () => {
+    let callCount = 0;
+    const badOutput1 = makeInstrumentationOutput({ instrumentedCode: 'bad1;\n', tokenUsage: attempt1Tokens });
+    const badOutput2 = makeInstrumentationOutput({ instrumentedCode: 'bad2;\n', tokenUsage: attempt2Tokens });
+    const badOutput3 = makeInstrumentationOutput({ instrumentedCode: 'bad3;\n', tokenUsage: attempt3Tokens });
+
+    // Attempt 2: 1 LINT error; Attempt 3: 2 LINT errors (oscillation on fresh regen → bail)
+    const oneLintError: ValidationResult = {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 1, message: 'Lint error 1', tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 1, message: 'Lint error 1', tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+
+    const twoLintErrors: ValidationResult = {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 1, message: 'Lint error 1', tier: 1, blocking: true },
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Lint error 2', tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 1, message: 'Lint error 1', tier: 1, blocking: true },
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Lint error 2', tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
+        if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
+        return { success: true, output: badOutput3 } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad1;\n') return makeFailingValidation(testFilePath);
+        if (input.instrumentedCode === 'bad2;\n') return oneLintError;
+        return twoLintErrors;
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.validationAttempts).toBe(3);
+    expect(result.reason).toContain('Oscillation');
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+  });
+
+  it('bails on duplicate errors across attempts (same ruleId + filePath)', async () => {
+    let callCount = 0;
+    const badOutput1 = makeInstrumentationOutput({ instrumentedCode: 'bad1;\n', tokenUsage: attempt1Tokens });
+    const badOutput2 = makeInstrumentationOutput({ instrumentedCode: 'bad2;\n', tokenUsage: attempt2Tokens });
+    const badOutput3 = makeInstrumentationOutput({ instrumentedCode: 'bad3;\n', tokenUsage: attempt3Tokens });
+
+    // Same SYNTAX error on same filePath in attempts 1, 2, and 3 → duplicate detection
+    const syntaxError: ValidationResult = {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
+        if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
+        return { success: true, output: badOutput3 } as InstrumentFileResult;
+      },
+      validateFile: async () => syntaxError,
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Duplicate errors detected after attempt 2 → skip to fresh regen (attempt 3).
+    // Duplicate errors detected again after attempt 3 → bail.
+    expect(result.status).toBe('failed');
+    expect(result.reason).toContain('Oscillation');
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+  });
+
+  it('does not detect oscillation when errors decrease (convergence)', async () => {
+    let callCount = 0;
+    const badOutput1 = makeInstrumentationOutput({ instrumentedCode: 'bad1;\n', tokenUsage: attempt1Tokens });
+    const badOutput2 = makeInstrumentationOutput({ instrumentedCode: 'bad2;\n', tokenUsage: attempt2Tokens });
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt3Tokens });
+
+    // Attempt 1: 2 errors at different stages, Attempt 2: 1 error (convergence — no oscillation)
+    const twoErrorValidation: ValidationResult = {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Lint error', tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Lint error', tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
+        if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad1;\n') return twoErrorValidation;
+        if (input.instrumentedCode === 'bad2;\n') return makeFailingValidation(testFilePath); // 1 error
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Normal flow — attempt 2 had fewer errors, so no oscillation. Attempt 3 succeeds.
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(3);
+    expect(result.errorProgression).toEqual(['2 blocking errors', '1 blocking error', '0 errors']);
+  });
+
+  it('token budget takes precedence over oscillation detection', async () => {
+    let callCount = 0;
+    const expensiveTokens: TokenUsage = {
+      inputTokens: 5000,
+      outputTokens: 3000,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    };
+    const badOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: expensiveTokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        return { success: true, output: badOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => makeFailingValidation(testFilePath),
+    };
+
+    // Budget 10000: attempt 1 uses 8000, attempt 2 uses 8000 (cumulative 16000 > 10000)
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 10000 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toContain('budget');
+    // Budget exceeded before oscillation detection runs
+  });
+
+  it('includes oscillation reason in errorProgression when oscillation causes early exit', async () => {
+    let callCount = 0;
+    const badOutput1 = makeInstrumentationOutput({ instrumentedCode: 'bad1;\n', tokenUsage: attempt1Tokens });
+    const badOutput2 = makeInstrumentationOutput({ instrumentedCode: 'bad2;\n', tokenUsage: attempt2Tokens });
+    const badOutput3 = makeInstrumentationOutput({ instrumentedCode: 'bad3;\n', tokenUsage: attempt3Tokens });
+
+    // Same error in all attempts → duplicate detection fires
+    const syntaxError: ValidationResult = {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
+        if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
+        return { success: true, output: badOutput3 } as InstrumentFileResult;
+      },
+      validateFile: async () => syntaxError,
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.errorProgression).toBeDefined();
+    expect(result.errorProgression!.length).toBe(3); // All 3 attempts ran
   });
 });

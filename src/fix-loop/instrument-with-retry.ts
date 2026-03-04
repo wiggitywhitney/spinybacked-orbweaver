@@ -1,5 +1,5 @@
 // ABOUTME: Core fix loop — orchestrates instrumentFile + validateFile with the hybrid 3-attempt strategy.
-// ABOUTME: Retry with multi-turn feedback (attempt 2), token budget tracking, and file snapshot/restore.
+// ABOUTME: Retry with multi-turn feedback, fresh regeneration, oscillation detection, and token budget tracking.
 
 import { writeFile } from 'node:fs/promises';
 import type { AgentConfig } from '../config/schema.ts';
@@ -8,6 +8,7 @@ import type { InstrumentFileResult, ConversationContext } from '../agent/instrum
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import { createSnapshot, restoreSnapshot, removeSnapshot } from './snapshot.ts';
 import { addTokenUsage, totalTokens } from './token-budget.ts';
+import { detectOscillation } from './oscillation.ts';
 import type { FileResult, ValidationStrategy } from './types.ts';
 
 /**
@@ -211,6 +212,7 @@ async function executeRetryLoop(
   const errorProgression: string[] = [];
   let lastOutput: InstrumentationOutput | undefined;
   let lastValidation: ValidationResult | undefined;
+  let previousValidation: ValidationResult | undefined;
   let lastConversationContext: ConversationContext | undefined;
   let lastStrategy: ValidationStrategy = 'initial-generation';
 
@@ -307,6 +309,29 @@ async function executeRetryLoop(
     // Validation failed — restore original code before next attempt.
     // Write originalCode directly instead of consuming the snapshot (which deletes it).
     await writeFile(filePath, originalCode, 'utf-8');
+
+    // Oscillation detection: compare with previous validation
+    if (attempt > 1 && previousValidation) {
+      const oscillation = detectOscillation(validation, previousValidation);
+      if (oscillation.shouldSkip) {
+        const isFreshRegen = strategy === 'fresh-regeneration';
+        if (isFreshRegen) {
+          // Already on fresh regeneration — bail immediately
+          await removeSnapshot(snapshotPath);
+          const reason = `Oscillation detected during fresh regeneration: ${oscillation.reason}`;
+          const lastError = validation.blockingFailures
+            .map(f => `${f.ruleId}: ${f.message}`)
+            .join('\n');
+          return buildFailedResult(
+            filePath, reason, lastError, cumulativeTokens,
+            attempt, strategy, errorProgression, lastOutput,
+          );
+        }
+        // Not yet on fresh regen — skip ahead to it (loop continues naturally to attempt 3)
+      }
+    }
+
+    previousValidation = validation;
   }
 
   // All attempts exhausted — clean up snapshot and return failure
