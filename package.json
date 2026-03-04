@@ -7,9 +7,8 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "lint": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -31,9 +30,16 @@
   },
   "homepage": "https://github.com/wiggitywhitney/spinybacked-orbweaver#readme",
   "devDependencies": {
+    "@types/node": "^24.11.0",
     "@vitest/coverage-v8": "^4.0.18",
     "commit-story": "file:../commit-story-v2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "ts-morph": "^27.0.2",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
   }
 }

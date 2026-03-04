@@ -1,0 +1,1 @@
+/Users/whitney.lee/Documents/Repositories/claude-config/.claude/skills/prd-create/SKILL.v1-yolo.md

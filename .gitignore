@@ -5,3 +5,4 @@ journal/
 .commit-story/
 .vals.yaml
 .claude/CLAUDE.md
+.claude/design-decisions.md
