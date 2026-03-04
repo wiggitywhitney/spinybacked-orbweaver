@@ -84,6 +84,7 @@ describe('detectElision', () => {
       const result = detectElision(output, original);
       // At exactly 80%, should not flag (threshold is strictly less than)
       expect(result.lengthRatio).toBeGreaterThanOrEqual(0.8);
+      expect(result.elisionDetected).toBe(false);
     });
 
     it('does not flag short files that naturally shrink slightly', () => {

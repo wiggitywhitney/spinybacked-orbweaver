@@ -2,9 +2,15 @@
 // ABOUTME: Verifies package.json, OTel API dependency, SDK init file, and Weaver schema.
 
 import { readFile, access } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join, resolve, relative, isAbsolute } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import type { AgentConfig } from './schema.ts';
+
+/** Check whether a resolved path stays within the project root. */
+function isWithinProject(fullPath: string, projectRoot: string): boolean {
+  const rel = relative(projectRoot, fullPath);
+  return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel);
+}
 
 /** Individual prerequisite check identifiers. */
 const PREREQUISITE_IDS = {
@@ -140,7 +146,7 @@ async function checkOtelApiDependency(projectRoot: string): Promise<Prerequisite
 async function checkSdkInitFile(projectRoot: string, sdkInitFile: string): Promise<PrerequisiteCheckResult> {
   const fullPath = resolve(projectRoot, sdkInitFile);
 
-  if (!fullPath.startsWith(projectRoot + '/')) {
+  if (!isWithinProject(fullPath, projectRoot)) {
     return {
       id: PREREQUISITE_IDS.SDK_INIT_FILE,
       passed: false,
@@ -176,7 +182,7 @@ async function checkSdkInitFile(projectRoot: string, sdkInitFile: string): Promi
 async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promise<PrerequisiteCheckResult> {
   const fullPath = resolve(projectRoot, schemaPath);
 
-  if (!fullPath.startsWith(projectRoot + '/')) {
+  if (!isWithinProject(fullPath, projectRoot)) {
     return {
       id: PREREQUISITE_IDS.WEAVER_SCHEMA,
       passed: false,
