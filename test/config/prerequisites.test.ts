@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   checkPackageJson,
@@ -27,7 +27,7 @@ afterEach(() => {
 
 function writeFile(relativePath: string, content: string): string {
   const fullPath = join(testDir, relativePath);
-  const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
+  const dir = dirname(fullPath);
   mkdirSync(dir, { recursive: true });
   writeFileSync(fullPath, content, 'utf-8');
   return fullPath;

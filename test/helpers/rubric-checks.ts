@@ -361,10 +361,8 @@ export function checkErrorRecording(code: string): RubricCheckResult {
  * startSpan requires context.with() — checked here.
  */
 export function checkAsyncContext(code: string): RubricCheckResult {
-  // startActiveSpan auto-manages context — this is the expected pattern
-  const hasStartActiveSpan = /\.startActiveSpan\s*\(/.test(code);
-
-  // startSpan requires manual context management
+  // startActiveSpan auto-manages context — no manual context.with() needed.
+  // startSpan requires manual context management.
   const startSpanMatches = code.match(/\.startSpan\s*\(/g);
   if (startSpanMatches && startSpanMatches.length > 0) {
     const hasContextWith = /context\.with\s*\(/.test(code);
