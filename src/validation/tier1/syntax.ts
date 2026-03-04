@@ -69,7 +69,7 @@ export function checkSyntax(filePath: string): CheckResult {
       filePath,
       lineNumber,
       message:
-        `SYNTAX check failed: node --check reported a syntax error. ${stderr.trim()} ` +
+        `SYNTAX check failed: node --check returned a non-zero exit code. ${stderr.trim()} ` +
         `Fix the syntax error${lineNumber ? ` at line ${lineNumber}` : ''} and ensure the file is valid JavaScript.`,
       tier: 1,
       blocking: true,
