@@ -110,7 +110,9 @@ export function validateConfig(input: Record<string, unknown>): ConfigResult {
 
   if (!result.success) {
     const issues = result.error.issues.map(
-      (issue) => `${issue.path.join('.')}: ${issue.message}`
+      (issue) => issue.path.length > 0
+        ? `${issue.path.join('.')}: ${issue.message}`
+        : issue.message
     );
     return {
       success: false,

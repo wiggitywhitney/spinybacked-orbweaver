@@ -226,6 +226,9 @@ describe('checkPrerequisites', () => {
     expect(result.checks[2].id).toBe('SDK_INIT_FILE');
     expect(result.checks[2].passed).toBe(true);
     expect(result.checks[3].id).toBe('WEAVER_SCHEMA');
+    // allPassed depends on weaver CLI availability
+    const expectedAllPassed = result.checks.every(c => c.passed);
+    expect(result.allPassed).toBe(expectedAllPassed);
   });
 
   it('returns allPassed false when any check fails', async () => {
