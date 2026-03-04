@@ -57,11 +57,6 @@ export function checkNonInstrumentationDiff(
   instrumentedCode: string,
   filePath: string,
 ): CheckResult {
-  const originalLines = originalCode
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
   const instrumentedTrimmed = instrumentedCode
     .split('\n')
     .map((l) => l.trim())
