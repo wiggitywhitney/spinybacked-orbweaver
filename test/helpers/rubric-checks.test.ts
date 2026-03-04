@@ -68,6 +68,24 @@ export async function getUsers(req, res) {
     expect(result.passed).toBe(false);
     expect(result.details).toContain("pool.query");
   });
+
+  it('fails when original lines are reordered', () => {
+    const original = `export function process(data) {
+  const validated = validate(data);
+  const transformed = transform(validated);
+  return save(transformed);
+}`;
+    const instrumented = `import { trace } from '@opentelemetry/api';
+const tracer = trace.getTracer('svc');
+export function process(data) {
+  const transformed = transform(validated);
+  const validated = validate(data);
+  return save(transformed);
+}`;
+    const result = checkNonInstrumentationLinesUnchanged(original, instrumented);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('reordered');
+  });
 });
 
 describe('NDS-004: checkPublicApiPreserved', () => {
@@ -202,6 +220,23 @@ describe('CDQ-001: checkSpansClosed', () => {
 
   it('passes when no spans exist', () => {
     const result = checkSpansClosed('function foo() { return 1; }');
+    expect(result.passed).toBe(true);
+  });
+
+  it('passes when finally block contains nested braces before span.end()', () => {
+    const code = `export async function foo() {
+  return tracer.startActiveSpan('foo', async (span) => {
+    try { return await doWork(); }
+    catch (e) { throw e; }
+    finally {
+      if (shouldLog) {
+        logger.info('done');
+      }
+      span.end();
+    }
+  });
+}`;
+    const result = checkSpansClosed(code);
     expect(result.passed).toBe(true);
   });
 });

@@ -5,8 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Project } from 'ts-morph';
-import type { SourceFile, SyntaxKind as SyntaxKindType } from 'ts-morph';
+import { Project, Node } from 'ts-morph';
+import type { SourceFile, SyntaxKind as SyntaxKindType, TryStatement } from 'ts-morph';
 
 /** Result of a rubric check. */
 interface RubricCheckResult {
@@ -35,8 +35,10 @@ export function checkSyntaxValid(code: string): RubricCheckResult {
 
 /**
  * NDS-003: Non-instrumentation lines unchanged.
- * Every non-blank line from the original should appear in the instrumented output
- * (after trimming whitespace, to allow for indentation changes from wrapping).
+ * Every non-blank, non-instrumentation line from the original should appear in the
+ * instrumented output (after trimming whitespace, to allow for indentation changes
+ * from wrapping). Checks both presence and relative ordering to detect modifications
+ * as well as deletions.
  */
 export function checkNonInstrumentationLinesUnchanged(
   original: string,
@@ -44,29 +46,56 @@ export function checkNonInstrumentationLinesUnchanged(
 ): RubricCheckResult {
   const originalLines = original.split('\n')
     .map(l => l.trim())
+    .filter(l => l.length > 0)
+    .filter(l => !l.startsWith('// ABOUTME:'));
+
+  const instrumentedTrimmed = instrumented.split('\n')
+    .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  const instrumentedLines = new Set(
-    instrumented.split('\n').map(l => l.trim()),
-  );
+  // Filter instrumented lines to non-OTel lines for ordering check
+  const instrumentedNonOtel = instrumentedTrimmed.filter(l => !isOTelLine(l));
 
   const missingLines: string[] = [];
+  const instrumentedSet = new Set(instrumentedTrimmed);
+
+  // Presence check: every original line must appear somewhere in the output
   for (const line of originalLines) {
-    // Skip ABOUTME comments — these may be legitimately modified
-    if (line.startsWith('// ABOUTME:')) continue;
-    if (!instrumentedLines.has(line)) {
+    if (!instrumentedSet.has(line)) {
       missingLines.push(line);
     }
   }
 
-  if (missingLines.length === 0) {
-    return { passed: true };
+  if (missingLines.length > 0) {
+    return {
+      passed: false,
+      details: `Original lines missing from instrumented output:\n${missingLines.map(l => `  - ${l}`).join('\n')}`,
+    };
   }
 
-  return {
-    passed: false,
-    details: `Original lines missing from instrumented output:\n${missingLines.map(l => `  - ${l}`).join('\n')}`,
-  };
+  // Ordering check: original lines should appear in the same relative order
+  // in the non-OTel portion of the instrumented output
+  const reorderedLines: string[] = [];
+  let searchFrom = 0;
+  for (const line of originalLines) {
+    const idx = instrumentedNonOtel.indexOf(line, searchFrom);
+    if (idx === -1) {
+      // Line was present (passed presence check) but not found in order —
+      // it may have been moved relative to other original lines
+      reorderedLines.push(line);
+    } else {
+      searchFrom = idx + 1;
+    }
+  }
+
+  if (reorderedLines.length > 0) {
+    return {
+      passed: false,
+      details: `Original lines were reordered in instrumented output:\n${reorderedLines.map(l => `  - ${l}`).join('\n')}`,
+    };
+  }
+
+  return { passed: true };
 }
 
 /**
@@ -222,9 +251,8 @@ export function checkSpansClosed(code: string): RubricCheckResult {
     return { passed: true };
   }
 
-  // Count span.end() in finally blocks
-  const finallyEndRegex = /finally\s*\{[^}]*\.end\(\)/g;
-  const finallyEndCount = (code.match(finallyEndRegex) || []).length;
+  // Count span.end() in finally blocks using brace-counting to handle nested braces
+  const finallyEndCount = countSpanEndInFinallyBlocks(code);
 
   if (finallyEndCount >= spanOpenCount) {
     return { passed: true };
@@ -234,6 +262,30 @@ export function checkSpansClosed(code: string): RubricCheckResult {
     passed: false,
     details: `Found ${spanOpenCount} span opens but only ${finallyEndCount} span.end() calls in finally blocks`,
   };
+}
+
+/**
+ * Extract finally block bodies using ts-morph AST parsing,
+ * then count how many contain .end() calls.
+ */
+function countSpanEndInFinallyBlocks(code: string): number {
+  const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+  const sourceFile = project.createSourceFile('check-spans.js', code);
+  let count = 0;
+
+  sourceFile.forEachDescendant((node) => {
+    if (Node.isTryStatement(node)) {
+      const finallyBlock = node.getFinallyBlock();
+      if (finallyBlock) {
+        const finallyText = finallyBlock.getText();
+        if (/\.end\(\)/.test(finallyText)) {
+          count++;
+        }
+      }
+    }
+  });
+
+  return count;
 }
 
 /**
