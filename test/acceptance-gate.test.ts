@@ -165,7 +165,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
         expect(check.passed, `${rule} failed: ${check.details}`).toBe(true);
       }
 
-      // NDS-005 specifically: the createUser error handling should be preserved
+      // NDS-005 specifically: the validateOrder error handling should be preserved
       expect(output.instrumentedCode).toContain('validateOrder');
     });
   });
