@@ -258,7 +258,7 @@ src/
 
 - [x] **Milestone 2: Prerequisite checks** — Library functions that verify: `package.json` exists, `@opentelemetry/api` in peerDependencies, OTel SDK init file exists at configured path, Weaver schema exists and is valid (`weaver registry check` passes). Each check returns structured results explaining what was checked and what failed. Verified by unit tests with missing/invalid prerequisites.
 
-- [ ] **Milestone 3: AST helpers** — ts-morph utility module (`src/ast/`) with: import detection (existing OTel imports), variable shadowing check (scope-based, using compiler node `locals` access), function classification (exported, async, line count). Verified by unit tests against sample JavaScript files.
+- [x] **Milestone 3: AST helpers** — ts-morph utility module (`src/ast/`) with: import detection (existing OTel imports), variable shadowing check (scope-based, using compiler node `locals` access), function classification (exported, async, line count). Verified by unit tests against sample JavaScript files.
 
 - [ ] **Milestone 4: System prompt construction** — Build the system prompt following the spec's structure: role and constraints, schema contract, transformation rules, 3-5 diverse examples, source file, output format specification. Includes Claude 4.x prompt hygiene (no anti-laziness directives, format specifications instead of motivational nudges, no chain-of-thought instructions for the transformation). Verified by inspection and integration test.
 
