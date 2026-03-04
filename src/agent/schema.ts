@@ -1,0 +1,68 @@
+// ABOUTME: Zod schemas for the Instrumentation Agent's structured LLM output.
+// ABOUTME: Defines InstrumentationOutput, SpanCategories, LibraryRequirement, and TokenUsage types.
+
+import { z } from 'zod';
+
+/**
+ * A library requirement identified by the agent — an auto-instrumentation
+ * package that should be installed and registered in the SDK init file.
+ */
+export const LibraryRequirementSchema = z.strictObject({
+  package: z.string(),
+  importName: z.string(),
+});
+
+/**
+ * Breakdown of spans added to the file by category.
+ * Used for ratio-based backstop (~20% threshold) and PR summary reporting.
+ */
+export const SpanCategoriesSchema = z.strictObject({
+  externalCalls: z.number().int().nonnegative(),
+  schemaDefined: z.number().int().nonnegative(),
+  serviceEntryPoints: z.number().int().nonnegative(),
+  totalFunctionsInFile: z.number().int().nonnegative(),
+});
+
+/**
+ * The structured output schema sent to the LLM via zodOutputFormat.
+ * This is what the LLM fills in. TokenUsage is excluded — it's populated
+ * from the API response metadata by the caller.
+ */
+export const LlmOutputSchema = z.strictObject({
+  instrumentedCode: z.string(),
+  librariesNeeded: z.array(LibraryRequirementSchema),
+  schemaExtensions: z.array(z.string()),
+  attributesCreated: z.number().int().nonnegative(),
+  spanCategories: SpanCategoriesSchema.nullable(),
+  notes: z.array(z.string()),
+});
+
+/**
+ * Token usage captured from the Anthropic API response's message.usage field.
+ */
+export const TokenUsageSchema = z.strictObject({
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheCreationInputTokens: z.number().int().nonnegative(),
+  cacheReadInputTokens: z.number().int().nonnegative(),
+});
+
+/**
+ * Complete result of a single instrumentation attempt (one LLM call).
+ * Combines the LLM's structured output with token usage from the API response.
+ */
+export const InstrumentationOutputSchema = z.strictObject({
+  instrumentedCode: z.string(),
+  librariesNeeded: z.array(LibraryRequirementSchema),
+  schemaExtensions: z.array(z.string()),
+  attributesCreated: z.number().int().nonnegative(),
+  spanCategories: SpanCategoriesSchema.nullable(),
+  notes: z.array(z.string()),
+  tokenUsage: TokenUsageSchema,
+});
+
+export type LibraryRequirement = z.infer<typeof LibraryRequirementSchema>;
+export type SpanCategories = z.infer<typeof SpanCategoriesSchema>;
+export type LlmOutput = z.infer<typeof LlmOutputSchema>;
+export type TokenUsage = z.infer<typeof TokenUsageSchema>;
+export type InstrumentationOutput = z.infer<typeof InstrumentationOutputSchema>;
