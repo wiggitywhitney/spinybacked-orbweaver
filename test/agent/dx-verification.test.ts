@@ -211,8 +211,10 @@ export async function handleRequest(req, res) {
       // Notes should reference specific function names and decisions
       const allNotes = result.output.notes.join(' ');
       expect(allNotes).toMatch(/handleRequest|formatResponse/);
-      // Notes should not be generic ("instrumentation complete")
-      expect(allNotes).not.toMatch(/^(done|complete|success|ok)$/i);
+      // No individual note should be a generic stub word
+      for (const note of result.output.notes) {
+        expect(note.trim().toLowerCase()).not.toMatch(/^(done|complete|success|ok)$/);
+      }
     });
   });
 
