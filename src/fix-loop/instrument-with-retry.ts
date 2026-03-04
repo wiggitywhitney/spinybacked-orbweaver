@@ -1,14 +1,25 @@
 // ABOUTME: Core fix loop — orchestrates instrumentFile + validateFile with the hybrid 3-attempt strategy.
-// ABOUTME: Implements single-attempt pass-through with token budget tracking; retry logic added in later milestones.
+// ABOUTME: Retry with multi-turn feedback (attempt 2), token budget tracking, and file snapshot/restore.
 
 import { writeFile } from 'node:fs/promises';
 import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
-import type { InstrumentFileResult } from '../agent/instrument-file.ts';
+import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import { createSnapshot, restoreSnapshot, removeSnapshot } from './snapshot.ts';
 import { addTokenUsage, totalTokens } from './token-budget.ts';
-import type { FileResult } from './types.ts';
+import type { FileResult, ValidationStrategy } from './types.ts';
+
+/**
+ * Options passed to instrumentFile for multi-turn fix attempts.
+ * Contains conversation context from prior attempts and the feedback message.
+ */
+export interface InstrumentFileCallOptions {
+  /** Prior conversation context from a previous attempt (for multi-turn fix). */
+  conversationContext?: ConversationContext;
+  /** Feedback message replacing the standard user message (for multi-turn fix). */
+  feedbackMessage?: string;
+}
 
 /**
  * Injectable dependencies for testing. Production code uses real implementations
@@ -20,6 +31,7 @@ export interface InstrumentWithRetryDeps {
     originalCode: string,
     resolvedSchema: object,
     config: AgentConfig,
+    options?: InstrumentFileCallOptions,
   ) => Promise<InstrumentFileResult>;
   validateFile: (input: ValidateFileInput) => Promise<ValidationResult>;
 }
@@ -85,11 +97,38 @@ function buildValidationConfig(config: AgentConfig) {
 }
 
 /**
+ * Build the feedback prompt for a multi-turn fix attempt.
+ * Combines a preamble with the structured validation feedback.
+ *
+ * @param validationFeedback - Formatted validation errors from formatFeedbackForAgent
+ * @returns Complete feedback message for the LLM
+ */
+function buildFixPrompt(validationFeedback: string): string {
+  return `The instrumented file has validation errors. Fix them and return the complete corrected file.\n\n${validationFeedback}`;
+}
+
+/**
+ * Determine the validation strategy for a given attempt number.
+ * Attempt 1 = initial-generation, attempt 2 = multi-turn-fix,
+ * attempt 3 = fresh-regeneration (Milestone 5).
+ *
+ * @param attemptNumber - 1-based attempt number
+ * @returns The strategy for this attempt
+ */
+function strategyForAttempt(attemptNumber: number): ValidationStrategy {
+  if (attemptNumber === 1) return 'initial-generation';
+  if (attemptNumber === 2) return 'multi-turn-fix';
+  return 'fresh-regeneration';
+}
+
+/**
  * Instrument a file with validation and retry loop.
  *
  * Orchestrates instrumentFile (Phase 1) + validateFile (Phase 2)
- * using the hybrid 3-attempt strategy. Milestone 2 implements single-attempt
- * pass-through only — retry logic is added in Milestones 4-6.
+ * using the hybrid 3-attempt strategy:
+ *   Attempt 1: initial generation
+ *   Attempt 2: multi-turn fix with validation feedback (Milestone 4)
+ *   Attempt 3: fresh regeneration with failure hint (Milestone 5)
  *
  * The resolvedSchema is provided by the coordinator, which re-resolves
  * it before each file. The fix loop uses this snapshot for all attempts
@@ -112,29 +151,30 @@ export async function instrumentWithRetry(
   const deps = options?.deps;
   const instrumentFileFn = deps?.instrumentFile ?? (await import('../agent/index.ts')).instrumentFile;
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
+  const formatFeedbackFn = (await import('../validation/feedback.ts')).formatFeedbackForAgent;
 
   // Snapshot the original file before any modifications
   const snapshotPath = await createSnapshot(filePath);
 
   try {
-    return await executeAttempt(
+    return await executeRetryLoop(
       filePath, originalCode, resolvedSchema, config, snapshotPath,
-      instrumentFileFn, validateFileFn,
+      instrumentFileFn, validateFileFn, formatFeedbackFn,
     );
   } catch (error) {
-    // Unexpected error — restore and fail cleanly
-    await restoreSnapshot(snapshotPath, filePath);
+    // Unexpected error — restore original content and clean up snapshot
+    await writeFile(filePath, originalCode, 'utf-8');
+    await removeSnapshot(snapshotPath);
     const message = error instanceof Error ? error.message : String(error);
-    return buildFailedResult(filePath, message, message, ZERO_TOKENS, 1);
+    return buildFailedResult(filePath, message, message, ZERO_TOKENS, 1, 'initial-generation');
   }
 }
 
 /**
- * Execute a single instrumentation + validation attempt.
- * Handles file writing, validation, snapshot restore on failure,
- * and snapshot cleanup on success.
+ * Execute the retry loop: attempt 1 (initial) + up to maxFixAttempts retries.
+ * Each failed attempt feeds validation results back to the next attempt.
  */
-async function executeAttempt(
+async function executeRetryLoop(
   filePath: string,
   originalCode: string,
   resolvedSchema: object,
@@ -142,77 +182,133 @@ async function executeAttempt(
   snapshotPath: string,
   instrumentFileFn: InstrumentWithRetryDeps['instrumentFile'],
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
+  formatFeedbackFn: (result: ValidationResult) => string,
 ): Promise<FileResult> {
-  // Step 1: Call instrumentFile (Phase 1)
-  const instrumentResult = await instrumentFileFn(filePath, originalCode, resolvedSchema, config);
-
-  if (!instrumentResult.success) {
-    await restoreSnapshot(snapshotPath, filePath);
-    const tokenUsage = instrumentResult.tokenUsage ?? ZERO_TOKENS;
-    return buildFailedResult(
-      filePath, instrumentResult.error, instrumentResult.error, tokenUsage, 1,
-    );
-  }
-
-  const output = instrumentResult.output;
-
-  // Step 2: Check token budget before proceeding to validation
-  if (totalTokens(output.tokenUsage) > config.maxTokensPerFile) {
-    await restoreSnapshot(snapshotPath, filePath);
-    const reason = `Token budget exceeded: ${totalTokens(output.tokenUsage)} tokens used, budget is ${config.maxTokensPerFile}`;
-    return buildFailedResult(filePath, reason, reason, output.tokenUsage, 1);
-  }
-
-  // Step 3: Write instrumented code to disk (validation checks need the file on disk)
-  await writeFile(filePath, output.instrumentedCode, 'utf-8');
-
-  // Step 3: Run validation chain (Phase 2)
+  const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config);
-  const validation = await validateFileFn({
-    originalCode,
-    instrumentedCode: output.instrumentedCode,
-    filePath,
-    config: validationConfig,
-  });
 
-  const errorSummary = summarizeErrors(validation);
+  let cumulativeTokens: TokenUsage = { ...ZERO_TOKENS };
+  const errorProgression: string[] = [];
+  let lastOutput: InstrumentationOutput | undefined;
+  let lastValidation: ValidationResult | undefined;
+  let lastConversationContext: ConversationContext | undefined;
+  let lastStrategy: ValidationStrategy = 'initial-generation';
 
-  if (validation.passed) {
-    // Success — clean up snapshot, return populated FileResult
-    await removeSnapshot(snapshotPath);
-    return {
-      path: filePath,
-      status: 'success',
-      spansAdded: calculateSpansAdded(output),
-      librariesNeeded: output.librariesNeeded,
-      schemaExtensions: output.schemaExtensions,
-      attributesCreated: output.attributesCreated,
-      validationAttempts: 1,
-      validationStrategyUsed: 'initial-generation',
-      errorProgression: [errorSummary],
-      spanCategories: output.spanCategories,
-      notes: output.notes,
-      advisoryAnnotations: validation.advisoryFindings.length > 0
-        ? validation.advisoryFindings
-        : undefined,
-      tokenUsage: output.tokenUsage,
-    };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const strategy = strategyForAttempt(attempt);
+    lastStrategy = strategy;
+
+    // Build call options for retry attempts
+    const callOptions: InstrumentFileCallOptions | undefined =
+      attempt === 2 && lastConversationContext && lastValidation
+        ? {
+            conversationContext: lastConversationContext,
+            feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
+          }
+        : undefined;
+
+    // Call instrumentFile
+    const instrumentResult = await instrumentFileFn(
+      filePath, originalCode, resolvedSchema, config, callOptions,
+    );
+
+    if (!instrumentResult.success) {
+      // instrumentFile failed — accumulate tokens and stop.
+      // File is already in original state (restored after prior attempt or never written).
+      const failTokens = instrumentResult.tokenUsage ?? ZERO_TOKENS;
+      cumulativeTokens = addTokenUsage(cumulativeTokens, failTokens);
+      await removeSnapshot(snapshotPath);
+      return buildFailedResult(
+        filePath, instrumentResult.error, instrumentResult.error,
+        cumulativeTokens, attempt, strategy, errorProgression, lastOutput,
+      );
+    }
+
+    const output = instrumentResult.output;
+    lastOutput = output;
+    cumulativeTokens = addTokenUsage(cumulativeTokens, output.tokenUsage);
+
+    // Capture conversation context for potential next attempt
+    if (instrumentResult.conversationContext) {
+      lastConversationContext = instrumentResult.conversationContext;
+    }
+
+    // Check token budget — file is still in original state at this point
+    if (totalTokens(cumulativeTokens) > config.maxTokensPerFile) {
+      await removeSnapshot(snapshotPath);
+      const reason = `Token budget exceeded: ${totalTokens(cumulativeTokens)} tokens used, budget is ${config.maxTokensPerFile}`;
+      return buildFailedResult(
+        filePath, reason, reason, cumulativeTokens, attempt, strategy, errorProgression, output,
+      );
+    }
+
+    // Write instrumented code to disk (validation chain needs the file on disk)
+    await writeFile(filePath, output.instrumentedCode, 'utf-8');
+
+    // Run validation chain
+    const validation = await validateFileFn({
+      originalCode,
+      instrumentedCode: output.instrumentedCode,
+      filePath,
+      config: validationConfig,
+    });
+
+    lastValidation = validation;
+    errorProgression.push(summarizeErrors(validation));
+
+    if (validation.passed) {
+      // Success — clean up snapshot, return populated FileResult
+      await removeSnapshot(snapshotPath);
+      return {
+        path: filePath,
+        status: 'success',
+        spansAdded: calculateSpansAdded(output),
+        librariesNeeded: output.librariesNeeded,
+        schemaExtensions: output.schemaExtensions,
+        attributesCreated: output.attributesCreated,
+        validationAttempts: attempt,
+        validationStrategyUsed: strategy,
+        errorProgression,
+        spanCategories: output.spanCategories,
+        notes: output.notes,
+        advisoryAnnotations: validation.advisoryFindings.length > 0
+          ? validation.advisoryFindings
+          : undefined,
+        tokenUsage: cumulativeTokens,
+      };
+    }
+
+    // Validation failed — restore original code before next attempt.
+    // Write originalCode directly instead of consuming the snapshot (which deletes it).
+    await writeFile(filePath, originalCode, 'utf-8');
   }
 
-  // Validation failed — restore original file from snapshot
-  await restoreSnapshot(snapshotPath, filePath);
-
-  const failedRuleIds = validation.blockingFailures.map(f => f.ruleId).join(', ');
-  const reason = `Validation failed: ${failedRuleIds} — ${validation.blockingFailures[0]?.message ?? 'unknown error'}`;
-  const lastError = validation.blockingFailures
+  // All attempts exhausted — clean up snapshot and return failure
+  await removeSnapshot(snapshotPath);
+  const failedRuleIds = lastValidation!.blockingFailures.map(f => f.ruleId).join(', ');
+  const reason = `Validation failed: ${failedRuleIds} — ${lastValidation!.blockingFailures[0]?.message ?? 'unknown error'}`;
+  const lastError = lastValidation!.blockingFailures
     .map(f => `${f.ruleId}: ${f.message}`)
     .join('\n');
 
-  return buildFailedResult(filePath, reason, lastError, output.tokenUsage, 1, [errorSummary], output);
+  return buildFailedResult(
+    filePath, reason, lastError, cumulativeTokens,
+    maxAttempts, lastStrategy, errorProgression, lastOutput,
+  );
 }
 
 /**
  * Build a failed FileResult with all diagnostic fields populated.
+ *
+ * @param filePath - Path to the file
+ * @param reason - Human-readable failure reason
+ * @param lastError - Raw error output for debugging
+ * @param tokenUsage - Cumulative token usage
+ * @param attempts - Total attempts made
+ * @param strategy - Strategy of the last completed attempt
+ * @param errorProgression - Error summaries across attempts
+ * @param output - Last successful instrumentation output (for metadata)
+ * @returns Complete failed FileResult
  */
 function buildFailedResult(
   filePath: string,
@@ -220,6 +316,7 @@ function buildFailedResult(
   lastError: string,
   tokenUsage: TokenUsage,
   attempts: number,
+  strategy: ValidationStrategy,
   errorProgression?: string[],
   output?: InstrumentationOutput,
 ): FileResult {
@@ -231,7 +328,7 @@ function buildFailedResult(
     schemaExtensions: output?.schemaExtensions ?? [],
     attributesCreated: 0,
     validationAttempts: attempts,
-    validationStrategyUsed: 'initial-generation',
+    validationStrategyUsed: strategy,
     errorProgression,
     spanCategories: output?.spanCategories,
     notes: output?.notes,
