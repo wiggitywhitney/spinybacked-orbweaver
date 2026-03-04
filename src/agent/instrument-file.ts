@@ -56,6 +56,8 @@ interface InstrumentFileOptions {
   conversationContext?: ConversationContext;
   /** Feedback message replacing the standard user message (for multi-turn fix). */
   feedbackMessage?: string;
+  /** Failure category hint appended to the standard user message (for fresh regeneration). */
+  failureHint?: string;
 }
 
 /**
@@ -137,7 +139,12 @@ export async function instrumentFile(
   const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult);
 
   // Build messages: multi-turn (with prior conversation) or standard (initial generation)
-  const currentUserMessage = options?.feedbackMessage ?? userMessage;
+  // feedbackMessage replaces the user message (multi-turn fix);
+  // failureHint appends to the standard user message (fresh regeneration)
+  let currentUserMessage = options?.feedbackMessage ?? userMessage;
+  if (!options?.feedbackMessage && options?.failureHint) {
+    currentUserMessage = `${userMessage}\n\n${options.failureHint}`;
+  }
   const messages: Array<{ role: 'user' | 'assistant'; content: string | unknown[] }> = [];
 
   if (options?.conversationContext) {

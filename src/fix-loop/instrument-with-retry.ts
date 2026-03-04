@@ -19,6 +19,8 @@ export interface InstrumentFileCallOptions {
   conversationContext?: ConversationContext;
   /** Feedback message replacing the standard user message (for multi-turn fix). */
   feedbackMessage?: string;
+  /** Failure category hint appended to the user message (for fresh regeneration). */
+  failureHint?: string;
 }
 
 /**
@@ -105,6 +107,24 @@ function buildValidationConfig(config: AgentConfig) {
  */
 function buildFixPrompt(validationFeedback: string): string {
   return `The instrumented file has validation errors. Fix them and return the complete corrected file.\n\n${validationFeedback}`;
+}
+
+/**
+ * Build a failure category hint for fresh regeneration (attempt 3).
+ * Uses blockingFailures[0].ruleId + first sentence of its message.
+ * The hint steers the agent away from the same failure mode without
+ * providing detailed repair instructions (that was attempt 2's job).
+ *
+ * @param validation - The last validation result with blocking failures
+ * @returns Failure hint string for the LLM, or undefined if no blocking failures
+ */
+function buildFailureHint(validation: ValidationResult): string | undefined {
+  const firstFailure = validation.blockingFailures[0];
+  if (!firstFailure) return undefined;
+
+  // Extract first sentence: split on period followed by space or end of string
+  const firstSentence = firstFailure.message.split(/\.\s/)[0];
+  return `IMPORTANT: A previous attempt to instrument this file failed. The failure was: ${firstFailure.ruleId} — ${firstSentence}. Avoid this failure mode.`;
 }
 
 /**
@@ -199,13 +219,19 @@ async function executeRetryLoop(
     lastStrategy = strategy;
 
     // Build call options for retry attempts
-    const callOptions: InstrumentFileCallOptions | undefined =
-      attempt === 2 && lastConversationContext && lastValidation
-        ? {
-            conversationContext: lastConversationContext,
-            feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
-          }
-        : undefined;
+    let callOptions: InstrumentFileCallOptions | undefined;
+    if (attempt === 2 && lastConversationContext && lastValidation) {
+      // Multi-turn fix: grow the conversation with validation feedback
+      callOptions = {
+        conversationContext: lastConversationContext,
+        feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
+      };
+    } else if (attempt >= 3 && lastValidation) {
+      // Fresh regeneration: new conversation with failure category hint
+      callOptions = {
+        failureHint: buildFailureHint(lastValidation),
+      };
+    }
 
     // Call instrumentFile
     const instrumentResult = await instrumentFileFn(
