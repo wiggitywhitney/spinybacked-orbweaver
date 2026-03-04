@@ -40,9 +40,8 @@ describe('checkSpansClosed (CDQ-001)', () => {
       expect(result.passed).toBe(true);
     });
 
-    it('passes when startActiveSpan callback pattern (no try/finally needed)', () => {
-      // The callback pattern for startActiveSpan auto-manages span lifecycle
-      // when the callback simply returns — span.end() in finally is still the pattern
+    it('passes with startActiveSpan callback using try/finally and local variables', () => {
+      // Variant: callback stores result in a local variable before returning
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',

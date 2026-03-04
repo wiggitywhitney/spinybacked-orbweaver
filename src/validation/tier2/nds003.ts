@@ -23,15 +23,8 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   /SpanStatusCode\./,
   // context.with for async context propagation
   /^\s*(?:return\s+)?context\.with\s*\(/,
-  // Try/catch/finally structural keywords (when part of span lifecycle)
-  /^\s*try\s*\{/,
-  /^\s*\}\s*catch\s*\(/,
-  /^\s*\}\s*finally\s*\{/,
-  /^\s*\}\s*$/,                // closing braces
-  /^\s*\);?\s*$/,              // closing parens with optional semicolon
-  /^\s*\}\);?\s*$/,            // closing brace+paren (end of callback)
-  // Throw in catch (re-throw after recording exception)
-  /^\s*throw\s+/,
+  // Re-throw of caught exception (after recording exception on span)
+  /^\s*throw\s+(?:err|error|e|ex|exception)\s*;/,
   // Return with span wrapper
   /^\s*return\s+tracer\./,
   /^\s*return\s+(?:span|otelSpan)\./,
