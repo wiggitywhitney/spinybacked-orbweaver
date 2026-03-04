@@ -177,6 +177,15 @@ describe('checkSdkInitFile', () => {
     expect(result.id).toBe('SDK_INIT_FILE');
     expect(result.message).toContain('outside the project root');
   });
+
+  it('accepts path resolving to project root itself', async () => {
+    // '.' resolves to projectRoot — should not be rejected as outside
+    writeFile('dummy', '');
+    const result = await checkSdkInitFile(testDir, '.');
+    expect(result.id).toBe('SDK_INIT_FILE');
+    // Should not fail with "outside the project root"
+    expect(result.message).not.toContain('outside the project root');
+  });
 });
 
 describe('checkWeaverSchema', () => {

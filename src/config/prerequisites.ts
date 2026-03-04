@@ -9,7 +9,7 @@ import type { AgentConfig } from './schema.ts';
 /** Check whether a resolved path stays within the project root. */
 function isWithinProject(fullPath: string, projectRoot: string): boolean {
   const rel = relative(projectRoot, fullPath);
-  return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel);
+  return !rel.startsWith('..') && !isAbsolute(rel);
 }
 
 /** Individual prerequisite check identifiers. */

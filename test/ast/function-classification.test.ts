@@ -115,6 +115,29 @@ describe('classifyFunctions', () => {
     });
   });
 
+  describe('arrow function line numbers', () => {
+    it('reports initializer line numbers, not variable statement line numbers', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        useInMemoryFileSystem: true,
+      });
+      // The arrow function starts on line 2, but the VariableStatement starts on line 1
+      const sf = project.createSourceFile('test.js', [
+        'export const handler =',
+        '  async (req, res) => {',
+        '    return res.send("ok");',
+        '  };',
+      ].join('\n'));
+      const result = classifyFunctions(sf);
+      expect(result).toHaveLength(1);
+      const handler = result[0];
+      expect(handler.name).toBe('handler');
+      // startLine should be the arrow function (line 2), not the const declaration (line 1)
+      expect(handler.startLine).toBe(2);
+      expect(handler.lineCount).toBe(3);
+    });
+  });
+
   describe('totalFunctionsInFile count', () => {
     it('counts all functions for ratio-based backstop', () => {
       const sourceFile = getSourceFile('mixed-functions.js');

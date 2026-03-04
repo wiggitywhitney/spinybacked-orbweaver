@@ -88,6 +88,22 @@ describe('AgentConfigSchema', () => {
       const result = AgentConfigSchema.safeParse(rest);
       expect(result.success).toBe(false);
     });
+
+    it('rejects empty string schemaPath', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        schemaPath: '',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects empty string sdkInitFile', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        sdkInitFile: '',
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('enum validation', () => {

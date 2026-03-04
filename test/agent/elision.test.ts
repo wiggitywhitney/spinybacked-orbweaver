@@ -61,6 +61,14 @@ describe('detectElision', () => {
   });
 
   describe('length comparison', () => {
+    it('flags empty output for a one-line input', () => {
+      const original = 'const x = 1;';
+      const output = '';
+      const result = detectElision(output, original);
+      expect(result.elisionDetected).toBe(true);
+      expect(result.lengthRatio).toBe(0);
+    });
+
     it('flags output significantly shorter than input', () => {
       // 10-line input, 5-line output = 50%, well below 80%
       const original = Array.from({ length: 10 }, (_, i) => `line ${i}`).join('\n');

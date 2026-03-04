@@ -74,8 +74,8 @@ function classifyVariableFunction(
 ): FunctionInfo {
   const isExported = varStatement.isExported();
   const isAsync = initializer.isAsync();
-  const startLine = varStatement.getStartLineNumber();
-  const endLine = varStatement.getEndLineNumber();
+  const startLine = initializer.getStartLineNumber();
+  const endLine = initializer.getEndLineNumber();
   const lineCount = endLine - startLine + 1;
 
   return { name, isExported, isAsync, lineCount, startLine };

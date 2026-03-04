@@ -30,8 +30,8 @@ const ReviewSensitivity = z.enum(['strict', 'moderate', 'off']);
  */
 export const AgentConfigSchema = z.strictObject({
   // Required
-  schemaPath: z.string(),
-  sdkInitFile: z.string(),
+  schemaPath: z.string().min(1),
+  sdkInitFile: z.string().min(1),
 
   // Agent API configuration
   agentModel: z.string().default('claude-sonnet-4-6'),

@@ -63,9 +63,9 @@ export function detectElision(output: string, original: string): ElisionResult {
     reasons.push(`Placeholder patterns detected: ${patternsFound.join(', ')}`);
   }
 
-  // Length comparison
-  const outputLines = output.split('\n').length;
-  const originalLines = original.split('\n').length;
+  // Length comparison — empty string is 0 lines (not 1)
+  const outputLines = output === '' ? 0 : output.split('\n').length;
+  const originalLines = original === '' ? 0 : original.split('\n').length;
   const lengthRatio = originalLines > 0 ? outputLines / originalLines : 1;
 
   if (lengthRatio < LENGTH_RATIO_THRESHOLD) {
