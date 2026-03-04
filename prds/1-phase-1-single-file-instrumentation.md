@@ -268,7 +268,7 @@ src/
 
 - [x] **Milestone 7: DX verification** — Structured results for all outcomes: successful instrumentation (all `InstrumentationOutput` fields populated with meaningful content, not empty defaults), prerequisite failures (error says what's missing and what to do), elision rejection (error says what pattern was detected). No silent failures. Verified by asserting diagnostic fields contain meaningful content, not just `status === 'success'`.
 
-- [ ] **Milestone 8: Acceptance gate passes** — Full acceptance gate end-to-end: call `instrumentFile` on a real JavaScript file in a real project. Output parses (`node --check`). Diff analysis confirms no business logic changed. OTel imports from `@opentelemetry/api` only. Spans closed in all paths. AST checks for CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-007 pass. Already-instrumented file correctly handled. All `InstrumentationOutput` fields populated. See Decision Log: purpose-built test fixture project in `test/fixtures/`.
+- [x] **Milestone 8: Acceptance gate passes** — Full acceptance gate end-to-end: call `instrumentFile` on a real JavaScript file in a real project. Output parses (`node --check`). Diff analysis confirms no business logic changed. OTel imports from `@opentelemetry/api` only. Spans closed in all paths. AST checks for CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-007 pass. Already-instrumented file correctly handled. All `InstrumentationOutput` fields populated. See Decision Log: purpose-built test fixture project in `test/fixtures/`.
 
 ## Dependencies
 

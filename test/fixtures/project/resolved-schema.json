@@ -1,0 +1,192 @@
+{
+  "groups": [
+    {
+      "id": "registry.fixture_service.api",
+      "type": "attribute_group",
+      "display_name": "API Operation Attributes",
+      "brief": "Attributes for API request handling",
+      "attributes": [
+        {
+          "name": "http.request.method",
+          "type": "string",
+          "requirement_level": "required",
+          "brief": "HTTP request method",
+          "examples": ["GET", "POST", "PUT", "DELETE"]
+        },
+        {
+          "name": "http.route",
+          "type": "string",
+          "requirement_level": "recommended",
+          "brief": "The matched route template",
+          "examples": ["/users/:id", "/orders"]
+        },
+        {
+          "name": "http.response.status_code",
+          "type": "int",
+          "requirement_level": "recommended",
+          "brief": "HTTP response status code",
+          "examples": [200, 404, 500]
+        }
+      ]
+    },
+    {
+      "id": "registry.fixture_service.db",
+      "type": "attribute_group",
+      "display_name": "Database Attributes",
+      "brief": "Attributes for database operations",
+      "attributes": [
+        {
+          "name": "db.system",
+          "type": "string",
+          "requirement_level": "required",
+          "brief": "Database management system identifier",
+          "examples": ["postgresql"]
+        },
+        {
+          "name": "db.operation.name",
+          "type": "string",
+          "requirement_level": "recommended",
+          "brief": "The name of the operation being executed",
+          "examples": ["SELECT", "INSERT", "UPDATE"]
+        },
+        {
+          "name": "db.namespace",
+          "type": "string",
+          "requirement_level": "recommended",
+          "brief": "The database namespace (schema or database name)",
+          "examples": ["public", "users"]
+        }
+      ]
+    },
+    {
+      "id": "registry.fixture_service.order",
+      "type": "attribute_group",
+      "display_name": "Order Processing Attributes",
+      "brief": "Attributes for order operations",
+      "attributes": [
+        {
+          "name": "fixture_service.order.id",
+          "type": "string",
+          "stability": "development",
+          "requirement_level": "required",
+          "brief": "Unique order identifier",
+          "examples": ["ord-123", "ord-456"]
+        },
+        {
+          "name": "fixture_service.order.total",
+          "type": "double",
+          "stability": "development",
+          "requirement_level": "recommended",
+          "brief": "Order total amount",
+          "examples": [29.99, 149.50]
+        },
+        {
+          "name": "fixture_service.payment.status",
+          "type": "string",
+          "stability": "development",
+          "requirement_level": "recommended",
+          "brief": "Payment processing status",
+          "examples": ["succeeded", "failed", "pending"]
+        }
+      ]
+    },
+    {
+      "id": "span.fixture_service.db.operations",
+      "type": "span",
+      "brief": "Database operations (via @opentelemetry/instrumentation-pg)",
+      "span_kind": "client",
+      "note": "Auto-instrumentation library handles span creation",
+      "attributes": [
+        {
+          "name": "db.system",
+          "requirement_level": "required"
+        },
+        {
+          "name": "db.namespace",
+          "requirement_level": "recommended"
+        },
+        {
+          "name": "db.operation.name",
+          "requirement_level": "recommended"
+        }
+      ]
+    },
+    {
+      "id": "span.fixture_service.user.get_users",
+      "type": "span",
+      "stability": "development",
+      "brief": "Retrieve all users",
+      "span_kind": "server",
+      "attributes": [
+        {
+          "name": "http.request.method",
+          "requirement_level": "required"
+        },
+        {
+          "name": "http.route",
+          "requirement_level": "recommended"
+        }
+      ]
+    },
+    {
+      "id": "span.fixture_service.user.get_user_by_id",
+      "type": "span",
+      "stability": "development",
+      "brief": "Retrieve a single user by ID",
+      "span_kind": "server",
+      "attributes": [
+        {
+          "name": "http.request.method",
+          "requirement_level": "required"
+        },
+        {
+          "name": "http.route",
+          "requirement_level": "recommended"
+        }
+      ]
+    },
+    {
+      "id": "span.fixture_service.user.create_user",
+      "type": "span",
+      "stability": "development",
+      "brief": "Create a new user",
+      "span_kind": "server",
+      "attributes": [
+        {
+          "name": "http.request.method",
+          "requirement_level": "required"
+        }
+      ]
+    },
+    {
+      "id": "span.fixture_service.order.process_order",
+      "type": "span",
+      "stability": "development",
+      "brief": "Process a customer order end-to-end",
+      "span_kind": "internal",
+      "attributes": [
+        {
+          "name": "fixture_service.order.id",
+          "requirement_level": "required"
+        },
+        {
+          "name": "fixture_service.order.total",
+          "requirement_level": "recommended"
+        }
+      ]
+    },
+    {
+      "id": "span.fixture_service.order.charge_payment",
+      "type": "span",
+      "stability": "development",
+      "brief": "Charge payment via external payment API",
+      "span_kind": "client",
+      "attributes": [
+        {
+          "name": "fixture_service.payment.status",
+          "requirement_level": "recommended"
+        }
+      ]
+    }
+  ]
+}
