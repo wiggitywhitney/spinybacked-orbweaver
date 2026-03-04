@@ -1,7 +1,7 @@
 # PRD: Phase 3 — Fix Loop
 
 **Issue**: [#3](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/3)
-**Status**: Not Started
+**Status**: In Progress
 **Priority**: High
 **Blocked by**: Phase 2 PRD ([#2](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/2))
 **Created**: 2026-03-02
@@ -287,7 +287,7 @@ The module likely needs:
 
 - [x] **Milestone 1: File snapshot and restore** — Implement the file snapshot mechanism: copy file to temp location before processing, restore on failure. The fix loop owns snapshot/restore responsibility (Phase 2 decision: syntax checker writes to the original path, caller manages snapshots). Verified by tests that confirm: (a) original file content preserved after a failed attempt, (b) snapshot cleaned up after success, (c) restore works even if the instrumented file is malformed. See Decision Log: snapshots use `os.tmpdir()` only.
 
-- [ ] **Milestone 2: Single-attempt pass-through** — Wire `instrumentFile` (Phase 1) + `validateFile` (Phase 2) into a single attempt with no retry. Returns `FileResult` with `validationAttempts: 1`, `validationStrategyUsed: "initial-generation"`. This is the foundation — the fix loop "works" with zero fix attempts (`maxFixAttempts: 0`). Verified by: (a) instrument a file that passes on first attempt → success with all FileResult fields populated, (b) instrument a file that fails → failure with FileResult populated, file reverted.
+- [x] **Milestone 2: Single-attempt pass-through** — Wire `instrumentFile` (Phase 1) + `validateFile` (Phase 2) into a single attempt with no retry. Returns `FileResult` with `validationAttempts: 1`, `validationStrategyUsed: "initial-generation"`. This is the foundation — the fix loop "works" with zero fix attempts (`maxFixAttempts: 0`). Verified by: (a) instrument a file that passes on first attempt → success with all FileResult fields populated, (b) instrument a file that fails → failure with FileResult populated, file reverted.
 
 - [ ] **Milestone 3: Token budget tracking** — Track cumulative token usage across all attempts by summing `message.usage` fields (`input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`). Check against `maxTokensPerFile` (default: 80,000) after each API call. If exceeded, stop immediately regardless of which attempt is in progress. Verified by tests with a low budget that triggers mid-attempt termination.
 
