@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "erasableSyntaxOnly": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

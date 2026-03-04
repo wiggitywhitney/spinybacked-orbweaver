@@ -1,7 +1,7 @@
 # PRD: Phase 1 — Single-File Instrumentation
 
 **Issue**: [#1](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1)
-**Status**: Not Started
+**Status**: In Progress
 **Priority**: High
 **Blocked by**: None (first phase)
 **Created**: 2026-03-02
@@ -254,7 +254,7 @@ src/
 
 ## Milestones
 
-- [ ] **Milestone 1: Config validation** — Zod schema for `orb.yaml` with all config fields. Invalid or unknown fields produce clear error messages (e.g., `Unknown config field 'maxSpanPerFile' — did you mean 'maxFixAttempts'?`). Verified by unit tests with valid, invalid, and typo'd configs.
+- [x] **Milestone 1: Config validation** — Zod schema for `orb.yaml` with all config fields. Invalid or unknown fields produce clear error messages (e.g., `Unknown config field 'maxSpanPerFile' — did you mean 'maxFixAttempts'?`). Verified by unit tests with valid, invalid, and typo'd configs.
 
 - [ ] **Milestone 2: Prerequisite checks** — Library functions that verify: `package.json` exists, `@opentelemetry/api` in peerDependencies, OTel SDK init file exists at configured path, Weaver schema exists and is valid (`weaver registry check` passes). Each check returns structured results explaining what was checked and what failed. Verified by unit tests with missing/invalid prerequisites.
 
