@@ -21,3 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Basic elision rejection (`src/agent/elision.ts`): placeholder pattern scan and length-ratio threshold (80%) to catch truncated LLM output
 - Already-instrumented detection: skips fully-instrumented files without LLM call, passes partial instrumentation context to the agent
 - DX verification: structured results for all outcomes (success, prerequisite failure, elision rejection, API error) with meaningful diagnostic content
+- Validation chain (`src/validation/`): two-tier validation architecture with structured `CheckResult` and `ValidationResult` types
+- Tier 1 structural checks: elision detection (pattern scan + length ratio), syntax checking (`node --check` on real filesystem), diff-based lint checking (Prettier `check()` with project config resolution), Weaver registry check (CLI integration with graceful skip)
+- Tier 1 chain orchestration (`src/validation/chain.ts`): sequential execution with short-circuit on first failure, conditional Weaver check, Tier 2 gating
+- Tier 2 semantic checks: CDQ-001 (AST-based span closure verification via ts-morph), NDS-003 (diff-based non-instrumentation line preservation with instrumentation pattern filtering)
+- Feedback formatting (`src/validation/feedback.ts`): `formatFeedbackForAgent()` producing `{rule_id} | {pass|fail|advisory} | {path}:{line} | {message}` structured output for LLM consumption
+- Prettier 3.8.1 dependency for diff-based lint checking
