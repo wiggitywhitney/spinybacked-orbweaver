@@ -260,7 +260,7 @@ src/
 
 - [x] **Milestone 3: AST helpers** — ts-morph utility module (`src/ast/`) with: import detection (existing OTel imports), variable shadowing check (scope-based, using compiler node `locals` access), function classification (exported, async, line count). Verified by unit tests against sample JavaScript files.
 
-- [ ] **Milestone 4: System prompt construction** — Build the system prompt following the spec's structure: role and constraints, schema contract, transformation rules, 3-5 diverse examples, source file, output format specification. Includes Claude 4.x prompt hygiene (no anti-laziness directives, format specifications instead of motivational nudges, no chain-of-thought instructions for the transformation). Verified by inspection and integration test.
+- [x] **Milestone 4: System prompt construction** — Build the system prompt following the spec's structure: role and constraints, schema contract, transformation rules, 3-5 diverse examples, source file, output format specification. Includes Claude 4.x prompt hygiene (no anti-laziness directives, format specifications instead of motivational nudges, no chain-of-thought instructions for the transformation). Verified by inspection and integration test.
 
 - [ ] **Milestone 5: LLM integration and response parsing** — `instrumentFile` calls the Anthropic API with structured output (`zodOutputFormat`), adaptive thinking, and prompt caching. Response parsed into `InstrumentationOutput`. Basic elision rejection: pattern scan for `// ...`, `// existing code`, `// rest of`, `/* ... */`; length comparison (output <80% of input with spans added = rejection). Token usage captured from `message.usage`. Verified by integration test against a real JavaScript file.
 
