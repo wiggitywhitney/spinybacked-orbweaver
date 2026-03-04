@@ -140,7 +140,7 @@ async function checkOtelApiDependency(projectRoot: string): Promise<Prerequisite
 async function checkSdkInitFile(projectRoot: string, sdkInitFile: string): Promise<PrerequisiteCheckResult> {
   const fullPath = resolve(projectRoot, sdkInitFile);
 
-  if (!fullPath.startsWith(projectRoot)) {
+  if (!fullPath.startsWith(projectRoot + '/')) {
     return {
       id: PREREQUISITE_IDS.SDK_INIT_FILE,
       passed: false,
@@ -176,7 +176,7 @@ async function checkSdkInitFile(projectRoot: string, sdkInitFile: string): Promi
 async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promise<PrerequisiteCheckResult> {
   const fullPath = resolve(projectRoot, schemaPath);
 
-  if (!fullPath.startsWith(projectRoot)) {
+  if (!fullPath.startsWith(projectRoot + '/')) {
     return {
       id: PREREQUISITE_IDS.WEAVER_SCHEMA,
       passed: false,
