@@ -1,5 +1,5 @@
 // ABOUTME: Core fix loop — orchestrates instrumentFile + validateFile with the hybrid 3-attempt strategy.
-// ABOUTME: Milestone 2 implements single-attempt pass-through; retry logic added in later milestones.
+// ABOUTME: Implements single-attempt pass-through with token budget tracking; retry logic added in later milestones.
 
 import { writeFile } from 'node:fs/promises';
 import type { AgentConfig } from '../config/schema.ts';
@@ -7,6 +7,7 @@ import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import { createSnapshot, restoreSnapshot, removeSnapshot } from './snapshot.ts';
+import { addTokenUsage, totalTokens } from './token-budget.ts';
 import type { FileResult } from './types.ts';
 
 /**
@@ -155,7 +156,14 @@ async function executeAttempt(
 
   const output = instrumentResult.output;
 
-  // Step 2: Write instrumented code to disk (validation checks need the file on disk)
+  // Step 2: Check token budget before proceeding to validation
+  if (totalTokens(output.tokenUsage) > config.maxTokensPerFile) {
+    await restoreSnapshot(snapshotPath, filePath);
+    const reason = `Token budget exceeded: ${totalTokens(output.tokenUsage)} tokens used, budget is ${config.maxTokensPerFile}`;
+    return buildFailedResult(filePath, reason, reason, output.tokenUsage, 1);
+  }
+
+  // Step 3: Write instrumented code to disk (validation checks need the file on disk)
   await writeFile(filePath, output.instrumentedCode, 'utf-8');
 
   // Step 3: Run validation chain (Phase 2)

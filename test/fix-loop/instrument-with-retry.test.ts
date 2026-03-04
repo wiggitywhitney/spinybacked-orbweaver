@@ -1,5 +1,5 @@
-// ABOUTME: Tests for the single-attempt pass-through of instrumentWithRetry.
-// ABOUTME: Milestone 2 — verifies FileResult population on success and failure, file revert on failure.
+// ABOUTME: Tests for instrumentWithRetry — single-attempt pass-through and token budget tracking.
+// ABOUTME: Milestones 2-3 — verifies FileResult population, file revert, and budget enforcement.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSync } from 'node:fs';
@@ -307,5 +307,163 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     );
 
     expect(result.spansAdded).toBe(5);
+  });
+});
+
+describe('instrumentWithRetry — token budget tracking', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'orb-budget-test-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('stops with budget-exceeded failure when tokens exceed maxTokensPerFile', async () => {
+    const highTokens: TokenUsage = {
+      inputTokens: 5000,
+      outputTokens: 4000,
+      cacheCreationInputTokens: 1000,
+      cacheReadInputTokens: 500,
+    };
+    const output = makeInstrumentationOutput({ tokenUsage: highTokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    // Set budget to 5000 — total tokens are 10500 (5000+4000+1000+500), exceeding the budget
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toContain('budget');
+    expect(result.tokenUsage).toEqual(highTokens);
+    expect(result.validationAttempts).toBe(1);
+    // File should be reverted since we stopped before validation
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+  });
+
+  it('proceeds normally when token usage is within budget', async () => {
+    const output = makeInstrumentationOutput({ tokenUsage: sampleTokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    // sampleTokens total = 1000+500+200+100 = 1800, well under 80000
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.tokenUsage).toEqual(sampleTokens);
+  });
+
+  it('counts all token types in budget check (input + output + cache)', async () => {
+    // Each type contributes 2500 tokens — total = 10000
+    const spreadTokens: TokenUsage = {
+      inputTokens: 2500,
+      outputTokens: 2500,
+      cacheCreationInputTokens: 2500,
+      cacheReadInputTokens: 2500,
+    };
+    const output = makeInstrumentationOutput({ tokenUsage: spreadTokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    // Budget is 9999 — total is 10000, should exceed
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 9999 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toContain('budget');
+  });
+
+  it('reverts file and cleans up snapshot when budget exceeded', async () => {
+    const highTokens: TokenUsage = {
+      inputTokens: 50000,
+      outputTokens: 40000,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    };
+    const output = makeInstrumentationOutput({ tokenUsage: highTokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => { throw new Error('should not reach validation'); },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 1000 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    // Original file restored
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+  });
+
+  it('skips validation when budget exceeded after instrumentFile', async () => {
+    let validateCalled = false;
+    const highTokens: TokenUsage = {
+      inputTokens: 50000,
+      outputTokens: 40000,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    };
+    const output = makeInstrumentationOutput({ tokenUsage: highTokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => {
+        validateCalled = true;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 1000 }), { deps },
+    );
+
+    expect(validateCalled).toBe(false);
+  });
+
+  it('includes token usage from failed instrumentFile in budget-exceeded result', async () => {
+    const failTokens: TokenUsage = {
+      inputTokens: 50000,
+      outputTokens: 0,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    };
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: false,
+        error: 'LLM parse error',
+        tokenUsage: failTokens,
+      }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    // Even on instrumentFile failure, if budget exceeded, reason should mention budget
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 1000 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.tokenUsage).toEqual(failTokens);
   });
 });
