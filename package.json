@@ -30,7 +30,7 @@
   },
   "homepage": "https://github.com/wiggitywhitney/spinybacked-orbweaver#readme",
   "devDependencies": {
-    "@types/node": "^25.3.3",
+    "@types/node": "^24.11.0",
     "@vitest/coverage-v8": "^4.0.18",
     "commit-story": "file:../commit-story-v2",
     "typescript": "^5.9.3",
