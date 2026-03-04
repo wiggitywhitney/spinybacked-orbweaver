@@ -2,7 +2,7 @@
 // ABOUTME: One function per rubric rule — verifies instrumented code meets quality criteria.
 
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Project } from 'ts-morph';
@@ -29,6 +29,7 @@ export function checkSyntaxValid(code: string): RubricCheckResult {
     return { passed: false, details: `node --check failed: ${message}` };
   } finally {
     try { unlinkSync(filePath); } catch { /* ignore cleanup errors */ }
+    try { rmdirSync(dir); } catch { /* ignore cleanup errors */ }
   }
 }
 

@@ -1,6 +1,6 @@
 // ABOUTME: Test fixture — Express routes with pg database queries.
 // ABOUTME: Tests service entry points (COV-001) and external calls (COV-002).
-import express from 'express';
+import express from 'express'; // Intentional: triggers auto-instrumentation library detection
 import { Pool } from 'pg';
 
 const pool = new Pool();
