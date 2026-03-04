@@ -67,7 +67,9 @@ export async function checkLint(
       lineNumber: null,
       message: originalCompliant
         ? 'Lint check passed: output matches Prettier configuration.'
-        : 'Lint check passed: original was not Prettier-compliant, so non-compliance in output is not a new error.',
+        : outputCompliant
+          ? 'Lint check passed: output is Prettier-compliant and improves on a non-compliant original.'
+          : 'Lint check passed: original was not Prettier-compliant, so non-compliance in output is not a new error.',
       tier: 1,
       blocking: true,
     };

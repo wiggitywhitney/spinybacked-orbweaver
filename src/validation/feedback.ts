@@ -26,7 +26,10 @@ function formatCheckLine(check: CheckResult): string {
   const location =
     check.lineNumber !== null ? `${check.filePath}:${check.lineNumber}` : check.filePath;
 
-  return `${check.ruleId} | ${status} | ${location} | ${check.message}`;
+  // Sanitize message: collapse newlines and escape pipes to preserve one-line-per-check format
+  const sanitizedMessage = check.message.replace(/\r?\n/g, '\\n').replace(/\|/g, '\\|');
+
+  return `${check.ruleId} | ${status} | ${location} | ${sanitizedMessage}`;
 }
 
 /**

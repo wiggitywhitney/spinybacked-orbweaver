@@ -97,17 +97,32 @@ function getSpanName(callExpr: import('ts-morph').CallExpression): string {
  *    a try/finally with span.end() in the finally block.
  * 2. The call itself is wrapped in a try/finally (less common).
  */
+/**
+ * Build a regex that matches `<identifier>.end()` for a specific span variable.
+ */
+function spanEndRegex(spanName: string): RegExp {
+  const escaped = spanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\.end\\(\\)`);
+}
+
 function hasSpanEndInFinally(callExpr: import('ts-morph').CallExpression): boolean {
+  const exprText = callExpr.getExpression().getText();
+
   // Pattern 1: Check callback arguments for try/finally with span.end()
   // startActiveSpan("name", (span) => { try { ... } finally { span.end() } })
   const args = callExpr.getArguments();
   for (const arg of args) {
     if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg)) {
+      // Extract the span parameter name from the callback (first param)
+      const spanParam = arg.getParameters()[0]?.getName();
+      if (!spanParam) continue;
+
+      const endPattern = spanEndRegex(spanParam);
       let found = false;
       arg.forEachDescendant((desc) => {
         if (Node.isTryStatement(desc)) {
           const fb = desc.getFinallyBlock();
-          if (fb && /\.end\(\)/.test(fb.getText())) {
+          if (fb && endPattern.test(fb.getText())) {
             found = true;
           }
         }
@@ -116,17 +131,38 @@ function hasSpanEndInFinally(callExpr: import('ts-morph').CallExpression): boole
     }
   }
 
-  // Pattern 2: Walk up looking for an enclosing try/finally with span.end()
-  let current = callExpr.getParent();
-  while (current) {
-    if (Node.isTryStatement(current)) {
-      const finallyBlock = current.getFinallyBlock();
-      if (finallyBlock && /\.end\(\)/.test(finallyBlock.getText())) {
-        return true;
+  // Pattern 2: const span = tracer.startSpan(...)
+  // Walk up looking for a variable declaration to find the span identifier
+  if (exprText.endsWith('.startSpan')) {
+    const spanIdentifier = getStartSpanVariable(callExpr);
+    if (spanIdentifier) {
+      const endPattern = spanEndRegex(spanIdentifier);
+      let current = callExpr.getParent();
+      while (current) {
+        if (Node.isTryStatement(current)) {
+          const finallyBlock = current.getFinallyBlock();
+          if (finallyBlock && endPattern.test(finallyBlock.getText())) {
+            return true;
+          }
+        }
+        current = current.getParent();
       }
     }
-    current = current.getParent();
   }
 
   return false;
+}
+
+/**
+ * Extract the variable name bound to a startSpan() call.
+ * e.g. `const span = tracer.startSpan("name")` → "span"
+ */
+function getStartSpanVariable(
+  callExpr: import('ts-morph').CallExpression,
+): string | null {
+  const parent = callExpr.getParent();
+  if (parent && Node.isVariableDeclaration(parent)) {
+    return parent.getName();
+  }
+  return null;
 }

@@ -149,6 +149,52 @@ describe('formatFeedbackForAgent', () => {
     });
   });
 
+  describe('message sanitization', () => {
+    it('collapses newlines in messages to preserve one-line-per-check format', () => {
+      const multilineCheck = makeCheckResult({
+        ruleId: 'NDS-003',
+        passed: false,
+        message: 'NDS-003 check failed:\n  - line 5: missing\n  - line 10: modified',
+      });
+
+      const result = makeResult({
+        passed: false,
+        tier1Results: [multilineCheck],
+        blockingFailures: [multilineCheck],
+      });
+
+      const feedback = formatFeedbackForAgent(result);
+      const lines = feedback.split('\n');
+
+      // Each check should be exactly one line
+      expect(lines.length).toBe(1);
+      // Newlines should be escaped, not literal
+      expect(feedback).toContain('\\n');
+    });
+
+    it('escapes pipe characters in messages to prevent field confusion', () => {
+      const pipeCheck = makeCheckResult({
+        ruleId: 'WEAVER',
+        passed: false,
+        message: 'Error: schema | field mismatch',
+      });
+
+      const result = makeResult({
+        passed: false,
+        tier1Results: [pipeCheck],
+        blockingFailures: [pipeCheck],
+      });
+
+      const feedback = formatFeedbackForAgent(result);
+
+      // Pipes in message should be escaped
+      expect(feedback).toContain('schema \\| field mismatch');
+      // Should still have exactly 4 unescaped pipe delimiters
+      const unescapedPipes = feedback.replace(/\\\|/g, '').split('|').length - 1;
+      expect(unescapedPipes).toBe(3); // rule | status | location
+    });
+  });
+
   describe('output structure', () => {
     it('includes each check on its own line', () => {
       const result = makeResult({

@@ -23,6 +23,14 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   /SpanStatusCode\./,
   // context.with for async context propagation
   /^\s*(?:return\s+)?context\.with\s*\(/,
+  // Standalone structural lines (anchored to full line — won't match business logic)
+  // These appear when the agent wraps code in try/catch/finally for span lifecycle
+  /^\s*try\s*\{\s*$/,
+  /^\s*\}\s*catch\s*\([^)]*\)\s*\{\s*$/,
+  /^\s*\}\s*finally\s*\{\s*$/,
+  /^\s*\}\s*$/,                 // standalone closing brace
+  /^\s*\);?\s*$/,               // standalone closing paren with optional semicolon
+  /^\s*\}\);?\s*$/,             // standalone closing brace+paren (end of callback)
   // Re-throw of caught exception (after recording exception on span)
   /^\s*throw\s+(?:err|error|e|ex|exception)\s*;/,
   // Return with span wrapper
@@ -40,12 +48,11 @@ function isInstrumentationLine(line: string): boolean {
 /**
  * NDS-003: Verify that non-instrumentation lines are unchanged.
  *
- * Compares original and instrumented code. Every non-blank, non-instrumentation
- * line from the original must appear in the instrumented output (after trimming
- * whitespace, to allow for indentation changes from span wrapping).
- *
- * Lines are compared after trimming to accommodate the indentation changes
- * that naturally occur when wrapping code in startActiveSpan callbacks.
+ * Two-directional check:
+ * 1. Forward: all original lines appear in the instrumented output as a subsequence
+ *    (preserving relative order, allowing indentation changes via trim)
+ * 2. Reverse: after filtering instrumentation patterns from the instrumented output,
+ *    no non-instrumentation lines were added
  *
  * @param originalCode - The original source code before instrumentation
  * @param instrumentedCode - The agent's instrumented output
@@ -57,28 +64,64 @@ export function checkNonInstrumentationDiff(
   instrumentedCode: string,
   filePath: string,
 ): CheckResult {
-  const instrumentedTrimmed = instrumentedCode
+  const originalLines = originalCode
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  // Build a set of all trimmed lines in the instrumented output for fast presence check
-  const instrumentedSet = new Set(instrumentedTrimmed);
+  const instrumentedLines = instrumentedCode
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
 
+  // Empty original: any additions are fine (instrumenting an empty file)
+  if (originalLines.length === 0) {
+    return {
+      ruleId: 'NDS-003',
+      passed: true,
+      filePath,
+      lineNumber: null,
+      message: 'All non-instrumentation lines from the original are preserved.',
+      tier: 2,
+      blocking: true,
+    };
+  }
+
+  // Forward check: original lines must be a subsequence of instrumented lines
   const missingLines: Array<{ line: string; originalLineNum: number }> = [];
-
+  let instrIdx = 0;
   let lineNum = 0;
   for (const rawLine of originalCode.split('\n')) {
     lineNum++;
     const trimmed = rawLine.trim();
     if (trimmed.length === 0) continue;
 
-    if (!instrumentedSet.has(trimmed)) {
+    // Advance through instrumented lines looking for this original line
+    let found = false;
+    while (instrIdx < instrumentedLines.length) {
+      if (instrumentedLines[instrIdx] === trimmed) {
+        instrIdx++;
+        found = true;
+        break;
+      }
+      instrIdx++;
+    }
+
+    if (!found) {
       missingLines.push({ line: trimmed, originalLineNum: lineNum });
     }
   }
 
-  if (missingLines.length === 0) {
+  // Reverse check: filter instrumented lines, remaining should be subset of original
+  const originalSet = new Set(originalLines);
+  const addedLines: string[] = [];
+  for (const line of instrumentedLines) {
+    if (!isInstrumentationLine(line) && !originalSet.has(line)) {
+      addedLines.push(line);
+    }
+  }
+
+  if (missingLines.length === 0 && addedLines.length === 0) {
     return {
       ruleId: 'NDS-003',
       passed: true,
@@ -90,36 +133,35 @@ export function checkNonInstrumentationDiff(
     };
   }
 
-  // Filter out lines that look like instrumentation patterns
-  // (the agent might have restructured instrumentation-adjacent code)
-  const reallyMissing = missingLines.filter((m) => !isInstrumentationLine(m.line));
-
-  if (reallyMissing.length === 0) {
-    return {
-      ruleId: 'NDS-003',
-      passed: true,
-      filePath,
-      lineNumber: null,
-      message: 'All non-instrumentation lines from the original are preserved.',
-      tier: 2,
-      blocking: true,
-    };
+  // Build diagnostic details
+  const issues: Array<{ desc: string; lineNum: number }> = [];
+  for (const m of missingLines) {
+    issues.push({
+      desc: `  - line ${m.originalLineNum} [missing/modified]: ${m.line}`,
+      lineNum: m.originalLineNum,
+    });
+  }
+  for (const a of addedLines) {
+    issues.push({
+      desc: `  - (new) [added]: ${a}`,
+      lineNum: 0,
+    });
   }
 
-  const firstMissing = reallyMissing[0];
-  const details = reallyMissing
+  const firstLineNum = issues.find((i) => i.lineNum > 0)?.lineNum ?? null;
+  const details = issues
     .slice(0, 10)
-    .map((m) => `  - line ${m.originalLineNum}: ${m.line}`)
+    .map((i) => i.desc)
     .join('\n');
-  const overflow = reallyMissing.length > 10 ? `\n  ... and ${reallyMissing.length - 10} more` : '';
+  const overflow = issues.length > 10 ? `\n  ... and ${issues.length - 10} more` : '';
 
   return {
     ruleId: 'NDS-003',
     passed: false,
     filePath,
-    lineNumber: firstMissing.originalLineNum,
+    lineNumber: firstLineNum,
     message:
-      `NDS-003 check failed: ${reallyMissing.length} non-instrumentation line(s) from the original were modified or removed.\n` +
+      `NDS-003 check failed: ${issues.length} non-instrumentation difference(s) detected.\n` +
       `${details}${overflow}\n` +
       `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
     tier: 2,

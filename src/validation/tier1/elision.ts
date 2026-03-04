@@ -1,7 +1,7 @@
 // ABOUTME: Tier 1 elision detection checker for the validation chain.
 // ABOUTME: Wraps the core elision detection logic into CheckResult format.
 
-import { detectElision } from '../../agent/elision.ts';
+import { detectElision } from '../../shared/elision.ts';
 import type { CheckResult } from '../types.ts';
 
 /**

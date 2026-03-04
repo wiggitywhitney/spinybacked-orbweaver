@@ -21,12 +21,6 @@ function parseLineNumber(stderr: string, filePath: string): number | null {
     return parseInt(lineMatch[1], 10);
   }
 
-  // Fallback: look for any "filename:number" pattern
-  const genericMatch = stderr.match(/:(\d+)\b/);
-  if (genericMatch) {
-    return parseInt(genericMatch[1], 10);
-  }
-
   return null;
 }
 
