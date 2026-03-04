@@ -256,7 +256,7 @@ src/
 
 - [x] **Milestone 1: Config validation** — Zod schema for `orb.yaml` with all config fields. Invalid or unknown fields produce clear error messages (e.g., `Unknown config field 'maxSpanPerFile' — did you mean 'maxFixAttempts'?`). Verified by unit tests with valid, invalid, and typo'd configs.
 
-- [ ] **Milestone 2: Prerequisite checks** — Library functions that verify: `package.json` exists, `@opentelemetry/api` in peerDependencies, OTel SDK init file exists at configured path, Weaver schema exists and is valid (`weaver registry check` passes). Each check returns structured results explaining what was checked and what failed. Verified by unit tests with missing/invalid prerequisites.
+- [x] **Milestone 2: Prerequisite checks** — Library functions that verify: `package.json` exists, `@opentelemetry/api` in peerDependencies, OTel SDK init file exists at configured path, Weaver schema exists and is valid (`weaver registry check` passes). Each check returns structured results explaining what was checked and what failed. Verified by unit tests with missing/invalid prerequisites.
 
 - [ ] **Milestone 3: AST helpers** — ts-morph utility module (`src/ast/`) with: import detection (existing OTel imports), variable shadowing check (scope-based, using compiler node `locals` access), function classification (exported, async, line count). Verified by unit tests against sample JavaScript files.
 
