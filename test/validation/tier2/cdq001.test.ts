@@ -197,6 +197,27 @@ describe('checkSpansClosed (CDQ-001)', () => {
       expect(result.passed).toBe(false);
     });
 
+    it('fails when only a preceding try/finally calls span.end()', () => {
+      // Regression: a try/finally BEFORE the startSpan declaration should not
+      // count as closing the span — only subsequent try/finally blocks matter.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  try {',
+        '    noop();',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '  const span = tracer.startSpan("doWork");',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const result = checkSpansClosed(code, filePath);
+      expect(result.passed).toBe(false);
+    });
+
     it('fails when startSpan has no sibling try/finally at all', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
