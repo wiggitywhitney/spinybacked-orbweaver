@@ -274,7 +274,10 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     // Libraries should be detected from successful instrumentations
     if (succeeded.length > 0) {
       const allLibraries = succeeded.flatMap(r => r.librariesNeeded);
-      expect(allLibraries.length).toBeGreaterThanOrEqual(0);
+      for (const lib of allLibraries) {
+        expect(lib.package).toBeDefined();
+        expect(lib.importName).toBeDefined();
+      }
     }
 
     // Phase 5 fields are undefined

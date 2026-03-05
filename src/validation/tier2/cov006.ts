@@ -116,22 +116,6 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
 }
 
 /**
- * Get the text of ancestor call expressions that contain this span.
- * Walks up the AST to find if the span is nested inside an auto-instrumentable
- * context (e.g., an Express route handler callback).
- */
-function getAncestorContext(spanCall: CallExpression): string | null {
-  let current = spanCall.getParent();
-  while (current) {
-    if (Node.isCallExpression(current)) {
-      return current.getExpression().getText() + '(';
-    }
-    current = current.getParent();
-  }
-  return null;
-}
-
-/**
  * Get the text content inside a span callback (the body of the callback function).
  */
 function getSpanContent(spanCall: CallExpression): string | null {
