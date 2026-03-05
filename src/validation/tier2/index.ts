@@ -1,5 +1,5 @@
 // ABOUTME: Public API for Tier 2 semantic validation checks.
-// ABOUTME: Re-exports all Tier 2 checkers (CDQ-001, NDS-003, COV-002, RST-001, COV-005, CDQ-008).
+// ABOUTME: Re-exports all Tier 2 checkers for coverage, restraint, and quality dimensions.
 
 export { checkSpansClosed } from './cdq001.ts';
 export { checkNonInstrumentationDiff } from './nds003.ts';
@@ -9,3 +9,11 @@ export { checkDomainAttributes } from './cov005.ts';
 export type { RegistrySpanDefinition } from './cov005.ts';
 export { checkTracerNamingConsistency } from './cdq008.ts';
 export type { FileContent } from './cdq008.ts';
+export { checkEntryPointSpans } from './cov001.ts';
+export { checkErrorVisibility } from './cov003.ts';
+export { checkAsyncOperationSpans } from './cov004.ts';
+export { checkAutoInstrumentationPreference } from './cov006.ts';
+export { checkTrivialAccessorSpans } from './rst002.ts';
+export { checkThinWrapperSpans } from './rst003.ts';
+export { checkInternalDetailSpans } from './rst004.ts';
+export { checkIsRecordingGuard } from './cdq006.ts';
