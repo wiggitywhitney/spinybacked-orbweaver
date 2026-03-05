@@ -182,7 +182,11 @@ export async function instrumentWithRetry(
     // Unexpected error — restore original content from memory.
     // We don't have access to the retry loop's internal state (attempt count,
     // cumulative tokens), so report what we know: an unexpected error occurred.
-    await writeFile(filePath, originalCode, 'utf-8');
+    try {
+      await writeFile(filePath, originalCode, 'utf-8');
+    } catch {
+      // Best-effort restore — file may be left in a modified state
+    }
     const message = error instanceof Error ? error.message : String(error);
     return buildFailedResult(
       filePath, `Unexpected error: ${message}`, message, ZERO_TOKENS, 1, 'initial-generation',
