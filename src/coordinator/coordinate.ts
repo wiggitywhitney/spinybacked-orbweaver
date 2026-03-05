@@ -12,6 +12,11 @@ import { discoverFiles as defaultDiscoverFiles } from './discovery.ts';
 import { dispatchFiles as defaultDispatchFiles } from './dispatch.ts';
 import { aggregateResults, finalizeResults as defaultFinalizeResults } from './aggregate.ts';
 import { checkPrerequisites as defaultCheckPrerequisites } from '../config/prerequisites.ts';
+import {
+  collectSchemaExtensions,
+  writeSchemaExtensions as defaultWriteSchemaExtensions,
+} from './schema-extensions.ts';
+import type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
 import type { FinalizeDeps } from './aggregate.ts';
 
 /**
@@ -49,6 +54,10 @@ export interface CoordinateDeps {
     dependencyStrategy: 'dependencies' | 'peerDependencies',
     deps?: FinalizeDeps,
   ) => Promise<void>;
+  writeSchemaExtensions: (
+    registryDir: string,
+    extensions: string[],
+  ) => Promise<WriteSchemaExtensionsResult>;
 }
 
 /**
@@ -106,6 +115,8 @@ export async function coordinate(
   const statFn = deps?.statFile ?? ((fp: string) => stat(fp));
   const dispatch = deps?.dispatchFiles ?? defaultDispatchFiles;
   const finalize = deps?.finalizeResults ?? defaultFinalizeResults;
+  const writeExtensions = deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
+  const schemaExtensionWarnings: string[] = [];
 
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;
@@ -168,8 +179,21 @@ export async function coordinate(
     throw new CoordinatorAbortError(`File dispatch failed: ${message}`);
   }
 
+  // Step 5b: Write schema extensions (degrade and warn on failure)
+  const extensions = collectSchemaExtensions(fileResults);
+  if (extensions.length > 0) {
+    try {
+      const registryDir = resolve(projectDir, config.schemaPath);
+      await writeExtensions(registryDir, extensions);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaExtensionWarnings.push(`Schema extension writing failed (degraded): ${message}`);
+    }
+  }
+
   // Step 6: Aggregate results
   const runResult = aggregateResults(fileResults, costCeiling);
+  runResult.warnings.push(...schemaExtensionWarnings);
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {

@@ -139,6 +139,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
       makeSkippedResult('/project/src/already-instrumented.js'),
     ]),
     finalizeResults: vi.fn().mockResolvedValue(undefined),
+    writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
     ...overrides,
   };
 }

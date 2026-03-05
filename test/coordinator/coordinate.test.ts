@@ -83,6 +83,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
       return filePaths.map(fp => makeSuccessResult(fp));
     }),
     finalizeResults: vi.fn().mockResolvedValue(undefined),
+    writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
     ...overrides,
   };
 }
@@ -423,6 +424,65 @@ describe('coordinate', () => {
       // Should still process files, but with zero-sized cost ceiling
       expect(result.costCeiling.totalFileSizeBytes).toBe(0);
       expect(result.filesProcessed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('schema extension writing', () => {
+    it('calls writeSchemaExtensions when file results have extensions', async () => {
+      const writeSchemaExtensions = vi.fn().mockResolvedValue({
+        written: true, extensionCount: 1, filePath: '/project/schemas/registry/agent-extensions.yaml', rejected: [],
+      });
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Order total'],
+          }),
+        ]),
+        writeSchemaExtensions,
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(writeSchemaExtensions).toHaveBeenCalledTimes(1);
+      expect(writeSchemaExtensions).toHaveBeenCalledWith(
+        expect.stringContaining('schemas/registry'),
+        ['- id: myapp.order.total\n  type: int\n  brief: Order total'],
+      );
+    });
+
+    it('does not call writeSchemaExtensions when no extensions exist', async () => {
+      const writeSchemaExtensions = vi.fn();
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', { schemaExtensions: [] }),
+        ]),
+        writeSchemaExtensions,
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(writeSchemaExtensions).not.toHaveBeenCalled();
+    });
+
+    it('reports schema extension failures as warnings (degrade and warn)', async () => {
+      const writeSchemaExtensions = vi.fn().mockRejectedValue(
+        new Error('Cannot read registry_manifest.yaml'),
+      );
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+          }),
+        ]),
+        writeSchemaExtensions,
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('Schema extension writing failed'))).toBe(true);
+      expect(result.filesProcessed).toBe(1);
     });
   });
 

@@ -1,7 +1,7 @@
 # PRD: Phase 5 — Schema Integration (Weaver)
 
 **Issue**: [#5](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/5)
-**Status**: Not Started
+**Status**: In Progress
 **Priority**: High
 **Blocked by**: Phase 4 PRD ([#4](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/4))
 **Created**: 2026-03-02
@@ -213,7 +213,7 @@ src/
 
 ## Milestones
 
-- [ ] **Milestone 1: Schema extension YAML generation** — Implement the coordinator plumbing that writes agent-requested schema extensions to disk as valid YAML. The agent's `InstrumentationOutput.schemaExtensions` declares what new attributes/spans it needs; the coordinator writes them to a separate `agent-extensions.yaml` file in the registry directory (one file per run, overwritten each run). Extensions follow existing schema patterns: namespace prefix is mandatory, structural patterns match existing groups, entries use the project's naming convention. Enforce guardrails: namespace prefix required, structural pattern consistency. Verify: (a) coordinator writes a valid YAML entry for agent-requested custom attributes, (b) the entry uses the project namespace prefix, (c) `weaver registry check` passes on the extended schema, (d) extensions are in a separate file (not appended to existing YAML) → SCH-001, SCH-002, SCH-003.
+- [x] **Milestone 1: Schema extension YAML generation** — Implement the coordinator plumbing that writes agent-requested schema extensions to disk as valid YAML. The agent's `InstrumentationOutput.schemaExtensions` declares what new attributes/spans it needs; the coordinator writes them to a separate `agent-extensions.yaml` file in the registry directory (one file per run, overwritten each run). Extensions follow existing schema patterns: namespace prefix is mandatory, structural patterns match existing groups, entries use the project's naming convention. Enforce guardrails: namespace prefix required, structural pattern consistency. Verify: (a) coordinator writes a valid YAML entry for agent-requested custom attributes, (b) the entry uses the project namespace prefix, (c) `weaver registry check` passes on the extended schema, (d) extensions are in a separate file (not appended to existing YAML) → SCH-001, SCH-002, SCH-003.
 
 - [ ] **Milestone 2: Schema hash tracking** — Implement schema hash computation for `FileResult.schemaHashBefore` and `FileResult.schemaHashAfter`. Hash is computed on canonicalized JSON (sorted keys, no whitespace) from `weaver registry resolve` output. Implement `RunResult.schemaHashStart` (hash at run start) and `RunResult.schemaHashEnd` (hash at run end). Verify: (a) hashes differ when the agent extends the schema, (b) hashes are identical when the agent doesn't extend, (c) hash sequence across `FileResult` array pinpoints which file introduced a schema change.
 

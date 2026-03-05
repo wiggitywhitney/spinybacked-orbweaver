@@ -12,4 +12,6 @@ export { updateSdkInitFile } from './sdk-init.ts';
 export type { SdkInitResult } from './sdk-init.ts';
 export { installDependencies } from './dependencies.ts';
 export type { DependencyInstallResult, InstallDeps } from './dependencies.ts';
+export { writeSchemaExtensions, collectSchemaExtensions, extractNamespacePrefix } from './schema-extensions.ts';
+export type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
 export type { CoordinatorCallbacks, CostCeiling, RunResult, DispatchFilesDeps } from './types.ts';
