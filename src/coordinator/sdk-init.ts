@@ -242,9 +242,10 @@ function findLastImportPosition(text: string, esm: boolean): number {
   }
 
   // Return position after the last import line (including its newline)
+  const newlineLen = text.includes('\r\n') ? 2 : 1;
   let pos = 0;
   for (let i = 0; i <= lastImportLine; i++) {
-    pos += lines[i].length + 1; // +1 for newline
+    pos += lines[i].length + newlineLen;
   }
   return pos;
 }
