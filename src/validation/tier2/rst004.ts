@@ -143,7 +143,7 @@ function collectExportedNames(code: string): Set<string> {
   }
 
   // module.exports = { name, ... } or module.exports = { name: value }
-  const objPattern = /module\.exports\s*=\s*\{([^}]+)\}/;
+  const objPattern = /module\.exports\s*=\s*\{([\s\S]*?)\}/;
   const objMatch = objPattern.exec(code);
   if (objMatch) {
     const entries = objMatch[1].split(',');

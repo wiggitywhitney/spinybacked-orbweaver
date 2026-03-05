@@ -102,7 +102,7 @@ export async function updateSdkInitFile(
     return { updated: true, fallbackWritten: false };
   }
 
-  // Fallback: write orb-instrumentations.js (or .mjs for ESM projects)
+  // Fallback: write orb-instrumentations.js
   const fallbackPath = join(dirname(sdkInitFilePath), 'orb-instrumentations.js');
   const fallbackContent = generateFallbackFile(uniqueLibraries, esm);
   await writeFile(fallbackPath, fallbackContent, 'utf-8');

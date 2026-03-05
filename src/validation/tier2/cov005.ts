@@ -178,17 +178,23 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
       }
     }
   } else if (exprText.endsWith('.startSpan')) {
-    // Search sibling statements after the declaration
-    const varDecl = spanCall.getParent();
-    const varDeclList = varDecl?.getParent();
-    const varStatement = varDeclList?.getParent();
-    const containingBlock = varStatement?.getParent();
+    // Walk up to the nearest containing block or source file
+    let containingBlock: Node | undefined;
+    let ancestorStatement: Node | undefined;
+    let current: Node | undefined = spanCall;
+    while (current) {
+      const parent = current.getParent();
+      if (parent && (Node.isBlock(parent) || Node.isSourceFile(parent))) {
+        containingBlock = parent;
+        ancestorStatement = current;
+        break;
+      }
+      current = parent;
+    }
 
-    if (containingBlock && (Node.isBlock(containingBlock) || Node.isSourceFile(containingBlock))) {
+    if (containingBlock && ancestorStatement && (Node.isBlock(containingBlock) || Node.isSourceFile(containingBlock))) {
       const statements = containingBlock.getStatements();
-      const declIndex = varStatement
-        ? statements.findIndex(s => s === varStatement)
-        : -1;
+      const declIndex = statements.findIndex(s => s === ancestorStatement);
       if (declIndex >= 0) {
         for (let i = declIndex + 1; i < statements.length; i++) {
           statements[i].forEachDescendant((desc) => {
