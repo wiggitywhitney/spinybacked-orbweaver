@@ -451,7 +451,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.tokenUsage.inputTokens).toBe(6000); // 3000 + 3000
       expect(result.tokenUsage.outputTokens).toBe(5000); // 2500 + 2500
 
-      // errorProgression has entry from attempt 1 only (attempt 2 didn't reach validation)
+      // errorProgression has a single entry from attempt 1 (attempt 2 didn't reach validation)
       expect(result.errorProgression).toHaveLength(1);
       expect(result.errorProgression![0]).toMatch(/blocking error/);
     });
