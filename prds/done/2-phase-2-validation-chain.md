@@ -236,7 +236,7 @@ interface ValidateFileInput {
   originalCode: string;        // Original file before instrumentation (for diff-based lint)
   instrumentedCode: string;    // Agent's output
   filePath: string;            // For filesystem-based checks (syntax, lint)
-  resolvedSchema: object;      // For Weaver static check
+  // resolvedSchema omitted — Weaver CLI uses ValidationConfig.registryPath (see Decision Log)
   config: ValidationConfig;    // Which checks to enable, blocking/advisory classification per rule
 }
 
