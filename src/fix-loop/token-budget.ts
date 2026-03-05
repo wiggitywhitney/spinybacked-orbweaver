@@ -23,6 +23,12 @@ export function addTokenUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
  * Calculate the total token count from a TokenUsage object.
  * Sums all four fields: input, output, cache creation, and cache read.
  *
+ * Note: The spec says to sum input_tokens + output_tokens, but we include
+ * cache_creation_input_tokens and cache_read_input_tokens too. This is more
+ * conservative (hits budget sooner) and treats the OTel gen_ai.usage.input_tokens
+ * as total input tokens inclusive of cache, rather than the Anthropic API's
+ * narrower input_tokens field.
+ *
  * @param usage - Token usage to total
  * @returns Total number of tokens across all categories
  */
