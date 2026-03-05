@@ -3,7 +3,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, DispatchFilesDeps } from './types.ts';
@@ -76,14 +76,24 @@ export function buildSkippedResult(filePath: string): FileResult {
  * @param schemaPath - Relative path to the schema directory (from config)
  * @returns Parsed JSON output from weaver registry resolve
  */
-export function resolveSchema(projectDir: string, schemaPath: string): Promise<object> {
+export async function resolveSchema(projectDir: string, schemaPath: string): Promise<object> {
   const fullSchemaPath = resolve(projectDir, schemaPath);
-  const output = execFileSync('weaver', ['registry', 'resolve', '-r', fullSchemaPath, '--format', 'json'], {
-    cwd: projectDir,
-    timeout: 30000,
-    stdio: ['pipe', 'pipe', 'pipe'],
+  return new Promise((res, reject) => {
+    execFile('weaver', ['registry', 'resolve', '-r', fullSchemaPath, '--format', 'json'], {
+      cwd: projectDir,
+      timeout: 30000,
+    }, (error, stdout) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      try {
+        res(JSON.parse(stdout) as object);
+      } catch (parseError) {
+        reject(new Error(`Failed to parse weaver registry resolve output: ${parseError}`));
+      }
+    });
   });
-  return Promise.resolve(JSON.parse(output.toString()) as object);
 }
 
 /** Options for dispatchFiles, primarily for dependency injection in tests. */

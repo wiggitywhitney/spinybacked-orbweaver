@@ -223,6 +223,30 @@ sdk.start();
       expect(result.fallbackWritten).toBe(true);
     });
 
+    it('writes ESM fallback when source file is ESM', async () => {
+      const sdkFile = await createSdkInitFile(`
+import { startTelemetry } from './telemetry';
+
+// Custom setup without NodeSDK
+startTelemetry();
+`);
+
+      const libraries: LibraryRequirement[] = [
+        makeLibrary('@opentelemetry/instrumentation-http', 'HttpInstrumentation'),
+      ];
+
+      const result = await updateSdkInitFile(sdkFile, libraries);
+
+      expect(result.fallbackWritten).toBe(true);
+      const fallbackContent = await readFile(result.fallbackPath!, 'utf-8');
+      // Should use ESM import/export syntax
+      expect(fallbackContent).toContain("import { HttpInstrumentation } from '@opentelemetry/instrumentation-http'");
+      expect(fallbackContent).toContain('export');
+      // Should NOT use require/module.exports
+      expect(fallbackContent).not.toContain('require(');
+      expect(fallbackContent).not.toContain('module.exports');
+    });
+
     it('returns warning message for fallback', async () => {
       const sdkFile = await createSdkInitFile(`
 // No NodeSDK pattern
@@ -280,6 +304,35 @@ sdk.start();
 
       expect(result.updated).toBe(false);
       expect(result.fallbackWritten).toBe(false);
+    });
+
+    it('adds to instrumentations array even when import already exists', async () => {
+      // Library is imported but not in the instrumentations array — should add to array
+      // without duplicating the import
+      const sdkFile = await createSdkInitFile(`
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
+
+const sdk = new NodeSDK({
+  instrumentations: [],
+});
+
+sdk.start();
+`);
+
+      const libraries: LibraryRequirement[] = [
+        makeLibrary('@opentelemetry/instrumentation-http', 'HttpInstrumentation'),
+      ];
+
+      const result = await updateSdkInitFile(sdkFile, libraries);
+
+      expect(result.updated).toBe(true);
+      const content = await readFile(sdkFile, 'utf-8');
+      // Should be added to the array
+      expect(content).toContain('new HttpInstrumentation()');
+      // Import should not be duplicated
+      const importMatches = content.match(/import \{ HttpInstrumentation \}/g);
+      expect(importMatches).toHaveLength(1);
     });
 
     it('deduplicates libraries by package name', async () => {
