@@ -180,15 +180,29 @@ function checkValueAgainstType(
     return null;
   }
 
-  // Numeric types (int, double)
-  if (typeStr === 'int' || typeStr === 'double') {
+  // Integer type — must be a number AND an integer value
+  if (typeStr === 'int') {
+    if (literalType.kind !== 'number' || !Number.isInteger(Number(literalType.raw))) {
+      return {
+        key,
+        line,
+        expectedType: 'int',
+        actualValue: literalType.raw,
+        detail: `expected int but got ${literalType.kind} ${literalType.raw}`,
+      };
+    }
+    return null;
+  }
+
+  // Double type — any number is valid
+  if (typeStr === 'double') {
     if (literalType.kind !== 'number') {
       return {
         key,
         line,
-        expectedType: typeStr,
+        expectedType: 'double',
         actualValue: literalType.raw,
-        detail: `expected ${typeStr} but got ${literalType.kind} ${literalType.raw}`,
+        detail: `expected double but got ${literalType.kind} ${literalType.raw}`,
       };
     }
     return null;

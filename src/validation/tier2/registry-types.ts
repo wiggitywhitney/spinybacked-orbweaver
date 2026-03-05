@@ -82,7 +82,10 @@ export function parseResolvedRegistry(resolvedSchema: object): ResolvedRegistry 
   if (!Array.isArray(schema.groups)) {
     return { groups: [] };
   }
-  return { groups: schema.groups as ResolvedRegistryGroup[] };
+  const groups = schema.groups.filter(
+    (g: unknown): g is ResolvedRegistryGroup => typeof g === 'object' && g !== null,
+  );
+  return { groups };
 }
 
 /**
@@ -106,9 +109,11 @@ export function getSpanDefinitions(registry: ResolvedRegistry): ResolvedRegistry
 export function getAllAttributeNames(registry: ResolvedRegistry): Set<string> {
   const names = new Set<string>();
   for (const group of registry.groups) {
-    if (group.attributes) {
+    if (Array.isArray(group.attributes)) {
       for (const attr of group.attributes) {
-        names.add(attr.name);
+        if (attr && typeof attr.name === 'string') {
+          names.add(attr.name);
+        }
       }
     }
   }
@@ -128,8 +133,9 @@ export function getAttributeDefinitions(
 ): Map<string, ResolvedRegistryAttribute> {
   const defs = new Map<string, ResolvedRegistryAttribute>();
   for (const group of registry.groups) {
-    if (group.attributes) {
+    if (Array.isArray(group.attributes)) {
       for (const attr of group.attributes) {
+        if (!attr || typeof attr.name !== 'string') continue;
         const existing = defs.get(attr.name);
         // Prefer definitions that have type information
         if (!existing || (!existing.type && attr.type)) {

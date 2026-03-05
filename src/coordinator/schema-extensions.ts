@@ -142,7 +142,7 @@ export async function writeSchemaExtensions(
   }
 
   if (validAttributes.length === 0) {
-    return { written: true, extensionCount: 0, filePath, rejected };
+    return { written: false, extensionCount: 0, filePath, rejected };
   }
 
   const yamlContent = stringify({

@@ -255,12 +255,13 @@ describe('validateDiffChanges', () => {
     expect(result.violations[0]).toContain('Failed to parse');
   });
 
-  it('handles missing changes array gracefully', () => {
+  it('handles missing changes array as invalid', () => {
     const result = validateDiffChanges(JSON.stringify({ other: 'data' }));
 
-    // No changes array = no violations (nothing to validate)
-    expect(result.valid).toBe(true);
-    expect(result.violations).toHaveLength(0);
+    // Missing changes array = can't validate extend-only enforcement
+    expect(result.valid).toBe(false);
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0]).toContain('changes');
   });
 });
 

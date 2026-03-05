@@ -174,12 +174,18 @@ async function runRegistryDiff(
       'weaver',
       ['registry', 'diff', '-r', registryDir, '--baseline-registry', baselineDir, '--diff-format', 'json'],
       { timeout: 30000 },
-      (error, stdout) => {
+      (error, stdout, stderr) => {
         if (error) {
+          const execError = error as Error & { stdout?: Buffer | string; stderr?: Buffer | string };
+          const stdoutStr = (typeof execError.stdout === 'string' ? execError.stdout : execError.stdout?.toString())?.trim()
+            ?? (typeof stdout === 'string' ? stdout : '')?.trim() ?? '';
+          const stderrStr = (typeof execError.stderr === 'string' ? execError.stderr : execError.stderr?.toString())?.trim()
+            ?? (typeof stderr === 'string' ? stderr : '')?.trim() ?? '';
+          const cliOutput = [stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message;
           resolve({
             passed: false,
             violations: [],
-            error: error.message,
+            error: cliOutput,
           });
           return;
         }

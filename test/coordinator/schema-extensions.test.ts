@@ -196,7 +196,7 @@ describe('writeSchemaExtensions', () => {
 
     const result = await writeSchemaExtensions(registryDir, extensions);
 
-    expect(result.written).toBe(true);
+    expect(result.written).toBe(false);
     expect(result.extensionCount).toBe(0);
     expect(result.rejected).toHaveLength(1);
     expect(result.rejected[0]).toContain('wrong_namespace.order.total');

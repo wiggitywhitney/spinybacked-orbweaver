@@ -110,7 +110,7 @@ export function validateDiffChanges(diffJson: string): DiffValidationResult {
 
   const changes = parsed.changes;
   if (!Array.isArray(changes)) {
-    return { valid: true, violations: [] };
+    return { valid: false, violations: ['Schema diff JSON did not include a valid "changes" array.'] };
   }
 
   const violations: string[] = [];

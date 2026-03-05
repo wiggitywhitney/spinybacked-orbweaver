@@ -240,7 +240,12 @@ export async function coordinate(
   const extensions = collectSchemaExtensions(fileResults);
   if (extensions.length > 0) {
     try {
-      await writeExtensions(registryDir, extensions);
+      const writeResult = await writeExtensions(registryDir, extensions);
+      if (writeResult.rejected.length > 0) {
+        schemaExtensionWarnings.push(
+          `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       schemaExtensionWarnings.push(`Schema extension writing failed (degraded): ${message}`);

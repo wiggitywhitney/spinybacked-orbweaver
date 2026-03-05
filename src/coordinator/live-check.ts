@@ -176,6 +176,7 @@ export async function runLiveCheck(
     }) as ChildProcess;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    try { callbacks?.onValidationComplete?.(false, ''); } catch { /* non-fatal */ }
     return {
       skipped: true,
       warnings: [`Failed to start Weaver live-check: ${message}`],
@@ -196,6 +197,7 @@ export async function runLiveCheck(
   // Step 4: Wait for Weaver to be ready (or fail early)
   const weaverReady = await waitForWeaverReady(weaverProcess, deps);
   if (!weaverReady.ready) {
+    try { callbacks?.onValidationComplete?.(false, ''); } catch { /* non-fatal */ }
     return {
       skipped: true,
       warnings: [`Failed to start Weaver live-check: ${weaverStderr || weaverReady.error || 'process exited unexpectedly'}`],
