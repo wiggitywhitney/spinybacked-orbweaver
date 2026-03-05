@@ -25,17 +25,17 @@ const OUTBOUND_PATTERNS: Array<{
   // HTTP clients — node:http / node:https
   { objectPattern: /^https?$/, methodPattern: /^(request|get)$/, label: 'http/https' },
 
-  // Database clients — pg (postgres)
-  { objectPattern: /.*/, methodPattern: /^query$/, label: 'query' },
+  // Database clients — pg (postgres), mysql, generic database
+  { objectPattern: /(?:pool|client|connection|db|database|pg|mysql|knex)/i, methodPattern: /^query$/, label: 'query' },
 
-  // Database clients — mysql
-  { objectPattern: /.*/, methodPattern: /^execute$/, label: 'execute' },
+  // Database clients — mysql execute
+  { objectPattern: /(?:pool|client|connection|db|database|mysql|knex)/i, methodPattern: /^execute$/, label: 'execute' },
 
   // Redis
-  { objectPattern: /.*/, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis' },
+  { objectPattern: /(?:redis|cache|store|client)/i, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis' },
 
   // Message queues — AMQP (RabbitMQ)
-  { objectPattern: /.*/, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp' },
+  { objectPattern: /(?:channel|rabbit|amqp|mq|queue|exchange)/i, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp' },
 ];
 
 /**
@@ -166,9 +166,7 @@ function isInsideSpanScope(node: CallExpression): boolean {
       if (parent && Node.isTryStatement(parent)) {
         const tryParent = parent.getParent();
         if (tryParent && (Node.isBlock(tryParent) || Node.isSourceFile(tryParent))) {
-          const statements = Node.isBlock(tryParent)
-            ? tryParent.getStatements()
-            : tryParent.getStatements();
+          const statements = tryParent.getStatements();
           const tryIndex = statements.findIndex(s => s === parent);
           if (tryIndex > 0) {
             // Check if preceding statement has a startSpan call

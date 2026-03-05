@@ -141,25 +141,42 @@ export async function dispatchFiles(
 
     callbacks?.onFileStart?.(filePath, i, total);
 
-    // Read file content
-    const fileContent = await readFile(filePath, 'utf-8');
+    try {
+      // Read file content
+      const fileContent = await readFile(filePath, 'utf-8');
 
-    // Check if already instrumented — skip without schema resolution or LLM call
-    if (isAlreadyInstrumented(fileContent)) {
-      const skipped = buildSkippedResult(filePath);
-      results.push(skipped);
-      callbacks?.onFileComplete?.(skipped, i, total);
-      continue;
+      // Check if already instrumented — skip without schema resolution or LLM call
+      if (isAlreadyInstrumented(fileContent)) {
+        const skipped = buildSkippedResult(filePath);
+        results.push(skipped);
+        callbacks?.onFileComplete?.(skipped, i, total);
+        continue;
+      }
+
+      // Resolve schema fresh for each file
+      const schema = await resolveFn(projectDir, config.schemaPath);
+
+      // Dispatch to fix loop
+      const result = await instrumentFn(filePath, fileContent, schema, config);
+      results.push(result);
+
+      callbacks?.onFileComplete?.(result, i, total);
+    } catch (error) {
+      const failed: FileResult = {
+        path: filePath,
+        status: 'failed',
+        spansAdded: 0,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        attributesCreated: 0,
+        validationAttempts: 0,
+        validationStrategyUsed: 'initial-generation',
+        lastError: error instanceof Error ? error.message : String(error),
+        tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      };
+      results.push(failed);
+      callbacks?.onFileComplete?.(failed, i, total);
     }
-
-    // Resolve schema fresh for each file
-    const schema = await resolveFn(projectDir, config.schemaPath);
-
-    // Dispatch to fix loop
-    const result = await instrumentFn(filePath, fileContent, schema, config);
-    results.push(result);
-
-    callbacks?.onFileComplete?.(result, i, total);
   }
 
   return results;
