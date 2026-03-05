@@ -5,7 +5,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   runSchemaCheckpoint,
 } from '../../src/coordinator/schema-checkpoint.ts';
-import type { SchemaCheckpointResult, SchemaCheckpointDeps } from '../../src/coordinator/schema-checkpoint.ts';
+import type { SchemaCheckpointDeps } from '../../src/coordinator/schema-checkpoint.ts';
+import type { FileResult } from '../../src/fix-loop/types.ts';
 
 /** Build mock deps with configurable behavior. */
 function makeDeps(overrides: Partial<SchemaCheckpointDeps> = {}): SchemaCheckpointDeps {
@@ -230,6 +231,88 @@ describe('runSchemaCheckpoint', () => {
       const result = await runSchemaCheckpoint(registryDir, baselineDir, triggeringFile, 7, deps);
 
       expect(result.blastRadius).toBe(7);
+    });
+  });
+
+  describe('drift detection integration', () => {
+    /** Build a FileResult with configurable metrics. */
+    function makeFileResult(path: string, overrides: Partial<FileResult> = {}): FileResult {
+      return {
+        path,
+        status: 'success',
+        spansAdded: 3,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        attributesCreated: 2,
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+        tokenUsage: { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+        ...overrides,
+      };
+    }
+
+    /** Build deps where both check and diff pass. */
+    function makePassingDeps(): SchemaCheckpointDeps {
+      return {
+        execFileFn: vi.fn()
+          .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+            cb(null, 'passed', '');
+          })
+          .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+            cb(null, JSON.stringify({ changes: [{ change_type: 'added', name: 'myapp.attr' }] }), '');
+          }),
+      };
+    }
+
+    it('detects drift when a file creates excessive attributes', async () => {
+      const deps = makePassingDeps();
+      const results = [
+        makeFileResult('/src/mega.js', { attributesCreated: 35 }),
+      ];
+
+      const result = await runSchemaCheckpoint(registryDir, baselineDir, triggeringFile, 1, deps, results);
+
+      expect(result.passed).toBe(false);
+      expect(result.driftDetected).toBe(true);
+      expect(result.failedCheck).toBe('drift');
+      expect(result.driftWarnings).toHaveLength(1);
+      expect(result.driftWarnings![0]).toContain('/src/mega.js');
+      expect(result.driftWarnings![0]).toContain('35');
+    });
+
+    it('passes when no drift detected', async () => {
+      const deps = makePassingDeps();
+      const results = [
+        makeFileResult('/src/ok.js', { attributesCreated: 5 }),
+      ];
+
+      const result = await runSchemaCheckpoint(registryDir, baselineDir, triggeringFile, 1, deps, results);
+
+      expect(result.passed).toBe(true);
+      expect(result.driftDetected).toBe(false);
+      expect(result.totalAttributesCreated).toBe(5);
+    });
+
+    it('reports totals even when no drift', async () => {
+      const deps = makePassingDeps();
+      const results = [
+        makeFileResult('/src/a.js', { attributesCreated: 5, spansAdded: 3 }),
+        makeFileResult('/src/b.js', { attributesCreated: 8, spansAdded: 4 }),
+      ];
+
+      const result = await runSchemaCheckpoint(registryDir, baselineDir, triggeringFile, 2, deps, results);
+
+      expect(result.totalAttributesCreated).toBe(13);
+      expect(result.totalSpansAdded).toBe(7);
+    });
+
+    it('skips drift detection when no results provided', async () => {
+      const deps = makePassingDeps();
+
+      const result = await runSchemaCheckpoint(registryDir, baselineDir, triggeringFile, 1, deps);
+
+      expect(result.passed).toBe(true);
+      expect(result.driftDetected).toBeUndefined();
     });
   });
 });

@@ -2,7 +2,9 @@
 // ABOUTME: Returns structured results with failure mode, triggering file, blast radius for diagnostic reporting.
 
 import { execFile as defaultExecFile } from 'node:child_process';
+import type { FileResult } from '../fix-loop/types.ts';
 import { validateDiffChanges } from './schema-diff.ts';
+import { detectSchemaDrift } from './schema-drift.ts';
 
 /** Injectable dependencies for schema checkpoint (testing). */
 export interface SchemaCheckpointDeps {
@@ -22,8 +24,8 @@ export interface SchemaCheckpointResult {
   checkPassed: boolean;
   /** Whether extend-only enforcement via `weaver registry diff` passed. */
   diffPassed: boolean;
-  /** Which step failed: 'validation' (registry check) or 'integrity' (diff shows non-added changes). */
-  failedCheck?: 'validation' | 'integrity';
+  /** Which step failed: 'validation' (registry check), 'integrity' (diff shows non-added changes), or 'drift' (excessive attributes/spans). */
+  failedCheck?: 'validation' | 'integrity' | 'drift';
   /** The last file processed before this checkpoint. */
   triggeringFile: string;
   /** Files processed since last successful checkpoint. */
@@ -32,6 +34,14 @@ export interface SchemaCheckpointResult {
   message: string;
   /** Specific violation messages from diff validation. */
   violations: string[];
+  /** Whether schema drift thresholds were exceeded (excessive attributes/spans per file). */
+  driftDetected?: boolean;
+  /** Human-readable drift warnings identifying specific files and counts. */
+  driftWarnings?: string[];
+  /** Total attributes created across files in this checkpoint window. */
+  totalAttributesCreated?: number;
+  /** Total spans added across files in this checkpoint window. */
+  totalSpansAdded?: number;
 }
 
 /**
@@ -46,6 +56,7 @@ export interface SchemaCheckpointResult {
  * @param triggeringFile - Path of the last file processed before this checkpoint
  * @param blastRadius - Number of files processed since last successful checkpoint
  * @param deps - Injectable dependencies for testing
+ * @param resultsSinceCheckpoint - FileResults since last checkpoint, for drift detection
  * @returns Structured checkpoint result with diagnostic information
  */
 export async function runSchemaCheckpoint(
@@ -54,6 +65,7 @@ export async function runSchemaCheckpoint(
   triggeringFile: string,
   blastRadius: number,
   deps?: SchemaCheckpointDeps,
+  resultsSinceCheckpoint?: FileResult[],
 ): Promise<SchemaCheckpointResult> {
   const execFileFn = deps?.execFileFn ?? (defaultExecFile as unknown as SchemaCheckpointDeps['execFileFn']);
 
@@ -101,14 +113,26 @@ export async function runSchemaCheckpoint(
     };
   }
 
+  // Step 3: Drift detection on file results (if available)
+  const drift = resultsSinceCheckpoint
+    ? detectSchemaDrift(resultsSinceCheckpoint)
+    : undefined;
+
   return {
-    passed: true,
+    passed: !drift?.driftDetected,
     checkPassed: true,
     diffPassed: true,
+    failedCheck: drift?.driftDetected ? 'drift' as const : undefined,
     triggeringFile,
     blastRadius,
-    message: 'Schema checkpoint passed.',
-    violations: [],
+    message: drift?.driftDetected
+      ? `Schema drift detected: ${drift.warnings[0]}`
+      : 'Schema checkpoint passed.',
+    violations: drift?.driftDetected ? drift.warnings : [],
+    driftDetected: drift?.driftDetected,
+    driftWarnings: drift?.warnings,
+    totalAttributesCreated: drift?.totalAttributesCreated,
+    totalSpansAdded: drift?.totalSpansAdded,
   };
 }
 

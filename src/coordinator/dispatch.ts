@@ -143,6 +143,7 @@ export async function dispatchFiles(
   const interval = config.schemaCheckpointInterval;
   const checkpointConfig = options?.checkpoint;
   let filesSinceLastCheckpoint = 0;
+  let lastCheckpointResultIndex = 0;
   let stoppedByCheckpoint = false;
 
   for (let i = 0; i < total; i++) {
@@ -184,12 +185,14 @@ export async function dispatchFiles(
       // Run periodic schema checkpoint after every N processed (non-skipped) files
       if (checkpointConfig && interval > 0 && filesSinceLastCheckpoint >= interval) {
         try {
+          const resultsSinceCheckpoint = results.slice(lastCheckpointResultIndex);
           const checkpointResult = await runSchemaCheckpoint(
             checkpointConfig.registryDir,
             checkpointConfig.baselineSnapshotDir,
             filePath,
             filesSinceLastCheckpoint,
             options?.checkpointDeps,
+            resultsSinceCheckpoint,
           );
 
           // Fire callback
@@ -202,13 +205,15 @@ export async function dispatchFiles(
 
           if (checkpointResult.passed) {
             filesSinceLastCheckpoint = 0;
+            lastCheckpointResultIndex = results.length;
           } else {
             // On failure: stop unless callback explicitly returns true
             if (shouldContinue !== true) {
               stoppedByCheckpoint = true;
             } else {
-              // Continue despite failure — don't reset counter
+              // Continue despite failure — reset counters
               filesSinceLastCheckpoint = 0;
+              lastCheckpointResultIndex = results.length;
             }
           }
         } catch {

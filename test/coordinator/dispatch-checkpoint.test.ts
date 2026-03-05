@@ -398,6 +398,89 @@ describe('dispatchFiles with schema checkpoints', () => {
     });
   });
 
+  describe('drift detection at checkpoint', () => {
+    it('stops processing when drift detected at checkpoint', async () => {
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+      const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
+      // instrumentWithRetry returns excessive attributes
+      const deps = makeDeps({
+        instrumentWithRetry: vi.fn().mockImplementation(async (filePath: string) => {
+          return makeSuccessResult(filePath, { attributesCreated: 35 });
+        }),
+      });
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+      const checkpointDeps = makePassingCheckpointDeps();
+
+      const results = await dispatchFiles(files, tmpDir, config, callbacks, {
+        deps,
+        checkpoint: checkpointConfig,
+        checkpointDeps,
+      });
+
+      // Drift detected after file 2 → stops before file 3
+      expect(results).toHaveLength(2);
+      expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, false);
+    });
+
+    it('continues processing when drift detected but callback returns true', async () => {
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(true);
+      const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
+      const deps = makeDeps({
+        instrumentWithRetry: vi.fn().mockImplementation(async (filePath: string) => {
+          return makeSuccessResult(filePath, { attributesCreated: 35 });
+        }),
+      });
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+      const checkpointDeps = makePassingCheckpointDeps();
+
+      const results = await dispatchFiles(files, tmpDir, config, callbacks, {
+        deps,
+        checkpoint: checkpointConfig,
+        checkpointDeps,
+      });
+
+      // All 4 files processed despite drift
+      expect(results).toHaveLength(4);
+      expect(onSchemaCheckpoint).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not flag drift when attribute counts are reasonable', async () => {
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+      ]);
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+      const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
+      const deps = makeDeps({
+        instrumentWithRetry: vi.fn().mockImplementation(async (filePath: string) => {
+          return makeSuccessResult(filePath, { attributesCreated: 5, spansAdded: 3 });
+        }),
+      });
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+      const checkpointDeps = makePassingCheckpointDeps();
+
+      const results = await dispatchFiles(files, tmpDir, config, callbacks, {
+        deps,
+        checkpoint: checkpointConfig,
+        checkpointDeps,
+      });
+
+      // No drift → all files processed, checkpoint passed
+      expect(results).toHaveLength(2);
+      expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, true);
+    });
+  });
+
   describe('checkpoint infrastructure failure degrades gracefully', () => {
     it('continues processing when checkpoint runner throws', async () => {
       const files = await Promise.all([
