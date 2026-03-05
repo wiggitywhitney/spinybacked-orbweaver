@@ -2,7 +2,7 @@
 // ABOUTME: Unit tests mock the Anthropic SDK; integration tests call the real API.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { instrumentFile } from '../../src/agent/instrument-file.ts';
+import { instrumentFile, MAX_OUTPUT_TOKENS_PER_CALL } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { LlmOutput } from '../../src/agent/schema.ts';
 
@@ -352,11 +352,8 @@ describe('instrumentFile', () => {
       );
 
       const call = client.messages.parse.mock.calls[0][0];
-      // max_tokens must NOT be the cumulative budget (80000 exceeds Sonnet 4.6's 64K limit)
-      expect(call.max_tokens).not.toBe(80000);
-      // Should use a per-call limit within model output limits
-      expect(call.max_tokens).toBeLessThanOrEqual(64000);
-      expect(call.max_tokens).toBeGreaterThan(0);
+      // Must use the per-call constant, not the cumulative budget
+      expect(call.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
     });
 
     it('uses the same per-call limit regardless of maxTokensPerFile config', async () => {
@@ -383,7 +380,8 @@ describe('instrumentFile', () => {
       const call1 = client1.messages.parse.mock.calls[0][0];
       const call2 = client2.messages.parse.mock.calls[0][0];
       // Per-call limit should be the same constant, not derived from maxTokensPerFile
-      expect(call1.max_tokens).toBe(call2.max_tokens);
+      expect(call1.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
+      expect(call2.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
     });
   });
 
