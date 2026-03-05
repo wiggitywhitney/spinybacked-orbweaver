@@ -77,7 +77,18 @@ export async function checkPortAvailable(
 
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        resolve({ available: false, port });
+        // Attempt to identify the blocking process via lsof
+        defaultExecFile('lsof', ['-i', `:${port}`, '-t'], (lsofErr, stdout) => {
+          if (!lsofErr && stdout.trim()) {
+            const pid = parseInt(stdout.trim().split('\n')[0], 10);
+            defaultExecFile('ps', ['-p', String(pid), '-o', 'comm='], (psErr, psStdout) => {
+              const processName = (!psErr && psStdout.trim()) ? psStdout.trim() : undefined;
+              resolve({ available: false, port, pid, processName });
+            });
+          } else {
+            resolve({ available: false, port });
+          }
+        });
       } else {
         resolve({ available: false, port });
       }
@@ -132,13 +143,15 @@ export async function runLiveCheck(
   // Step 2: Check port availability
   const grpcCheck = await checkPortAvailable(GRPC_PORT, deps);
   if (!grpcCheck.available) {
-    const msg = `Port ${GRPC_PORT} is in use. Free this port to enable end-of-run schema validation. Skipping live-check.`;
+    const pidInfo = grpcCheck.pid ? ` (PID: ${grpcCheck.pid}${grpcCheck.processName ? `, process: ${grpcCheck.processName}` : ''})` : '';
+    const msg = `Port ${GRPC_PORT} is in use${pidInfo}. Free this port to enable end-of-run schema validation. Skipping live-check.`;
     return { skipped: true, warnings: [msg] };
   }
 
   const httpCheck = await checkPortAvailable(HTTP_PORT, deps);
   if (!httpCheck.available) {
-    const msg = `Port ${HTTP_PORT} is in use. Free this port to enable end-of-run schema validation. Skipping live-check.`;
+    const pidInfo = httpCheck.pid ? ` (PID: ${httpCheck.pid}${httpCheck.processName ? `, process: ${httpCheck.processName}` : ''})` : '';
+    const msg = `Port ${HTTP_PORT} is in use${pidInfo}. Free this port to enable end-of-run schema validation. Skipping live-check.`;
     return { skipped: true, warnings: [msg] };
   }
 
@@ -204,6 +217,7 @@ export async function runLiveCheck(
   try {
     const stopResponse = await fetchFn(`http://localhost:${HTTP_PORT}/stop`, {
       method: 'POST',
+      signal: AbortSignal.timeout(WEAVER_STOP_TIMEOUT_MS),
     });
     complianceReport = await stopResponse.text();
   } catch (err) {
