@@ -139,7 +139,11 @@ export async function dispatchFiles(
   for (let i = 0; i < total; i++) {
     const filePath = filePaths[i];
 
-    callbacks?.onFileStart?.(filePath, i, total);
+    try {
+      callbacks?.onFileStart?.(filePath, i, total);
+    } catch {
+      // Callback failure must not abort dispatch
+    }
 
     try {
       // Read file content
@@ -149,7 +153,7 @@ export async function dispatchFiles(
       if (isAlreadyInstrumented(fileContent)) {
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
-        callbacks?.onFileComplete?.(skipped, i, total);
+        try { callbacks?.onFileComplete?.(skipped, i, total); } catch { /* callback failure must not abort dispatch */ }
         continue;
       }
 
@@ -160,7 +164,7 @@ export async function dispatchFiles(
       const result = await instrumentFn(filePath, fileContent, schema, config);
       results.push(result);
 
-      callbacks?.onFileComplete?.(result, i, total);
+      try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
     } catch (error) {
       const failed: FileResult = {
         path: filePath,
@@ -176,7 +180,7 @@ export async function dispatchFiles(
         tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
       };
       results.push(failed);
-      callbacks?.onFileComplete?.(failed, i, total);
+      try { callbacks?.onFileComplete?.(failed, i, total); } catch { /* callback failure must not abort dispatch */ }
     }
   }
 

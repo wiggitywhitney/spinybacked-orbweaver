@@ -128,9 +128,15 @@ function isExpensiveValue(valueNode: import('ts-morph').Node, valueText: string)
 
 /**
  * Check if a setAttribute call is inside an isRecording() guard.
- * Walks up the AST looking for an if statement with span.isRecording() condition.
+ * Checks two patterns:
+ * 1. Enclosing if statement with span.isRecording() condition (setAttribute in then-branch)
+ * 2. Early-return guard: if (!span.isRecording()) return; before the setAttribute call
  */
 function hasIsRecordingGuard(setAttrCall: CallExpression): boolean {
+  // Pattern 1: Check for early-return guard in preceding sibling statements
+  if (hasEarlyReturnGuard(setAttrCall)) return true;
+
+  // Pattern 2: Check enclosing if statement
   let current = setAttrCall.getParent();
 
   while (current) {
@@ -160,6 +166,38 @@ function hasIsRecordingGuard(setAttrCall: CallExpression): boolean {
     current = current.getParent();
   }
 
+  return false;
+}
+
+/**
+ * Check for early-return guard: if (!span.isRecording()) return; before the setAttribute call.
+ * Scans preceding sibling statements in the containing block.
+ */
+function hasEarlyReturnGuard(setAttrCall: CallExpression): boolean {
+  // Find the containing block and the statement that contains this call
+  let stmt: import('ts-morph').Node | undefined = setAttrCall;
+  let block: import('ts-morph').Node | undefined;
+  while (stmt) {
+    const parent = stmt.getParent();
+    if (parent && (Node.isBlock(parent) || Node.isSourceFile(parent))) {
+      block = parent;
+      break;
+    }
+    stmt = parent;
+  }
+  if (!block || !stmt || (!Node.isBlock(block) && !Node.isSourceFile(block))) return false;
+
+  const statements = block.getStatements();
+  const stmtIndex = statements.findIndex(s => s === stmt);
+  if (stmtIndex <= 0) return false;
+
+  // Check preceding statements for: if (!span.isRecording()) return;
+  for (let i = stmtIndex - 1; i >= 0; i--) {
+    const prevText = statements[i].getText();
+    if (/if\s*\(\s*!\s*\w+\.isRecording\(\)\s*\)\s*(return|break|continue)/.test(prevText)) {
+      return true;
+    }
+  }
   return false;
 }
 

@@ -108,7 +108,13 @@ export async function coordinate(
   const finalize = deps?.finalizeResults ?? defaultFinalizeResults;
 
   // Step 1: Check prerequisites (abort on failure)
-  const prereqs = await checkPrereqs(projectDir, config);
+  let prereqs: PrerequisitesResult;
+  try {
+    prereqs = await checkPrereqs(projectDir, config);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new CoordinatorAbortError(`Prerequisites check failed: ${message}`);
+  }
   if (!prereqs.allPassed) {
     const failedMessages = prereqs.checks
       .filter(c => !c.passed)
@@ -137,7 +143,13 @@ export async function coordinate(
 
   // Step 4: Fire onCostCeilingReady (abort if returns false)
   if (config.confirmEstimate && callbacks?.onCostCeilingReady) {
-    const proceed = callbacks.onCostCeilingReady(costCeiling);
+    let proceed: boolean | void;
+    try {
+      proceed = callbacks.onCostCeilingReady(costCeiling);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new CoordinatorAbortError(`onCostCeilingReady callback failed: ${message}`);
+    }
     if (proceed === false) {
       throw new CoordinatorAbortError(
         `Cost ceiling rejected by caller. ` +
