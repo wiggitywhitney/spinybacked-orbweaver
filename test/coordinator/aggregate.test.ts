@@ -1,11 +1,14 @@
 // ABOUTME: Unit tests for the coordinator result aggregation module.
-// ABOUTME: Covers FileResult aggregation into RunResult counts, token usage summation, and warnings collection.
+// ABOUTME: Covers FileResult aggregation into RunResult counts, token usage summation, warnings collection, library collection, and finalization.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFile, readFile, mkdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { FileResult } from '../../src/fix-loop/types.ts';
-import type { TokenUsage } from '../../src/agent/schema.ts';
+import type { TokenUsage, LibraryRequirement } from '../../src/agent/schema.ts';
 import type { CostCeiling } from '../../src/coordinator/types.ts';
-import { aggregateResults } from '../../src/coordinator/aggregate.ts';
+import { aggregateResults, collectLibraries, finalizeResults } from '../../src/coordinator/aggregate.ts';
 
 const ZERO_TOKENS: TokenUsage = {
   inputTokens: 0,
@@ -232,12 +235,168 @@ describe('aggregateResults', () => {
       expect(run.endOfRunValidation).toBeUndefined();
     });
 
-    it('initializes library fields as empty (populated by Milestone 5)', () => {
+    it('initializes library fields as empty (populated by finalizeResults)', () => {
       const run = aggregateResults([], makeCostCeiling({ fileCount: 0 }));
 
       expect(run.librariesInstalled).toEqual([]);
       expect(run.libraryInstallFailures).toEqual([]);
       expect(run.sdkInitUpdated).toBe(false);
     });
+  });
+});
+
+describe('collectLibraries', () => {
+  it('collects unique libraries from successful results', () => {
+    const results: FileResult[] = [
+      makeSuccessResult('/a.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+          { package: '@opentelemetry/instrumentation-pg', importName: 'PgInstrumentation' },
+        ],
+      }),
+      makeSuccessResult('/b.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+          { package: '@opentelemetry/instrumentation-redis', importName: 'RedisInstrumentation' },
+        ],
+      }),
+    ];
+
+    const libraries = collectLibraries(results);
+
+    expect(libraries).toHaveLength(3);
+    expect(libraries.map(l => l.package)).toEqual([
+      '@opentelemetry/instrumentation-http',
+      '@opentelemetry/instrumentation-pg',
+      '@opentelemetry/instrumentation-redis',
+    ]);
+  });
+
+  it('excludes libraries from failed and skipped results', () => {
+    const results: FileResult[] = [
+      makeSuccessResult('/a.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+        ],
+      }),
+      makeFailedResult('/b.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-pg', importName: 'PgInstrumentation' },
+        ],
+      }),
+      makeSkippedResult('/c.js'),
+    ];
+
+    const libraries = collectLibraries(results);
+
+    expect(libraries).toHaveLength(1);
+    expect(libraries[0].package).toBe('@opentelemetry/instrumentation-http');
+  });
+
+  it('returns empty for no successful results', () => {
+    const results: FileResult[] = [
+      makeFailedResult('/a.js'),
+      makeSkippedResult('/b.js'),
+    ];
+
+    const libraries = collectLibraries(results);
+
+    expect(libraries).toEqual([]);
+  });
+});
+
+describe('finalizeResults', () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    testDir = join(tmpdir(), `finalize-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await mkdir(testDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  it('populates library fields on RunResult after SDK init and dependency install', async () => {
+    const sdkFile = join(testDir, 'setup.js');
+    await writeFile(sdkFile, `
+import { NodeSDK } from '@opentelemetry/sdk-node';
+
+const sdk = new NodeSDK({
+  instrumentations: [],
+});
+
+sdk.start();
+`, 'utf-8');
+
+    const results: FileResult[] = [
+      makeSuccessResult('/a.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+        ],
+      }),
+    ];
+
+    const runResult = aggregateResults(results, makeCostCeiling({ fileCount: 1 }));
+
+    // Mock exec so npm install succeeds
+    const execCalls: string[] = [];
+    await finalizeResults(runResult, testDir, sdkFile, 'dependencies', {
+      installDeps: {
+        exec: async (cmd: string) => { execCalls.push(cmd); },
+        readFile: async () => '{}',
+        writeFile: async () => {},
+      },
+    });
+
+    expect(runResult.sdkInitUpdated).toBe(true);
+    expect(runResult.librariesInstalled).toContain('@opentelemetry/api');
+    expect(runResult.librariesInstalled).toContain('@opentelemetry/instrumentation-http');
+    expect(runResult.libraryInstallFailures).toEqual([]);
+  });
+
+  it('does nothing when no libraries are needed', async () => {
+    const sdkFile = join(testDir, 'setup.js');
+    await writeFile(sdkFile, 'console.log("setup");', 'utf-8');
+
+    const results: FileResult[] = [
+      makeSuccessResult('/a.js', { librariesNeeded: [] }),
+    ];
+
+    const runResult = aggregateResults(results, makeCostCeiling({ fileCount: 1 }));
+
+    await finalizeResults(runResult, testDir, sdkFile, 'dependencies');
+
+    expect(runResult.sdkInitUpdated).toBe(false);
+    expect(runResult.librariesInstalled).toEqual([]);
+  });
+
+  it('reports SDK init fallback warning in RunResult', async () => {
+    const sdkFile = join(testDir, 'setup.js');
+    await writeFile(sdkFile, `
+// No NodeSDK pattern
+startTelemetry();
+`, 'utf-8');
+
+    const results: FileResult[] = [
+      makeSuccessResult('/a.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+        ],
+      }),
+    ];
+
+    const runResult = aggregateResults(results, makeCostCeiling({ fileCount: 1 }));
+
+    await finalizeResults(runResult, testDir, sdkFile, 'dependencies', {
+      installDeps: {
+        exec: async () => {},
+        readFile: async () => '{}',
+        writeFile: async () => {},
+      },
+    });
+
+    expect(runResult.sdkInitUpdated).toBe(false);
+    expect(runResult.warnings.some(w => w.includes('orb-instrumentations.js'))).toBe(true);
   });
 });

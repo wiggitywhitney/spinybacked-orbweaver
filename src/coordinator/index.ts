@@ -4,5 +4,10 @@
 export { discoverFiles } from './discovery.ts';
 export type { DiscoverFilesOptions } from './discovery.ts';
 export { isAlreadyInstrumented, buildSkippedResult, dispatchFiles, resolveSchema } from './dispatch.ts';
-export { aggregateResults } from './aggregate.ts';
+export { aggregateResults, collectLibraries, finalizeResults } from './aggregate.ts';
+export type { FinalizeDeps } from './aggregate.ts';
+export { updateSdkInitFile } from './sdk-init.ts';
+export type { SdkInitResult } from './sdk-init.ts';
+export { installDependencies } from './dependencies.ts';
+export type { DependencyInstallResult, InstallDeps } from './dependencies.ts';
 export type { CoordinatorCallbacks, CostCeiling, RunResult, DispatchFilesDeps } from './types.ts';

@@ -1,9 +1,14 @@
 // ABOUTME: Result aggregation for the coordinator module.
-// ABOUTME: Collects FileResult objects into a RunResult with aggregate counts, token usage, and warnings.
+// ABOUTME: Collects FileResult objects into a RunResult with aggregate counts, token usage, warnings, SDK init writing, and dependency installation.
 
 import type { FileResult } from '../fix-loop/types.ts';
+import type { LibraryRequirement } from '../agent/schema.ts';
 import type { TokenUsage } from '../agent/schema.ts';
 import type { CostCeiling, RunResult } from './types.ts';
+import { updateSdkInitFile } from './sdk-init.ts';
+import type { SdkInitResult } from './sdk-init.ts';
+import { installDependencies } from './dependencies.ts';
+import type { DependencyInstallResult, InstallDeps } from './dependencies.ts';
 
 /**
  * Sum token usage across all file results.
@@ -40,8 +45,7 @@ function collectWarnings(results: FileResult[]): string[] {
  * Aggregate FileResult objects into a RunResult.
  *
  * Computes file status counts, sums token usage, and collects warnings.
- * Library installation fields (librariesInstalled, libraryInstallFailures,
- * sdkInitUpdated) are initialized empty — populated by Milestone 5.
+ * Library installation fields are initialized empty — populated by finalizeResults.
  * Phase 5 fields (schemaDiff, schemaHashStart, schemaHashEnd,
  * endOfRunValidation) are left undefined.
  */
@@ -62,4 +66,78 @@ export function aggregateResults(
     sdkInitUpdated: false,
     warnings: collectWarnings(results),
   };
+}
+
+/**
+ * Collect unique libraries needed from all successful file results.
+ * Deduplicates by package name, keeping the first occurrence.
+ */
+export function collectLibraries(results: FileResult[]): LibraryRequirement[] {
+  const seen = new Set<string>();
+  const libraries: LibraryRequirement[] = [];
+  for (const r of results) {
+    if (r.status !== 'success') continue;
+    for (const lib of r.librariesNeeded) {
+      if (!seen.has(lib.package)) {
+        seen.add(lib.package);
+        libraries.push(lib);
+      }
+    }
+  }
+  return libraries;
+}
+
+/**
+ * Injectable dependencies for the finalize step.
+ * Production code uses real implementations; tests inject mocks.
+ */
+export interface FinalizeDeps {
+  installDeps?: InstallDeps;
+}
+
+/**
+ * Finalize the run result by writing the SDK init file and installing dependencies.
+ *
+ * Called after all files have been processed and aggregated. Mutates the RunResult
+ * in place to populate librariesInstalled, libraryInstallFailures, sdkInitUpdated,
+ * and additional warnings.
+ *
+ * @param runResult - The aggregated run result to finalize
+ * @param projectDir - Project root directory
+ * @param sdkInitFilePath - Path to the SDK init file
+ * @param dependencyStrategy - How to add packages to package.json
+ * @param deps - Injectable dependencies for testing
+ */
+export async function finalizeResults(
+  runResult: RunResult,
+  projectDir: string,
+  sdkInitFilePath: string,
+  dependencyStrategy: 'dependencies' | 'peerDependencies',
+  deps?: FinalizeDeps,
+): Promise<void> {
+  const libraries = collectLibraries(runResult.fileResults);
+
+  if (libraries.length === 0) {
+    return;
+  }
+
+  // Write SDK init file
+  const sdkResult = await updateSdkInitFile(sdkInitFilePath, libraries);
+  runResult.sdkInitUpdated = sdkResult.updated;
+
+  if (sdkResult.warning) {
+    runResult.warnings.push(sdkResult.warning);
+  }
+
+  // Install dependencies
+  const installResult = await installDependencies(
+    projectDir,
+    libraries,
+    dependencyStrategy,
+    deps?.installDeps,
+  );
+
+  runResult.librariesInstalled = installResult.installed;
+  runResult.libraryInstallFailures = installResult.failures;
+  runResult.warnings.push(...installResult.warnings);
 }
