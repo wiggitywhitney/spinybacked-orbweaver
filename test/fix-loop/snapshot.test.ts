@@ -2,7 +2,7 @@
 // ABOUTME: Verifies snapshot creation, restoration on failure, and cleanup on success.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, readFileSync, existsSync, mkdtempSync, unlinkSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createSnapshot, restoreSnapshot, removeSnapshot } from '../../src/fix-loop/snapshot.ts';
@@ -19,9 +19,9 @@ describe('file snapshot/restore', () => {
   });
 
   afterEach(() => {
-    // Clean up test file if it exists
-    if (existsSync(testFilePath)) {
-      unlinkSync(testFilePath);
+    // Clean up temp directory and all contents
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
     }
   });
 
