@@ -52,7 +52,6 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
 
     // For startSpan (non-callback style), check sibling scope for error recording
     if (!spanParam) {
-      const text = expr.getText();
       if (text.endsWith('.startSpan')) {
         // Find the span variable name from the declaration
         const parentNode = node.getParent();

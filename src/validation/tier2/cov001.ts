@@ -72,7 +72,7 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
   });
 
   // Check exported async service functions
-  checkExportedAsyncFunctions(code, sourceFile, unspanned);
+  checkExportedAsyncFunctions(sourceFile, unspanned);
 
   if (unspanned.length === 0) {
     return {
@@ -127,7 +127,6 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
  * Exported async functions are service entry points that should be traced.
  */
 function checkExportedAsyncFunctions(
-  code: string,
   sourceFile: import('ts-morph').SourceFile,
   unspanned: Array<{ line: number; description: string }>,
 ): void {
