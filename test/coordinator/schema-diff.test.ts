@@ -308,7 +308,7 @@ describe('computeSchemaDiff', () => {
     const result = await computeSchemaDiff('/registry', '/baseline', execFileMock);
 
     expect(result.markdown).toBeUndefined();
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
     expect(result.error).toContain('weaver crashed');
   });
 
@@ -324,7 +324,7 @@ describe('computeSchemaDiff', () => {
     const result = await computeSchemaDiff('/registry', '/baseline', execFileMock);
 
     expect(result.markdown).toBe('## Changes\n');
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
     expect(result.error).toContain('json format unsupported');
   });
 });

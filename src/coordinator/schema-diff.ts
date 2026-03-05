@@ -151,7 +151,7 @@ export async function computeSchemaDiff(
     const message = err instanceof Error ? err.message : String(err);
     return {
       markdown: undefined,
-      valid: true,
+      valid: false,
       violations: [],
       error: `Schema diff (markdown) failed: ${message}`,
     };
@@ -165,7 +165,7 @@ export async function computeSchemaDiff(
     const message = err instanceof Error ? err.message : String(err);
     return {
       markdown,
-      valid: true,
+      valid: false,
       violations: [],
       error: `Schema diff (json) failed: ${message}`,
     };

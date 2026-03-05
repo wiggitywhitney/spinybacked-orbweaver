@@ -282,7 +282,9 @@ async function runTestSuite(
   projectDir: string,
   execFileFn: LiveCheckDeps['execFileFn'],
 ): Promise<{ stdout: string; stderr: string }> {
-  const [cmd, ...args] = testCommand.split(' ');
+  const isWindows = process.platform === 'win32';
+  const cmd = isWindows ? 'cmd.exe' : 'sh';
+  const args = isWindows ? ['/c', testCommand] : ['-c', testCommand];
 
   return new Promise((resolve, reject) => {
     execFileFn(
