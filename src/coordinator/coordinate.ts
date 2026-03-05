@@ -12,7 +12,22 @@ import { discoverFiles as defaultDiscoverFiles } from './discovery.ts';
 import { dispatchFiles as defaultDispatchFiles } from './dispatch.ts';
 import { aggregateResults, finalizeResults as defaultFinalizeResults } from './aggregate.ts';
 import { checkPrerequisites as defaultCheckPrerequisites } from '../config/prerequisites.ts';
+import {
+  collectSchemaExtensions,
+  writeSchemaExtensions as defaultWriteSchemaExtensions,
+} from './schema-extensions.ts';
+import type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
 import type { FinalizeDeps } from './aggregate.ts';
+import { computeSchemaHash } from './schema-hash.ts';
+import { resolveSchema as defaultResolveSchema } from './dispatch.ts';
+import {
+  createBaselineSnapshot as defaultCreateBaselineSnapshot,
+  cleanupSnapshot as defaultCleanupSnapshot,
+  computeSchemaDiff as defaultComputeSchemaDiff,
+} from './schema-diff.ts';
+import type { SchemaDiffResult } from './schema-diff.ts';
+import { runLiveCheck as defaultRunLiveCheck } from './live-check.ts';
+import type { LiveCheckResult, LiveCheckDeps } from './live-check.ts';
 
 /**
  * Error thrown when the coordinator must abort the run.
@@ -49,6 +64,21 @@ export interface CoordinateDeps {
     dependencyStrategy: 'dependencies' | 'peerDependencies',
     deps?: FinalizeDeps,
   ) => Promise<void>;
+  writeSchemaExtensions: (
+    registryDir: string,
+    extensions: string[],
+  ) => Promise<WriteSchemaExtensionsResult>;
+  resolveSchemaForHash: (projectDir: string, schemaPath: string) => Promise<object>;
+  createBaselineSnapshot: (registryDir: string) => Promise<string>;
+  cleanupSnapshot: (snapshotDir: string) => Promise<void>;
+  computeSchemaDiff: (registryDir: string, baselineDir: string) => Promise<SchemaDiffResult>;
+  runLiveCheck: (
+    registryDir: string,
+    projectDir: string,
+    testCommand: string,
+    deps?: LiveCheckDeps,
+    callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
+  ) => Promise<LiveCheckResult>;
 }
 
 /**
@@ -106,6 +136,15 @@ export async function coordinate(
   const statFn = deps?.statFile ?? ((fp: string) => stat(fp));
   const dispatch = deps?.dispatchFiles ?? defaultDispatchFiles;
   const finalize = deps?.finalizeResults ?? defaultFinalizeResults;
+  const writeExtensions = deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
+  const resolveForHash = deps?.resolveSchemaForHash ?? defaultResolveSchema;
+  const createSnapshot = deps?.createBaselineSnapshot ?? defaultCreateBaselineSnapshot;
+  const cleanupSnap = deps?.cleanupSnapshot ?? defaultCleanupSnapshot;
+  const schemaDiff = deps?.computeSchemaDiff ?? defaultComputeSchemaDiff;
+  const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
+  const schemaExtensionWarnings: string[] = [];
+  const schemaHashWarnings: string[] = [];
+  const schemaDiffWarnings: string[] = [];
 
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;
@@ -159,17 +198,103 @@ export async function coordinate(
     }
   }
 
+  // Step 4b: Compute schema hash at run start (degrade and warn on failure)
+  let schemaHashStart: string | undefined;
+  try {
+    const startSchema = await resolveForHash(projectDir, config.schemaPath);
+    schemaHashStart = computeSchemaHash(startSchema);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    schemaHashWarnings.push(`Schema hash computation at run start failed (degraded): ${message}`);
+  }
+
+  // Step 4c: Create baseline snapshot of registry (degrade and warn on failure)
+  const registryDir = resolve(projectDir, config.schemaPath);
+  let baselineSnapshotDir: string | undefined;
+  try {
+    baselineSnapshotDir = await createSnapshot(registryDir);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    schemaDiffWarnings.push(`Baseline snapshot failed (degraded): ${message}`);
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   let fileResults: FileResult[];
   try {
-    fileResults = await dispatch(filePaths, projectDir, config, callbacks, undefined);
+    fileResults = await dispatch(filePaths, projectDir, config, callbacks, {
+      checkpoint: {
+        registryDir,
+        baselineSnapshotDir: baselineSnapshotDir,
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Clean up baseline snapshot before aborting
+    if (baselineSnapshotDir) {
+      try { await cleanupSnap(baselineSnapshotDir); } catch { /* best effort cleanup */ }
+    }
     throw new CoordinatorAbortError(`File dispatch failed: ${message}`);
+  }
+
+  // Step 5b: Write schema extensions (degrade and warn on failure)
+  const extensions = collectSchemaExtensions(fileResults);
+  if (extensions.length > 0) {
+    try {
+      const writeResult = await writeExtensions(registryDir, extensions);
+      if (writeResult.rejected.length > 0) {
+        schemaExtensionWarnings.push(
+          `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaExtensionWarnings.push(`Schema extension writing failed (degraded): ${message}`);
+    }
+  }
+
+  // Step 5c: Compute schema hash at run end (after extensions written)
+  let schemaHashEnd: string | undefined;
+  if (schemaHashStart !== undefined) {
+    try {
+      const endSchema = await resolveForHash(projectDir, config.schemaPath);
+      schemaHashEnd = computeSchemaHash(endSchema);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaHashWarnings.push(`Schema hash computation at run end failed (degraded): ${message}`);
+    }
+  }
+
+  // Step 5d: Compute schema diff against baseline (degrade and warn on failure)
+  let schemaDiffMarkdown: string | undefined;
+  if (baselineSnapshotDir && extensions.length > 0) {
+    try {
+      const diffResult = await schemaDiff(registryDir, baselineSnapshotDir);
+      schemaDiffMarkdown = diffResult.markdown;
+      if (!diffResult.valid) {
+        schemaDiffWarnings.push(...diffResult.violations);
+      }
+      if (diffResult.error) {
+        schemaDiffWarnings.push(`Schema diff warning: ${diffResult.error}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaDiffWarnings.push(`Schema diff failed (degraded): ${message}`);
+    }
+  }
+
+  // Step 5e: Clean up baseline snapshot (always, best effort)
+  if (baselineSnapshotDir) {
+    try { await cleanupSnap(baselineSnapshotDir); } catch { /* best effort cleanup */ }
   }
 
   // Step 6: Aggregate results
   const runResult = aggregateResults(fileResults, costCeiling);
+  runResult.schemaHashStart = schemaHashStart;
+  runResult.schemaHashEnd = schemaHashEnd;
+  runResult.schemaDiff = schemaDiffMarkdown;
+  runResult.warnings.push(...schemaExtensionWarnings);
+  runResult.warnings.push(...schemaHashWarnings);
+  runResult.warnings.push(...schemaDiffWarnings);
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {
@@ -177,6 +302,26 @@ export async function coordinate(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     runResult.warnings.push(`onRunComplete callback failed: ${message}`);
+  }
+
+  // Step 7b: End-of-run Weaver live-check (degrade and warn on failure)
+  try {
+    const liveCheckResult = await liveCheck(
+      registryDir,
+      projectDir,
+      config.testCommand,
+      undefined,
+      callbacks,
+    );
+    if (liveCheckResult.complianceReport) {
+      runResult.endOfRunValidation = liveCheckResult.complianceReport;
+    }
+    if (liveCheckResult.warnings.length > 0) {
+      runResult.warnings.push(...liveCheckResult.warnings);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
   }
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)

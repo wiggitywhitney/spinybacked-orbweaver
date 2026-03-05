@@ -212,7 +212,9 @@ Phase 7 also extends:
 
 - [ ] **Milestone 11: Resolve commit-story local dependency** — Remove or replace the `"commit-story": "file:../commit-story-v2"` devDependency in package.json. This local path dependency breaks for anyone cloning the repo without the sibling directory. Options: publish to npm, replace with direct implementation, or remove with a note about optional journal integration. This is the last step before the repo is fully public-ready. Verify: (a) `npm install` succeeds from a clean clone without the sibling directory, (b) any journal integration that depended on commit-story still works or is gracefully degraded.
 
-- [ ] **Milestone 12: Acceptance gate passes** — Full end-to-end run from CLI produces a reviewable PR on a feature branch with per-file commits. PR description includes all specified sections. User can estimate cost, monitor progress, and understand failures. README and usage docs are complete. Verify against a real test JavaScript project with Weaver schema.
+- [ ] **Milestone 12: Weekly CI workflow for acceptance gate tests** — Create a GitHub Actions workflow (`.github/workflows/acceptance-tests.yml`) that runs all acceptance gate tests (`test/**/acceptance-gate.test.ts`) with the `ANTHROPIC_API_KEY` secret injected. Scheduled weekly (`cron: '0 9 * * 1'` — Monday mornings). Also triggerable on-demand via `workflow_dispatch`. Uses `vals exec` or direct env var injection for the API key. Verify: (a) workflow file is valid YAML, (b) `on.schedule` and `on.workflow_dispatch` triggers configured, (c) test command runs acceptance gate tests only (not the full suite), (d) API key is injected as a secret (never logged).
+
+- [ ] **Milestone 13: Acceptance gate passes** — Full end-to-end run from CLI produces a reviewable PR on a feature branch with per-file commits. PR description includes all specified sections. User can estimate cost, monitor progress, and understand failures. README and usage docs are complete. Verify against a real test JavaScript project with Weaver schema.
 
 ## Dependencies
 

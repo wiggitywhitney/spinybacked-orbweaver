@@ -65,3 +65,14 @@ export interface DispatchFilesDeps {
     config: AgentConfig,
   ) => Promise<FileResult>;
 }
+
+/**
+ * Checkpoint configuration passed from coordinate() to dispatchFiles().
+ * Enables periodic schema validation during the dispatch loop.
+ */
+export interface DispatchCheckpointConfig {
+  /** Absolute path to the Weaver registry directory. */
+  registryDir: string;
+  /** Absolute path to baseline snapshot, or undefined if snapshot failed. */
+  baselineSnapshotDir?: string;
+}

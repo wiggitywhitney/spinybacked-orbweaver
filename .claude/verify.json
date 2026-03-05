@@ -1,0 +1,5 @@
+{
+  "commands": {
+    "acceptance_test": "vals exec -f .vals.yaml -- npx vitest run test/**/acceptance-gate.test.ts"
+  }
+}

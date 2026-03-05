@@ -17,3 +17,21 @@ export { checkTrivialAccessorSpans } from './rst002.ts';
 export { checkThinWrapperSpans } from './rst003.ts';
 export { checkInternalDetailSpans } from './rst004.ts';
 export { checkIsRecordingGuard } from './cdq006.ts';
+export { checkSpanNamesMatchRegistry } from './sch001.ts';
+export { checkAttributeKeysMatchRegistry } from './sch002.ts';
+export { checkAttributeValuesConformToTypes } from './sch003.ts';
+export { checkNoRedundantSchemaEntries } from './sch004.ts';
+export type {
+  ResolvedRegistry,
+  ResolvedRegistryGroup,
+  ResolvedRegistryAttribute,
+  ResolvedEnumType,
+  ResolvedEnumMember,
+} from './registry-types.ts';
+export {
+  parseResolvedRegistry,
+  getSpanDefinitions,
+  getAllAttributeNames,
+  getAttributeDefinitions,
+  isEnumType,
+} from './registry-types.ts';

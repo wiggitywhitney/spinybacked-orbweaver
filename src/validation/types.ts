@@ -59,6 +59,9 @@ export interface ValidationConfig {
   registryPath?: string;
   /** Registry span definitions for COV-005 domain attribute checks. */
   registryDefinitions?: import('./tier2/cov005.ts').RegistrySpanDefinition[];
+  /** Resolved Weaver registry (from `weaver registry resolve -f json`).
+   *  Used by SCH-001 through SCH-004 Tier 2 checks. */
+  resolvedSchema?: object;
 }
 
 /**
