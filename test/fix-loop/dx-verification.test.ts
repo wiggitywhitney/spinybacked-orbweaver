@@ -601,6 +601,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.validationStrategyUsed).toBe('initial-generation');
 
       // reason and lastError contain the thrown error message
+      expect(result.reason).toContain('Unexpected error');
       expect(result.reason).toContain('cannot read property');
       expect(result.lastError).toContain('cannot read property');
 

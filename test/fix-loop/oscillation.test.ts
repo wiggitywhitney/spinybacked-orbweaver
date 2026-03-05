@@ -74,7 +74,7 @@ describe('detectOscillation', () => {
       expect(result.shouldSkip).toBe(false);
     });
 
-    it('does not detect oscillation when error count stays the same', () => {
+    it('detects oscillation via duplicate errors when count stays the same', () => {
       const previous = makeValidation([
         makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error A' }),
       ]);

@@ -441,7 +441,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
     expect(validateCalled).toBe(false);
   });
 
-  it('includes token usage from failed instrumentFile in budget-exceeded result', async () => {
+  it('propagates token usage from failed instrumentFile call', async () => {
     const failTokens: TokenUsage = {
       inputTokens: 50000,
       outputTokens: 0,

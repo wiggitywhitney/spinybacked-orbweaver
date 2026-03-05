@@ -30,7 +30,12 @@ export async function createSnapshot(filePath: string): Promise<string> {
  */
 export async function restoreSnapshot(snapshotPath: string, filePath: string): Promise<void> {
   await copyFile(snapshotPath, filePath);
-  await unlink(snapshotPath);
+  try {
+    await unlink(snapshotPath);
+  } catch {
+    // Best-effort cleanup; restored file state is the critical invariant.
+    // Snapshots live in os.tmpdir() and will be cleaned by the OS.
+  }
 }
 
 /**

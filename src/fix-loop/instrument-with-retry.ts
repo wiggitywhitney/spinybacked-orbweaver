@@ -183,11 +183,15 @@ export async function instrumentWithRetry(
       instrumentFileFn, validateFileFn, formatFeedbackFn,
     );
   } catch (error) {
-    // Unexpected error — restore original content and clean up snapshot
+    // Unexpected error — restore original content and clean up snapshot.
+    // We don't have access to the retry loop's internal state (attempt count,
+    // cumulative tokens), so report what we know: an unexpected error occurred.
     await writeFile(filePath, originalCode, 'utf-8');
     await removeSnapshot(snapshotPath);
     const message = error instanceof Error ? error.message : String(error);
-    return buildFailedResult(filePath, message, message, ZERO_TOKENS, 1, 'initial-generation');
+    return buildFailedResult(
+      filePath, `Unexpected error: ${message}`, message, ZERO_TOKENS, 1, 'initial-generation',
+    );
   }
 }
 
