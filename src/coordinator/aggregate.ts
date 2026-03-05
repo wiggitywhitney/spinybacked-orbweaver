@@ -121,23 +121,33 @@ export async function finalizeResults(
     return;
   }
 
-  // Write SDK init file
-  const sdkResult = await updateSdkInitFile(sdkInitFilePath, libraries);
-  runResult.sdkInitUpdated = sdkResult.updated;
+  // Write SDK init file (degrade independently)
+  try {
+    const sdkResult = await updateSdkInitFile(sdkInitFilePath, libraries);
+    runResult.sdkInitUpdated = sdkResult.updated;
 
-  if (sdkResult.warning) {
-    runResult.warnings.push(sdkResult.warning);
+    if (sdkResult.warning) {
+      runResult.warnings.push(sdkResult.warning);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    runResult.warnings.push(`SDK init file update failed (degraded): ${message}`);
   }
 
-  // Install dependencies
-  const installResult = await installDependencies(
-    projectDir,
-    libraries,
-    dependencyStrategy,
-    deps?.installDeps,
-  );
+  // Install dependencies (degrade independently)
+  try {
+    const installResult = await installDependencies(
+      projectDir,
+      libraries,
+      dependencyStrategy,
+      deps?.installDeps,
+    );
 
-  runResult.librariesInstalled = installResult.installed;
-  runResult.libraryInstallFailures = installResult.failures;
-  runResult.warnings.push(...installResult.warnings);
+    runResult.librariesInstalled = installResult.installed;
+    runResult.libraryInstallFailures = installResult.failures;
+    runResult.warnings.push(...installResult.warnings);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    runResult.warnings.push(`Dependency installation failed (degraded): ${message}`);
+  }
 }

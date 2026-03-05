@@ -115,12 +115,15 @@ export async function installDependencies(
 
   // For peerDependencies strategy, add peerDependenciesMeta
   if (dependencyStrategy === 'peerDependencies') {
-    await addPeerDependenciesMeta(
+    const metaWarning = await addPeerDependenciesMeta(
       projectDir,
       [...uniquePackages, '@opentelemetry/api'],
       readFileFn,
       writeFileFn,
     );
+    if (metaWarning) {
+      warnings.push(metaWarning);
+    }
   }
 
   return { installed, failures, warnings };
@@ -168,7 +171,7 @@ async function addPeerDependenciesMeta(
   packageNames: string[],
   readFileFn: (path: string) => Promise<string>,
   writeFileFn: (path: string, content: string) => Promise<void>,
-): Promise<void> {
+): Promise<string | null> {
   const pkgJsonPath = join(projectDir, 'package.json');
   try {
     const content = await readFileFn(pkgJsonPath);
@@ -181,7 +184,9 @@ async function addPeerDependenciesMeta(
 
     pkg.peerDependenciesMeta = meta;
     await writeFileFn(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n');
-  } catch {
-    // If package.json can't be read/written, skip peerDependenciesMeta — not fatal
+    return null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return `Failed to add peerDependenciesMeta to package.json: ${message}`;
   }
 }

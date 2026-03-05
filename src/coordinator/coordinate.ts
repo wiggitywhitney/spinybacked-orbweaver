@@ -148,13 +148,24 @@ export async function coordinate(
   }
 
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
-  const fileResults = await dispatch(filePaths, projectDir, config, callbacks, undefined);
+  let fileResults: FileResult[];
+  try {
+    fileResults = await dispatch(filePaths, projectDir, config, callbacks, undefined);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new CoordinatorAbortError(`File dispatch failed: ${message}`);
+  }
 
-  // Step 6: Fire onRunComplete callback
-  callbacks?.onRunComplete?.(fileResults);
-
-  // Step 7: Aggregate results
+  // Step 6: Aggregate results
   const runResult = aggregateResults(fileResults, costCeiling);
+
+  // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
+  try {
+    callbacks?.onRunComplete?.(fileResults);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    runResult.warnings.push(`onRunComplete callback failed: ${message}`);
+  }
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)
   const sdkInitPath = resolve(projectDir, config.sdkInitFile);

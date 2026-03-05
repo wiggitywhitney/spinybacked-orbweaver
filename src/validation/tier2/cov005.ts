@@ -220,6 +220,10 @@ function extractSetAttributeName(callExpr: CallExpression): string | null {
   if (!Node.isPropertyAccessExpression(expr)) return null;
   if (expr.getName() !== 'setAttribute') return null;
 
+  // Only match span.setAttribute — skip unrelated APIs
+  const receiverText = expr.getExpression().getText();
+  if (!receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return null;
+
   const args = callExpr.getArguments();
   if (args.length < 2) return null;
 

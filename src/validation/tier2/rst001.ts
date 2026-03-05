@@ -16,7 +16,10 @@ const IO_PATTERNS = [
   'child_process', 'exec', 'spawn', 'execSync',
   'net.', 'dgram.',
   '.query(', '.execute(',
-  'redis.', '.get(', '.set(', '.del(',
+  'redis.get(', 'redis.set(', 'redis.del(',
+  'cache.get(', 'cache.set(', 'cache.del(',
+  'client.get(', 'client.set(', 'client.del(',
+  'store.get(', 'store.set(', 'store.del(',
   'publish', 'sendToQueue', 'consume',
   'database', 'mongoose', 'sequelize', 'knex', 'prisma',
 ];

@@ -83,6 +83,24 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     }
   }
 
+  // Check class methods
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isMethodDeclaration(node)) return;
+
+    const name = node.getName();
+    const bodyText = node.getText();
+
+    if (hasSpanCall(bodyText)) return;
+
+    if (node.isAsync()) {
+      flagged.push({ name, line: node.getStartLineNumber(), reason: 'async class method' });
+    } else if (bodyText.includes('await ')) {
+      flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method contains await' });
+    } else if (hasIOCalls(bodyText)) {
+      flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method with I/O calls' });
+    }
+  });
+
   if (flagged.length === 0) {
     return {
       ruleId: 'COV-004',

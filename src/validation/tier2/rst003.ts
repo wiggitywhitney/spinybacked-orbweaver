@@ -155,5 +155,16 @@ function extractTryBlockStatements(
     }
   }
 
+  // For startSpan (non-callback style), find try block in the function body directly
+  const tryStatements: import('ts-morph').TryStatement[] = [];
+  fn.forEachDescendant((node) => {
+    if (Node.isTryStatement(node)) {
+      tryStatements.push(node);
+    }
+  });
+  if (tryStatements.length > 0) {
+    return tryStatements[0].getTryBlock().getStatements();
+  }
+
   return null;
 }

@@ -135,14 +135,28 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
 function collectExportedNames(code: string): Set<string> {
   const names = new Set<string>();
 
-  // module.exports.name = ... or exports.name = ...
-  const assignPattern = /(?:module\.exports|exports)\.(\w+)\s*=/g;
+  // ESM: export { name1, name2 }
+  const namedExportPattern = /export\s*\{([^}]+)\}/g;
   let match;
+  while ((match = namedExportPattern.exec(code)) !== null) {
+    const entries = match[1].split(',');
+    for (const entry of entries) {
+      const trimmed = entry.trim();
+      // Handle "name as alias" — the original name is what matters
+      const nameMatch = /^(\w+)/.exec(trimmed);
+      if (nameMatch) {
+        names.add(nameMatch[1]);
+      }
+    }
+  }
+
+  // CJS: module.exports.name = ... or exports.name = ...
+  const assignPattern = /(?:module\.exports|exports)\.(\w+)\s*=/g;
   while ((match = assignPattern.exec(code)) !== null) {
     names.add(match[1]);
   }
 
-  // module.exports = { name, ... } or module.exports = { name: value }
+  // CJS: module.exports = { name, ... } or module.exports = { name: value }
   const objPattern = /module\.exports\s*=\s*\{([\s\S]*?)\}/;
   const objMatch = objPattern.exec(code);
   if (objMatch) {
@@ -154,6 +168,13 @@ function collectExportedNames(code: string): Set<string> {
         names.add(keyMatch[1]);
       }
     }
+  }
+
+  // CJS: module.exports = singleFunctionName
+  const singleExportPattern = /module\.exports\s*=\s*(\w+)\s*[;\n]/;
+  const singleMatch = singleExportPattern.exec(code);
+  if (singleMatch) {
+    names.add(singleMatch[1]);
   }
 
   return names;

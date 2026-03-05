@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { discoverFiles } from '../../src/coordinator/discovery.ts';
 
 const TEST_DIR = join(import.meta.dirname, '..', '..', '.tmp-discovery-test');
@@ -11,7 +11,7 @@ const TEST_DIR = join(import.meta.dirname, '..', '..', '.tmp-discovery-test');
 /** Create a file with minimal content at the given path relative to TEST_DIR. */
 function createFile(relativePath: string, content = '// placeholder'): void {
   const fullPath = join(TEST_DIR, relativePath);
-  const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
+  const dir = dirname(fullPath);
   mkdirSync(dir, { recursive: true });
   writeFileSync(fullPath, content);
 }
@@ -72,7 +72,7 @@ describe('discoverFiles', () => {
       });
 
       for (const file of files) {
-        expect(file).toMatch(/^\//);
+        expect(isAbsolute(file)).toBe(true);
       }
     });
 

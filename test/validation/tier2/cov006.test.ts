@@ -33,7 +33,9 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
   });
 
   describe('manual spans on auto-instrumentable operations', () => {
-    it('flags manual span wrapping express route handler', () => {
+    it('does not flag span nested inside express route (ancestor context is not checked)', () => {
+      // A span inside app.get() does NOT mean it wraps route handling —
+      // it wraps the span's own callback content. Ancestor context caused false positives.
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -46,6 +48,27 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
         '    }',
         '  });',
         '});',
+      ].join('\n');
+
+      const result = checkAutoInstrumentationPreference(code, filePath);
+      expect(result.passed).toBe(true);
+      expect(result.ruleId).toBe('COV-006');
+    });
+
+    it('flags manual span whose callback body contains express route call', () => {
+      // A span that directly wraps an express route setup IS flagged
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function setupRoutes() {',
+        '  return tracer.startActiveSpan("setupRoutes", (span) => {',
+        '    try {',
+        '      app.get("/users", handler);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
       ].join('\n');
 
       const result = checkAutoInstrumentationPreference(code, filePath);

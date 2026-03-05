@@ -49,7 +49,39 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
     if (!text.endsWith('.startActiveSpan') && !text.endsWith('.startSpan')) return;
 
     const spanParam = getSpanParamName(node);
-    if (!spanParam) return;
+
+    // For startSpan (non-callback style), check sibling scope for error recording
+    if (!spanParam) {
+      const text = expr.getText();
+      if (text.endsWith('.startSpan')) {
+        // Find the span variable name from the declaration
+        const parentNode = node.getParent();
+        if (parentNode) {
+          const declText = parentNode.getText();
+          const varMatch = declText.match(/(?:const|let|var)\s+(\w+)\s*=/);
+          if (varMatch) {
+            const spanVarName = varMatch[1];
+            // Walk up to find the containing block and check for error recording
+            let container = parentNode.getParent();
+            while (container && !Node.isBlock(container) && !Node.isSourceFile(container)) {
+              container = container.getParent();
+            }
+            if (container && (Node.isBlock(container) || Node.isSourceFile(container))) {
+              const blockText = container.getText();
+              if (blockText.includes('try') && blockText.includes('catch')) {
+                if (!hasErrorRecording(blockText, spanVarName)) {
+                  issues.push({
+                    line: node.getStartLineNumber(),
+                    description: `startSpan "${spanVarName}" — catch block does not record error on span`,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+      return;
+    }
 
     const args = node.getArguments();
     for (const arg of args) {

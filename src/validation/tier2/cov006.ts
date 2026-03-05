@@ -65,17 +65,13 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
     const text = expr.getText();
     if (!text.endsWith('.startActiveSpan') && !text.endsWith('.startSpan')) return;
 
-    // Check two patterns:
-    // 1. The span wraps an auto-instrumentable operation (inside span callback)
-    // 2. The span is inside an auto-instrumentable context (e.g., Express route handler)
+    // Only check the span's own content — ancestor context causes false positives
+    // (e.g., a span inside app.get() doesn't mean it wraps the route handling)
     const spanContent = getSpanContent(node);
-    const ancestorContext = getAncestorContext(node);
-
-    const contentToCheck = [spanContent, ancestorContext].filter(Boolean).join('\n');
-    if (!contentToCheck) return;
+    if (!spanContent) return;
 
     for (const op of AUTO_INSTRUMENTED_OPERATIONS) {
-      if (op.pattern.test(contentToCheck)) {
+      if (op.pattern.test(spanContent)) {
         const spanName = getSpanName(node);
         flagged.push({
           line: node.getStartLineNumber(),
@@ -146,13 +142,26 @@ function getSpanContent(spanCall: CallExpression): string | null {
     }
   }
 
-  // For startSpan (non-callback style), look at sibling statements
-  const parent = spanCall.getParent();
-  if (parent) {
-    const block = parent.getParent();
-    if (block && (Node.isBlock(block) || Node.isSourceFile(block))) {
-      return block.getText();
+  // For startSpan (non-callback style), find statements between span creation and span.end()
+  let current: import('ts-morph').Node | undefined = spanCall;
+  while (current) {
+    const parent = current.getParent();
+    if (parent && (Node.isBlock(parent) || Node.isSourceFile(parent))) {
+      const statements = parent.getStatements();
+      const startIdx = statements.findIndex(s => s === current);
+      if (startIdx >= 0) {
+        // Collect text from span creation to span.end()
+        const parts: string[] = [];
+        for (let i = startIdx; i < statements.length; i++) {
+          const stmtText = statements[i].getText();
+          parts.push(stmtText);
+          if (stmtText.includes('.end()')) break;
+        }
+        return parts.join('\n');
+      }
+      break;
     }
+    current = parent;
   }
 
   return null;

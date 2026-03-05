@@ -6,7 +6,7 @@ import {
   mkdtempSync, rmSync, mkdirSync, writeFileSync,
   copyFileSync, readFileSync, existsSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
@@ -232,7 +232,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const failed = result.fileResults.filter(r => r.status === 'failed');
     for (const r of failed) {
       // Read the fixture original to verify revert
-      const fixtureName = r.path.split('/').pop()!;
+      const fixtureName = basename(r.path);
       const originalContent = readFileSync(
         join(FIXTURES_DIR, 'src', fixtureName),
         'utf-8',

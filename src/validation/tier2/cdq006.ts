@@ -49,6 +49,10 @@ export function checkIsRecordingGuard(code: string, filePath: string): CheckResu
     if (!Node.isPropertyAccessExpression(expr)) return;
     if (expr.getName() !== 'setAttribute') return;
 
+    // Only flag span.setAttribute — skip unrelated APIs (Map, URLSearchParams, Element, etc.)
+    const receiverText = expr.getExpression().getText();
+    if (!receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return;
+
     // Check the value argument (second argument)
     const args = node.getArguments();
     if (args.length < 2) return;
@@ -133,11 +137,29 @@ function hasIsRecordingGuard(setAttrCall: CallExpression): boolean {
     if (Node.isIfStatement(current)) {
       const condition = current.getExpression().getText();
       if (condition.includes('.isRecording()') || condition.includes('isRecording()')) {
-        return true;
+        // Verify the setAttribute call is in the 'then' branch, not the 'else' branch
+        const thenStatement = current.getThenStatement();
+        if (thenStatement && isDescendantOf(setAttrCall, thenStatement)) {
+          return true;
+        }
+        // In the else branch — not actually guarded
+        return false;
       }
     }
     current = current.getParent();
   }
 
+  return false;
+}
+
+/**
+ * Check if a node is a descendant of a potential parent node.
+ */
+function isDescendantOf(node: import('ts-morph').Node, potentialParent: import('ts-morph').Node): boolean {
+  let current = node.getParent();
+  while (current) {
+    if (current === potentialParent) return true;
+    current = current.getParent();
+  }
   return false;
 }

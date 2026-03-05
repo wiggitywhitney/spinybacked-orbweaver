@@ -169,11 +169,19 @@ function isInsideSpanScope(node: CallExpression): boolean {
           const statements = tryParent.getStatements();
           const tryIndex = statements.findIndex(s => s === parent);
           if (tryIndex > 0) {
-            // Check if preceding statement has a startSpan call
+            // Check if preceding statement declares a span variable via startSpan
             for (let i = 0; i < tryIndex; i++) {
               const stmtText = statements[i].getText();
               if (stmtText.includes('.startSpan(')) {
-                return true;
+                // Verify the span variable is referenced in the try block
+                const spanVarMatch = stmtText.match(/(?:const|let|var)\s+(\w+)\s*=.*\.startSpan\(/);
+                if (spanVarMatch) {
+                  const spanVar = spanVarMatch[1];
+                  const tryStatementText = parent.getText();
+                  if (tryStatementText.includes(spanVar + '.')) {
+                    return true;
+                  }
+                }
               }
             }
           }
