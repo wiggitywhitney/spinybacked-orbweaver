@@ -142,6 +142,78 @@ describe('checkSpansClosed (CDQ-001)', () => {
     });
   });
 
+  describe('startSpan sibling pattern', () => {
+    it('passes when startSpan has sibling try/finally with span.end()', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  const span = tracer.startSpan("doWork");',
+        '  try {',
+        '    return computeResult();',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const result = checkSpansClosed(code, filePath);
+      expect(result.passed).toBe(true);
+    });
+
+    it('passes with startSpan sibling pattern using let binding', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  let span = tracer.startSpan("doWork");',
+        '  try {',
+        '    return computeResult();',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const result = checkSpansClosed(code, filePath);
+      expect(result.passed).toBe(true);
+    });
+
+    it('fails when startSpan sibling try/finally is missing span.end()', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  const span = tracer.startSpan("doWork");',
+        '  try {',
+        '    return computeResult();',
+        '  } finally {',
+        '    cleanup();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const result = checkSpansClosed(code, filePath);
+      expect(result.passed).toBe(false);
+    });
+
+    it('fails when startSpan has no sibling try/finally at all', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  const span = tracer.startSpan("doWork");',
+        '  const result = computeResult();',
+        '  span.end();',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const result = checkSpansClosed(code, filePath);
+      expect(result.passed).toBe(false);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
