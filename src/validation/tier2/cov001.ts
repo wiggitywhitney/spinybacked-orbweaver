@@ -131,16 +131,6 @@ function checkExportedAsyncFunctions(
   sourceFile: import('ts-morph').SourceFile,
   unspanned: Array<{ line: number; description: string }>,
 ): void {
-  // Collect exported names
-  const exportedNames = new Set<string>();
-
-  // module.exports.name = ... or exports.name = ...
-  const assignPattern = /(?:module\.exports|exports)\.(\w+)\s*=/g;
-  let match;
-  while ((match = assignPattern.exec(code)) !== null) {
-    exportedNames.add(match[1]);
-  }
-
   // Check if exported functions are async and lack spans
   // Pattern: module.exports.name = async function ... or module.exports.name = async () => ...
   sourceFile.forEachDescendant((node) => {

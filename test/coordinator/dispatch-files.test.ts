@@ -2,7 +2,7 @@
 // ABOUTME: Covers schema re-resolution per file, callback firing, skip/success/failure flows.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { FileResult } from '../../src/fix-loop/types.ts';

@@ -171,6 +171,7 @@ export async function dispatchFiles(
         attributesCreated: 0,
         validationAttempts: 0,
         validationStrategyUsed: 'initial-generation',
+        reason: 'Pre-dispatch error',
         lastError: error instanceof Error ? error.message : String(error),
         tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
       };
