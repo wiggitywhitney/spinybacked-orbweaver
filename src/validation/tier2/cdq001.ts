@@ -132,11 +132,41 @@ function hasSpanEndInFinally(callExpr: import('ts-morph').CallExpression): boole
   }
 
   // Pattern 2: const span = tracer.startSpan(...)
-  // Walk up looking for a variable declaration to find the span identifier
+  // The standard pattern places try/finally as a sibling statement:
+  //   const span = tracer.startSpan("doWork");
+  //   try { ... } finally { span.end(); }
   if (exprText.endsWith('.startSpan')) {
     const spanIdentifier = getStartSpanVariable(callExpr);
     if (spanIdentifier) {
       const endPattern = spanEndRegex(spanIdentifier);
+
+      // First: check sibling statements AFTER the variable declaration in the
+      // containing block for a TryStatement whose finally block contains span.end().
+      // Only statements after the startSpan declaration are valid — a preceding
+      // try/finally cannot close a span that doesn't exist yet.
+      const varDecl = callExpr.getParent(); // VariableDeclaration
+      const varDeclList = varDecl?.getParent(); // VariableDeclarationList
+      const varStatement = varDeclList?.getParent(); // VariableStatement
+      const containingBlock = varStatement?.getParent(); // Block or SourceFile
+      if (containingBlock && (Node.isBlock(containingBlock) || Node.isSourceFile(containingBlock))) {
+        const statements = containingBlock.getStatements();
+        const declIndex = varStatement
+          ? statements.findIndex(s => s === varStatement)
+          : -1;
+        if (declIndex >= 0) {
+          for (let i = declIndex + 1; i < statements.length; i++) {
+            const stmt = statements[i];
+            if (Node.isTryStatement(stmt)) {
+              const finallyBlock = stmt.getFinallyBlock();
+              if (finallyBlock && endPattern.test(finallyBlock.getText())) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback: walk up ancestors looking for an enclosing try/finally
       let current = callExpr.getParent();
       while (current) {
         if (Node.isTryStatement(current)) {

@@ -236,7 +236,7 @@ interface ValidateFileInput {
   originalCode: string;        // Original file before instrumentation (for diff-based lint)
   instrumentedCode: string;    // Agent's output
   filePath: string;            // For filesystem-based checks (syntax, lint)
-  resolvedSchema: object;      // For Weaver static check
+  // resolvedSchema omitted — Weaver CLI uses ValidationConfig.registryPath (see Decision Log)
   config: ValidationConfig;    // Which checks to enable, blocking/advisory classification per rule
 }
 
@@ -327,6 +327,7 @@ src/
 | 2026-03-02 | NDS-003 uses conservative try/finally filter; accept known limitation | Conservative filter (only allow try/finally containing `span.end()` in finally) has false positives (safe — fix loop retries or developer reviews). A sophisticated filter risks false negatives (dangerous — broken code ships). The agent shouldn't be restructuring error handling anyway (NDS-005 is a Phase 1 rubric rule). The conservative filter doubles as a canary for prompt regression. |
 | 2026-03-02 | `ValidationConfig` type defined with `enableWeaver`, `tier2Checks`, `registryPath` | Closes the loose end where `ValidateFileInput.config` referenced an undefined type. Shape supports Phase 2 needs (Weaver toggle, per-rule blocking/advisory) and is extensible for Phase 4+ Tier 2 additions. |
 | 2026-03-02 | Syntax checker writes instrumented code to original file path; fix loop owns snapshots | `node --check` must resolve `node_modules/` imports, which requires the file to exist at its real path. Snapshot/restore responsibility belongs to the fix loop (Phase 3), not the validation chain. The coordinator (Phase 4) does not need its own snapshot mechanism — `instrumentWithRetry` handles per-file snapshot/restore internally. |
+| 2026-03-05 | `resolvedSchema` omitted from `ValidateFileInput` | The spec (v3.9, line 974–980) and design document both include `resolvedSchema: object` in `ValidateFileInput`. The implementation omits it because the Weaver static check uses the CLI (`weaver registry check -r <path>`), which operates on the registry directory path — not a pre-resolved JSON schema object. `ValidationConfig.registryPath` provides the path the CLI needs. Adding `resolvedSchema` would create an unused field that implies a different validation approach. If Phase 5's live-check needs the resolved schema (e.g., for in-process Weaver validation), the field should be added at that point. |
 
 ## Open Questions
 
