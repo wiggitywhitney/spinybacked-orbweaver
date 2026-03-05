@@ -542,11 +542,14 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
 
     await coordinate(tempDir, config, callbacks, deps);
 
-    // dispatch received the callbacks (including onSchemaCheckpoint)
-    const dispatchCalls = (deps.dispatchFiles as ReturnType<typeof vi.fn>).mock?.calls;
-    // dispatchFiles was called — we can verify callbacks were passed through
-    // by checking the callback object was forwarded
-    expect(callbacks.onSchemaCheckpoint).toBe(onSchemaCheckpoint);
+    // Verify dispatchFiles received the callbacks with onSchemaCheckpoint
+    expect(deps.dispatchFiles).toHaveBeenCalledWith(
+      expect.any(Array),
+      tempDir,
+      expect.any(Object),
+      expect.objectContaining({ onSchemaCheckpoint }),
+      expect.anything(),
+    );
   });
 
   it('successful files have schemaHashBefore populated from dispatch', { timeout: 600_000 }, async () => {

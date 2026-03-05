@@ -211,7 +211,7 @@ describe('runLiveCheck', () => {
         on: vi.fn((_event: string, handler: (code: number) => void) => {
           // Simulate Weaver exiting after stop
           if (_event === 'close') {
-            globalThis.setTimeout(() => handler(0), 10);
+            queueMicrotask(() => handler(0));
           }
         }),
         kill: vi.fn(),
