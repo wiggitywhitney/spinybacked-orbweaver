@@ -1,0 +1,477 @@
+// ABOUTME: DX verification tests for the coordinator module (PRD-4 Milestone 8).
+// ABOUTME: Verifies callbacks fire for every stage, RunResult is fully populated, and a test subscriber receives all expected events.
+
+import { describe, it, expect, vi } from 'vitest';
+import type { AgentConfig } from '../../src/config/schema.ts';
+import type { FileResult } from '../../src/fix-loop/types.ts';
+import type { CoordinatorCallbacks, CostCeiling } from '../../src/coordinator/types.ts';
+import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
+import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
+/** Minimal config for testing. */
+function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
+  return {
+    schemaPath: 'schemas/registry',
+    sdkInitFile: 'src/instrumentation.js',
+    agentModel: 'claude-sonnet-4-6',
+    agentEffort: 'medium',
+    autoApproveLibraries: true,
+    testCommand: 'npm test',
+    dependencyStrategy: 'dependencies',
+    maxFilesPerRun: 50,
+    maxFixAttempts: 2,
+    maxTokensPerFile: 80000,
+    largeFileThresholdLines: 500,
+    schemaCheckpointInterval: 5,
+    weaverMinVersion: '0.21.2',
+    reviewSensitivity: 'moderate',
+    dryRun: false,
+    confirmEstimate: true,
+    exclude: [],
+    ...overrides,
+  };
+}
+
+/** Build a successful FileResult with non-trivial diagnostic content. */
+function makeSuccessResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
+  return {
+    path: filePath,
+    status: 'success',
+    spansAdded: 4,
+    librariesNeeded: [
+      { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+    ],
+    schemaExtensions: ['http.request.method'],
+    attributesCreated: 3,
+    validationAttempts: 1,
+    validationStrategyUsed: 'initial-generation',
+    spanCategories: {
+      externalCalls: 1,
+      schemaDefined: 0,
+      serviceEntryPoints: 2,
+      totalFunctionsInFile: 5,
+    },
+    notes: ['Added spans to route handlers and outbound fetch calls'],
+    advisoryAnnotations: [
+      {
+        ruleId: 'RST-001',
+        passed: false,
+        filePath,
+        lineNumber: 42,
+        message: 'Span on utility function formatDate — consider removing',
+        tier: 2,
+        blocking: false,
+      },
+    ],
+    tokenUsage: {
+      inputTokens: 5000,
+      outputTokens: 2500,
+      cacheCreationInputTokens: 800,
+      cacheReadInputTokens: 400,
+    },
+    ...overrides,
+  };
+}
+
+/** Build a failed FileResult with diagnostic detail. */
+function makeFailedResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
+  return {
+    path: filePath,
+    status: 'failed',
+    spansAdded: 0,
+    librariesNeeded: [],
+    schemaExtensions: [],
+    attributesCreated: 0,
+    validationAttempts: 3,
+    validationStrategyUsed: 'fresh-regeneration',
+    reason: 'Validation failed after 3 attempts',
+    lastError: 'COV-001: No spans on entry point handlers',
+    errorProgression: [
+      'Attempt 1: SYNTAX — missing semicolon',
+      'Attempt 2: COV-001 — entry point not instrumented',
+      'Attempt 3: COV-001 — still not instrumented',
+    ],
+    tokenUsage: {
+      inputTokens: 12000,
+      outputTokens: 6000,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    },
+    ...overrides,
+  };
+}
+
+/** Build a skipped FileResult. */
+function makeSkippedResult(filePath: string): FileResult {
+  return {
+    path: filePath,
+    status: 'skipped',
+    spansAdded: 0,
+    librariesNeeded: [],
+    schemaExtensions: [],
+    attributesCreated: 0,
+    validationAttempts: 0,
+    validationStrategyUsed: 'initial-generation',
+    reason: 'File already instrumented — detected existing OpenTelemetry imports or span calls',
+    tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+  };
+}
+
+/** Build mock dependencies for the coordinate function. */
+function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
+  return {
+    checkPrerequisites: vi.fn().mockResolvedValue({ allPassed: true, checks: [] }),
+    discoverFiles: vi.fn().mockResolvedValue([
+      '/project/src/routes.js',
+      '/project/src/db.js',
+      '/project/src/already-instrumented.js',
+    ]),
+    statFile: vi.fn()
+      .mockResolvedValueOnce({ size: 2400 })
+      .mockResolvedValueOnce({ size: 1800 })
+      .mockResolvedValueOnce({ size: 900 }),
+    dispatchFiles: vi.fn().mockResolvedValue([
+      makeSuccessResult('/project/src/routes.js'),
+      makeSuccessResult('/project/src/db.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-pg', importName: 'PgInstrumentation' },
+        ],
+      }),
+      makeSkippedResult('/project/src/already-instrumented.js'),
+    ]),
+    finalizeResults: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+/**
+ * A test subscriber that records all coordinator events in order.
+ * Wired to all CoordinatorCallbacks to verify the complete event sequence.
+ */
+interface EventRecord {
+  type: string;
+  args: unknown[];
+  timestamp: number;
+}
+
+function createTestSubscriber(): { callbacks: CoordinatorCallbacks; events: EventRecord[] } {
+  const events: EventRecord[] = [];
+  let counter = 0;
+
+  const record = (type: string, ...args: unknown[]) => {
+    events.push({ type, args, timestamp: counter++ });
+  };
+
+  const callbacks: CoordinatorCallbacks = {
+    onCostCeilingReady: (ceiling: CostCeiling) => {
+      record('onCostCeilingReady', ceiling);
+      return true;
+    },
+    onFileStart: (path: string, index: number, total: number) => {
+      record('onFileStart', path, index, total);
+    },
+    onFileComplete: (result: FileResult, index: number, total: number) => {
+      record('onFileComplete', result, index, total);
+    },
+    onRunComplete: (results: FileResult[]) => {
+      record('onRunComplete', results);
+    },
+  };
+
+  return { callbacks, events };
+}
+
+describe('DX Verification — Milestone 8', () => {
+  describe('test subscriber receives all expected events for a multi-file run', () => {
+    it('fires all callbacks in correct order for a mixed success/skipped run', async () => {
+      const deps = makeDeps();
+      const { callbacks, events } = createTestSubscriber();
+
+      await coordinate('/project', makeConfig(), callbacks, deps);
+
+      // Verify event types in order
+      const eventTypes = events.map(e => e.type);
+      expect(eventTypes).toEqual([
+        'onCostCeilingReady',
+        'onRunComplete',
+      ]);
+
+      // onCostCeilingReady fires with ceiling data
+      const ceilingEvent = events.find(e => e.type === 'onCostCeilingReady')!;
+      const ceiling = ceilingEvent.args[0] as CostCeiling;
+      expect(ceiling.fileCount).toBe(3);
+      expect(ceiling.totalFileSizeBytes).toBe(5100);
+      expect(ceiling.maxTokensCeiling).toBe(3 * 80000);
+
+      // onRunComplete fires with all file results
+      const runCompleteEvent = events.find(e => e.type === 'onRunComplete')!;
+      const results = runCompleteEvent.args[0] as FileResult[];
+      expect(results).toHaveLength(3);
+    });
+
+    it('receives onFileStart and onFileComplete via dispatchFiles passthrough', async () => {
+      // Verify that coordinate passes callbacks to dispatchFiles
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 500 }),
+        dispatchFiles,
+      });
+      const { callbacks } = createTestSubscriber();
+
+      await coordinate('/project', makeConfig(), callbacks, deps);
+
+      // Verify callbacks were passed through to dispatchFiles
+      const passedCallbacks = dispatchFiles.mock.calls[0][3] as CoordinatorCallbacks;
+      expect(passedCallbacks.onFileStart).toBeDefined();
+      expect(passedCallbacks.onFileComplete).toBeDefined();
+    });
+
+    it('onCostCeilingReady fires only when confirmEstimate is true', async () => {
+      const deps = makeDeps();
+      const { callbacks, events } = createTestSubscriber();
+
+      // confirmEstimate=false — onCostCeilingReady should NOT fire
+      await coordinate('/project', makeConfig({ confirmEstimate: false }), callbacks, deps);
+
+      const ceilingEvents = events.filter(e => e.type === 'onCostCeilingReady');
+      expect(ceilingEvents).toHaveLength(0);
+
+      // onRunComplete should still fire
+      expect(events.some(e => e.type === 'onRunComplete')).toBe(true);
+    });
+  });
+
+  describe('RunResult has all diagnostic fields populated with meaningful content', () => {
+    it('contains non-zero counts and populated arrays for a successful multi-file run', async () => {
+      const deps = makeDeps();
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      // File counts reflect mixed outcomes
+      expect(result.filesProcessed).toBe(3);
+      expect(result.filesSucceeded).toBe(2);
+      expect(result.filesFailed).toBe(0);
+      expect(result.filesSkipped).toBe(1);
+
+      // fileResults contains all results
+      expect(result.fileResults).toHaveLength(3);
+      expect(result.fileResults[0].status).toBe('success');
+      expect(result.fileResults[1].status).toBe('success');
+      expect(result.fileResults[2].status).toBe('skipped');
+
+      // Cost ceiling is populated with real values
+      expect(result.costCeiling.fileCount).toBe(3);
+      expect(result.costCeiling.totalFileSizeBytes).toBeGreaterThan(0);
+      expect(result.costCeiling.maxTokensCeiling).toBeGreaterThan(0);
+
+      // Token usage is cumulative and non-zero (from 2 successful files)
+      expect(result.actualTokenUsage.inputTokens).toBeGreaterThan(0);
+      expect(result.actualTokenUsage.outputTokens).toBeGreaterThan(0);
+    });
+
+    it('successful FileResults contain diagnostic fields beyond just status', async () => {
+      const deps = makeDeps();
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const successResults = result.fileResults.filter(r => r.status === 'success');
+      expect(successResults.length).toBeGreaterThan(0);
+
+      for (const r of successResults) {
+        expect(r.spansAdded).toBeGreaterThan(0);
+        expect(r.attributesCreated).toBeGreaterThan(0);
+        expect(r.validationAttempts).toBeGreaterThan(0);
+        expect(r.tokenUsage.inputTokens).toBeGreaterThan(0);
+        expect(r.tokenUsage.outputTokens).toBeGreaterThan(0);
+      }
+    });
+
+    it('skipped FileResults explain why they were skipped', async () => {
+      const deps = makeDeps();
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const skippedResults = result.fileResults.filter(r => r.status === 'skipped');
+      expect(skippedResults.length).toBeGreaterThan(0);
+
+      for (const r of skippedResults) {
+        expect(r.reason).toBeDefined();
+        expect(r.reason!.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('Phase 5 fields are undefined (not populated until Phase 5)', async () => {
+      const deps = makeDeps();
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.schemaDiff).toBeUndefined();
+      expect(result.schemaHashStart).toBeUndefined();
+      expect(result.schemaHashEnd).toBeUndefined();
+      expect(result.endOfRunValidation).toBeUndefined();
+    });
+
+    it('warnings is an empty array when all files succeed (no silent issues)', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 500 }),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js'),
+        ]),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings).toEqual([]);
+    });
+  });
+
+  describe('zero files produces a clear error with context', () => {
+    it('throws CoordinatorAbortError with descriptive message for zero JS files', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockRejectedValue(
+          new Error('No JavaScript files found in /empty-project. Check that the directory contains .js files and that exclude patterns are not too broad.'),
+        ),
+      });
+
+      try {
+        await coordinate('/empty-project', makeConfig(), undefined, deps);
+        expect.unreachable('Should have thrown CoordinatorAbortError');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CoordinatorAbortError);
+        const abortErr = err as CoordinatorAbortError;
+        expect(abortErr.message).toContain('No JavaScript files found');
+        expect(abortErr.message).toContain('/empty-project');
+        expect(abortErr.category).toBe('abort');
+      }
+    });
+
+    it('does not return RunResult or exit silently for zero files', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockRejectedValue(
+          new Error('No JavaScript files found in /project.'),
+        ),
+      });
+
+      let threwError = false;
+      try {
+        await coordinate('/project', makeConfig(), undefined, deps);
+      } catch {
+        threwError = true;
+      }
+
+      expect(threwError).toBe(true);
+    });
+  });
+
+  describe('partial failures report per-file detail', () => {
+    it('RunResult contains per-file detail for each failed file', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue([
+          '/project/good.js',
+          '/project/bad1.js',
+          '/project/bad2.js',
+        ]),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/good.js'),
+          makeFailedResult('/project/bad1.js', {
+            reason: 'Syntax error after 3 attempts',
+            lastError: 'NDS-001: Unexpected token at line 42',
+            errorProgression: [
+              'Attempt 1: SYNTAX — unexpected token',
+              'Attempt 2: SYNTAX — unexpected token',
+              'Attempt 3: SYNTAX — unexpected token',
+            ],
+          }),
+          makeFailedResult('/project/bad2.js', {
+            reason: 'Coverage check failed',
+            lastError: 'COV-001: Entry point handler has no span',
+          }),
+        ]),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      // Aggregate counts reflect the mix
+      expect(result.filesSucceeded).toBe(1);
+      expect(result.filesFailed).toBe(2);
+
+      // Each failed file has its own warning
+      expect(result.warnings).toHaveLength(2);
+      expect(result.warnings[0]).toContain('bad1.js');
+      expect(result.warnings[1]).toContain('bad2.js');
+
+      // Per-file detail is preserved in fileResults
+      const bad1 = result.fileResults.find(r => r.path === '/project/bad1.js')!;
+      expect(bad1.reason).toContain('Syntax error');
+      expect(bad1.lastError).toContain('NDS-001');
+      expect(bad1.errorProgression).toHaveLength(3);
+      expect(bad1.validationAttempts).toBe(3);
+
+      const bad2 = result.fileResults.find(r => r.path === '/project/bad2.js')!;
+      expect(bad2.reason).toContain('Coverage check');
+      expect(bad2.lastError).toContain('COV-001');
+    });
+
+    it('partial failures do not prevent finalization of successful files', async () => {
+      const finalizeResults = vi.fn().mockResolvedValue(undefined);
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/good.js', '/project/bad.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/good.js'),
+          makeFailedResult('/project/bad.js'),
+        ]),
+        finalizeResults,
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      // finalizeResults still called despite partial failure
+      expect(finalizeResults).toHaveBeenCalledTimes(1);
+    });
+
+    it('finalization failures are warnings, not exceptions', async () => {
+      const deps = makeDeps({
+        finalizeResults: vi.fn().mockRejectedValue(
+          new Error('npm install failed: ENETWORK'),
+        ),
+      });
+
+      // Should NOT throw — finalization failure is degraded
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('npm install failed'))).toBe(true);
+      expect(result.filesProcessed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('advisory annotations surface in FileResults', () => {
+    it('successful files carry advisory annotations from Tier 2 checks', async () => {
+      const advisoryAnnotation = {
+        ruleId: 'RST-003',
+        passed: false,
+        filePath: '/project/src/routes.js',
+        lineNumber: 15,
+        message: 'Thin wrapper function delegateHandler has span — consider removing',
+        tier: 2 as const,
+        blocking: false,
+      };
+
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/src/routes.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1500 }),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/src/routes.js', {
+            advisoryAnnotations: [advisoryAnnotation],
+          }),
+        ]),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const routeResult = result.fileResults[0];
+      expect(routeResult.advisoryAnnotations).toHaveLength(1);
+      expect(routeResult.advisoryAnnotations![0].ruleId).toBe('RST-003');
+    });
+  });
+});
