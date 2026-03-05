@@ -258,7 +258,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(fileContentDuringValidation).toBe(instrumentedCode);
   });
 
-  it('cleans up snapshot on success', async () => {
+  it('leaves instrumented content on disk after success', async () => {
     const output = makeInstrumentationOutput();
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
@@ -269,9 +269,6 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
       testFilePath, originalContent, {}, makeConfig(), { deps },
     );
 
-    // No orb-snapshot files should remain in tmpdir
-    // (We can't easily check this without knowing the exact path,
-    // but we verify that the file on disk has the instrumented content)
     expect(readFileSync(testFilePath, 'utf-8')).toBe(output.instrumentedCode);
   });
 
@@ -393,7 +390,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
     expect(result.reason).toContain('budget');
   });
 
-  it('reverts file and cleans up snapshot when budget exceeded', async () => {
+  it('reverts file when budget exceeded', async () => {
     const highTokens: TokenUsage = {
       inputTokens: 50000,
       outputTokens: 40000,

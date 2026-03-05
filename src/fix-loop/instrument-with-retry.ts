@@ -6,7 +6,6 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
-import { createSnapshot, restoreSnapshot, removeSnapshot } from './snapshot.ts';
 import { addTokenUsage, totalTokens } from './token-budget.ts';
 import { detectOscillation } from './oscillation.ts';
 import type { FileResult, ValidationStrategy } from './types.ts';
@@ -174,20 +173,16 @@ export async function instrumentWithRetry(
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
   const formatFeedbackFn = (await import('../validation/feedback.ts')).formatFeedbackForAgent;
 
-  // Snapshot the original file before any modifications
-  const snapshotPath = await createSnapshot(filePath);
-
   try {
     return await executeRetryLoop(
-      filePath, originalCode, resolvedSchema, config, snapshotPath,
+      filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
     );
   } catch (error) {
-    // Unexpected error — restore original content and clean up snapshot.
+    // Unexpected error — restore original content from memory.
     // We don't have access to the retry loop's internal state (attempt count,
     // cumulative tokens), so report what we know: an unexpected error occurred.
     await writeFile(filePath, originalCode, 'utf-8');
-    await removeSnapshot(snapshotPath);
     const message = error instanceof Error ? error.message : String(error);
     return buildFailedResult(
       filePath, `Unexpected error: ${message}`, message, ZERO_TOKENS, 1, 'initial-generation',
@@ -204,7 +199,6 @@ async function executeRetryLoop(
   originalCode: string,
   resolvedSchema: object,
   config: AgentConfig,
-  snapshotPath: string,
   instrumentFileFn: InstrumentWithRetryDeps['instrumentFile'],
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
   formatFeedbackFn: (result: ValidationResult) => string,
@@ -249,7 +243,6 @@ async function executeRetryLoop(
       // File is already in original state (restored after prior attempt or never written).
       const failTokens = instrumentResult.tokenUsage ?? ZERO_TOKENS;
       cumulativeTokens = addTokenUsage(cumulativeTokens, failTokens);
-      await removeSnapshot(snapshotPath);
       return buildFailedResult(
         filePath, instrumentResult.error, instrumentResult.error,
         cumulativeTokens, attempt, strategy, errorProgression, lastOutput,
@@ -267,7 +260,6 @@ async function executeRetryLoop(
 
     // Check token budget — file is still in original state at this point
     if (totalTokens(cumulativeTokens) > config.maxTokensPerFile) {
-      await removeSnapshot(snapshotPath);
       const reason = `Token budget exceeded: ${totalTokens(cumulativeTokens)} tokens used, budget is ${config.maxTokensPerFile}`;
       return buildFailedResult(
         filePath, reason, reason, cumulativeTokens, attempt, strategy, errorProgression, output,
@@ -289,8 +281,6 @@ async function executeRetryLoop(
     errorProgression.push(summarizeErrors(validation));
 
     if (validation.passed) {
-      // Success — clean up snapshot, return populated FileResult
-      await removeSnapshot(snapshotPath);
       return {
         path: filePath,
         status: 'success',
@@ -310,8 +300,7 @@ async function executeRetryLoop(
       };
     }
 
-    // Validation failed — restore original code before next attempt.
-    // Write originalCode directly instead of consuming the snapshot (which deletes it).
+    // Validation failed — restore original code from memory before next attempt
     await writeFile(filePath, originalCode, 'utf-8');
 
     // Oscillation detection: compare with previous validation
@@ -321,7 +310,6 @@ async function executeRetryLoop(
         const isFreshRegen = strategy === 'fresh-regeneration';
         if (isFreshRegen) {
           // Already on fresh regeneration — bail immediately
-          await removeSnapshot(snapshotPath);
           const reason = `Oscillation detected during fresh regeneration: ${oscillation.reason}`;
           const lastError = validation.blockingFailures
             .map(f => `${f.ruleId}: ${f.message}`)
@@ -338,8 +326,7 @@ async function executeRetryLoop(
     previousValidation = validation;
   }
 
-  // All attempts exhausted — clean up snapshot and return failure
-  await removeSnapshot(snapshotPath);
+  // All attempts exhausted
   const failedRuleIds = lastValidation!.blockingFailures.map(f => f.ruleId).join(', ');
   const reason = `Validation failed: ${failedRuleIds} — ${lastValidation!.blockingFailures[0]?.message ?? 'unknown error'}`;
   const lastError = lastValidation!.blockingFailures
