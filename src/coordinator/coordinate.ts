@@ -20,6 +20,12 @@ import type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
 import type { FinalizeDeps } from './aggregate.ts';
 import { computeSchemaHash } from './schema-hash.ts';
 import { resolveSchema as defaultResolveSchema } from './dispatch.ts';
+import {
+  createBaselineSnapshot as defaultCreateBaselineSnapshot,
+  cleanupSnapshot as defaultCleanupSnapshot,
+  computeSchemaDiff as defaultComputeSchemaDiff,
+} from './schema-diff.ts';
+import type { SchemaDiffResult } from './schema-diff.ts';
 
 /**
  * Error thrown when the coordinator must abort the run.
@@ -61,6 +67,9 @@ export interface CoordinateDeps {
     extensions: string[],
   ) => Promise<WriteSchemaExtensionsResult>;
   resolveSchemaForHash: (projectDir: string, schemaPath: string) => Promise<object>;
+  createBaselineSnapshot: (registryDir: string) => Promise<string>;
+  cleanupSnapshot: (snapshotDir: string) => Promise<void>;
+  computeSchemaDiff: (registryDir: string, baselineDir: string) => Promise<SchemaDiffResult>;
 }
 
 /**
@@ -120,8 +129,12 @@ export async function coordinate(
   const finalize = deps?.finalizeResults ?? defaultFinalizeResults;
   const writeExtensions = deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
   const resolveForHash = deps?.resolveSchemaForHash ?? defaultResolveSchema;
+  const createSnapshot = deps?.createBaselineSnapshot ?? defaultCreateBaselineSnapshot;
+  const cleanupSnap = deps?.cleanupSnapshot ?? defaultCleanupSnapshot;
+  const schemaDiff = deps?.computeSchemaDiff ?? defaultComputeSchemaDiff;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
+  const schemaDiffWarnings: string[] = [];
 
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;
@@ -185,12 +198,26 @@ export async function coordinate(
     schemaHashWarnings.push(`Schema hash computation at run start failed (degraded): ${message}`);
   }
 
+  // Step 4c: Create baseline snapshot of registry (degrade and warn on failure)
+  const registryDir = resolve(projectDir, config.schemaPath);
+  let baselineSnapshotDir: string | undefined;
+  try {
+    baselineSnapshotDir = await createSnapshot(registryDir);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    schemaDiffWarnings.push(`Baseline snapshot failed (degraded): ${message}`);
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   let fileResults: FileResult[];
   try {
     fileResults = await dispatch(filePaths, projectDir, config, callbacks, undefined);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Clean up baseline snapshot before aborting
+    if (baselineSnapshotDir) {
+      try { await cleanupSnap(baselineSnapshotDir); } catch { /* best effort cleanup */ }
+    }
     throw new CoordinatorAbortError(`File dispatch failed: ${message}`);
   }
 
@@ -198,7 +225,6 @@ export async function coordinate(
   const extensions = collectSchemaExtensions(fileResults);
   if (extensions.length > 0) {
     try {
-      const registryDir = resolve(projectDir, config.schemaPath);
       await writeExtensions(registryDir, extensions);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -218,12 +244,37 @@ export async function coordinate(
     }
   }
 
+  // Step 5d: Compute schema diff against baseline (degrade and warn on failure)
+  let schemaDiffMarkdown: string | undefined;
+  if (baselineSnapshotDir && extensions.length > 0) {
+    try {
+      const diffResult = await schemaDiff(registryDir, baselineSnapshotDir);
+      schemaDiffMarkdown = diffResult.markdown;
+      if (!diffResult.valid) {
+        schemaDiffWarnings.push(...diffResult.violations);
+      }
+      if (diffResult.error) {
+        schemaDiffWarnings.push(`Schema diff warning: ${diffResult.error}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaDiffWarnings.push(`Schema diff failed (degraded): ${message}`);
+    }
+  }
+
+  // Step 5e: Clean up baseline snapshot (always, best effort)
+  if (baselineSnapshotDir) {
+    try { await cleanupSnap(baselineSnapshotDir); } catch { /* best effort cleanup */ }
+  }
+
   // Step 6: Aggregate results
   const runResult = aggregateResults(fileResults, costCeiling);
   runResult.schemaHashStart = schemaHashStart;
   runResult.schemaHashEnd = schemaHashEnd;
+  runResult.schemaDiff = schemaDiffMarkdown;
   runResult.warnings.push(...schemaExtensionWarnings);
   runResult.warnings.push(...schemaHashWarnings);
+  runResult.warnings.push(...schemaDiffWarnings);
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {

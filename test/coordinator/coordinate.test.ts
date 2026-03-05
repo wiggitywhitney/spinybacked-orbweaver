@@ -85,6 +85,9 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     finalizeResults: vi.fn().mockResolvedValue(undefined),
     writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
     resolveSchemaForHash: vi.fn().mockResolvedValue({ groups: [] }),
+    createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+    cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+    computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     ...overrides,
   };
 }
@@ -484,6 +487,176 @@ describe('coordinate', () => {
 
       expect(result.warnings.some(w => w.includes('Schema extension writing failed'))).toBe(true);
       expect(result.filesProcessed).toBe(1);
+    });
+  });
+
+  describe('schema diff — baseline snapshot and diff', () => {
+    it('creates baseline snapshot before dispatch and computes diff after extensions', async () => {
+      const createBaselineSnapshot = vi.fn().mockResolvedValue('/tmp/baseline-123');
+      const computeSchemaDiff = vi.fn().mockResolvedValue({
+        markdown: '## Schema Changes\n- Added myapp.order.total',
+        valid: true,
+        violations: [],
+      });
+      const cleanupSnapshot = vi.fn().mockResolvedValue(undefined);
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+          }),
+        ]),
+        createBaselineSnapshot,
+        computeSchemaDiff,
+        cleanupSnapshot,
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(createBaselineSnapshot).toHaveBeenCalledTimes(1);
+      expect(createBaselineSnapshot).toHaveBeenCalledWith(expect.stringContaining('schemas/registry'));
+      expect(computeSchemaDiff).toHaveBeenCalledTimes(1);
+      expect(computeSchemaDiff).toHaveBeenCalledWith(
+        expect.stringContaining('schemas/registry'),
+        '/tmp/baseline-123',
+      );
+      expect(cleanupSnapshot).toHaveBeenCalledWith('/tmp/baseline-123');
+      expect(result.schemaDiff).toContain('Schema Changes');
+    });
+
+    it('populates RunResult.schemaDiff with meaningful markdown', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+          }),
+        ]),
+        createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline'),
+        computeSchemaDiff: vi.fn().mockResolvedValue({
+          markdown: '## Added\n- myapp.order.total (int)\n',
+          valid: true,
+          violations: [],
+        }),
+        cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.schemaDiff).toBe('## Added\n- myapp.order.total (int)\n');
+    });
+
+    it('reports extend-only violations as warnings', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+          }),
+        ]),
+        createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline'),
+        computeSchemaDiff: vi.fn().mockResolvedValue({
+          markdown: '## Changes\n',
+          valid: false,
+          violations: [
+            'Schema integrity violation: existing definition "myapp.old" was removed — agents may only add new definitions.',
+          ],
+        }),
+        cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('Schema integrity violation'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('myapp.old'))).toBe(true);
+    });
+
+    it('skips diff when no schema extensions exist', async () => {
+      const createBaselineSnapshot = vi.fn().mockResolvedValue('/tmp/baseline');
+      const computeSchemaDiff = vi.fn();
+      const cleanupSnapshot = vi.fn().mockResolvedValue(undefined);
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', { schemaExtensions: [] }),
+        ]),
+        createBaselineSnapshot,
+        computeSchemaDiff,
+        cleanupSnapshot,
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      // Baseline snapshot is still created (for checkpoint use), but diff is not computed
+      // since there are no extensions to validate
+      expect(computeSchemaDiff).not.toHaveBeenCalled();
+      expect(cleanupSnapshot).toHaveBeenCalled();
+      expect(result.schemaDiff).toBeUndefined();
+    });
+
+    it('cleans up baseline snapshot even when diff fails', async () => {
+      const cleanupSnapshot = vi.fn().mockResolvedValue(undefined);
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+          }),
+        ]),
+        createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline'),
+        computeSchemaDiff: vi.fn().mockResolvedValue({
+          markdown: undefined,
+          valid: true,
+          violations: [],
+          error: 'weaver crashed',
+        }),
+        cleanupSnapshot,
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(cleanupSnapshot).toHaveBeenCalledWith('/tmp/baseline');
+    });
+
+    it('reports baseline snapshot failure as warning and continues', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+          }),
+        ]),
+        createBaselineSnapshot: vi.fn().mockRejectedValue(new Error('ENOSPC: no space left')),
+        cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('Baseline snapshot failed'))).toBe(true);
+      expect(result.filesProcessed).toBe(1);
+      expect(result.schemaDiff).toBeUndefined();
+    });
+
+    it('reports diff error as warning when weaver fails', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', {
+            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+          }),
+        ]),
+        createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline'),
+        computeSchemaDiff: vi.fn().mockResolvedValue({
+          markdown: undefined,
+          valid: true,
+          violations: [],
+          error: 'Schema diff (markdown) failed: weaver not found',
+        }),
+        cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('Schema diff'))).toBe(true);
     });
   });
 

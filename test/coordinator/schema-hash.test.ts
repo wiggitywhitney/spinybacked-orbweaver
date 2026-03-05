@@ -237,6 +237,9 @@ describe('coordinate — RunResult schema hash fields', () => {
       finalizeResults: vi.fn().mockResolvedValue(undefined),
       writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
       resolveSchemaForHash: vi.fn().mockResolvedValue(schema),
+      createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+      cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     };
     const config = makeConfig();
 
@@ -266,6 +269,9 @@ describe('coordinate — RunResult schema hash fields', () => {
       finalizeResults: vi.fn().mockResolvedValue(undefined),
       writeSchemaExtensions: vi.fn().mockResolvedValue({ written: true, extensionCount: 1, filePath: '', rejected: [] }),
       resolveSchemaForHash,
+      createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+      cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     };
     const config = makeConfig();
 
@@ -289,6 +295,9 @@ describe('coordinate — RunResult schema hash fields', () => {
       finalizeResults: vi.fn().mockResolvedValue(undefined),
       writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
       resolveSchemaForHash: vi.fn().mockResolvedValue(schema),
+      createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+      cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     };
     const config = makeConfig();
 
@@ -308,6 +317,9 @@ describe('coordinate — RunResult schema hash fields', () => {
       finalizeResults: vi.fn().mockResolvedValue(undefined),
       writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
       resolveSchemaForHash: vi.fn().mockRejectedValue(new Error('weaver not found')),
+      createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+      cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     };
     const config = makeConfig();
 

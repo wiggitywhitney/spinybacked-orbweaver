@@ -149,6 +149,9 @@ function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
     },
     writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
     resolveSchemaForHash: vi.fn().mockResolvedValue(resolvedSchema),
+    createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+    cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+    computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
   };
 }
 
