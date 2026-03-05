@@ -194,7 +194,7 @@ function hasEarlyReturnGuard(setAttrCall: CallExpression): boolean {
   // Check preceding statements for: if (!span.isRecording()) return;
   for (let i = stmtIndex - 1; i >= 0; i--) {
     const prevText = statements[i].getText();
-    if (/if\s*\(\s*!\s*\w+\.isRecording\(\)\s*\)\s*(return|break|continue)/.test(prevText)) {
+    if (/if\s*\(\s*!\s*\w+\.isRecording\(\)\s*\)\s*(?:(return|break|continue)|\{\s*(return|break|continue)[;\s]*\})/.test(prevText)) {
       return true;
     }
   }

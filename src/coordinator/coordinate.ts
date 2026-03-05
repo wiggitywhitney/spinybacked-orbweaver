@@ -173,7 +173,7 @@ export async function coordinate(
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {
-    callbacks?.onRunComplete?.(fileResults);
+    await callbacks?.onRunComplete?.(fileResults);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     runResult.warnings.push(`onRunComplete callback failed: ${message}`);
