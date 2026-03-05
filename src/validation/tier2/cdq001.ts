@@ -150,14 +150,17 @@ function hasSpanEndInFinally(callExpr: import('ts-morph').CallExpression): boole
       const containingBlock = varStatement?.getParent(); // Block or SourceFile
       if (containingBlock && (Node.isBlock(containingBlock) || Node.isSourceFile(containingBlock))) {
         const statements = containingBlock.getStatements();
-        const varStartPos = varStatement?.getStart() ?? -1;
-        const declIndex = statements.findIndex(s => s.getStart() === varStartPos);
-        for (let i = declIndex + 1; i < statements.length; i++) {
-          const stmt = statements[i];
-          if (Node.isTryStatement(stmt)) {
-            const finallyBlock = stmt.getFinallyBlock();
-            if (finallyBlock && endPattern.test(finallyBlock.getText())) {
-              return true;
+        const declIndex = varStatement
+          ? statements.findIndex(s => s === varStatement)
+          : -1;
+        if (declIndex >= 0) {
+          for (let i = declIndex + 1; i < statements.length; i++) {
+            const stmt = statements[i];
+            if (Node.isTryStatement(stmt)) {
+              const finallyBlock = stmt.getFinallyBlock();
+              if (finallyBlock && endPattern.test(finallyBlock.getText())) {
+                return true;
+              }
             }
           }
         }
