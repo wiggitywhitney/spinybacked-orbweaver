@@ -1581,26 +1581,26 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     assistantResponseBlocks: [{ type: 'text', text: '{"instrumentedCode": "..."}' }],
   };
 
+  // Uses different ruleIds per attempt to avoid triggering oscillation detection
+  function makeDifferentFailingValidation(attemptNum: number): ValidationResult {
+    const ruleId = `SYNTAX-${attemptNum}`;
+    return {
+      passed: false,
+      tier1Results: [
+        { ruleId, passed: false, filePath: testFilePath, lineNumber: 5, message: `Error on attempt ${attemptNum}`, tier: 1, blocking: true },
+      ],
+      tier2Results: [],
+      blockingFailures: [
+        { ruleId, passed: false, filePath: testFilePath, lineNumber: 5, message: `Error on attempt ${attemptNum}`, tier: 1, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+  }
+
   it('uses multi-turn-fix for attempts 2 and 3, fresh-regeneration only for attempt 4 when maxFixAttempts=3', async () => {
     let callCount = 0;
     let validateCount = 0;
     const capturedOptions: (InstrumentFileCallOptions | undefined)[] = [];
-
-    // Use different ruleIds per attempt to avoid triggering oscillation detection
-    function makeDifferentFailingValidation(attemptNum: number): ValidationResult {
-      const ruleId = `SYNTAX-${attemptNum}`;
-      return {
-        passed: false,
-        tier1Results: [
-          { ruleId, passed: false, filePath: testFilePath, lineNumber: 5, message: `Error on attempt ${attemptNum}`, tier: 1, blocking: true },
-        ],
-        tier2Results: [],
-        blockingFailures: [
-          { ruleId, passed: false, filePath: testFilePath, lineNumber: 5, message: `Error on attempt ${attemptNum}`, tier: 1, blocking: true },
-        ],
-        advisoryFindings: [],
-      };
-    }
 
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async (_fp, _code, _schema, _config, options?) => {
@@ -1653,22 +1653,6 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
   it('reports multi-turn-fix strategy when attempt 3 succeeds with maxFixAttempts=3', async () => {
     let callCount = 0;
     let validateCount = 0;
-
-    // Use different ruleIds per attempt to avoid triggering oscillation detection
-    function makeDifferentFailingValidation(attemptNum: number): ValidationResult {
-      const ruleId = `SYNTAX-${attemptNum}`;
-      return {
-        passed: false,
-        tier1Results: [
-          { ruleId, passed: false, filePath: testFilePath, lineNumber: 5, message: `Error on attempt ${attemptNum}`, tier: 1, blocking: true },
-        ],
-        tier2Results: [],
-        blockingFailures: [
-          { ruleId, passed: false, filePath: testFilePath, lineNumber: 5, message: `Error on attempt ${attemptNum}`, tier: 1, blocking: true },
-        ],
-        advisoryFindings: [],
-      };
-    }
 
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => {
