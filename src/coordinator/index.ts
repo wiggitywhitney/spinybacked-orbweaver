@@ -3,3 +3,4 @@
 
 export { discoverFiles } from './discovery.ts';
 export type { DiscoverFilesOptions } from './discovery.ts';
+export { isAlreadyInstrumented, buildSkippedResult } from './dispatch.ts';
