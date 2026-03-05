@@ -2,7 +2,7 @@
 // ABOUTME: Unit tests mock the Anthropic SDK; integration tests call the real API.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { instrumentFile } from '../../src/agent/instrument-file.ts';
+import { instrumentFile, MAX_OUTPUT_TOKENS_PER_CALL } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { LlmOutput } from '../../src/agent/schema.ts';
 
@@ -336,11 +336,12 @@ describe('instrumentFile', () => {
     });
   });
 
-  describe('maxTokensPerFile', () => {
-    it('passes max_tokens from config', async () => {
+  describe('max_tokens per API call', () => {
+    it('uses a per-call output limit, not the cumulative maxTokensPerFile budget', async () => {
       const llmOutput = makeValidLlmOutput();
       const client = makeMockClient(llmOutput);
-      const config = makeConfig({ maxTokensPerFile: 16000 });
+      // maxTokensPerFile is 80000 by default — this should NOT be passed as max_tokens
+      const config = makeConfig({ maxTokensPerFile: 80000 });
 
       await instrumentFile(
         '/project/src/handler.js',
@@ -351,7 +352,36 @@ describe('instrumentFile', () => {
       );
 
       const call = client.messages.parse.mock.calls[0][0];
-      expect(call.max_tokens).toBe(16000);
+      // Must use the per-call constant, not the cumulative budget
+      expect(call.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
+    });
+
+    it('uses the same per-call limit regardless of maxTokensPerFile config', async () => {
+      const llmOutput = makeValidLlmOutput();
+      const client1 = makeMockClient(llmOutput);
+      const client2 = makeMockClient(llmOutput);
+
+      await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig({ maxTokensPerFile: 80000 }),
+        { client: client1 as any },
+      );
+
+      await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig({ maxTokensPerFile: 16000 }),
+        { client: client2 as any },
+      );
+
+      const call1 = client1.messages.parse.mock.calls[0][0];
+      const call2 = client2.messages.parse.mock.calls[0][0];
+      // Per-call limit should be the same constant, not derived from maxTokensPerFile
+      expect(call1.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
+      expect(call2.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
     });
   });
 
