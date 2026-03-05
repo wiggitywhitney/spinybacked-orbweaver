@@ -13,6 +13,14 @@ import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
 import { detectElision } from './elision.ts';
 
 /**
+ * Per-call output token limit for the Messages API.
+ * Distinct from maxTokensPerFile (the cumulative budget across all attempts).
+ * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
+ * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
+ */
+export const MAX_OUTPUT_TOKENS_PER_CALL = 16384;
+
+/**
  * Conversation context captured from an API call for multi-turn threading.
  * The fix loop stores this from attempt N and passes it to attempt N+1
  * so the LLM sees the full conversation history.
@@ -160,7 +168,7 @@ export async function instrumentFile(
   try {
     const response = await client.messages.parse({
       model: config.agentModel,
-      max_tokens: config.maxTokensPerFile,
+      max_tokens: MAX_OUTPUT_TOKENS_PER_CALL,
       thinking: { type: 'adaptive' },
       output_config: {
         effort: config.agentEffort,
