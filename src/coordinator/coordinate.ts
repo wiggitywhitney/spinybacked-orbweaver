@@ -26,6 +26,8 @@ import {
   computeSchemaDiff as defaultComputeSchemaDiff,
 } from './schema-diff.ts';
 import type { SchemaDiffResult } from './schema-diff.ts';
+import { runLiveCheck as defaultRunLiveCheck } from './live-check.ts';
+import type { LiveCheckResult, LiveCheckDeps } from './live-check.ts';
 
 /**
  * Error thrown when the coordinator must abort the run.
@@ -70,6 +72,13 @@ export interface CoordinateDeps {
   createBaselineSnapshot: (registryDir: string) => Promise<string>;
   cleanupSnapshot: (snapshotDir: string) => Promise<void>;
   computeSchemaDiff: (registryDir: string, baselineDir: string) => Promise<SchemaDiffResult>;
+  runLiveCheck: (
+    registryDir: string,
+    projectDir: string,
+    testCommand: string,
+    deps?: LiveCheckDeps,
+    callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
+  ) => Promise<LiveCheckResult>;
 }
 
 /**
@@ -132,6 +141,7 @@ export async function coordinate(
   const createSnapshot = deps?.createBaselineSnapshot ?? defaultCreateBaselineSnapshot;
   const cleanupSnap = deps?.cleanupSnapshot ?? defaultCleanupSnapshot;
   const schemaDiff = deps?.computeSchemaDiff ?? defaultComputeSchemaDiff;
+  const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
@@ -287,6 +297,26 @@ export async function coordinate(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     runResult.warnings.push(`onRunComplete callback failed: ${message}`);
+  }
+
+  // Step 7b: End-of-run Weaver live-check (degrade and warn on failure)
+  try {
+    const liveCheckResult = await liveCheck(
+      registryDir,
+      projectDir,
+      config.testCommand,
+      undefined,
+      callbacks,
+    );
+    if (liveCheckResult.complianceReport) {
+      runResult.endOfRunValidation = liveCheckResult.complianceReport;
+    }
+    if (liveCheckResult.warnings.length > 0) {
+      runResult.warnings.push(...liveCheckResult.warnings);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
   }
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)

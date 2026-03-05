@@ -240,6 +240,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
+      runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     };
     const config = makeConfig();
 
@@ -272,6 +273,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
+      runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     };
     const config = makeConfig();
 
@@ -298,6 +300,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
+      runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     };
     const config = makeConfig();
 
@@ -320,6 +323,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
+      runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     };
     const config = makeConfig();
 

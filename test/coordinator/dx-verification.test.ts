@@ -144,6 +144,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
     computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
+    runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     ...overrides,
   };
 }
