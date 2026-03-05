@@ -32,3 +32,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Token budget tracking (`src/fix-loop/token-budget.ts`): cumulative usage across attempts, hard stop when `maxTokensPerFile` exceeded
 - Oscillation detection (`src/fix-loop/oscillation.ts`): error-count monotonicity and duplicate error detection trigger early exit or skip to fresh regeneration
 - `instrumentWithRetry()` orchestrator: wires `instrumentFile` + `validateFile` with retry, populates complete `FileResult` on all exit paths (success, exhaustion, budget exceeded, oscillation, unexpected error)
+- Phase 3 acceptance gate tests: end-to-end validation with real Anthropic API (successful retry, budget exceeded, file revert, strategy verification)

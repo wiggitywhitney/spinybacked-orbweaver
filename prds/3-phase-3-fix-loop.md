@@ -299,7 +299,7 @@ The module likely needs:
 
 - [x] **Milestone 7: DX verification** — Verify all exit paths produce fully populated `FileResult`: success (all fields including `errorProgression`, `notes`, `tokenUsage`), failure by exhaustion (`reason`, `lastError`, `errorProgression` showing oscillation), failure by budget (`reason` mentioning budget, `tokenUsage` showing cumulative), Tier 2 advisory findings collected in `advisoryAnnotations` on success. No silent failures — every code path produces structured output. Verified by asserting field content (not just presence) for each exit path.
 
-- [ ] **Milestone 8: Acceptance gate passes** — Full end-to-end: (a) instrument a file that initially fails validation → fix loop retries with feedback → produces passing output within budget, (b) instrument a file with an unfixable issue → exhausts attempts, fails cleanly with file reverted and budget respected, (c) Tier 1 failure triggers retry/regeneration, Tier 2 blocking failure triggers fix but not fresh regen alone, (d) all tests run against real agent output (not synthetic).
+- [x] **Milestone 8: Acceptance gate passes** — Full end-to-end: (a) instrument a file that initially fails validation → fix loop retries with feedback → produces passing output within budget, (b) instrument a file with an unfixable issue → exhausts attempts, fails cleanly with file reverted and budget respected, (c) Tier 1 failure triggers retry/regeneration, Tier 2 blocking failure triggers fix but not fresh regen alone, (d) all tests run against real agent output (not synthetic).
 
 ## Dependencies
 
