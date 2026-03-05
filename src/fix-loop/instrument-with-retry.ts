@@ -130,16 +130,20 @@ function buildFailureHint(validation: ValidationResult): string | undefined {
 
 /**
  * Determine the validation strategy for a given attempt number.
- * Attempt 1 = initial-generation, attempt 2 = multi-turn-fix,
- * attempt 3 = fresh-regeneration (Milestone 5).
+ * Attempt 1 = initial-generation. The last attempt = fresh-regeneration.
+ * All intermediate attempts = multi-turn-fix.
+ *
+ * Per spec: "The last fix attempt is always a fresh regeneration;
+ * all preceding fix attempts are multi-turn."
  *
  * @param attemptNumber - 1-based attempt number
+ * @param maxAttempts - Total number of attempts (1 + maxFixAttempts)
  * @returns The strategy for this attempt
  */
-function strategyForAttempt(attemptNumber: number): ValidationStrategy {
+function strategyForAttempt(attemptNumber: number, maxAttempts: number): ValidationStrategy {
   if (attemptNumber === 1) return 'initial-generation';
-  if (attemptNumber === 2) return 'multi-turn-fix';
-  return 'fresh-regeneration';
+  if (attemptNumber === maxAttempts && maxAttempts > 2) return 'fresh-regeneration';
+  return 'multi-turn-fix';
 }
 
 /**
@@ -221,18 +225,18 @@ async function executeRetryLoop(
   let lastStrategy: ValidationStrategy = 'initial-generation';
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const strategy = strategyForAttempt(attempt);
+    const strategy = strategyForAttempt(attempt, maxAttempts);
     lastStrategy = strategy;
 
-    // Build call options for retry attempts
+    // Build call options for retry attempts based on strategy
     let callOptions: InstrumentFileCallOptions | undefined;
-    if (attempt === 2 && lastConversationContext && lastValidation) {
+    if (strategy === 'multi-turn-fix' && lastConversationContext && lastValidation) {
       // Multi-turn fix: grow the conversation with validation feedback
       callOptions = {
         conversationContext: lastConversationContext,
         feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
       };
-    } else if (attempt >= 3 && lastValidation) {
+    } else if (strategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint
       callOptions = {
         failureHint: buildFailureHint(lastValidation),

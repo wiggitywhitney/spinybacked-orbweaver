@@ -1553,3 +1553,110 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     expect(result.errorProgression!.length).toBe(3); // All 3 attempts ran
   });
 });
+
+describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'orb-highfix-test-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  const attemptTokens: TokenUsage = {
+    inputTokens: 500,
+    outputTokens: 200,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+  };
+
+  const mockConversationContext: ConversationContext = {
+    userMessage: 'instrument this file',
+    assistantResponseBlocks: [{ type: 'text', text: '{"instrumentedCode": "..."}' }],
+  };
+
+  it('uses multi-turn-fix for attempts 2 and 3, fresh-regeneration only for attempt 4 when maxFixAttempts=3', async () => {
+    let callCount = 0;
+    const capturedOptions: (InstrumentFileCallOptions | undefined)[] = [];
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+        callCount++;
+        capturedOptions.push(options);
+        const output = makeInstrumentationOutput({
+          instrumentedCode: callCount === 4 ? 'good;\n' : `bad${callCount};\n`,
+          tokenUsage: attemptTokens,
+        });
+        return { success: true, output, conversationContext: mockConversationContext } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'good;\n') return makePassingValidation(testFilePath);
+        return makeFailingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(4);
+    expect(result.validationStrategyUsed).toBe('fresh-regeneration');
+    expect(callCount).toBe(4);
+
+    // Attempt 1: initial — no options
+    expect(capturedOptions[0]).toBeUndefined();
+
+    // Attempt 2: multi-turn fix — has conversationContext and feedbackMessage
+    expect(capturedOptions[1]).toBeDefined();
+    expect(capturedOptions[1]!.conversationContext).toBeDefined();
+    expect(capturedOptions[1]!.feedbackMessage).toBeDefined();
+    expect(capturedOptions[1]!.failureHint).toBeUndefined();
+
+    // Attempt 3: also multi-turn fix (NOT fresh-regen) — has conversationContext and feedbackMessage
+    expect(capturedOptions[2]).toBeDefined();
+    expect(capturedOptions[2]!.conversationContext).toBeDefined();
+    expect(capturedOptions[2]!.feedbackMessage).toBeDefined();
+    expect(capturedOptions[2]!.failureHint).toBeUndefined();
+
+    // Attempt 4: fresh regeneration — has failureHint, no conversationContext
+    expect(capturedOptions[3]).toBeDefined();
+    expect(capturedOptions[3]!.conversationContext).toBeUndefined();
+    expect(capturedOptions[3]!.failureHint).toBeDefined();
+    expect(capturedOptions[3]!.feedbackMessage).toBeUndefined();
+  });
+
+  it('reports multi-turn-fix strategy when attempt 3 succeeds with maxFixAttempts=3', async () => {
+    let callCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        const output = makeInstrumentationOutput({
+          instrumentedCode: callCount === 3 ? 'good;\n' : `bad${callCount};\n`,
+          tokenUsage: attemptTokens,
+        });
+        return { success: true, output, conversationContext: mockConversationContext } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'good;\n') return makePassingValidation(testFilePath);
+        return makeFailingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(3);
+    // Attempt 3 with maxFixAttempts=3 should be multi-turn-fix, not fresh-regeneration
+    expect(result.validationStrategyUsed).toBe('multi-turn-fix');
+  });
+});
