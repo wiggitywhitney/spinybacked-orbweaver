@@ -1,7 +1,7 @@
 # PRD: Phase 6 — Interfaces (CLI + MCP + GitHub Action)
 
 **Issue**: [#6](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/6)
-**Status**: Not Started
+**Status**: In Progress
 **Priority**: High
 **Blocked by**: Phase 5 PRD ([#5](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/5))
 **Created**: 2026-03-02
@@ -249,7 +249,7 @@ action.yml            GitHub Action (shell-based, invokes CLI)
 
 ## Milestones
 
-- [ ] **Milestone 1: CLI scaffold with yargs** — Set up `src/interfaces/cli.ts` with yargs. Define `init` and `instrument` commands with all flags (`--dry-run`, `--output json|text`, `--yes`/`-y`, `--verbose`, `--debug`). Commands parse arguments correctly but call placeholder handlers. Verify: `orb --help` shows both commands with descriptions, `orb init --help` shows init options, `orb instrument --help` shows all flags.
+- [x] **Milestone 1: CLI scaffold with yargs** — Set up `src/interfaces/cli.ts` with yargs. Define `init` and `instrument` commands with all flags (`--dry-run`, `--output json|text`, `--yes`/`-y`, `--verbose`, `--debug`). Commands parse arguments correctly but call placeholder handlers. Verify: `orb --help` shows both commands with descriptions, `orb init --help` shows init options, `orb instrument --help` shows all flags.
 
 - [ ] **Milestone 2: `orb init` wired to real handlers** — Wire the `init` command to Phase 1's config module: prerequisite verification (package.json, OTel API, Weaver version, port availability, SDK init file), Weaver schema validation, project type detection, config file creation (`orb.yaml`). In non-interactive mode (`--yes`), auto-select dependency strategy from heuristic. In interactive mode, prompt for confirmation. Verify: (a) `orb init` in a valid project creates `orb.yaml` with correct fields, (b) missing prerequisites produce specific, actionable error messages ("package.json not found in /path — run orb init from the project root"), (c) `--yes` skips prompts and auto-detects project type.
 
