@@ -13,11 +13,25 @@ import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
 import { detectElision } from './elision.ts';
 
 /**
+ * Conversation context captured from an API call for multi-turn threading.
+ * The fix loop stores this from attempt N and passes it to attempt N+1
+ * so the LLM sees the full conversation history.
+ */
+export interface ConversationContext {
+  /** The user message text sent to the API. */
+  userMessage: string;
+  /** The assistant's response content blocks (opaque — passed back for multi-turn). */
+  assistantResponseBlocks: unknown[];
+}
+
+/**
  * Successful instrumentation result.
  */
 interface InstrumentFileSuccess {
   success: true;
   output: InstrumentationOutput;
+  /** Conversation context for multi-turn threading. Present when an API call was made. */
+  conversationContext?: ConversationContext;
 }
 
 /**
@@ -38,6 +52,12 @@ export type InstrumentFileResult = InstrumentFileSuccess | InstrumentFileFailure
 interface InstrumentFileOptions {
   /** Anthropic client instance. If not provided, a new one is created. */
   client?: Anthropic;
+  /** Prior conversation context from a previous attempt (for multi-turn fix). */
+  conversationContext?: ConversationContext;
+  /** Feedback message replacing the standard user message (for multi-turn fix). */
+  feedbackMessage?: string;
+  /** Failure category hint appended to the standard user message (for fresh regeneration). */
+  failureHint?: string;
 }
 
 /**
@@ -118,6 +138,23 @@ export async function instrumentFile(
   const systemPrompt = buildSystemPrompt(resolvedSchema);
   const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult);
 
+  // Build messages: multi-turn (with prior conversation) or standard (initial generation)
+  // feedbackMessage replaces the user message (multi-turn fix);
+  // failureHint appends to the standard user message (fresh regeneration)
+  let currentUserMessage = options?.feedbackMessage ?? userMessage;
+  if (!options?.feedbackMessage && options?.failureHint) {
+    currentUserMessage = `${userMessage}\n\n${options.failureHint}`;
+  }
+  const messages: Array<{ role: 'user' | 'assistant'; content: string | unknown[] }> = [];
+
+  if (options?.conversationContext) {
+    messages.push(
+      { role: 'user', content: options.conversationContext.userMessage },
+      { role: 'assistant', content: options.conversationContext.assistantResponseBlocks },
+    );
+  }
+  messages.push({ role: 'user', content: currentUserMessage });
+
   let tokenUsage: TokenUsage | undefined;
 
   try {
@@ -136,7 +173,8 @@ export async function instrumentFile(
           cache_control: { type: 'ephemeral' },
         },
       ],
-      messages: [{ role: 'user', content: userMessage }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      messages: messages as any,
     });
 
     tokenUsage = extractTokenUsage(response.usage);
@@ -172,7 +210,13 @@ export async function instrumentFile(
       tokenUsage,
     };
 
-    return { success: true, output };
+    // Capture conversation context for multi-turn threading
+    const conversationContext: ConversationContext = {
+      userMessage: currentUserMessage,
+      assistantResponseBlocks: response.content as unknown[],
+    };
+
+    return { success: true, output, conversationContext };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {

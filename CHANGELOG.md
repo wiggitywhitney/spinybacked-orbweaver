@@ -27,3 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Tier 2 semantic checks: CDQ-001 (AST-based span closure verification via ts-morph), NDS-003 (diff-based non-instrumentation line preservation with instrumentation pattern filtering)
 - Feedback formatting (`src/validation/feedback.ts`): `formatFeedbackForAgent()` producing `{rule_id} | {pass|fail|advisory} | {path}:{line} | {message}` structured output for LLM consumption
 - Prettier 3.8.1 dependency for diff-based lint checking
+- Fix loop (`src/fix-loop/`): hybrid 3-attempt strategy — initial generation, multi-turn fix with conversation context, fresh regeneration with failure category hint
+- File snapshot/restore (`src/fix-loop/snapshot.ts`): copy to `os.tmpdir()` before processing, restore on failure, clean up on success
+- Token budget tracking (`src/fix-loop/token-budget.ts`): cumulative usage across attempts, hard stop when `maxTokensPerFile` exceeded
+- Oscillation detection (`src/fix-loop/oscillation.ts`): error-count monotonicity and duplicate error detection trigger early exit or skip to fresh regeneration
+- `instrumentWithRetry()` orchestrator: wires `instrumentFile` + `validateFile` with retry, populates complete `FileResult` on all exit paths (success, exhaustion, budget exceeded, oscillation, unexpected error)
+- Phase 3 acceptance gate tests: end-to-end validation with real Anthropic API (successful retry, budget exceeded, file revert, strategy verification)

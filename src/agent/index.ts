@@ -3,7 +3,7 @@
 
 export { buildSystemPrompt, buildUserMessage } from './prompt.ts';
 export { instrumentFile } from './instrument-file.ts';
-export type { InstrumentFileResult } from './instrument-file.ts';
+export type { InstrumentFileResult, ConversationContext } from './instrument-file.ts';
 export { detectElision } from './elision.ts';
 export type { ElisionResult } from './elision.ts';
 export {
