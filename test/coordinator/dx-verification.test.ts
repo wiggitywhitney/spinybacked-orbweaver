@@ -1,5 +1,5 @@
-// ABOUTME: DX verification tests for the coordinator module (PRD-4 Milestone 8).
-// ABOUTME: Verifies callbacks fire for every stage, RunResult is fully populated, and a test subscriber receives all expected events.
+// ABOUTME: DX verification tests for the coordinator module (PRD-4 Milestone 8, PRD-5 Milestone 8).
+// ABOUTME: Verifies callbacks fire for every stage, RunResult is fully populated, schema integration outputs are structured.
 
 import { describe, it, expect, vi } from 'vitest';
 import type { AgentConfig } from '../../src/config/schema.ts';
@@ -305,14 +305,60 @@ describe('DX Verification — Milestone 8', () => {
       }
     });
 
-    it('Phase 5 schema hash fields are populated, remaining Phase 5 fields are undefined', async () => {
+    it('schema hash fields are populated with valid SHA-256 hashes', async () => {
       const deps = makeDeps();
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
       expect(result.schemaHashStart).toMatch(/^[0-9a-f]{64}$/);
       expect(result.schemaHashEnd).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('schemaDiff is undefined when no extensions are written', async () => {
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', { schemaExtensions: [] }),
+        ]),
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+      });
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      // No extensions → no diff computed
       expect(result.schemaDiff).toBeUndefined();
-      expect(result.endOfRunValidation).toBeUndefined();
+    });
+
+    it('schemaDiff is populated with markdown when extensions exist', async () => {
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', { schemaExtensions: ['myapp.order.total'] }),
+        ]),
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+        computeSchemaDiff: vi.fn().mockResolvedValue({
+          markdown: '## Schema Changes\n\n- Added: myapp.order.total',
+          valid: true,
+          violations: [],
+        }),
+      });
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.schemaDiff).toContain('Schema Changes');
+      expect(result.schemaDiff).toContain('myapp.order.total');
+    });
+
+    it('endOfRunValidation is populated when live-check completes', async () => {
+      const deps = makeDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          complianceReport: 'Schema compliance: 5/5 spans validated, 0 violations',
+          testsPassed: true,
+          warnings: [],
+        }),
+      });
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.endOfRunValidation).toContain('Schema compliance');
+      expect(result.endOfRunValidation).toContain('5/5 spans validated');
     });
 
     it('warnings is an empty array when all files succeed (no silent issues)', async () => {
@@ -448,6 +494,217 @@ describe('DX Verification — Milestone 8', () => {
 
       expect(result.warnings.some(w => w.includes('npm install failed'))).toBe(true);
       expect(result.filesProcessed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('schema integration outputs are structured and inspectable (Phase 5)', () => {
+    it('checkpoint failure warnings include failing rule, triggering file, and blast radius', async () => {
+      // Test at the SchemaCheckpointResult level — checkpoint failures include all three diagnostics
+      const { runSchemaCheckpoint } = await import('../../src/coordinator/schema-checkpoint.ts');
+      const execFileFn = vi.fn()
+        .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+          const error = new Error('Schema validation error');
+          (error as unknown as Record<string, unknown>).stdout = Buffer.from('Error: attribute "myapp.order.total" has invalid type');
+          (error as unknown as Record<string, unknown>).stderr = Buffer.from('');
+          cb(error, '', '');
+        });
+
+      const result = await runSchemaCheckpoint(
+        '/project/schemas/registry',
+        '/tmp/baseline',
+        '/project/src/order-handler.js',
+        4,
+        { execFileFn },
+      );
+
+      // Failing rule is identified in message
+      expect(result.message).toMatch(/Schema validation failed/);
+      expect(result.message).toContain('myapp.order.total');
+      // Triggering file is reported
+      expect(result.triggeringFile).toBe('/project/src/order-handler.js');
+      // Blast radius is reported
+      expect(result.blastRadius).toBe(4);
+      // Overall failure is clear
+      expect(result.passed).toBe(false);
+      expect(result.failedCheck).toBe('validation');
+    });
+
+    it('drift warnings include specific file paths and attribute counts', async () => {
+      const { detectSchemaDrift } = await import('../../src/coordinator/schema-drift.ts');
+
+      const results: FileResult[] = [
+        makeSuccessResult('/project/src/mega-handler.js', {
+          attributesCreated: 35,
+          spansAdded: 5,
+        }),
+        makeSuccessResult('/project/src/normal.js', {
+          attributesCreated: 3,
+          spansAdded: 2,
+        }),
+      ];
+
+      const drift = detectSchemaDrift(results);
+
+      expect(drift.driftDetected).toBe(true);
+      expect(drift.warnings).toHaveLength(1);
+      // Warning identifies the specific file
+      expect(drift.warnings[0]).toContain('/project/src/mega-handler.js');
+      // Warning includes the specific count
+      expect(drift.warnings[0]).toContain('35');
+      // Totals are computed across all files
+      expect(drift.totalAttributesCreated).toBe(38);
+      expect(drift.totalSpansAdded).toBe(7);
+    });
+
+    it('live-check graceful degradation for missing tests produces structured warning', async () => {
+      const deps = makeDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: true,
+          warnings: ['No test command configured. Skipping end-of-run live-check.'],
+        }),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      // Warning is in RunResult.warnings, not a silent failure
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('No test command configured'),
+      );
+      // endOfRunValidation is not populated
+      expect(result.endOfRunValidation).toBeUndefined();
+    });
+
+    it('live-check graceful degradation for port conflict produces structured warning', async () => {
+      const deps = makeDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: true,
+          warnings: ['Port 4317 is in use. Free this port to enable end-of-run schema validation. Skipping live-check.'],
+        }),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('Port 4317 is in use'),
+      );
+      expect(result.endOfRunValidation).toBeUndefined();
+    });
+
+    it('onSchemaCheckpoint callback receives filesProcessed and passed boolean', async () => {
+      // This is tested at the dispatch level; verify it works through coordinate()
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+      const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
+
+      // Configure dispatch to simulate checkpoint firing
+      const dispatchFiles = vi.fn().mockImplementation(
+        async (_paths: string[], _dir: string, _config: AgentConfig, cbs?: CoordinatorCallbacks) => {
+          // Simulate checkpoint callback firing during dispatch
+          cbs?.onSchemaCheckpoint?.(5, true);
+          return [makeSuccessResult('/project/a.js')];
+        },
+      );
+
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 500 }),
+        dispatchFiles,
+      });
+
+      await coordinate('/project', makeConfig(), callbacks, deps);
+
+      expect(onSchemaCheckpoint).toHaveBeenCalledWith(5, true);
+    });
+
+    it('schema diff violations surface in RunResult.warnings', async () => {
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', { schemaExtensions: ['myapp.order.total'] }),
+        ]),
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+        computeSchemaDiff: vi.fn().mockResolvedValue({
+          markdown: '## Changes\n- Removed: myapp.old_attr',
+          valid: false,
+          violations: [
+            'Schema integrity violation: existing definition "myapp.old_attr" was removed — agents may only add new definitions.',
+          ],
+        }),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('myapp.old_attr'),
+      );
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('agents may only add new definitions'),
+      );
+    });
+
+    it('schema hash start and end differ when extensions modify the schema', async () => {
+      let resolveCallCount = 0;
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', { schemaExtensions: ['myapp.order.total'] }),
+        ]),
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+        // Return different schemas for start and end to simulate extensions modifying the schema
+        resolveSchemaForHash: vi.fn().mockImplementation(async () => {
+          resolveCallCount++;
+          if (resolveCallCount === 1) {
+            return { groups: [{ id: 'registry.myapp', attributes: [] }] };
+          }
+          return { groups: [{ id: 'registry.myapp', attributes: [{ name: 'myapp.order.total' }] }] };
+        }),
+        writeSchemaExtensions: vi.fn().mockResolvedValue({ written: true, extensionCount: 1, filePath: '/project/schemas/registry/agent-extensions.yaml', rejected: [] }),
+        computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: '## Added\n- myapp.order.total', valid: true, violations: [] }),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.schemaHashStart).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.schemaHashEnd).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.schemaHashStart).not.toBe(result.schemaHashEnd);
+    });
+
+    it('all four RunResult schema fields populated after successful run with extensions and live-check', async () => {
+      let resolveCallCount = 0;
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js', { schemaExtensions: ['myapp.order.total'] }),
+        ]),
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+        resolveSchemaForHash: vi.fn().mockImplementation(async () => {
+          resolveCallCount++;
+          return { groups: [{ count: resolveCallCount }] };
+        }),
+        writeSchemaExtensions: vi.fn().mockResolvedValue({ written: true, extensionCount: 1, filePath: '/schemas/agent-extensions.yaml', rejected: [] }),
+        computeSchemaDiff: vi.fn().mockResolvedValue({
+          markdown: '## Schema Changes\n\n- Added: `myapp.order.total`',
+          valid: true,
+          violations: [],
+        }),
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          complianceReport: 'All 3 spans validated against registry. 0 violations found.',
+          testsPassed: true,
+          warnings: [],
+        }),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      // All four schema fields are populated (not undefined, not empty)
+      expect(result.schemaHashStart).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.schemaHashEnd).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.schemaDiff).toBeDefined();
+      expect(result.schemaDiff!.length).toBeGreaterThan(0);
+      expect(result.schemaDiff).toContain('myapp.order.total');
+      expect(result.endOfRunValidation).toBeDefined();
+      expect(result.endOfRunValidation!.length).toBeGreaterThan(0);
+      expect(result.endOfRunValidation).toContain('spans validated');
     });
   });
 
