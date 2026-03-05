@@ -1,6 +1,8 @@
 // ABOUTME: Public API for the coordinator module.
 // ABOUTME: Re-exports file discovery, dispatch, and coordinator types.
 
+export { coordinate, CoordinatorAbortError } from './coordinate.ts';
+export type { CoordinateDeps } from './coordinate.ts';
 export { discoverFiles } from './discovery.ts';
 export type { DiscoverFilesOptions } from './discovery.ts';
 export { isAlreadyInstrumented, buildSkippedResult, dispatchFiles, resolveSchema } from './dispatch.ts';

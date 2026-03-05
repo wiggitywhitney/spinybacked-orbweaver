@@ -1,0 +1,479 @@
+// ABOUTME: Unit tests for the coordinate() entry point function.
+// ABOUTME: Covers three error categories (abort/degrade-continue/degrade-warn), cost ceiling, callbacks, and no silent failures.
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import type { AgentConfig } from '../../src/config/schema.ts';
+import type { FileResult } from '../../src/fix-loop/types.ts';
+import type { TokenUsage } from '../../src/agent/schema.ts';
+import type { CoordinatorCallbacks } from '../../src/coordinator/types.ts';
+import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
+import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
+
+/** Minimal config for testing. */
+function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
+  return {
+    schemaPath: 'schemas/registry',
+    sdkInitFile: 'src/instrumentation.js',
+    agentModel: 'claude-sonnet-4-6',
+    agentEffort: 'medium',
+    autoApproveLibraries: true,
+    testCommand: 'npm test',
+    dependencyStrategy: 'dependencies',
+    maxFilesPerRun: 50,
+    maxFixAttempts: 2,
+    maxTokensPerFile: 80000,
+    largeFileThresholdLines: 500,
+    schemaCheckpointInterval: 5,
+    weaverMinVersion: '0.21.2',
+    reviewSensitivity: 'moderate',
+    dryRun: false,
+    confirmEstimate: true,
+    exclude: [],
+    ...overrides,
+  };
+}
+
+/** Build a successful FileResult for testing. */
+function makeSuccessResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
+  return {
+    path: filePath,
+    status: 'success',
+    spansAdded: 3,
+    librariesNeeded: [],
+    schemaExtensions: [],
+    attributesCreated: 2,
+    validationAttempts: 1,
+    validationStrategyUsed: 'initial-generation',
+    tokenUsage: { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+    ...overrides,
+  };
+}
+
+/** Build a failed FileResult for testing. */
+function makeFailedResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
+  return {
+    path: filePath,
+    status: 'failed',
+    spansAdded: 0,
+    librariesNeeded: [],
+    schemaExtensions: [],
+    attributesCreated: 0,
+    validationAttempts: 3,
+    validationStrategyUsed: 'fresh-regeneration',
+    reason: 'Validation failed',
+    lastError: 'SYNTAX: parse error',
+    tokenUsage: { inputTokens: 3000, outputTokens: 1500, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+    ...overrides,
+  };
+}
+
+/** Build mock dependencies for the coordinate function. */
+function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
+  return {
+    checkPrerequisites: vi.fn().mockResolvedValue({
+      allPassed: true,
+      checks: [],
+    }),
+    discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
+    statFile: vi.fn().mockResolvedValue({ size: 500 }),
+    dispatchFiles: vi.fn().mockImplementation(async (filePaths: string[]) => {
+      return filePaths.map(fp => makeSuccessResult(fp));
+    }),
+    finalizeResults: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+describe('coordinate', () => {
+  describe('abort errors — stop the run immediately', () => {
+    it('aborts with CoordinatorAbortError when prerequisites fail', async () => {
+      const deps = makeDeps({
+        checkPrerequisites: vi.fn().mockResolvedValue({
+          allPassed: false,
+          checks: [
+            { id: 'WEAVER_SCHEMA', passed: false, message: 'Weaver CLI not found.' },
+            { id: 'PACKAGE_JSON', passed: true, message: 'package.json found.' },
+          ],
+        }),
+      });
+
+      await expect(coordinate('/project', makeConfig(), undefined, deps))
+        .rejects.toThrow(CoordinatorAbortError);
+    });
+
+    it('abort error message includes all failed prerequisite details', async () => {
+      const deps = makeDeps({
+        checkPrerequisites: vi.fn().mockResolvedValue({
+          allPassed: false,
+          checks: [
+            { id: 'WEAVER_SCHEMA', passed: false, message: 'Weaver CLI not found.' },
+            { id: 'SDK_INIT_FILE', passed: false, message: 'SDK init file missing.' },
+          ],
+        }),
+      });
+
+      try {
+        await coordinate('/project', makeConfig(), undefined, deps);
+        expect.unreachable('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CoordinatorAbortError);
+        const abortErr = err as CoordinatorAbortError;
+        expect(abortErr.message).toContain('Weaver CLI not found');
+        expect(abortErr.message).toContain('SDK init file missing');
+        expect(abortErr.category).toBe('abort');
+      }
+    });
+
+    it('aborts when onCostCeilingReady returns false', async () => {
+      const deps = makeDeps();
+      const callbacks: CoordinatorCallbacks = {
+        onCostCeilingReady: () => false,
+      };
+
+      await expect(coordinate('/project', makeConfig(), callbacks, deps))
+        .rejects.toThrow(CoordinatorAbortError);
+    });
+
+    it('abort on cost ceiling rejection includes ceiling details', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1000 }),
+      });
+      const callbacks: CoordinatorCallbacks = {
+        onCostCeilingReady: () => false,
+      };
+
+      try {
+        await coordinate('/project', makeConfig({ maxTokensPerFile: 50000 }), callbacks, deps);
+        expect.unreachable('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CoordinatorAbortError);
+        const abortErr = err as CoordinatorAbortError;
+        expect(abortErr.message).toContain('Cost ceiling rejected');
+      }
+    });
+
+    it('aborts when file discovery throws (zero files)', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockRejectedValue(
+          new Error('No JavaScript files found in /empty-project.'),
+        ),
+      });
+
+      await expect(coordinate('/empty-project', makeConfig(), undefined, deps))
+        .rejects.toThrow(CoordinatorAbortError);
+    });
+
+    it('aborts when file discovery throws (file limit exceeded)', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockRejectedValue(
+          new Error('Discovered 100 files, which exceeds maxFilesPerRun limit of 50.'),
+        ),
+      });
+
+      await expect(coordinate('/project', makeConfig(), undefined, deps))
+        .rejects.toThrow(CoordinatorAbortError);
+    });
+
+    it('does not call dispatchFiles after abort', async () => {
+      const dispatchFiles = vi.fn();
+      const deps = makeDeps({
+        checkPrerequisites: vi.fn().mockResolvedValue({
+          allPassed: false,
+          checks: [{ id: 'WEAVER_SCHEMA', passed: false, message: 'Missing' }],
+        }),
+        dispatchFiles,
+      });
+
+      try {
+        await coordinate('/project', makeConfig(), undefined, deps);
+      } catch {
+        // expected
+      }
+
+      expect(dispatchFiles).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('degrade and continue — isolated failures do not stop the run', () => {
+    it('returns RunResult even when some files fail', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/good.js', '/project/bad.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/good.js'),
+          makeFailedResult('/project/bad.js'),
+        ]),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.filesSucceeded).toBe(1);
+      expect(result.filesFailed).toBe(1);
+      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.warnings.some(w => w.includes('bad.js'))).toBe(true);
+    });
+
+    it('still calls finalizeResults after file failures', async () => {
+      const finalizeResults = vi.fn().mockResolvedValue(undefined);
+      const deps = makeDeps({
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeFailedResult('/project/bad.js'),
+        ]),
+        finalizeResults,
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(finalizeResults).toHaveBeenCalled();
+    });
+
+    it('reports finalize failures as warnings without stopping the run', async () => {
+      const deps = makeDeps({
+        finalizeResults: vi.fn().mockRejectedValue(new Error('npm install timed out')),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('npm install timed out'))).toBe(true);
+      expect(result.filesProcessed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('degrade and warn — non-essential steps', () => {
+    it('reports finalization errors in warnings but returns valid RunResult', async () => {
+      const deps = makeDeps({
+        finalizeResults: vi.fn().mockRejectedValue(
+          new Error('SDK init file could not be written'),
+        ),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.sdkInitUpdated).toBe(false);
+      expect(result.warnings.some(w => w.includes('SDK init file'))).toBe(true);
+    });
+  });
+
+  describe('cost ceiling computation', () => {
+    it('computes cost ceiling from discovered files', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js', '/project/c.js']),
+        statFile: vi.fn()
+          .mockResolvedValueOnce({ size: 100 })
+          .mockResolvedValueOnce({ size: 200 })
+          .mockResolvedValueOnce({ size: 300 }),
+      });
+      const config = makeConfig({ maxTokensPerFile: 80000 });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.costCeiling.fileCount).toBe(3);
+      expect(result.costCeiling.totalFileSizeBytes).toBe(600);
+      // maxTokensCeiling = fileCount * maxTokensPerFile (Phase 4 placeholder)
+      expect(result.costCeiling.maxTokensCeiling).toBe(3 * 80000);
+    });
+
+    it('fires onCostCeilingReady callback with ceiling', async () => {
+      const onCostCeilingReady = vi.fn().mockReturnValue(true);
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 500 }),
+      });
+
+      await coordinate('/project', makeConfig(), { onCostCeilingReady }, deps);
+
+      expect(onCostCeilingReady).toHaveBeenCalledTimes(1);
+      expect(onCostCeilingReady).toHaveBeenCalledWith(
+        expect.objectContaining({ fileCount: 1, totalFileSizeBytes: 500 }),
+      );
+    });
+
+    it('skips onCostCeilingReady when confirmEstimate is false', async () => {
+      const onCostCeilingReady = vi.fn();
+      const deps = makeDeps();
+
+      await coordinate('/project', makeConfig({ confirmEstimate: false }), { onCostCeilingReady }, deps);
+
+      expect(onCostCeilingReady).not.toHaveBeenCalled();
+    });
+
+    it('proceeds when onCostCeilingReady returns undefined (void)', async () => {
+      const deps = makeDeps();
+      const callbacks: CoordinatorCallbacks = {
+        onCostCeilingReady: () => undefined,
+      };
+
+      const result = await coordinate('/project', makeConfig(), callbacks, deps);
+
+      expect(result.filesProcessed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('callback wiring', () => {
+    it('fires onRunComplete after all files are processed', async () => {
+      const onRunComplete = vi.fn();
+      const fileResults = [makeSuccessResult('/project/a.js')];
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue(fileResults),
+      });
+
+      await coordinate('/project', makeConfig(), { onRunComplete }, deps);
+
+      expect(onRunComplete).toHaveBeenCalledTimes(1);
+      expect(onRunComplete).toHaveBeenCalledWith(fileResults);
+    });
+
+    it('passes callbacks through to dispatchFiles', async () => {
+      const onFileStart = vi.fn();
+      const onFileComplete = vi.fn();
+      const dispatchFiles = vi.fn().mockResolvedValue([]);
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles,
+      });
+
+      await coordinate(
+        '/project',
+        makeConfig(),
+        { onFileStart, onFileComplete },
+        deps,
+      );
+
+      expect(dispatchFiles).toHaveBeenCalledWith(
+        expect.any(Array),
+        '/project',
+        expect.any(Object),
+        expect.objectContaining({ onFileStart, onFileComplete }),
+        undefined,
+      );
+    });
+
+    it('fires onRunComplete even when no files were processed (all skipped)', async () => {
+      const onRunComplete = vi.fn();
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([{
+          path: '/project/a.js',
+          status: 'skipped',
+          spansAdded: 0,
+          librariesNeeded: [],
+          schemaExtensions: [],
+          attributesCreated: 0,
+          validationAttempts: 0,
+          validationStrategyUsed: 'initial-generation',
+          reason: 'Already instrumented',
+          tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+        }]),
+      });
+
+      await coordinate('/project', makeConfig(), { onRunComplete }, deps);
+
+      expect(onRunComplete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('no silent failures', () => {
+    it('all file failures appear in warnings', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeFailedResult('/project/a.js', { reason: 'Timeout' }),
+          makeFailedResult('/project/b.js', { reason: 'Parse error' }),
+        ]),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings).toHaveLength(2);
+      expect(result.warnings[0]).toContain('a.js');
+      expect(result.warnings[1]).toContain('b.js');
+    });
+
+    it('RunResult is fully populated for a successful run', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockResolvedValue({ size: 1234 }),
+        dispatchFiles: vi.fn().mockResolvedValue([makeSuccessResult('/project/a.js')]),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.fileResults).toHaveLength(1);
+      expect(result.costCeiling.fileCount).toBe(1);
+      expect(result.costCeiling.totalFileSizeBytes).toBe(1234);
+      expect(result.actualTokenUsage.inputTokens).toBeGreaterThan(0);
+      expect(result.filesProcessed).toBe(1);
+      expect(result.filesSucceeded).toBe(1);
+      expect(result.filesFailed).toBe(0);
+      expect(result.filesSkipped).toBe(0);
+    });
+
+    it('stat failures produce warnings but do not abort', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+        statFile: vi.fn().mockRejectedValue(new Error('EACCES')),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      // Should still process files, but with zero-sized cost ceiling
+      expect(result.costCeiling.totalFileSizeBytes).toBe(0);
+      expect(result.filesProcessed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('happy path end-to-end', () => {
+    it('wires discovery → dispatch → aggregate → finalize in order', async () => {
+      const callOrder: string[] = [];
+
+      const deps = makeDeps({
+        checkPrerequisites: vi.fn().mockImplementation(async () => {
+          callOrder.push('prerequisites');
+          return { allPassed: true, checks: [] };
+        }),
+        discoverFiles: vi.fn().mockImplementation(async () => {
+          callOrder.push('discover');
+          return ['/project/a.js'];
+        }),
+        statFile: vi.fn().mockImplementation(async () => {
+          callOrder.push('stat');
+          return { size: 100 };
+        }),
+        dispatchFiles: vi.fn().mockImplementation(async (paths: string[]) => {
+          callOrder.push('dispatch');
+          return paths.map(p => makeSuccessResult(p));
+        }),
+        finalizeResults: vi.fn().mockImplementation(async () => {
+          callOrder.push('finalize');
+        }),
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(callOrder).toEqual(['prerequisites', 'discover', 'stat', 'dispatch', 'finalize']);
+    });
+
+    it('passes sdkInitFile and dependencyStrategy to finalizeResults', async () => {
+      const finalizeResults = vi.fn().mockResolvedValue(undefined);
+      const deps = makeDeps({ finalizeResults });
+      const config = makeConfig({
+        sdkInitFile: 'src/tracing.js',
+        dependencyStrategy: 'peerDependencies',
+      });
+
+      await coordinate('/project', config, undefined, deps);
+
+      expect(finalizeResults).toHaveBeenCalledWith(
+        expect.any(Object),       // runResult
+        '/project',               // projectDir
+        '/project/src/tracing.js', // sdkInitFilePath (resolved to absolute)
+        'peerDependencies',       // dependencyStrategy
+        undefined,                // finalizeDeps
+      );
+    });
+  });
+});
