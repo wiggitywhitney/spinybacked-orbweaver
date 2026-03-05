@@ -137,12 +137,23 @@ function hasIsRecordingGuard(setAttrCall: CallExpression): boolean {
     if (Node.isIfStatement(current)) {
       const condition = current.getExpression().getText();
       if (condition.includes('.isRecording()') || condition.includes('isRecording()')) {
-        // Verify the setAttribute call is in the 'then' branch, not the 'else' branch
+        // Detect negated conditions like if (!span.isRecording())
+        const isNegated = /!\s*\w+\.?isRecording\(\)/.test(condition);
         const thenStatement = current.getThenStatement();
+        const elseStatement = current.getElseStatement();
+
+        if (isNegated) {
+          // Negated: then-branch is the UNguarded path, else-branch is guarded
+          if (elseStatement && isDescendantOf(setAttrCall, elseStatement)) {
+            return true;
+          }
+          return false;
+        }
+
+        // Non-negated: then-branch is the guarded path
         if (thenStatement && isDescendantOf(setAttrCall, thenStatement)) {
           return true;
         }
-        // In the else branch — not actually guarded
         return false;
       }
     }
