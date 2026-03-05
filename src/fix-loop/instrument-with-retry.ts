@@ -130,11 +130,13 @@ function buildFailureHint(validation: ValidationResult): string | undefined {
 
 /**
  * Determine the validation strategy for a given attempt number.
- * Attempt 1 = initial-generation. The last attempt = fresh-regeneration.
- * All intermediate attempts = multi-turn-fix.
+ * Attempt 1 = initial-generation.
+ * If maxAttempts > 2, the last attempt = fresh-regeneration.
+ * All other retry attempts = multi-turn-fix.
  *
  * Per spec: "The last fix attempt is always a fresh regeneration;
  * all preceding fix attempts are multi-turn."
+ * (When maxAttempts <= 2, there is no fresh-regeneration attempt.)
  *
  * @param attemptNumber - 1-based attempt number
  * @param maxAttempts - Total number of attempts (1 + maxFixAttempts)
@@ -335,7 +337,12 @@ async function executeRetryLoop(
             attempt, strategy, errorProgression, lastOutput,
           );
         }
-        // Not yet on fresh regen — skip ahead to it (loop continues naturally to attempt 3)
+        // Not yet on fresh regen — jump to the final attempt (fresh-regeneration)
+        if (maxAttempts > 2) {
+          previousValidation = validation;
+          attempt = maxAttempts - 1;
+          continue;
+        }
       }
     }
 
