@@ -1,0 +1,67 @@
+// ABOUTME: Type definitions for the coordinator module.
+// ABOUTME: Defines CoordinatorCallbacks, CostCeiling, RunResult, and injectable dependencies for dispatch.
+
+import type { FileResult } from '../fix-loop/types.ts';
+import type { TokenUsage } from '../agent/schema.ts';
+import type { AgentConfig } from '../config/schema.ts';
+
+/**
+ * Pre-run cost ceiling calculation.
+ * Computed after file discovery, before any agent processing.
+ */
+export interface CostCeiling {
+  fileCount: number;
+  totalFileSizeBytes: number;
+  maxTokensCeiling: number;
+}
+
+/**
+ * Callback hooks for coordinator progress reporting.
+ * The coordinator never writes to stdout/stderr directly — all user-facing
+ * output flows through callbacks or the final RunResult.
+ */
+export interface CoordinatorCallbacks {
+  onCostCeilingReady?: (ceiling: CostCeiling) => boolean | void;
+  onFileStart?: (path: string, index: number, total: number) => void;
+  onFileComplete?: (result: FileResult, index: number, total: number) => void;
+  onSchemaCheckpoint?: (filesProcessed: number, passed: boolean) => boolean | void;
+  onValidationStart?: () => void;
+  onValidationComplete?: (passed: boolean, complianceReport: string) => void;
+  onRunComplete?: (results: FileResult[]) => void;
+}
+
+/**
+ * Complete result of a full instrumentation run.
+ * This is what the coordinator returns and interfaces consume.
+ */
+export interface RunResult {
+  fileResults: FileResult[];
+  costCeiling: CostCeiling;
+  actualTokenUsage: TokenUsage;
+  filesProcessed: number;
+  filesSucceeded: number;
+  filesFailed: number;
+  filesSkipped: number;
+  librariesInstalled: string[];
+  libraryInstallFailures: string[];
+  sdkInitUpdated: boolean;
+  schemaDiff?: string;
+  schemaHashStart?: string;
+  schemaHashEnd?: string;
+  endOfRunValidation?: string;
+  warnings: string[];
+}
+
+/**
+ * Injectable dependencies for the dispatch loop.
+ * Production code uses real implementations; tests inject mocks.
+ */
+export interface DispatchFilesDeps {
+  resolveSchema: (projectDir: string, schemaPath: string) => Promise<object>;
+  instrumentWithRetry: (
+    filePath: string,
+    originalCode: string,
+    resolvedSchema: object,
+    config: AgentConfig,
+  ) => Promise<FileResult>;
+}

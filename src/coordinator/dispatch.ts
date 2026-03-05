@@ -1,7 +1,12 @@
 // ABOUTME: Dispatch logic for the coordinator — sequential file processing and pre-dispatch checks.
-// ABOUTME: Includes fast already-instrumented detection (string matching, no AST) and skipped result construction.
+// ABOUTME: Includes already-instrumented detection, schema re-resolution per file, and sequential dispatch to instrumentWithRetry.
 
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
+import type { CoordinatorCallbacks, DispatchFilesDeps } from './types.ts';
 
 /**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
@@ -61,4 +66,91 @@ export function buildSkippedResult(filePath: string): FileResult {
       cacheReadInputTokens: 0,
     },
   };
+}
+
+/**
+ * Resolve the Weaver schema by running `weaver registry resolve`.
+ * Called before each file to get a fresh schema resolution.
+ *
+ * @param projectDir - Absolute path to the project root
+ * @param schemaPath - Relative path to the schema directory (from config)
+ * @returns Parsed JSON output from weaver registry resolve
+ */
+export function resolveSchema(projectDir: string, schemaPath: string): Promise<object> {
+  const fullSchemaPath = resolve(projectDir, schemaPath);
+  const output = execFileSync('weaver', ['registry', 'resolve', '-r', fullSchemaPath, '--format', 'json'], {
+    cwd: projectDir,
+    timeout: 30000,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  return Promise.resolve(JSON.parse(output.toString()) as object);
+}
+
+/** Options for dispatchFiles, primarily for dependency injection in tests. */
+interface DispatchFilesOptions {
+  deps?: DispatchFilesDeps;
+}
+
+/**
+ * Process discovered files sequentially: read, check instrumentation, resolve schema, dispatch.
+ *
+ * For each file:
+ * 1. Fire onFileStart callback
+ * 2. Read file content
+ * 3. Check if already instrumented → return skipped result
+ * 4. Resolve schema via weaver registry resolve (fresh per file)
+ * 5. Call instrumentWithRetry
+ * 6. Fire onFileComplete callback
+ *
+ * Failed files are already reverted by the fix loop — the coordinator does not
+ * need its own revert mechanism.
+ *
+ * @param filePaths - Absolute paths to discovered JS files (from discoverFiles)
+ * @param projectDir - Absolute path to the project root
+ * @param config - Validated agent configuration
+ * @param callbacks - Optional progress callbacks
+ * @param options - Optional dependency injection for testing
+ * @returns Array of FileResult objects, one per file, in processing order
+ */
+export async function dispatchFiles(
+  filePaths: string[],
+  projectDir: string,
+  config: AgentConfig,
+  callbacks?: CoordinatorCallbacks,
+  options?: DispatchFilesOptions,
+): Promise<FileResult[]> {
+  const resolveFn = options?.deps?.resolveSchema ?? resolveSchema;
+  const instrumentFn = options?.deps?.instrumentWithRetry
+    ?? (await import('../fix-loop/index.ts')).instrumentWithRetry;
+
+  const total = filePaths.length;
+  const results: FileResult[] = [];
+
+  for (let i = 0; i < total; i++) {
+    const filePath = filePaths[i];
+
+    callbacks?.onFileStart?.(filePath, i, total);
+
+    // Read file content
+    const fileContent = await readFile(filePath, 'utf-8');
+
+    // Check if already instrumented — skip without schema resolution or LLM call
+    if (isAlreadyInstrumented(fileContent)) {
+      const skipped = buildSkippedResult(filePath);
+      results.push(skipped);
+      callbacks?.onFileComplete?.(skipped, i, total);
+      continue;
+    }
+
+    // Resolve schema fresh for each file
+    const schema = await resolveFn(projectDir, config.schemaPath);
+
+    // Dispatch to fix loop
+    const result = await instrumentFn(filePath, fileContent, schema, config);
+    results.push(result);
+
+    callbacks?.onFileComplete?.(result, i, total);
+  }
+
+  return results;
 }
