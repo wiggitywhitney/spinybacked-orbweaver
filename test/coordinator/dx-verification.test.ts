@@ -140,6 +140,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     ]),
     finalizeResults: vi.fn().mockResolvedValue(undefined),
     writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
+    resolveSchemaForHash: vi.fn().mockResolvedValue({ groups: [] }),
     ...overrides,
   };
 }
@@ -300,13 +301,13 @@ describe('DX Verification — Milestone 8', () => {
       }
     });
 
-    it('Phase 5 fields are undefined (not populated until Phase 5)', async () => {
+    it('Phase 5 schema hash fields are populated, remaining Phase 5 fields are undefined', async () => {
       const deps = makeDeps();
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
+      expect(result.schemaHashStart).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.schemaHashEnd).toMatch(/^[0-9a-f]{64}$/);
       expect(result.schemaDiff).toBeUndefined();
-      expect(result.schemaHashStart).toBeUndefined();
-      expect(result.schemaHashEnd).toBeUndefined();
       expect(result.endOfRunValidation).toBeUndefined();
     });
 

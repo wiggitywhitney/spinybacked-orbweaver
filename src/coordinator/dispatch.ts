@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, DispatchFilesDeps } from './types.ts';
+import { computeSchemaHash } from './schema-hash.ts';
 
 /**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
@@ -159,9 +160,12 @@ export async function dispatchFiles(
 
       // Resolve schema fresh for each file
       const schema = await resolveFn(projectDir, config.schemaPath);
+      const schemaHash = computeSchemaHash(schema as object);
 
       // Dispatch to fix loop
       const result = await instrumentFn(filePath, fileContent, schema, config);
+      result.schemaHashBefore = schemaHash;
+      result.schemaHashAfter = schemaHash;
       results.push(result);
 
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }

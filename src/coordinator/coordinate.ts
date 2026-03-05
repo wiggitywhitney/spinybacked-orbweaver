@@ -18,6 +18,8 @@ import {
 } from './schema-extensions.ts';
 import type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
 import type { FinalizeDeps } from './aggregate.ts';
+import { computeSchemaHash } from './schema-hash.ts';
+import { resolveSchema as defaultResolveSchema } from './dispatch.ts';
 
 /**
  * Error thrown when the coordinator must abort the run.
@@ -58,6 +60,7 @@ export interface CoordinateDeps {
     registryDir: string,
     extensions: string[],
   ) => Promise<WriteSchemaExtensionsResult>;
+  resolveSchemaForHash: (projectDir: string, schemaPath: string) => Promise<object>;
 }
 
 /**
@@ -116,7 +119,9 @@ export async function coordinate(
   const dispatch = deps?.dispatchFiles ?? defaultDispatchFiles;
   const finalize = deps?.finalizeResults ?? defaultFinalizeResults;
   const writeExtensions = deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
+  const resolveForHash = deps?.resolveSchemaForHash ?? defaultResolveSchema;
   const schemaExtensionWarnings: string[] = [];
+  const schemaHashWarnings: string[] = [];
 
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;
@@ -170,6 +175,16 @@ export async function coordinate(
     }
   }
 
+  // Step 4b: Compute schema hash at run start (degrade and warn on failure)
+  let schemaHashStart: string | undefined;
+  try {
+    const startSchema = await resolveForHash(projectDir, config.schemaPath);
+    schemaHashStart = computeSchemaHash(startSchema);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    schemaHashWarnings.push(`Schema hash computation at run start failed (degraded): ${message}`);
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   let fileResults: FileResult[];
   try {
@@ -191,9 +206,24 @@ export async function coordinate(
     }
   }
 
+  // Step 5c: Compute schema hash at run end (after extensions written)
+  let schemaHashEnd: string | undefined;
+  if (schemaHashStart !== undefined) {
+    try {
+      const endSchema = await resolveForHash(projectDir, config.schemaPath);
+      schemaHashEnd = computeSchemaHash(endSchema);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaHashWarnings.push(`Schema hash computation at run end failed (degraded): ${message}`);
+    }
+  }
+
   // Step 6: Aggregate results
   const runResult = aggregateResults(fileResults, costCeiling);
+  runResult.schemaHashStart = schemaHashStart;
+  runResult.schemaHashEnd = schemaHashEnd;
   runResult.warnings.push(...schemaExtensionWarnings);
+  runResult.warnings.push(...schemaHashWarnings);
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {

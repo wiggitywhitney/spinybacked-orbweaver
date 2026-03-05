@@ -84,6 +84,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     }),
     finalizeResults: vi.fn().mockResolvedValue(undefined),
     writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
+    resolveSchemaForHash: vi.fn().mockResolvedValue({ groups: [] }),
     ...overrides,
   };
 }

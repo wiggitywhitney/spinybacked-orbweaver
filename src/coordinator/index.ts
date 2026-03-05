@@ -14,4 +14,5 @@ export { installDependencies } from './dependencies.ts';
 export type { DependencyInstallResult, InstallDeps } from './dependencies.ts';
 export { writeSchemaExtensions, collectSchemaExtensions, extractNamespacePrefix } from './schema-extensions.ts';
 export type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
+export { computeSchemaHash } from './schema-hash.ts';
 export type { CoordinatorCallbacks, CostCeiling, RunResult, DispatchFilesDeps } from './types.ts';

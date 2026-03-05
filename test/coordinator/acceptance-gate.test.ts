@@ -148,6 +148,7 @@ function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
       });
     },
     writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
+    resolveSchemaForHash: vi.fn().mockResolvedValue(resolvedSchema),
   };
 }
 
