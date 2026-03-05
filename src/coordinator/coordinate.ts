@@ -184,7 +184,7 @@ export async function coordinate(
   if (config.confirmEstimate && callbacks?.onCostCeilingReady) {
     let proceed: boolean | void;
     try {
-      proceed = callbacks.onCostCeilingReady(costCeiling);
+      proceed = await callbacks.onCostCeilingReady(costCeiling);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new CoordinatorAbortError(`onCostCeilingReady callback failed: ${message}`);

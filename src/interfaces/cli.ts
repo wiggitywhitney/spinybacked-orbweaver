@@ -10,6 +10,7 @@ import { createProductionDeps } from './init-deps.ts';
 import { handleInstrument } from './instrument-handler.ts';
 import { loadConfig } from '../config/loader.ts';
 import { coordinate } from '../coordinator/coordinate.ts';
+import { promptConfirm } from './prompt.ts';
 
 /**
  * Build the yargs parser with all commands and options.
@@ -115,6 +116,7 @@ export async function run(args?: string[]) {
         coordinate,
         stderr: (msg: string) => console.error(msg),
         stdout: (msg: string) => console.log(msg),
+        promptConfirm,
       },
     );
     process.exit(result.exitCode);

@@ -21,7 +21,7 @@ export interface CostCeiling {
  * output flows through callbacks or the final RunResult.
  */
 export interface CoordinatorCallbacks {
-  onCostCeilingReady?: (ceiling: CostCeiling) => boolean | void;
+  onCostCeilingReady?: (ceiling: CostCeiling) => boolean | void | Promise<boolean | void>;
   onFileStart?: (path: string, index: number, total: number) => void;
   onFileComplete?: (result: FileResult, index: number, total: number) => void;
   onSchemaCheckpoint?: (filesProcessed: number, passed: boolean) => boolean | void;

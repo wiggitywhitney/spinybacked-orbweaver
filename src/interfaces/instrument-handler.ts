@@ -30,6 +30,7 @@ export interface InstrumentDeps {
   ) => Promise<RunResult>;
   stderr: (msg: string) => void;
   stdout: (msg: string) => void;
+  promptConfirm: (message: string) => Promise<boolean>;
 }
 
 /** Result of the instrument command. */
@@ -87,8 +88,37 @@ export async function handleInstrument(
     confirmEstimate: !options.yes,
   };
 
-  // Build callbacks (placeholder — Milestone 4 adds real progress output)
-  const callbacks: CoordinatorCallbacks = {};
+  // Build callbacks: wire coordinator progress to stderr output
+  const callbacks: CoordinatorCallbacks = {
+    onCostCeilingReady: async (ceiling) => {
+      deps.stderr(
+        `Cost ceiling: ${ceiling.fileCount} files, ` +
+        `${ceiling.totalFileSizeBytes} bytes, ` +
+        `${ceiling.maxTokensCeiling} max tokens`,
+      );
+      if (!options.yes) {
+        const proceed = await deps.promptConfirm('Proceed? [y/N] ');
+        if (!proceed) return false;
+      }
+    },
+    onFileStart: (path, index, total) => {
+      deps.stderr(`Processing file ${index + 1} of ${total}: ${path}`);
+    },
+    onFileComplete: (result, _index, _total) => {
+      const statusLabel = result.status === 'success'
+        ? `success (${result.spansAdded} spans)`
+        : result.status;
+      deps.stderr(`  ${result.path}: ${statusLabel}`);
+    },
+    onRunComplete: (results) => {
+      const succeeded = results.filter(r => r.status === 'success').length;
+      const failed = results.filter(r => r.status === 'failed').length;
+      const skipped = results.filter(r => r.status === 'skipped').length;
+      deps.stderr(
+        `\nRun complete: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped`,
+      );
+    },
+  };
 
   // Run coordinator
   let runResult: RunResult;
