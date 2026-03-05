@@ -115,6 +115,7 @@ export function validateDiffChanges(diffJson: string): DiffValidationResult {
 
   const violations: string[] = [];
   for (const change of changes) {
+    if (!change || typeof change !== 'object') continue;
     if (change.change_type !== 'added') {
       violations.push(
         `Schema integrity violation: existing definition "${change.name}" was ${change.change_type}` +

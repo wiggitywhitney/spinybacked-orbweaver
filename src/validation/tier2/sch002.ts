@@ -37,7 +37,7 @@ export function checkAttributeKeysMatchRegistry(
   const usedAttributes = extractAttributeKeys(code);
 
   if (usedAttributes.length === 0) {
-    return pass(filePath, 'No setAttribute calls found to check.');
+    return pass(filePath, 'No setAttribute/setAttributes calls found to check.');
   }
 
   const issues: AttributeKeyIssue[] = [];
