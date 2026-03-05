@@ -57,6 +57,8 @@ export interface ValidationConfig {
   >;
   /** Weaver registry directory. Required if enableWeaver is true. */
   registryPath?: string;
+  /** Registry span definitions for COV-005 domain attribute checks. */
+  registryDefinitions?: import('./tier2/cov005.ts').RegistrySpanDefinition[];
 }
 
 /**

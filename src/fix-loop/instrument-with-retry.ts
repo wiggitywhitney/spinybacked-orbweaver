@@ -85,8 +85,8 @@ function summarizeErrors(validation: ValidationResult): string {
 }
 
 /**
- * Build a default ValidationConfig from AgentConfig for Phase 2 consumption.
- * Enables CDQ-001 and NDS-003 as blocking checks by default.
+ * Build a default ValidationConfig from AgentConfig.
+ * Enables all Tier 2 checks with their default blocking/advisory settings.
  */
 function buildValidationConfig(config: AgentConfig) {
   return {
@@ -94,6 +94,9 @@ function buildValidationConfig(config: AgentConfig) {
     tier2Checks: {
       'CDQ-001': { enabled: true, blocking: true },
       'NDS-003': { enabled: true, blocking: true },
+      'COV-002': { enabled: true, blocking: true },
+      'RST-001': { enabled: true, blocking: false },
+      'COV-005': { enabled: true, blocking: false },
     },
   };
 }

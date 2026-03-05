@@ -7,6 +7,18 @@ import { checkLint } from './tier1/lint.ts';
 import { checkWeaver } from './tier1/weaver.ts';
 import { checkSpansClosed } from './tier2/cdq001.ts';
 import { checkNonInstrumentationDiff } from './tier2/nds003.ts';
+import { checkOutboundCallSpans } from './tier2/cov002.ts';
+import { checkUtilityFunctionSpans } from './tier2/rst001.ts';
+import { checkDomainAttributes } from './tier2/cov005.ts';
+import type { RegistrySpanDefinition } from './tier2/cov005.ts';
+import { checkEntryPointSpans } from './tier2/cov001.ts';
+import { checkErrorVisibility } from './tier2/cov003.ts';
+import { checkAsyncOperationSpans } from './tier2/cov004.ts';
+import { checkAutoInstrumentationPreference } from './tier2/cov006.ts';
+import { checkTrivialAccessorSpans } from './tier2/rst002.ts';
+import { checkThinWrapperSpans } from './tier2/rst003.ts';
+import { checkInternalDetailSpans } from './tier2/rst004.ts';
+import { checkIsRecordingGuard } from './tier2/cdq006.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -71,6 +83,73 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     const nds003 = checkNonInstrumentationDiff(originalCode, instrumentedCode, filePath);
     nds003.blocking = config.tier2Checks['NDS-003'].blocking;
     tier2Results.push(nds003);
+  }
+
+  if (config.tier2Checks['COV-002']?.enabled) {
+    const cov002 = checkOutboundCallSpans(instrumentedCode, filePath);
+    cov002.blocking = config.tier2Checks['COV-002'].blocking;
+    tier2Results.push(cov002);
+  }
+
+  if (config.tier2Checks['RST-001']?.enabled) {
+    const rst001 = checkUtilityFunctionSpans(instrumentedCode, filePath);
+    rst001.blocking = config.tier2Checks['RST-001'].blocking;
+    tier2Results.push(rst001);
+  }
+
+  if (config.tier2Checks['COV-005']?.enabled) {
+    const registry: RegistrySpanDefinition[] = config.registryDefinitions ?? [];
+    const cov005 = checkDomainAttributes(instrumentedCode, filePath, registry);
+    cov005.blocking = config.tier2Checks['COV-005'].blocking;
+    tier2Results.push(cov005);
+  }
+
+  if (config.tier2Checks['COV-001']?.enabled) {
+    const cov001 = checkEntryPointSpans(instrumentedCode, filePath);
+    cov001.blocking = config.tier2Checks['COV-001'].blocking;
+    tier2Results.push(cov001);
+  }
+
+  if (config.tier2Checks['COV-003']?.enabled) {
+    const cov003 = checkErrorVisibility(instrumentedCode, filePath);
+    cov003.blocking = config.tier2Checks['COV-003'].blocking;
+    tier2Results.push(cov003);
+  }
+
+  if (config.tier2Checks['COV-004']?.enabled) {
+    const cov004 = checkAsyncOperationSpans(instrumentedCode, filePath);
+    cov004.blocking = config.tier2Checks['COV-004'].blocking;
+    tier2Results.push(cov004);
+  }
+
+  if (config.tier2Checks['COV-006']?.enabled) {
+    const cov006 = checkAutoInstrumentationPreference(instrumentedCode, filePath);
+    cov006.blocking = config.tier2Checks['COV-006'].blocking;
+    tier2Results.push(cov006);
+  }
+
+  if (config.tier2Checks['RST-002']?.enabled) {
+    const rst002 = checkTrivialAccessorSpans(instrumentedCode, filePath);
+    rst002.blocking = config.tier2Checks['RST-002'].blocking;
+    tier2Results.push(rst002);
+  }
+
+  if (config.tier2Checks['RST-003']?.enabled) {
+    const rst003 = checkThinWrapperSpans(instrumentedCode, filePath);
+    rst003.blocking = config.tier2Checks['RST-003'].blocking;
+    tier2Results.push(rst003);
+  }
+
+  if (config.tier2Checks['RST-004']?.enabled) {
+    const rst004 = checkInternalDetailSpans(instrumentedCode, filePath);
+    rst004.blocking = config.tier2Checks['RST-004'].blocking;
+    tier2Results.push(rst004);
+  }
+
+  if (config.tier2Checks['CDQ-006']?.enabled) {
+    const cdq006 = checkIsRecordingGuard(instrumentedCode, filePath);
+    cdq006.blocking = config.tier2Checks['CDQ-006'].blocking;
+    tier2Results.push(cdq006);
   }
 
   return buildResult(tier1Results, tier2Results);
