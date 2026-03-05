@@ -19,6 +19,10 @@ import { checkTrivialAccessorSpans } from './tier2/rst002.ts';
 import { checkThinWrapperSpans } from './tier2/rst003.ts';
 import { checkInternalDetailSpans } from './tier2/rst004.ts';
 import { checkIsRecordingGuard } from './tier2/cdq006.ts';
+import { checkSpanNamesMatchRegistry } from './tier2/sch001.ts';
+import { checkAttributeKeysMatchRegistry } from './tier2/sch002.ts';
+import { checkAttributeValuesConformToTypes } from './tier2/sch003.ts';
+import { checkNoRedundantSchemaEntries } from './tier2/sch004.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -150,6 +154,30 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     const cdq006 = checkIsRecordingGuard(instrumentedCode, filePath);
     cdq006.blocking = config.tier2Checks['CDQ-006'].blocking;
     tier2Results.push(cdq006);
+  }
+
+  if (config.tier2Checks['SCH-001']?.enabled && config.resolvedSchema) {
+    const sch001 = checkSpanNamesMatchRegistry(instrumentedCode, filePath, config.resolvedSchema);
+    sch001.blocking = config.tier2Checks['SCH-001'].blocking;
+    tier2Results.push(sch001);
+  }
+
+  if (config.tier2Checks['SCH-002']?.enabled && config.resolvedSchema) {
+    const sch002 = checkAttributeKeysMatchRegistry(instrumentedCode, filePath, config.resolvedSchema);
+    sch002.blocking = config.tier2Checks['SCH-002'].blocking;
+    tier2Results.push(sch002);
+  }
+
+  if (config.tier2Checks['SCH-003']?.enabled && config.resolvedSchema) {
+    const sch003 = checkAttributeValuesConformToTypes(instrumentedCode, filePath, config.resolvedSchema);
+    sch003.blocking = config.tier2Checks['SCH-003'].blocking;
+    tier2Results.push(sch003);
+  }
+
+  if (config.tier2Checks['SCH-004']?.enabled && config.resolvedSchema) {
+    const sch004 = checkNoRedundantSchemaEntries(instrumentedCode, filePath, config.resolvedSchema);
+    sch004.blocking = config.tier2Checks['SCH-004'].blocking;
+    tier2Results.push(sch004);
   }
 
   return buildResult(tier1Results, tier2Results);
