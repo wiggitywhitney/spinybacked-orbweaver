@@ -6,8 +6,10 @@ import { resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
-import type { CoordinatorCallbacks, DispatchFilesDeps } from './types.ts';
+import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';
 import { computeSchemaHash } from './schema-hash.ts';
+import { runSchemaCheckpoint } from './schema-checkpoint.ts';
+import type { SchemaCheckpointDeps } from './schema-checkpoint.ts';
 
 /**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
@@ -100,6 +102,8 @@ export async function resolveSchema(projectDir: string, schemaPath: string): Pro
 /** Options for dispatchFiles, primarily for dependency injection in tests. */
 interface DispatchFilesOptions {
   deps?: DispatchFilesDeps;
+  checkpoint?: DispatchCheckpointConfig;
+  checkpointDeps?: SchemaCheckpointDeps;
 }
 
 /**
@@ -136,8 +140,14 @@ export async function dispatchFiles(
 
   const total = filePaths.length;
   const results: FileResult[] = [];
+  const interval = config.schemaCheckpointInterval;
+  const checkpointConfig = options?.checkpoint;
+  let filesSinceLastCheckpoint = 0;
+  let stoppedByCheckpoint = false;
 
   for (let i = 0; i < total; i++) {
+    if (stoppedByCheckpoint) break;
+
     const filePath = filePaths[i];
 
     try {
@@ -167,8 +177,44 @@ export async function dispatchFiles(
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);
+      filesSinceLastCheckpoint++;
 
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
+
+      // Run periodic schema checkpoint after every N processed (non-skipped) files
+      if (checkpointConfig && interval > 0 && filesSinceLastCheckpoint >= interval) {
+        try {
+          const checkpointResult = await runSchemaCheckpoint(
+            checkpointConfig.registryDir,
+            checkpointConfig.baselineSnapshotDir,
+            filePath,
+            filesSinceLastCheckpoint,
+            options?.checkpointDeps,
+          );
+
+          // Fire callback
+          let shouldContinue: boolean | void = undefined;
+          try {
+            shouldContinue = callbacks?.onSchemaCheckpoint?.(i + 1, checkpointResult.passed);
+          } catch {
+            // Callback failure must not abort dispatch
+          }
+
+          if (checkpointResult.passed) {
+            filesSinceLastCheckpoint = 0;
+          } else {
+            // On failure: stop unless callback explicitly returns true
+            if (shouldContinue !== true) {
+              stoppedByCheckpoint = true;
+            } else {
+              // Continue despite failure — don't reset counter
+              filesSinceLastCheckpoint = 0;
+            }
+          }
+        } catch {
+          // Checkpoint infrastructure failure — degrade, don't stop
+        }
+      }
     } catch (error) {
       const failed: FileResult = {
         path: filePath,

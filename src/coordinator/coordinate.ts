@@ -211,7 +211,12 @@ export async function coordinate(
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   let fileResults: FileResult[];
   try {
-    fileResults = await dispatch(filePaths, projectDir, config, callbacks, undefined);
+    fileResults = await dispatch(filePaths, projectDir, config, callbacks, {
+      checkpoint: {
+        registryDir,
+        baselineSnapshotDir: baselineSnapshotDir,
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Clean up baseline snapshot before aborting

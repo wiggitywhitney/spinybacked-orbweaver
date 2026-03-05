@@ -15,4 +15,6 @@ export type { DependencyInstallResult, InstallDeps } from './dependencies.ts';
 export { writeSchemaExtensions, collectSchemaExtensions, extractNamespacePrefix } from './schema-extensions.ts';
 export type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
 export { computeSchemaHash } from './schema-hash.ts';
-export type { CoordinatorCallbacks, CostCeiling, RunResult, DispatchFilesDeps } from './types.ts';
+export { runSchemaCheckpoint } from './schema-checkpoint.ts';
+export type { SchemaCheckpointResult, SchemaCheckpointDeps } from './schema-checkpoint.ts';
+export type { CoordinatorCallbacks, CostCeiling, RunResult, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';

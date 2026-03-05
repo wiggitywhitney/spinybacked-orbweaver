@@ -353,7 +353,11 @@ describe('coordinate', () => {
         '/project',
         expect.any(Object),
         expect.objectContaining({ onFileStart, onFileComplete }),
-        undefined,
+        expect.objectContaining({
+          checkpoint: expect.objectContaining({
+            registryDir: expect.any(String),
+          }),
+        }),
       );
     });
 
