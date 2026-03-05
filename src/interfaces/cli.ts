@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // ABOUTME: CLI entry point for the orb command.
-// ABOUTME: Defines init and instrument commands with yargs, wired to placeholder handlers.
+// ABOUTME: Defines init and instrument commands with yargs, wired to real handlers.
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import { resolve } from 'node:path';
+import { handleInit } from './init-handler.ts';
+import { createProductionDeps } from './init-deps.ts';
 
 /**
  * Build the yargs parser with all commands and options.
@@ -70,7 +73,7 @@ export function buildParser() {
 
 /**
  * Run the CLI. Called when the script is executed directly.
- * Handlers are placeholders — wired to real implementations in later milestones.
+ * Init is wired to real handlers; instrument is a placeholder for Milestone 3.
  */
 export async function run(args?: string[]) {
   const parser = buildParser();
@@ -79,8 +82,18 @@ export async function run(args?: string[]) {
   const command = argv._[0];
 
   if (command === 'init') {
-    console.error('orb init: not yet implemented');
-    process.exit(1);
+    const projectDir = resolve(process.cwd());
+    const yes = Boolean(argv.yes);
+    const deps = createProductionDeps(projectDir);
+    const result = await handleInit({ projectDir, yes }, deps);
+
+    if (!result.success) {
+      for (const error of result.errors) {
+        console.error(error);
+      }
+      process.exit(1);
+    }
+    process.exit(0);
   } else if (command === 'instrument') {
     console.error('orb instrument: not yet implemented');
     process.exit(1);
