@@ -7,6 +7,9 @@ import { hideBin } from 'yargs/helpers';
 import { resolve } from 'node:path';
 import { handleInit } from './init-handler.ts';
 import { createProductionDeps } from './init-deps.ts';
+import { handleInstrument } from './instrument-handler.ts';
+import { loadConfig } from '../config/loader.ts';
+import { coordinate } from '../coordinator/coordinate.ts';
 
 /**
  * Build the yargs parser with all commands and options.
@@ -73,7 +76,7 @@ export function buildParser() {
 
 /**
  * Run the CLI. Called when the script is executed directly.
- * Init is wired to real handlers; instrument is a placeholder for Milestone 3.
+ * Init and instrument commands are wired to real handlers.
  */
 export async function run(args?: string[]) {
   const parser = buildParser();
@@ -95,8 +98,26 @@ export async function run(args?: string[]) {
     }
     process.exit(0);
   } else if (command === 'instrument') {
-    console.error('orb instrument: not yet implemented');
-    process.exit(1);
+    const targetPath = String(argv.path);
+    const projectDir = resolve(process.cwd());
+    const result = await handleInstrument(
+      {
+        path: targetPath,
+        projectDir,
+        dryRun: Boolean(argv.dryRun),
+        output: (argv.output as 'text' | 'json') ?? 'text',
+        yes: Boolean(argv.yes),
+        verbose: Boolean(argv.verbose),
+        debug: Boolean(argv.debug),
+      },
+      {
+        loadConfig,
+        coordinate,
+        stderr: (msg: string) => console.error(msg),
+        stdout: (msg: string) => console.log(msg),
+      },
+    );
+    process.exit(result.exitCode);
   }
 }
 
