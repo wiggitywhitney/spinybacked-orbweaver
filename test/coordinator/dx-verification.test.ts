@@ -145,6 +145,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
     computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
+    readFileForAdvisory: vi.fn().mockResolvedValue(''),
     ...overrides,
   };
 }

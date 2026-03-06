@@ -49,6 +49,8 @@ export interface RunResult {
   schemaHashStart?: string;
   schemaHashEnd?: string;
   endOfRunValidation?: string;
+  /** Run-level advisory findings from cross-file checks (e.g., CDQ-008 tracer naming). */
+  runLevelAdvisory: import('../validation/types.ts').CheckResult[];
   warnings: string[];
 }
 

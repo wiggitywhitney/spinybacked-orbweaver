@@ -28,6 +28,9 @@ import {
 import type { SchemaDiffResult } from './schema-diff.ts';
 import { runLiveCheck as defaultRunLiveCheck } from './live-check.ts';
 import type { LiveCheckResult, LiveCheckDeps } from './live-check.ts';
+import { readFile } from 'node:fs/promises';
+import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
+import type { FileContent } from '../validation/tier2/cdq008.ts';
 
 /**
  * Error thrown when the coordinator must abort the run.
@@ -79,6 +82,7 @@ export interface CoordinateDeps {
     deps?: LiveCheckDeps,
     callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
   ) => Promise<LiveCheckResult>;
+  readFileForAdvisory: (filePath: string) => Promise<string>;
 }
 
 /**
@@ -142,6 +146,7 @@ export async function coordinate(
   const cleanupSnap = deps?.cleanupSnapshot ?? defaultCleanupSnapshot;
   const schemaDiff = deps?.computeSchemaDiff ?? defaultComputeSchemaDiff;
   const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
+  const readForAdvisory = deps?.readFileForAdvisory ?? ((fp: string) => readFile(fp, 'utf-8'));
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
@@ -295,6 +300,33 @@ export async function coordinate(
   runResult.warnings.push(...schemaExtensionWarnings);
   runResult.warnings.push(...schemaHashWarnings);
   runResult.warnings.push(...schemaDiffWarnings);
+
+  // Step 6b: Run CDQ-008 cross-file tracer naming check (advisory, degrade and warn)
+  const successfulFiles = fileResults.filter(r => r.status === 'success');
+  if (successfulFiles.length > 0) {
+    const readResults = await Promise.allSettled(
+      successfulFiles.map(async (r) => ({
+        filePath: r.path,
+        code: await readForAdvisory(r.path),
+      })),
+    );
+
+    const fileContents: FileContent[] = [];
+    for (const [index, readResult] of readResults.entries()) {
+      if (readResult.status === 'fulfilled') {
+        fileContents.push(readResult.value);
+      } else {
+        const filePath = successfulFiles[index]?.path ?? '<unknown>';
+        const message = readResult.reason instanceof Error ? readResult.reason.message : String(readResult.reason);
+        runResult.warnings.push(`CDQ-008 file read failed (degraded): ${filePath} — ${message}`);
+      }
+    }
+
+    if (fileContents.length > 0) {
+      const cdq008Result = checkTracerNamingConsistency(fileContents);
+      runResult.runLevelAdvisory.push(cdq008Result);
+    }
+  }
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {
