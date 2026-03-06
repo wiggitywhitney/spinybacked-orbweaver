@@ -68,6 +68,7 @@ function makeRunResult(overrides: Partial<RunResult> = {}): RunResult {
     librariesInstalled: ['@opentelemetry/instrumentation-http'],
     libraryInstallFailures: [],
     sdkInitUpdated: true,
+    runLevelAdvisory: [],
     warnings: [],
     ...overrides,
   };

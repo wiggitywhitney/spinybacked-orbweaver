@@ -180,7 +180,20 @@ Ports 4317 and 4320 are hardcoded. Weaver supports `--otlp-grpc-port` and `--adm
 - Enable parallel test runs
 - Simplify integration testing
 
+## Test Fixture Strategy
+
+All integration tests share a common fixture directory: `test/fixtures/weaver-registry/`. Contents:
+
+- `valid/` — A minimal valid Weaver registry based on the Minimum Viable Schema Example from the spec (lines 1381-1513). Used by Milestones 4, 6, 7, 9.
+- `valid-modified/` — A copy of `valid/` with known additions (new attributes, new span). Used as the "current" registry in diff tests (Milestone 5). The specific changes should be documented in a `README.md` inside the directory so tests can assert against known change types.
+- `invalid/` — A registry with a broken reference (e.g., an attribute referencing a non-existent group). Used for negative tests in Milestone 4.
+- `baseline/` — A snapshot copy of `valid/` for `--baseline-registry` flag in diff and checkpoint tests.
+
+Each milestone references the fixture it needs; no milestone creates its own ad-hoc fixtures.
+
 ## Milestones
+
+Additional bugs discovered when running against real Weaver output should be fixed in the milestone where they surface, not deferred to a later milestone.
 
 - [ ] **Milestone 1: Fix diff JSON parser** — Update `validateDiffChanges()` in `schema-diff.ts` to match real Weaver output structure: iterate over `changes.registry_attributes`, `changes.spans`, `changes.metrics`, `changes.events`, `changes.resources`, reading the `type` field (not `change_type`). Write an integration test that runs `weaver registry diff` against a real registry with known changes and verifies the parser handles the output correctly. Also update `computeSchemaDiff()` to pass the parsed categories through to callers. Verify: (a) parser handles real Weaver JSON, (b) extend-only enforcement detects `renamed`/`obsoleted`/`removed` changes, (c) old mock-based tests removed.
 
@@ -212,7 +225,7 @@ Ports 4317 and 4320 are hardcoded. Weaver supports `--otlp-grpc-port` and `--adm
 
 - Weaver MCP server integration (spec documents this as post-PoC — CLI is the correct approach for the reasons documented in the spec and PRD #5)
 - `weaver registry search` (deprecated since v0.20.0)
-- `weaver registry emit` (useful for testing but not needed for core functionality)
+- `weaver registry emit` (not needed for core functionality; may be used as test infrastructure for live-check integration tests — see Open Question #2)
 - `weaver registry infer` (experimental — infers schema from OTLP messages)
 - Changes to the agent prompt or instrumentation logic
 - Multi-file coordination fixes (PRD #31)
@@ -222,9 +235,10 @@ Ports 4317 and 4320 are hardcoded. Weaver supports `--otlp-grpc-port` and `--adm
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-03-06 | CI installs Weaver via installer script from GitHub Releases | Fastest option for CI. Weaver provides an installer script: `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh \| sh`. Docker and cargo install are slower and add unnecessary complexity. |
 
 ## Open Questions
 
 1. **`registry resolve` replacement**: Need to verify whether `registry generate` or `registry package` produces equivalent JSON output. If the output format differs significantly, the migration may require updating schema parsing throughout the codebase. Research needed before Milestone 3 implementation.
-2. **CI Weaver installation**: The GitHub Actions workflow needs to install Weaver. Options: (a) download pre-built binary from GitHub Releases, (b) use Docker `otel/weaver`, (c) cargo install. Option (a) is fastest for CI.
-3. **live-check integration test infrastructure**: Milestone 8 needs a minimal Node.js app that emits OTLP telemetry. Options: (a) tiny script using `@opentelemetry/sdk-trace-node` + `@opentelemetry/exporter-trace-otlp-grpc`, (b) use `weaver registry emit` to generate test telemetry. Option (b) avoids adding test-only npm dependencies.
+2. **live-check integration test infrastructure**: Milestone 8 needs a minimal Node.js app that emits OTLP telemetry. Options: (a) tiny script using `@opentelemetry/sdk-trace-node` + `@opentelemetry/exporter-trace-otlp-grpc`, (b) use `weaver registry emit` to generate test telemetry. Option (b) avoids adding test-only npm dependencies and uses a tool already installed (Weaver). Recommended: option (b).
+3. **`--future` flag for `registry check`**: The Weaver CLI Reference notes that `--future` enables latest validation rules and is recommended for new registries. The codebase doesn't use it. Consider adding it as a configurable option (default off) in a follow-up — not in scope for this PRD but worth tracking.

@@ -74,6 +74,7 @@ function makeRunResult(overrides: Partial<RunResult> = {}): RunResult {
     schemaHashStart: 'abc123',
     schemaHashEnd: 'def456',
     endOfRunValidation: 'All checks passed',
+    runLevelAdvisory: [],
     warnings: ['File src/utils.js skipped: pure utility functions'],
     ...overrides,
   };

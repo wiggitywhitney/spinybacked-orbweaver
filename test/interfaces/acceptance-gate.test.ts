@@ -66,6 +66,7 @@ function makeRunResult(overrides: Partial<RunResult> = {}): RunResult {
     librariesInstalled: [],
     libraryInstallFailures: [],
     sdkInitUpdated: false,
+    runLevelAdvisory: [],
     warnings: [],
     ...overrides,
   };
