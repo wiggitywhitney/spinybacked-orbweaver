@@ -199,6 +199,9 @@ export async function dispatchFiles(
         }
         try {
           await writeExtFn(registryDir, [...accumulatedExtensions]);
+          // Re-resolve schema after writing extensions to compute meaningful schemaHashAfter
+          const updatedSchema = await resolveFn(projectDir, config.schemaPath);
+          result.schemaHashAfter = computeSchemaHash(updatedSchema as object);
         } catch {
           // Extension write failure is degrade-and-warn — don't stop dispatch
         }

@@ -309,6 +309,153 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     expect(writeSchemaExtensions).not.toHaveBeenCalled();
   });
 
+  describe('schemaHashBefore/After correctness', () => {
+    it('sets schemaHashAfter different from schemaHashBefore when extensions are written', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const schemaV1 = { attributes: { original: true } };
+      const schemaV2 = { attributes: { original: true, added: true } };
+
+      const resolveSchema = vi.fn()
+        .mockResolvedValueOnce(schemaV1)  // Before file A
+        .mockResolvedValueOnce(schemaV2); // After writing file A's extensions
+
+      const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const instrumentWithRetry = vi.fn().mockResolvedValue(
+        makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+      );
+
+      const deps = makeDeps({ resolveSchema, instrumentWithRetry, writeSchemaExtensions });
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+      });
+
+      expect(results[0].schemaHashBefore).toBeDefined();
+      expect(results[0].schemaHashAfter).toBeDefined();
+      expect(results[0].schemaHashBefore).not.toBe(results[0].schemaHashAfter);
+    });
+
+    it('keeps schemaHashBefore equal to schemaHashAfter when no extensions are written', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const schema = { attributes: { original: true } };
+      const resolveSchema = vi.fn().mockResolvedValue(schema);
+
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const instrumentWithRetry = vi.fn().mockResolvedValue(
+        makeSuccessResult(file1, { schemaExtensions: [] }),
+      );
+
+      const deps = makeDeps({ resolveSchema, instrumentWithRetry, writeSchemaExtensions });
+      const config = makeConfig();
+
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir: join(tmpDir, 'registry'),
+      });
+
+      expect(results[0].schemaHashBefore).toBeDefined();
+      expect(results[0].schemaHashBefore).toBe(results[0].schemaHashAfter);
+    });
+
+    it('maintains continuous hash chain across files: file A schemaHashAfter = file B schemaHashBefore', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+      const file2 = await createFile('b.js', 'function b() {}');
+
+      const schemaV1 = { attributes: { v: 1 } };
+      const schemaV2 = { attributes: { v: 1, added: true } };
+
+      // Call sequence: resolve for A (v1), resolve after A writes (v2), resolve for B (v2)
+      const resolveSchema = vi.fn()
+        .mockResolvedValueOnce(schemaV1)  // Before file A
+        .mockResolvedValueOnce(schemaV2)  // After file A's extensions written
+        .mockResolvedValueOnce(schemaV2); // Before file B (same state — nothing changed on disk between)
+
+      const ext1 = '- id: myapp.a.attr\n  type: string';
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const instrumentWithRetry = vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(file1, { schemaExtensions: [ext1] }))
+        .mockResolvedValueOnce(makeSuccessResult(file2, { schemaExtensions: [] }));
+
+      const deps = makeDeps({ resolveSchema, instrumentWithRetry, writeSchemaExtensions });
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+      });
+
+      // File A's after hash should equal file B's before hash
+      expect(results[0].schemaHashAfter).toBe(results[1].schemaHashBefore);
+      // File A's hashes should differ (it wrote extensions)
+      expect(results[0].schemaHashBefore).not.toBe(results[0].schemaHashAfter);
+      // File B's hashes should be equal (no extensions)
+      expect(results[1].schemaHashBefore).toBe(results[1].schemaHashAfter);
+    });
+
+    it('re-resolves schema after writing extensions to compute schemaHashAfter', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const schemaV1 = { attributes: { original: true } };
+      const schemaV2 = { attributes: { original: true, extended: true } };
+
+      const resolveSchema = vi.fn()
+        .mockResolvedValueOnce(schemaV1)
+        .mockResolvedValueOnce(schemaV2);
+
+      const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const instrumentWithRetry = vi.fn().mockResolvedValue(
+        makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+      );
+
+      const deps = makeDeps({ resolveSchema, instrumentWithRetry, writeSchemaExtensions });
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+      });
+
+      // resolveSchema called twice: once before instrumentation, once after extension write
+      expect(resolveSchema).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not re-resolve schema when extension write fails', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const schema = { attributes: { original: true } };
+      const resolveSchema = vi.fn().mockResolvedValue(schema);
+
+      const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+      const writeSchemaExtensions = vi.fn().mockRejectedValue(new Error('Write failed'));
+      const instrumentWithRetry = vi.fn().mockResolvedValue(
+        makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+      );
+
+      const deps = makeDeps({ resolveSchema, instrumentWithRetry, writeSchemaExtensions });
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+      });
+
+      // resolveSchema called only once (before instrumentation) — not after failed write
+      expect(resolveSchema).toHaveBeenCalledTimes(1);
+      // Hashes should be equal since re-resolve didn't happen
+      expect(results[0].schemaHashBefore).toBe(results[0].schemaHashAfter);
+    });
+  });
+
   it('continues dispatch when writeSchemaExtensions throws', async () => {
     const file1 = await createFile('a.js', 'function a() {}');
     const file2 = await createFile('b.js', 'function b() {}');
