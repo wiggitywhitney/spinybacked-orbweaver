@@ -16,9 +16,19 @@ import type { LiveCheckOptions } from '../../src/coordinator/live-check.ts';
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry');
 const VALID_REGISTRY = join(FIXTURES_DIR, 'valid');
 
-/** Use high ports to avoid collisions with running services. */
-const TEST_GRPC_PORT = 14317;
-const TEST_ADMIN_PORT = 14320;
+/** Each test gets unique ports to avoid TIME_WAIT races between tests in CI. */
+const PORTS = {
+  portCheck:  { grpc: 14317, admin: 14320 },
+  workflow:   { grpc: 14327, admin: 14330 },
+  callbacks:  { grpc: 14337, admin: 14340 },
+  testFail:   { grpc: 14347, admin: 14350 },
+  timeout:    { grpc: 14357, admin: 14360 },
+  conflictG:  { grpc: 14367, admin: 14370 },
+  conflictA:  { grpc: 14377, admin: 14380 },
+  direct1:    { grpc: 14387, admin: 14390 },
+  direct2:    { grpc: 14397, admin: 14400 },
+  direct3:    { grpc: 14407, admin: 14410 },
+};
 
 /** Helper: bind a port and return the server for cleanup. */
 function bindPort(port: number): Promise<Server> {
@@ -54,33 +64,33 @@ describe('checkPortAvailable — real port integration', () => {
   });
 
   it('returns available: true for a free port', async () => {
-    const result = await checkPortAvailable(TEST_GRPC_PORT);
+    const result = await checkPortAvailable(PORTS.portCheck.grpc);
 
     expect(result.available).toBe(true);
-    expect(result.port).toBe(TEST_GRPC_PORT);
+    expect(result.port).toBe(PORTS.portCheck.grpc);
     expect(result.pid).toBeUndefined();
   });
 
   it('returns available: false when port is occupied', async () => {
-    server = await bindPort(TEST_GRPC_PORT);
+    server = await bindPort(PORTS.portCheck.grpc);
 
-    const result = await checkPortAvailable(TEST_GRPC_PORT);
+    const result = await checkPortAvailable(PORTS.portCheck.grpc);
 
     expect(result.available).toBe(false);
-    expect(result.port).toBe(TEST_GRPC_PORT);
+    expect(result.port).toBe(PORTS.portCheck.grpc);
     expect(result.pid).toBeTypeOf('number');
     expect(result.pid).toBeGreaterThan(0);
   });
 
   it('identifies the blocking process name', async () => {
-    server = await bindPort(TEST_ADMIN_PORT);
+    server = await bindPort(PORTS.portCheck.admin);
 
-    const result = await checkPortAvailable(TEST_ADMIN_PORT);
+    const result = await checkPortAvailable(PORTS.portCheck.admin);
 
     expect(result.available).toBe(false);
-    // Process name should be 'node' since we're binding from Node.js
+    // Process name varies by platform: 'node' on macOS, 'MainThread' on Linux
     expect(result.processName).toBeDefined();
-    expect(result.processName).toMatch(/node/i);
+    expect(result.processName!.length).toBeGreaterThan(0);
   });
 });
 
@@ -106,12 +116,12 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
   });
 
   it('skips with port conflict warning when gRPC port is occupied', async () => {
-    const server = await bindPort(TEST_GRPC_PORT);
+    const server = await bindPort(PORTS.conflictG.grpc);
 
     try {
       const options: LiveCheckOptions = {
-        grpcPort: TEST_GRPC_PORT,
-        adminPort: TEST_ADMIN_PORT,
+        grpcPort: PORTS.conflictG.grpc,
+        adminPort: PORTS.conflictG.admin,
       };
       const result = await runLiveCheck(
         VALID_REGISTRY, process.cwd(), 'echo test', options,
@@ -119,7 +129,7 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
 
       expect(result.skipped).toBe(true);
       expect(result.warnings.length).toBeGreaterThan(0);
-      expect(result.warnings[0]).toContain(String(TEST_GRPC_PORT));
+      expect(result.warnings[0]).toContain(String(PORTS.conflictG.grpc));
       expect(result.warnings[0]).toContain('in use');
     } finally {
       await closeServer(server);
@@ -127,12 +137,12 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
   });
 
   it('skips with port conflict warning when admin port is occupied', async () => {
-    const server = await bindPort(TEST_ADMIN_PORT);
+    const server = await bindPort(PORTS.conflictA.admin);
 
     try {
       const options: LiveCheckOptions = {
-        grpcPort: TEST_GRPC_PORT,
-        adminPort: TEST_ADMIN_PORT,
+        grpcPort: PORTS.conflictA.grpc,
+        adminPort: PORTS.conflictA.admin,
       };
       const result = await runLiveCheck(
         VALID_REGISTRY, process.cwd(), 'echo test', options,
@@ -140,7 +150,7 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
 
       expect(result.skipped).toBe(true);
       expect(result.warnings.length).toBeGreaterThan(0);
-      expect(result.warnings[0]).toContain(String(TEST_ADMIN_PORT));
+      expect(result.warnings[0]).toContain(String(PORTS.conflictA.admin));
       expect(result.warnings[0]).toContain('in use');
     } finally {
       await closeServer(server);
@@ -148,10 +158,10 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
   });
 
   it('runs full workflow: start Weaver, emit telemetry, stop, get report', async () => {
-    const emitCommand = `weaver registry emit -r ${VALID_REGISTRY} --endpoint http://localhost:${TEST_GRPC_PORT}`;
+    const emitCommand = `weaver registry emit -r ${VALID_REGISTRY} --endpoint http://localhost:${PORTS.workflow.grpc}`;
     const options: LiveCheckOptions = {
-      grpcPort: TEST_GRPC_PORT,
-      adminPort: TEST_ADMIN_PORT,
+      grpcPort: PORTS.workflow.grpc,
+      adminPort: PORTS.workflow.admin,
       inactivityTimeoutSeconds: 60,
     };
 
@@ -167,10 +177,10 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
   });
 
   it('fires callbacks during the workflow', async () => {
-    const emitCommand = `weaver registry emit -r ${VALID_REGISTRY} --endpoint http://localhost:${TEST_GRPC_PORT}`;
+    const emitCommand = `weaver registry emit -r ${VALID_REGISTRY} --endpoint http://localhost:${PORTS.callbacks.grpc}`;
     const options: LiveCheckOptions = {
-      grpcPort: TEST_GRPC_PORT,
-      adminPort: TEST_ADMIN_PORT,
+      grpcPort: PORTS.callbacks.grpc,
+      adminPort: PORTS.callbacks.admin,
       inactivityTimeoutSeconds: 60,
     };
 
@@ -198,8 +208,8 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
 
   it('reports test failure when test command exits with non-zero', async () => {
     const options: LiveCheckOptions = {
-      grpcPort: TEST_GRPC_PORT,
-      adminPort: TEST_ADMIN_PORT,
+      grpcPort: PORTS.testFail.grpc,
+      adminPort: PORTS.testFail.admin,
       inactivityTimeoutSeconds: 60,
     };
 
@@ -214,8 +224,8 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
 
   it('handles Weaver auto-stop due to inactivity timeout', async () => {
     const options: LiveCheckOptions = {
-      grpcPort: TEST_GRPC_PORT,
-      adminPort: TEST_ADMIN_PORT,
+      grpcPort: PORTS.timeout.grpc,
+      adminPort: PORTS.timeout.admin,
       inactivityTimeoutSeconds: 2,
     };
 
@@ -251,15 +261,15 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     weaverProc = spawn('weaver', [
       'registry', 'live-check', '-r', VALID_REGISTRY,
       '--inactivity-timeout', '30',
-      '--otlp-grpc-port', String(TEST_GRPC_PORT),
-      '--admin-port', String(TEST_ADMIN_PORT),
+      '--otlp-grpc-port', String(PORTS.direct1.grpc),
+      '--admin-port', String(PORTS.direct1.admin),
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
     // Wait for Weaver to start
     await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Verify admin port is responsive
-    const response = await fetch(`http://localhost:${TEST_ADMIN_PORT}/stop`, {
+    const response = await fetch(`http://localhost:${PORTS.direct1.admin}/stop`, {
       method: 'POST',
       signal: AbortSignal.timeout(5000),
     });
@@ -276,8 +286,8 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     weaverProc = spawn('weaver', [
       'registry', 'live-check', '-r', VALID_REGISTRY,
       '--inactivity-timeout', '2',
-      '--otlp-grpc-port', String(TEST_GRPC_PORT),
-      '--admin-port', String(TEST_ADMIN_PORT),
+      '--otlp-grpc-port', String(PORTS.direct2.grpc),
+      '--admin-port', String(PORTS.direct2.admin),
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
     // Wait for Weaver to auto-stop (2s inactivity + some buffer)
@@ -294,8 +304,8 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     weaverProc = spawn('weaver', [
       'registry', 'live-check', '-r', VALID_REGISTRY,
       '--inactivity-timeout', '30',
-      '--otlp-grpc-port', String(TEST_GRPC_PORT),
-      '--admin-port', String(TEST_ADMIN_PORT),
+      '--otlp-grpc-port', String(PORTS.direct3.grpc),
+      '--admin-port', String(PORTS.direct3.admin),
       '--format', 'json',
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
@@ -305,7 +315,7 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     // Emit test telemetry
     const emitProc = spawn('weaver', [
       'registry', 'emit', '-r', VALID_REGISTRY,
-      '--endpoint', `http://localhost:${TEST_GRPC_PORT}`,
+      '--endpoint', `http://localhost:${PORTS.direct3.grpc}`,
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
     await waitForExit(emitProc);
 
@@ -313,7 +323,7 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Stop Weaver and get compliance report
-    const response = await fetch(`http://localhost:${TEST_ADMIN_PORT}/stop`, {
+    const response = await fetch(`http://localhost:${PORTS.direct3.admin}/stop`, {
       method: 'POST',
       signal: AbortSignal.timeout(5000),
     });
