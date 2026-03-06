@@ -67,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Meaningful `schemaHashBefore`/`schemaHashAfter`: schema re-resolved after writing extensions so `schemaHashAfter` reflects the updated registry state; hash chain is continuous across files (file N's `schemaHashAfter` equals file N+1's `schemaHashBefore`)
 - Schema state revert on file failure: snapshot `agent-extensions.yaml` before each file, restore on-disk file and in-memory accumulator when file fails (both `status: 'failed'` and pre-dispatch exceptions)
 - Removed redundant post-dispatch batch schema extension write from `coordinate()` — extensions are now written per-file in dispatch, with rejection and failure warnings surfaced via `schemaExtensionWarnings` array passed through dispatch options
+- Per-file extension validation: `weaver registry check` runs after each file's extensions are written; invalid extensions are rolled back (snapshot restore + accumulator revert) and the file is marked failed before the next file processes
 
 ### Fixed
 

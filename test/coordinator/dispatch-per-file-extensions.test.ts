@@ -91,6 +91,7 @@ function makeDeps(overrides: Partial<DispatchFilesDeps> = {}): DispatchFilesDeps
     instrumentWithRetry: vi.fn().mockImplementation(async (filePath: string) => {
       return makeSuccessResult(filePath);
     }),
+    validateRegistry: vi.fn().mockResolvedValue({ passed: true }),
     ...overrides,
   };
 }
@@ -512,6 +513,249 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     expect(schemaExtensionWarnings[0]).toContain('Weaver write failed');
   });
 
+  describe('per-file extension validation (registry check after write)', () => {
+    it('calls validateRegistry after writing extensions for a successful file', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const validateRegistry = vi.fn().mockResolvedValue({ passed: true });
+      const deps = makeDeps({
+        instrumentWithRetry: vi.fn().mockResolvedValue(
+          makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+        ),
+        writeSchemaExtensions,
+        validateRegistry,
+      });
+
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+      });
+
+      expect(validateRegistry).toHaveBeenCalledTimes(1);
+      expect(validateRegistry).toHaveBeenCalledWith(registryDir);
+    });
+
+    it('does not call validateRegistry when no extensions are written', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const validateRegistry = vi.fn().mockResolvedValue({ passed: true });
+      const deps = makeDeps({
+        instrumentWithRetry: vi.fn().mockResolvedValue(
+          makeSuccessResult(file1, { schemaExtensions: [] }),
+        ),
+        validateRegistry,
+      });
+
+      const config = makeConfig();
+
+      await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir: join(tmpDir, 'registry'),
+      });
+
+      expect(validateRegistry).not.toHaveBeenCalled();
+    });
+
+    it('rolls back extensions and marks file failed when validation fails', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const validateRegistry = vi.fn().mockResolvedValue({
+        passed: false,
+        error: 'Invalid attribute type "doubble"',
+      });
+      const restoreExtensionsFile = vi.fn().mockResolvedValue(undefined);
+      const snapshotExtensionsFile = vi.fn().mockResolvedValue('previous-content');
+      const deps = makeDeps({
+        instrumentWithRetry: vi.fn().mockResolvedValue(
+          makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+        ),
+        writeSchemaExtensions,
+        validateRegistry,
+        snapshotExtensionsFile,
+        restoreExtensionsFile,
+      });
+
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+      const schemaExtensionWarnings: string[] = [];
+
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+        schemaExtensionWarnings,
+      });
+
+      // File should be marked as failed
+      expect(results[0].status).toBe('failed');
+      expect(results[0].reason).toContain('Schema validation failed');
+
+      // Extensions should be rolled back
+      expect(restoreExtensionsFile).toHaveBeenCalledWith(registryDir, 'previous-content');
+
+      // Warning should be added
+      expect(schemaExtensionWarnings).toHaveLength(1);
+      expect(schemaExtensionWarnings[0]).toContain('Schema validation failed');
+    });
+
+    it('keeps schemaHashBefore equal to schemaHashAfter when validation fails', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const schema = { attributes: { original: true } };
+      const resolveSchema = vi.fn().mockResolvedValue(schema);
+
+      const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const validateRegistry = vi.fn().mockResolvedValue({
+        passed: false,
+        error: 'Invalid schema',
+      });
+      const snapshotExtensionsFile = vi.fn().mockResolvedValue(null);
+      const restoreExtensionsFile = vi.fn().mockResolvedValue(undefined);
+      const deps = makeDeps({
+        resolveSchema,
+        instrumentWithRetry: vi.fn().mockResolvedValue(
+          makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+        ),
+        writeSchemaExtensions,
+        validateRegistry,
+        snapshotExtensionsFile,
+        restoreExtensionsFile,
+      });
+
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+      });
+
+      // No re-resolve should happen — hashes should be equal
+      expect(results[0].schemaHashBefore).toBe(results[0].schemaHashAfter);
+      // resolveSchema called only once (before instrumentation)
+      expect(resolveSchema).toHaveBeenCalledTimes(1);
+    });
+
+    it('reverts in-memory accumulator when validation fails so subsequent files have clean state', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+      const file2 = await createFile('b.js', 'function b() {}');
+
+      const ext1 = '- id: myapp.bad.attr\n  type: doubble';
+      const ext2 = '- id: myapp.good.attr\n  type: string';
+
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const validateRegistry = vi.fn()
+        .mockResolvedValueOnce({ passed: false, error: 'Invalid type' })
+        .mockResolvedValueOnce({ passed: true });
+      const snapshotExtensionsFile = vi.fn().mockResolvedValue(null);
+      const restoreExtensionsFile = vi.fn().mockResolvedValue(undefined);
+
+      const instrumentWithRetry = vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(file1, { schemaExtensions: [ext1] }))
+        .mockResolvedValueOnce(makeSuccessResult(file2, { schemaExtensions: [ext2] }));
+
+      const deps = makeDeps({
+        instrumentWithRetry,
+        writeSchemaExtensions,
+        validateRegistry,
+        snapshotExtensionsFile,
+        restoreExtensionsFile,
+      });
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+      });
+
+      // File 1 failed validation, file 2 succeeded
+      expect(results[0].status).toBe('failed');
+      expect(results[1].status).toBe('success');
+
+      // File 2's write should NOT include file 1's rejected extension
+      expect(writeSchemaExtensions).toHaveBeenNthCalledWith(2, registryDir, [ext2]);
+    });
+
+    it('continues dispatch when validateRegistry throws', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+      const file2 = await createFile('b.js', 'function b() {}');
+
+      const ext1 = '- id: myapp.a.attr\n  type: string';
+      const ext2 = '- id: myapp.b.attr\n  type: int';
+
+      const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+      const validateRegistry = vi.fn()
+        .mockRejectedValueOnce(new Error('Weaver CLI crashed'))
+        .mockResolvedValueOnce({ passed: true });
+
+      const instrumentWithRetry = vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(file1, { schemaExtensions: [ext1] }))
+        .mockResolvedValueOnce(makeSuccessResult(file2, { schemaExtensions: [ext2] }));
+
+      const snapshotExtensionsFile = vi.fn().mockResolvedValue(null);
+      const restoreExtensionsFile = vi.fn().mockResolvedValue(undefined);
+
+      const deps = makeDeps({
+        instrumentWithRetry,
+        writeSchemaExtensions,
+        validateRegistry,
+        snapshotExtensionsFile,
+        restoreExtensionsFile,
+      });
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+      const schemaExtensionWarnings: string[] = [];
+
+      const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+        schemaExtensionWarnings,
+      });
+
+      // File 1 should be marked failed (validation infrastructure failure = treat as failed)
+      expect(results[0].status).toBe('failed');
+      // File 2 should succeed
+      expect(results[1].status).toBe('success');
+      // Warning should be added for the crash
+      expect(schemaExtensionWarnings.some(w => w.includes('Weaver CLI crashed'))).toBe(true);
+    });
+
+    it('does not call validateRegistry when writeSchemaExtensions throws', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+      const writeSchemaExtensions = vi.fn().mockRejectedValue(new Error('Write failed'));
+      const validateRegistry = vi.fn().mockResolvedValue({ passed: true });
+      const deps = makeDeps({
+        instrumentWithRetry: vi.fn().mockResolvedValue(
+          makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+        ),
+        writeSchemaExtensions,
+        validateRegistry,
+      });
+
+      const config = makeConfig();
+      const registryDir = join(tmpDir, 'registry');
+
+      await dispatchFiles([file1], tmpDir, config, undefined, {
+        deps,
+        registryDir,
+        schemaExtensionWarnings: [],
+      });
+
+      // Validation should not be called if write failed
+      expect(validateRegistry).not.toHaveBeenCalled();
+    });
+  });
+
   it('continues dispatch when writeSchemaExtensions throws', async () => {
     const file1 = await createFile('a.js', 'function a() {}');
     const file2 = await createFile('b.js', 'function b() {}');
@@ -527,7 +771,8 @@ describe('dispatchFiles — per-file schema extension writing', () => {
       .mockResolvedValueOnce(makeSuccessResult(file1, { schemaExtensions: [ext1] }))
       .mockResolvedValueOnce(makeSuccessResult(file2, { schemaExtensions: [ext2] }));
 
-    const deps = makeDeps({ instrumentWithRetry, writeSchemaExtensions });
+    const validateRegistry = vi.fn().mockResolvedValue({ passed: true });
+    const deps = makeDeps({ instrumentWithRetry, writeSchemaExtensions, validateRegistry });
     const config = makeConfig();
     const registryDir = join(tmpDir, 'registry');
 

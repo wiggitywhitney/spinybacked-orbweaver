@@ -73,6 +73,7 @@ export interface DispatchFilesDeps {
   ) => Promise<WriteSchemaExtensionsResult>;
   snapshotExtensionsFile?: (registryDir: string) => Promise<string | null>;
   restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
+  validateRegistry?: (registryDir: string) => Promise<{ passed: boolean; error?: string }>;
 }
 
 /**

@@ -17,6 +17,35 @@ import {
 } from './schema-extensions.ts';
 
 /**
+ * Validate the Weaver registry by running `weaver registry check`.
+ * Used as the default implementation for per-file extension validation.
+ *
+ * @param registryDir - Absolute path to the Weaver registry directory
+ * @returns Whether the check passed, with error details on failure
+ */
+export async function validateRegistryCheck(
+  registryDir: string,
+): Promise<{ passed: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      'weaver',
+      ['registry', 'check', '-r', registryDir],
+      { timeout: 30000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const stdoutStr = stdout?.trim() ?? '';
+          const stderrStr = stderr?.trim() ?? '';
+          const cliOutput = [stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message;
+          resolve({ passed: false, error: cliOutput });
+          return;
+        }
+        resolve({ passed: true });
+      },
+    );
+  });
+}
+
+/**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
  * Uses string/regex matching (no AST) for speed — this is an optimization
  * to avoid wasting LLM calls on obviously-instrumented files.
@@ -149,6 +178,7 @@ export async function dispatchFiles(
   const writeExtFn = options?.deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
   const snapshotFn = options?.deps?.snapshotExtensionsFile ?? defaultSnapshotExtensionsFile;
   const restoreFn = options?.deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
+  const validateFn = options?.deps?.validateRegistry ?? validateRegistryCheck;
   const registryDir = options?.registryDir;
   const extWarnings = options?.schemaExtensionWarnings;
 
@@ -227,9 +257,47 @@ export async function dispatchFiles(
               `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
             );
           }
-          // Re-resolve schema after writing extensions to compute meaningful schemaHashAfter
-          const updatedSchema = await resolveFn(projectDir, config.schemaPath);
-          result.schemaHashAfter = computeSchemaHash(updatedSchema as object);
+
+          // Validate the registry after writing extensions
+          let validationFailed = false;
+          try {
+            const validation = await validateFn(registryDir);
+            if (!validation.passed) {
+              validationFailed = true;
+              const errMsg = validation.error ?? 'unknown validation error';
+              result.status = 'failed';
+              result.reason = `Schema validation failed after writing extensions: ${errMsg}`;
+              if (extWarnings) {
+                extWarnings.push(`Schema validation failed for ${filePath}: ${errMsg}`);
+              }
+            }
+          } catch (validateErr) {
+            validationFailed = true;
+            const errMsg = validateErr instanceof Error ? validateErr.message : String(validateErr);
+            result.status = 'failed';
+            result.reason = `Schema validation infrastructure error: ${errMsg}`;
+            if (extWarnings) {
+              extWarnings.push(`Schema validation infrastructure error for ${filePath}: ${errMsg}`);
+            }
+          }
+
+          // Roll back extensions on validation failure
+          if (validationFailed) {
+            accumulatedExtensions.length = accumulatorLengthSnapshot;
+            seenExtensions.clear();
+            for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+            if (extensionsSnapshot !== undefined) {
+              try {
+                await restoreFn(registryDir, extensionsSnapshot);
+              } catch {
+                // Restore failure is non-fatal
+              }
+            }
+          } else {
+            // Re-resolve schema after writing extensions to compute meaningful schemaHashAfter
+            const updatedSchema = await resolveFn(projectDir, config.schemaPath);
+            result.schemaHashAfter = computeSchemaHash(updatedSchema as object);
+          }
         } catch (writeErr) {
           const msg = writeErr instanceof Error ? writeErr.message : String(writeErr);
           if (extWarnings) {

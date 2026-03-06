@@ -83,6 +83,7 @@ function makeDeps(overrides: Partial<DispatchFilesDeps> = {}): DispatchFilesDeps
     instrumentWithRetry: vi.fn().mockImplementation(async (filePath: string) => {
       return makeSuccessResult(filePath);
     }),
+    validateRegistry: vi.fn().mockResolvedValue({ passed: true }),
     ...overrides,
   };
 }
