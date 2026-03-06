@@ -83,7 +83,7 @@ export async function extractNamespacePrefix(registryDir: string): Promise<strin
  * @param extensionYaml - YAML string for a single attribute definition
  * @returns Parsed attribute object, or null if parsing fails
  */
-function parseExtension(extensionYaml: string): Record<string, unknown> | null {
+export function parseExtension(extensionYaml: string): Record<string, unknown> | null {
   try {
     // The extension is a YAML list item — parse it as a list
     const parsed = parse(extensionYaml) as unknown;

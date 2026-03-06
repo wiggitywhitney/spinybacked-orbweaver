@@ -14,6 +14,7 @@ import {
   writeSchemaExtensions as defaultWriteSchemaExtensions,
   snapshotExtensionsFile as defaultSnapshotExtensionsFile,
   restoreExtensionsFile as defaultRestoreExtensionsFile,
+  parseExtension,
 } from './schema-extensions.ts';
 
 /**
@@ -259,15 +260,17 @@ export async function dispatchFiles(
         try {
           const writeResult = await writeExtFn(registryDir, [...accumulatedExtensions]);
           if (writeResult.rejected.length > 0) {
-            // Remove rejected extensions from accumulator so they aren't resubmitted
+            // Remove rejected extensions from accumulator so they aren't resubmitted.
+            // rejected IDs are plain strings (e.g. "bad.namespace.attr") while
+            // accumulatedExtensions are full YAML strings — extract the ID to compare.
             const rejectedSet = new Set(writeResult.rejected);
             for (let j = accumulatedExtensions.length - 1; j >= 0; j--) {
-              if (rejectedSet.has(accumulatedExtensions[j])) {
+              const parsed = parseExtension(accumulatedExtensions[j]);
+              const extId = parsed?.id as string | undefined;
+              if (extId && rejectedSet.has(extId)) {
+                seenExtensions.delete(accumulatedExtensions[j]);
                 accumulatedExtensions.splice(j, 1);
               }
-            }
-            for (const rejected of writeResult.rejected) {
-              seenExtensions.delete(rejected);
             }
             if (extWarnings) {
               extWarnings.push(

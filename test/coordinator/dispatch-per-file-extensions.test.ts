@@ -457,6 +457,39 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     });
   });
 
+  it('removes rejected extensions from accumulator so they are not resubmitted on subsequent files', async () => {
+    const file1 = await createFile('a.js', 'function a() {}');
+    const file2 = await createFile('b.js', 'function b() {}');
+
+    const goodExt = '- id: myapp.payment.amount\n  type: double';
+    const badExt = '- id: bad.namespace.attr\n  type: string';
+    const newExt = '- id: myapp.order.total\n  type: int';
+
+    // File 1 produces both a good and bad extension; bad one gets rejected
+    // File 2 produces a new extension
+    const writeSchemaExtensions = vi.fn()
+      .mockResolvedValueOnce(makeWriteResult({ rejected: ['bad.namespace.attr'] }))
+      .mockResolvedValueOnce(makeWriteResult());
+
+    const instrumentWithRetry = vi.fn()
+      .mockResolvedValueOnce(makeSuccessResult(file1, { schemaExtensions: [goodExt, badExt] }))
+      .mockResolvedValueOnce(makeSuccessResult(file2, { schemaExtensions: [newExt] }));
+
+    const deps = makeDeps({ instrumentWithRetry, writeSchemaExtensions });
+    const config = makeConfig();
+    const registryDir = join(tmpDir, 'registry');
+
+    await dispatchFiles([file1, file2], tmpDir, config, undefined, {
+      deps,
+      registryDir,
+    });
+
+    // First call includes both extensions
+    expect(writeSchemaExtensions).toHaveBeenNthCalledWith(1, registryDir, [goodExt, badExt]);
+    // Second call should NOT include the rejected badExt — only goodExt + newExt
+    expect(writeSchemaExtensions).toHaveBeenNthCalledWith(2, registryDir, [goodExt, newExt]);
+  });
+
   it('pushes rejection warnings into schemaExtensionWarnings when extensions are rejected', async () => {
     const file1 = await createFile('a.js', 'function a() {}');
 
