@@ -190,7 +190,7 @@ Phase 7 also extends:
 
 ## Milestones
 
-- [ ] **Milestone 1: simple-git wrapper** — Create `src/git/` module with branch creation, file staging, commit, and log operations. Verify: unit tests create a branch, commit a file, and read the commit log in an isolated test repo (temp directory with `git init`).
+- [x] **Milestone 1: simple-git wrapper** — Create `src/git/` module with branch creation, file staging, commit, and log operations. Verify: unit tests create a branch, commit a file, and read the commit log in an isolated test repo (temp directory with `git init`).
 
 - [ ] **Milestone 2: Per-file commit workflow** — Wire `onFileComplete` callback to commit instrumented code + schema changes for each successful file. Verify: coordinator processes 3 test files → git log shows 3 separate commits, one per file.
 
