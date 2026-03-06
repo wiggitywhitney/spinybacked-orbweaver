@@ -308,5 +308,5 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   };
 }
 
-export { handleInit, detectProjectType };
+export { handleInit, detectProjectType, isVersionSatisfied };
 export type { InitOptions, InitDeps, InitResult };
