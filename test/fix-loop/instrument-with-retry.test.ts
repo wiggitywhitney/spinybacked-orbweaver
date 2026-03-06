@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
-import type { ValidationResult, CheckResult } from '../../src/validation/types.ts';
+import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
 import type { InstrumentFileResult, ConversationContext } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { InstrumentWithRetryDeps, InstrumentFileCallOptions } from '../../src/fix-loop/instrument-with-retry.ts';
@@ -149,6 +149,51 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.notes).toEqual(output.notes);
     expect(result.tokenUsage).toEqual(sampleTokens);
     expect(result.errorProgression).toEqual(['0 errors']);
+  });
+
+  it('passes all 17 Tier 2 checks to validateFile with correct blocking flags', async () => {
+    const output = makeInstrumentationOutput();
+    let capturedConfig: ValidateFileInput['config'] | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async (input: ValidateFileInput) => {
+        capturedConfig = input.config;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(capturedConfig).toBeDefined();
+    const checks = capturedConfig!.tier2Checks;
+
+    // Phase 2 checks (5)
+    expect(checks['CDQ-001']).toEqual({ enabled: true, blocking: true });
+    expect(checks['NDS-003']).toEqual({ enabled: true, blocking: true });
+    expect(checks['COV-002']).toEqual({ enabled: true, blocking: true });
+    expect(checks['RST-001']).toEqual({ enabled: true, blocking: false });
+    expect(checks['COV-005']).toEqual({ enabled: true, blocking: false });
+
+    // Phase 4 checks (8)
+    expect(checks['COV-001']).toEqual({ enabled: true, blocking: true });
+    expect(checks['COV-003']).toEqual({ enabled: true, blocking: true });
+    expect(checks['COV-006']).toEqual({ enabled: true, blocking: true });
+    expect(checks['COV-004']).toEqual({ enabled: true, blocking: false });
+    expect(checks['RST-002']).toEqual({ enabled: true, blocking: false });
+    expect(checks['RST-003']).toEqual({ enabled: true, blocking: false });
+    expect(checks['RST-004']).toEqual({ enabled: true, blocking: false });
+    expect(checks['CDQ-006']).toEqual({ enabled: true, blocking: false });
+
+    // Phase 5 checks (4)
+    expect(checks['SCH-001']).toEqual({ enabled: true, blocking: true });
+    expect(checks['SCH-002']).toEqual({ enabled: true, blocking: true });
+    expect(checks['SCH-003']).toEqual({ enabled: true, blocking: true });
+    expect(checks['SCH-004']).toEqual({ enabled: true, blocking: false });
+
+    // Total: 17 checks
+    expect(Object.keys(checks)).toHaveLength(17);
   });
 
   it('returns failed FileResult and reverts file when validation fails', async () => {

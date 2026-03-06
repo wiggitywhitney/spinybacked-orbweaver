@@ -86,17 +86,33 @@ function summarizeErrors(validation: ValidationResult): string {
 
 /**
  * Build a default ValidationConfig from AgentConfig.
- * Enables all Tier 2 checks with their default blocking/advisory settings.
+ * Enables all 17 Tier 2 checks with their blocking/advisory settings
+ * per the PRD Dimension Rules tables (Phases 2, 4, 5).
  */
 function buildValidationConfig(config: AgentConfig) {
   return {
     enableWeaver: false,
     tier2Checks: {
+      // Phase 2 checks
       'CDQ-001': { enabled: true, blocking: true },
       'NDS-003': { enabled: true, blocking: true },
       'COV-002': { enabled: true, blocking: true },
       'RST-001': { enabled: true, blocking: false },
       'COV-005': { enabled: true, blocking: false },
+      // Phase 4 checks
+      'COV-001': { enabled: true, blocking: true },
+      'COV-003': { enabled: true, blocking: true },
+      'COV-006': { enabled: true, blocking: true },
+      'COV-004': { enabled: true, blocking: false },
+      'RST-002': { enabled: true, blocking: false },
+      'RST-003': { enabled: true, blocking: false },
+      'RST-004': { enabled: true, blocking: false },
+      'CDQ-006': { enabled: true, blocking: false },
+      // Phase 5 checks
+      'SCH-001': { enabled: true, blocking: true },
+      'SCH-002': { enabled: true, blocking: true },
+      'SCH-003': { enabled: true, blocking: true },
+      'SCH-004': { enabled: true, blocking: false },
     },
   };
 }
