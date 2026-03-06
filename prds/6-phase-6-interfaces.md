@@ -265,7 +265,7 @@ action.yml            GitHub Action (shell-based, invokes CLI)
 
 - [x] **Milestone 8: DX verification** — Verify all interfaces meet the DX cross-cutting requirement: (a) zero files discovered → clear warning from every interface (not exit 0 with no output), (b) invalid path → clear error with suggestion, (c) missing config → clear error directing user to run `orb init`, (d) progress output is semantically meaningful (file name, index, total — not just percentages), (e) error responses include enough context for an AI intermediary to explain what went wrong and what to do about it, (f) `--verbose` and `--debug` flags produce additional diagnostic output.
 
-- [ ] **Milestone 9: Interface equivalence and acceptance gate** — Full end-to-end verification: run the same real project through CLI, MCP, and direct `coordinate()` call. Verify `RunResult` is equivalent across all three paths. Verify all acceptance gate criteria: `orb init` creates valid config, `orb instrument` produces visible progress, MCP tools produce same results, progress callbacks fire at every stage, no silent failures from any interface.
+- [x] **Milestone 9: Interface equivalence and acceptance gate** — Full end-to-end verification: run the same real project through CLI, MCP, and direct `coordinate()` call. Verify `RunResult` is equivalent across all three paths. Verify all acceptance gate criteria: `orb init` creates valid config, `orb instrument` produces visible progress, MCP tools produce same results, progress callbacks fire at every stage, no silent failures from any interface.
 
 ## Dependencies
 

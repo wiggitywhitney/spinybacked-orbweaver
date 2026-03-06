@@ -44,3 +44,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `--verbose` flag: shows config loading path during instrument command
 - `--debug` flag: shows full config details as JSON during instrument command
 - MCP error responses include enough context for AI intermediary to explain failures and suggest next steps
+- Interface equivalence tests: CLI, MCP, and direct `coordinate()` produce equivalent RunResult for the same scenario
+- Phase 6 acceptance gate tests: comprehensive verification of all acceptance criteria (exit codes, cost ceiling flow, progress callbacks, JSDoc coverage, no silent failures)
