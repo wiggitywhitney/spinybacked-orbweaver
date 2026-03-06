@@ -66,3 +66,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Diff JSON parser (`validateDiffChanges()`) now matches real Weaver output: nested `{ changes: { registry_attributes: [...], spans: [...] } }` with `type` field instead of flat array with `change_type`
 - Shared Weaver registry test fixtures (`test/fixtures/weaver-registry/`) for integration testing against real Weaver binary
+- Live-check `--inactivity-timeout` flag prevents Weaver auto-stopping during long test suites (was hardcoded 10s default)
+- Live-check configurable ports (`--otlp-grpc-port`, `--admin-port`) avoid collisions with running OTel collectors
+- `WEAVER_STARTUP_TIMEOUT_MS` wired into `waitForWeaverReady` instead of hardcoded 2000ms (issue #29)
+- `checkPortAvailable` uses DI-injected `execFileFn` for `lsof`/`ps` calls instead of bypassing DI (issue #30)

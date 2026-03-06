@@ -27,7 +27,7 @@ import {
 } from './schema-diff.ts';
 import type { SchemaDiffResult } from './schema-diff.ts';
 import { runLiveCheck as defaultRunLiveCheck } from './live-check.ts';
-import type { LiveCheckResult, LiveCheckDeps } from './live-check.ts';
+import type { LiveCheckResult, LiveCheckDeps, LiveCheckOptions } from './live-check.ts';
 import { readFile } from 'node:fs/promises';
 import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
 import type { FileContent } from '../validation/tier2/cdq008.ts';
@@ -79,6 +79,7 @@ export interface CoordinateDeps {
     registryDir: string,
     projectDir: string,
     testCommand: string,
+    options?: LiveCheckOptions,
     deps?: LiveCheckDeps,
     callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
   ) => Promise<LiveCheckResult>;
@@ -342,6 +343,7 @@ export async function coordinate(
       registryDir,
       projectDir,
       config.testCommand,
+      undefined,
       undefined,
       callbacks,
     );
