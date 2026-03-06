@@ -85,14 +85,14 @@ runs:
       run: |
         RESULT='${{ steps.instrument.outputs.result }}'
 
-        FILES_PROCESSED=$(echo "${RESULT}" | node -e "
-          const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+        FILES_PROCESSED=$(echo "${RESULT}" | node -e '
+          const d = JSON.parse(require("fs").readFileSync(0, "utf8"));
           const r = d.fileResults || [];
-          const ok = r.filter(f => f.status === 'success').length;
-          const fail = r.filter(f => f.status === 'failure').length;
-          const skip = r.filter(f => f.status === 'skipped').length;
-          console.log(ok + ' succeeded, ' + fail + ' failed, ' + skip + ' skipped out of ' + r.length + ' files');
-        " 2>/dev/null || echo "Unable to parse results")
+          const ok = r.filter(f => f.status === "success").length;
+          const fail = r.filter(f => f.status === "failure").length;
+          const skip = r.filter(f => f.status === "skipped").length;
+          console.log(ok + " succeeded, " + fail + " failed, " + skip + " skipped out of " + r.length + " files");
+        ' 2>/dev/null || echo "Unable to parse results")
 
         SUMMARY="Instrumentation complete: ${FILES_PROCESSED}"
         echo "summary=${SUMMARY}" >> "$GITHUB_OUTPUT"

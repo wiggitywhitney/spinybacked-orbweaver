@@ -1,6 +1,7 @@
 // ABOUTME: MCP server interface for the orb agent.
 // ABOUTME: Exposes get-cost-ceiling and instrument tools over stdio transport for Claude Code integration.
 
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -407,7 +408,7 @@ export async function startServer(): Promise<void> {
 }
 
 // Run when executed directly (not imported)
-const isDirectExecution = process.argv[1] && import.meta.url.endsWith(process.argv[1]);
+const isDirectExecution = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectExecution) {
   startServer();
 }
