@@ -14,6 +14,8 @@ Additionally:
 - `FileResult.schemaHashBefore` and `schemaHashAfter` become meaningful (hash changes when extensions are written between files)
 - Schema state is snapshot and reverted on file failure (spec requires "copies the file and its corresponding schema state")
 - `writeSchemaExtensions` is called incrementally per-file, not once at end-of-run
+- Extensions are validated (via `weaver registry check`) immediately after writing, before the next file processes — invalid extensions are caught and rolled back per-file rather than persisting until post-dispatch validation
+- Checkpoint infrastructure failures produce warnings instead of silently degrading (`dispatch.ts` lines 219-221 swallow errors with no diagnostic output)
 
 ## Why This Phase Exists
 
@@ -37,6 +39,8 @@ This is a correctness fix, not a feature. The spec's design is clear; the implem
 | Failed file's schema extensions are reverted | Instrument a file that fails validation after creating extensions; verify extensions are removed from registry before next file processes | — |
 | Periodic checkpoints still work correctly | Run with `schemaCheckpointInterval: 2` on a multi-file project; checkpoints see the incrementally-extended schema | — |
 | End-of-run batch write is removed or becomes a no-op | Verify `coordinate()` no longer writes extensions in a separate post-dispatch step (extensions are already written per-file) | — |
+| Per-file extension validation before next file | After writing extensions for file N, run `weaver registry check` before processing file N+1; invalid extensions are rolled back immediately rather than persisting | SCH-003 |
+| Checkpoint infrastructure failures produce warnings | Trigger a checkpoint infrastructure error (e.g., Weaver CLI not found mid-run); verify warning appears in `RunResult.warnings` instead of silent swallow | DX |
 | Existing tests continue to pass | All unit, integration, and acceptance gate tests pass | NDS-001, NDS-002 |
 
 ## Cross-Cutting Requirements
@@ -97,9 +101,13 @@ src/
 
 - [ ] **Milestone 4: Remove or simplify post-dispatch batch write** — The batch `collectSchemaExtensions` + `writeSchemaExtensions` call in `coordinate()` (lines 240–253) is now redundant because extensions are written per-file in dispatch. Either remove it or convert it to a verification step that confirms the final `agent-extensions.yaml` matches the accumulated per-file extensions. Verify: (a) removing the batch write doesn't change behavior (extensions already on disk), (b) `RunResult` warnings from extension writing still surface correctly.
 
-- [ ] **Milestone 5: Integration with periodic checkpoints** — Verify that periodic schema checkpoints (`weaver registry check` + `weaver registry diff` every N files) see the incrementally-extended schema. Since extensions are now written per-file, checkpoints should reflect cumulative changes. Verify: (a) checkpoint after file 2 sees extensions from files 1 and 2, (b) checkpoint diff shows incremental additions, (c) checkpoint failure handling still works (stop processing, blast radius reporting).
+- [ ] **Milestone 5: Per-file extension validation** — After writing extensions for each file, run `weaver registry check` on the registry to validate the extended schema immediately. If the check fails, roll back the extensions (restore from snapshot) and treat the file as failed. This catches invalid extensions at the source file rather than letting them persist until a periodic checkpoint or end-of-run validation. The current implementation writes extensions in a post-dispatch batch without validation before subsequent files process — invalid extensions from file A could corrupt file B's schema context. Verify: (a) invalid extension (e.g., malformed YAML that passes namespace check but fails Weaver validation) is detected immediately, (b) the file is marked failed and extensions rolled back, (c) subsequent files see clean schema.
 
-- [ ] **Milestone 6: Acceptance gate passes** — End-to-end with a multi-file test project where files have cross-file schema dependencies: (a) later files see earlier files' schema contributions, (b) hash chain is monotonically growing, (c) failed files' extensions are reverted, (d) checkpoints see accumulated extensions, (e) all existing tests pass.
+- [ ] **Milestone 6: Checkpoint infrastructure failure visibility** — The `catch` block at `dispatch.ts` lines 219-221 silently swallows checkpoint infrastructure failures (e.g., Weaver CLI crashes, `execFile` timeout). Add the error to a warnings list so it surfaces in `RunResult.warnings`. The `onSchemaCheckpoint` callback should not fire on infrastructure failures (it currently doesn't, which is correct), but the user must be told that a checkpoint was skipped and why. Verify: (a) Weaver CLI failure during checkpoint produces a warning in `RunResult.warnings`, (b) dispatch continues (degrade-and-warn, not abort), (c) subsequent checkpoints still attempt to run.
+
+- [ ] **Milestone 7: Integration with periodic checkpoints** — Verify that periodic schema checkpoints (`weaver registry check` + `weaver registry diff` every N files) see the incrementally-extended schema. Since extensions are now written per-file, checkpoints should reflect cumulative changes. Verify: (a) checkpoint after file 2 sees extensions from files 1 and 2, (b) checkpoint diff shows incremental additions, (c) checkpoint failure handling still works (stop processing, blast radius reporting).
+
+- [ ] **Milestone 8: Acceptance gate passes** — End-to-end with a multi-file test project where files have cross-file schema dependencies: (a) later files see earlier files' schema contributions, (b) hash chain is monotonically growing, (c) failed files' extensions are reverted, (d) checkpoints see accumulated extensions, (e) checkpoint infrastructure failures produce warnings, (f) per-file extension validation catches invalid extensions, (g) all existing tests pass.
 
 ## Dependencies
 
