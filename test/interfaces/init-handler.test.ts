@@ -2,13 +2,18 @@
 // ABOUTME: Verifies prerequisite checks, project type detection, config creation, and --yes mode.
 
 import { describe, it, expect, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import {
   detectProjectType,
   handleInit,
+  isVersionSatisfied,
 } from '../../src/interfaces/init-handler.ts';
-import type { InitDeps, InitResult } from '../../src/interfaces/init-handler.ts';
+import type { InitDeps } from '../../src/interfaces/init-handler.ts';
 
-/** Create default deps with overridable fields for testing. */
+const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry');
+
+/** Create default deps that use the real Weaver binary. */
 function makeDeps(overrides: Partial<InitDeps> = {}): InitDeps {
   const validPackageJson = JSON.stringify({
     name: 'test-project',
@@ -30,15 +35,11 @@ function makeDeps(overrides: Partial<InitDeps> = {}): InitDeps {
       }
     }),
     writeFile: vi.fn(async () => {}),
-    execFileSync: vi.fn((_cmd: string, args: string[]) => {
-      if (args.includes('--version')) {
-        return Buffer.from('weaver 0.21.2\n');
-      }
-      // weaver registry check
-      return Buffer.from('');
-    }),
+    execFileSync: (cmd: string, args: string[], opts?: object) => {
+      return execFileSync(cmd, args, opts) as Buffer;
+    },
     globSync: vi.fn(() => ['src/instrumentation.ts']),
-    findSchemaDir: vi.fn(() => 'semconv'),
+    findSchemaDir: vi.fn(() => 'valid'),
     prompt: vi.fn(async () => 'y'),
     stderr: vi.fn(),
     checkPort: vi.fn(async () => true),
@@ -78,6 +79,40 @@ describe('detectProjectType', () => {
   });
 });
 
+describe('isVersionSatisfied', () => {
+  it('returns true when versions are equal', () => {
+    expect(isVersionSatisfied('0.21.2', '0.21.2')).toBe(true);
+  });
+
+  it('returns true when actual is newer patch', () => {
+    expect(isVersionSatisfied('0.21.3', '0.21.2')).toBe(true);
+  });
+
+  it('returns true when actual is newer minor', () => {
+    expect(isVersionSatisfied('0.22.0', '0.21.2')).toBe(true);
+  });
+
+  it('returns true when actual is newer major', () => {
+    expect(isVersionSatisfied('1.0.0', '0.21.2')).toBe(true);
+  });
+
+  it('returns false when actual is older patch', () => {
+    expect(isVersionSatisfied('0.21.1', '0.21.2')).toBe(false);
+  });
+
+  it('returns false when actual is older minor', () => {
+    expect(isVersionSatisfied('0.19.0', '0.21.2')).toBe(false);
+  });
+
+  it('returns false when actual has older major version', () => {
+    expect(isVersionSatisfied('0.5.0', '1.0.0')).toBe(false);
+  });
+
+  it('returns false for unparseable version', () => {
+    expect(isVersionSatisfied('notaversion', '0.21.2')).toBe(false);
+  });
+});
+
 describe('handleInit', () => {
   describe('prerequisite checks', () => {
     it('fails when package.json not found', async () => {
@@ -87,7 +122,7 @@ describe('handleInit', () => {
         readFile: vi.fn(async () => { throw err; }),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -104,7 +139,7 @@ describe('handleInit', () => {
         readFile: vi.fn(async () => { throw err; }),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -119,7 +154,7 @@ describe('handleInit', () => {
         readFile: vi.fn(async () => 'not json'),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -136,7 +171,7 @@ describe('handleInit', () => {
         })),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -154,7 +189,7 @@ describe('handleInit', () => {
         })),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -165,42 +200,23 @@ describe('handleInit', () => {
     });
 
     it('fails when Weaver CLI not found', async () => {
-      const deps = makeDeps({
-        execFileSync: vi.fn(() => {
-          const err = new Error('ENOENT') as Error & { code: string };
-          err.code = 'ENOENT';
-          throw err;
-        }),
-      });
+      const originalPath = process.env.PATH;
+      try {
+        // Remove weaver from PATH to trigger ENOENT
+        process.env.PATH = '/nonexistent-dir-for-enoent-test';
+        const deps = makeDeps();
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+        const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
-      expect(result.success).toBe(false);
-      expect(result.errors).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining('Weaver CLI'),
-        ]),
-      );
-    });
-
-    it('fails when Weaver version is too old', async () => {
-      const deps = makeDeps({
-        execFileSync: vi.fn((_cmd: string, args: string[]) => {
-          if (args.includes('--version')) {
-            return Buffer.from('weaver 0.19.0\n');
-          }
-          return Buffer.from('');
-        }),
-      });
-
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
-
-      expect(result.success).toBe(false);
-      expect(result.errors).toEqual(
-        expect.arrayContaining([
-          expect.stringContaining('0.21.2'),
-        ]),
-      );
+        expect(result.success).toBe(false);
+        expect(result.errors).toEqual(
+          expect.arrayContaining([
+            expect.stringContaining('Weaver CLI'),
+          ]),
+        );
+      } finally {
+        process.env.PATH = originalPath;
+      }
     });
 
     it('fails when port 4317 is not available', async () => {
@@ -208,7 +224,7 @@ describe('handleInit', () => {
         checkPort: vi.fn(async (port: number) => port !== 4317),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -223,7 +239,7 @@ describe('handleInit', () => {
         checkPort: vi.fn(async (port: number) => port !== 4320),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -240,7 +256,7 @@ describe('handleInit', () => {
         globSync: vi.fn(() => []),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -255,7 +271,7 @@ describe('handleInit', () => {
         findSchemaDir: vi.fn(() => null),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -270,10 +286,10 @@ describe('handleInit', () => {
     it('creates orb.yaml with correct fields', async () => {
       const deps = makeDeps();
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
-      expect(result.configPath).toBe('/test/orb.yaml');
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
       expect(deps.writeFile).toHaveBeenCalledOnce();
 
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
@@ -290,7 +306,7 @@ describe('handleInit', () => {
         })),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
@@ -305,7 +321,7 @@ describe('handleInit', () => {
         })),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
@@ -315,7 +331,7 @@ describe('handleInit', () => {
     it('does not prompt user in --yes mode', async () => {
       const deps = makeDeps();
 
-      await handleInit({ projectDir: '/test', yes: true }, deps);
+      await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(deps.prompt).not.toHaveBeenCalled();
     });
@@ -323,7 +339,7 @@ describe('handleInit', () => {
     it('auto-detects project type in --yes mode', async () => {
       const deps = makeDeps();
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
       expect(deps.prompt).not.toHaveBeenCalled();
@@ -336,7 +352,7 @@ describe('handleInit', () => {
         prompt: vi.fn(async () => 'y'),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: false }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: false }, deps);
 
       expect(result.success).toBe(true);
       expect(deps.prompt).toHaveBeenCalled();
@@ -347,7 +363,7 @@ describe('handleInit', () => {
         prompt: vi.fn(async () => '  y  \n'),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: false }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: false }, deps);
 
       expect(result.success).toBe(true);
     });
@@ -357,7 +373,7 @@ describe('handleInit', () => {
         prompt: vi.fn(async () => 'n'),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: false }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: false }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -374,11 +390,11 @@ describe('handleInit', () => {
       const globSyncMock = vi.fn(() => ['src/instrumentation.ts']);
       const deps = makeDeps({ globSync: globSyncMock });
 
-      await handleInit({ projectDir: '/my/project', yes: true }, deps);
+      await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(globSyncMock).toHaveBeenCalledWith(
         expect.any(Array),
-        { cwd: '/my/project' },
+        { cwd: FIXTURES_DIR },
       );
     });
   });
@@ -389,7 +405,7 @@ describe('handleInit', () => {
         writeFile: vi.fn(async () => { throw new Error('EACCES: permission denied'); }),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
@@ -401,26 +417,17 @@ describe('handleInit', () => {
   });
 
   describe('Weaver schema validation', () => {
-    it('fails when weaver registry check fails', async () => {
+    it('fails when weaver registry check fails on invalid registry', async () => {
       const deps = makeDeps({
-        execFileSync: vi.fn((_cmd: string, args: string[]) => {
-          if (args.includes('--version')) {
-            return Buffer.from('weaver 0.21.2\n');
-          }
-          // weaver registry check fails
-          const err = new Error('schema invalid') as Error & { status: number; stderr: Buffer };
-          err.status = 1;
-          err.stderr = Buffer.from('invalid schema: missing required field');
-          throw err;
-        }),
+        findSchemaDir: vi.fn(() => 'invalid'),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('schema'),
+          expect.stringContaining('schema validation failed'),
         ]),
       );
     });
@@ -430,7 +437,7 @@ describe('handleInit', () => {
     it('writes progress to stderr during init', async () => {
       const deps = makeDeps();
 
-      await handleInit({ projectDir: '/test', yes: true }, deps);
+      await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(deps.stderr).toHaveBeenCalled();
       const messages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(
@@ -448,7 +455,7 @@ describe('handleInit', () => {
         }),
       });
 
-      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(

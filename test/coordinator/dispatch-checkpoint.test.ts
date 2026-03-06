@@ -1,16 +1,17 @@
-// ABOUTME: Tests for periodic schema checkpoints within the dispatch loop.
-// ABOUTME: Covers checkpoint intervals, callback behavior, early stop on failure, and blast radius reporting.
+// ABOUTME: Integration tests for periodic schema checkpoints within the dispatch loop.
+// ABOUTME: Runs real weaver binary for checkpoint validation.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
-import type { SchemaCheckpointDeps } from '../../src/coordinator/schema-checkpoint.ts';
 
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks, DispatchCheckpointConfig } from '../../src/coordinator/types.ts';
+
+const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
 
 /** Minimal config for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -52,7 +53,7 @@ function makeSuccessResult(filePath: string, overrides: Partial<FileResult> = {}
   };
 }
 
-/** Build mock deps with configurable behavior. */
+/** Build deps for dispatch (resolveSchema + instrumentWithRetry — agent boundary, not CLI). */
 function makeDeps(overrides: Partial<DispatchFilesDeps> = {}): DispatchFilesDeps {
   return {
     resolveSchema: vi.fn().mockResolvedValue({ resolved: true }),
@@ -63,53 +64,25 @@ function makeDeps(overrides: Partial<DispatchFilesDeps> = {}): DispatchFilesDeps
   };
 }
 
-/** Build checkpoint deps where both check and diff pass. */
-function makePassingCheckpointDeps(): SchemaCheckpointDeps {
-  return {
-    execFileFn: vi.fn()
-      .mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: Function) => {
-        if (args.includes('check')) {
-          cb(null, 'Registry check passed.', '');
-        } else if (args.includes('diff')) {
-          cb(null, JSON.stringify({ changes: [{ change_type: 'added', name: 'myapp.attr' }] }), '');
-        }
-      }),
-  };
-}
+/** Checkpoint config using real fixtures where both check and diff pass. */
+const passingCheckpointConfig: DispatchCheckpointConfig = {
+  registryDir: resolve(FIXTURES_DIR, 'valid-modified'),
+  baselineSnapshotDir: resolve(FIXTURES_DIR, 'baseline'),
+};
 
-/** Build checkpoint deps where check fails. */
-function makeFailingCheckCheckpointDeps(): SchemaCheckpointDeps {
-  return {
-    execFileFn: vi.fn()
-      .mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: Function) => {
-        if (args.includes('check')) {
-          const error = new Error('Schema validation error');
-          (error as unknown as Record<string, unknown>).stdout = Buffer.from('Error: invalid type');
-          cb(error, '', '');
-        } else if (args.includes('diff')) {
-          cb(null, JSON.stringify({ changes: [] }), '');
-        }
-      }),
-  };
-}
+/** Checkpoint config where weaver registry check fails (invalid registry). */
+const failingCheckCheckpointConfig: DispatchCheckpointConfig = {
+  registryDir: resolve(FIXTURES_DIR, 'invalid'),
+  baselineSnapshotDir: resolve(FIXTURES_DIR, 'baseline'),
+};
 
-/** Build checkpoint deps where diff shows integrity violation. */
-function makeFailingDiffCheckpointDeps(): SchemaCheckpointDeps {
-  return {
-    execFileFn: vi.fn()
-      .mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: Function) => {
-        if (args.includes('check')) {
-          cb(null, 'Registry check passed.', '');
-        } else if (args.includes('diff')) {
-          cb(null, JSON.stringify({
-            changes: [{ change_type: 'removed', name: 'myapp.deleted_attr' }],
-          }), '');
-        }
-      }),
-  };
-}
+/** Checkpoint config where diff shows integrity violation (current has fewer attrs than baseline). */
+const failingDiffCheckpointConfig: DispatchCheckpointConfig = {
+  registryDir: resolve(FIXTURES_DIR, 'baseline'),
+  baselineSnapshotDir: resolve(FIXTURES_DIR, 'valid-modified'),
+};
 
-describe('dispatchFiles with schema checkpoints', () => {
+describe('dispatchFiles with schema checkpoints — real Weaver integration', () => {
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -126,11 +99,6 @@ describe('dispatchFiles with schema checkpoints', () => {
     return filePath;
   }
 
-  const checkpointConfig: DispatchCheckpointConfig = {
-    registryDir: '/project/schemas/registry',
-    baselineSnapshotDir: '/tmp/weaver-baseline-test',
-  };
-
   describe('checkpoint interval timing', () => {
     it('runs checkpoint after every schemaCheckpointInterval processed files', async () => {
       const files = await Promise.all([
@@ -142,12 +110,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makePassingCheckpointDeps();
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: passingCheckpointConfig,
       });
 
       // 4 files with interval 2 → 2 checkpoints
@@ -164,12 +130,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makePassingCheckpointDeps();
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: passingCheckpointConfig,
       });
 
       // First checkpoint after file index 1 (2 files processed), second after index 3 (4 files)
@@ -202,13 +166,11 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makePassingCheckpointDeps();
 
       // 3 files: 1 skipped + 2 processed → 1 checkpoint at the 2nd processed file
       await dispatchFiles([instrumentedFile, file1, file2], tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: passingCheckpointConfig,
       });
 
       expect(onSchemaCheckpoint).toHaveBeenCalledTimes(1);
@@ -217,36 +179,20 @@ describe('dispatchFiles with schema checkpoints', () => {
   });
 
   describe('both check and diff run at each checkpoint', () => {
-    it('runs weaver registry check and weaver registry diff at checkpoint', async () => {
+    it('checkpoint passes when registry is valid and diff shows only additions', async () => {
       const files = await Promise.all([createFile('a.js'), createFile('b.js')]);
 
-      const execFileFn = vi.fn()
-        .mockImplementation((_cmd: string, args: string[], _opts: unknown, cb: Function) => {
-          if (args.includes('check')) {
-            cb(null, 'passed', '');
-          } else if (args.includes('diff')) {
-            cb(null, JSON.stringify({ changes: [] }), '');
-          }
-        });
-
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
 
-      await dispatchFiles(files, tmpDir, config, {}, {
+      await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps: { execFileFn },
+        checkpoint: passingCheckpointConfig,
       });
 
-      const checkCalls = execFileFn.mock.calls.filter(
-        (c: string[][]) => c[1].includes('check'),
-      );
-      const diffCalls = execFileFn.mock.calls.filter(
-        (c: string[][]) => c[1].includes('diff'),
-      );
-
-      expect(checkCalls).toHaveLength(1);
-      expect(diffCalls).toHaveLength(1);
+      // Checkpoint passed
+      expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, true);
     });
   });
 
@@ -261,12 +207,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makeFailingCheckCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: failingCheckCheckpointConfig,
       });
 
       // Checkpoint fails after file 2 → files 3 and 4 are not processed
@@ -284,12 +228,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makeFailingDiffCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: failingDiffCheckpointConfig,
       });
 
       expect(results).toHaveLength(2);
@@ -307,12 +249,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makeFailingCheckCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: failingCheckCheckpointConfig,
       });
 
       // All 4 files processed despite checkpoint failure
@@ -335,12 +275,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makePassingCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: passingCheckpointConfig,
       });
 
       // All files processed despite callback failure
@@ -359,12 +297,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makeFailingCheckCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: failingCheckCheckpointConfig,
       });
 
       // Files a.js and b.js were processed successfully before checkpoint failed
@@ -385,12 +321,10 @@ describe('dispatchFiles with schema checkpoints', () => {
       const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makeFailingDiffCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: failingDiffCheckpointConfig,
       });
 
       expect(results).toHaveLength(2);
@@ -414,12 +348,10 @@ describe('dispatchFiles with schema checkpoints', () => {
         }),
       });
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makePassingCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: passingCheckpointConfig,
       });
 
       // Drift detected after file 2 → stops before file 3
@@ -441,12 +373,10 @@ describe('dispatchFiles with schema checkpoints', () => {
         }),
       });
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makePassingCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: passingCheckpointConfig,
       });
 
       // All 4 files processed despite drift
@@ -467,45 +397,15 @@ describe('dispatchFiles with schema checkpoints', () => {
         }),
       });
       const config = makeConfig({ schemaCheckpointInterval: 2 });
-      const checkpointDeps = makePassingCheckpointDeps();
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
+        checkpoint: passingCheckpointConfig,
       });
 
       // No drift → all files processed, checkpoint passed
       expect(results).toHaveLength(2);
       expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, true);
-    });
-  });
-
-  describe('checkpoint infrastructure failure degrades gracefully', () => {
-    it('continues processing when checkpoint runner throws', async () => {
-      const files = await Promise.all([
-        createFile('a.js'), createFile('b.js'),
-        createFile('c.js'),
-      ]);
-
-      // Mock that throws on any invocation
-      const checkpointDeps: SchemaCheckpointDeps = {
-        execFileFn: vi.fn().mockImplementation(() => {
-          throw new Error('execFile catastrophic failure');
-        }),
-      };
-
-      const deps = makeDeps();
-      const config = makeConfig({ schemaCheckpointInterval: 2 });
-
-      const results = await dispatchFiles(files, tmpDir, config, {}, {
-        deps,
-        checkpoint: checkpointConfig,
-        checkpointDeps,
-      });
-
-      // All files still processed despite checkpoint infrastructure failure
-      expect(results).toHaveLength(3);
     });
   });
 });

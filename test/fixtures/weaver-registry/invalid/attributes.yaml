@@ -1,0 +1,11 @@
+groups:
+  - id: registry.test_app_invalid.core
+    type: attribute_group
+    display_name: Core Attributes
+    brief: Core test attributes
+    attributes:
+      - id: test_app_invalid.order.id
+        type: string
+        stability: development
+        brief: Unique order identifier
+        examples: ["order-123"]

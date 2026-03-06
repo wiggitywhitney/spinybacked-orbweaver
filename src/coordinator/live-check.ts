@@ -8,9 +8,9 @@ import type { ChildProcess } from 'node:child_process';
 import type { Server } from 'node:net';
 import type { CoordinatorCallbacks } from './types.ts';
 
-/** Weaver OTLP receiver ports. */
-const GRPC_PORT = 4317;
-const HTTP_PORT = 4320;
+/** Default Weaver OTLP receiver ports. */
+const DEFAULT_GRPC_PORT = 4317;
+const DEFAULT_ADMIN_PORT = 4320;
 
 /** How long to wait for Weaver to start listening (ms). */
 const WEAVER_STARTUP_TIMEOUT_MS = 15_000;
@@ -59,6 +59,16 @@ export interface LiveCheckResult {
   warnings: string[];
 }
 
+/** Configuration options for the live-check workflow. */
+export interface LiveCheckOptions {
+  /** OTLP gRPC receiver port. Default: 4317. */
+  grpcPort?: number;
+  /** Weaver admin HTTP port. Default: 4320. */
+  adminPort?: number;
+  /** Inactivity timeout in seconds before Weaver auto-stops. Default: derived from TEST_SUITE_TIMEOUT_MS. */
+  inactivityTimeoutSeconds?: number;
+}
+
 /**
  * Check if a port is available for binding.
  *
@@ -71,6 +81,7 @@ export async function checkPortAvailable(
   deps?: LiveCheckDeps,
 ): Promise<PortCheckResult> {
   const createServer = deps?.createServerFn ?? defaultCreateServer;
+  const execFileFn = deps?.execFileFn ?? (defaultExecFile as unknown as LiveCheckDeps['execFileFn']);
 
   return new Promise((resolve) => {
     const server = createServer() as Server;
@@ -78,10 +89,10 @@ export async function checkPortAvailable(
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
         // Attempt to identify the blocking process via lsof
-        defaultExecFile('lsof', ['-i', `:${port}`, '-t'], (lsofErr, stdout) => {
+        execFileFn('lsof', ['-i', `:${port}`, '-t'], {}, (lsofErr, stdout) => {
           if (!lsofErr && stdout.trim()) {
             const pid = parseInt(stdout.trim().split('\n')[0], 10);
-            defaultExecFile('ps', ['-p', String(pid), '-o', 'comm='], (psErr, psStdout) => {
+            execFileFn('ps', ['-p', String(pid), '-o', 'comm='], {}, (psErr, psStdout) => {
               const processName = (!psErr && psStdout.trim()) ? psStdout.trim() : undefined;
               resolve({ available: false, port, pid, processName });
             });
@@ -127,10 +138,14 @@ export async function runLiveCheck(
   registryDir: string,
   projectDir: string,
   testCommand: string,
+  options?: LiveCheckOptions,
   deps?: LiveCheckDeps,
   callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
 ): Promise<LiveCheckResult> {
   const warnings: string[] = [];
+  const grpcPort = options?.grpcPort ?? DEFAULT_GRPC_PORT;
+  const adminPort = options?.adminPort ?? DEFAULT_ADMIN_PORT;
+  const inactivityTimeoutSeconds = options?.inactivityTimeoutSeconds ?? Math.ceil(TEST_SUITE_TIMEOUT_MS / 1000);
 
   // Step 1: Validate test command
   if (!testCommand || testCommand.trim() === '') {
@@ -141,17 +156,17 @@ export async function runLiveCheck(
   }
 
   // Step 2: Check port availability
-  const grpcCheck = await checkPortAvailable(GRPC_PORT, deps);
+  const grpcCheck = await checkPortAvailable(grpcPort, deps);
   if (!grpcCheck.available) {
     const pidInfo = grpcCheck.pid ? ` (PID: ${grpcCheck.pid}${grpcCheck.processName ? `, process: ${grpcCheck.processName}` : ''})` : '';
-    const msg = `Port ${GRPC_PORT} is in use${pidInfo}. Free this port to enable end-of-run schema validation. Skipping live-check.`;
+    const msg = `Port ${grpcPort} is in use${pidInfo}. Free this port to enable end-of-run schema validation. Skipping live-check.`;
     return { skipped: true, warnings: [msg] };
   }
 
-  const httpCheck = await checkPortAvailable(HTTP_PORT, deps);
+  const httpCheck = await checkPortAvailable(adminPort, deps);
   if (!httpCheck.available) {
     const pidInfo = httpCheck.pid ? ` (PID: ${httpCheck.pid}${httpCheck.processName ? `, process: ${httpCheck.processName}` : ''})` : '';
-    const msg = `Port ${HTTP_PORT} is in use${pidInfo}. Free this port to enable end-of-run schema validation. Skipping live-check.`;
+    const msg = `Port ${adminPort} is in use${pidInfo}. Free this port to enable end-of-run schema validation. Skipping live-check.`;
     return { skipped: true, warnings: [msg] };
   }
 
@@ -171,7 +186,12 @@ export async function runLiveCheck(
   let weaverStderr = '';
 
   try {
-    weaverProcess = spawnFn('weaver', ['registry', 'live-check', '-r', registryDir], {
+    weaverProcess = spawnFn('weaver', [
+      'registry', 'live-check', '-r', registryDir,
+      '--inactivity-timeout', String(inactivityTimeoutSeconds),
+      '--otlp-grpc-port', String(grpcPort),
+      '--admin-port', String(adminPort),
+    ], {
       stdio: ['ignore', 'pipe', 'pipe'],
     }) as ChildProcess;
   } catch (err) {
@@ -207,7 +227,7 @@ export async function runLiveCheck(
   // Step 5: Run test suite with OTLP endpoint override
   let testsPassed = true;
   try {
-    await runTestSuite(testCommand, projectDir, execFileFn);
+    await runTestSuite(testCommand, projectDir, grpcPort, execFileFn);
   } catch (err) {
     testsPassed = false;
     const message = err instanceof Error ? err.message : String(err);
@@ -217,7 +237,7 @@ export async function runLiveCheck(
   // Step 6: Stop Weaver via HTTP /stop endpoint
   let complianceReport: string | undefined;
   try {
-    const stopResponse = await fetchFn(`http://localhost:${HTTP_PORT}/stop`, {
+    const stopResponse = await fetchFn(`http://localhost:${adminPort}/stop`, {
       method: 'POST',
       signal: AbortSignal.timeout(WEAVER_STOP_TIMEOUT_MS),
     });
@@ -275,13 +295,12 @@ async function waitForWeaverReady(
     });
 
     // Give Weaver time to start, then assume it's ready
-    // In production, we'd poll the HTTP port; for now, use a startup delay
     const timer = setTimeoutFn(() => {
       if (!settled) {
         settled = true;
         resolve({ ready: true });
       }
-    }, 2000);
+    }, WEAVER_STARTUP_TIMEOUT_MS);
 
     // Clean up timer if process exits first
     process.on('close', () => {
@@ -296,6 +315,7 @@ async function waitForWeaverReady(
 async function runTestSuite(
   testCommand: string,
   projectDir: string,
+  grpcPort: number,
   execFileFn: LiveCheckDeps['execFileFn'],
 ): Promise<{ stdout: string; stderr: string }> {
   const isWindows = process.platform === 'win32';
@@ -311,7 +331,7 @@ async function runTestSuite(
         timeout: TEST_SUITE_TIMEOUT_MS,
         env: {
           ...process.env,
-          OTEL_EXPORTER_OTLP_ENDPOINT: `http://localhost:${GRPC_PORT}`,
+          OTEL_EXPORTER_OTLP_ENDPOINT: `http://localhost:${grpcPort}`,
         },
       },
       (error, stdout, stderr) => {

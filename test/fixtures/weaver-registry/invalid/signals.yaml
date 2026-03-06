@@ -1,0 +1,9 @@
+groups:
+  - id: span.test_app_invalid.broken_span
+    type: span
+    stability: development
+    brief: A span with a broken attribute reference
+    span_kind: internal
+    attributes:
+      - ref: nonexistent.attribute.that.does.not.exist
+        requirement_level: required

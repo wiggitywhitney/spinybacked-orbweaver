@@ -1,33 +1,15 @@
 // ABOUTME: Tests for the validation chain orchestration (chain.ts).
 // ABOUTME: Verifies Tier 1 short-circuiting, Tier 2 conditional execution, and result aggregation.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { ExecFileSyncOptions } from 'node:child_process';
-
-// Mock weaver to avoid requiring CLI
-vi.mock('node:child_process', async (importOriginal) => {
-  const original = (await importOriginal()) as typeof import('node:child_process');
-  return {
-    ...original,
-    execFileSync: vi.fn((cmd: string, args: string[], opts?: ExecFileSyncOptions) => {
-      // Let node --check through to real implementation
-      if (cmd === 'node') {
-        return original.execFileSync(cmd, args, opts);
-      }
-      // Mock weaver
-      if (cmd === 'weaver') {
-        return Buffer.from('Registry check passed\n');
-      }
-      return original.execFileSync(cmd, args, opts);
-    }),
-  };
-});
 
 import { validateFile } from '../../src/validation/chain.ts';
 import type { ValidateFileInput, ValidationConfig } from '../../src/validation/types.ts';
+
+const validRegistry = join(import.meta.dirname, '../fixtures/weaver-registry/valid');
 
 describe('validateFile', () => {
   let tempDir: string;
@@ -162,7 +144,7 @@ describe('validateFile', () => {
         config: {
           ...defaultConfig,
           enableWeaver: true,
-          registryPath: '/some/registry',
+          registryPath: validRegistry,
         },
       };
 
