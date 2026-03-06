@@ -279,6 +279,15 @@ describe('snapshotExtensionsFile', () => {
     const snapshot = await snapshotExtensionsFile(registryDir);
     expect(snapshot).toBeNull();
   });
+
+  it('throws non-ENOENT errors instead of returning null', async () => {
+    // Point at a path that exists but is not readable as a file
+    const notADir = join(registryDir, 'agent-extensions.yaml');
+    // Create a directory where the file should be — readFile on a directory throws EISDIR
+    await mkdir(notADir);
+
+    await expect(snapshotExtensionsFile(registryDir)).rejects.toThrow();
+  });
 });
 
 describe('restoreExtensionsFile', () => {
@@ -317,5 +326,13 @@ describe('restoreExtensionsFile', () => {
   it('does not throw when deleting a file that already does not exist', async () => {
     // No file exists, snapshot is null — should be a no-op
     await expect(restoreExtensionsFile(registryDir, null)).resolves.not.toThrow();
+  });
+
+  it('throws non-ENOENT errors when deleting with null snapshot', async () => {
+    // Create a directory where the file should be — unlink on a directory throws EPERM/EISDIR
+    const filePath = join(registryDir, 'agent-extensions.yaml');
+    await mkdir(filePath);
+
+    await expect(restoreExtensionsFile(registryDir, null)).rejects.toThrow();
   });
 });

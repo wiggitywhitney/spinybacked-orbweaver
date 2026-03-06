@@ -289,8 +289,9 @@ export async function dispatchFiles(
             if (extensionsSnapshot !== undefined) {
               try {
                 await restoreFn(registryDir, extensionsSnapshot);
-              } catch {
-                // Restore failure is non-fatal
+              } catch (restoreErr) {
+                const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+                extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
               }
             }
           } else {
@@ -321,8 +322,9 @@ export async function dispatchFiles(
         // Restore on-disk extensions file
         try {
           await restoreFn(registryDir, extensionsSnapshot);
-        } catch {
-          // Restore failure is non-fatal — continue dispatch
+        } catch (restoreErr) {
+          const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+          extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
         }
       }
 
@@ -381,8 +383,9 @@ export async function dispatchFiles(
         for (const ext of accumulatedExtensions) seenExtensions.add(ext);
         try {
           await restoreFn(registryDir, extensionsSnapshot);
-        } catch {
-          // Restore failure is non-fatal — continue dispatch
+        } catch (restoreErr) {
+          const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+          extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
         }
       }
 

@@ -951,7 +951,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
     expect(results[2].schemaHashBefore).not.toBe(results[2].schemaHashAfter);
   });
 
-  it('(d,e) checkpoints see accumulated extensions; infrastructure failure produces warning', async () => {
+  it('(d) checkpoints see accumulated extensions', async () => {
     const registryDir = copyRegistry('valid');
     const baselineDir = join(WEAVER_FIXTURES, 'valid');
 
@@ -1003,6 +1003,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
     // Both checkpoints pass — registry with accumulated extensions is valid
     expect(onSchemaCheckpoint).toHaveBeenNthCalledWith(1, 2, true);
     expect(onSchemaCheckpoint).toHaveBeenNthCalledWith(2, 4, true);
+    expect(warnings).toHaveLength(0);
   });
 
   it('(e) checkpoint infrastructure failure produces warning and dispatch continues', async () => {

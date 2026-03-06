@@ -176,8 +176,11 @@ export async function snapshotExtensionsFile(registryDir: string): Promise<strin
   const filePath = join(registryDir, EXTENSIONS_FILENAME);
   try {
     return await readFile(filePath, 'utf-8');
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -197,8 +200,10 @@ export async function restoreExtensionsFile(
   if (snapshot === null) {
     try {
       await unlink(filePath);
-    } catch {
-      // File already absent — no-op
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
     }
   } else {
     await writeFile(filePath, snapshot, 'utf-8');
