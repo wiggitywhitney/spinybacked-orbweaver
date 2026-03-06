@@ -687,7 +687,7 @@ describe('coordinate', () => {
       expect(result.runLevelAdvisory[0].message).toContain('inconsistent');
     });
 
-    it('runLevelAdvisory is empty when tracer naming is consistent', async () => {
+    it('runLevelAdvisory contains passing CDQ-008 result when tracer naming is consistent', async () => {
       const deps = makeDeps({
         discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
         dispatchFiles: vi.fn().mockResolvedValue([
