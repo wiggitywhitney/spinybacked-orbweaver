@@ -6,7 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { loadConfig as defaultLoadConfig } from '../config/loader.ts';
 import { discoverFiles as defaultDiscoverFiles } from '../coordinator/discovery.ts';
 import { coordinate as defaultCoordinate } from '../coordinator/coordinate.ts';
@@ -344,7 +344,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
       'and cost of the instrumentation run. No LLM calls are made — this is ' +
       'a fast, local-only calculation.',
     inputSchema: {
-      projectDir: z.string().describe('Absolute path to the project root directory'),
+      projectDir: z.string().min(1)
+        .refine((p) => isAbsolute(p), { message: 'projectDir must be an absolute path' })
+        .describe('Absolute path to the project root directory'),
       maxFilesPerRun: z.number().int().positive().optional()
         .describe('Override max files per run (default: from orb.yaml)'),
       maxTokensPerFile: z.number().int().positive().optional()
@@ -366,7 +368,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
       'Returns a hierarchical result: summary (files processed/succeeded/failed), ' +
       'per-file detail (spans added, advisory annotations), and schema integration data.',
     inputSchema: {
-      projectDir: z.string().describe('Absolute path to the project root directory'),
+      projectDir: z.string().min(1)
+        .refine((p) => isAbsolute(p), { message: 'projectDir must be an absolute path' })
+        .describe('Absolute path to the project root directory'),
       maxFilesPerRun: z.number().int().positive().optional()
         .describe('Override max files per run (default: from orb.yaml)'),
       maxTokensPerFile: z.number().int().positive().optional()
