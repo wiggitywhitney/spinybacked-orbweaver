@@ -10,6 +10,7 @@ import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig 
 import { computeSchemaHash } from './schema-hash.ts';
 import { runSchemaCheckpoint } from './schema-checkpoint.ts';
 import type { SchemaCheckpointDeps } from './schema-checkpoint.ts';
+import { writeSchemaExtensions as defaultWriteSchemaExtensions } from './schema-extensions.ts';
 
 /**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
@@ -104,6 +105,8 @@ interface DispatchFilesOptions {
   deps?: DispatchFilesDeps;
   checkpoint?: DispatchCheckpointConfig;
   checkpointDeps?: SchemaCheckpointDeps;
+  /** Absolute path to the Weaver registry directory. Required for per-file extension writing. */
+  registryDir?: string;
 }
 
 /**
@@ -137,6 +140,8 @@ export async function dispatchFiles(
   const resolveFn = options?.deps?.resolveSchema ?? resolveSchema;
   const instrumentFn = options?.deps?.instrumentWithRetry
     ?? (await import('../fix-loop/index.ts')).instrumentWithRetry;
+  const writeExtFn = options?.deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
+  const registryDir = options?.registryDir;
 
   const total = filePaths.length;
   const results: FileResult[] = [];
@@ -145,6 +150,10 @@ export async function dispatchFiles(
   let filesSinceLastCheckpoint = 0;
   let lastCheckpointResultIndex = 0;
   let stoppedByCheckpoint = false;
+
+  // In-memory accumulator for schema extensions across files (deduped)
+  const accumulatedExtensions: string[] = [];
+  const seenExtensions = new Set<string>();
 
   for (let i = 0; i < total; i++) {
     if (stoppedByCheckpoint) break;
@@ -179,6 +188,21 @@ export async function dispatchFiles(
       result.schemaHashAfter = schemaHash;
       results.push(result);
       filesSinceLastCheckpoint++;
+
+      // Write schema extensions per-file for successful files
+      if (registryDir && result.status === 'success' && result.schemaExtensions.length > 0) {
+        for (const ext of result.schemaExtensions) {
+          if (!seenExtensions.has(ext)) {
+            seenExtensions.add(ext);
+            accumulatedExtensions.push(ext);
+          }
+        }
+        try {
+          await writeExtFn(registryDir, [...accumulatedExtensions]);
+        } catch {
+          // Extension write failure is degrade-and-warn — don't stop dispatch
+        }
+      }
 
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
 

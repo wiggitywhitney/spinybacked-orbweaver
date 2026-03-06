@@ -1,7 +1,7 @@
 # PRD: Per-File Schema Extension Writing
 
 **Issue**: [#31](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/31)
-**Status**: Not Started
+**Status**: In Progress
 **Priority**: High
 **Blocked by**: None (all required infrastructure exists from Phases 4-5)
 **Created**: 2026-03-06
@@ -93,7 +93,7 @@ src/
 
 ## Milestones
 
-- [ ] **Milestone 1: Per-file extension writing in dispatch loop** — Move `writeSchemaExtensions()` call into the `dispatchFiles()` for-loop, executed after each successful file (after `instrumentFn` returns with `status: 'success'`). Extensions from the current file are written to `agent-extensions.yaml` before the next file's `resolveSchema()` call. The existing `collectSchemaExtensions` + `writeSchemaExtensions` functions may need adjustment to support incremental writing via an in-memory accumulator with full-file overwrite (see Decision Log), rather than append-in-place YAML mutation. Verify: (a) file B's resolved schema includes extensions from file A, (b) `weaver registry check` passes after each incremental write, (c) extensions accumulate correctly across files.
+- [x] **Milestone 1: Per-file extension writing in dispatch loop** — Move `writeSchemaExtensions()` call into the `dispatchFiles()` for-loop, executed after each successful file (after `instrumentFn` returns with `status: 'success'`). Extensions from the current file are written to `agent-extensions.yaml` before the next file's `resolveSchema()` call. The existing `collectSchemaExtensions` + `writeSchemaExtensions` functions may need adjustment to support incremental writing via an in-memory accumulator with full-file overwrite (see Decision Log), rather than append-in-place YAML mutation. Verify: (a) file B's resolved schema includes extensions from file A, (b) `weaver registry check` passes after each incremental write, (c) extensions accumulate correctly across files.
 
 - [ ] **Milestone 2: Meaningful schemaHashBefore/After** — Compute `schemaHashAfter` after extensions are written (not before, as currently). The hash sequence across the `FileResult` array should show: file A's `schemaHashAfter` equals file B's `schemaHashBefore` (when A wrote extensions). For files that don't create extensions, `schemaHashBefore` equals `schemaHashAfter`. Verify: (a) hashes differ when extensions are written, (b) hash chain is continuous across files, (c) a file with no extensions shows identical before/after hashes.
 
