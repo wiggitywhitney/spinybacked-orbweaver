@@ -64,6 +64,7 @@ export function aggregateResults(
     librariesInstalled: [],
     libraryInstallFailures: [],
     sdkInitUpdated: false,
+    runLevelAdvisory: [],
     warnings: collectWarnings(results),
   };
 }
