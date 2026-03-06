@@ -13,5 +13,5 @@ A copy of `valid/` with known additions for diff testing.
 ## Expected diff output (JSON)
 
 When diffed against `valid/` as baseline, `weaver registry diff` produces:
-- `changes.registry_attributes`: one entry `{ name: "test_app.order.status", type: "added" }`
+- `changes.registry_attributes`: one entry `{"name": "test_app.order.status", "type": "added"}`
 - All other categories (`spans`, `metrics`, `events`, `entities`): empty arrays

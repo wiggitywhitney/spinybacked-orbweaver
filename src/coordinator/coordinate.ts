@@ -84,6 +84,7 @@ export interface CoordinateDeps {
     callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
   ) => Promise<LiveCheckResult>;
   readFileForAdvisory: (filePath: string) => Promise<string>;
+  liveCheckOptions?: LiveCheckOptions;
 }
 
 /**
@@ -343,7 +344,7 @@ export async function coordinate(
       registryDir,
       projectDir,
       config.testCommand,
-      undefined,
+      deps?.liveCheckOptions,
       undefined,
       callbacks,
     );
