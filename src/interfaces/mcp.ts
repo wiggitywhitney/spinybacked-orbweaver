@@ -12,6 +12,8 @@ import { coordinate as defaultCoordinate } from '../coordinator/coordinate.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { DiscoverFilesOptions } from '../coordinator/discovery.ts';
 import type { CostCeiling, RunResult, CoordinatorCallbacks } from '../coordinator/types.ts';
+import type { FileResult } from '../fix-loop/types.ts';
+import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
 /**
@@ -32,6 +34,12 @@ export interface McpDeps {
     deps?: CoordinateDeps,
   ) => Promise<RunResult>;
 }
+
+/** Log levels supported by MCP SDK's sendLoggingMessage. */
+type McpLogLevel = 'error' | 'warning' | 'debug' | 'info' | 'notice' | 'critical' | 'alert' | 'emergency';
+
+/** Logging function for MCP progress notifications. */
+export type McpLogFn = (params: { level: McpLogLevel; data: string }) => void;
 
 /** Input parameters for the get-cost-ceiling tool. */
 interface GetCostCeilingInput {
@@ -140,6 +148,180 @@ export async function handleGetCostCeiling(
   };
 }
 
+/** Input parameters for the instrument tool. */
+interface InstrumentInput {
+  projectDir: string;
+  maxFilesPerRun?: number;
+  maxTokensPerFile?: number;
+  exclude?: string[];
+}
+
+/**
+ * Format a RunResult into a hierarchical structure for AI intermediary consumption.
+ * Summary at top level, per-file detail, cost/token data, schema integration, and warnings.
+ */
+function formatRunResultForMcp(result: RunResult): object {
+  return {
+    summary: {
+      filesProcessed: result.filesProcessed,
+      filesSucceeded: result.filesSucceeded,
+      filesFailed: result.filesFailed,
+      filesSkipped: result.filesSkipped,
+      librariesInstalled: result.librariesInstalled,
+      libraryInstallFailures: result.libraryInstallFailures,
+      sdkInitUpdated: result.sdkInitUpdated,
+    },
+    files: result.fileResults.map((f: FileResult) => ({
+      path: f.path,
+      status: f.status,
+      spansAdded: f.spansAdded,
+      attributesCreated: f.attributesCreated,
+      validationAttempts: f.validationAttempts,
+      ...(f.reason ? { reason: f.reason } : {}),
+      ...(f.advisoryAnnotations?.length ? { advisoryAnnotations: f.advisoryAnnotations } : {}),
+      ...(f.notes?.length ? { notes: f.notes } : {}),
+    })),
+    costCeiling: result.costCeiling,
+    actualTokenUsage: result.actualTokenUsage,
+    ...(result.schemaDiff || result.schemaHashStart || result.endOfRunValidation
+      ? {
+          schemaIntegration: {
+            ...(result.schemaDiff ? { schemaDiff: result.schemaDiff } : {}),
+            ...(result.schemaHashStart ? { schemaHashStart: result.schemaHashStart } : {}),
+            ...(result.schemaHashEnd ? { schemaHashEnd: result.schemaHashEnd } : {}),
+            ...(result.endOfRunValidation ? { endOfRunValidation: result.endOfRunValidation } : {}),
+          },
+        }
+      : {}),
+    warnings: result.warnings,
+  };
+}
+
+/**
+ * Handle the instrument tool request.
+ * Loads config, calls coordinate() with confirmEstimate: false, returns hierarchical RunResult.
+ *
+ * @param input - Tool input parameters
+ * @param deps - Injectable dependencies
+ * @param logFn - Logging function for progress notifications
+ * @returns MCP tool result with formatted RunResult as JSON
+ */
+export async function handleInstrumentTool(
+  input: InstrumentInput,
+  deps: McpDeps,
+  logFn: McpLogFn,
+): Promise<ToolResult> {
+  const { projectDir } = input;
+
+  // Load config from orb.yaml
+  const configPath = join(projectDir, 'orb.yaml');
+  const configResult = await deps.loadConfig(configPath);
+
+  if (!configResult.success) {
+    return {
+      content: [{
+        type: 'text',
+        text: `Failed to load config: ${configResult.error.message}\n\nRun \`orb init\` to create a configuration file.`,
+      }],
+      isError: true,
+    };
+  }
+
+  // Build config with overrides and confirmEstimate: false (MCP uses two-tool flow)
+  const config: AgentConfig = {
+    ...configResult.config,
+    confirmEstimate: false,
+    ...(input.maxFilesPerRun !== undefined ? { maxFilesPerRun: input.maxFilesPerRun } : {}),
+    ...(input.maxTokensPerFile !== undefined ? { maxTokensPerFile: input.maxTokensPerFile } : {}),
+    ...(input.exclude !== undefined ? { exclude: input.exclude } : {}),
+  };
+
+  // Wire callbacks to MCP progress notifications
+  const callbacks: CoordinatorCallbacks = {
+    onFileStart: (path, index, total) => {
+      logFn({
+        level: 'info',
+        data: JSON.stringify({ stage: 'fileStart', path, index, total }),
+      });
+    },
+    onFileComplete: (result, index, total) => {
+      logFn({
+        level: 'info',
+        data: JSON.stringify({
+          stage: 'fileComplete',
+          path: result.path,
+          status: result.status,
+          spansAdded: result.spansAdded,
+          index,
+          total,
+        }),
+      });
+    },
+    onRunComplete: (results) => {
+      const succeeded = results.filter(r => r.status === 'success').length;
+      const failed = results.filter(r => r.status === 'failed').length;
+      const skipped = results.filter(r => r.status === 'skipped').length;
+      logFn({
+        level: 'info',
+        data: JSON.stringify({
+          stage: 'runComplete',
+          succeeded,
+          failed,
+          skipped,
+          total: results.length,
+        }),
+      });
+    },
+    onSchemaCheckpoint: (filesProcessed, passed) => {
+      logFn({
+        level: 'info',
+        data: JSON.stringify({ stage: 'schemaCheckpoint', filesProcessed, passed }),
+      });
+    },
+    onValidationStart: () => {
+      logFn({ level: 'info', data: JSON.stringify({ stage: 'validationStart' }) });
+    },
+    onValidationComplete: (passed, complianceReport) => {
+      logFn({
+        level: 'info',
+        data: JSON.stringify({ stage: 'validationComplete', passed, complianceReport }),
+      });
+    },
+  };
+
+  // Run coordinator
+  let runResult: RunResult;
+  try {
+    runResult = await deps.coordinate(projectDir, config, callbacks, undefined);
+  } catch (err) {
+    if (err instanceof CoordinatorAbortError) {
+      return {
+        content: [{
+          type: 'text',
+          text: `Instrumentation aborted: ${err.message}`,
+        }],
+        isError: true,
+      };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      content: [{
+        type: 'text',
+        text: `Unexpected error during instrumentation: ${message}`,
+      }],
+      isError: true,
+    };
+  }
+
+  // Return hierarchical response
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify(formatRunResultForMcp(runResult), null, 2),
+    }],
+  };
+}
+
 /**
  * Create and configure the MCP server with all tools registered.
  *
@@ -171,6 +353,31 @@ export function createMcpServer(deps: McpDeps): McpServer {
     },
   }, async (input) => {
     return handleGetCostCeiling(input, deps);
+  });
+
+  mcpServer.registerTool('instrument', {
+    title: 'Instrument',
+    description:
+      'Run full OpenTelemetry instrumentation on a JavaScript project. ' +
+      'Analyzes source files, adds spans, attributes, and context propagation ' +
+      'using LLM-guided code generation. Call get-cost-ceiling first to understand ' +
+      'the scope and cost before running this tool. ' +
+      'Returns a hierarchical result: summary (files processed/succeeded/failed), ' +
+      'per-file detail (spans added, advisory annotations), and schema integration data.',
+    inputSchema: {
+      projectDir: z.string().describe('Absolute path to the project root directory'),
+      maxFilesPerRun: z.number().int().positive().optional()
+        .describe('Override max files per run (default: from orb.yaml)'),
+      maxTokensPerFile: z.number().int().positive().optional()
+        .describe('Override max tokens per file (default: from orb.yaml)'),
+      exclude: z.array(z.string()).optional()
+        .describe('Override exclude patterns (default: from orb.yaml)'),
+    },
+  }, async (input) => {
+    const logFn: McpLogFn = (params) => {
+      mcpServer.sendLoggingMessage(params);
+    };
+    return handleInstrumentTool(input, deps, logFn);
   });
 
   return mcpServer;
