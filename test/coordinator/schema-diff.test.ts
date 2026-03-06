@@ -125,6 +125,21 @@ describe('runSchemaDiff (integration)', () => {
     });
   });
 
+  it('produces JSON output with non-added change types from real weaver', async () => {
+    // Swap current/baseline so the added attribute appears as "removed"
+    const result = await runSchemaDiff(
+      join(FIXTURES_DIR, 'baseline'),
+      join(FIXTURES_DIR, 'valid-modified'),
+      'json',
+    );
+
+    const parsed = JSON.parse(result);
+    expect(parsed.changes.registry_attributes).toContainEqual({
+      name: 'test_app.order.status',
+      type: 'removed',
+    });
+  });
+
   it('produces empty changes when diffing identical registries', async () => {
     const result = await runSchemaDiff(
       join(FIXTURES_DIR, 'valid'),
@@ -325,6 +340,20 @@ describe('computeSchemaDiff (integration)', () => {
 
     expect(result.valid).toBe(true);
     expect(result.violations).toHaveLength(0);
+  });
+
+  it('rejects non-added changes end-to-end with real weaver', async () => {
+    // Swap current/baseline so the added attribute appears as "removed"
+    const result = await computeSchemaDiff(
+      join(FIXTURES_DIR, 'baseline'),
+      join(FIXTURES_DIR, 'valid-modified'),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.violations.length).toBeGreaterThan(0);
+    expect(result.violations[0]).toContain('removed');
+    expect(result.violations[0]).toContain('test_app.order.status');
+    expect(result.error).toBeUndefined();
   });
 
   it('returns error when registry path is invalid', async () => {
