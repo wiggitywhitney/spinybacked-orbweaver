@@ -395,6 +395,65 @@ describe('DX verification', () => {
     });
   });
 
+  describe('CLI: cost ceiling includes dollar estimate', () => {
+    it('onCostCeilingReady output includes dollar amount', async () => {
+      const deps = makeCliDeps();
+      await handleInstrument(makeCliOptions(), deps);
+      const callbacks = (deps.coordinate as ReturnType<typeof vi.fn>).mock.calls[0][2] as CoordinatorCallbacks;
+
+      // Simulate cost ceiling callback with known values
+      callbacks.onCostCeilingReady!({ fileCount: 5, totalFileSizeBytes: 25000, maxTokensCeiling: 400000 });
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const ceilingLine = stderrMessages.find((s: string) => s.includes('Cost ceiling'));
+      expect(ceilingLine).toBeDefined();
+      // Must include dollar amount, not just tokens
+      expect(ceilingLine).toMatch(/\$\d+\.\d+/);
+      // Must still include file count for context
+      expect(ceilingLine).toContain('5 files');
+    });
+  });
+
+  describe('CLI: early abort produces actionable error', () => {
+    it('early abort error includes ruleId and remediation guidance', async () => {
+      const deps = makeCliDeps({
+        coordinate: vi.fn().mockRejectedValue(
+          new CoordinatorAbortError(
+            'Early abort: 3 consecutive files failed with the same error (SYNTAX). ' +
+            'This indicates a systemic issue — not a file-specific problem. ' +
+            'Check your configuration, dependencies, and schema setup before retrying. ' +
+            'Partial results from files processed before the abort are preserved.',
+          ),
+        ),
+      });
+      const result = await handleInstrument(makeCliOptions(), deps);
+
+      expect(result.exitCode).toBe(2);
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const errorMsg = stderrMessages.join('\n');
+      // Includes the ruleId
+      expect(errorMsg).toContain('SYNTAX');
+      // Includes remediation
+      expect(errorMsg).toContain('configuration');
+      // Includes partial results note
+      expect(errorMsg).toContain('Partial results');
+    });
+  });
+
+  describe('MCP: get-cost-ceiling includes dollar estimate', () => {
+    it('response includes estimated cost in dollars', async () => {
+      const deps = makeMcpDeps();
+      const result = await handleGetCostCeiling({ projectDir: '/project' }, deps);
+
+      expect(result.isError).toBeUndefined();
+      const parsed = JSON.parse(result.content[0].text);
+      // Must include dollar estimate alongside token data
+      expect(parsed.estimatedCostDollars).toBeDefined();
+      expect(typeof parsed.estimatedCostDollars).toBe('string');
+      expect(parsed.estimatedCostDollars).toMatch(/^\$/);
+    });
+  });
+
   describe('MCP: progress notifications are semantically meaningful', () => {
     it('onFileStart notification includes stage, path, index, and total', async () => {
       const logFn = vi.fn() as McpLogFn;

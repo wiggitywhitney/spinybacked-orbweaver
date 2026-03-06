@@ -88,6 +88,7 @@ describe('MCP server', () => {
         fileCount: 3,
         totalFileSizeBytes: 3072,
         maxTokensCeiling: 240000,
+        estimatedCostDollars: expect.stringMatching(/^\$/),
       });
     });
 

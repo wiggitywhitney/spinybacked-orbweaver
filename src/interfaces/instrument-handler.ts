@@ -6,6 +6,7 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
+import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
 
 /** Options parsed from CLI arguments for the instrument command. */
 export interface InstrumentOptions {
@@ -107,10 +108,11 @@ export async function handleInstrument(
   // Build callbacks: wire coordinator progress to stderr output
   const callbacks: CoordinatorCallbacks = {
     onCostCeilingReady: async (ceiling) => {
+      const dollarEstimate = formatDollars(ceilingToDollars(ceiling, config.agentModel));
       deps.stderr(
         `Cost ceiling: ${ceiling.fileCount} files, ` +
-        `${ceiling.totalFileSizeBytes} bytes, ` +
-        `${ceiling.maxTokensCeiling} max tokens`,
+        `${ceiling.maxTokensCeiling} max tokens, ` +
+        `estimated max cost ${dollarEstimate}`,
       );
       if (!options.yes) {
         const proceed = await deps.promptConfirm('Proceed? [y/N] ');
