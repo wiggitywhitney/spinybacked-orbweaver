@@ -71,3 +71,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `WEAVER_STARTUP_TIMEOUT_MS` wired into `waitForWeaverReady` instead of hardcoded 2000ms (issue #29)
 - `checkPortAvailable` uses DI-injected `execFileFn` for `lsof`/`ps` calls instead of bypassing DI (issue #30)
 - Replaced Weaver CLI mocks in `weaver.test.ts` and `chain.test.ts` with integration tests against real Weaver binary using shared registry fixtures
+- Replaced all mock-based live-check tests with 13 integration tests against real Weaver binary (port checking, full OTLP workflow via `weaver registry emit`, inactivity timeout, port conflict detection)
