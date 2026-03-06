@@ -1,5 +1,5 @@
 // ABOUTME: Integration tests for schema checkpoint module — two-step validation with structured failure reporting.
-// ABOUTME: Runs real weaver binary against test registry fixtures — no mocks.
+// ABOUTME: Runs real weaver binary against test registry fixtures.
 
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';

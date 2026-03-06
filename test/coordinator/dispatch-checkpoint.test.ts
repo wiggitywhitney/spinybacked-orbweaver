@@ -1,5 +1,5 @@
 // ABOUTME: Integration tests for periodic schema checkpoints within the dispatch loop.
-// ABOUTME: Runs real weaver binary for checkpoint validation — no mocked execFileFn.
+// ABOUTME: Runs real weaver binary for checkpoint validation.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -53,7 +53,7 @@ function makeSuccessResult(filePath: string, overrides: Partial<FileResult> = {}
   };
 }
 
-/** Build mock deps for dispatch (resolveSchema + instrumentWithRetry — agent boundary, not Weaver). */
+/** Build deps for dispatch (resolveSchema + instrumentWithRetry — agent boundary, not CLI). */
 function makeDeps(overrides: Partial<DispatchFilesDeps> = {}): DispatchFilesDeps {
   return {
     resolveSchema: vi.fn().mockResolvedValue({ resolved: true }),

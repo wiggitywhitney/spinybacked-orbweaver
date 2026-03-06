@@ -213,7 +213,7 @@ Additional bugs discovered when running against real Weaver output should be fix
 
 - [x] **Milestone 9: Integration tests for init handler** — Replace mocks in `test/interfaces/init-handler.test.ts` for `weaver --version` and `weaver registry check`. Run against real Weaver binary. Verify: (a) version parsing works with real output, (b) version comparison against `weaverMinVersion` works, (c) schema validation with real registry works.
 
-- [ ] **Milestone 10: Zero mocks verification and acceptance gate** — Audit all test files to confirm zero remaining Weaver CLI mocks. Run the full test suite with real Weaver binary. Verify: (a) `grep -r` for Weaver mock patterns returns nothing, (b) all tests pass, (c) CI workflow installs Weaver binary pinned to v0.21.2 (per Decision Log — prevents breakage from unreleased `registry resolve` deprecation), (d) test execution time is acceptable (Weaver CLI calls are fast — <1s each except live-check).
+- [x] **Milestone 10: Zero mocks verification and acceptance gate** — Audit all test files to confirm zero remaining Weaver CLI mocks. Run the full test suite with real Weaver binary. Verify: (a) `grep -r` for Weaver mock patterns returns nothing, (b) all tests pass, (c) CI workflow installs Weaver binary pinned to v0.21.2 (per Decision Log — prevents breakage from unreleased `registry resolve` deprecation), (d) test execution time is acceptable (Weaver CLI calls are fast — <1s each except live-check).
 
 ## Dependencies
 

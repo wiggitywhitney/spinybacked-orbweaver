@@ -502,25 +502,22 @@ describe('DX Verification — Milestone 8', () => {
     it('checkpoint failure warnings include failing rule, triggering file, and blast radius', async () => {
       // Test at the SchemaCheckpointResult level — checkpoint failures include all three diagnostics
       const { runSchemaCheckpoint } = await import('../../src/coordinator/schema-checkpoint.ts');
-      const execFileFn = vi.fn()
-        .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-          const error = new Error('Schema validation error');
-          (error as unknown as Record<string, unknown>).stdout = Buffer.from('Error: attribute "myapp.order.total" has invalid type');
-          (error as unknown as Record<string, unknown>).stderr = Buffer.from('');
-          cb(error, '', '');
-        });
+      const { join } = await import('node:path');
+
+      // Real Weaver call against invalid registry fixture
+      const invalidRegistry = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'invalid');
+      const baselineFixture = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'baseline');
 
       const result = await runSchemaCheckpoint(
-        '/project/schemas/registry',
-        '/tmp/baseline',
+        invalidRegistry,
+        baselineFixture,
         '/project/src/order-handler.js',
         4,
-        { execFileFn },
       );
 
       // Failing rule is identified in message
       expect(result.message).toMatch(/Schema validation failed/);
-      expect(result.message).toContain('myapp.order.total');
+      expect(result.message).toContain('nonexistent.attribute.that.does.not.exist');
       // Triggering file is reported
       expect(result.triggeringFile).toBe('/project/src/order-handler.js');
       // Blast radius is reported

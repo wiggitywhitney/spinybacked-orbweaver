@@ -1,5 +1,5 @@
 // ABOUTME: Integration tests for the Tier 1 Weaver registry check.
-// ABOUTME: Runs real weaver binary against test registry fixtures — no mocks.
+// ABOUTME: Runs real weaver binary against test registry fixtures.
 
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';

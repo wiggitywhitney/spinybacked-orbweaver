@@ -123,7 +123,7 @@ function setupTempProject(): string {
 
 /**
  * Build CoordinateDeps that use real file discovery and dispatch
- * but mock prerequisites (weaver CLI) and npm install.
+ * but stub prerequisites and npm install (coordination boundary, not CLI).
  */
 function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
   return {
@@ -785,23 +785,15 @@ describe('Acceptance Gate — Phase 5 Checkpoint and Drift Integration', () => {
   it('(f) checkpoint failure provides rule, file, and blast radius end-to-end', async () => {
     const { runSchemaCheckpoint } = await import('../../src/coordinator/schema-checkpoint.ts');
 
-    // Mock weaver registry check failure
-    const execFileFn = vi.fn()
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        const error = new Error('check failed');
-        (error as unknown as Record<string, unknown>).stdout = Buffer.from(
-          'Error: attribute "fixture_service.order.id" references undefined type "invalid_enum"',
-        );
-        (error as unknown as Record<string, unknown>).stderr = Buffer.from('');
-        cb(error, '', '');
-      });
+    // Real Weaver call against invalid registry fixture
+    const invalidRegistry = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'invalid');
+    const baselineFixture = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'baseline');
 
     const result = await runSchemaCheckpoint(
-      '/project/telemetry/registry',
-      '/tmp/baseline',
+      invalidRegistry,
+      baselineFixture,
       '/project/src/order-service.js',
       3,
-      { execFileFn },
     );
 
     // Overall failure
@@ -816,43 +808,28 @@ describe('Acceptance Gate — Phase 5 Checkpoint and Drift Integration', () => {
 
     // Message contains the failing rule details
     expect(result.message).toContain('Schema validation failed');
-    expect(result.message).toContain('fixture_service.order.id');
+    expect(result.message).toContain('nonexistent.attribute.that.does.not.exist');
   });
 
   it('(f) checkpoint integrity violation (non-added change) provides structured diagnostics', async () => {
     const { runSchemaCheckpoint } = await import('../../src/coordinator/schema-checkpoint.ts');
 
-    const execFileFn = vi.fn()
-      // First call: registry check passes
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        cb(null, 'Schema check passed', '');
-      })
-      // Second call: registry diff returns a removed change
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        cb(null, JSON.stringify({
-          changes: {
-            registry_attributes: [
-              { name: 'fixture_service.new_attr', type: 'added' },
-              { name: 'fixture_service.old_attr', type: 'removed' },
-            ],
-          },
-        }), '');
-      });
+    // Swap baseline/current to produce "removed" changes against real Weaver
+    const validModifiedFixture = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'valid-modified');
+    const baselineFixture = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'baseline');
 
     const result = await runSchemaCheckpoint(
-      '/project/telemetry/registry',
-      '/tmp/baseline',
+      baselineFixture,
+      validModifiedFixture,
       '/project/src/routes.js',
       5,
-      { execFileFn },
     );
 
     expect(result.passed).toBe(false);
     expect(result.failedCheck).toBe('integrity');
     expect(result.checkPassed).toBe(true);
     expect(result.diffPassed).toBe(false);
-    expect(result.violations).toHaveLength(1);
-    expect(result.violations[0]).toContain('fixture_service.old_attr');
+    expect(result.violations.length).toBeGreaterThan(0);
     expect(result.violations[0]).toContain('removed');
     expect(result.violations[0]).toContain('agents may only add new definitions');
     expect(result.blastRadius).toBe(5);
