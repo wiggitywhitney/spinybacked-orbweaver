@@ -256,10 +256,22 @@ export async function dispatchFiles(
         }
         try {
           const writeResult = await writeExtFn(registryDir, [...accumulatedExtensions]);
-          if (writeResult.rejected.length > 0 && extWarnings) {
-            extWarnings.push(
-              `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
-            );
+          if (writeResult.rejected.length > 0) {
+            // Remove rejected extensions from accumulator so they aren't resubmitted
+            const rejectedSet = new Set(writeResult.rejected);
+            for (let j = accumulatedExtensions.length - 1; j >= 0; j--) {
+              if (rejectedSet.has(accumulatedExtensions[j])) {
+                accumulatedExtensions.splice(j, 1);
+              }
+            }
+            for (const rejected of writeResult.rejected) {
+              seenExtensions.delete(rejected);
+            }
+            if (extWarnings) {
+              extWarnings.push(
+                `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
+              );
+            }
           }
 
           // Validate the registry after writing extensions
@@ -311,11 +323,19 @@ export async function dispatchFiles(
           if (extWarnings) {
             extWarnings.push(`Schema extension write failed: ${msg}`);
           }
-          // Roll back in-memory state since write failed
+          // Roll back in-memory and on-disk state since write failed
           extensionRollbackDone = true;
           accumulatedExtensions.length = accumulatorLengthSnapshot;
           seenExtensions.clear();
           for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+          if (extensionsSnapshot !== undefined) {
+            try {
+              await restoreFn(registryDir, extensionsSnapshot);
+            } catch (restoreErr) {
+              const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+              extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
+            }
+          }
         }
       }
 
