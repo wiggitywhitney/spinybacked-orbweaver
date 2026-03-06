@@ -509,7 +509,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     });
 
     expect(schemaExtensionWarnings).toHaveLength(1);
-    expect(schemaExtensionWarnings[0]).toContain('Schema extension writing failed');
+    expect(schemaExtensionWarnings[0]).toContain('Schema extension write failed');
     expect(schemaExtensionWarnings[0]).toContain('Weaver write failed');
   });
 
@@ -783,10 +783,11 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     // Dispatch continues despite write failure
     expect(results).toHaveLength(2);
-    expect(results[0].status).toBe('success');
+    expect(results[0].status).toBe('failed');
+    expect(results[0].reason).toContain('Schema extension write failed');
     expect(results[1].status).toBe('success');
 
-    // Second write still attempted with accumulated extensions
+    // Second write still attempted (file 1's extensions rolled back, file 2 has its own)
     expect(writeSchemaExtensions).toHaveBeenCalledTimes(2);
   });
 });

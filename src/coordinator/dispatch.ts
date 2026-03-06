@@ -300,9 +300,15 @@ export async function dispatchFiles(
           }
         } catch (writeErr) {
           const msg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+          result.status = 'failed';
+          result.reason = `Schema extension write failed: ${msg}`;
           if (extWarnings) {
-            extWarnings.push(`Schema extension writing failed (degraded): ${msg}`);
+            extWarnings.push(`Schema extension write failed: ${msg}`);
           }
+          // Roll back in-memory state since write failed
+          accumulatedExtensions.length = accumulatorLengthSnapshot;
+          seenExtensions.clear();
+          for (const ext of accumulatedExtensions) seenExtensions.add(ext);
         }
       }
 
