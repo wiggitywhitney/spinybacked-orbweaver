@@ -199,7 +199,7 @@ Additional bugs discovered when running against real Weaver output should be fix
 
 - [x] **Milestone 2: Fix live-check flags** — Add `--inactivity-timeout` to the `spawn` call in `runLiveCheck()` with a value derived from `TEST_SUITE_TIMEOUT_MS` (or a separate config field). Add `--otlp-grpc-port` and `--admin-port` support so ports are configurable rather than hardcoded. Update `checkPortAvailable` to use the configured ports. Resolve issues #29 (use `WEAVER_STARTUP_TIMEOUT_MS` or remove it) and #30 (`checkPortAvailable` DI consistency). Verify: (a) Weaver doesn't auto-stop during long test suites, (b) non-default ports work, (c) `WEAVER_STARTUP_TIMEOUT_MS` is used or removed.
 
-- [ ] **Milestone 3: Address `registry resolve` deprecation** — Research `weaver registry generate` and `weaver registry package` to determine which is the correct replacement for getting resolved schema JSON. Update `resolveSchema()` in `dispatch.ts` and all callers. If the replacement command's output format differs, update schema parsing accordingly. If migration is not feasible yet (e.g., replacement commands are too new or have different semantics), document the decision and add a `--future` compatibility note. Verify: (a) no deprecation warnings from Weaver during normal operation, (b) resolved schema output is equivalent.
+- [x] **Milestone 3: Address `registry resolve` deprecation** — Research confirmed `registry resolve` is not deprecated in v0.21.2 (latest release). The deprecation and its replacement (`registry package`) exist only in unreleased code on `main`. Migration is not feasible — `registry package` doesn't exist in v0.21.2. Decision: keep using `registry resolve`, pin Weaver to v0.21.2 in CI, migrate when next release ships. No `--future` flag usage in codebase. See Decision Log.
 
 - [ ] **Milestone 4: Integration tests for `registry check`** — Replace mocks in `test/validation/tier1/weaver.test.ts` and `test/validation/chain.test.ts` with integration tests against a real Weaver binary and a test registry fixture. Create a minimal test registry in the test fixtures directory (valid YAML with known attributes). Test: (a) valid registry passes check, (b) invalid registry fails with diagnostic output, (c) missing Weaver binary produces ENOENT, (d) chain.ts short-circuit behavior still works with real Weaver. Remove the `vi.mock('node:child_process')` calls that fake Weaver output.
 
@@ -213,11 +213,11 @@ Additional bugs discovered when running against real Weaver output should be fix
 
 - [ ] **Milestone 9: Integration tests for init handler** — Replace mocks in `test/interfaces/init-handler.test.ts` for `weaver --version` and `weaver registry check`. Run against real Weaver binary. Verify: (a) version parsing works with real output, (b) version comparison against `weaverMinVersion` works, (c) schema validation with real registry works.
 
-- [ ] **Milestone 10: Zero mocks verification and acceptance gate** — Audit all test files to confirm zero remaining Weaver CLI mocks. Run the full test suite with real Weaver binary. Verify: (a) `grep -r` for Weaver mock patterns returns nothing, (b) all tests pass, (c) CI workflow installs Weaver binary, (d) test execution time is acceptable (Weaver CLI calls are fast — <1s each except live-check).
+- [ ] **Milestone 10: Zero mocks verification and acceptance gate** — Audit all test files to confirm zero remaining Weaver CLI mocks. Run the full test suite with real Weaver binary. Verify: (a) `grep -r` for Weaver mock patterns returns nothing, (b) all tests pass, (c) CI workflow installs Weaver binary pinned to v0.21.2 (per Decision Log — prevents breakage from unreleased `registry resolve` deprecation), (d) test execution time is acceptable (Weaver CLI calls are fast — <1s each except live-check).
 
 ## Dependencies
 
-- **Weaver CLI**: Must be installed locally and in CI. Version >=0.21.2.
+- **Weaver CLI**: Must be installed locally and in CI. Pin to v0.21.2 (next release deprecates `registry resolve` — see Decision Log).
 - **Test registry fixtures**: Need minimal valid Weaver registries for integration tests. Can use the Minimum Viable Schema Example from the spec (lines 1381-1513) as a starting point.
 - **Issues #29 and #30**: Folded into Milestone 2 to avoid separate PRs for closely related live-check fixes.
 
@@ -236,9 +236,10 @@ Additional bugs discovered when running against real Weaver output should be fix
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-03-06 | CI installs Weaver via installer script from GitHub Releases | Fastest option for CI. Weaver provides an installer script: `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh \| sh`. Docker and cargo install are slower and add unnecessary complexity. |
+| 2026-03-06 | Keep `registry resolve` — deprecation is unreleased | Research confirmed `registry resolve` is NOT deprecated in v0.21.2 (latest release). The deprecation (PR #1255) and its replacement `registry package` (PR #1254) are merged to `main` but unreleased. `registry package` doesn't exist in v0.21.2, so migration is impossible. `registry generate` is not a direct replacement — it's template-based artifact generation. When the next Weaver release ships, migrate from `resolve` to `package`. Pin Weaver to v0.21.2 in CI (Milestone 10) to prevent surprise breakage. No `--future` flag usage exists in the codebase (good — future mode will error on deprecated commands). |
 
 ## Open Questions
 
-1. **`registry resolve` replacement**: Need to verify whether `registry generate` or `registry package` produces equivalent JSON output. If the output format differs significantly, the migration may require updating schema parsing throughout the codebase. Research needed before Milestone 3 implementation.
+1. ~~**`registry resolve` replacement**~~: **RESOLVED** — `registry package` is the semantic replacement (writes resolved schema), but it doesn't exist in v0.21.2. `registry generate` is template-based artifact generation, not a direct replacement. Migration deferred until next Weaver release. See Decision Log entry and Milestone 3.
 2. **live-check integration test infrastructure**: Milestone 8 needs a minimal Node.js app that emits OTLP telemetry. Options: (a) tiny script using `@opentelemetry/sdk-trace-node` + `@opentelemetry/exporter-trace-otlp-grpc`, (b) use `weaver registry emit` to generate test telemetry. Option (b) avoids adding test-only npm dependencies and uses a tool already installed (Weaver). Recommended: option (b).
 3. **`--future` flag for `registry check`**: The Weaver CLI Reference notes that `--future` enables latest validation rules and is recommended for new registries. The codebase doesn't use it. Consider adding it as a configurable option (default off) in a follow-up — not in scope for this PRD but worth tracking.
