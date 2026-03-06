@@ -32,7 +32,7 @@ describe('runSchemaCheckpoint', () => {
         })
         // Second call: weaver registry diff --diff-format json (all added)
         .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-          cb(null, JSON.stringify({ changes: [{ change_type: 'added', name: 'myapp.order.total' }] }), '');
+          cb(null, JSON.stringify({ changes: { registry_attributes: [{ name: 'myapp.order.total', type: 'added' }] } }), '');
         });
 
       const deps = makeDeps({ execFileFn });
@@ -143,10 +143,12 @@ describe('runSchemaCheckpoint', () => {
         })
         .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
           cb(null, JSON.stringify({
-            changes: [
-              { change_type: 'added', name: 'myapp.order.total' },
-              { change_type: 'removed', name: 'myapp.old_attr' },
-            ],
+            changes: {
+              registry_attributes: [
+                { name: 'myapp.order.total', type: 'added' },
+                { name: 'myapp.old_attr', type: 'removed' },
+              ],
+            },
           }), '');
         });
 
@@ -168,7 +170,7 @@ describe('runSchemaCheckpoint', () => {
         })
         .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
           cb(null, JSON.stringify({
-            changes: [{ change_type: 'renamed', name: 'myapp.old_name' }],
+            changes: { registry_attributes: [{ name: 'myapp.old_name', type: 'renamed' }] },
           }), '');
         });
 
@@ -259,7 +261,7 @@ describe('runSchemaCheckpoint', () => {
             cb(null, 'passed', '');
           })
           .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-            cb(null, JSON.stringify({ changes: [{ change_type: 'added', name: 'myapp.attr' }] }), '');
+            cb(null, JSON.stringify({ changes: { registry_attributes: [{ name: 'myapp.attr', type: 'added' }] } }), '');
           }),
       };
     }

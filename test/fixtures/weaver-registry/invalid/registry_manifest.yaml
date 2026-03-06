@@ -1,0 +1,4 @@
+name: test_app_invalid
+description: Invalid registry with broken references for negative tests
+semconv_version: 0.1.0
+schema_base_url: https://test.dev/schemas/

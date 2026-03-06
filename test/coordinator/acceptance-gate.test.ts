@@ -815,10 +815,12 @@ describe('Acceptance Gate — Phase 5 Checkpoint and Drift Integration', () => {
       // Second call: registry diff returns a removed change
       .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
         cb(null, JSON.stringify({
-          changes: [
-            { change_type: 'added', name: 'fixture_service.new_attr' },
-            { change_type: 'removed', name: 'fixture_service.old_attr' },
-          ],
+          changes: {
+            registry_attributes: [
+              { name: 'fixture_service.new_attr', type: 'added' },
+              { name: 'fixture_service.old_attr', type: 'removed' },
+            ],
+          },
         }), '');
       });
 

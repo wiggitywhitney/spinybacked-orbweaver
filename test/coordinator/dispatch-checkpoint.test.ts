@@ -71,7 +71,7 @@ function makePassingCheckpointDeps(): SchemaCheckpointDeps {
         if (args.includes('check')) {
           cb(null, 'Registry check passed.', '');
         } else if (args.includes('diff')) {
-          cb(null, JSON.stringify({ changes: [{ change_type: 'added', name: 'myapp.attr' }] }), '');
+          cb(null, JSON.stringify({ changes: { registry_attributes: [{ name: 'myapp.attr', type: 'added' }] } }), '');
         }
       }),
   };
@@ -87,7 +87,7 @@ function makeFailingCheckCheckpointDeps(): SchemaCheckpointDeps {
           (error as unknown as Record<string, unknown>).stdout = Buffer.from('Error: invalid type');
           cb(error, '', '');
         } else if (args.includes('diff')) {
-          cb(null, JSON.stringify({ changes: [] }), '');
+          cb(null, JSON.stringify({ changes: { registry_attributes: [] } }), '');
         }
       }),
   };
@@ -102,7 +102,7 @@ function makeFailingDiffCheckpointDeps(): SchemaCheckpointDeps {
           cb(null, 'Registry check passed.', '');
         } else if (args.includes('diff')) {
           cb(null, JSON.stringify({
-            changes: [{ change_type: 'removed', name: 'myapp.deleted_attr' }],
+            changes: { registry_attributes: [{ name: 'myapp.deleted_attr', type: 'removed' }] },
           }), '');
         }
       }),
@@ -225,7 +225,7 @@ describe('dispatchFiles with schema checkpoints', () => {
           if (args.includes('check')) {
             cb(null, 'passed', '');
           } else if (args.includes('diff')) {
-            cb(null, JSON.stringify({ changes: [] }), '');
+            cb(null, JSON.stringify({ changes: { registry_attributes: [] } }), '');
           }
         });
 

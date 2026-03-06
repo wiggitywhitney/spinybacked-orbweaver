@@ -90,15 +90,31 @@ export async function runSchemaDiff(
   });
 }
 
+/** A single change entry from Weaver's diff JSON output. */
+export interface WeaverDiffChange {
+  name: string;
+  type: string;
+  new_name?: string;
+  note?: string;
+}
+
+/** Weaver's diff JSON `changes` object — categories mapped to arrays of changes. */
+export interface WeaverDiffChanges {
+  [category: string]: WeaverDiffChange[];
+}
+
 /**
  * Validate that all changes in a diff JSON output are "added" only.
  * Rejects "renamed", "obsoleted", "removed", and "uncategorized" changes.
+ *
+ * Weaver produces `{ changes: { registry_attributes: [...], spans: [...], ... } }`
+ * where each category maps to an array of `{ name, type }` entries.
  *
  * @param diffJson - Raw JSON string from `weaver registry diff --diff-format json`
  * @returns Validation result with specific violation messages
  */
 export function validateDiffChanges(diffJson: string): DiffValidationResult {
-  let parsed: { changes?: Array<{ change_type: string; name: string }> };
+  let parsed: { changes?: WeaverDiffChanges };
   try {
     parsed = JSON.parse(diffJson) as typeof parsed;
   } catch {
@@ -109,18 +125,21 @@ export function validateDiffChanges(diffJson: string): DiffValidationResult {
   }
 
   const changes = parsed.changes;
-  if (!Array.isArray(changes)) {
-    return { valid: false, violations: ['Schema diff JSON did not include a valid "changes" array.'] };
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
+    return { valid: false, violations: ['Schema diff JSON did not include a valid "changes" object.'] };
   }
 
   const violations: string[] = [];
-  for (const change of changes) {
-    if (!change || typeof change !== 'object') continue;
-    if (change.change_type !== 'added') {
-      violations.push(
-        `Schema integrity violation: existing definition "${change.name}" was ${change.change_type}` +
-        ` — agents may only add new definitions.`,
-      );
+  for (const [category, entries] of Object.entries(changes)) {
+    if (!Array.isArray(entries)) continue;
+    for (const change of entries) {
+      if (!change || typeof change !== 'object') continue;
+      if (change.type !== 'added') {
+        violations.push(
+          `Schema integrity violation (${category}): existing definition "${change.name}" was ${change.type}` +
+          ` — agents may only add new definitions.`,
+        );
+      }
     }
   }
 

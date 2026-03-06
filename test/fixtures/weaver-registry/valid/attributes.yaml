@@ -1,0 +1,16 @@
+groups:
+  - id: registry.test_app.core
+    type: attribute_group
+    display_name: Core Attributes
+    brief: Core test attributes
+    attributes:
+      - id: test_app.order.id
+        type: string
+        stability: development
+        brief: Unique order identifier
+        examples: ["order-123"]
+      - id: test_app.order.total
+        type: double
+        stability: development
+        brief: Order total amount
+        examples: [29.99]

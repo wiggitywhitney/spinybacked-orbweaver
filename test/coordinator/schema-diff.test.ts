@@ -1,9 +1,9 @@
 // ABOUTME: Tests for schema diff module — baseline snapshot, diff execution, and change validation.
-// ABOUTME: Covers Milestone 3 of PRD 5: registry baseline snapshot and diff for extend-only enforcement.
+// ABOUTME: Integration tests run against real Weaver binary; unit tests cover deterministic parsing.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, mkdir, rm, readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   createBaselineSnapshot,
@@ -12,6 +12,8 @@ import {
   validateDiffChanges,
   computeSchemaDiff,
 } from '../../src/coordinator/schema-diff.ts';
+
+const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
 
 describe('createBaselineSnapshot', () => {
   let tempRegistryDir: string;
@@ -95,57 +97,59 @@ describe('cleanupSnapshot', () => {
   });
 });
 
-describe('runSchemaDiff', () => {
-  it('calls weaver registry diff with correct arguments for markdown format', async () => {
-    const execFileMock = vi.fn((_cmd: string, args: string[], _opts: unknown, cb: Function) => {
-      cb(null, '## Schema Changes\n- Added attribute myapp.order.total\n', '');
-    });
-
-    const result = await runSchemaDiff('/registry', '/baseline', 'markdown', execFileMock);
-
-    expect(execFileMock).toHaveBeenCalledWith(
-      'weaver',
-      ['registry', 'diff', '-r', '/registry', '--baseline-registry', '/baseline', '--diff-format', 'markdown'],
-      expect.objectContaining({ timeout: 30000 }),
-      expect.any(Function),
+describe('runSchemaDiff (integration)', () => {
+  it('produces markdown output from real weaver registry diff', async () => {
+    const result = await runSchemaDiff(
+      join(FIXTURES_DIR, 'valid-modified'),
+      join(FIXTURES_DIR, 'baseline'),
+      'markdown',
     );
-    expect(result).toContain('Schema Changes');
+
+    expect(result).toContain('test_app.order.status');
   });
 
-  it('calls weaver registry diff with correct arguments for json format', async () => {
-    const diffOutput = JSON.stringify({ changes: [] });
-    const execFileMock = vi.fn((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-      cb(null, diffOutput, '');
-    });
-
-    const result = await runSchemaDiff('/registry', '/baseline', 'json', execFileMock);
-
-    expect(execFileMock).toHaveBeenCalledWith(
-      'weaver',
-      ['registry', 'diff', '-r', '/registry', '--baseline-registry', '/baseline', '--diff-format', 'json'],
-      expect.objectContaining({ timeout: 30000 }),
-      expect.any(Function),
+  it('produces JSON output with correct structure from real weaver registry diff', async () => {
+    const result = await runSchemaDiff(
+      join(FIXTURES_DIR, 'valid-modified'),
+      join(FIXTURES_DIR, 'baseline'),
+      'json',
     );
-    expect(result).toBe(diffOutput);
+
+    const parsed = JSON.parse(result);
+    expect(parsed).toHaveProperty('changes');
+    expect(parsed.changes).toHaveProperty('registry_attributes');
+    expect(Array.isArray(parsed.changes.registry_attributes)).toBe(true);
+    expect(parsed.changes.registry_attributes).toContainEqual({
+      name: 'test_app.order.status',
+      type: 'added',
+    });
   });
 
-  it('throws when weaver registry diff fails', async () => {
-    const execFileMock = vi.fn((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-      cb(new Error('weaver not found'), '', '');
-    });
+  it('produces empty changes when diffing identical registries', async () => {
+    const result = await runSchemaDiff(
+      join(FIXTURES_DIR, 'valid'),
+      join(FIXTURES_DIR, 'baseline'),
+      'json',
+    );
 
-    await expect(runSchemaDiff('/registry', '/baseline', 'markdown', execFileMock))
-      .rejects.toThrow('weaver not found');
+    const parsed = JSON.parse(result);
+    for (const entries of Object.values(parsed.changes)) {
+      expect(entries).toHaveLength(0);
+    }
   });
 });
 
 describe('validateDiffChanges', () => {
   it('returns valid when all changes are "added"', () => {
     const diffJson = JSON.stringify({
-      changes: [
-        { change_type: 'added', name: 'myapp.order.total' },
-        { change_type: 'added', name: 'myapp.order.status' },
-      ],
+      changes: {
+        registry_attributes: [
+          { name: 'myapp.order.total', type: 'added' },
+          { name: 'myapp.order.status', type: 'added' },
+        ],
+        spans: [],
+        metrics: [],
+      },
     });
 
     const result = validateDiffChanges(diffJson);
@@ -154,8 +158,16 @@ describe('validateDiffChanges', () => {
     expect(result.violations).toHaveLength(0);
   });
 
-  it('returns valid when there are no changes', () => {
-    const diffJson = JSON.stringify({ changes: [] });
+  it('returns valid when all categories are empty', () => {
+    const diffJson = JSON.stringify({
+      changes: {
+        registry_attributes: [],
+        spans: [],
+        metrics: [],
+        events: [],
+        entities: [],
+      },
+    });
 
     const result = validateDiffChanges(diffJson);
 
@@ -165,10 +177,12 @@ describe('validateDiffChanges', () => {
 
   it('returns invalid when changes include "renamed"', () => {
     const diffJson = JSON.stringify({
-      changes: [
-        { change_type: 'added', name: 'myapp.order.total' },
-        { change_type: 'renamed', name: 'myapp.old_name' },
-      ],
+      changes: {
+        registry_attributes: [
+          { name: 'myapp.order.total', type: 'added' },
+          { name: 'myapp.old_name', type: 'renamed', new_name: 'myapp.new_name' },
+        ],
+      },
     });
 
     const result = validateDiffChanges(diffJson);
@@ -181,9 +195,11 @@ describe('validateDiffChanges', () => {
 
   it('returns invalid when changes include "obsoleted"', () => {
     const diffJson = JSON.stringify({
-      changes: [
-        { change_type: 'obsoleted', name: 'myapp.deprecated_attr' },
-      ],
+      changes: {
+        registry_attributes: [
+          { name: 'myapp.deprecated_attr', type: 'obsoleted', note: 'Deprecated' },
+        ],
+      },
     });
 
     const result = validateDiffChanges(diffJson);
@@ -194,9 +210,11 @@ describe('validateDiffChanges', () => {
 
   it('returns invalid when changes include "removed"', () => {
     const diffJson = JSON.stringify({
-      changes: [
-        { change_type: 'removed', name: 'myapp.deleted_attr' },
-      ],
+      changes: {
+        registry_attributes: [
+          { name: 'myapp.deleted_attr', type: 'removed' },
+        ],
+      },
     });
 
     const result = validateDiffChanges(diffJson);
@@ -207,9 +225,11 @@ describe('validateDiffChanges', () => {
 
   it('returns invalid when changes include "uncategorized"', () => {
     const diffJson = JSON.stringify({
-      changes: [
-        { change_type: 'uncategorized', name: 'myapp.mystery_attr' },
-      ],
+      changes: {
+        registry_attributes: [
+          { name: 'myapp.mystery_attr', type: 'uncategorized' },
+        ],
+      },
     });
 
     const result = validateDiffChanges(diffJson);
@@ -218,13 +238,19 @@ describe('validateDiffChanges', () => {
     expect(result.violations[0]).toContain('uncategorized');
   });
 
-  it('reports all violations when multiple non-added changes exist', () => {
+  it('reports violations across multiple categories', () => {
     const diffJson = JSON.stringify({
-      changes: [
-        { change_type: 'renamed', name: 'myapp.renamed_attr' },
-        { change_type: 'removed', name: 'myapp.removed_attr' },
-        { change_type: 'added', name: 'myapp.new_attr' },
-      ],
+      changes: {
+        registry_attributes: [
+          { name: 'myapp.renamed_attr', type: 'renamed' },
+        ],
+        spans: [
+          { name: 'myapp.removed_span', type: 'removed' },
+        ],
+        metrics: [
+          { name: 'myapp.new_metric', type: 'added' },
+        ],
+      },
     });
 
     const result = validateDiffChanges(diffJson);
@@ -233,17 +259,20 @@ describe('validateDiffChanges', () => {
     expect(result.violations).toHaveLength(2);
   });
 
-  it('produces actionable violation messages', () => {
+  it('produces actionable violation messages with category context', () => {
     const diffJson = JSON.stringify({
-      changes: [
-        { change_type: 'removed', name: 'myapp.deleted_attr' },
-      ],
+      changes: {
+        registry_attributes: [
+          { name: 'myapp.deleted_attr', type: 'removed' },
+        ],
+      },
     });
 
     const result = validateDiffChanges(diffJson);
 
     expect(result.violations[0]).toContain('myapp.deleted_attr');
     expect(result.violations[0]).toContain('removed');
+    expect(result.violations[0]).toContain('registry_attributes');
     expect(result.violations[0]).toMatch(/agents may only add new definitions/);
   });
 
@@ -255,77 +284,56 @@ describe('validateDiffChanges', () => {
     expect(result.violations[0]).toContain('Failed to parse');
   });
 
-  it('handles missing changes array as invalid', () => {
+  it('handles missing changes object as invalid', () => {
     const result = validateDiffChanges(JSON.stringify({ other: 'data' }));
 
-    // Missing changes array = can't validate extend-only enforcement
     expect(result.valid).toBe(false);
     expect(result.violations).toHaveLength(1);
     expect(result.violations[0]).toContain('changes');
   });
+
+  it('handles changes as flat array (wrong structure) as invalid', () => {
+    const diffJson = JSON.stringify({
+      changes: [{ name: 'attr', type: 'added' }],
+    });
+
+    const result = validateDiffChanges(diffJson);
+
+    expect(result.valid).toBe(false);
+    expect(result.violations[0]).toContain('changes');
+  });
 });
 
-describe('computeSchemaDiff', () => {
-  it('returns markdown diff and validation result', async () => {
-    const execFileMock = vi.fn()
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        // Markdown call
-        cb(null, '## Schema Changes\n- Added myapp.order.total\n', '');
-      })
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        // JSON call
-        cb(null, JSON.stringify({ changes: [{ change_type: 'added', name: 'myapp.order.total' }] }), '');
-      });
+describe('computeSchemaDiff (integration)', () => {
+  it('returns markdown and valid result for extend-only changes', async () => {
+    const result = await computeSchemaDiff(
+      join(FIXTURES_DIR, 'valid-modified'),
+      join(FIXTURES_DIR, 'baseline'),
+    );
 
-    const result = await computeSchemaDiff('/registry', '/baseline', execFileMock);
+    expect(result.markdown).toContain('test_app.order.status');
+    expect(result.valid).toBe(true);
+    expect(result.violations).toHaveLength(0);
+    expect(result.error).toBeUndefined();
+  });
 
-    expect(result.markdown).toContain('Schema Changes');
+  it('returns valid result when registries are identical', async () => {
+    const result = await computeSchemaDiff(
+      join(FIXTURES_DIR, 'valid'),
+      join(FIXTURES_DIR, 'baseline'),
+    );
+
     expect(result.valid).toBe(true);
     expect(result.violations).toHaveLength(0);
   });
 
-  it('returns invalid result when non-added changes detected', async () => {
-    const execFileMock = vi.fn()
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        cb(null, '## Schema Changes\n- Removed myapp.old\n', '');
-      })
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        cb(null, JSON.stringify({ changes: [{ change_type: 'removed', name: 'myapp.old' }] }), '');
-      });
+  it('returns error when registry path is invalid', async () => {
+    const result = await computeSchemaDiff(
+      '/nonexistent/registry',
+      join(FIXTURES_DIR, 'baseline'),
+    );
 
-    const result = await computeSchemaDiff('/registry', '/baseline', execFileMock);
-
-    expect(result.markdown).toContain('Schema Changes');
     expect(result.valid).toBe(false);
-    expect(result.violations).toHaveLength(1);
-  });
-
-  it('returns degraded result when markdown diff fails', async () => {
-    const execFileMock = vi.fn()
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        cb(new Error('weaver crashed'), '', '');
-      });
-
-    const result = await computeSchemaDiff('/registry', '/baseline', execFileMock);
-
-    expect(result.markdown).toBeUndefined();
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('weaver crashed');
-  });
-
-  it('returns markdown but invalid validation when JSON diff fails', async () => {
-    const execFileMock = vi.fn()
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        cb(null, '## Changes\n', '');
-      })
-      .mockImplementationOnce((_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
-        cb(new Error('json format unsupported'), '', '');
-      });
-
-    const result = await computeSchemaDiff('/registry', '/baseline', execFileMock);
-
-    expect(result.markdown).toBe('## Changes\n');
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('json format unsupported');
+    expect(result.error).toBeDefined();
   });
 });

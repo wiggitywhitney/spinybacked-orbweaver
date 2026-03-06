@@ -1,0 +1,11 @@
+groups:
+  - id: span.test_app.process_order
+    type: span
+    stability: development
+    brief: Process an incoming order
+    span_kind: internal
+    attributes:
+      - ref: test_app.order.id
+        requirement_level: required
+      - ref: test_app.order.total
+        requirement_level: recommended
