@@ -16,7 +16,7 @@ interface InitDeps {
   access: (path: string) => Promise<void>;
   writeFile: (path: string, content: string) => Promise<void>;
   execFileSync: (cmd: string, args: string[], opts?: object) => Buffer;
-  globSync: (patterns: string[]) => string[];
+  globSync: (patterns: string[], options?: { cwd?: string }) => string[];
   findSchemaDir: (projectDir: string) => string | null;
   prompt: (question: string) => Promise<string>;
   stderr: (msg: string) => void;
@@ -138,7 +138,12 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     if (err instanceof SyntaxError) {
       errors.push(`package.json at ${packageJsonPath} contains invalid JSON.`);
     } else {
-      errors.push(`package.json not found at ${packageJsonPath} — run 'npm init' to create one.`);
+      const error = err as NodeJS.ErrnoException;
+      if (error.code === 'ENOENT') {
+        errors.push(`package.json not found at ${packageJsonPath} — run 'npm init' to create one.`);
+      } else {
+        errors.push(`Cannot read package.json at ${packageJsonPath}: ${error.message}`);
+      }
     }
     return { success: false, errors, warnings };
   }
@@ -218,7 +223,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
 
   // Detect SDK init file
   deps.stderr('Detecting SDK init file...');
-  const foundInitFiles = deps.globSync(SDK_INIT_PATTERNS);
+  const foundInitFiles = deps.globSync(SDK_INIT_PATTERNS, { cwd: projectDir });
   if (foundInitFiles.length === 0) {
     errors.push(
       'SDK init file not found. Create an OTel SDK initialization file ' +
@@ -270,7 +275,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     deps.stderr('');
 
     const answer = await deps.prompt('Create orb.yaml with these settings? [y/N] ');
-    if (answer.toLowerCase() !== 'y') {
+    if (answer.trim().toLowerCase() !== 'y') {
       errors.push('Init cancelled by user.');
       return { success: false, errors, warnings };
     }
@@ -285,7 +290,13 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   };
 
   const yamlContent = stringifyYaml(config);
-  await deps.writeFile(configPath, yamlContent);
+  try {
+    await deps.writeFile(configPath, yamlContent);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    errors.push(`Failed to write orb.yaml at ${configPath}: ${message}`);
+    return { success: false, errors, warnings };
+  }
 
   deps.stderr(`Created ${configPath}`);
 

@@ -81,8 +81,10 @@ describe('detectProjectType', () => {
 describe('handleInit', () => {
   describe('prerequisite checks', () => {
     it('fails when package.json not found', async () => {
+      const err = new Error('ENOENT') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
       const deps = makeDeps({
-        readFile: vi.fn(async () => { throw new Error('ENOENT'); }),
+        readFile: vi.fn(async () => { throw err; }),
       });
 
       const result = await handleInit({ projectDir: '/test', yes: true }, deps);
@@ -90,7 +92,24 @@ describe('handleInit', () => {
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('package.json'),
+          expect.stringContaining('package.json not found'),
+        ]),
+      );
+    });
+
+    it('reports permission error when package.json cannot be read', async () => {
+      const err = new Error('Permission denied') as NodeJS.ErrnoException;
+      err.code = 'EACCES';
+      const deps = makeDeps({
+        readFile: vi.fn(async () => { throw err; }),
+      });
+
+      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Cannot read package.json'),
         ]),
       );
     });
@@ -323,6 +342,16 @@ describe('handleInit', () => {
       expect(deps.prompt).toHaveBeenCalled();
     });
 
+    it('accepts trimmed confirmation input', async () => {
+      const deps = makeDeps({
+        prompt: vi.fn(async () => '  y  \n'),
+      });
+
+      const result = await handleInit({ projectDir: '/test', yes: false }, deps);
+
+      expect(result.success).toBe(true);
+    });
+
     it('aborts when user declines confirmation', async () => {
       const deps = makeDeps({
         prompt: vi.fn(async () => 'n'),
@@ -337,6 +366,37 @@ describe('handleInit', () => {
         ]),
       );
       expect(deps.writeFile).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('globSync scoping', () => {
+    it('passes projectDir as cwd to globSync', async () => {
+      const globSyncMock = vi.fn(() => ['src/instrumentation.ts']);
+      const deps = makeDeps({ globSync: globSyncMock });
+
+      await handleInit({ projectDir: '/my/project', yes: true }, deps);
+
+      expect(globSyncMock).toHaveBeenCalledWith(
+        expect.any(Array),
+        { cwd: '/my/project' },
+      );
+    });
+  });
+
+  describe('writeFile error handling', () => {
+    it('returns structured error when orb.yaml write fails', async () => {
+      const deps = makeDeps({
+        writeFile: vi.fn(async () => { throw new Error('EACCES: permission denied'); }),
+      });
+
+      const result = await handleInit({ projectDir: '/test', yes: true }, deps);
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('Failed to write orb.yaml'),
+        ]),
+      );
     });
   });
 

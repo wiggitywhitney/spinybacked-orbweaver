@@ -33,6 +33,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Oscillation detection (`src/fix-loop/oscillation.ts`): error-count monotonicity and duplicate error detection trigger early exit or skip to fresh regeneration
 - `instrumentWithRetry()` orchestrator: wires `instrumentFile` + `validateFile` with retry, populates complete `FileResult` on all exit paths (success, exhaustion, budget exceeded, oscillation, unexpected error)
 - Phase 3 acceptance gate tests: end-to-end validation with real Anthropic API (successful retry, budget exceeded, file revert, strategy verification)
+- Coordinator (`src/coordinator/`): `coordinate()` orchestrator wiring file discovery, dispatch, aggregation, and finalization with three error categories (abort, degrade-and-continue, degrade-and-warn)
+- File discovery (`src/coordinator/discovery.ts`): glob-based `.js` file discovery with exclude patterns, SDK init file exclusion, and `maxFilesPerRun` limit
+- File dispatch (`src/coordinator/dispatch.ts`): sequential per-file `instrumentWithRetry()` invocation with progress callbacks and cost ceiling computation
+- Result aggregation (`src/coordinator/aggregate.ts`): per-file results rolled up into `RunResult` with warnings, cost ceiling, and summary statistics
+- Finalization (`src/coordinator/aggregate.ts`): SDK init file update and dependency installation via `npm install` with `dependencyStrategy` support
+- `CoordinatorCallbacks`: `onFileStart`, `onFileComplete`, `onCostCeilingReady`, `onRunComplete` for progress reporting and cost confirmation
+- `CoordinatorAbortError`: typed error for unrecoverable coordinator failures (prerequisite failure, discovery failure, cost ceiling rejection)
+- Schema extensions (`src/coordinator/schema-extensions.ts`): collect per-file schema YAML, write to registry with namespace enforcement, reject cross-namespace writes
+- Schema hash computation (`src/coordinator/schema-hash.ts`): deterministic JSON hash of resolved Weaver schema for drift detection (`schemaHashStart`/`schemaHashEnd` on `RunResult`)
+- Schema diff (`src/coordinator/schema-diff.ts`): baseline snapshot, `weaver registry diff --diff-format markdown`, violation detection for removed/renamed attributes
+- Live check (`src/coordinator/live-check.ts`): end-of-run Weaver `live-check` validation with `onValidationStart`/`onValidationComplete` callbacks and compliance report
+- Schema checkpoint (`src/coordinator/dispatch.ts`): mid-run `weaver registry check` after schema extensions, revert on failure
+- CDQ-008 tracer naming consistency (`src/validation/cdq008.ts`): cross-file advisory check verifying consistent `trace.getTracer()` naming patterns
+- `RunResult` extended with `schemaHashStart`, `schemaHashEnd`, `schemaDiff`, `endOfRunValidation`, and `runLevelAdvisory` fields
+- Phase 4 acceptance gate tests: coordinator orchestration with real Anthropic API
 - CLI scaffold with yargs (`orb init`, `orb instrument` commands with all flags)
 - `orb init` wired to real handlers: prerequisite verification, config file creation, project type detection
 - `orb instrument` wired to coordinator with exit codes (0=success, 1=partial, 2=failure, 3=abort)
