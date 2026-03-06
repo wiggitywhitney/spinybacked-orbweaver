@@ -104,8 +104,8 @@ describe('isVersionSatisfied', () => {
     expect(isVersionSatisfied('0.19.0', '0.21.2')).toBe(false);
   });
 
-  it('returns false when actual is older major', () => {
-    expect(isVersionSatisfied('0.20.9', '0.21.2')).toBe(false);
+  it('returns false when actual has older major version', () => {
+    expect(isVersionSatisfied('0.5.0', '1.0.0')).toBe(false);
   });
 
   it('returns false for unparseable version', () => {
