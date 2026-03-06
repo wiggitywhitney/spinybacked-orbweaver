@@ -205,7 +205,7 @@ Additional bugs discovered when running against real Weaver output should be fix
 
 - [x] **Milestone 5: Integration tests for `registry diff`** — Replace mocks in `test/coordinator/schema-diff.test.ts` with integration tests. Create two registry fixture directories (baseline and modified). Run real `weaver registry diff` and verify: (a) markdown format produces readable output, (b) JSON format matches the parser from Milestone 1, (c) extend-only enforcement works end-to-end, (d) `added` changes pass, `renamed`/`obsoleted`/`removed` changes are rejected.
 
-- [ ] **Milestone 6: Integration tests for `registry resolve` (or replacement)** — Replace the mock in `test/coordinator/acceptance-gate.test.ts` (`resolveSchemaForHash`) with a real `weaver registry resolve` (or its replacement from Milestone 3) call. Verify the resolved schema is a valid JSON object that `computeSchemaHash()` can hash consistently.
+- [x] **Milestone 6: Integration tests for `registry resolve` (or replacement)** — Replace the mock in `test/coordinator/acceptance-gate.test.ts` (`resolveSchemaForHash`) with a real `weaver registry resolve` (or its replacement from Milestone 3) call. Verify the resolved schema is a valid JSON object that `computeSchemaHash()` can hash consistently.
 
 - [ ] **Milestone 7: Integration tests for schema checkpoints** — Replace mocks in `test/coordinator/schema-checkpoint.test.ts` and `test/coordinator/dispatch-checkpoint.test.ts`. Use real registry fixtures and run real `weaver registry check` + `weaver registry diff` at checkpoint intervals. Verify: (a) checkpoints detect real schema violations, (b) blast radius is reported correctly, (c) extend-only enforcement catches non-`added` changes in a real diff.
 

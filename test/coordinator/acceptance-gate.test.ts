@@ -11,8 +11,9 @@ import { tmpdir } from 'node:os';
 import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
 import { discoverFiles } from '../../src/coordinator/discovery.ts';
-import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
+import { dispatchFiles, resolveSchema } from '../../src/coordinator/dispatch.ts';
 import { finalizeResults } from '../../src/coordinator/aggregate.ts';
+import { readdirSync } from 'node:fs';
 import { instrumentWithRetry } from '../../src/fix-loop/index.ts';
 import { stat } from 'node:fs/promises';
 import type { AgentConfig } from '../../src/config/schema.ts';
@@ -20,6 +21,7 @@ import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { CoordinatorCallbacks, CostCeiling, RunResult } from '../../src/coordinator/types.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'project');
+const WEAVER_REGISTRY_DIR = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'valid');
 const API_KEY_AVAILABLE = !!process.env.ANTHROPIC_API_KEY;
 
 /** Load the resolved schema fixture. */
@@ -93,6 +95,12 @@ function setupTempProject(): string {
     join(tempDir, 'src', 'already-instrumented.js'),
   );
 
+  // Copy weaver registry fixture into the temp project's schema directory
+  const registryFiles = readdirSync(WEAVER_REGISTRY_DIR);
+  for (const file of registryFiles) {
+    copyFileSync(join(WEAVER_REGISTRY_DIR, file), join(tempDir, 'telemetry', 'registry', file));
+  }
+
   // Create SDK init file with NodeSDK pattern
   writeFileSync(join(tempDir, 'src', 'instrumentation.js'), SDK_INIT_CONTENT, 'utf-8');
 
@@ -148,7 +156,7 @@ function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
       });
     },
     writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
-    resolveSchemaForHash: vi.fn().mockResolvedValue(resolvedSchema),
+    resolveSchemaForHash: resolveSchema,
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
     computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
@@ -383,23 +391,34 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
  * Schema hash, diff, live-check, and extensions return meaningful values
  * so that RunResult schema fields are populated.
  */
-function makePhase5Deps(resolvedSchema: object): CoordinateDeps {
+/** Extension YAML written to the registry between resolve calls to simulate schema change. */
+const EXTENSION_YAML = `groups:
+  - id: registry.fixture_service.agent_extensions
+    type: attribute_group
+    brief: Agent-created attributes
+    attributes:
+      - id: fixture_service.custom.agent_attr
+        type: string
+        stability: development
+        brief: Custom agent attribute
+`;
+
+function makePhase5Deps(resolvedSchema: object, tempDir: string): CoordinateDeps {
   let resolveCallCount = 0;
 
-  // Simulate schema changing after extensions are written
-  const schemaBeforeExtension = { ...resolvedSchema };
-  const schemaAfterExtension = {
-    ...(resolvedSchema as Record<string, unknown>),
-    groups: [
-      ...((resolvedSchema as { groups: unknown[] }).groups ?? []),
-      {
-        id: 'registry.fixture_service.agent_extensions',
-        type: 'attribute_group',
-        display_name: 'Agent-Created Attributes',
-        brief: 'Attributes created by the instrumentation agent',
-        attributes: [{ name: 'fixture_service.custom.agent_attr', type: 'string' }],
-      },
-    ],
+  /**
+   * Wrapper around real resolveSchema that writes an extension file before the
+   * second call, simulating the schema change that happens when extensions are
+   * written to the registry between run-start and run-end resolve calls.
+   */
+  const resolveWithExtension = async (projectDir: string, schemaPath: string): Promise<object> => {
+    resolveCallCount++;
+    if (resolveCallCount === 2) {
+      // Write extension file to the registry before second resolve
+      const registryDir = join(projectDir, schemaPath);
+      writeFileSync(join(registryDir, 'agent-extensions.yaml'), EXTENSION_YAML, 'utf-8');
+    }
+    return resolveSchema(projectDir, schemaPath);
   };
 
   return {
@@ -437,11 +456,7 @@ function makePhase5Deps(resolvedSchema: object): CoordinateDeps {
       filePath: '/tmp/registry/agent-extensions.yaml',
       rejected: [],
     }),
-    resolveSchemaForHash: vi.fn().mockImplementation(async () => {
-      resolveCallCount++;
-      // First call = run start, second call = run end (after extensions written)
-      return resolveCallCount === 1 ? schemaBeforeExtension : schemaAfterExtension;
-    }),
+    resolveSchemaForHash: resolveWithExtension,
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-snapshot'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
     computeSchemaDiff: vi.fn().mockResolvedValue({
@@ -474,7 +489,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
   });
 
   it('(a,e,h) all RunResult schema fields populated with meaningful content after run with extensions', { timeout: 600_000 }, async () => {
-    const deps = makePhase5Deps(resolvedSchema);
+    const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
     const result: RunResult = await coordinate(tempDir, config, undefined, deps);
@@ -503,7 +518,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
   });
 
   it('(b) writeSchemaExtensions called when agent produces extensions', { timeout: 600_000 }, async () => {
-    const deps = makePhase5Deps(resolvedSchema);
+    const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
     await coordinate(tempDir, config, undefined, deps);
@@ -522,7 +537,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
   });
 
   it('(d) live-check compliance report flows into RunResult.endOfRunValidation', { timeout: 600_000 }, async () => {
-    const deps = makePhase5Deps(resolvedSchema);
+    const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
@@ -539,7 +554,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
   it('(c) onSchemaCheckpoint callback is passed through to dispatch', { timeout: 600_000 }, async () => {
     const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
     const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
-    const deps = makePhase5Deps(resolvedSchema);
+    const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig({ schemaCheckpointInterval: 2 });
 
     await coordinate(tempDir, config, callbacks, deps);
@@ -555,7 +570,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
   });
 
   it('successful files have schemaHashBefore populated from dispatch', { timeout: 600_000 }, async () => {
-    const deps = makePhase5Deps(resolvedSchema);
+    const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
@@ -571,7 +586,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
   });
 
   it('no warnings when all schema operations succeed', { timeout: 600_000 }, async () => {
-    const deps = makePhase5Deps(resolvedSchema);
+    const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
