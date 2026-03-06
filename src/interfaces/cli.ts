@@ -2,6 +2,7 @@
 // ABOUTME: CLI entry point for the orb command.
 // ABOUTME: Defines init and instrument commands with yargs, wired to real handlers.
 
+import { fileURLToPath } from 'node:url';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { resolve } from 'node:path';
@@ -124,7 +125,7 @@ export async function run(args?: string[]) {
 }
 
 // Run when executed directly (not imported)
-const isDirectExecution = process.argv[1] && import.meta.url.endsWith(process.argv[1]);
+const isDirectExecution = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectExecution) {
   run();
 }
