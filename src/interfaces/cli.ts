@@ -127,5 +127,8 @@ export async function run(args?: string[]) {
 // Run when executed directly (not imported)
 const isDirectExecution = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectExecution) {
-  run();
+  run().catch((err) => {
+    console.error('Unexpected error:', err);
+    process.exit(1);
+  });
 }

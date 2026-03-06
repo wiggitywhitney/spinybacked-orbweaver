@@ -410,5 +410,8 @@ export async function startServer(): Promise<void> {
 // Run when executed directly (not imported)
 const isDirectExecution = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectExecution) {
-  startServer();
+  startServer().catch((err) => {
+    console.error('Failed to start MCP server:', err);
+    process.exit(1);
+  });
 }
