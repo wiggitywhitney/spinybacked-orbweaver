@@ -18,7 +18,15 @@ jobs:
           cache: 'npm'
 
       - name: Install Weaver v0.21.2
-        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh | sh
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh \
+            -o weaver-installer.sh
+          gh attestation verify weaver-installer.sh --repo open-telemetry/weaver
+          sh weaver-installer.sh
+          rm weaver-installer.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Verify Weaver version
         run: weaver --version
