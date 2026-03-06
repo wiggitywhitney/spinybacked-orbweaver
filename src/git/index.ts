@@ -3,3 +3,5 @@
 
 export { createBranch, stageFiles, commit, getLog, getCurrentBranch } from './git-wrapper.ts';
 export type { LogEntry } from './git-wrapper.ts';
+export { commitFileResult } from './per-file-commit.ts';
+export type { CommitFileResultOptions } from './per-file-commit.ts';

@@ -63,6 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Phase 6 acceptance gate tests: comprehensive verification of all acceptance criteria (exit codes, cost ceiling flow, progress callbacks, JSDoc coverage, no silent failures)
 - CI workflow (`.github/workflows/ci.yml`): GitHub Actions pipeline with Node.js 24, Weaver v0.21.2 pinned via installer script, binary attestation verification, typecheck, and test suite
 - Git wrapper (`src/git/`): simple-git-based operations for branch creation, file staging, commit, log retrieval, and current branch detection — foundation for Phase 7 git workflow
+- Per-file commit workflow (`src/git/per-file-commit.ts`): `commitFileResult()` stages instrumented code + schema extensions and creates individual commits per successful file; skips failed/skipped files; handles edge cases (external paths, missing extensions file)
 - `LiveCheckOptions` exposed through `CoordinateDeps` so callers can configure non-default ports and inactivity timeouts
 - Per-file schema extension writing in dispatch loop: `writeSchemaExtensions()` called after each successful file with in-memory accumulator and deduplication, enabling subsequent files to see prior files' schema contributions via `resolveSchema()`
 - Meaningful `schemaHashBefore`/`schemaHashAfter`: schema re-resolved after writing extensions so `schemaHashAfter` reflects the updated registry state; hash chain is continuous across files (file N's `schemaHashAfter` equals file N+1's `schemaHashBefore`)
