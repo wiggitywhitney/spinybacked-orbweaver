@@ -71,6 +71,8 @@ export interface DispatchFilesDeps {
     registryDir: string,
     extensions: string[],
   ) => Promise<WriteSchemaExtensionsResult>;
+  snapshotExtensionsFile?: (registryDir: string) => Promise<string | null>;
+  restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
 }
 
 /**

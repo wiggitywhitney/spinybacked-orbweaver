@@ -10,7 +10,11 @@ import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig 
 import { computeSchemaHash } from './schema-hash.ts';
 import { runSchemaCheckpoint } from './schema-checkpoint.ts';
 import type { SchemaCheckpointDeps } from './schema-checkpoint.ts';
-import { writeSchemaExtensions as defaultWriteSchemaExtensions } from './schema-extensions.ts';
+import {
+  writeSchemaExtensions as defaultWriteSchemaExtensions,
+  snapshotExtensionsFile as defaultSnapshotExtensionsFile,
+  restoreExtensionsFile as defaultRestoreExtensionsFile,
+} from './schema-extensions.ts';
 
 /**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
@@ -141,6 +145,8 @@ export async function dispatchFiles(
   const instrumentFn = options?.deps?.instrumentWithRetry
     ?? (await import('../fix-loop/index.ts')).instrumentWithRetry;
   const writeExtFn = options?.deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
+  const snapshotFn = options?.deps?.snapshotExtensionsFile ?? defaultSnapshotExtensionsFile;
+  const restoreFn = options?.deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
   const registryDir = options?.registryDir;
 
   const total = filePaths.length;
@@ -166,6 +172,10 @@ export async function dispatchFiles(
       // Callback failure must not abort dispatch
     }
 
+    // Snapshot schema extensions state before processing (for revert on failure)
+    let extensionsSnapshot: string | null | undefined;
+    let accumulatorLengthSnapshot = accumulatedExtensions.length;
+
     try {
       // Read file content
       const fileContent = await readFile(filePath, 'utf-8');
@@ -176,6 +186,16 @@ export async function dispatchFiles(
         results.push(skipped);
         try { callbacks?.onFileComplete?.(skipped, i, total); } catch { /* callback failure must not abort dispatch */ }
         continue;
+      }
+
+      // Snapshot extensions file before processing this file
+      if (registryDir) {
+        try {
+          extensionsSnapshot = await snapshotFn(registryDir);
+          accumulatorLengthSnapshot = accumulatedExtensions.length;
+        } catch {
+          // Snapshot failure is non-fatal — continue without revert capability
+        }
       }
 
       // Resolve schema fresh for each file
@@ -204,6 +224,20 @@ export async function dispatchFiles(
           result.schemaHashAfter = computeSchemaHash(updatedSchema as object);
         } catch {
           // Extension write failure is degrade-and-warn — don't stop dispatch
+        }
+      }
+
+      // Revert schema extensions if file failed
+      if (registryDir && result.status === 'failed' && extensionsSnapshot !== undefined) {
+        // Restore in-memory accumulator to pre-file state
+        accumulatedExtensions.length = accumulatorLengthSnapshot;
+        seenExtensions.clear();
+        for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+        // Restore on-disk extensions file
+        try {
+          await restoreFn(registryDir, extensionsSnapshot);
+        } catch {
+          // Restore failure is non-fatal — continue dispatch
         }
       }
 
@@ -248,6 +282,18 @@ export async function dispatchFiles(
         }
       }
     } catch (error) {
+      // Revert schema extensions on exception (pre-dispatch error)
+      if (registryDir && extensionsSnapshot !== undefined) {
+        accumulatedExtensions.length = accumulatorLengthSnapshot;
+        seenExtensions.clear();
+        for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+        try {
+          await restoreFn(registryDir, extensionsSnapshot);
+        } catch {
+          // Restore failure is non-fatal — continue dispatch
+        }
+      }
+
       const failed: FileResult = {
         path: filePath,
         status: 'failed',

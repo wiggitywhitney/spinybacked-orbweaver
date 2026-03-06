@@ -10,6 +10,8 @@ import {
   writeSchemaExtensions,
   collectSchemaExtensions,
   extractNamespacePrefix,
+  snapshotExtensionsFile,
+  restoreExtensionsFile,
 } from '../../src/coordinator/schema-extensions.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 
@@ -251,5 +253,69 @@ describe('writeSchemaExtensions', () => {
     const parsed = parse(content) as { groups: Array<{ attributes: Array<{ type: unknown }> }> };
     const attr = parsed.groups[0].attributes[0];
     expect(attr.type).toHaveProperty('members');
+  });
+});
+
+describe('snapshotExtensionsFile', () => {
+  let registryDir: string;
+
+  beforeEach(async () => {
+    registryDir = await mkdtemp(join(tmpdir(), 'schema-snap-'));
+  });
+
+  afterEach(async () => {
+    await rm(registryDir, { recursive: true, force: true });
+  });
+
+  it('returns file content when agent-extensions.yaml exists', async () => {
+    const content = 'groups:\n  - id: test\n';
+    await writeFile(join(registryDir, 'agent-extensions.yaml'), content, 'utf-8');
+
+    const snapshot = await snapshotExtensionsFile(registryDir);
+    expect(snapshot).toBe(content);
+  });
+
+  it('returns null when agent-extensions.yaml does not exist', async () => {
+    const snapshot = await snapshotExtensionsFile(registryDir);
+    expect(snapshot).toBeNull();
+  });
+});
+
+describe('restoreExtensionsFile', () => {
+  let registryDir: string;
+
+  beforeEach(async () => {
+    registryDir = await mkdtemp(join(tmpdir(), 'schema-restore-'));
+  });
+
+  afterEach(async () => {
+    await rm(registryDir, { recursive: true, force: true });
+  });
+
+  it('restores file content from a non-null snapshot', async () => {
+    const original = 'groups:\n  - id: original\n';
+    // Write something different first
+    await writeFile(join(registryDir, 'agent-extensions.yaml'), 'modified content', 'utf-8');
+
+    await restoreExtensionsFile(registryDir, original);
+
+    const restored = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    expect(restored).toBe(original);
+  });
+
+  it('deletes file when snapshot is null', async () => {
+    // Create the file first
+    await writeFile(join(registryDir, 'agent-extensions.yaml'), 'to be deleted', 'utf-8');
+
+    await restoreExtensionsFile(registryDir, null);
+
+    // File should be gone
+    await expect(readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8'))
+      .rejects.toThrow();
+  });
+
+  it('does not throw when deleting a file that already does not exist', async () => {
+    // No file exists, snapshot is null — should be a no-op
+    await expect(restoreExtensionsFile(registryDir, null)).resolves.not.toThrow();
   });
 });

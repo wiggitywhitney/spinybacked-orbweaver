@@ -65,6 +65,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `LiveCheckOptions` exposed through `CoordinateDeps` so callers can configure non-default ports and inactivity timeouts
 - Per-file schema extension writing in dispatch loop: `writeSchemaExtensions()` called after each successful file with in-memory accumulator and deduplication, enabling subsequent files to see prior files' schema contributions via `resolveSchema()`
 - Meaningful `schemaHashBefore`/`schemaHashAfter`: schema re-resolved after writing extensions so `schemaHashAfter` reflects the updated registry state; hash chain is continuous across files (file N's `schemaHashAfter` equals file N+1's `schemaHashBefore`)
+- Schema state revert on file failure: snapshot `agent-extensions.yaml` before each file, restore on-disk file and in-memory accumulator when file fails (both `status: 'failed'` and pre-dispatch exceptions)
 
 ### Fixed
 
