@@ -29,7 +29,7 @@ The evaluation's most expensive lesson was $3.50–4.50 wasted on 7 silent failu
 | User can monitor progress during the run | Observe stderr output during CLI run; verify file-by-file progress is reported | — |
 | User can understand any failures without reading source code | Trigger a failure scenario (e.g., file that can't be instrumented); verify the error output explains what failed, why, and what to do about it | — |
 | JSDoc on all exported functions | Every exported function in Phase 7 modules has JSDoc documenting parameters, return type, and purpose | DX |
-| CHANGELOG updated | CHANGELOG.md `[Unreleased]` section updated with Phase 7 additions during `/prd-update-progress` | DX |
+| Progress log updated | PROGRESS.md `[Unreleased]` section updated with Phase 7 additions during `/prd-update-progress` | DX |
 
 ## Cross-Cutting Requirements
 
@@ -214,7 +214,7 @@ Phase 7 also extends:
 
 - [ ] **Milestone 12: Weekly CI workflow for acceptance gate tests** — Create a GitHub Actions workflow (`.github/workflows/acceptance-tests.yml`) that runs all acceptance gate tests (`test/**/acceptance-gate.test.ts`) with the `ANTHROPIC_API_KEY` secret injected. Scheduled weekly (`cron: '0 9 * * 1'` — Monday mornings). Also triggerable on-demand via `workflow_dispatch`. Uses `vals exec` or direct env var injection for the API key. Verify: (a) workflow file is valid YAML, (b) `on.schedule` and `on.workflow_dispatch` triggers configured, (c) test command runs acceptance gate tests only (not the full suite), (d) API key is injected as a secret (never logged).
 
-- [ ] **Milestone 13: CHANGELOG updated** — CHANGELOG.md `[Unreleased]` section updated with Phase 7 additions during `/prd-update-progress`. Verify: CHANGELOG includes entries for all Phase 7 features (git workflow, PR summary, cost formatting, dry-run, early abort, DX polish).
+- [ ] **Milestone 13: Progress log updated** — PROGRESS.md `[Unreleased]` section updated with Phase 7 additions during `/prd-update-progress`. Verify: PROGRESS.md includes entries for all Phase 7 features (git workflow, PR summary, cost formatting, dry-run, early abort, DX polish).
 
 - [ ] **Milestone 14: Acceptance gate passes** — Full end-to-end run from CLI produces a reviewable PR on a feature branch with per-file commits. PR description includes all specified sections. User can estimate cost, monitor progress, and understand failures. README and usage docs are complete. Verify against a real test JavaScript project with Weaver schema.
 
@@ -253,7 +253,7 @@ Phase 6 delivered interfaces as planned in the design document with the followin
 | 2026-03-02 | **Keep Weaver registry diff in dry-run mode** — Do not skip `weaver registry diff` during dry run. The diff is the most valuable dry-run output. | The diff shows what schema changes the agent *would* make — the whole point of dry run. Network call concern (semconv dependency fetch) is manageable: cached locally by Weaver after first fetch, already triggered during normal validation. First dry run on a fresh clone may fetch, but so would the first real run. Air-gapped CI should pre-resolve semconv as a Weaver setup step — not a dry-run concern. |
 | 2026-03-02 | **README and usage docs as Phase 7 milestones, not a separate documentation PRD** | Documentation requires the CLI (Phase 6) and the complete workflow (Phase 7) to exist before it can be written with validated examples. The `/write-docs` skill executes real commands — it can't document `orb init` until `orb init` works. Placing documentation after the DX polish milestones (dry-run, early abort, error messages) means docs reflect the final product. A separate documentation PRD would be blocked by Phase 7 anyway. |
 | 2026-03-02 | **Resolve commit-story local dependency as the last milestone** | `"commit-story": "file:../commit-story-v2"` breaks on clone without the sibling directory. Journal integration via commit-story is useful during development (PRD progress tracking). Removing it last preserves development workflow through all 7 phases. The dependency must be resolved before the repo is fully public-ready. |
-| 2026-03-02 | **CHANGELOG maintained throughout all phases** | Each phase updates CHANGELOG.md with notable changes during `/prd-update-progress`. Adopts Keep a Changelog format. This prevents a documentation sprint at the end and provides a running record of what shipped in each phase. |
+| 2026-03-02 | **Progress log maintained throughout all phases** | Each phase updates PROGRESS.md with notable changes during `/prd-update-progress`. Adopts Keep a Changelog format. This prevents a documentation sprint at the end and provides a running record of what shipped in each phase. |
 
 ## Open Questions
 
