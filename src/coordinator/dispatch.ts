@@ -356,8 +356,15 @@ export async function dispatchFiles(
               lastCheckpointResultIndex = results.length;
             }
           }
-        } catch {
-          // Checkpoint infrastructure failure — degrade, don't stop
+        } catch (checkpointErr) {
+          // Checkpoint infrastructure failure — degrade and warn, don't stop
+          // Reset counters so next checkpoint attempts at the normal interval
+          filesSinceLastCheckpoint = 0;
+          lastCheckpointResultIndex = results.length;
+          if (extWarnings) {
+            const msg = checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr);
+            extWarnings.push(`Schema checkpoint infrastructure failure (degraded): ${msg}`);
+          }
         }
       }
     } catch (error) {

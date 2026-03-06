@@ -332,6 +332,76 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
     });
   });
 
+  describe('checkpoint infrastructure failure visibility', () => {
+    it('surfaces checkpoint infrastructure error as warning and continues processing', async () => {
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+      const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
+      const deps = makeDeps();
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+
+      // Inject a throwing execFileFn to simulate infrastructure failure (e.g., Weaver CLI not found)
+      const checkpointDeps = {
+        execFileFn: () => { throw new Error('weaver: command not found'); },
+      };
+
+      const warnings: string[] = [];
+      const results = await dispatchFiles(files, tmpDir, config, callbacks, {
+        deps,
+        checkpoint: passingCheckpointConfig,
+        checkpointDeps,
+        schemaExtensionWarnings: warnings,
+      });
+
+      // All 4 files processed — infrastructure failure degrades, doesn't stop
+      expect(results).toHaveLength(4);
+      // Checkpoint callback was NOT fired (infrastructure failure, not a checkpoint result)
+      expect(onSchemaCheckpoint).not.toHaveBeenCalled();
+      // Warning was surfaced
+      expect(warnings).toHaveLength(2); // Two checkpoints attempted (files 2 and 4), both failed
+      expect(warnings[0]).toContain('weaver: command not found');
+      expect(warnings[0]).toContain('checkpoint');
+    });
+
+    it('subsequent checkpoints still attempt after infrastructure failure', async () => {
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+      const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
+      const deps = makeDeps();
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+
+      let callCount = 0;
+      const checkpointDeps = {
+        execFileFn: () => {
+          callCount++;
+          throw new Error(`infrastructure failure #${callCount}`);
+        },
+      };
+
+      const warnings: string[] = [];
+      const results = await dispatchFiles(files, tmpDir, config, callbacks, {
+        deps,
+        checkpoint: passingCheckpointConfig,
+        checkpointDeps,
+        schemaExtensionWarnings: warnings,
+      });
+
+      // Both checkpoints attempted (at file 2 and file 4)
+      expect(results).toHaveLength(4);
+      expect(warnings).toHaveLength(2);
+      expect(warnings[0]).toContain('infrastructure failure #1');
+      expect(warnings[1]).toContain('infrastructure failure #2');
+    });
+  });
+
   describe('drift detection at checkpoint', () => {
     it('stops processing when drift detected at checkpoint', async () => {
       const files = await Promise.all([
