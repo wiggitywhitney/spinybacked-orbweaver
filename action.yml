@@ -1,0 +1,100 @@
+# ABOUTME: GitHub Action that runs the orb instrumentation agent.
+# ABOUTME: Composite action wrapping the CLI for CI/CD usage.
+
+name: 'Spinybacked Orbweaver'
+description: 'AI-powered OpenTelemetry instrumentation for JavaScript applications'
+
+inputs:
+  path:
+    description: 'Path to instrument (relative to repository root)'
+    default: 'src'
+  node-version:
+    description: 'Node.js version to use'
+    default: '24'
+  weaver-version:
+    description: 'Weaver CLI version to install'
+    default: '0.21.2'
+
+outputs:
+  result:
+    description: 'JSON result from the instrumentation run'
+    value: ${{ steps.instrument.outputs.result }}
+  summary:
+    description: 'Human-readable summary of the instrumentation run'
+    value: ${{ steps.parse-results.outputs.summary }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install dependencies
+      run: npm install
+      shell: bash
+
+    - name: Install Weaver CLI
+      run: |
+        WEAVER_VERSION="${{ inputs.weaver-version }}"
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        ARCH="$(uname -m)"
+        case "$ARCH" in
+          x86_64) ARCH="amd64" ;;
+          aarch64|arm64) ARCH="arm64" ;;
+        esac
+        ARCHIVE="weaver-v${WEAVER_VERSION}-${OS}-${ARCH}.tar.gz"
+        URL="https://github.com/open-telemetry/weaver/releases/download/v${WEAVER_VERSION}/${ARCHIVE}"
+        echo "Downloading Weaver v${WEAVER_VERSION} from ${URL}"
+        curl -fsSL "${URL}" -o weaver.tar.gz
+        tar -xzf weaver.tar.gz
+        sudo mv weaver /usr/local/bin/weaver
+        rm weaver.tar.gz
+        weaver --version
+      shell: bash
+
+    - name: Run instrumentation
+      id: instrument
+      run: |
+        RESULT=$(npx orb instrument --yes --output json "${{ inputs.path }}" 2>orb-stderr.log) || EXIT_CODE=$?
+        EXIT_CODE=${EXIT_CODE:-0}
+
+        # Log stderr (progress output) via GitHub Actions notices
+        while IFS= read -r line; do
+          echo "::notice::${line}"
+        done < orb-stderr.log
+
+        # Log cost ceiling info from stderr
+        if grep -q "Cost ceiling" orb-stderr.log; then
+          grep "Cost ceiling" orb-stderr.log | while IFS= read -r line; do
+            echo "::notice title=Cost Ceiling::${line}"
+          done
+        fi
+
+        echo "result<<RESULT_EOF" >> "$GITHUB_OUTPUT"
+        echo "${RESULT}" >> "$GITHUB_OUTPUT"
+        echo "RESULT_EOF" >> "$GITHUB_OUTPUT"
+
+        exit ${EXIT_CODE}
+      shell: bash
+
+    - name: Parse results and set summary
+      id: parse-results
+      if: always() && steps.instrument.outputs.result != ''
+      run: |
+        RESULT='${{ steps.instrument.outputs.result }}'
+
+        FILES_PROCESSED=$(echo "${RESULT}" | node -e "
+          const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+          const r = d.fileResults || [];
+          const ok = r.filter(f => f.status === 'success').length;
+          const fail = r.filter(f => f.status === 'failure').length;
+          const skip = r.filter(f => f.status === 'skipped').length;
+          console.log(ok + ' succeeded, ' + fail + ' failed, ' + skip + ' skipped out of ' + r.length + ' files');
+        " 2>/dev/null || echo "Unable to parse results")
+
+        SUMMARY="Instrumentation complete: ${FILES_PROCESSED}"
+        echo "summary=${SUMMARY}" >> "$GITHUB_OUTPUT"
+        echo "::notice title=Instrumentation Summary::${SUMMARY}"
+      shell: bash

@@ -33,3 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Oscillation detection (`src/fix-loop/oscillation.ts`): error-count monotonicity and duplicate error detection trigger early exit or skip to fresh regeneration
 - `instrumentWithRetry()` orchestrator: wires `instrumentFile` + `validateFile` with retry, populates complete `FileResult` on all exit paths (success, exhaustion, budget exceeded, oscillation, unexpected error)
 - Phase 3 acceptance gate tests: end-to-end validation with real Anthropic API (successful retry, budget exceeded, file revert, strategy verification)
+- CLI scaffold with yargs (`orb init`, `orb instrument` commands with all flags)
+- `orb init` wired to real handlers: prerequisite verification, config file creation, project type detection
+- `orb instrument` wired to coordinator with exit codes (0=success, 1=partial, 2=failure, 3=abort)
+- CLI progress callbacks: stderr progress lines, cost ceiling confirmation flow
+- MCP server with `get-cost-ceiling` tool (file globbing + cost calculation, no LLM calls)
+- MCP server with `instrument` tool (full workflow with progress notifications and hierarchical results)
+- GitHub Action (`action.yml`): composite action wrapping CLI with Weaver binary install, `--yes --output json`, step outputs for results and summary
