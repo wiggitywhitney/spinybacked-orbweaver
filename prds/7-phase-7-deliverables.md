@@ -194,7 +194,7 @@ Phase 7 also extends:
 
 - [x] **Milestone 2: Per-file commit workflow** — Wire `onFileComplete` callback to commit instrumented code + schema changes for each successful file. Verify: coordinator processes 3 test files → git log shows 3 separate commits, one per file.
 
-- [ ] **Milestone 3: SDK/package.json commit** — After all files complete, commit SDK init file and package.json changes in a single commit. Verify: git log shows the aggregate commit after per-file commits.
+- [x] **Milestone 3: SDK/package.json commit** — After all files complete, commit SDK init file and package.json changes in a single commit. Verify: git log shows the aggregate commit after per-file commits.
 
 - [ ] **Milestone 4: Cost formatting in dollars** — Implement per-model pricing table and dollar conversion. Both pre-run ceiling (from `countTokens()`) and post-run actuals (from `message.usage` accumulation) expressed in dollars. Verify: unit tests confirm correct dollar calculation for known token counts across all supported models, including cache discount and thinking token headroom.
 

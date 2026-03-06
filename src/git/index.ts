@@ -5,3 +5,5 @@ export { createBranch, stageFiles, commit, getLog, getCurrentBranch } from './gi
 export type { LogEntry } from './git-wrapper.ts';
 export { commitFileResult } from './per-file-commit.ts';
 export type { CommitFileResultOptions } from './per-file-commit.ts';
+export { commitAggregateChanges } from './aggregate-commit.ts';
+export type { AggregateCommitInput } from './aggregate-commit.ts';
