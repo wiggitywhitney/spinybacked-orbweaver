@@ -243,6 +243,9 @@ export async function dispatchFiles(
       results.push(result);
       filesSinceLastCheckpoint++;
 
+      // Track whether the extension block already handled rollback
+      let extensionRollbackDone = false;
+
       // Write schema extensions per-file for successful files
       if (registryDir && result.status === 'success' && result.schemaExtensions.length > 0) {
         for (const ext of result.schemaExtensions) {
@@ -284,6 +287,7 @@ export async function dispatchFiles(
 
           // Roll back extensions on validation failure
           if (validationFailed) {
+            extensionRollbackDone = true;
             accumulatedExtensions.length = accumulatorLengthSnapshot;
             seenExtensions.clear();
             for (const ext of accumulatedExtensions) seenExtensions.add(ext);
@@ -308,14 +312,15 @@ export async function dispatchFiles(
             extWarnings.push(`Schema extension write failed: ${msg}`);
           }
           // Roll back in-memory state since write failed
+          extensionRollbackDone = true;
           accumulatedExtensions.length = accumulatorLengthSnapshot;
           seenExtensions.clear();
           for (const ext of accumulatedExtensions) seenExtensions.add(ext);
         }
       }
 
-      // Revert schema extensions if file failed
-      if (registryDir && result.status === 'failed' && extensionsSnapshot !== undefined) {
+      // Revert schema extensions if file failed (skip if extension block already rolled back)
+      if (registryDir && result.status === 'failed' && extensionsSnapshot !== undefined && !extensionRollbackDone) {
         // Restore in-memory accumulator to pre-file state
         accumulatedExtensions.length = accumulatorLengthSnapshot;
         seenExtensions.clear();
