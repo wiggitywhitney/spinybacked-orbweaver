@@ -196,7 +196,7 @@ Phase 7 also extends:
 
 - [x] **Milestone 3: SDK/package.json commit** — After all files complete, commit SDK init file and package.json changes in a single commit. Verify: git log shows the aggregate commit after per-file commits.
 
-- [ ] **Milestone 4: Cost formatting in dollars** — Implement per-model pricing table and dollar conversion. Both pre-run ceiling (from `countTokens()`) and post-run actuals (from `message.usage` accumulation) expressed in dollars. Verify: unit tests confirm correct dollar calculation for known token counts across all supported models, including cache discount and thinking token headroom.
+- [x] **Milestone 4: Cost formatting in dollars** — Implement per-model pricing table and dollar conversion. Both pre-run ceiling (from `countTokens()`) and post-run actuals (from `message.usage` accumulation) expressed in dollars. Verify: unit tests confirm correct dollar calculation for known token counts across all supported models, including cache discount and thinking token headroom.
 
 - [ ] **Milestone 5: PR summary rendering** — Implement `src/deliverables/` module that renders `RunResult` into the complete PR description. All sections present: per-file status, span category breakdown table, schema changes summary (`weaver registry diff --diff-format markdown`), review sensitivity annotations (respecting `strict`/`moderate`/`off`), agent notes, token usage (ceiling + actuals side by side), agent version. Verify: unit tests render a known `RunResult` and assert all sections are present with correct content.
 
