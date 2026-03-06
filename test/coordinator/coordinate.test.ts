@@ -718,6 +718,26 @@ describe('coordinate', () => {
       expect(result.runLevelAdvisory).toHaveLength(0);
     });
 
+    it('still runs CDQ-008 on readable files when some reads fail', async () => {
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
+        dispatchFiles: vi.fn().mockResolvedValue([
+          makeSuccessResult('/project/a.js'),
+          makeSuccessResult('/project/b.js'),
+        ]),
+        readFileForAdvisory: vi.fn()
+          .mockResolvedValueOnce('const tracer = trace.getTracer("com.myapp.users");')
+          .mockRejectedValueOnce(new Error('EACCES')),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.runLevelAdvisory).toHaveLength(1);
+      expect(result.runLevelAdvisory[0].ruleId).toBe('CDQ-008');
+      expect(result.warnings.some(w => w.includes('CDQ-008 file read failed'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('/project/b.js'))).toBe(true);
+    });
+
     it('reports CDQ-008 file read failure as warning without aborting', async () => {
       const deps = makeDeps({
         discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),

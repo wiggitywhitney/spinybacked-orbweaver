@@ -304,18 +304,27 @@ export async function coordinate(
   // Step 6b: Run CDQ-008 cross-file tracer naming check (advisory, degrade and warn)
   const successfulFiles = fileResults.filter(r => r.status === 'success');
   if (successfulFiles.length > 0) {
-    try {
-      const fileContents: FileContent[] = await Promise.all(
-        successfulFiles.map(async (r) => ({
-          filePath: r.path,
-          code: await readForAdvisory(r.path),
-        })),
-      );
+    const readResults = await Promise.allSettled(
+      successfulFiles.map(async (r) => ({
+        filePath: r.path,
+        code: await readForAdvisory(r.path),
+      })),
+    );
+
+    const fileContents: FileContent[] = [];
+    for (const [index, readResult] of readResults.entries()) {
+      if (readResult.status === 'fulfilled') {
+        fileContents.push(readResult.value);
+      } else {
+        const filePath = successfulFiles[index]?.path ?? '<unknown>';
+        const message = readResult.reason instanceof Error ? readResult.reason.message : String(readResult.reason);
+        runResult.warnings.push(`CDQ-008 file read failed (degraded): ${filePath} — ${message}`);
+      }
+    }
+
+    if (fileContents.length > 0) {
       const cdq008Result = checkTracerNamingConsistency(fileContents);
       runResult.runLevelAdvisory.push(cdq008Result);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      runResult.warnings.push(`CDQ-008 tracer naming check failed (degraded): ${message}`);
     }
   }
 
