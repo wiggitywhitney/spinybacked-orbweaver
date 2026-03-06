@@ -226,8 +226,9 @@ export async function dispatchFiles(
         try {
           extensionsSnapshot = await snapshotFn(registryDir);
           accumulatorLengthSnapshot = accumulatedExtensions.length;
-        } catch {
-          // Snapshot failure is non-fatal — continue without revert capability
+        } catch (snapErr) {
+          const snapMsg = snapErr instanceof Error ? snapErr.message : String(snapErr);
+          extWarnings?.push(`Schema snapshot failed for ${filePath} (rollback disabled): ${snapMsg}`);
         }
       }
 
