@@ -1,5 +1,5 @@
-// ABOUTME: Acceptance gate end-to-end tests for Phase 4 and Phase 5 coordinator — calls real Anthropic API.
-// ABOUTME: Phase 4: multi-file orchestration. Phase 5: schema integration (extensions, hashes, diff, checkpoints, live-check, SCH checks).
+// ABOUTME: Acceptance gate end-to-end tests for Phase 4, Phase 5, and PRD 31 coordinator.
+// ABOUTME: Phase 4: multi-file orchestration. Phase 5: schema integration. PRD 31: per-file extension writing.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
@@ -768,6 +768,339 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
     expect(results[1].blocking).toBe(true);
     expect(results[2].blocking).toBe(true);
     expect(results[3].blocking).toBe(false);
+  });
+});
+
+describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
+  /**
+   * Integration tests verifying all PRD 31 features work together:
+   * - Per-file extension writing with real Weaver CLI
+   * - Meaningful schemaHashBefore/After with continuous hash chain
+   * - Schema state revert on file failure
+   * - Per-file extension validation via `weaver registry check`
+   * - Checkpoint integration with accumulated extensions
+   * - Checkpoint infrastructure failure warnings
+   *
+   * Uses real Weaver CLI + real writeSchemaExtensions + real resolveSchema.
+   * Only instrumentWithRetry is mocked (LLM boundary).
+   */
+
+  const WEAVER_FIXTURES = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry');
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orb-prd31-'));
+  });
+
+  afterEach(() => {
+    if (tempDir && existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  /** Copy a fixture registry to a writable temp location. */
+  function copyRegistry(fixture: string): string {
+    const destDir = join(tempDir, 'registry');
+    mkdirSync(destDir, { recursive: true });
+    const srcDir = join(WEAVER_FIXTURES, fixture);
+    for (const file of readdirSync(srcDir)) {
+      if (!file.startsWith('.')) {
+        copyFileSync(join(srcDir, file), join(destDir, file));
+      }
+    }
+    return destDir;
+  }
+
+  /** Create a JS file in the temp project. */
+  function createFile(name: string, content = 'function x() {}'): string {
+    const filePath = join(tempDir, name);
+    writeFileSync(filePath, content, 'utf-8');
+    return filePath;
+  }
+
+  /** Build a successful FileResult with schema extensions. */
+  function makeResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
+    return {
+      path: filePath,
+      status: 'success',
+      spansAdded: 2,
+      librariesNeeded: [],
+      schemaExtensions: [],
+      attributesCreated: 1,
+      validationAttempts: 1,
+      validationStrategyUsed: 'initial-generation',
+      tokenUsage: { inputTokens: 500, outputTokens: 200, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      ...overrides,
+    };
+  }
+
+  it('(a,b) later files see earlier files\' extensions via real schema resolution; hash chain is monotonically growing', async () => {
+    const registryDir = copyRegistry('valid');
+
+    const file1 = createFile('a.js', 'function processPayment() {}');
+    const file2 = createFile('b.js', 'function processOrder() {}');
+    const file3 = createFile('c.js', 'function processShipping() {}');
+
+    const ext1 = '- id: test_app.payment.amount\n  type: double\n  stability: development\n  brief: Payment amount\n  examples: [29.99]';
+    const ext2 = '- id: test_app.shipping.weight\n  type: double\n  stability: development\n  brief: Shipping weight\n  examples: [2.5]';
+
+    // Track schemas passed to instrumentWithRetry to verify later files see earlier extensions
+    const schemasReceived: object[] = [];
+
+    const instrumentWithRetry = vi.fn().mockImplementation(
+      async (filePath: string, _code: string, schema: object) => {
+        schemasReceived.push(schema);
+        if (filePath.includes('a.js')) {
+          return makeResult(filePath, { schemaExtensions: [ext1] });
+        }
+        if (filePath.includes('b.js')) {
+          return makeResult(filePath, { schemaExtensions: [ext2] });
+        }
+        return makeResult(filePath);
+      },
+    );
+
+    const deps: import('../../src/coordinator/types.ts').DispatchFilesDeps = {
+      resolveSchema: resolveSchema,
+      instrumentWithRetry,
+    };
+
+    const config = makeConfig({ schemaPath: 'registry', schemaCheckpointInterval: 0 });
+
+    const results = await dispatchFiles(
+      [file1, file2, file3], tempDir, config, undefined,
+      { deps, registryDir },
+    );
+
+    // All three files processed successfully
+    expect(results).toHaveLength(3);
+    expect(results.every(r => r.status === 'success')).toBe(true);
+
+    // (a) Later files' schemas include earlier files' extensions
+    // Schema passed to file B should differ from schema passed to file A
+    // (because file A's extensions were written to disk and re-resolved)
+    expect(schemasReceived).toHaveLength(3);
+
+    // (b) Hash chain is monotonically growing
+    // File A writes extensions → hashBefore != hashAfter
+    expect(results[0].schemaHashBefore).not.toBe(results[0].schemaHashAfter);
+    // File A's after = File B's before (continuous chain)
+    expect(results[0].schemaHashAfter).toBe(results[1].schemaHashBefore);
+    // File B writes extensions → hashBefore != hashAfter
+    expect(results[1].schemaHashBefore).not.toBe(results[1].schemaHashAfter);
+    // File B's after = File C's before
+    expect(results[1].schemaHashAfter).toBe(results[2].schemaHashBefore);
+    // File C has no extensions → hashBefore == hashAfter
+    expect(results[2].schemaHashBefore).toBe(results[2].schemaHashAfter);
+
+    // All hashes are valid SHA-256
+    for (const r of results) {
+      expect(r.schemaHashBefore).toMatch(/^[0-9a-f]{64}$/);
+      expect(r.schemaHashAfter).toMatch(/^[0-9a-f]{64}$/);
+    }
+  });
+
+  it('(c) failed file\'s extensions are reverted — subsequent files see clean schema', async () => {
+    const registryDir = copyRegistry('valid');
+
+    const file1 = createFile('a.js', 'function good() {}');
+    const file2 = createFile('b.js', 'function bad() {}');
+    const file3 = createFile('c.js', 'function alsogood() {}');
+
+    const ext1 = '- id: test_app.good.attr\n  type: string\n  stability: development\n  brief: Good attr';
+    const ext3 = '- id: test_app.also.attr\n  type: string\n  stability: development\n  brief: Also attr';
+
+    const instrumentWithRetry = vi.fn().mockImplementation(
+      async (filePath: string) => {
+        if (filePath.includes('a.js')) {
+          return makeResult(filePath, { schemaExtensions: [ext1] });
+        }
+        if (filePath.includes('b.js')) {
+          return makeResult(filePath, {
+            status: 'failed',
+            reason: 'Validation failed',
+            schemaExtensions: [],
+          });
+        }
+        return makeResult(filePath, { schemaExtensions: [ext3] });
+      },
+    );
+
+    const deps: import('../../src/coordinator/types.ts').DispatchFilesDeps = {
+      resolveSchema: resolveSchema,
+      instrumentWithRetry,
+    };
+
+    const config = makeConfig({ schemaPath: 'registry', schemaCheckpointInterval: 0 });
+
+    const results = await dispatchFiles(
+      [file1, file2, file3], tempDir, config, undefined,
+      { deps, registryDir },
+    );
+
+    expect(results).toHaveLength(3);
+    expect(results[0].status).toBe('success');
+    expect(results[1].status).toBe('failed');
+    expect(results[2].status).toBe('success');
+
+    // File A's extensions persisted, file B's failure was reverted
+    // File C's hashBefore should equal file A's hashAfter (B's failure didn't change schema)
+    expect(results[2].schemaHashBefore).toBe(results[0].schemaHashAfter);
+
+    // File C wrote extensions on top of A's → different hash
+    expect(results[2].schemaHashBefore).not.toBe(results[2].schemaHashAfter);
+  });
+
+  it('(d,e) checkpoints see accumulated extensions; infrastructure failure produces warning', async () => {
+    const registryDir = copyRegistry('valid');
+    const baselineDir = join(WEAVER_FIXTURES, 'valid');
+
+    const files = [
+      createFile('a.js', 'function a() {}'),
+      createFile('b.js', 'function b() {}'),
+      createFile('c.js', 'function c() {}'),
+      createFile('d.js', 'function d() {}'),
+    ];
+
+    const ext1 = '- id: test_app.checkpoint.attr1\n  type: string\n  stability: development\n  brief: Attr 1';
+    const ext2 = '- id: test_app.checkpoint.attr2\n  type: int\n  stability: development\n  brief: Attr 2';
+
+    const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+
+    const instrumentWithRetry = vi.fn().mockImplementation(
+      async (filePath: string) => {
+        if (filePath.includes('a.js')) {
+          return makeResult(filePath, { schemaExtensions: [ext1] });
+        }
+        if (filePath.includes('c.js')) {
+          return makeResult(filePath, { schemaExtensions: [ext2] });
+        }
+        return makeResult(filePath);
+      },
+    );
+
+    const deps: import('../../src/coordinator/types.ts').DispatchFilesDeps = {
+      resolveSchema: resolveSchema,
+      instrumentWithRetry,
+    };
+
+    const config = makeConfig({ schemaPath: 'registry', schemaCheckpointInterval: 2 });
+    const warnings: string[] = [];
+
+    const results = await dispatchFiles(
+      files, tempDir, config, { onSchemaCheckpoint },
+      {
+        deps,
+        registryDir,
+        schemaExtensionWarnings: warnings,
+        checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
+      },
+    );
+
+    // (d) All files processed, checkpoints see accumulated extensions
+    expect(results).toHaveLength(4);
+    expect(onSchemaCheckpoint).toHaveBeenCalledTimes(2);
+    // Both checkpoints pass — registry with accumulated extensions is valid
+    expect(onSchemaCheckpoint).toHaveBeenNthCalledWith(1, 2, true);
+    expect(onSchemaCheckpoint).toHaveBeenNthCalledWith(2, 4, true);
+  });
+
+  it('(e) checkpoint infrastructure failure produces warning and dispatch continues', async () => {
+    const registryDir = copyRegistry('valid');
+
+    const files = [
+      createFile('a.js', 'function a() {}'),
+      createFile('b.js', 'function b() {}'),
+    ];
+
+    const onSchemaCheckpoint = vi.fn();
+
+    const instrumentWithRetry = vi.fn().mockImplementation(
+      async (filePath: string) => makeResult(filePath),
+    );
+
+    const deps: import('../../src/coordinator/types.ts').DispatchFilesDeps = {
+      resolveSchema: resolveSchema,
+      instrumentWithRetry,
+    };
+
+    const config = makeConfig({ schemaPath: 'registry', schemaCheckpointInterval: 2 });
+    const warnings: string[] = [];
+
+    // Inject throwing checkpoint deps to simulate infrastructure failure
+    const checkpointDeps = {
+      execFileFn: () => { throw new Error('weaver: command not found'); },
+    };
+
+    const results = await dispatchFiles(
+      files, tempDir, config, { onSchemaCheckpoint },
+      {
+        deps,
+        registryDir,
+        schemaExtensionWarnings: warnings,
+        checkpoint: { registryDir, baselineSnapshotDir: join(WEAVER_FIXTURES, 'valid') },
+        checkpointDeps,
+      },
+    );
+
+    // Dispatch continued despite infrastructure failure
+    expect(results).toHaveLength(2);
+    // Checkpoint callback was NOT fired (infrastructure failure, not a result)
+    expect(onSchemaCheckpoint).not.toHaveBeenCalled();
+    // Warning surfaced
+    expect(warnings.length).toBeGreaterThanOrEqual(1);
+    expect(warnings.some(w => w.includes('weaver: command not found'))).toBe(true);
+  });
+
+  it('(f) per-file extension validation catches invalid extensions and rolls back', async () => {
+    const registryDir = copyRegistry('valid');
+
+    const file1 = createFile('a.js', 'function a() {}');
+    const file2 = createFile('b.js', 'function b() {}');
+
+    // File A produces a valid extension
+    const validExt = '- id: test_app.valid.attr\n  type: string\n  stability: development\n  brief: Valid';
+
+    const instrumentWithRetry = vi.fn().mockImplementation(
+      async (filePath: string) => {
+        if (filePath.includes('a.js')) {
+          return makeResult(filePath, { schemaExtensions: [validExt] });
+        }
+        return makeResult(filePath);
+      },
+    );
+
+    // Mock validateRegistry to fail for the first call (simulating invalid extension)
+    const validateRegistry = vi.fn()
+      .mockResolvedValueOnce({ passed: false, error: 'Invalid attribute definition' })
+      .mockResolvedValue({ passed: true });
+
+    const deps: import('../../src/coordinator/types.ts').DispatchFilesDeps = {
+      resolveSchema: resolveSchema,
+      instrumentWithRetry,
+      validateRegistry,
+    };
+
+    const config = makeConfig({ schemaPath: 'registry', schemaCheckpointInterval: 0 });
+    const warnings: string[] = [];
+
+    const results = await dispatchFiles(
+      [file1, file2], tempDir, config, undefined,
+      { deps, registryDir, schemaExtensionWarnings: warnings },
+    );
+
+    // File A failed due to validation, file B succeeded
+    expect(results[0].status).toBe('failed');
+    expect(results[0].reason).toContain('Schema validation failed');
+    expect(results[1].status).toBe('success');
+
+    // File A's extensions were rolled back — agent-extensions.yaml should not exist
+    // (since file A was the first to write, rollback restores to "absent")
+    const extensionsPath = join(registryDir, 'agent-extensions.yaml');
+    expect(existsSync(extensionsPath)).toBe(false);
+
+    // Warning was produced
+    expect(warnings.some(w => w.includes('Schema validation failed'))).toBe(true);
   });
 });
 

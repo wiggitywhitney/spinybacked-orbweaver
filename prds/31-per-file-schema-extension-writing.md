@@ -1,7 +1,7 @@
 # PRD: Per-File Schema Extension Writing
 
 **Issue**: [#31](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/31)
-**Status**: In Progress
+**Status**: Complete
 **Priority**: High
 **Blocked by**: None (all required infrastructure exists from Phases 4-5)
 **Created**: 2026-03-06
@@ -107,7 +107,7 @@ src/
 
 - [x] **Milestone 7: Integration with periodic checkpoints** — Verify that periodic schema checkpoints (`weaver registry check` + `weaver registry diff` every N files) see the incrementally-extended schema. Since extensions are now written per-file, checkpoints should reflect cumulative changes. **Test callout:** `dispatch-checkpoint.test.ts` specifically needs attention — per-file validation (Milestone 5) changes the checkpoint counting flow, and existing checkpoint tests may need adjustment to account for the additional `registry check` calls happening between checkpoints. Verify: (a) checkpoint after file 2 sees extensions from files 1 and 2, (b) checkpoint diff shows incremental additions, (c) checkpoint failure handling still works (stop processing, blast radius reporting).
 
-- [ ] **Milestone 8: Acceptance gate passes** — End-to-end with a multi-file test project where files have cross-file schema dependencies: (a) later files see earlier files' schema contributions, (b) hash chain is monotonically growing, (c) failed files' extensions are reverted, (d) checkpoints see accumulated extensions, (e) checkpoint infrastructure failures produce warnings, (f) per-file extension validation catches invalid extensions, (g) all existing tests pass.
+- [x] **Milestone 8: Acceptance gate passes** — End-to-end with a multi-file test project where files have cross-file schema dependencies: (a) later files see earlier files' schema contributions, (b) hash chain is monotonically growing, (c) failed files' extensions are reverted, (d) checkpoints see accumulated extensions, (e) checkpoint infrastructure failures produce warnings, (f) per-file extension validation catches invalid extensions, (g) all existing tests pass.
 
 ## Dependencies
 

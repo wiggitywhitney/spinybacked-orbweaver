@@ -70,6 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Per-file extension validation: `weaver registry check` runs after each file's extensions are written; invalid extensions are rolled back (snapshot restore + accumulator revert) and the file is marked failed before the next file processes
 - Checkpoint infrastructure failure visibility: checkpoint catch block surfaces errors as warnings in `RunResult.warnings` instead of silently swallowing; counters reset on infrastructure failure for proper checkpoint interval spacing
 - Periodic checkpoint integration with per-file extension writing: checkpoints see accumulated extensions from prior files, diff shows only additions, checkpoint failure still stops processing when per-file writes are active, per-file validation failures don't interfere with checkpoint counting
+- PRD 31 acceptance gate: end-to-end integration tests verifying all per-file extension features work together — hash chain continuity, schema revert on failure, checkpoint integration, infrastructure failure warnings, and per-file validation — using real Weaver CLI
 
 ### Fixed
 
