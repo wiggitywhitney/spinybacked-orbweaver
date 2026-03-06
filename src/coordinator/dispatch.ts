@@ -1,7 +1,7 @@
 // ABOUTME: Dispatch logic for the coordinator — sequential file processing and pre-dispatch checks.
 // ABOUTME: Includes already-instrumented detection, schema re-resolution per file, and sequential dispatch to instrumentWithRetry.
 
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
@@ -145,6 +145,8 @@ interface DispatchFilesOptions {
   registryDir?: string;
   /** Mutable array for per-file extension warnings — coordinate() passes this in and reads it after dispatch. */
   schemaExtensionWarnings?: string[];
+  /** When true, revert every file after processing and skip schema checkpoints. */
+  dryRun?: boolean;
 }
 
 /**
@@ -184,6 +186,7 @@ export async function dispatchFiles(
   const validateFn = options?.deps?.validateRegistry ?? validateRegistryCheck;
   const registryDir = options?.registryDir;
   const extWarnings = options?.schemaExtensionWarnings;
+  const isDryRun = options?.dryRun === true;
 
   const total = filePaths.length;
   const results: FileResult[] = [];
@@ -361,8 +364,18 @@ export async function dispatchFiles(
 
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
 
+      // Dry-run: restore original file content after processing
+      if (isDryRun) {
+        try {
+          await writeFile(filePath, fileContent, 'utf-8');
+        } catch {
+          // Best effort — file may not exist if agent deleted it
+        }
+      }
+
       // Run periodic schema checkpoint after every N processed (non-skipped) files
-      if (checkpointConfig && interval > 0 && filesSinceLastCheckpoint >= interval) {
+      // Dry-run skips checkpoints — schema changes are transient and will be reverted
+      if (!isDryRun && checkpointConfig && interval > 0 && filesSinceLastCheckpoint >= interval) {
         try {
           const resultsSinceCheckpoint = results.slice(lastCheckpointResultIndex);
           const checkpointResult = await runSchemaCheckpoint(
