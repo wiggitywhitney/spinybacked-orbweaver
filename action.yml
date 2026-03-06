@@ -79,9 +79,9 @@ runs:
     - name: Parse results and set summary
       id: parse-results
       if: always() && steps.instrument.outputs.result != ''
+      env:
+        RESULT: ${{ steps.instrument.outputs.result }}
       run: |
-        RESULT='${{ steps.instrument.outputs.result }}'
-
         FILES_PROCESSED=$(echo "${RESULT}" | node -e '
           const d = JSON.parse(require("fs").readFileSync(0, "utf8"));
           const r = d.fileResults || [];

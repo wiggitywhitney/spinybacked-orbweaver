@@ -376,7 +376,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
     },
   }, async (input) => {
     const logFn: McpLogFn = (params) => {
-      mcpServer.sendLoggingMessage(params);
+      void mcpServer.sendLoggingMessage(params).catch(() => {
+        // Best-effort progress logging; do not fail tool execution on log transport errors.
+      });
     };
     return handleInstrumentTool(input, deps, logFn);
   });
