@@ -121,8 +121,7 @@ You are returning structured JSON via the output schema. Fill in each field:
 - \`schemaExtensions\`: Array of string IDs for any new schema entries created. Empty array if none.
 - \`attributesCreated\`: Count of new span attributes added that were not in the existing schema. 0 if none.
 - \`spanCategories\`: Breakdown of spans added: \`{ externalCalls, schemaDefined, serviceEntryPoints, totalFunctionsInFile }\`. Set to null only if the file could not be processed at all.
-- \`notes\`: Array of judgment call explanations. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Never return an empty array — at minimum explain your instrumentation decisions.
-- \`tokenUsage\`: Set all fields to 0. This is populated by the caller from the API response metadata, not by you.`;
+- \`notes\`: Array of judgment call explanations. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Never return an empty array — at minimum explain your instrumentation decisions.`;
 }
 
 /**
