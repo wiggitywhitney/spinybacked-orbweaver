@@ -116,7 +116,7 @@ export async function run(args?: string[]) {
         loadConfig,
         coordinate,
         stderr: (msg: string) => console.error(msg),
-        stdout: (msg: string) => console.log(msg),
+        stdout: (msg: string) => console.log(msg), // eslint-disable-line no-console
         promptConfirm,
       },
     );
