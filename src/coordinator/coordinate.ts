@@ -12,11 +12,7 @@ import { discoverFiles as defaultDiscoverFiles } from './discovery.ts';
 import { dispatchFiles as defaultDispatchFiles } from './dispatch.ts';
 import { aggregateResults, finalizeResults as defaultFinalizeResults } from './aggregate.ts';
 import { checkPrerequisites as defaultCheckPrerequisites } from '../config/prerequisites.ts';
-import {
-  collectSchemaExtensions,
-  writeSchemaExtensions as defaultWriteSchemaExtensions,
-} from './schema-extensions.ts';
-import type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
+import { collectSchemaExtensions } from './schema-extensions.ts';
 import type { FinalizeDeps } from './aggregate.ts';
 import { computeSchemaHash } from './schema-hash.ts';
 import { resolveSchema as defaultResolveSchema } from './dispatch.ts';
@@ -67,10 +63,6 @@ export interface CoordinateDeps {
     dependencyStrategy: 'dependencies' | 'peerDependencies',
     deps?: FinalizeDeps,
   ) => Promise<void>;
-  writeSchemaExtensions: (
-    registryDir: string,
-    extensions: string[],
-  ) => Promise<WriteSchemaExtensionsResult>;
   resolveSchemaForHash: (projectDir: string, schemaPath: string) => Promise<object>;
   createBaselineSnapshot: (registryDir: string) => Promise<string>;
   cleanupSnapshot: (snapshotDir: string) => Promise<void>;
@@ -142,7 +134,6 @@ export async function coordinate(
   const statFn = deps?.statFile ?? ((fp: string) => stat(fp));
   const dispatch = deps?.dispatchFiles ?? defaultDispatchFiles;
   const finalize = deps?.finalizeResults ?? defaultFinalizeResults;
-  const writeExtensions = deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
   const resolveForHash = deps?.resolveSchemaForHash ?? defaultResolveSchema;
   const createSnapshot = deps?.createBaselineSnapshot ?? defaultCreateBaselineSnapshot;
   const cleanupSnap = deps?.cleanupSnapshot ?? defaultCleanupSnapshot;
@@ -233,6 +224,8 @@ export async function coordinate(
         registryDir,
         baselineSnapshotDir: baselineSnapshotDir,
       },
+      registryDir,
+      schemaExtensionWarnings,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -243,21 +236,9 @@ export async function coordinate(
     throw new CoordinatorAbortError(`File dispatch failed: ${message}`);
   }
 
-  // Step 5b: Write schema extensions (degrade and warn on failure)
+  // Step 5b: Schema extensions are written per-file inside dispatchFiles.
+  // Warnings from per-file writes are pushed into schemaExtensionWarnings.
   const extensions = collectSchemaExtensions(fileResults);
-  if (extensions.length > 0) {
-    try {
-      const writeResult = await writeExtensions(registryDir, extensions);
-      if (writeResult.rejected.length > 0) {
-        schemaExtensionWarnings.push(
-          `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
-        );
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      schemaExtensionWarnings.push(`Schema extension writing failed (degraded): ${message}`);
-    }
-  }
 
   // Step 5c: Compute schema hash at run end (after extensions written)
   let schemaHashEnd: string | undefined;

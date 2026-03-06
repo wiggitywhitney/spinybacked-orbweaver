@@ -63,8 +63,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Phase 6 acceptance gate tests: comprehensive verification of all acceptance criteria (exit codes, cost ceiling flow, progress callbacks, JSDoc coverage, no silent failures)
 - CI workflow (`.github/workflows/ci.yml`): GitHub Actions pipeline with Node.js 24, Weaver v0.21.2 pinned via installer script, binary attestation verification, typecheck, and test suite
 - `LiveCheckOptions` exposed through `CoordinateDeps` so callers can configure non-default ports and inactivity timeouts
+- Per-file schema extension writing in dispatch loop: `writeSchemaExtensions()` called after each successful file with in-memory accumulator and deduplication, enabling subsequent files to see prior files' schema contributions via `resolveSchema()`
+- Meaningful `schemaHashBefore`/`schemaHashAfter`: schema re-resolved after writing extensions so `schemaHashAfter` reflects the updated registry state; hash chain is continuous across files (file N's `schemaHashAfter` equals file N+1's `schemaHashBefore`)
+- Schema state revert on file failure: snapshot `agent-extensions.yaml` before each file, restore on-disk file and in-memory accumulator when file fails (both `status: 'failed'` and pre-dispatch exceptions)
+- Removed redundant post-dispatch batch schema extension write from `coordinate()` — extensions are now written per-file in dispatch, with rejection and failure warnings surfaced via `schemaExtensionWarnings` array passed through dispatch options
+- Per-file extension validation: `weaver registry check` runs after each file's extensions are written; invalid extensions are rolled back (snapshot restore + accumulator revert) and the file is marked failed before the next file processes
+- Checkpoint infrastructure failure visibility: checkpoint catch block surfaces errors as warnings in `RunResult.warnings` instead of silently swallowing; counters reset on infrastructure failure for proper checkpoint interval spacing
+- Periodic checkpoint integration with per-file extension writing: checkpoints see accumulated extensions from prior files, diff shows only additions, checkpoint failure still stops processing when per-file writes are active, per-file validation failures don't interfere with checkpoint counting
+- PRD 31 acceptance gate: end-to-end integration tests verifying all per-file extension features work together — hash chain continuity, schema revert on failure, checkpoint integration, infrastructure failure warnings, and per-file validation — using real Weaver CLI
 
 ### Fixed
+
+- `coordinate()` now passes `registryDir` to `dispatchFiles()` so per-file extension writing works in production (was only effective in tests)
 
 - Diff JSON parser (`validateDiffChanges()`) now matches real Weaver output: nested `{ changes: { registry_attributes: [...], spans: [...] } }` with `type` field instead of flat array with `change_type`
 - Shared Weaver registry test fixtures (`test/fixtures/weaver-registry/`) for integration testing against real Weaver binary

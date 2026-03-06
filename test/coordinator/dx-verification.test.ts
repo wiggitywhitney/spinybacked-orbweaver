@@ -139,7 +139,6 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
       makeSkippedResult('/project/src/already-instrumented.js'),
     ]),
     finalizeResults: vi.fn().mockResolvedValue(undefined),
-    writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
     resolveSchemaForHash: vi.fn().mockResolvedValue({ groups: [] }),
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -655,7 +654,6 @@ describe('DX Verification — Milestone 8', () => {
           }
           return { groups: [{ id: 'registry.myapp', attributes: [{ name: 'myapp.order.total' }] }] };
         }),
-        writeSchemaExtensions: vi.fn().mockResolvedValue({ written: true, extensionCount: 1, filePath: '/project/schemas/registry/agent-extensions.yaml', rejected: [] }),
         computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: '## Added\n- myapp.order.total', valid: true, violations: [] }),
       });
 
@@ -678,7 +676,6 @@ describe('DX Verification — Milestone 8', () => {
           resolveCallCount++;
           return { groups: [{ count: resolveCallCount }] };
         }),
-        writeSchemaExtensions: vi.fn().mockResolvedValue({ written: true, extensionCount: 1, filePath: '/schemas/agent-extensions.yaml', rejected: [] }),
         computeSchemaDiff: vi.fn().mockResolvedValue({
           markdown: '## Schema Changes\n\n- Added: `myapp.order.total`',
           valid: true,

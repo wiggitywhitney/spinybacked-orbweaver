@@ -10,6 +10,40 @@ import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig 
 import { computeSchemaHash } from './schema-hash.ts';
 import { runSchemaCheckpoint } from './schema-checkpoint.ts';
 import type { SchemaCheckpointDeps } from './schema-checkpoint.ts';
+import {
+  writeSchemaExtensions as defaultWriteSchemaExtensions,
+  snapshotExtensionsFile as defaultSnapshotExtensionsFile,
+  restoreExtensionsFile as defaultRestoreExtensionsFile,
+} from './schema-extensions.ts';
+
+/**
+ * Validate the Weaver registry by running `weaver registry check`.
+ * Used as the default implementation for per-file extension validation.
+ *
+ * @param registryDir - Absolute path to the Weaver registry directory
+ * @returns Whether the check passed, with error details on failure
+ */
+export async function validateRegistryCheck(
+  registryDir: string,
+): Promise<{ passed: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      'weaver',
+      ['registry', 'check', '-r', registryDir],
+      { timeout: 30000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const stdoutStr = stdout?.trim() ?? '';
+          const stderrStr = stderr?.trim() ?? '';
+          const cliOutput = [stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message;
+          resolve({ passed: false, error: cliOutput });
+          return;
+        }
+        resolve({ passed: true });
+      },
+    );
+  });
+}
 
 /**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
@@ -106,6 +140,10 @@ interface DispatchFilesOptions {
   deps?: DispatchFilesDeps;
   checkpoint?: DispatchCheckpointConfig;
   checkpointDeps?: SchemaCheckpointDeps;
+  /** Absolute path to the Weaver registry directory. Required for per-file extension writing. */
+  registryDir?: string;
+  /** Mutable array for per-file extension warnings — coordinate() passes this in and reads it after dispatch. */
+  schemaExtensionWarnings?: string[];
 }
 
 /**
@@ -139,6 +177,12 @@ export async function dispatchFiles(
   const resolveFn = options?.deps?.resolveSchema ?? resolveSchema;
   const instrumentFn = options?.deps?.instrumentWithRetry
     ?? (await import('../fix-loop/index.ts')).instrumentWithRetry;
+  const writeExtFn = options?.deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
+  const snapshotFn = options?.deps?.snapshotExtensionsFile ?? defaultSnapshotExtensionsFile;
+  const restoreFn = options?.deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
+  const validateFn = options?.deps?.validateRegistry ?? validateRegistryCheck;
+  const registryDir = options?.registryDir;
+  const extWarnings = options?.schemaExtensionWarnings;
 
   const total = filePaths.length;
   const results: FileResult[] = [];
@@ -147,6 +191,10 @@ export async function dispatchFiles(
   let filesSinceLastCheckpoint = 0;
   let lastCheckpointResultIndex = 0;
   let stoppedByCheckpoint = false;
+
+  // In-memory accumulator for schema extensions across files (deduped)
+  const accumulatedExtensions: string[] = [];
+  const seenExtensions = new Set<string>();
 
   for (let i = 0; i < total; i++) {
     if (stoppedByCheckpoint) break;
@@ -158,6 +206,10 @@ export async function dispatchFiles(
     } catch {
       // Callback failure must not abort dispatch
     }
+
+    // Snapshot schema extensions state before processing (for revert on failure)
+    let extensionsSnapshot: string | null | undefined;
+    let accumulatorLengthSnapshot = accumulatedExtensions.length;
 
     try {
       // Read file content
@@ -171,6 +223,17 @@ export async function dispatchFiles(
         continue;
       }
 
+      // Snapshot extensions file before processing this file
+      if (registryDir) {
+        try {
+          extensionsSnapshot = await snapshotFn(registryDir);
+          accumulatorLengthSnapshot = accumulatedExtensions.length;
+        } catch (snapErr) {
+          const snapMsg = snapErr instanceof Error ? snapErr.message : String(snapErr);
+          extWarnings?.push(`Schema snapshot failed for ${filePath} (rollback disabled): ${snapMsg}`);
+        }
+      }
+
       // Resolve schema fresh for each file
       const schema = await resolveFn(projectDir, config.schemaPath);
       const schemaHash = computeSchemaHash(schema as object);
@@ -181,6 +244,117 @@ export async function dispatchFiles(
       result.schemaHashAfter = schemaHash;
       results.push(result);
       filesSinceLastCheckpoint++;
+
+      // Track whether the extension block already handled rollback
+      let extensionRollbackDone = false;
+
+      // Write schema extensions per-file for successful files
+      if (registryDir && result.status === 'success' && result.schemaExtensions.length > 0) {
+        for (const ext of result.schemaExtensions) {
+          if (!seenExtensions.has(ext)) {
+            seenExtensions.add(ext);
+            accumulatedExtensions.push(ext);
+          }
+        }
+        try {
+          const writeResult = await writeExtFn(registryDir, [...accumulatedExtensions]);
+          if (writeResult.rejected.length > 0) {
+            // Remove rejected extensions from accumulator so they aren't resubmitted
+            const rejectedSet = new Set(writeResult.rejected);
+            for (let j = accumulatedExtensions.length - 1; j >= 0; j--) {
+              if (rejectedSet.has(accumulatedExtensions[j])) {
+                accumulatedExtensions.splice(j, 1);
+              }
+            }
+            for (const rejected of writeResult.rejected) {
+              seenExtensions.delete(rejected);
+            }
+            if (extWarnings) {
+              extWarnings.push(
+                `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
+              );
+            }
+          }
+
+          // Validate the registry after writing extensions
+          let validationFailed = false;
+          try {
+            const validation = await validateFn(registryDir);
+            if (!validation.passed) {
+              validationFailed = true;
+              const errMsg = validation.error ?? 'unknown validation error';
+              result.status = 'failed';
+              result.reason = `Schema validation failed after writing extensions: ${errMsg}`;
+              if (extWarnings) {
+                extWarnings.push(`Schema validation failed for ${filePath}: ${errMsg}`);
+              }
+            }
+          } catch (validateErr) {
+            validationFailed = true;
+            const errMsg = validateErr instanceof Error ? validateErr.message : String(validateErr);
+            result.status = 'failed';
+            result.reason = `Schema validation infrastructure error: ${errMsg}`;
+            if (extWarnings) {
+              extWarnings.push(`Schema validation infrastructure error for ${filePath}: ${errMsg}`);
+            }
+          }
+
+          // Roll back extensions on validation failure
+          if (validationFailed) {
+            extensionRollbackDone = true;
+            accumulatedExtensions.length = accumulatorLengthSnapshot;
+            seenExtensions.clear();
+            for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+            if (extensionsSnapshot !== undefined) {
+              try {
+                await restoreFn(registryDir, extensionsSnapshot);
+              } catch (restoreErr) {
+                const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+                extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
+              }
+            }
+          } else {
+            // Re-resolve schema after writing extensions to compute meaningful schemaHashAfter
+            const updatedSchema = await resolveFn(projectDir, config.schemaPath);
+            result.schemaHashAfter = computeSchemaHash(updatedSchema as object);
+          }
+        } catch (writeErr) {
+          const msg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+          result.status = 'failed';
+          result.reason = `Schema extension write failed: ${msg}`;
+          if (extWarnings) {
+            extWarnings.push(`Schema extension write failed: ${msg}`);
+          }
+          // Roll back in-memory and on-disk state since write failed
+          extensionRollbackDone = true;
+          accumulatedExtensions.length = accumulatorLengthSnapshot;
+          seenExtensions.clear();
+          for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+          if (extensionsSnapshot !== undefined) {
+            try {
+              await restoreFn(registryDir, extensionsSnapshot);
+            } catch (restoreErr) {
+              const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+              extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
+            }
+          }
+        }
+      }
+
+      // Revert schema extensions if file failed (skip if extension block already rolled back)
+      if (registryDir && result.status === 'failed' && extensionsSnapshot !== undefined && !extensionRollbackDone) {
+        // Restore in-memory accumulator to pre-file state
+        accumulatedExtensions.length = accumulatorLengthSnapshot;
+        seenExtensions.clear();
+        for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+        // Restore on-disk extensions file
+        try {
+          await restoreFn(registryDir, extensionsSnapshot);
+        } catch (restoreErr) {
+          const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+          extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
+        }
+      }
 
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
 
@@ -218,11 +392,31 @@ export async function dispatchFiles(
               lastCheckpointResultIndex = results.length;
             }
           }
-        } catch {
-          // Checkpoint infrastructure failure — degrade, don't stop
+        } catch (checkpointErr) {
+          // Checkpoint infrastructure failure — degrade and warn, don't stop
+          // Reset counters so next checkpoint attempts at the normal interval
+          filesSinceLastCheckpoint = 0;
+          lastCheckpointResultIndex = results.length;
+          if (extWarnings) {
+            const msg = checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr);
+            extWarnings.push(`Schema checkpoint infrastructure failure (degraded): ${msg}`);
+          }
         }
       }
     } catch (error) {
+      // Revert schema extensions on exception (pre-dispatch error)
+      if (registryDir && extensionsSnapshot !== undefined) {
+        accumulatedExtensions.length = accumulatorLengthSnapshot;
+        seenExtensions.clear();
+        for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+        try {
+          await restoreFn(registryDir, extensionsSnapshot);
+        } catch (restoreErr) {
+          const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+          extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
+        }
+      }
+
       const failed: FileResult = {
         path: filePath,
         status: 'failed',

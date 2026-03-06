@@ -1,7 +1,7 @@
 // ABOUTME: Schema extension YAML generation for the coordinator module.
 // ABOUTME: Writes agent-requested schema extensions to agent-extensions.yaml in the registry directory.
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse, stringify } from 'yaml';
 import type { FileResult } from '../fix-loop/types.ts';
@@ -163,4 +163,49 @@ export async function writeSchemaExtensions(
     filePath,
     rejected,
   };
+}
+
+/**
+ * Snapshot the current agent-extensions.yaml file content.
+ * Returns the file content as a string, or null if the file does not exist.
+ *
+ * @param registryDir - Absolute path to the Weaver registry directory
+ * @returns File content string, or null if absent
+ */
+export async function snapshotExtensionsFile(registryDir: string): Promise<string | null> {
+  const filePath = join(registryDir, EXTENSIONS_FILENAME);
+  try {
+    return await readFile(filePath, 'utf-8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Restore agent-extensions.yaml to a previous state.
+ * If the snapshot is a string, writes that content back to the file.
+ * If the snapshot is null (file was absent), deletes the file.
+ *
+ * @param registryDir - Absolute path to the Weaver registry directory
+ * @param snapshot - Previous file content (string) or null (file was absent)
+ */
+export async function restoreExtensionsFile(
+  registryDir: string,
+  snapshot: string | null,
+): Promise<void> {
+  const filePath = join(registryDir, EXTENSIONS_FILENAME);
+  if (snapshot === null) {
+    try {
+      await unlink(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  } else {
+    await writeFile(filePath, snapshot, 'utf-8');
+  }
 }
