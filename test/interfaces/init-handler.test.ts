@@ -24,7 +24,9 @@ function makeDeps(overrides: Partial<InitDeps> = {}): InitDeps {
     access: vi.fn(async (path: string) => {
       // orb.yaml should NOT exist by default (init creates it)
       if (path.endsWith('orb.yaml')) {
-        throw new Error('ENOENT');
+        const err = new Error('ENOENT') as NodeJS.ErrnoException;
+        err.code = 'ENOENT';
+        throw err;
       }
     }),
     writeFile: vi.fn(async () => {}),

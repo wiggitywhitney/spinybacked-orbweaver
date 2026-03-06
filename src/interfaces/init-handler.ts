@@ -114,8 +114,13 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     await deps.access(configPath);
     errors.push(`orb.yaml already exists at ${configPath}. Remove it first to re-initialize.`);
     return { success: false, errors, warnings };
-  } catch {
-    // Expected — file should not exist
+  } catch (err: unknown) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code !== 'ENOENT') {
+      errors.push(`Cannot access ${configPath}: ${error.message}`);
+      return { success: false, errors, warnings };
+    }
+    // ENOENT is expected — file should not exist
   }
 
   // Read and parse package.json
