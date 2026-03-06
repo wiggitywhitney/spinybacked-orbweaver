@@ -111,6 +111,8 @@ interface DispatchFilesOptions {
   checkpointDeps?: SchemaCheckpointDeps;
   /** Absolute path to the Weaver registry directory. Required for per-file extension writing. */
   registryDir?: string;
+  /** Mutable array for per-file extension warnings — coordinate() passes this in and reads it after dispatch. */
+  schemaExtensionWarnings?: string[];
 }
 
 /**
@@ -148,6 +150,7 @@ export async function dispatchFiles(
   const snapshotFn = options?.deps?.snapshotExtensionsFile ?? defaultSnapshotExtensionsFile;
   const restoreFn = options?.deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
   const registryDir = options?.registryDir;
+  const extWarnings = options?.schemaExtensionWarnings;
 
   const total = filePaths.length;
   const results: FileResult[] = [];
@@ -218,12 +221,20 @@ export async function dispatchFiles(
           }
         }
         try {
-          await writeExtFn(registryDir, [...accumulatedExtensions]);
+          const writeResult = await writeExtFn(registryDir, [...accumulatedExtensions]);
+          if (writeResult.rejected.length > 0 && extWarnings) {
+            extWarnings.push(
+              `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
+            );
+          }
           // Re-resolve schema after writing extensions to compute meaningful schemaHashAfter
           const updatedSchema = await resolveFn(projectDir, config.schemaPath);
           result.schemaHashAfter = computeSchemaHash(updatedSchema as object);
-        } catch {
-          // Extension write failure is degrade-and-warn — don't stop dispatch
+        } catch (writeErr) {
+          const msg = writeErr instanceof Error ? writeErr.message : String(writeErr);
+          if (extWarnings) {
+            extWarnings.push(`Schema extension writing failed (degraded): ${msg}`);
+          }
         }
       }
 

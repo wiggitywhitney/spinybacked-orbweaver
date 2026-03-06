@@ -456,6 +456,62 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     });
   });
 
+  it('pushes rejection warnings into schemaExtensionWarnings when extensions are rejected', async () => {
+    const file1 = await createFile('a.js', 'function a() {}');
+
+    const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+    const writeSchemaExtensions = vi.fn().mockResolvedValue(
+      makeWriteResult({ rejected: ['bad.namespace.attr'] }),
+    );
+    const deps = makeDeps({
+      instrumentWithRetry: vi.fn().mockResolvedValue(
+        makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+      ),
+      writeSchemaExtensions,
+    });
+
+    const config = makeConfig();
+    const registryDir = join(tmpDir, 'registry');
+    const schemaExtensionWarnings: string[] = [];
+
+    await dispatchFiles([file1], tmpDir, config, undefined, {
+      deps,
+      registryDir,
+      schemaExtensionWarnings,
+    });
+
+    expect(schemaExtensionWarnings).toHaveLength(1);
+    expect(schemaExtensionWarnings[0]).toContain('rejected by namespace enforcement');
+    expect(schemaExtensionWarnings[0]).toContain('bad.namespace.attr');
+  });
+
+  it('pushes write failure warnings into schemaExtensionWarnings', async () => {
+    const file1 = await createFile('a.js', 'function a() {}');
+
+    const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+    const writeSchemaExtensions = vi.fn().mockRejectedValue(new Error('Weaver write failed'));
+    const deps = makeDeps({
+      instrumentWithRetry: vi.fn().mockResolvedValue(
+        makeSuccessResult(file1, { schemaExtensions: [extensionYaml] }),
+      ),
+      writeSchemaExtensions,
+    });
+
+    const config = makeConfig();
+    const registryDir = join(tmpDir, 'registry');
+    const schemaExtensionWarnings: string[] = [];
+
+    await dispatchFiles([file1], tmpDir, config, undefined, {
+      deps,
+      registryDir,
+      schemaExtensionWarnings,
+    });
+
+    expect(schemaExtensionWarnings).toHaveLength(1);
+    expect(schemaExtensionWarnings[0]).toContain('Schema extension writing failed');
+    expect(schemaExtensionWarnings[0]).toContain('Weaver write failed');
+  });
+
   it('continues dispatch when writeSchemaExtensions throws', async () => {
     const file1 = await createFile('a.js', 'function a() {}');
     const file2 = await createFile('b.js', 'function b() {}');

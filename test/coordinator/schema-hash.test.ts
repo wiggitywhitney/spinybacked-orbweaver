@@ -235,7 +235,6 @@ describe('coordinate — RunResult schema hash fields', () => {
         return filePaths.map(fp => makeSuccessResult(fp));
       }),
       finalizeResults: vi.fn().mockResolvedValue(undefined),
-      writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
       resolveSchemaForHash: vi.fn().mockResolvedValue(schema),
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -269,7 +268,6 @@ describe('coordinate — RunResult schema hash fields', () => {
         }));
       }),
       finalizeResults: vi.fn().mockResolvedValue(undefined),
-      writeSchemaExtensions: vi.fn().mockResolvedValue({ written: true, extensionCount: 1, filePath: '', rejected: [] }),
       resolveSchemaForHash,
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -297,7 +295,6 @@ describe('coordinate — RunResult schema hash fields', () => {
         return filePaths.map(fp => makeSuccessResult(fp));
       }),
       finalizeResults: vi.fn().mockResolvedValue(undefined),
-      writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
       resolveSchemaForHash: vi.fn().mockResolvedValue(schema),
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -321,7 +318,6 @@ describe('coordinate — RunResult schema hash fields', () => {
         return filePaths.map(fp => makeSuccessResult(fp));
       }),
       finalizeResults: vi.fn().mockResolvedValue(undefined),
-      writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
       resolveSchemaForHash: vi.fn().mockRejectedValue(new Error('schema resolution failed')),
       createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
       cleanupSnapshot: vi.fn().mockResolvedValue(undefined),

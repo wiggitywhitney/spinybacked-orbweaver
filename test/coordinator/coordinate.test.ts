@@ -83,7 +83,6 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
       return filePaths.map(fp => makeSuccessResult(fp));
     }),
     finalizeResults: vi.fn().mockResolvedValue(undefined),
-    writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
     resolveSchemaForHash: vi.fn().mockResolvedValue({ groups: [] }),
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -437,57 +436,56 @@ describe('coordinate', () => {
     });
   });
 
-  describe('schema extension writing', () => {
-    it('calls writeSchemaExtensions when file results have extensions', async () => {
-      const writeSchemaExtensions = vi.fn().mockResolvedValue({
-        written: true, extensionCount: 1, filePath: '/project/schemas/registry/agent-extensions.yaml', rejected: [],
-      });
+  describe('schema extension writing (per-file, not batch)', () => {
+    it('passes schemaExtensionWarnings array to dispatchFiles for per-file warning collection', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js', {
+          schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Order total'],
+        }),
+      ]);
       const deps = makeDeps({
         discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeSuccessResult('/project/a.js', {
-            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Order total'],
-          }),
-        ]),
-        writeSchemaExtensions,
+        dispatchFiles,
       });
 
       await coordinate('/project', makeConfig(), undefined, deps);
 
-      expect(writeSchemaExtensions).toHaveBeenCalledTimes(1);
-      expect(writeSchemaExtensions).toHaveBeenCalledWith(
-        expect.stringContaining('schemas/registry'),
-        ['- id: myapp.order.total\n  type: int\n  brief: Order total'],
-      );
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.schemaExtensionWarnings).toBeDefined();
+      expect(Array.isArray(options.schemaExtensionWarnings)).toBe(true);
     });
 
-    it('does not call writeSchemaExtensions when no extensions exist', async () => {
-      const writeSchemaExtensions = vi.fn();
-      const deps = makeDeps({
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeSuccessResult('/project/a.js', { schemaExtensions: [] }),
-        ]),
-        writeSchemaExtensions,
-      });
+    it('passes registryDir to dispatchFiles for per-file extension writing', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({ dispatchFiles });
 
       await coordinate('/project', makeConfig(), undefined, deps);
 
-      expect(writeSchemaExtensions).not.toHaveBeenCalled();
+      // dispatchFiles should receive registryDir in the options argument (5th param)
+      expect(dispatchFiles).toHaveBeenCalledTimes(1);
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options).toBeDefined();
+      expect(options.registryDir).toContain('schemas/registry');
     });
 
-    it('reports schema extension failures as warnings (degrade and warn)', async () => {
-      const writeSchemaExtensions = vi.fn().mockRejectedValue(
-        new Error('Cannot read registry_manifest.yaml'),
+    it('surfaces per-file extension warnings from dispatch in RunResult.warnings', async () => {
+      // Simulate dispatch pushing warnings into the schemaExtensionWarnings array
+      const dispatchFiles = vi.fn().mockImplementation(
+        async (_filePaths: string[], _projectDir: string, _config: AgentConfig, _callbacks: unknown, options: Record<string, unknown>) => {
+          const warnings = options?.schemaExtensionWarnings as string[] | undefined;
+          if (warnings) {
+            warnings.push('Schema extension writing failed for /project/a.js (degraded): Cannot read registry_manifest.yaml');
+          }
+          return [
+            makeSuccessResult('/project/a.js', {
+              schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
+            }),
+          ];
+        },
       );
-      const deps = makeDeps({
-        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeSuccessResult('/project/a.js', {
-            schemaExtensions: ['- id: myapp.order.total\n  type: int\n  brief: Total'],
-          }),
-        ]),
-        writeSchemaExtensions,
-      });
+      const deps = makeDeps({ dispatchFiles });
 
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 

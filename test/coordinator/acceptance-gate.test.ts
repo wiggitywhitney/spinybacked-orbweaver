@@ -155,7 +155,6 @@ function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
         },
       });
     },
-    writeSchemaExtensions: vi.fn().mockResolvedValue({ written: false, extensionCount: 0, filePath: '', rejected: [] }),
     resolveSchemaForHash: resolveSchema,
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -450,12 +449,6 @@ function makePhase5Deps(resolvedSchema: object, tempDir: string): CoordinateDeps
         },
       });
     },
-    writeSchemaExtensions: vi.fn().mockResolvedValue({
-      written: true,
-      extensionCount: 1,
-      filePath: '/tmp/registry/agent-extensions.yaml',
-      rejected: [],
-    }),
     resolveSchemaForHash: resolveWithExtension,
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-snapshot'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
@@ -517,14 +510,11 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     expect(result.filesSucceeded).toBeGreaterThanOrEqual(1);
   });
 
-  it('(b) writeSchemaExtensions called when agent produces extensions', { timeout: 600_000 }, async () => {
+  it('(b) schema lifecycle deps called when agent produces extensions', { timeout: 600_000 }, async () => {
     const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
     await coordinate(tempDir, config, undefined, deps);
-
-    // writeSchemaExtensions was invoked by the coordinator
-    expect(deps.writeSchemaExtensions).toHaveBeenCalled();
 
     // createBaselineSnapshot was called at run start
     expect(deps.createBaselineSnapshot).toHaveBeenCalled();
