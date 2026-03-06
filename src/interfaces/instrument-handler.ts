@@ -70,6 +70,11 @@ export async function handleInstrument(
 ): Promise<InstrumentResult> {
   // Load config
   const configPath = join(options.projectDir, 'orb.yaml');
+
+  if (options.verbose) {
+    deps.stderr(`Loading config from ${configPath}`);
+  }
+
   const configResult = await deps.loadConfig(configPath);
 
   if (!configResult.success) {
@@ -81,12 +86,20 @@ export async function handleInstrument(
     return { exitCode: 1 };
   }
 
+  if (options.verbose) {
+    deps.stderr(`Config loaded from ${configPath}`);
+  }
+
   // Merge CLI flags into config
   const config: AgentConfig = {
     ...configResult.config,
     dryRun: options.dryRun,
     confirmEstimate: !options.yes,
   };
+
+  if (options.debug) {
+    deps.stderr(`Config: ${JSON.stringify(config, null, 2)}`);
+  }
 
   // Build callbacks: wire coordinator progress to stderr output
   const callbacks: CoordinatorCallbacks = {

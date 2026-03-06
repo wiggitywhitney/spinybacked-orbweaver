@@ -40,3 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MCP server with `get-cost-ceiling` tool (file globbing + cost calculation, no LLM calls)
 - MCP server with `instrument` tool (full workflow with progress notifications and hierarchical results)
 - GitHub Action (`action.yml`): composite action wrapping CLI with Weaver binary install, `--yes --output json`, step outputs for results and summary
+- DX verification: zero files → clear warning (not silent exit 0), invalid path → actionable error, missing config → `orb init` suggestion across all interfaces
+- `--verbose` flag: shows config loading path during instrument command
+- `--debug` flag: shows full config details as JSON during instrument command
+- MCP error responses include enough context for AI intermediary to explain failures and suggest next steps
