@@ -62,6 +62,8 @@ export function buildSkippedResult(filePath: string): FileResult {
     validationAttempts: 0,
     validationStrategyUsed: 'initial-generation',
     reason: 'File already instrumented — detected existing OpenTelemetry imports or span calls',
+    errorProgression: [],
+    notes: [],
     tokenUsage: {
       inputTokens: 0,
       outputTokens: 0,
@@ -232,6 +234,8 @@ export async function dispatchFiles(
         validationStrategyUsed: 'initial-generation',
         reason: 'Pre-dispatch error',
         lastError: error instanceof Error ? error.message : String(error),
+        errorProgression: [],
+        notes: [],
         tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
       };
       results.push(failed);

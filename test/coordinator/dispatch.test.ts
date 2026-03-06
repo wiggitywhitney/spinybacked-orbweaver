@@ -117,4 +117,10 @@ describe('buildSkippedResult', () => {
     expect(result.reason).toBeDefined();
     expect(result.reason).toMatch(/already.*instrumented/i);
   });
+
+  it('sets errorProgression and notes to empty arrays', () => {
+    const result = buildSkippedResult('/path/to/file.js');
+    expect(result.errorProgression).toEqual([]);
+    expect(result.notes).toEqual([]);
+  });
 });

@@ -377,4 +377,22 @@ describe('dispatchFiles', () => {
       expect(results).toEqual([]);
     });
   });
+
+  describe('diagnostic field population', () => {
+    it('sets errorProgression and notes to empty arrays on pre-dispatch error results', async () => {
+      const file1 = await createFile('a.js', 'function a() {}');
+
+      const deps = makeDeps({
+        resolveSchema: vi.fn().mockRejectedValue(new Error('Weaver crashed')),
+      });
+      const config = makeConfig();
+
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].status).toBe('failed');
+      expect(results[0].errorProgression).toEqual([]);
+      expect(results[0].notes).toEqual([]);
+    });
+  });
 });
