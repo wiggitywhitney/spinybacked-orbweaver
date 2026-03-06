@@ -61,6 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MCP error responses include enough context for AI intermediary to explain failures and suggest next steps
 - Interface equivalence tests: CLI, MCP, and direct `coordinate()` produce equivalent RunResult for the same scenario
 - Phase 6 acceptance gate tests: comprehensive verification of all acceptance criteria (exit codes, cost ceiling flow, progress callbacks, JSDoc coverage, no silent failures)
+- CI workflow (`.github/workflows/ci.yml`): GitHub Actions pipeline with Node.js 24, Weaver v0.21.2 pinned via installer script, typecheck, and test suite
 
 ### Fixed
 
@@ -74,7 +75,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Replaced all mock-based live-check tests with 13 integration tests against real Weaver binary (port checking, full OTLP workflow via `weaver registry emit`, inactivity timeout, port conflict detection)
 - Replaced all Weaver CLI mocks in `init-handler.test.ts` with real `execFileSync` calls against Weaver binary and registry fixtures; added 6 dedicated integration tests in `init-handler.integration.test.ts`; exported `isVersionSatisfied` for direct unit testing of version comparison logic
 - Replaced remaining Weaver CLI mocks in `acceptance-gate.test.ts` and `dx-verification.test.ts` with real Weaver calls against registry fixtures — zero Weaver mocks remain in the test suite
-
-### Added
-
-- CI workflow (`.github/workflows/ci.yml`): GitHub Actions pipeline with Node.js 24, Weaver v0.21.2 pinned via installer script, typecheck, and test suite
