@@ -402,6 +402,198 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
     });
   });
 
+  describe('checkpoints with per-file extension writing active', () => {
+    /**
+     * These tests exercise the interaction between per-file extension writing
+     * (registryDir set, files produce schemaExtensions) and periodic checkpoints.
+     * Both features use the same registry directory — extensions accumulate on disk
+     * and checkpoints validate the growing registry via real Weaver CLI.
+     */
+
+    async function copyFixture(srcDir: string, destDir: string): Promise<void> {
+      const { cp } = await import('node:fs/promises');
+      await cp(srcDir, destDir, { recursive: true });
+    }
+
+    it('checkpoint sees accumulated extensions from per-file writes', async () => {
+      // Copy valid fixture to a writable temp dir
+      const registryDir = join(tmpDir, 'registry');
+      await copyFixture(resolve(FIXTURES_DIR, 'valid'), registryDir);
+
+      // Baseline is the unmodified valid fixture
+      const baselineDir = resolve(FIXTURES_DIR, 'valid');
+
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+      ]);
+
+      // File A produces a valid schema extension with correct namespace
+      const ext1 = '- id: test_app.payment.amount\n  type: double\n  stability: development\n  brief: Payment amount\n  examples: [29.99]';
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+      const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
+
+      const instrumentWithRetry = vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(files[0], { schemaExtensions: [ext1] }))
+        .mockResolvedValueOnce(makeSuccessResult(files[1]));
+
+      // Use real writeSchemaExtensions (writes to disk) but mock resolveSchema + instrumentWithRetry
+      const deps: DispatchFilesDeps = {
+        resolveSchema: vi.fn().mockResolvedValue({ resolved: true }),
+        instrumentWithRetry,
+      };
+
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+
+      const results = await dispatchFiles(files, tmpDir, config, callbacks, {
+        deps,
+        checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
+        registryDir,
+      });
+
+      // Both files processed
+      expect(results).toHaveLength(2);
+
+      // Checkpoint fired after 2 files and passed — the registry with accumulated
+      // extensions is valid and diff shows only additions vs baseline
+      expect(onSchemaCheckpoint).toHaveBeenCalledTimes(1);
+      expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, true);
+    });
+
+    it('checkpoint diff shows only additions when extensions accumulate across files', async () => {
+      const registryDir = join(tmpDir, 'registry');
+      await copyFixture(resolve(FIXTURES_DIR, 'valid'), registryDir);
+      const baselineDir = resolve(FIXTURES_DIR, 'valid');
+
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      // Two files produce extensions, two don't — checkpoint should still pass
+      const ext1 = '- id: test_app.shipping.method\n  type: string\n  stability: development\n  brief: Shipping method\n  examples: ["express"]';
+      const ext2 = '- id: test_app.shipping.cost\n  type: double\n  stability: development\n  brief: Shipping cost\n  examples: [5.99]';
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+
+      const instrumentWithRetry = vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(files[0], { schemaExtensions: [ext1] }))
+        .mockResolvedValueOnce(makeSuccessResult(files[1]))
+        .mockResolvedValueOnce(makeSuccessResult(files[2], { schemaExtensions: [ext2] }))
+        .mockResolvedValueOnce(makeSuccessResult(files[3]));
+
+      const deps: DispatchFilesDeps = {
+        resolveSchema: vi.fn().mockResolvedValue({ resolved: true }),
+        instrumentWithRetry,
+      };
+
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+
+      const results = await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
+        deps,
+        checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
+        registryDir,
+      });
+
+      expect(results).toHaveLength(4);
+      // Two checkpoints: after file 2 (ext1 accumulated) and after file 4 (ext1+ext2 accumulated)
+      // Both should pass — only additions relative to baseline
+      expect(onSchemaCheckpoint).toHaveBeenCalledTimes(2);
+      expect(onSchemaCheckpoint).toHaveBeenNthCalledWith(1, 2, true);
+      expect(onSchemaCheckpoint).toHaveBeenNthCalledWith(2, 4, true);
+    });
+
+    it('checkpoint failure still stops processing when per-file extensions are active', async () => {
+      // Use invalid fixture as checkpoint registry to trigger check failure,
+      // but use a valid writable copy for per-file extension writes
+      const registryDir = join(tmpDir, 'registry');
+      await copyFixture(resolve(FIXTURES_DIR, 'valid'), registryDir);
+
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      const ext1 = '- id: test_app.user.name\n  type: string\n  stability: development\n  brief: User name\n  examples: ["alice"]';
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+
+      const instrumentWithRetry = vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(files[0], { schemaExtensions: [ext1] }))
+        .mockResolvedValueOnce(makeSuccessResult(files[1]))
+        .mockResolvedValueOnce(makeSuccessResult(files[2]))
+        .mockResolvedValueOnce(makeSuccessResult(files[3]));
+
+      const deps: DispatchFilesDeps = {
+        resolveSchema: vi.fn().mockResolvedValue({ resolved: true }),
+        instrumentWithRetry,
+      };
+
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+
+      // Point checkpoint at invalid fixture to force failure, while per-file
+      // extension writing uses the valid writable registry
+      const results = await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
+        deps,
+        checkpoint: failingCheckCheckpointConfig,
+        registryDir,
+      });
+
+      // Checkpoint fails after file 2 → files 3 and 4 not processed
+      expect(results).toHaveLength(2);
+      expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, false);
+    });
+
+    it('per-file validation failure does not interfere with checkpoint counting', async () => {
+      const registryDir = join(tmpDir, 'registry');
+      await copyFixture(resolve(FIXTURES_DIR, 'valid'), registryDir);
+      const baselineDir = resolve(FIXTURES_DIR, 'valid');
+
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'),
+      ]);
+
+      // File A produces an extension that fails per-file validation
+      // File B and C succeed without extensions
+      const badExt = '- id: test_app.bad.attr\n  type: string\n  stability: development\n  brief: Bad attr';
+
+      const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
+
+      const instrumentWithRetry = vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(files[0], { schemaExtensions: [badExt] }))
+        .mockResolvedValueOnce(makeSuccessResult(files[1]))
+        .mockResolvedValueOnce(makeSuccessResult(files[2]));
+
+      // Per-file validateRegistry fails for file A, but real checkpoint still runs
+      const validateRegistry = vi.fn()
+        .mockResolvedValueOnce({ passed: false, error: 'simulated per-file validation failure' });
+
+      const deps: DispatchFilesDeps = {
+        resolveSchema: vi.fn().mockResolvedValue({ resolved: true }),
+        instrumentWithRetry,
+        validateRegistry,
+      };
+
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+
+      const results = await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
+        deps,
+        checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
+        registryDir,
+      });
+
+      // File A failed validation → marked failed, but still counts for checkpoint interval
+      // File B is the 2nd processed file → checkpoint fires at file 2
+      expect(results).toHaveLength(3);
+      expect(results[0].status).toBe('failed');
+
+      // Checkpoint should still fire (file A counted as processed even though it failed validation)
+      expect(onSchemaCheckpoint).toHaveBeenCalledTimes(1);
+      expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, true);
+    });
+  });
+
   describe('drift detection at checkpoint', () => {
     it('stops processing when drift detected at checkpoint', async () => {
       const files = await Promise.all([
