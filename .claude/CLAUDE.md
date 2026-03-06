@@ -95,4 +95,4 @@ Do not invent tasks outside the PRD structure. When a PRD exists, follow it. Do 
 
 ## Testing: Weaver CLI
 
-**Never mock the Weaver CLI.** Weaver is installed locally and runs fast (<1s per command except live-check). All tests that exercise Weaver behavior must run against the real binary. Mocking Weaver has hidden real bugs (wrong output format assumptions, deprecated commands, missing flags). Use real registry fixtures in `test/fixtures/weaver-registry/` instead of fabricating Weaver output.
+**Never mock the Weaver CLI.** Weaver is installed locally and runs fast (<1s per command except live-check). All tests that exercise Weaver behavior must run against the real binary. Mocking Weaver has hidden real bugs (wrong output format assumptions, deprecated commands, missing flags). Use real registry fixtures instead of fabricating Weaver output.

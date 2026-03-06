@@ -225,7 +225,7 @@ Additional bugs discovered when running against real Weaver output should be fix
 
 - Weaver MCP server integration (spec documents this as post-PoC — CLI is the correct approach for the reasons documented in the spec and PRD #5)
 - `weaver registry search` (deprecated since v0.20.0)
-- `weaver registry emit` (not needed for core functionality; may be used as test infrastructure for live-check integration tests — see Open Question #3)
+- `weaver registry emit` (not needed for core functionality; may be used as test infrastructure for live-check integration tests — see Open Question #2)
 - `weaver registry infer` (experimental — infers schema from OTLP messages)
 - Changes to the agent prompt or instrumentation logic
 - Multi-file coordination fixes (PRD #31)
