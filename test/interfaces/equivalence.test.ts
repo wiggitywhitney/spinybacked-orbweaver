@@ -86,11 +86,24 @@ function makeCliOptions(overrides: Partial<InstrumentOptions> = {}): InstrumentO
     path: './src',
     projectDir: '/test/project',
     dryRun: false,
+    noPr: true,
     output: 'text',
     yes: true,
     verbose: false,
     debug: false,
     ...overrides,
+  };
+}
+
+/** Create mock git workflow deps to prevent real git operations in tests. */
+function makeGitWorkflowDeps() {
+  return {
+    createBranch: vi.fn().mockResolvedValue(undefined),
+    commitFileResult: vi.fn().mockResolvedValue('abc123'),
+    commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
+    renderPrSummary: vi.fn().mockReturnValue('# PR Summary'),
+    createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
+    checkGhAvailable: vi.fn().mockResolvedValue(false),
   };
 }
 
@@ -112,6 +125,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         stderr: vi.fn(),
         stdout: vi.fn(),
         promptConfirm: vi.fn().mockResolvedValue(true),
+        gitWorkflow: makeGitWorkflowDeps(),
       };
 
       await handleInstrument(makeCliOptions({ yes: true }), cliDeps);
@@ -163,6 +177,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         stderr: vi.fn(),
         stdout: cliStdout,
         promptConfirm: vi.fn().mockResolvedValue(true),
+        gitWorkflow: makeGitWorkflowDeps(),
       };
 
       await handleInstrument(makeCliOptions({ yes: true, output: 'json' }), cliDeps);
@@ -288,6 +303,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         stderr: vi.fn(),
         stdout: vi.fn(),
         promptConfirm: vi.fn().mockResolvedValue(true),
+        gitWorkflow: makeGitWorkflowDeps(),
       };
 
       const cliResult = await handleInstrument(makeCliOptions({ yes: true }), cliDeps);
@@ -382,6 +398,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         stderr: (msg: string) => cliCallbacks.push(msg),
         stdout: vi.fn(),
         promptConfirm: vi.fn().mockResolvedValue(true),
+        gitWorkflow: makeGitWorkflowDeps(),
       };
 
       await handleInstrument(makeCliOptions({ yes: true }), cliDeps);
@@ -452,6 +469,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         stderr: vi.fn(),
         stdout: vi.fn(),
         promptConfirm: vi.fn().mockResolvedValue(true),
+        gitWorkflow: makeGitWorkflowDeps(),
       };
 
       await handleInstrument(makeCliOptions({ yes: true }), cliDeps);
@@ -491,6 +509,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         stderr: vi.fn(),
         stdout: cliStdout,
         promptConfirm: vi.fn().mockResolvedValue(true),
+        gitWorkflow: makeGitWorkflowDeps(),
       };
 
       const result = await handleInstrument(
@@ -552,6 +571,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         stderr: stderrCapture,
         stdout: vi.fn(),
         promptConfirm: vi.fn(),
+        gitWorkflow: makeGitWorkflowDeps(),
       };
 
       const result = await handleInstrument(makeCliOptions(), cliDeps);

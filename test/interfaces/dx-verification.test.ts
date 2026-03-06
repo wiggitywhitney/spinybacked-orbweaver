@@ -59,6 +59,7 @@ function makeCliOptions(overrides?: Partial<InstrumentOptions>): InstrumentOptio
     path: './src',
     projectDir: '/test/project',
     dryRun: false,
+    noPr: true,
     output: 'text',
     yes: true,
     verbose: false,
@@ -71,6 +72,14 @@ function makeCliDeps(overrides?: Partial<InstrumentDeps>): InstrumentDeps {
   return {
     loadConfig: vi.fn().mockResolvedValue({ success: true, config: makeConfig() }),
     coordinate: vi.fn().mockResolvedValue(makeRunResult({ filesProcessed: 1, filesSucceeded: 1 })),
+    gitWorkflow: {
+      createBranch: vi.fn().mockResolvedValue(undefined),
+      commitFileResult: vi.fn().mockResolvedValue('abc123'),
+      commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
+      renderPrSummary: vi.fn().mockReturnValue('# PR Summary'),
+      createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
+      checkGhAvailable: vi.fn().mockResolvedValue(false),
+    },
     stderr: vi.fn(),
     stdout: vi.fn(),
     promptConfirm: vi.fn().mockResolvedValue(true),

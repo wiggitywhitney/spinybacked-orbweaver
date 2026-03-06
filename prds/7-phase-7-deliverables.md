@@ -204,7 +204,7 @@ Phase 7 also extends:
 
 - [x] **Milestone 7: Early abort on repeated failures** — Abort after 3 consecutive files fail with the same `CheckResult.ruleId` (Decision: hardcoded threshold, not configurable). Detect pattern, abort with clear message (what failed, how many times, what to do). Verify: process 5 files where the first 3 fail with the same ruleId → run aborts after file 3, remaining files skipped, partial results preserved.
 
-- [ ] **Milestone 8: End-to-end git workflow** — Full flow: create feature branch → process files with per-file commits → SDK/package.json commit → end-of-run validation → PR creation via `gh pr create` (Decision: gh CLI, not GitHub API). Support `--no-pr` flag to skip PR creation when `gh` is unavailable. Verify: integration test against a real test project produces a complete feature branch and PR description.
+- [x] **Milestone 8: End-to-end git workflow** — Full flow: create feature branch → process files with per-file commits → SDK/package.json commit → end-of-run validation → PR creation via `gh pr create` (Decision: gh CLI, not GitHub API). Support `--no-pr` flag to skip PR creation when `gh` is unavailable. Verify: integration test against a real test project produces a complete feature branch and PR description.
 
 - [ ] **Milestone 9: DX verification** — Error messages are self-explanatory for AI intermediary consumption. Progress output is semantically meaningful. Cost ceiling displayed in dollars before processing. All failure scenarios produce actionable messages. Verify: trigger each failure mode (no config, invalid path, agent failure, schema checkpoint failure, budget exceeded) and confirm error output includes what failed, why, and what to do.
 

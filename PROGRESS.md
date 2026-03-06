@@ -78,6 +78,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dry-run mode (`src/coordinator/coordinate.ts`, `src/coordinator/dispatch.ts`): when `dryRun: true`, coordinator runs full analysis pipeline then reverts all file changes, skips finalization (SDK init, npm install), skips end-of-run live-check, and skips periodic schema checkpoints — schema diff is captured before revert so dry-run summary shows what schema changes would have been made
 - Early abort on repeated failures (`src/coordinator/early-abort.ts`): `EarlyAbortTracker` aborts the dispatch loop after 3 consecutive files fail with the same `firstBlockingRuleId` — prevents wasting LLM budget on systemic issues (bad config, missing dependency, schema problems); skipped files are invisible to the tracker, successes reset the counter; actionable abort message designed for AI intermediary consumption
 - `firstBlockingRuleId` field on `FileResult`: populated by `instrumentWithRetry()` from the first blocking validation failure's ruleId, enabling structured early abort detection without parsing error strings
+- End-to-end git workflow (`src/deliverables/git-workflow.ts`): `runGitWorkflow()` orchestrates feature branch creation, per-file commits via `onFileComplete` callback (serialized via promise chain), aggregate commit for SDK/package.json changes, PR summary rendering, and PR creation via `gh pr create`; injectable `GitWorkflowDeps` for testing
+- `--no-pr` CLI flag: skips PR creation when `gh` CLI is unavailable or unwanted; `gh` availability detected at init time via `checkGhAvailable()`
+- `createPr()` function: wraps `gh pr create --title --body` for PR creation from the git workflow
+- Instrument handler wired to git workflow: `handleInstrument` calls `runGitWorkflow()` which wraps `coordinate()` with branch/commit/PR operations; git ops skipped in dry-run mode
 
 ### Fixed
 

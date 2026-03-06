@@ -1,16 +1,18 @@
 // ABOUTME: Handler for the `orb instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
+import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
 
 /** Options parsed from CLI arguments for the instrument command. */
 export interface InstrumentOptions {
   path: string;
   projectDir: string;
   dryRun: boolean;
+  noPr: boolean;
   output: 'text' | 'json';
   yes: boolean;
   verbose: boolean;
@@ -28,6 +30,7 @@ export interface InstrumentDeps {
     config: AgentConfig,
     callbacks?: CoordinatorCallbacks,
   ) => Promise<RunResult>;
+  gitWorkflow?: Partial<GitWorkflowDeps>;
   stderr: (msg: string) => void;
   stdout: (msg: string) => void;
   promptConfirm: (message: string) => Promise<boolean>;
@@ -133,10 +136,44 @@ export async function handleInstrument(
     },
   };
 
-  // Run coordinator
+  // Run git workflow (wraps coordinate with branch/commit/PR operations)
   let runResult: RunResult;
+  let prUrl: string | undefined;
+  let branchName: string | undefined;
   try {
-    runResult = await deps.coordinate(options.projectDir, config, callbacks);
+    const { runGitWorkflow } = await import('../deliverables/git-workflow.ts');
+    const registryDir = resolve(options.projectDir, config.schemaPath);
+    const gitDeps: GitWorkflowDeps = {
+      coordinate: deps.coordinate,
+      createBranch: deps.gitWorkflow?.createBranch
+        ?? (await import('../git/git-wrapper.ts')).createBranch,
+      commitFileResult: deps.gitWorkflow?.commitFileResult
+        ?? (await import('../git/per-file-commit.ts')).commitFileResult,
+      commitAggregateChanges: deps.gitWorkflow?.commitAggregateChanges
+        ?? (await import('../git/aggregate-commit.ts')).commitAggregateChanges,
+      renderPrSummary: deps.gitWorkflow?.renderPrSummary
+        ?? (await import('../deliverables/pr-summary.ts')).renderPrSummary,
+      createPr: deps.gitWorkflow?.createPr
+        ?? (await import('../deliverables/git-workflow.ts')).createPr,
+      checkGhAvailable: deps.gitWorkflow?.checkGhAvailable
+        ?? (await import('../deliverables/git-workflow.ts')).checkGhAvailable,
+      stderr: deps.stderr,
+    };
+
+    const workflowResult = await runGitWorkflow(
+      {
+        projectDir: options.projectDir,
+        config,
+        noPr: options.noPr,
+        dryRun: options.dryRun,
+        registryDir,
+      },
+      gitDeps,
+      callbacks,
+    );
+    runResult = workflowResult.runResult;
+    prUrl = workflowResult.prUrl;
+    branchName = workflowResult.branchName;
   } catch (err) {
     if (err instanceof CoordinatorAbortError) {
       deps.stderr(err.message);
@@ -158,6 +195,12 @@ export async function handleInstrument(
       `${runResult.filesFailed} failed, ` +
       `${runResult.filesSkipped} skipped`,
     );
+    if (branchName) {
+      deps.stderr(`Branch: ${branchName}`);
+    }
+    if (prUrl) {
+      deps.stderr(`PR: ${prUrl}`);
+    }
   }
 
   return {
