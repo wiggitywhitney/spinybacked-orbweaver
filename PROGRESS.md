@@ -76,6 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Periodic checkpoint integration with per-file extension writing: checkpoints see accumulated extensions from prior files, diff shows only additions, checkpoint failure still stops processing when per-file writes are active, per-file validation failures don't interfere with checkpoint counting
 - PRD 31 acceptance gate: end-to-end integration tests verifying all per-file extension features work together — hash chain continuity, schema revert on failure, checkpoint integration, infrastructure failure warnings, and per-file validation — using real Weaver CLI
 - Dry-run mode (`src/coordinator/coordinate.ts`, `src/coordinator/dispatch.ts`): when `dryRun: true`, coordinator runs full analysis pipeline then reverts all file changes, skips finalization (SDK init, npm install), skips end-of-run live-check, and skips periodic schema checkpoints — schema diff is captured before revert so dry-run summary shows what schema changes would have been made
+- Early abort on repeated failures (`src/coordinator/early-abort.ts`): `EarlyAbortTracker` aborts the dispatch loop after 3 consecutive files fail with the same `firstBlockingRuleId` — prevents wasting LLM budget on systemic issues (bad config, missing dependency, schema problems); skipped files are invisible to the tracker, successes reset the counter; actionable abort message designed for AI intermediary consumption
+- `firstBlockingRuleId` field on `FileResult`: populated by `instrumentWithRetry()` from the first blocking validation failure's ruleId, enabling structured early abort detection without parsing error strings
 
 ### Fixed
 

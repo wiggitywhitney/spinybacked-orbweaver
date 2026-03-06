@@ -9,6 +9,7 @@ import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';
 import { computeSchemaHash } from './schema-hash.ts';
 import { runSchemaCheckpoint } from './schema-checkpoint.ts';
+import { EarlyAbortTracker } from './early-abort.ts';
 import type { SchemaCheckpointDeps } from './schema-checkpoint.ts';
 import {
   writeSchemaExtensions as defaultWriteSchemaExtensions,
@@ -199,9 +200,11 @@ export async function dispatchFiles(
   // In-memory accumulator for schema extensions across files (deduped)
   const accumulatedExtensions: string[] = [];
   const seenExtensions = new Set<string>();
+  const abortTracker = new EarlyAbortTracker();
 
   for (let i = 0; i < total; i++) {
     if (stoppedByCheckpoint) break;
+    if (abortTracker.shouldAbort()) break;
 
     const filePath = filePaths[i];
 
@@ -223,6 +226,7 @@ export async function dispatchFiles(
       if (isAlreadyInstrumented(fileContent)) {
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
+        abortTracker.record(skipped);
         try { callbacks?.onFileComplete?.(skipped, i, total); } catch { /* callback failure must not abort dispatch */ }
         continue;
       }
@@ -363,6 +367,7 @@ export async function dispatchFiles(
       }
 
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
+      abortTracker.record(result);
 
       // Dry-run: restore original file content after processing
       if (isDryRun) {
@@ -450,6 +455,7 @@ export async function dispatchFiles(
       };
       results.push(failed);
       try { callbacks?.onFileComplete?.(failed, i, total); } catch { /* callback failure must not abort dispatch */ }
+      abortTracker.record(failed);
     }
   }
 
