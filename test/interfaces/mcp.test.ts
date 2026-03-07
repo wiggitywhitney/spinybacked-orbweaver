@@ -110,6 +110,7 @@ describe('MCP server', () => {
         exclude: ['**/*.test.js'],
         sdkInitFile: 'src/instrumentation.js',
         maxFilesPerRun: 10,
+        targetPath: undefined,
       });
     });
 
@@ -197,7 +198,19 @@ describe('MCP server', () => {
         exclude: ['**/vendor/**'],
         sdkInitFile: baseConfig.sdkInitFile,
         maxFilesPerRun: 5,
+        targetPath: undefined,
       });
+    });
+
+    it('threads path parameter to discoverFiles as targetPath', async () => {
+      await handleGetCostCeiling(
+        { projectDir: '/project', path: 'src/api' },
+        deps,
+      );
+
+      expect(deps.discoverFiles).toHaveBeenCalledWith('/project', expect.objectContaining({
+        targetPath: 'src/api',
+      }));
     });
 
     it('returns structured JSON for AI intermediary consumption', async () => {

@@ -33,6 +33,7 @@ export interface McpDeps {
     config: AgentConfig,
     callbacks?: CoordinatorCallbacks,
     deps?: CoordinateDeps,
+    targetPath?: string,
   ) => Promise<RunResult>;
 }
 
@@ -45,6 +46,7 @@ export type McpLogFn = (params: { level: McpLogLevel; data: string }) => void;
 /** Input parameters for the get-cost-ceiling tool. */
 interface GetCostCeilingInput {
   projectDir: string;
+  path?: string;
   maxFilesPerRun?: number;
   maxTokensPerFile?: number;
   exclude?: string[];
@@ -126,6 +128,7 @@ export async function handleGetCostCeiling(
       exclude,
       sdkInitFile: config.sdkInitFile,
       maxFilesPerRun,
+      targetPath: input.path,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -152,6 +155,7 @@ export async function handleGetCostCeiling(
 /** Input parameters for the instrument tool. */
 interface InstrumentInput {
   projectDir: string;
+  path?: string;
   maxFilesPerRun?: number;
   maxTokensPerFile?: number;
   exclude?: string[];
@@ -293,7 +297,7 @@ export async function handleInstrumentTool(
   // Run coordinator
   let runResult: RunResult;
   try {
-    runResult = await deps.coordinate(projectDir, config, callbacks, undefined);
+    runResult = await deps.coordinate(projectDir, config, callbacks, undefined, input.path);
   } catch (err) {
     if (err instanceof CoordinatorAbortError) {
       return {
@@ -347,6 +351,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
       projectDir: z.string().min(1)
         .refine((p) => isAbsolute(p), { message: 'projectDir must be an absolute path' })
         .describe('Absolute path to the project root directory'),
+      path: z.string().optional()
+        .describe('Optional path to scope discovery — a subdirectory (relative to projectDir) or a single .js file. Omit to discover all files in the project.'),
       maxFilesPerRun: z.number().int().positive().optional()
         .describe('Override max files per run (default: from orb.yaml)'),
       maxTokensPerFile: z.number().int().positive().optional()
@@ -371,6 +377,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
       projectDir: z.string().min(1)
         .refine((p) => isAbsolute(p), { message: 'projectDir must be an absolute path' })
         .describe('Absolute path to the project root directory'),
+      path: z.string().optional()
+        .describe('Optional path to scope instrumentation — a subdirectory (relative to projectDir) or a single .js file. Omit to instrument all files in the project.'),
       maxFilesPerRun: z.number().int().positive().optional()
         .describe('Override max files per run (default: from orb.yaml)'),
       maxTokensPerFile: z.number().int().positive().optional()
