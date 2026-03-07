@@ -82,6 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `--no-pr` CLI flag: skips PR creation when `gh` CLI is unavailable or unwanted; `gh` availability detected at init time via `checkGhAvailable()`
 - `createPr()` function: wraps `gh pr create --title --body` for PR creation from the git workflow
 - Instrument handler wired to git workflow: `handleInstrument` calls `runGitWorkflow()` which wraps `coordinate()` with branch/commit/PR operations; git ops skipped in dry-run mode
+- README.md with all sections: project overview, interface comparison (CLI/MCP/GitHub Action), prerequisites with setup links, project setup (auto-detect via `orb init` or manual `orb.yaml`), CLI reference, MCP integration for any MCP-compatible AI assistant, GitHub Action usage, full configuration reference, dry-run mode, license
 - DX verification: CLI cost ceiling output now includes dollar estimate (e.g., "estimated max cost $5.62") using `ceilingToDollars()` + `formatDollars()`; MCP `get-cost-ceiling` response includes `estimatedCostDollars` field; all 6 failure modes verified to produce actionable messages for AI intermediary consumption (no config, invalid path, agent failure, schema checkpoint failure, budget exceeded, early abort)
 
 ### Fixed
