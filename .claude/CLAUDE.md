@@ -27,6 +27,12 @@ Secrets are managed via vals — two secrets configured: `ANTHROPIC_API_KEY` and
 vals exec -f .vals.yaml -- <command>
 ```
 
+**PATH caveat**: `vals exec -- bash -c '...'` drops Homebrew from PATH. Commands like `npx`, `node`, and `weaver` won't be found. Fix by prepending PATH inside the bash -c:
+
+```bash
+vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run ...'
+```
+
 ## TypeScript: erasableSyntaxOnly
 
 This project uses Node.js 24.x native type stripping. TypeScript annotations are erased at runtime — no transpilation step. Run files directly with `node src/index.ts`.
@@ -92,6 +98,12 @@ Where N is the phase number (1-7). The skill reads the spec, tech stack, recomme
 - `/prd-done` — finalize a completed PRD (PR, merge, close issue).
 
 Do not invent tasks outside the PRD structure. When a PRD exists, follow it. Do not commit manually during PRD work — `/prd-update-progress` handles commits, PRD updates, and journaling together.
+
+## Acceptance Gate Tests
+
+**Acceptance gate tests must actually run.** A suite that exits with zero test files is not a pass — it is a broken runner. If the acceptance gate hook reports "no test files found" or runs zero tests, stop and fix the execution environment (glob patterns, PATH, working directory) before proceeding. Silent non-execution is how acceptance gates go unenforced for entire PRD cycles.
+
+**Never dismiss acceptance gate test failures.** When the acceptance gate suite reports failures — whether during a hook, a manual run, or a `/prd-next` loop — treat every failure as a real signal that must be investigated. Do not rationalize failures as "unrelated to the current task" or "pre-existing." If the tests fail, something is wrong, and the current work cannot proceed until the failures are understood and resolved (or triaged into a dedicated PRD).
 
 ## Testing: Weaver CLI
 

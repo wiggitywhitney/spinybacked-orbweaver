@@ -72,6 +72,11 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
 
     for (const op of AUTO_INSTRUMENTED_OPERATIONS) {
       if (op.pattern.test(spanContent)) {
+        // Per spec: manual spans wrapping a broader operation that includes an
+        // auto-instrumented call as a sub-operation are valid business spans.
+        // Only flag when the span's sole purpose is wrapping the auto-instrumented call.
+        if (isBroaderBusinessSpan(node)) break;
+
         const spanName = getSpanName(node);
         flagged.push({
           line: node.getStartLineNumber(),
@@ -113,6 +118,78 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
     tier: 2,
     blocking: true,
   };
+}
+
+/**
+ * Patterns for span lifecycle boilerplate that don't count as business logic.
+ * These are standard OTel span management calls, not application behavior.
+ */
+const SPAN_BOILERPLATE = /\bspan\s*\.\s*(end|recordException|setStatus)\s*\(/;
+
+/**
+ * Check if a span callback contains multiple meaningful statements,
+ * indicating a broader business operation rather than a direct wrapper
+ * around a single auto-instrumented call.
+ *
+ * Strips try/catch/finally boilerplate and span lifecycle calls (end,
+ * recordException, setStatus) before counting. If more than one meaningful
+ * statement remains, the span wraps a broader operation and should not be
+ * flagged by COV-006.
+ */
+function isBroaderBusinessSpan(spanCall: CallExpression): boolean {
+  const callback = getSpanCallback(spanCall);
+  if (!callback) return false;
+
+  const body = callback.getBody();
+  const statements = Node.isBlock(body) ? body.getStatements() : [];
+
+  const meaningful = collectMeaningfulStatements(statements);
+  return meaningful.length > 1;
+}
+
+/**
+ * Recursively collect meaningful statements from a statement list,
+ * unwrapping try/catch/finally and filtering out span boilerplate.
+ */
+function collectMeaningfulStatements(
+  statements: import('ts-morph').Statement[],
+): import('ts-morph').Statement[] {
+  const results: import('ts-morph').Statement[] = [];
+
+  for (const stmt of statements) {
+    if (Node.isTryStatement(stmt)) {
+      // Recurse into the try block — that's where business logic lives
+      results.push(...collectMeaningfulStatements(stmt.getTryBlock().getStatements()));
+      continue;
+    }
+
+    const text = stmt.getText();
+
+    // Skip span lifecycle boilerplate
+    if (SPAN_BOILERPLATE.test(text)) continue;
+
+    // Skip bare throw/rethrow in catch blocks
+    if (Node.isThrowStatement(stmt)) continue;
+
+    results.push(stmt);
+  }
+
+  return results;
+}
+
+/**
+ * Get the callback function node from a startActiveSpan/startSpan call.
+ */
+function getSpanCallback(
+  spanCall: CallExpression,
+): import('ts-morph').ArrowFunction | import('ts-morph').FunctionExpression | null {
+  const args = spanCall.getArguments();
+  for (const arg of args) {
+    if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg)) {
+      return arg as import('ts-morph').ArrowFunction | import('ts-morph').FunctionExpression;
+    }
+  }
+  return null;
 }
 
 /**
