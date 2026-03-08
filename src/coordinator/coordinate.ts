@@ -128,6 +128,7 @@ export async function coordinate(
   config: AgentConfig,
   callbacks?: CoordinatorCallbacks,
   deps?: CoordinateDeps,
+  targetPath?: string,
 ): Promise<RunResult> {
   const checkPrereqs = deps?.checkPrerequisites ?? defaultCheckPrerequisites;
   const discover = deps?.discoverFiles ?? defaultDiscoverFiles;
@@ -169,6 +170,7 @@ export async function coordinate(
       exclude: config.exclude,
       sdkInitFile: config.sdkInitFile,
       maxFilesPerRun: config.maxFilesPerRun,
+      targetPath,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

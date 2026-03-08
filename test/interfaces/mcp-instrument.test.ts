@@ -116,6 +116,7 @@ describe('MCP instrument tool', () => {
         expect.objectContaining({ confirmEstimate: false }),
         expect.any(Object),
         undefined,
+        undefined,
       );
     });
 
@@ -134,6 +135,23 @@ describe('MCP instrument tool', () => {
         }),
         expect.any(Object),
         undefined,
+        undefined,
+      );
+    });
+
+    it('threads path parameter to coordinate as targetPath', async () => {
+      await handleInstrumentTool(
+        { projectDir: '/project', path: 'src/routes' },
+        deps,
+        logFn,
+      );
+
+      expect(deps.coordinate).toHaveBeenCalledWith(
+        '/project',
+        expect.any(Object),
+        expect.any(Object),
+        undefined,
+        'src/routes',
       );
     });
 

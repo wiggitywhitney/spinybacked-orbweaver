@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
+import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
 /** Options parsed from CLI arguments for the instrument command. */
 export interface InstrumentOptions {
@@ -27,6 +28,8 @@ export interface InstrumentDeps {
     projectDir: string,
     config: AgentConfig,
     callbacks?: CoordinatorCallbacks,
+    deps?: CoordinateDeps,
+    targetPath?: string,
   ) => Promise<RunResult>;
   stderr: (msg: string) => void;
   stdout: (msg: string) => void;
@@ -136,7 +139,7 @@ export async function handleInstrument(
   // Run coordinator
   let runResult: RunResult;
   try {
-    runResult = await deps.coordinate(options.projectDir, config, callbacks);
+    runResult = await deps.coordinate(options.projectDir, config, callbacks, undefined, options.path);
   } catch (err) {
     if (err instanceof CoordinatorAbortError) {
       deps.stderr(err.message);
