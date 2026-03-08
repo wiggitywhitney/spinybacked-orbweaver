@@ -211,7 +211,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     }
   });
 
-  it('full end-to-end: discovers, skips, instruments, callbacks fire, RunResult populated', { timeout: 600_000 }, async () => {
+  it('full end-to-end: discovers, skips, instruments, callbacks fire, RunResult populated', { timeout: 1_200_000 }, async () => {
     const deps = makeAcceptanceDeps(resolvedSchema);
     const { callbacks, events } = createTestSubscriber();
     const config = makeConfig({ confirmEstimate: true });
@@ -305,7 +305,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     // P4-1 tests discovery, skip, instrumentation, callbacks, and RunResult population.
   });
 
-  it('successful files have spansAdded > 0 and populated diagnostic fields', { timeout: 600_000 }, async () => {
+  it('successful files have spansAdded > 0 and populated diagnostic fields', { timeout: 1_200_000 }, async () => {
     const deps = makeAcceptanceDeps(resolvedSchema);
     const config = makeConfig();
 
@@ -332,7 +332,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     }
   });
 
-  it('SDK init file is updated with discovered library instrumentations', { timeout: 600_000 }, async () => {
+  it('SDK init file is updated with discovered library instrumentations', { timeout: 1_200_000 }, async () => {
     const deps = makeAcceptanceDeps(resolvedSchema);
     const config = makeConfig();
 
@@ -359,7 +359,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     }
   });
 
-  it('advisory annotations surface from Tier 2 checks on successful files', { timeout: 600_000 }, async () => {
+  it('advisory annotations surface from Tier 2 checks on successful files', { timeout: 1_200_000 }, async () => {
     const deps = makeAcceptanceDeps(resolvedSchema);
     const config = makeConfig();
 
@@ -380,7 +380,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     }
   });
 
-  it('error progression tracks attempt outcomes', { timeout: 600_000 }, async () => {
+  it('error progression tracks attempt outcomes', { timeout: 1_200_000 }, async () => {
     const deps = makeAcceptanceDeps(resolvedSchema);
     const config = makeConfig();
 
@@ -512,7 +512,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     }
   });
 
-  it('(a,e,h) all RunResult schema fields populated with meaningful content after run with extensions', { timeout: 600_000 }, async () => {
+  it('(a,e,h) all RunResult schema fields populated with meaningful content after run with extensions', { timeout: 1_200_000 }, async () => {
     const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
@@ -541,7 +541,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     expect(result.filesSucceeded).toBeGreaterThanOrEqual(1);
   });
 
-  it('(b) schema lifecycle deps called when agent produces extensions', { timeout: 600_000 }, async () => {
+  it('(b) schema lifecycle deps called when agent produces extensions', { timeout: 1_200_000 }, async () => {
     const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
@@ -554,8 +554,11 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     // schema extensions). Extension production is non-deterministic — the LLM may or
     // may not generate extensions for the fraud-detection.js fixture on any given run.
     // Verify the lifecycle works when extensions are produced; skip when they aren't.
+    // Must filter by status === 'success' to match collectSchemaExtensions() in coordinate.ts,
+    // which only collects extensions from successful files. A failed file can still carry
+    // schemaExtensions from its last LLM output (buildFailedResult preserves them).
     const anyExtensions = result.fileResults.some(
-      (r: import('../../src/fix-loop/types.ts').FileResult) => r.schemaExtensions && r.schemaExtensions.length > 0,
+      (r: import('../../src/fix-loop/types.ts').FileResult) => r.status === 'success' && r.schemaExtensions && r.schemaExtensions.length > 0,
     );
     if (anyExtensions) {
       expect(deps.computeSchemaDiff).toHaveBeenCalled();
@@ -565,7 +568,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     expect(deps.cleanupSnapshot).toHaveBeenCalled();
   });
 
-  it('(d) live-check compliance report flows into RunResult and per-file schema hashes populated', { timeout: 600_000 }, async () => {
+  it('(d) live-check compliance report flows into RunResult and per-file schema hashes populated', { timeout: 1_200_000 }, async () => {
     const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
@@ -590,7 +593,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     }
   });
 
-  it('(c) onSchemaCheckpoint callback is passed through to dispatch', { timeout: 600_000 }, async () => {
+  it('(c) onSchemaCheckpoint callback is passed through to dispatch', { timeout: 1_200_000 }, async () => {
     const onSchemaCheckpoint = vi.fn().mockReturnValue(undefined);
     const callbacks: CoordinatorCallbacks = { onSchemaCheckpoint };
     const deps = makePhase5Deps(resolvedSchema, tempDir);
@@ -609,7 +612,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
   });
 
 
-  it('no warnings when all schema operations succeed', { timeout: 600_000 }, async () => {
+  it('no warnings when all schema operations succeed', { timeout: 1_200_000 }, async () => {
     const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 

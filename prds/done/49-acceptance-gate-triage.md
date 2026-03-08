@@ -56,7 +56,7 @@ File: `test/coordinator/acceptance-gate.test.ts`
 File: `test/coordinator/acceptance-gate.test.ts`
 
 - [x] **P5-1**: `all RunResult schema fields populated with meaningful content` — FIXED (117s). Root Cause 5 fix + fraud-detection.js fixture triggers schema extensions.
-- [x] **P5-2**: `schema lifecycle deps called when agent produces extensions` — FIXED (137s). fraud-detection.js fixture produces extensions, computeSchemaDiff now called.
+- [x] **P5-2**: `schema lifecycle deps called when agent produces extensions` — FIXED (137s). fraud-detection.js fixture produces extensions; anyExtensions check now filters by status==='success' to match collectSchemaExtensions() behavior.
 - [x] **P5-3**: `live-check compliance report flows into RunResult.endOfRunValidation` — PASS (140s). Reliable. P5-5 assertions merged into this test.
 - [x] **P5-4**: `onSchemaCheckpoint callback is passed through to dispatch` — FIXED (75s). vi.fn() spy fix verified.
 - [x] ~~**P5-5**: `successful files have schemaHashBefore populated from dispatch`~~ — Merged into P5-3 (identical coordinator run, redundant API calls eliminated).
@@ -227,7 +227,7 @@ Discussion items — no assumption that these need fixing.
 ### Milestone 4: Verify full suite green
 Final validation after all fixes.
 
-- [ ] Run full acceptance gate suite (all 47 tests — P5-5 merged into P5-3) — deferred to pre-PR hook execution
+- [x] Run full acceptance gate suite — P1+P3: 9/9, P4+P5: 24/25 (1 timeout fixed by bumping to 1200s), non-LLM: 1020/1020
 - [x] Decision log complete with rationale for every adjustment
 
 ## Decision Log
@@ -248,6 +248,8 @@ Final validation after all fixes.
 | 2026-03-08 | Hard fail on schema extensions | Schema extension creation is a core agent capability. If the agent can't produce extensions for a fixture that obviously needs them, that's a real regression — not acceptable LLM variance. P5-1 and P5-2 should hard-fail, not use conditional assertions. |
 | 2026-03-08 | Merge P5-5 into P5-3 | P5-3 and P5-5 ran identical coordinator configurations (same 5 files, same deps, same API calls). Merging eliminates ~230s of redundant LLM API calls per suite run. P5-3 now asserts both live-check compliance and per-file schema hashes. |
 | 2026-03-08 | Keep slow tests as-is (P3-5 113s, P5-3 140s) | Coordinator-level tests are inherently slow due to real LLM calls. Runtime is dominated by API latency, not test data. No optimization possible without reducing end-to-end coverage. Acceptance gates run advisory (never block PR creation), so runtime is acceptable. |
+| 2026-03-08 | P5-2 anyExtensions must filter by status | `collectSchemaExtensions()` only collects from `status === 'success'` FileResults, but `buildFailedResult()` preserves `schemaExtensions` from the last LLM output. The test's `anyExtensions` check must also filter by status to match what coordinate.ts actually evaluates — otherwise a failed file with leftover extensions creates a false positive assertion. |
+| 2026-03-08 | Bump coordinator LLM test timeouts to 1200s | API latency spikes caused tests to exceed the 600s timeout (observed: 734s, 792s, 877s, 1055s across two runs). Bumped all coordinator LLM-calling tests to 1200s (20 min). These are advisory tests — generous timeouts prevent false failures from API slowness. |
 | 2026-03-08 | Remove P1-2 (order-service.js single-shot) | P1-2 tested single-shot `instrumentFile()` on order-service.js — no retries. It failed intermittently due to LLM non-determinism (NDS-003: LLM rewrites `return await response.json()` when wrapping in spans). P3-2 covers the same file through the fix loop, which is how the agent works in production. P1-2 added ~49s of API cost per run without unique coverage — it measured single-shot quality on a file that the fix loop already tests with retries. A flaky test in an advisory suite trains you to ignore advisory results, which is worse than no test. |
 
 ## Out of Scope
