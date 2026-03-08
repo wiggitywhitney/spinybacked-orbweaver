@@ -57,13 +57,13 @@ function isInstrumentationLine(line: string): boolean {
  * @param originalCode - The original source code before instrumentation
  * @param instrumentedCode - The agent's instrumented output
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "NDS-003", tier 2, blocking true
+ * @returns CheckResult[] with ruleId "NDS-003", tier 2, blocking true — one per finding
  */
 export function checkNonInstrumentationDiff(
   originalCode: string,
   instrumentedCode: string,
   filePath: string,
-): CheckResult {
+): CheckResult[] {
   const originalLines = originalCode
     .split('\n')
     .map((l) => l.trim())
@@ -76,7 +76,7 @@ export function checkNonInstrumentationDiff(
 
   // Empty original: any additions are fine (instrumenting an empty file)
   if (originalLines.length === 0) {
-    return {
+    return [{
       ruleId: 'NDS-003',
       passed: true,
       filePath,
@@ -84,7 +84,7 @@ export function checkNonInstrumentationDiff(
       message: 'All non-instrumentation lines from the original are preserved.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
   // Forward check: original lines must be a subsequence of instrumented lines
@@ -122,7 +122,7 @@ export function checkNonInstrumentationDiff(
   }
 
   if (missingLines.length === 0 && addedLines.length === 0) {
-    return {
+    return [{
       ruleId: 'NDS-003',
       passed: true,
       filePath,
@@ -130,41 +130,37 @@ export function checkNonInstrumentationDiff(
       message: 'All non-instrumentation lines from the original are preserved.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
-  // Build diagnostic details
-  const issues: Array<{ desc: string; lineNum: number }> = [];
+  // Build one CheckResult per individual finding
+  const results: CheckResult[] = [];
   for (const m of missingLines) {
-    issues.push({
-      desc: `  - line ${m.originalLineNum} [missing/modified]: ${m.line}`,
-      lineNum: m.originalLineNum,
+    results.push({
+      ruleId: 'NDS-003',
+      passed: false,
+      filePath,
+      lineNumber: m.originalLineNum,
+      message:
+        `NDS-003: original line ${m.originalLineNum} missing/modified: ${m.line}\n` +
+        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
+      tier: 2,
+      blocking: true,
     });
   }
   for (const a of addedLines) {
-    issues.push({
-      desc: `  - (new) [added]: ${a}`,
-      lineNum: 0,
+    results.push({
+      ruleId: 'NDS-003',
+      passed: false,
+      filePath,
+      lineNumber: null,
+      message:
+        `NDS-003: non-instrumentation line added: ${a}\n` +
+        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
+      tier: 2,
+      blocking: true,
     });
   }
 
-  const firstLineNum = issues.find((i) => i.lineNum > 0)?.lineNum ?? null;
-  const details = issues
-    .slice(0, 10)
-    .map((i) => i.desc)
-    .join('\n');
-  const overflow = issues.length > 10 ? `\n  ... and ${issues.length - 10} more` : '';
-
-  return {
-    ruleId: 'NDS-003',
-    passed: false,
-    filePath,
-    lineNumber: firstLineNum,
-    message:
-      `NDS-003 check failed: ${issues.length} non-instrumentation difference(s) detected.\n` +
-      `${details}${overflow}\n` +
-      `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
-    tier: 2,
-    blocking: true,
-  };
+  return results;
 }

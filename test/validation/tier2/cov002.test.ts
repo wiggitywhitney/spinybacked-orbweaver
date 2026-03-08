@@ -11,12 +11,13 @@ describe('checkOutboundCallSpans (COV-002)', () => {
     it('passes when file has no outbound calls', () => {
       const code = 'function greet(name) {\n  return "Hello " + name;\n}\n';
 
-      const result = checkOutboundCallSpans(code, filePath);
+      const results = checkOutboundCallSpans(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('COV-002');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-002');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -37,8 +38,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when axios.get() is inside a startSpan scope', () => {
@@ -57,8 +59,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when pg query is inside a span', () => {
@@ -76,8 +79,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -90,12 +94,13 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
+      const results = checkOutboundCallSpans(code, filePath);
 
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('COV-002');
-      expect(result.message).toContain('COV-002');
-      expect(result.message).toContain('fetch');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-002');
+      expect(results[0].message).toContain('COV-002');
+      expect(results[0].message).toContain('fetch');
     });
 
     it('fails when axios.post() has no enclosing span', () => {
@@ -106,9 +111,10 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('axios.post');
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('axios.post');
     });
 
     it('fails when pool.query() has no enclosing span', () => {
@@ -118,8 +124,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('fails when redis.get() has no enclosing span', () => {
@@ -129,11 +136,12 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
-    it('reports line number of first unspanned outbound call', () => {
+    it('reports line number of unspanned outbound call', () => {
       const code = [
         'async function getData() {',
         '  const res = await fetch("https://api.example.com");',
@@ -141,14 +149,15 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.lineNumber).toBe(2);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(2);
     });
   });
 
   describe('multiple outbound calls', () => {
-    it('fails listing all unspanned calls', () => {
+    it('returns one CheckResult per unspanned call', () => {
       const code = [
         'async function process() {',
         '  const data = await fetch("/api/data");',
@@ -157,9 +166,11 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('2');
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(2);
+      expect(results[0].passed).toBe(false);
+      expect(results[1].passed).toBe(false);
+      expect(results[0].lineNumber).not.toBe(results[1].lineNumber);
     });
 
     it('passes when all outbound calls have spans', () => {
@@ -179,8 +190,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -193,8 +205,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('detects https.get() as outbound', () => {
@@ -205,8 +218,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('detects amqp channel.publish() as outbound', () => {
@@ -216,8 +230,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('detects channel.sendToQueue() as outbound', () => {
@@ -227,8 +242,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkOutboundCallSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
   });
 
@@ -236,9 +252,10 @@ describe('checkOutboundCallSpans (COV-002)', () => {
     it('returns correct structure on pass', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkOutboundCallSpans(code, filePath);
+      const results = checkOutboundCallSpans(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'COV-002',
         passed: true,
         filePath,

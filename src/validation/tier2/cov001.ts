@@ -37,9 +37,9 @@ const ENTRY_POINT_PATTERNS: Array<{
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "COV-001", tier 2, blocking true
+ * @returns CheckResult[] — one per finding (or a single passing result)
  */
-export function checkEntryPointSpans(code: string, filePath: string): CheckResult {
+export function checkEntryPointSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -75,7 +75,7 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
   checkExportedAsyncFunctions(sourceFile, unspanned);
 
   if (unspanned.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-001',
       passed: true,
       filePath,
@@ -83,27 +83,21 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
       message: 'All entry points have spans.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
-  const firstUnspanned = unspanned[0];
-  const details = unspanned
-    .map((u) => `  - ${u.description} at line ${u.line}`)
-    .join('\n');
-
-  return {
-    ruleId: 'COV-001',
-    passed: false,
+  return unspanned.map((u) => ({
+    ruleId: 'COV-001' as const,
+    passed: false as const,
     filePath,
-    lineNumber: firstUnspanned.line,
+    lineNumber: u.line,
     message:
-      `COV-001 check failed: ${unspanned.length} entry point(s) without spans.\n` +
-      `${details}\n` +
+      `COV-001 check failed: ${u.description} at line ${u.line}. ` +
       `Entry points (route handlers, server callbacks, exported service functions) ` +
       `must have spans for request tracing and error visibility.`,
-    tier: 2,
+    tier: 2 as const,
     blocking: true,
-  };
+  }));
 }
 
 /**

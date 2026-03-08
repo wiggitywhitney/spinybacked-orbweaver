@@ -41,12 +41,13 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('SCH-002');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('SCH-002');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -66,9 +67,10 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -88,15 +90,16 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('user.custom.field');
-      expect(result.message).toContain('SCH-002');
-      expect(result.lineNumber).toBeTypeOf('number');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('user.custom.field');
+      expect(results[0].message).toContain('SCH-002');
+      expect(results[0].lineNumber).toBeTypeOf('number');
     });
 
-    it('reports all non-matching attribute keys', () => {
+    it('reports each non-matching attribute key as a separate CheckResult', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -111,11 +114,15 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('unknown.attr.one');
-      expect(result.message).toContain('unknown.attr.two');
+      expect(results).toHaveLength(2);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('unknown.attr.one');
+      expect(results[1].passed).toBe(false);
+      expect(results[1].message).toContain('unknown.attr.two');
+      // Each result has its own lineNumber
+      expect(results[0].lineNumber).not.toBe(results[1].lineNumber);
     });
   });
 
@@ -137,10 +144,11 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('not.in.registry');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('not.in.registry');
     });
   });
 
@@ -159,10 +167,11 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeKeysMatchRegistry(code, filePath, { groups: [] });
+      const results = checkAttributeKeysMatchRegistry(code, filePath, { groups: [] });
 
-      expect(result.passed).toBe(true);
-      expect(result.message).toContain('No registry attributes');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].message).toContain('No registry attributes');
     });
   });
 
@@ -181,9 +190,10 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkAttributeKeysMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'SCH-002',
         passed: true,
         filePath,
