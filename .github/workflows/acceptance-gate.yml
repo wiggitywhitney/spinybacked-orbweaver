@@ -18,6 +18,10 @@ permissions:
   contents: read
   checks: write
 
+concurrency:
+  group: acceptance-gate-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   acceptance-gate:
     runs-on: ubuntu-latest
@@ -41,8 +45,12 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      - name: Install Weaver v0.21.2
-        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh | sh
+      - name: Download and install Weaver v0.21.2
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh \
+            -o /tmp/weaver-installer.sh
+          sh /tmp/weaver-installer.sh
 
       - name: Verify Weaver binary attestation
         run: gh attestation verify "$(which weaver)" --repo open-telemetry/weaver
