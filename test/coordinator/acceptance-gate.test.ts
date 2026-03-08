@@ -231,11 +231,13 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const nonSkipped = result.fileResults.filter(r => r.status !== 'skipped');
     expect(nonSkipped.length).toBe(3);
 
-    // (d) Successful files have instrumented code on disk
+    // (d) Successful files with spans added have instrumented code on disk
+    // Files that succeed with spansAdded=0 (e.g., utility files correctly identified
+    // as not needing instrumentation) won't have OTel on disk — that's correct behavior.
     const succeeded = result.fileResults.filter(r => r.status === 'success');
-    for (const r of succeeded) {
+    const instrumentedSucceeded = succeeded.filter(r => r.spansAdded > 0);
+    for (const r of instrumentedSucceeded) {
       const codeOnDisk = readFileSync(r.path, 'utf-8');
-      // Instrumented files should contain OTel imports or span calls
       const hasOtel = codeOnDisk.includes('@opentelemetry/api')
         || codeOnDisk.includes('startActiveSpan')
         || codeOnDisk.includes('startSpan');
@@ -310,7 +312,13 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const succeeded = result.fileResults.filter(r => r.status === 'success');
     expect(succeeded.length).toBeGreaterThanOrEqual(1);
 
-    for (const r of succeeded) {
+    // Files that actually received instrumentation have spans and diagnostics.
+    // Utility files (e.g., format-helpers.js) may correctly succeed with spansAdded=0
+    // when the agent determines no instrumentation is needed.
+    const instrumented = succeeded.filter(r => r.spansAdded > 0);
+    expect(instrumented.length).toBeGreaterThanOrEqual(1);
+
+    for (const r of instrumented) {
       expect(r.spansAdded).toBeGreaterThan(0);
       expect(r.validationAttempts).toBeGreaterThanOrEqual(1);
       expect(r.validationAttempts).toBeLessThanOrEqual(3);

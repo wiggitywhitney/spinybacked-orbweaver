@@ -72,6 +72,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Periodic checkpoint integration with per-file extension writing: checkpoints see accumulated extensions from prior files, diff shows only additions, checkpoint failure still stops processing when per-file writes are active, per-file validation failures don't interfere with checkpoint counting
 - PRD 31 acceptance gate: end-to-end integration tests verifying all per-file extension features work together — hash chain continuity, schema revert on failure, checkpoint integration, infrastructure failure warnings, and per-file validation — using real Weaver CLI
 
+### Changed
+
+- COV-006 validation now distinguishes business spans (broader operations containing auto-instrumented calls) from direct wrappers (single auto-instrumented call only). Statement-counting heuristic strips boilerplate before counting — aligns with spec "Never duplicate" exception.
+- P4-1/P4-2 acceptance gate tests adjusted to only assert OTel-on-disk and diagnostic fields for files with spansAdded > 0. Utility files correctly succeed with zero spans.
+
 ### Fixed
 
 - `coordinate()` now passes `registryDir` to `dispatchFiles()` so per-file extension writing works in production (was only effective in tests)
