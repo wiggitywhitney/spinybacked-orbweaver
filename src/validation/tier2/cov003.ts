@@ -29,9 +29,9 @@ const ERROR_RECORDING_PATTERNS = [
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "COV-003", tier 2, blocking true
+ * @returns CheckResult[] — one per finding (or a single passing result)
  */
-export function checkErrorVisibility(code: string, filePath: string): CheckResult {
+export function checkErrorVisibility(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -131,7 +131,7 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
   });
 
   if (issues.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-003',
       passed: true,
       filePath,
@@ -139,27 +139,21 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
       message: 'All failable operations in spans have error recording.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
-  const firstIssue = issues[0];
-  const details = issues
-    .map((i) => `  - ${i.description}`)
-    .join('\n');
-
-  return {
-    ruleId: 'COV-003',
-    passed: false,
+  return issues.map((i) => ({
+    ruleId: 'COV-003' as const,
+    passed: false as const,
     filePath,
-    lineNumber: firstIssue.line,
+    lineNumber: i.line,
     message:
-      `COV-003 check failed: ${issues.length} span(s) have failable operations without error recording.\n` +
-      `${details}\n` +
+      `COV-003 check failed: ${i.description}. ` +
       `Add span.recordException(error) and span.setStatus({ code: SpanStatusCode.ERROR }) ` +
       `in catch blocks to ensure errors are visible in traces.`,
-    tier: 2,
+    tier: 2 as const,
     blocking: true,
-  };
+  }));
 }
 
 /**

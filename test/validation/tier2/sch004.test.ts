@@ -29,12 +29,13 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         'function doWork() { return 1; }',
       ].join('\n');
 
-      const result = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('SCH-004');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(false);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('SCH-004');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(false);
     });
   });
 
@@ -53,9 +54,10 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -74,11 +76,12 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('http_request_duration');
-      expect(result.message).toContain('http.request.duration');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('http_request_duration');
+      expect(results[0].message).toContain('http.request.duration');
     });
 
     it('flags attribute key with high token similarity', () => {
@@ -95,11 +98,12 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('http.request.status_code');
-      expect(result.message).toContain('http.response.status_code');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('http.request.status_code');
+      expect(results[0].message).toContain('http.response.status_code');
     });
   });
 
@@ -118,9 +122,10 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -139,9 +144,10 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNoRedundantSchemaEntries(code, filePath, { groups: [] });
+      const results = checkNoRedundantSchemaEntries(code, filePath, { groups: [] });
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -152,9 +158,10 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         'function doWork() { return 1; }',
       ].join('\n');
 
-      const result = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'SCH-004',
         passed: true,
         filePath,

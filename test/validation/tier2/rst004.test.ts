@@ -11,12 +11,13 @@ describe('checkInternalDetailSpans (RST-004)', () => {
     it('passes when no functions exist', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkInternalDetailSpans(code, filePath);
+      const results = checkInternalDetailSpans(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('RST-004');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(false);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('RST-004');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(false);
     });
 
     it('passes when exported function has span', () => {
@@ -34,8 +35,9 @@ describe('checkInternalDetailSpans (RST-004)', () => {
         '};',
       ].join('\n');
 
-      const result = checkInternalDetailSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -55,11 +57,11 @@ describe('checkInternalDetailSpans (RST-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkInternalDetailSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('RST-004');
-      expect(result.message).toContain('RST-004');
-      expect(result.message).toContain('formatName');
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('RST-004');
+      expect(results[0].message).toContain('formatName');
     });
 
     it('flags private class method with span', () => {
@@ -79,9 +81,10 @@ describe('checkInternalDetailSpans (RST-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkInternalDetailSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('#calculateTax');
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('#calculateTax');
     });
   });
 
@@ -101,8 +104,9 @@ describe('checkInternalDetailSpans (RST-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkInternalDetailSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('does not flag unexported function with database query', () => {
@@ -120,8 +124,9 @@ describe('checkInternalDetailSpans (RST-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkInternalDetailSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('does not flag unexported function with fs operations', () => {
@@ -139,8 +144,9 @@ describe('checkInternalDetailSpans (RST-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkInternalDetailSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('does not flag unexported function with child_process', () => {
@@ -158,8 +164,9 @@ describe('checkInternalDetailSpans (RST-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkInternalDetailSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -167,9 +174,10 @@ describe('checkInternalDetailSpans (RST-004)', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkInternalDetailSpans(code, filePath);
+      const results = checkInternalDetailSpans(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'RST-004',
         passed: true,
         filePath,

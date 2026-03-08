@@ -46,9 +46,9 @@ const AUTO_INSTRUMENTED_OPERATIONS: Array<{
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "COV-006", tier 2, blocking true
+ * @returns CheckResult[] — one per finding (or a single passing result)
  */
-export function checkAutoInstrumentationPreference(code: string, filePath: string): CheckResult {
+export function checkAutoInstrumentationPreference(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -89,7 +89,7 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
   });
 
   if (flagged.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-006',
       passed: true,
       filePath,
@@ -97,27 +97,21 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
       message: 'No manual spans found on auto-instrumentable operations.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
-  const firstFlagged = flagged[0];
-  const details = flagged
-    .map((f) => `  - span "${f.spanName}" wraps ${f.library} operation at line ${f.line}`)
-    .join('\n');
-
-  return {
-    ruleId: 'COV-006',
-    passed: false,
+  return flagged.map((f) => ({
+    ruleId: 'COV-006' as const,
+    passed: false as const,
     filePath,
-    lineNumber: firstFlagged.line,
+    lineNumber: f.line,
     message:
-      `COV-006 check failed: ${flagged.length} manual span(s) wrap operations covered by auto-instrumentation libraries.\n` +
-      `${details}\n` +
+      `COV-006 check failed: span "${f.spanName}" wraps ${f.library} operation at line ${f.line}. ` +
       `Use the corresponding @opentelemetry/instrumentation-* library instead of manual spans. ` +
       `Auto-instrumentation provides proper semantic conventions and avoids duplicate traces.`,
-    tier: 2,
+    tier: 2 as const,
     blocking: true,
-  };
+  }));
 }
 
 /**

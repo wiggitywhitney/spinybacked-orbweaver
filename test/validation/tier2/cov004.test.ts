@@ -11,12 +11,13 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
     it('passes when no async functions exist', () => {
       const code = 'function greet(name) {\n  console.log("Hello " + name);\n}\n';
 
-      const result = checkAsyncOperationSpans(code, filePath);
+      const results = checkAsyncOperationSpans(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('COV-004');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(false);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-004');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(false);
     });
 
     it('passes when async function has span', () => {
@@ -35,8 +36,9 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAsyncOperationSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -49,11 +51,11 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAsyncOperationSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('COV-004');
-      expect(result.message).toContain('COV-004');
-      expect(result.message).toContain('fetchData');
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-004');
+      expect(results[0].message).toContain('fetchData');
     });
 
     it('flags async arrow function without span', () => {
@@ -64,9 +66,10 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
         '};',
       ].join('\n');
 
-      const result = checkAsyncOperationSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('getData');
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('getData');
     });
 
     it('flags function with I/O library calls without span', () => {
@@ -76,8 +79,9 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAsyncOperationSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('does not flag sync function without I/O', () => {
@@ -87,8 +91,9 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAsyncOperationSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -96,9 +101,10 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkAsyncOperationSpans(code, filePath);
+      const results = checkAsyncOperationSpans(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'COV-004',
         passed: true,
         filePath,

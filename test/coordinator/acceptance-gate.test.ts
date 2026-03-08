@@ -647,10 +647,11 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const result = checkSpanNamesMatchRegistry(code, '/project/src/routes.js', resolvedSchema);
-    expect(result.ruleId).toBe('SCH-001');
-    expect(result.passed).toBe(true);
-    expect(result.tier).toBe(2);
+    const results = checkSpanNamesMatchRegistry(code, '/project/src/routes.js', resolvedSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleId).toBe('SCH-001');
+    expect(results[0].passed).toBe(true);
+    expect(results[0].tier).toBe(2);
   });
 
   it('(g) SCH-001 fails for span names NOT in registry', () => {
@@ -667,12 +668,13 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const result = checkSpanNamesMatchRegistry(code, '/project/src/unknown.js', resolvedSchema);
-    expect(result.ruleId).toBe('SCH-001');
-    expect(result.passed).toBe(false);
-    expect(result.blocking).toBe(true);
-    expect(result.message).toContain('nonexistent.operation');
-    expect(result.message).toContain('not found in registry');
+    const results = checkSpanNamesMatchRegistry(code, '/project/src/unknown.js', resolvedSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleId).toBe('SCH-001');
+    expect(results[0].passed).toBe(false);
+    expect(results[0].blocking).toBe(true);
+    expect(results[0].message).toContain('nonexistent.operation');
+    expect(results[0].message).toContain('not found in registry');
   });
 
   it('(g) SCH-002 passes for attribute keys present in registry', () => {
@@ -692,9 +694,10 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const result = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
-    expect(result.ruleId).toBe('SCH-002');
-    expect(result.passed).toBe(true);
+    const results = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleId).toBe('SCH-002');
+    expect(results[0].passed).toBe(true);
   });
 
   it('(g) SCH-002 fails for attribute keys NOT in registry', () => {
@@ -713,11 +716,12 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const result = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
-    expect(result.ruleId).toBe('SCH-002');
-    expect(result.passed).toBe(false);
-    expect(result.blocking).toBe(true);
-    expect(result.message).toContain('unknown.custom.attr');
+    const results = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleId).toBe('SCH-002');
+    expect(results[0].passed).toBe(false);
+    expect(results[0].blocking).toBe(true);
+    expect(results[0].message).toContain('unknown.custom.attr');
   });
 
   it('(g) SCH-003 passes for values conforming to registry types', () => {
@@ -737,9 +741,10 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const result = checkAttributeValuesConformToTypes(code, '/project/src/api.js', resolvedSchema);
-    expect(result.ruleId).toBe('SCH-003');
-    expect(result.passed).toBe(true);
+    const results = checkAttributeValuesConformToTypes(code, '/project/src/api.js', resolvedSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleId).toBe('SCH-003');
+    expect(results[0].passed).toBe(true);
   });
 
   it('(g) SCH-004 produces advisory results (non-blocking)', () => {
@@ -758,10 +763,11 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const result = checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
-    expect(result.ruleId).toBe('SCH-004');
-    expect(result.tier).toBe(2);
-    expect(result.blocking).toBe(false);
+    const results = checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleId).toBe('SCH-004');
+    expect(results[0].tier).toBe(2);
+    expect(results[0].blocking).toBe(false);
   });
 
   it('(g) all four SCH checkers produce CheckResult with standard format', () => {
@@ -782,11 +788,14 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
+    const sch004Results = checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema);
+    expect(sch004Results).toHaveLength(1);
+
     const results = [
-      checkSpanNamesMatchRegistry(code, '/f.js', resolvedSchema),
-      checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema),
-      checkAttributeValuesConformToTypes(code, '/f.js', resolvedSchema),
-      checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema),
+      ...checkSpanNamesMatchRegistry(code, '/f.js', resolvedSchema),
+      ...checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema),
+      ...checkAttributeValuesConformToTypes(code, '/f.js', resolvedSchema),
+      sch004Results[0],
     ];
 
     for (const r of results) {

@@ -78,109 +78,142 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   // --- Tier 2: Semantic checks (all Tier 1 passed) ---
 
   if (config.tier2Checks['CDQ-001']?.enabled) {
-    const cdq001 = checkSpansClosed(instrumentedCode, filePath);
-    cdq001.blocking = config.tier2Checks['CDQ-001'].blocking;
-    tier2Results.push(cdq001);
+    tier2Results.push(...collectCheckResults(
+      checkSpansClosed(instrumentedCode, filePath),
+      config.tier2Checks['CDQ-001'].blocking,
+    ));
   }
 
   if (config.tier2Checks['NDS-003']?.enabled) {
-    const nds003 = checkNonInstrumentationDiff(originalCode, instrumentedCode, filePath);
-    nds003.blocking = config.tier2Checks['NDS-003'].blocking;
-    tier2Results.push(nds003);
+    tier2Results.push(...collectCheckResults(
+      checkNonInstrumentationDiff(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['NDS-003'].blocking,
+    ));
   }
 
   if (config.tier2Checks['COV-002']?.enabled) {
-    const cov002 = checkOutboundCallSpans(instrumentedCode, filePath);
-    cov002.blocking = config.tier2Checks['COV-002'].blocking;
-    tier2Results.push(cov002);
+    tier2Results.push(...collectCheckResults(
+      checkOutboundCallSpans(instrumentedCode, filePath),
+      config.tier2Checks['COV-002'].blocking,
+    ));
   }
 
   if (config.tier2Checks['RST-001']?.enabled) {
-    const rst001 = checkUtilityFunctionSpans(instrumentedCode, filePath);
-    rst001.blocking = config.tier2Checks['RST-001'].blocking;
-    tier2Results.push(rst001);
+    tier2Results.push(...collectCheckResults(
+      checkUtilityFunctionSpans(instrumentedCode, filePath),
+      config.tier2Checks['RST-001'].blocking,
+    ));
   }
 
   if (config.tier2Checks['COV-005']?.enabled) {
     const registry: RegistrySpanDefinition[] = config.registryDefinitions ?? [];
-    const cov005 = checkDomainAttributes(instrumentedCode, filePath, registry);
-    cov005.blocking = config.tier2Checks['COV-005'].blocking;
-    tier2Results.push(cov005);
+    tier2Results.push(...collectCheckResults(
+      checkDomainAttributes(instrumentedCode, filePath, registry),
+      config.tier2Checks['COV-005'].blocking,
+    ));
   }
 
   if (config.tier2Checks['COV-001']?.enabled) {
-    const cov001 = checkEntryPointSpans(instrumentedCode, filePath);
-    cov001.blocking = config.tier2Checks['COV-001'].blocking;
-    tier2Results.push(cov001);
+    tier2Results.push(...collectCheckResults(
+      checkEntryPointSpans(instrumentedCode, filePath),
+      config.tier2Checks['COV-001'].blocking,
+    ));
   }
 
   if (config.tier2Checks['COV-003']?.enabled) {
-    const cov003 = checkErrorVisibility(instrumentedCode, filePath);
-    cov003.blocking = config.tier2Checks['COV-003'].blocking;
-    tier2Results.push(cov003);
+    tier2Results.push(...collectCheckResults(
+      checkErrorVisibility(instrumentedCode, filePath),
+      config.tier2Checks['COV-003'].blocking,
+    ));
   }
 
   if (config.tier2Checks['COV-004']?.enabled) {
-    const cov004 = checkAsyncOperationSpans(instrumentedCode, filePath);
-    cov004.blocking = config.tier2Checks['COV-004'].blocking;
-    tier2Results.push(cov004);
+    tier2Results.push(...collectCheckResults(
+      checkAsyncOperationSpans(instrumentedCode, filePath),
+      config.tier2Checks['COV-004'].blocking,
+    ));
   }
 
   if (config.tier2Checks['COV-006']?.enabled) {
-    const cov006 = checkAutoInstrumentationPreference(instrumentedCode, filePath);
-    cov006.blocking = config.tier2Checks['COV-006'].blocking;
-    tier2Results.push(cov006);
+    tier2Results.push(...collectCheckResults(
+      checkAutoInstrumentationPreference(instrumentedCode, filePath),
+      config.tier2Checks['COV-006'].blocking,
+    ));
   }
 
   if (config.tier2Checks['RST-002']?.enabled) {
-    const rst002 = checkTrivialAccessorSpans(instrumentedCode, filePath);
-    rst002.blocking = config.tier2Checks['RST-002'].blocking;
-    tier2Results.push(rst002);
+    tier2Results.push(...collectCheckResults(
+      checkTrivialAccessorSpans(instrumentedCode, filePath),
+      config.tier2Checks['RST-002'].blocking,
+    ));
   }
 
   if (config.tier2Checks['RST-003']?.enabled) {
-    const rst003 = checkThinWrapperSpans(instrumentedCode, filePath);
-    rst003.blocking = config.tier2Checks['RST-003'].blocking;
-    tier2Results.push(rst003);
+    tier2Results.push(...collectCheckResults(
+      checkThinWrapperSpans(instrumentedCode, filePath),
+      config.tier2Checks['RST-003'].blocking,
+    ));
   }
 
   if (config.tier2Checks['RST-004']?.enabled) {
-    const rst004 = checkInternalDetailSpans(instrumentedCode, filePath);
-    rst004.blocking = config.tier2Checks['RST-004'].blocking;
-    tier2Results.push(rst004);
+    tier2Results.push(...collectCheckResults(
+      checkInternalDetailSpans(instrumentedCode, filePath),
+      config.tier2Checks['RST-004'].blocking,
+    ));
   }
 
   if (config.tier2Checks['CDQ-006']?.enabled) {
-    const cdq006 = checkIsRecordingGuard(instrumentedCode, filePath);
-    cdq006.blocking = config.tier2Checks['CDQ-006'].blocking;
-    tier2Results.push(cdq006);
+    tier2Results.push(...collectCheckResults(
+      checkIsRecordingGuard(instrumentedCode, filePath),
+      config.tier2Checks['CDQ-006'].blocking,
+    ));
   }
 
   if (config.tier2Checks['SCH-001']?.enabled && config.resolvedSchema) {
-    const sch001 = checkSpanNamesMatchRegistry(instrumentedCode, filePath, config.resolvedSchema);
-    sch001.blocking = config.tier2Checks['SCH-001'].blocking;
-    tier2Results.push(sch001);
+    tier2Results.push(...collectCheckResults(
+      checkSpanNamesMatchRegistry(instrumentedCode, filePath, config.resolvedSchema),
+      config.tier2Checks['SCH-001'].blocking,
+    ));
   }
 
   if (config.tier2Checks['SCH-002']?.enabled && config.resolvedSchema) {
-    const sch002 = checkAttributeKeysMatchRegistry(instrumentedCode, filePath, config.resolvedSchema);
-    sch002.blocking = config.tier2Checks['SCH-002'].blocking;
-    tier2Results.push(sch002);
+    tier2Results.push(...collectCheckResults(
+      checkAttributeKeysMatchRegistry(instrumentedCode, filePath, config.resolvedSchema),
+      config.tier2Checks['SCH-002'].blocking,
+    ));
   }
 
   if (config.tier2Checks['SCH-003']?.enabled && config.resolvedSchema) {
-    const sch003 = checkAttributeValuesConformToTypes(instrumentedCode, filePath, config.resolvedSchema);
-    sch003.blocking = config.tier2Checks['SCH-003'].blocking;
-    tier2Results.push(sch003);
+    tier2Results.push(...collectCheckResults(
+      checkAttributeValuesConformToTypes(instrumentedCode, filePath, config.resolvedSchema),
+      config.tier2Checks['SCH-003'].blocking,
+    ));
   }
 
   if (config.tier2Checks['SCH-004']?.enabled && config.resolvedSchema) {
-    const sch004 = checkNoRedundantSchemaEntries(instrumentedCode, filePath, config.resolvedSchema);
-    sch004.blocking = config.tier2Checks['SCH-004'].blocking;
-    tier2Results.push(sch004);
+    tier2Results.push(...collectCheckResults(
+      checkNoRedundantSchemaEntries(instrumentedCode, filePath, config.resolvedSchema),
+      config.tier2Checks['SCH-004'].blocking,
+    ));
   }
 
   return buildResult(tier1Results, tier2Results);
+}
+
+/**
+ * Normalize a check result (single or array) and apply the blocking flag
+ * from the validation config. Supports the migration from single-result
+ * checks to per-finding array results (issue #43).
+ */
+function collectCheckResults(
+  result: CheckResult | CheckResult[],
+  blocking: boolean,
+): CheckResult[] {
+  const results = Array.isArray(result) ? result : [result];
+  for (const r of results) {
+    r.blocking = blocking;
+  }
+  return results;
 }
 
 /**

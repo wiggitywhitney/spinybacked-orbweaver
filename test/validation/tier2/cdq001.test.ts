@@ -11,12 +11,13 @@ describe('checkSpansClosed (CDQ-001)', () => {
     it('passes when no spans exist', () => {
       const code = 'function greet(name) {\n  console.log("Hello " + name);\n}\n';
 
-      const result = checkSpansClosed(code, filePath);
+      const results = checkSpansClosed(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('CDQ-001');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('CDQ-001');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -36,12 +37,12 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes with startActiveSpan callback using try/finally and local variables', () => {
-      // Variant: callback stores result in a local variable before returning
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -57,8 +58,9 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes with multiple properly closed spans', () => {
@@ -77,8 +79,9 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -95,21 +98,21 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
+      const results = checkSpansClosed(code, filePath);
 
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('CDQ-001');
-      expect(result.message).toContain('CDQ-001');
-      expect(result.message).toContain('span.end()');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('CDQ-001');
+      expect(results[0].message).toContain('span.end()');
     });
 
-    it('fails when one of multiple spans is unclosed', () => {
+    it('returns one result per unclosed span when multiple are unclosed', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
         'function a() {',
         '  return tracer.startActiveSpan("a", (span) => {',
-        '    try { return 1; } finally { span.end(); }',
+        '    return 1;',
         '  });',
         '}',
         'function b() {',
@@ -119,8 +122,14 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkSpansClosed(code, filePath);
+
+      expect(results).toHaveLength(2);
+      expect(results[0].passed).toBe(false);
+      expect(results[1].passed).toBe(false);
+      expect(results[0].lineNumber).not.toBe(results[1].lineNumber);
+      expect(results[0].message).toContain('"a"');
+      expect(results[1].message).toContain('"b"');
     });
 
     it('reports line number of unclosed span', () => {
@@ -134,11 +143,11 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
+      const results = checkSpansClosed(code, filePath);
 
-      expect(result.passed).toBe(false);
-      // Should report the line number of the startActiveSpan call
-      expect(result.lineNumber).toBe(4);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(4);
     });
   });
 
@@ -157,8 +166,9 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes with startSpan sibling pattern using let binding', () => {
@@ -175,8 +185,9 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('fails when startSpan sibling try/finally is missing span.end()', () => {
@@ -193,13 +204,12 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('fails when only a preceding try/finally calls span.end()', () => {
-      // Regression: a try/finally BEFORE the startSpan declaration should not
-      // count as closing the span — only subsequent try/finally blocks matter.
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -214,8 +224,9 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('fails when startSpan has no sibling try/finally at all', () => {
@@ -230,18 +241,20 @@ describe('checkSpansClosed (CDQ-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpansClosed(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
   });
 
   describe('CheckResult structure', () => {
-    it('returns correct structure', () => {
+    it('returns correct structure for passing check', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkSpansClosed(code, filePath);
+      const results = checkSpansClosed(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'CDQ-001',
         passed: true,
         filePath,

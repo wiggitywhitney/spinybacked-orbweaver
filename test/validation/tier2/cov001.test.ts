@@ -11,12 +11,13 @@ describe('checkEntryPointSpans (COV-001)', () => {
     it('passes when no entry points exist', () => {
       const code = 'function helper(x) {\n  return x + 1;\n}\n';
 
-      const result = checkEntryPointSpans(code, filePath);
+      const results = checkEntryPointSpans(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('COV-001');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-001');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -36,8 +37,9 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '});',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('flags Express route handler without span', () => {
@@ -47,10 +49,11 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '});',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('COV-001');
-      expect(result.message).toContain('COV-001');
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-001');
+      expect(results[0].message).toContain('COV-001');
     });
 
     it('flags Express post handler without span', () => {
@@ -61,8 +64,9 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '});',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('flags router.get without span', () => {
@@ -72,8 +76,9 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '});',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
   });
 
@@ -85,8 +90,9 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '});',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
   });
 
@@ -99,8 +105,9 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '});',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('passes when createServer callback has span', () => {
@@ -119,8 +126,9 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '});',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -133,8 +141,9 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '};',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('passes when exported async function has span', () => {
@@ -153,8 +162,24 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '};',
       ].join('\n');
 
-      const result = checkEntryPointSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('multiple findings return separate results', () => {
+    it('returns one CheckResult per unspanned entry point', () => {
+      const code = [
+        'app.get("/users", (req, res) => { res.json([]); });',
+        'app.post("/users", (req, res) => { res.json({}); });',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(2);
+      expect(results[0].passed).toBe(false);
+      expect(results[1].passed).toBe(false);
+      expect(results[0].lineNumber).not.toBe(results[1].lineNumber);
     });
   });
 
@@ -162,9 +187,10 @@ describe('checkEntryPointSpans (COV-001)', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkEntryPointSpans(code, filePath);
+      const results = checkEntryPointSpans(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'COV-001',
         passed: true,
         filePath,

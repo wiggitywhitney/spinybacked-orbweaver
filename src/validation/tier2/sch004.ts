@@ -27,31 +27,31 @@ interface RedundancyFlag {
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param resolvedSchema - Resolved Weaver registry object
- * @returns CheckResult with ruleId "SCH-004", tier 2, blocking false (advisory)
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "SCH-004", tier 2, blocking false (advisory)
  */
 export function checkNoRedundantSchemaEntries(
   code: string,
   filePath: string,
   resolvedSchema: object,
-): CheckResult {
+): CheckResult[] {
   const registry = parseResolvedRegistry(resolvedSchema);
   const registryNames = getAllAttributeNames(registry);
 
   if (registryNames.size === 0) {
-    return pass(filePath, 'No registry attributes to check for redundancy.');
+    return [pass(filePath, 'No registry attributes to check for redundancy.')];
   }
 
   const usedKeys = extractAttributeKeys(code);
 
   if (usedKeys.length === 0) {
-    return pass(filePath, 'No setAttribute calls found to check.');
+    return [pass(filePath, 'No setAttribute calls found to check.')];
   }
 
   // Only check keys that are NOT already in the registry
   const novelKeys = usedKeys.filter((k) => !registryNames.has(k.key));
 
   if (novelKeys.length === 0) {
-    return pass(filePath, 'All attribute keys are registered — no redundancy concerns.');
+    return [pass(filePath, 'All attribute keys are registered — no redundancy concerns.')];
   }
 
   const flags: RedundancyFlag[] = [];
@@ -80,29 +80,20 @@ export function checkNoRedundantSchemaEntries(
   }
 
   if (flags.length === 0) {
-    return pass(filePath, 'No obviously redundant attribute keys detected.');
+    return [pass(filePath, 'No obviously redundant attribute keys detected.')];
   }
 
-  const details = flags
-    .map(
-      (f) =>
-        `  - "${f.key}" at line ${f.line}: similar to registry entry "${f.similarTo}" (${Math.round(f.similarity * 100)}% token overlap)`,
-    )
-    .join('\n');
-
-  return {
+  return flags.map((f) => ({
     ruleId: 'SCH-004',
     passed: false,
     filePath,
-    lineNumber: flags[0].line,
+    lineNumber: f.line,
     message:
-      `SCH-004 advisory: ${flags.length} attribute key(s) may be redundant with existing registry entries.\n` +
-      `${details}\n` +
-      `These attribute keys are not in the registry but share significant token overlap with existing entries. ` +
+      `Attribute key "${f.key}" at line ${f.line} may be redundant with registry entry "${f.similarTo}" (${Math.round(f.similarity * 100)}% token overlap). ` +
       `Consider using the existing registry attribute instead of creating a new one.`,
     tier: 2,
     blocking: false,
-  };
+  }));
 }
 
 /**

@@ -29,12 +29,13 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('NDS-003');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('NDS-003');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -46,8 +47,9 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         'const x = 1;',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('filters tracer acquisition lines', () => {
@@ -57,8 +59,9 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         'const x = 1;',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('filters startActiveSpan and span method calls', () => {
@@ -84,8 +87,9 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('filters try/finally blocks containing span.end()', () => {
@@ -107,8 +111,9 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -127,11 +132,13 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('NDS-003');
-      expect(result.message).toContain('console.log');
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('NDS-003');
+      expect(results[0].message).toContain('console.log');
+      expect(results[0].lineNumber).toBe(2);
     });
 
     it('fails when original line is modified', () => {
@@ -147,17 +154,68 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('NDS-003');
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('NDS-003');
+    });
+
+    it('returns one CheckResult per finding', () => {
+      const original = [
+        'const a = 1;',
+        'const b = 2;',
+        'const c = 3;',
+      ].join('\n');
+
+      // Add a non-instrumentation line and keep originals intact
+      const instrumented = [
+        'const a = 1;',
+        'const b = 2;',
+        'const c = 3;',
+        'const x = 99;',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+
+      // One added non-instrumentation line: const x = 99;
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('const x = 99');
+    });
+
+    it('returns separate results for missing and added lines', () => {
+      const original = [
+        'const a = 1;',
+        'const b = 2;',
+      ].join('\n');
+
+      const instrumented = [
+        'const a = 1;',
+        'const x = 99;',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+
+      // One missing (const b = 2) + one added (const x = 99)
+      expect(results).toHaveLength(2);
+      const missing = results.find((r) => r.message.includes('missing'));
+      const added = results.find((r) => r.message.includes('added'));
+      expect(missing).toBeDefined();
+      expect(missing!.passed).toBe(false);
+      expect(missing!.message).toContain('const b = 2');
+      expect(added).toBeDefined();
+      expect(added!.passed).toBe(false);
+      expect(added!.lineNumber).toBe(2); // line 2 in the instrumented output
+      expect(added!.message).toContain('const x = 99');
     });
   });
 
   describe('edge cases', () => {
     it('handles empty original', () => {
-      const result = checkNonInstrumentationDiff('', 'const x = 1;\n', filePath);
-      expect(result.passed).toBe(true);
+      const results = checkNonInstrumentationDiff('', 'const x = 1;\n', filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('allows indentation changes from wrapping', () => {
@@ -180,16 +238,18 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkNonInstrumentationDiff(original, instrumented, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
-      const result = checkNonInstrumentationDiff('const x = 1;', 'const x = 1;', filePath);
+      const results = checkNonInstrumentationDiff('const x = 1;', 'const x = 1;', filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'NDS-003',
         passed: true,
         filePath,

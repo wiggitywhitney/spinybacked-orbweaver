@@ -31,15 +31,15 @@ interface SpanAttributeGap {
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param registry - Registry span definitions with required/recommended attributes
- * @returns CheckResult with ruleId "COV-005", tier 2, blocking false
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "COV-005", tier 2, blocking false
  */
 export function checkDomainAttributes(
   code: string,
   filePath: string,
   registry: RegistrySpanDefinition[],
-): CheckResult {
+): CheckResult[] {
   if (registry.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-005',
       passed: true,
       filePath,
@@ -47,7 +47,7 @@ export function checkDomainAttributes(
       message: 'No registry definitions to check against.',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
   const project = new Project({
@@ -100,7 +100,7 @@ export function checkDomainAttributes(
   });
 
   if (gaps.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-005',
       passed: true,
       filePath,
@@ -108,36 +108,30 @@ export function checkDomainAttributes(
       message: 'All spans have required domain-specific attributes from the registry.',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
-  const firstGap = gaps[0];
-  const details = gaps
-    .map((g) => {
-      const parts: string[] = [];
-      if (g.missingRequired.length > 0) {
-        parts.push(`required: ${g.missingRequired.join(', ')}`);
-      }
-      if (g.missingRecommended.length > 0) {
-        parts.push(`recommended: ${g.missingRecommended.join(', ')}`);
-      }
-      return `  - "${g.spanName}" at line ${g.line}: missing ${parts.join('; ')}`;
-    })
-    .join('\n');
-
-  return {
-    ruleId: 'COV-005',
-    passed: false,
-    filePath,
-    lineNumber: firstGap.line,
-    message:
-      `COV-005 advisory: ${gaps.length} span(s) missing domain-specific attributes from the registry.\n` +
-      `${details}\n` +
-      `The telemetry registry defines required and recommended attributes for these spans. ` +
-      `Add the missing setAttribute() calls to improve trace quality.`,
-    tier: 2,
-    blocking: false,
-  };
+  return gaps.map((g) => {
+    const parts: string[] = [];
+    if (g.missingRequired.length > 0) {
+      parts.push(`required: ${g.missingRequired.join(', ')}`);
+    }
+    if (g.missingRecommended.length > 0) {
+      parts.push(`recommended: ${g.missingRecommended.join(', ')}`);
+    }
+    return {
+      ruleId: 'COV-005',
+      passed: false,
+      filePath,
+      lineNumber: g.line,
+      message:
+        `Span "${g.spanName}" at line ${g.line} is missing domain-specific attributes: ${parts.join('; ')}. ` +
+        `The telemetry registry defines required and recommended attributes for this span. ` +
+        `Add the missing setAttribute() calls to improve trace quality.`,
+      tier: 2,
+      blocking: false,
+    };
+  });
 }
 
 /**

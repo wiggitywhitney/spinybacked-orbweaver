@@ -38,12 +38,13 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         'function doWork() { return 1; }',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('SCH-003');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('SCH-003');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -62,9 +63,10 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when int attribute has numeric literal', () => {
@@ -81,9 +83,10 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when enum attribute has valid member value', () => {
@@ -100,9 +103,10 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -121,11 +125,12 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('http.response.status_code');
-      expect(result.message).toContain('int');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('http.response.status_code');
+      expect(results[0].message).toContain('int');
     });
 
     it('fails when string attribute has numeric value', () => {
@@ -142,11 +147,12 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('http.request.method');
-      expect(result.message).toContain('string');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('http.request.method');
+      expect(results[0].message).toContain('string');
     });
 
     it('fails when enum attribute has invalid member value', () => {
@@ -163,11 +169,12 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('myapp.section_type');
-      expect(result.message).toContain('invalid_value');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('myapp.section_type');
+      expect(results[0].message).toContain('invalid_value');
     });
   });
 
@@ -186,10 +193,11 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
       // Variable values cannot be type-checked statically — skip them
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -208,10 +216,11 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
       // SCH-003 only checks values for attributes with registry type definitions
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -230,9 +239,10 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('fails when boolean attribute has string literal', () => {
@@ -249,11 +259,12 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('myapp.enabled');
-      expect(result.message).toContain('boolean');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('myapp.enabled');
+      expect(results[0].message).toContain('boolean');
     });
   });
 
@@ -272,9 +283,10 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'SCH-003',
         passed: true,
         filePath,
