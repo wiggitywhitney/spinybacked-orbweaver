@@ -55,12 +55,12 @@ File: `test/coordinator/acceptance-gate.test.ts`
 ### Phase 5 — Schema Integration (6 LLM tests)
 File: `test/coordinator/acceptance-gate.test.ts`
 
-- [ ] **P5-1**: `all RunResult schema fields populated with meaningful content` — FAIL (134s). schemaHashStart undefined. Root Cause 4 (test wiring, not COV-006 cascade).
-- [ ] **P5-2**: `schema lifecycle deps called when agent produces extensions` — FAIL (135s). computeSchemaDiff never called. Root Cause 4 (cascading from P5-1).
+- [x] **P5-1**: `all RunResult schema fields populated with meaningful content` — FIXED (117s). Root Cause 5 fix + fraud-detection.js fixture triggers schema extensions.
+- [x] **P5-2**: `schema lifecycle deps called when agent produces extensions` — FIXED (137s). fraud-detection.js fixture produces extensions, computeSchemaDiff now called.
 - [x] **P5-3**: `live-check compliance report flows into RunResult.endOfRunValidation` — PASS (140s). Reliable.
-- [ ] **P5-4**: `onSchemaCheckpoint callback is passed through to dispatch` — FAIL (142s). **Test bug**: deps.dispatchFiles is not a spy. Tier 2 (test expectation).
+- [x] **P5-4**: `onSchemaCheckpoint callback is passed through to dispatch` — FIXED (75s). vi.fn() spy fix verified.
 - [x] **P5-5**: `successful files have schemaHashBefore populated from dispatch` — PASS (230s). Reliable.
-- [ ] **P5-6**: `no warnings when all schema operations succeed` — FAIL (227s). 1 schema warning when 0 expected. Root Cause 4 (cascading from P5-1 resolve failure).
+- [x] **P5-6**: `no warnings when all schema operations succeed` — FIXED (78s). resolveSchemaForHash ENOENT warning eliminated by Root Cause 5 fix.
 
 ## Tiered Acceptance Testing
 
@@ -160,12 +160,15 @@ Tests assumed ALL succeeded files have OTel on disk and spansAdded > 0. But form
 
 **Root Cause 4: P5 schema integration test wiring** (affects P5-1, P5-2, P5-6 — independent of COV-006)
 
-Originally categorized as cascading from COV-006, but investigation revealed these are independent issues. The `makePhase5Deps` schema resolution wiring has problems:
-- `resolveSchemaForHash` (via `resolveWithExtension`) calls the real Weaver CLI, which may fail in certain test runner environments
-- `schemaDiff` stays undefined because `computeSchemaDiff` is only called when `baselineSnapshotDir && extensions.length > 0` — if schema hashing fails, the entire diff pipeline is skipped
-- P5-2 (`computeSchemaDiff` never called) and P5-6 (schema warnings) cascade from P5-1's resolve failure
+Originally categorized as cascading from COV-006, but investigation revealed these are independent issues. Split into Root Cause 5 and Root Cause 6 after deeper investigation.
 
-These need investigation of the `makePhase5Deps` test infrastructure, not the agent code.
+**Root Cause 5: `vals exec` strips HOME and PATH** (affected P5-1, P5-6 — RESOLVED)
+
+`vals exec` strips `HOME` and most of `PATH` from the environment. `resolveSchemaForHash` (via `resolveWithExtension`) called `resolveSchema()` → `execFile('weaver', ...)` which fails with ENOENT because `~/.cargo/bin` isn't on PATH (and `$HOME` is empty, so `$HOME/.cargo/bin` expands to `/.cargo/bin`). Fix: `resolveWithExtension` now returns pre-loaded fixture schemas instead of calling the Weaver CLI. Real Weaver resolve behavior is already covered by PRD 31 integration tests.
+
+**Root Cause 6: Test fixtures don't trigger schema extensions** (affects P5-1, P5-2 — OPEN)
+
+The existing fixture files (user-routes.js, order-service.js, format-helpers.js) don't need new schema attributes beyond what's in the registry. The LLM correctly produces zero extensions for them. But P5-1 asserts `schemaDiff` is populated and P5-2 asserts `computeSchemaDiff` is called — both gated on `extensions.length > 0`. Fix: add a fixture file with operations that unambiguously require new domain-specific schema attributes (e.g., fraud scoring, loyalty program logic with custom metrics). Hard fail if the agent doesn't produce extensions — schema extension creation is a core agent capability.
 
 **Slow tests (>60s, passing)**: P3-5 (113s), P5-3 (140s), P5-5 (230s)
 
@@ -188,23 +191,30 @@ Resolves: P3-1 (COV-006 agent fix), P4-1, P4-2 (test adjustments).
 - [x] Adjust P4-2: only check diagnostic fields for files with spansAdded > 0
 - [x] Re-run P4-1 to confirm it passes (PASS, 68s)
 - [x] Re-run P4-2 to confirm it passes (PASS, 79s)
-- [ ] Re-run cascading P5 tests (P5-1, P5-2, P5-6) — found to have independent root cause (Root Cause 4), moved to Milestone 2b
+- [x] Re-run cascading P5 tests (P5-1, P5-2, P5-6) — found to have independent root causes (Root Causes 5+6), resolved in Milestones 2b+2c
 
 ### Milestone 2a: Fix P5-4 test bug
 Resolves: P5-4.
 
 - [x] Diagnose: deps.dispatchFiles is a real function, not a vi.fn() spy
 - [x] Fix: wrap dispatchFiles in makePhase5Deps with vi.fn().mockImplementation()
-- [ ] Re-run P5-4 to confirm it passes
+- [x] Re-run P5-4 to confirm it passes (PASS, 75s)
 
 ### Milestone 2b: Fix P5 schema integration test wiring
-Resolves: P5-1, P5-2, P5-6. Root Cause 4 (independent of COV-006).
+Resolves: P5-6. Root Cause 5 (vals exec PATH issue).
 
-- [ ] Investigate why `resolveSchemaForHash` (real Weaver CLI) fails during P5-1 test runs
-- [ ] Fix the `makePhase5Deps` schema resolution wiring so `schemaHashStart` is populated
-- [ ] Re-run P5-1 to confirm it passes
-- [ ] Re-run P5-2 to confirm `computeSchemaDiff` is called
-- [ ] Re-run P5-6 to confirm zero schema warnings
+- [x] Investigate why `resolveSchemaForHash` (real Weaver CLI) fails during P5-1 test runs — Root Cause 5: `vals exec` strips HOME and PATH, `execFile('weaver', ...)` gets ENOENT
+- [x] Fix the `makePhase5Deps` schema resolution wiring so `schemaHashStart` is populated — use pre-loaded fixture schemas instead of Weaver CLI
+- [x] Fix `makeAcceptanceDeps` to use pre-loaded schema for `resolveSchemaForHash` (same Root Cause 5)
+- [x] Re-run P5-6 to confirm zero schema warnings (PASS, 78s)
+
+### Milestone 2c: Add fixture for schema extension testing
+Resolves: P5-1, P5-2. Root Cause 6 (fixtures don't trigger extensions).
+
+- [x] Create a fixture JS file with operations that unambiguously need new schema attributes — fraud-detection.js with fraud scoring, velocity checks, geolocation anomaly, device fingerprinting
+- [x] Add fixture to setupTempProject() so P5 tests process it alongside existing files — updated filesProcessed from 4 to 5
+- [x] Re-run P5-1 to confirm schema hash + schemaDiff assertions pass (PASS, 117s — hard fail, extensions produced)
+- [x] Re-run P5-2 to confirm computeSchemaDiff is called (PASS, 137s — hard fail, extensions produced)
 
 ### Milestone 3: Review slow-but-passing tests
 Discussion items — no assumption that these need fixing.
@@ -233,6 +243,9 @@ Final validation after all fixes.
 | 2026-03-08 | COV-006: improve analysis (not make advisory) | Spec §"Never duplicate" explicitly allows manual spans wrapping broader operations that include auto-instrumented calls as sub-operations. Statement-counting heuristic: strip boilerplate (try/catch/finally/span lifecycle), count remaining statements. >1 = broader business operation = pass. Preserves the check's value for genuine duplicates. |
 | 2026-03-08 | P4-1/P4-2: test adjustment (agent behavior correct) | format-helpers.js (utility functions) correctly succeeds with spansAdded=0. Tests should only assert OTel-on-disk and diagnostic fields for files that actually received instrumentation. |
 | 2026-03-08 | Recategorize P5-1/P5-2/P5-6 | Originally blamed on COV-006 cascading. Investigation revealed independent Root Cause 4: `makePhase5Deps` schema resolution wiring fails (Weaver CLI resolve issue in test runner). Moved to new Milestone 2b. |
+| 2026-03-08 | Root Cause 5: vals exec strips HOME/PATH | `vals exec` empties HOME and reduces PATH to system dirs. `execFile('weaver', ...)` fails with ENOENT because `~/.cargo/bin` is unreachable. Fix: use pre-loaded fixture schemas for `resolveSchemaForHash` in test deps. Real Weaver resolve covered by PRD 31 tests. |
+| 2026-03-08 | Root Cause 6: fixtures don't trigger extensions | Existing fixture files don't need new schema attributes, so LLM correctly produces zero extensions. P5-1/P5-2 fail because they assert on extension-dependent fields. Fix: add a fixture with unambiguous domain-specific operations that require new attributes. |
+| 2026-03-08 | Hard fail on schema extensions | Schema extension creation is a core agent capability. If the agent can't produce extensions for a fixture that obviously needs them, that's a real regression — not acceptable LLM variance. P5-1 and P5-2 should hard-fail, not use conditional assertions. |
 
 ## Out of Scope
 

@@ -76,6 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - COV-006 validation now distinguishes business spans (broader operations containing auto-instrumented calls) from direct wrappers (single auto-instrumented call only). Statement-counting heuristic strips boilerplate before counting — aligns with spec "Never duplicate" exception.
 - P4-1/P4-2 acceptance gate tests adjusted to only assert OTel-on-disk and diagnostic fields for files with spansAdded > 0. Utility files correctly succeed with zero spans.
+- P5 acceptance gate `resolveSchemaForHash` deps now use pre-loaded fixture schemas instead of calling Weaver CLI — `vals exec` strips HOME and PATH, making `execFile('weaver')` fail with ENOENT. Real Weaver resolve covered by PRD 31 integration tests.
+- P4/P5 acceptance gate `filesProcessed` assertions updated from 4 to 5 after adding fraud-detection.js fixture.
 
 ### Fixed
 
@@ -93,3 +95,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Replaced remaining Weaver CLI mocks in `acceptance-gate.test.ts` and `dx-verification.test.ts` with real Weaver calls against registry fixtures — zero Weaver mocks remain in the test suite
 - GitHub Action `action.yml` status filter: corrected `"failure"` to `"failed"` to match `FileResult.status` type — was silently reporting 0 failed files
 - P5-4 acceptance gate test: `makePhase5Deps().dispatchFiles` wrapped with `vi.fn().mockImplementation()` so `toHaveBeenCalledWith` assertion works (was a real function, not a spy)
+- P5-1/P5-2 acceptance gate tests: added fraud-detection.js fixture with domain-specific operations (fraud scoring, velocity checks, geolocation anomaly, device fingerprinting) that require schema extensions not in the test registry — exercises schema extension creation as a core agent capability

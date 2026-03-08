@@ -94,6 +94,10 @@ function setupTempProject(): string {
     join(FIXTURES_DIR, 'src', 'already-instrumented.js'),
     join(tempDir, 'src', 'already-instrumented.js'),
   );
+  copyFileSync(
+    join(FIXTURES_DIR, 'src', 'fraud-detection.js'),
+    join(tempDir, 'src', 'fraud-detection.js'),
+  );
 
   // Copy weaver registry fixture into the temp project's schema directory
   const registryFiles = readdirSync(WEAVER_REGISTRY_DIR);
@@ -155,7 +159,7 @@ function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
         },
       });
     },
-    resolveSchemaForHash: resolveSchema,
+    resolveSchemaForHash: async () => resolvedSchema,
     createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
     computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
@@ -214,8 +218,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
 
     const result: RunResult = await coordinate(tempDir, config, callbacks, deps);
 
-    // (a) All discoverable files processed — 4 JS files in src/ (minus SDK init)
-    expect(result.filesProcessed).toBe(4);
+    // (a) All discoverable files processed — 5 JS files in src/ (minus SDK init)
+    expect(result.filesProcessed).toBe(5);
 
     // (b) already-instrumented.js correctly skipped
     const skippedResults = result.fileResults.filter(r => r.status === 'skipped');
@@ -229,7 +233,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
 
     // (c) Remaining files attempted instrumentation
     const nonSkipped = result.fileResults.filter(r => r.status !== 'skipped');
-    expect(nonSkipped.length).toBe(3);
+    expect(nonSkipped.length).toBe(4);
 
     // (d) Successful files with spans added have instrumented code on disk
     // Files that succeed with spansAdded=0 (e.g., utility files correctly identified
@@ -413,19 +417,38 @@ const EXTENSION_YAML = `groups:
 function makePhase5Deps(resolvedSchema: object, tempDir: string): CoordinateDeps {
   let resolveCallCount = 0;
 
+  // Build a modified schema that includes the extension group, simulating what
+  // Weaver would return after agent-extensions.yaml is written to the registry.
+  const extendedSchema = JSON.parse(JSON.stringify(resolvedSchema)) as Record<string, unknown>;
+  const groups = (extendedSchema.groups ?? []) as unknown[];
+  groups.push({
+    id: 'registry.fixture_service.agent_extensions',
+    type: 'attribute_group',
+    brief: 'Agent-created attributes',
+    attributes: [{
+      name: 'fixture_service.custom.agent_attr',
+      type: 'string',
+      stability: 'development',
+      brief: 'Custom agent attribute',
+    }],
+  });
+  extendedSchema.groups = groups;
+
   /**
-   * Wrapper around real resolveSchema that writes an extension file before the
-   * second call, simulating the schema change that happens when extensions are
-   * written to the registry between run-start and run-end resolve calls.
+   * Returns the pre-loaded resolved schema for the first call (run-start hash)
+   * and the extended schema for the second call (run-end hash), simulating the
+   * schema change that happens when extensions are written between resolve calls.
+   *
+   * Uses pre-loaded fixtures instead of calling `weaver registry resolve` because
+   * vals exec strips HOME and most of PATH, making the Weaver binary unfindable.
+   * Real Weaver resolve behavior is covered by PRD 31 integration tests.
    */
-  const resolveWithExtension = async (projectDir: string, schemaPath: string): Promise<object> => {
+  const resolveWithExtension = async (_projectDir: string, _schemaPath: string): Promise<object> => {
     resolveCallCount++;
-    if (resolveCallCount === 2) {
-      // Write extension file to the registry before second resolve
-      const registryDir = join(projectDir, schemaPath);
-      writeFileSync(join(registryDir, 'agent-extensions.yaml'), EXTENSION_YAML, 'utf-8');
+    if (resolveCallCount >= 2) {
+      return extendedSchema;
     }
-    return resolveSchema(projectDir, schemaPath);
+    return resolvedSchema;
   };
 
   return {
@@ -514,7 +537,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     expect(result.endOfRunValidation).toContain('spans validated');
 
     // Files were still processed successfully
-    expect(result.filesProcessed).toBe(4);
+    expect(result.filesProcessed).toBe(5);
     expect(result.filesSucceeded).toBeGreaterThanOrEqual(1);
   });
 
