@@ -1,5 +1,5 @@
 {
   "commands": {
-    "acceptance_test": "vals exec -f .vals.yaml -- bash -c 'for p in /opt/homebrew/bin /usr/local/bin; do [ -x \"$p/node\" ] && export PATH=\"$p:$PATH\" && break; done && npx vitest run \"test/**/acceptance-gate.test.ts\"'"
+    "acceptance_test": "vals exec -f .vals.yaml -- bash -c 'for p in /opt/homebrew/bin /usr/local/bin; do [ -x \"$p/node\" ] && export PATH=\"$p:$PATH\" && break; done && npx vitest run test/**/acceptance-gate.test.ts'"
   }
 }
