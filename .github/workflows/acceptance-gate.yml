@@ -1,0 +1,58 @@
+# Acceptance Gate CI — runs LLM-calling acceptance tests asynchronously
+#
+# Triggered by: gh workflow run (from pre-pr-hook.sh async path in claude-config)
+# Purpose: Run acceptance gate tests in CI so PR creation isn't blocked (~28min locally).
+# Results appear as CI status checks on the PR.
+#
+# Secrets required (Settings → Secrets → Actions):
+#   - ANTHROPIC_API_KEY: Anthropic API key for LLM-calling tests
+
+name: Acceptance Gate Tests
+
+on:
+  workflow_dispatch:
+    # Triggered by gh workflow run from pre-pr-hook.sh
+    # The --ref flag sets which branch to check out and test
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  acceptance-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        test-group:
+          - name: "core"
+            pattern: "test/acceptance-gate.test.ts test/validation/acceptance-gate.test.ts test/fix-loop/acceptance-gate.test.ts test/interfaces/acceptance-gate.test.ts"
+          - name: "coordinator"
+            pattern: "test/coordinator/acceptance-gate.test.ts"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install Weaver v0.21.2
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh | sh
+
+      - name: Verify Weaver binary attestation
+        run: gh attestation verify "$(which weaver)" --repo open-telemetry/weaver
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - run: npm ci
+
+      - name: Run ${{ matrix.test-group.name }} acceptance tests
+        run: npx vitest run --reporter=verbose ${{ matrix.test-group.pattern }}
+        timeout-minutes: 40
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
