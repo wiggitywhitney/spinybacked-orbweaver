@@ -1,5 +1,5 @@
 {
   "commands": {
-    "acceptance_test": "vals exec -f .vals.yaml -- npx vitest run test/**/acceptance-gate.test.ts"
+    "acceptance_test": "vals exec -f .vals.yaml -- bash -c 'export PATH=\"/opt/homebrew/bin:$PATH\" && npx vitest run test/**/acceptance-gate.test.ts'"
   }
 }

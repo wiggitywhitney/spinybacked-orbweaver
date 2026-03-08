@@ -70,10 +70,8 @@ export async function discoverFiles(
     }
   }
 
-  // Directory-scoped glob: use subdirectory prefix if targeting a directory
-  const globPattern = resolvedTarget
-    ? '**/*.js'
-    : '**/*.js';
+  // Directory-scoped glob: use target directory as cwd when scoping to a subdirectory
+  const globPattern = '**/*.js';
   const globCwd = resolvedTarget ?? projectDir;
 
   // Build exclude list: always exclude node_modules, plus user patterns
