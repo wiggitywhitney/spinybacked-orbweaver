@@ -2,7 +2,7 @@
 // ABOUTME: Uses Node.js built-in glob with exclude patterns, SDK init auto-exclusion, and file limit enforcement.
 
 import { glob, stat } from 'node:fs/promises';
-import { isAbsolute, join, normalize } from 'node:path';
+import { isAbsolute, join, normalize, relative } from 'node:path';
 
 /** Options controlling which files are discovered. */
 export interface DiscoverFilesOptions {
@@ -57,10 +57,9 @@ export async function discoverFiles(
           `Target file must be a .js file, got: ${resolvedTarget}`,
         );
       }
-      // Compute relative path for SDK init comparison
-      const relPath = resolvedTarget.startsWith(projectDir)
-        ? resolvedTarget.slice(projectDir.length + 1)
-        : targetPath!;
+      // Compute relative path for SDK init comparison using path.relative for safe boundary check
+      const rel = relative(projectDir, resolvedTarget);
+      const relPath = rel && !rel.startsWith('..') ? rel : targetPath!;
       if (normalize(relPath) === normalizedSdkInit) {
         throw new Error(
           `Target file is the SDK init file (${sdkInitFile}) — cannot instrument the SDK init file.`,
@@ -86,9 +85,8 @@ export async function discoverFiles(
   const filtered = relativePaths.filter((relPath: string) => {
     // When scoping to a subdirectory, reconstruct the project-relative path for SDK init comparison
     if (resolvedTarget) {
-      const subDirRel = resolvedTarget.startsWith(projectDir)
-        ? resolvedTarget.slice(projectDir.length + 1)
-        : targetPath!;
+      const rel = relative(projectDir, resolvedTarget);
+      const subDirRel = rel && !rel.startsWith('..') ? rel : targetPath!;
       const fullRelPath = join(subDirRel, relPath);
       return normalize(fullRelPath) !== normalizedSdkInit;
     }
