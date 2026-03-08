@@ -16,7 +16,7 @@ import type { CheckResult } from '../types.ts';
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "RST-003", tier 2, blocking false
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "RST-003", tier 2, blocking false
  */
 export function checkThinWrapperSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
