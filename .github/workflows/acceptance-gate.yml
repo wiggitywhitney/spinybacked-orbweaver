@@ -1,0 +1,79 @@
+# Acceptance Gate CI — runs LLM-calling acceptance tests asynchronously
+#
+# Triggered by: gh workflow run (from pre-pr-hook.sh async path in claude-config)
+# Purpose: Run acceptance gate tests in CI so PR creation isn't blocked (~28min locally).
+# Results appear as CI status checks on the PR.
+#
+# Secrets required (Settings → Secrets → Actions):
+#   - ANTHROPIC_API_KEY: Anthropic API key for LLM-calling tests
+
+name: Acceptance Gate Tests
+
+on:
+  workflow_dispatch:
+    # Triggered by gh workflow run from pre-pr-hook.sh
+    # The --ref flag sets which branch to check out and test
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: acceptance-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        test-group:
+          - name: "core"
+            pattern: "test/acceptance-gate.test.ts test/validation/acceptance-gate.test.ts test/fix-loop/acceptance-gate.test.ts test/interfaces/acceptance-gate.test.ts"
+          - name: "coordinator"
+            pattern: "test/coordinator/acceptance-gate.test.ts"
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Download Weaver v0.21.2 binary and checksum
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-x86_64-unknown-linux-gnu.tar.xz \
+            -o /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-x86_64-unknown-linux-gnu.tar.xz.sha256 \
+            -o /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz.sha256
+
+      - name: Verify checksum before extraction
+        run: cd /tmp && sha256sum -c weaver-x86_64-unknown-linux-gnu.tar.xz.sha256
+
+      - name: Verify attestation before install
+        run: >
+          gh attestation verify /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz
+          --repo open-telemetry/weaver
+          --signer-workflow open-telemetry/weaver/.github/workflows/release.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Install verified Weaver binary
+        run: |
+          tar -xJf /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz -C /tmp
+          sudo install -m 755 /tmp/weaver /usr/local/bin/weaver
+
+      - run: npm ci
+
+      - name: Run ${{ matrix.test-group.name }} acceptance tests
+        run: npx vitest run --reporter=verbose ${{ matrix.test-group.pattern }}
+        timeout-minutes: 40
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
