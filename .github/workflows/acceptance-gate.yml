@@ -45,17 +45,27 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      - name: Download and install Weaver v0.21.2
+      - name: Download Weaver v0.21.2 binary and checksum
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf \
-            https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh \
-            -o /tmp/weaver-installer.sh
-          sh /tmp/weaver-installer.sh
+            https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-x86_64-unknown-linux-gnu.tar.xz \
+            -o /tmp/weaver.tar.xz
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-x86_64-unknown-linux-gnu.tar.xz.sha256 \
+            -o /tmp/weaver.tar.xz.sha256
 
-      - name: Verify Weaver binary attestation
-        run: gh attestation verify "$(which weaver)" --repo open-telemetry/weaver
+      - name: Verify checksum before extraction
+        run: cd /tmp && sha256sum -c weaver.tar.xz.sha256
+
+      - name: Verify attestation before install
+        run: gh attestation verify /tmp/weaver.tar.xz --repo open-telemetry/weaver
         env:
           GH_TOKEN: ${{ github.token }}
+
+      - name: Install verified Weaver binary
+        run: |
+          tar -xJf /tmp/weaver.tar.xz -C /tmp
+          install -m 755 /tmp/weaver /usr/local/bin/weaver
 
       - run: npm ci
 
