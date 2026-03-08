@@ -34,7 +34,7 @@ const IO_PATTERNS = [
  * @param filePath - Path to the file being validated (for CheckResult)
  * @returns CheckResult with ruleId "RST-004", tier 2, blocking false
  */
-export function checkInternalDetailSpans(code: string, filePath: string): CheckResult {
+export function checkInternalDetailSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -96,7 +96,7 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
   });
 
   if (flagged.length === 0) {
-    return {
+    return [{
       ruleId: 'RST-004',
       passed: true,
       filePath,
@@ -104,28 +104,21 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
       message: 'No spans found on internal implementation details.',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
-  const firstFlagged = flagged[0];
-  const details = flagged
-    .map((f) => `  - "${f.name}" (${f.kind}) at line ${f.line}`)
-    .join('\n');
-
-  return {
+  return flagged.map((f) => ({
     ruleId: 'RST-004',
     passed: false,
     filePath,
-    lineNumber: firstFlagged.line,
+    lineNumber: f.line,
     message:
-      `RST-004 advisory: ${flagged.length} internal function(s) have spans that may not need observability.\n` +
-      `${details}\n` +
+      `Internal ${f.kind} "${f.name}" at line ${f.line} has a span that may not need observability. ` +
       `Unexported functions and private methods are implementation details. ` +
-      `Consider removing spans unless they perform I/O (database, HTTP, filesystem, child process) ` +
-      `or are part of the public API (export them).`,
+      `Consider removing the span unless it performs I/O or is part of the public API.`,
     tier: 2,
     blocking: false,
-  };
+  }));
 }
 
 /**

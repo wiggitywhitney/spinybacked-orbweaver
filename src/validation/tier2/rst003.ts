@@ -18,7 +18,7 @@ import type { CheckResult } from '../types.ts';
  * @param filePath - Path to the file being validated (for CheckResult)
  * @returns CheckResult with ruleId "RST-003", tier 2, blocking false
  */
-export function checkThinWrapperSpans(code: string, filePath: string): CheckResult {
+export function checkThinWrapperSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -52,7 +52,7 @@ export function checkThinWrapperSpans(code: string, filePath: string): CheckResu
   }
 
   if (flagged.length === 0) {
-    return {
+    return [{
       ruleId: 'RST-003',
       passed: true,
       filePath,
@@ -60,27 +60,21 @@ export function checkThinWrapperSpans(code: string, filePath: string): CheckResu
       message: 'No spans found on thin wrapper functions.',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
-  const firstFlagged = flagged[0];
-  const details = flagged
-    .map((f) => `  - "${f.name}" at line ${f.line}`)
-    .join('\n');
-
-  return {
+  return flagged.map((f) => ({
     ruleId: 'RST-003',
     passed: false,
     filePath,
-    lineNumber: firstFlagged.line,
+    lineNumber: f.line,
     message:
-      `RST-003 advisory: ${flagged.length} thin wrapper function(s) have spans that may create duplicate traces.\n` +
-      `${details}\n` +
+      `Thin wrapper "${f.name}" at line ${f.line} has a span that may create duplicate traces. ` +
       `Functions whose body is a single delegation to another function do not need their own span ` +
       `since the delegated function likely has its own span. Consider removing the wrapper span.`,
     tier: 2,
     blocking: false,
-  };
+  }));
 }
 
 /**

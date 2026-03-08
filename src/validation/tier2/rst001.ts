@@ -43,7 +43,7 @@ const MAX_UTILITY_LINES = 5;
  * @param filePath - Path to the file being validated (for CheckResult)
  * @returns CheckResult with ruleId "RST-001", tier 2, blocking false
  */
-export function checkUtilityFunctionSpans(code: string, filePath: string): CheckResult {
+export function checkUtilityFunctionSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -83,7 +83,7 @@ export function checkUtilityFunctionSpans(code: string, filePath: string): Check
   }
 
   if (flagged.length === 0) {
-    return {
+    return [{
       ruleId: 'RST-001',
       passed: true,
       filePath,
@@ -91,27 +91,21 @@ export function checkUtilityFunctionSpans(code: string, filePath: string): Check
       message: 'No spans found on utility functions.',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
-  const firstFlagged = flagged[0];
-  const details = flagged
-    .map((f) => `  - "${f.name}" at line ${f.line}`)
-    .join('\n');
-
-  return {
+  return flagged.map((f) => ({
     ruleId: 'RST-001',
     passed: false,
     filePath,
-    lineNumber: firstFlagged.line,
+    lineNumber: f.line,
     message:
-      `RST-001 advisory: ${flagged.length} utility function(s) have spans that add noise without observability value.\n` +
-      `${details}\n` +
+      `Utility function "${f.name}" at line ${f.line} has a span that adds noise without observability value. ` +
       `Utility functions (synchronous, short, unexported, no I/O) typically do not need spans. ` +
       `Consider removing the span to reduce trace noise, or export the function if it is part of the public API.`,
     tier: 2,
     blocking: false,
-  };
+  }));
 }
 
 /**

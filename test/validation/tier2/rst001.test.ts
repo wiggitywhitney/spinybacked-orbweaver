@@ -15,12 +15,13 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
+      const results = checkUtilityFunctionSpans(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('RST-001');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(false);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('RST-001');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(false);
     });
   });
 
@@ -36,8 +37,9 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -53,8 +55,9 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -70,8 +73,9 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when unexported function uses fs calls', () => {
@@ -86,8 +90,9 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -113,8 +118,9 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -130,12 +136,12 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
+      const results = checkUtilityFunctionSpans(code, filePath);
 
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('RST-001');
-      expect(result.message).toContain('RST-001');
-      expect(result.message).toContain('add');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('RST-001');
+      expect(results[0].message).toContain('add');
     });
 
     it('reports line number of the flagged function', () => {
@@ -149,9 +155,10 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.lineNumber).toBe(3);
+      const results = checkUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(3);
     });
 
     it('flags multiple utility functions with spans', () => {
@@ -170,9 +177,12 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkUtilityFunctionSpans(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('2');
+      const results = checkUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(2);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('add');
+      expect(results[1].passed).toBe(false);
+      expect(results[1].message).toContain('subtract');
     });
   });
 
@@ -180,9 +190,10 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
     it('returns correct structure on pass', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkUtilityFunctionSpans(code, filePath);
+      const results = checkUtilityFunctionSpans(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'RST-001',
         passed: true,
         filePath,

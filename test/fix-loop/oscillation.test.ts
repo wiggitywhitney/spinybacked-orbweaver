@@ -142,18 +142,34 @@ describe('detectOscillation', () => {
       expect(result.reason).toContain('Duplicate');
     });
 
-    it('detects duplicates even when messages differ but ruleId + filePath match', () => {
+    it('detects duplicates even when messages differ but ruleId + filePath + lineNumber match', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', message: 'Span not closed in if branch' }),
+        makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', lineNumber: 42, message: 'Span not closed in if branch' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', message: 'Span not closed in try block' }),
+        makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', lineNumber: 42, message: 'Span not closed in try block' }),
       ]);
 
       const result = detectOscillation(current, previous);
 
       expect(result.shouldSkip).toBe(true);
       expect(result.reason).toContain('Duplicate');
+    });
+
+    it('does not false-positive when same ruleId + filePath but different lineNumbers (issue #43)', () => {
+      // Attempt 1: CDQ-001 fails on function A at line 42
+      const previous = makeValidation([
+        makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', lineNumber: 42, message: 'Span not closed for functionA' }),
+      ]);
+      // Attempt 2: CDQ-001 fixed function A but broke function B at line 87
+      const current = makeValidation([
+        makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', lineNumber: 87, message: 'Span not closed for functionB' }),
+      ]);
+
+      const result = detectOscillation(current, previous);
+
+      // Different line numbers means the agent made progress — not oscillation
+      expect(result.shouldSkip).toBe(false);
     });
 
     it('does not detect duplicates when ruleId differs', () => {

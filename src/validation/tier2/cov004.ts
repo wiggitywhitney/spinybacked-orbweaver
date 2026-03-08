@@ -33,7 +33,7 @@ const IO_PATTERNS = [
  * @param filePath - Path to the file being validated (for CheckResult)
  * @returns CheckResult with ruleId "COV-004", tier 2, blocking false
  */
-export function checkAsyncOperationSpans(code: string, filePath: string): CheckResult {
+export function checkAsyncOperationSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -102,7 +102,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
   });
 
   if (flagged.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-004',
       passed: true,
       filePath,
@@ -110,27 +110,21 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
       message: 'All async/long-running operations have spans.',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
-  const firstFlagged = flagged[0];
-  const details = flagged
-    .map((f) => `  - "${f.name}" (${f.reason}) at line ${f.line}`)
-    .join('\n');
-
-  return {
+  return flagged.map((f) => ({
     ruleId: 'COV-004',
     passed: false,
     filePath,
-    lineNumber: firstFlagged.line,
+    lineNumber: f.line,
     message:
-      `COV-004 advisory: ${flagged.length} async/long-running operation(s) without spans.\n` +
-      `${details}\n` +
+      `"${f.name}" (${f.reason}) at line ${f.line} has no span. ` +
       `Async functions, await expressions, and I/O library calls benefit from spans ` +
-      `for latency tracking and error visibility. Consider adding spans to these operations.`,
+      `for latency tracking and error visibility. Consider adding a span.`,
     tier: 2,
     blocking: false,
-  };
+  }));
 }
 
 /**

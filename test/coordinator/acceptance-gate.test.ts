@@ -758,10 +758,11 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const result = checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
-    expect(result.ruleId).toBe('SCH-004');
-    expect(result.tier).toBe(2);
-    expect(result.blocking).toBe(false);
+    const results = checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleId).toBe('SCH-004');
+    expect(results[0].tier).toBe(2);
+    expect(results[0].blocking).toBe(false);
   });
 
   it('(g) all four SCH checkers produce CheckResult with standard format', () => {
@@ -782,11 +783,14 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
+    const sch004Results = checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema);
+    expect(sch004Results).toHaveLength(1);
+
     const results = [
       checkSpanNamesMatchRegistry(code, '/f.js', resolvedSchema),
       checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema),
       checkAttributeValuesConformToTypes(code, '/f.js', resolvedSchema),
-      checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema),
+      sch004Results[0],
     ];
 
     for (const r of results) {

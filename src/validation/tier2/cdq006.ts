@@ -32,7 +32,7 @@ const EXPENSIVE_PATTERNS = [
  * @param filePath - Path to the file being validated (for CheckResult)
  * @returns CheckResult with ruleId "CDQ-006", tier 2, blocking false
  */
-export function checkIsRecordingGuard(code: string, filePath: string): CheckResult {
+export function checkIsRecordingGuard(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -73,7 +73,7 @@ export function checkIsRecordingGuard(code: string, filePath: string): CheckResu
   });
 
   if (unguarded.length === 0) {
-    return {
+    return [{
       ruleId: 'CDQ-006',
       passed: true,
       filePath,
@@ -81,27 +81,21 @@ export function checkIsRecordingGuard(code: string, filePath: string): CheckResu
       message: 'All expensive setAttribute computations are guarded by isRecording().',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
-  const firstUnguarded = unguarded[0];
-  const details = unguarded
-    .map((u) => `  - setAttribute value "${u.detail}" at line ${u.line}`)
-    .join('\n');
-
-  return {
+  return unguarded.map((u) => ({
     ruleId: 'CDQ-006',
     passed: false,
     filePath,
-    lineNumber: firstUnguarded.line,
+    lineNumber: u.line,
     message:
-      `CDQ-006 advisory: ${unguarded.length} setAttribute call(s) have expensive value computations without span.isRecording() guard.\n` +
-      `${details}\n` +
+      `setAttribute value "${u.detail}" at line ${u.line} has an expensive computation without span.isRecording() guard. ` +
       `Wrap expensive attribute computations in an if (span.isRecording()) check ` +
       `to avoid unnecessary computation when the span is not being sampled.`,
     tier: 2,
     blocking: false,
-  };
+  }));
 }
 
 /**
