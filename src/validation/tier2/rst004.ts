@@ -107,6 +107,8 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
     }];
   }
 
+  flagged.sort((a, b) => a.line - b.line);
+
   return flagged.map((f) => ({
     ruleId: 'RST-004',
     passed: false,

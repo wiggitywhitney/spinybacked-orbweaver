@@ -117,7 +117,7 @@ function extractFromSetAttribute(
   const firstArg = args[0];
   if (Node.isStringLiteral(firstArg)) {
     const key = firstArg.getLiteralValue();
-    entries.push({ key, line: callExpr.getStartLineNumber() });
+    entries.push({ key, line: firstArg.getStartLineNumber() });
   }
 }
 
@@ -142,7 +142,7 @@ function extractFromSetAttributes(
         } else if (Node.isIdentifier(nameNode)) {
           key = nameNode.getText();
         }
-        if (key) {
+        if (key !== null) {
           entries.push({ key, line: prop.getStartLineNumber() });
         }
       }
