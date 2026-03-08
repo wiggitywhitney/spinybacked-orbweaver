@@ -1791,3 +1791,66 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     expect(capturedOptions[2]!.feedbackMessage).toBeUndefined();
   });
 });
+
+describe('instrumentWithRetry — agentVersion population', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'orb-retry-version-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('populates agentVersion from package.json on success', async () => {
+    const output = makeInstrumentationOutput();
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.agentVersion).toBeDefined();
+    expect(result.agentVersion).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('populates agentVersion from package.json on failure', async () => {
+    const output = makeInstrumentationOutput();
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makeFailingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.agentVersion).toBeDefined();
+    expect(result.agentVersion).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('populates agentVersion on unexpected error', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => { throw new Error('boom'); },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.agentVersion).toBeDefined();
+    expect(result.agentVersion).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});

@@ -2,6 +2,7 @@
 // ABOUTME: Retry with multi-turn feedback, fresh regeneration, oscillation detection, and token budget tracking.
 
 import { writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
@@ -9,6 +10,9 @@ import type { ValidateFileInput, ValidationResult } from '../validation/types.ts
 import { addTokenUsage, totalTokens } from './token-budget.ts';
 import { detectOscillation } from './oscillation.ts';
 import type { FileResult, ValidationStrategy } from './types.ts';
+
+const require = createRequire(import.meta.url);
+const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
 
 /**
  * Options passed to instrumentFile for multi-turn fix attempts.
@@ -325,6 +329,7 @@ async function executeRetryLoop(
         advisoryAnnotations: validation.advisoryFindings.length > 0
           ? validation.advisoryFindings
           : undefined,
+        agentVersion: AGENT_VERSION,
         tokenUsage: cumulativeTokens,
       };
     }
@@ -410,6 +415,7 @@ function buildFailedResult(
     notes: output?.notes,
     reason,
     lastError,
+    agentVersion: AGENT_VERSION,
     tokenUsage,
   };
 }
