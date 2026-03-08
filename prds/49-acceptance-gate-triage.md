@@ -62,6 +62,34 @@ File: `test/coordinator/acceptance-gate.test.ts`
 - [ ] **P5-5**: `successful files have schemaHashBefore populated from dispatch` — asserts hashes match `^[0-9a-f]{64}$`
 - [ ] **P5-6**: `no warnings when all schema operations succeed` — asserts zero schema-related warnings
 
+## Tiered Acceptance Testing
+
+The validation pipeline already uses tiered checks — Tier 1 (structural: syntax, elision, span closure) gates Tier 2 (semantic: naming conventions, attribute quality). Acceptance gate tests should follow the same pattern.
+
+### Tier 1 Acceptance: Structural correctness (fail fast)
+
+Run these first. If they fail, there's no point checking semantic quality.
+
+- Does the LLM produce syntactically valid JavaScript?
+- Is the original business logic preserved (no elision, no modification)?
+- Are spans properly opened and closed?
+- Does the output pass Tier 1 validation checks?
+
+### Tier 2 Acceptance: Semantic quality (run only after Tier 1 passes)
+
+- Are span names meaningful and consistent with the schema registry?
+- Are attributes well-chosen and properly typed?
+- Does the instrumentation follow OTel conventions?
+- Do advisory (non-blocking) checks surface useful feedback?
+
+### Why this matters for triage
+
+When a test fails, knowing *which tier* it fails at tells us what to fix:
+- **Tier 1 failure** → agent is producing fundamentally broken output (prompt issue, retry logic bug, or model struggling with the pattern)
+- **Tier 2 failure** → agent produces working instrumentation but semantic quality is low (prompt tuning, validation sensitivity, or test expectation too strict)
+
+The baseline milestone should categorize each failure by tier. This determines triage priority — Tier 1 failures block everything and get fixed first.
+
 ## Approach
 
 For each test, the triage follows this decision tree:
@@ -86,7 +114,8 @@ Run test in isolation (3 runs)
 
 ## Milestones
 
-- [ ] Baseline established: run all 17 tests 3x each, document pass/fail matrix
+- [ ] Baseline established: run all 17 tests 3x each, document pass/fail matrix with tier classification
+- [ ] All Tier 1 (structural) failures triaged and resolved — these block everything
 - [ ] Phase 1 tests (P1-1 through P1-3) triaged and resolved
 - [ ] Phase 3 tests (P3-1 through P3-6) triaged and resolved
 - [ ] Phase 4 tests (P4-1 through P4-2) triaged and resolved
@@ -99,6 +128,7 @@ Run test in isolation (3 runs)
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-03-07 | Created PRD | 14/17 LLM-calling tests failing; need systematic triage |
+| 2026-03-07 | Tiered acceptance testing | Mirror Tier 1/Tier 2 validation pattern in acceptance gates — fail fast on structural issues before checking semantic quality |
 
 ## Out of Scope
 
