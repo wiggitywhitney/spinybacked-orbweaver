@@ -24,7 +24,7 @@ const TRIVIAL_SETTER_PATTERN = /^set[A-Z]/;
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "RST-002", tier 2, blocking false
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "RST-002", tier 2, blocking false
  */
 export function checkTrivialAccessorSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({

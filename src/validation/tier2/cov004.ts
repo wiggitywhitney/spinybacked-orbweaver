@@ -31,7 +31,7 @@ const IO_PATTERNS = [
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "COV-004", tier 2, blocking false
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "COV-004", tier 2, blocking false
  */
 export function checkAsyncOperationSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
