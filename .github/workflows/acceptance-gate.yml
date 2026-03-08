@@ -49,23 +49,23 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf \
             https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-x86_64-unknown-linux-gnu.tar.xz \
-            -o /tmp/weaver.tar.xz
+            -o /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz
           curl --proto '=https' --tlsv1.2 -LsSf \
             https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-x86_64-unknown-linux-gnu.tar.xz.sha256 \
-            -o /tmp/weaver.tar.xz.sha256
+            -o /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz.sha256
 
       - name: Verify checksum before extraction
-        run: cd /tmp && sha256sum -c weaver.tar.xz.sha256
+        run: cd /tmp && sha256sum -c weaver-x86_64-unknown-linux-gnu.tar.xz.sha256
 
       - name: Verify attestation before install
-        run: gh attestation verify /tmp/weaver.tar.xz --repo open-telemetry/weaver
+        run: gh attestation verify /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz --repo open-telemetry/weaver
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Install verified Weaver binary
         run: |
-          tar -xJf /tmp/weaver.tar.xz -C /tmp
-          install -m 755 /tmp/weaver /usr/local/bin/weaver
+          tar -xJf /tmp/weaver-x86_64-unknown-linux-gnu.tar.xz -C /tmp
+          sudo install -m 755 /tmp/weaver /usr/local/bin/weaver
 
       - run: npm ci
 
