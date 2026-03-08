@@ -432,14 +432,14 @@ function makePhase5Deps(resolvedSchema: object, tempDir: string): CoordinateDeps
     }),
     discoverFiles,
     statFile: (fp: string) => stat(fp),
-    dispatchFiles: (filePaths, projectDir, config, callbacks, _options) => {
+    dispatchFiles: vi.fn().mockImplementation((filePaths, projectDir, config, callbacks, _options) => {
       return dispatchFiles(filePaths, projectDir, config, callbacks, {
         deps: {
           resolveSchema: async () => resolvedSchema,
           instrumentWithRetry,
         },
       });
-    },
+    }),
     finalizeResults: (runResult, projectDir, sdkInitPath, depStrategy, _deps) => {
       return finalizeResults(runResult, projectDir, sdkInitPath, depStrategy, {
         installDeps: {

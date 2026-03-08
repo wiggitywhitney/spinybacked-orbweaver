@@ -87,3 +87,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Replaced all Weaver CLI mocks in `init-handler.test.ts` with real `execFileSync` calls against Weaver binary and registry fixtures; added 6 dedicated integration tests in `init-handler.integration.test.ts`; exported `isVersionSatisfied` for direct unit testing of version comparison logic
 - Replaced remaining Weaver CLI mocks in `acceptance-gate.test.ts` and `dx-verification.test.ts` with real Weaver calls against registry fixtures — zero Weaver mocks remain in the test suite
 - GitHub Action `action.yml` status filter: corrected `"failure"` to `"failed"` to match `FileResult.status` type — was silently reporting 0 failed files
+- P5-4 acceptance gate test: `makePhase5Deps().dispatchFiles` wrapped with `vi.fn().mockImplementation()` so `toHaveBeenCalledWith` assertion works (was a real function, not a spy)
