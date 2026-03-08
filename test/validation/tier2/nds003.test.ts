@@ -206,6 +206,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(missing!.message).toContain('const b = 2');
       expect(added).toBeDefined();
       expect(added!.passed).toBe(false);
+      expect(added!.lineNumber).toBe(2); // line 2 in the instrumented output
       expect(added!.message).toContain('const x = 99');
     });
   });

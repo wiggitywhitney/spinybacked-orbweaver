@@ -114,10 +114,13 @@ export function checkNonInstrumentationDiff(
 
   // Reverse check: filter instrumented lines, remaining should be subset of original
   const originalSet = new Set(originalLines);
-  const addedLines: string[] = [];
-  for (const line of instrumentedLines) {
-    if (!isInstrumentationLine(line) && !originalSet.has(line)) {
-      addedLines.push(line);
+  const addedLines: Array<{ line: string; instrumentedLineNum: number }> = [];
+  const rawInstrumentedLines = instrumentedCode.split('\n');
+  for (let i = 0; i < rawInstrumentedLines.length; i++) {
+    const trimmed = rawInstrumentedLines[i].trim();
+    if (trimmed.length === 0) continue;
+    if (!isInstrumentationLine(trimmed) && !originalSet.has(trimmed)) {
+      addedLines.push({ line: trimmed, instrumentedLineNum: i + 1 });
     }
   }
 
@@ -153,9 +156,9 @@ export function checkNonInstrumentationDiff(
       ruleId: 'NDS-003',
       passed: false,
       filePath,
-      lineNumber: null,
+      lineNumber: a.instrumentedLineNum,
       message:
-        `NDS-003: non-instrumentation line added: ${a}\n` +
+        `NDS-003: non-instrumentation line added at instrumented line ${a.instrumentedLineNum}: ${a.line}\n` +
         `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
       tier: 2,
       blocking: true,

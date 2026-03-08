@@ -81,7 +81,6 @@ function extractAttributeKeys(code: string): AttributeKeyEntry[] {
   const sourceFile = project.createSourceFile('check.js', code);
 
   const entries: AttributeKeyEntry[] = [];
-  const seen = new Set<string>();
 
   sourceFile.forEachDescendant((node) => {
     if (!Node.isCallExpression(node)) return;
@@ -96,9 +95,9 @@ function extractAttributeKeys(code: string): AttributeKeyEntry[] {
     if (!/\b(?:span|activeSpan|parentSpan|rootSpan|childSpan)\b/i.test(receiverText)) return;
 
     if (methodName === 'setAttribute') {
-      extractFromSetAttribute(node, entries, seen);
+      extractFromSetAttribute(node, entries);
     } else if (methodName === 'setAttributes') {
-      extractFromSetAttributes(node, entries, seen);
+      extractFromSetAttributes(node, entries);
     }
   });
 
@@ -111,7 +110,6 @@ function extractAttributeKeys(code: string): AttributeKeyEntry[] {
 function extractFromSetAttribute(
   callExpr: CallExpression,
   entries: AttributeKeyEntry[],
-  seen: Set<string>,
 ): void {
   const args = callExpr.getArguments();
   if (args.length < 2) return;
@@ -119,10 +117,7 @@ function extractFromSetAttribute(
   const firstArg = args[0];
   if (Node.isStringLiteral(firstArg)) {
     const key = firstArg.getLiteralValue();
-    if (!seen.has(key)) {
-      seen.add(key);
-      entries.push({ key, line: callExpr.getStartLineNumber() });
-    }
+    entries.push({ key, line: callExpr.getStartLineNumber() });
   }
 }
 
@@ -132,7 +127,6 @@ function extractFromSetAttribute(
 function extractFromSetAttributes(
   callExpr: CallExpression,
   entries: AttributeKeyEntry[],
-  seen: Set<string>,
 ): void {
   const args = callExpr.getArguments();
   if (args.length === 0) return;
@@ -148,8 +142,7 @@ function extractFromSetAttributes(
         } else if (Node.isIdentifier(nameNode)) {
           key = nameNode.getText();
         }
-        if (key && !seen.has(key)) {
-          seen.add(key);
+        if (key) {
           entries.push({ key, line: prop.getStartLineNumber() });
         }
       }

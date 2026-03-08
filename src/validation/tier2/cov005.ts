@@ -31,7 +31,7 @@ interface SpanAttributeGap {
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param registry - Registry span definitions with required/recommended attributes
- * @returns CheckResult with ruleId "COV-005", tier 2, blocking false
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "COV-005", tier 2, blocking false
  */
 export function checkDomainAttributes(
   code: string,

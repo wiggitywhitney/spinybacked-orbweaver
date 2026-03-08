@@ -27,7 +27,7 @@ interface RedundancyFlag {
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param resolvedSchema - Resolved Weaver registry object
- * @returns CheckResult with ruleId "SCH-004", tier 2, blocking false (advisory)
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "SCH-004", tier 2, blocking false (advisory)
  */
 export function checkNoRedundantSchemaEntries(
   code: string,
