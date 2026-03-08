@@ -27,6 +27,12 @@ Secrets are managed via vals — two secrets configured: `ANTHROPIC_API_KEY` and
 vals exec -f .vals.yaml -- <command>
 ```
 
+**PATH caveat**: `vals exec -- bash -c '...'` drops Homebrew from PATH. Commands like `npx`, `node`, and `weaver` won't be found. Fix by prepending PATH inside the bash -c:
+
+```bash
+vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run ...'
+```
+
 ## TypeScript: erasableSyntaxOnly
 
 This project uses Node.js 24.x native type stripping. TypeScript annotations are erased at runtime — no transpilation step. Run files directly with `node src/index.ts`.
