@@ -33,7 +33,7 @@ Triage all 17 LLM-calling acceptance gate tests individually. For each test:
 File: `test/acceptance-gate.test.ts`
 
 - [x] **P1-1**: `instruments successfully and passes all rubric checks` (user-routes.js) — PASS (28s). Reliable.
-- [x] **P1-2**: `instruments successfully and preserves error handling` (order-service.js) — PASS (36s). Reliable.
+- [x] ~~**P1-2**: `instruments successfully and preserves error handling` (order-service.js)~~ — Removed. Flaky due to LLM non-determinism on NDS-003; P3-2 covers the same file with retries.
 - [x] **P1-3**: `instruments with minimal or no spans on utility functions` (format-helpers.js) — PASS (7s). Reliable.
 
 ### Phase 3 — Fix Loop (6 LLM tests)
@@ -248,6 +248,7 @@ Final validation after all fixes.
 | 2026-03-08 | Hard fail on schema extensions | Schema extension creation is a core agent capability. If the agent can't produce extensions for a fixture that obviously needs them, that's a real regression — not acceptable LLM variance. P5-1 and P5-2 should hard-fail, not use conditional assertions. |
 | 2026-03-08 | Merge P5-5 into P5-3 | P5-3 and P5-5 ran identical coordinator configurations (same 5 files, same deps, same API calls). Merging eliminates ~230s of redundant LLM API calls per suite run. P5-3 now asserts both live-check compliance and per-file schema hashes. |
 | 2026-03-08 | Keep slow tests as-is (P3-5 113s, P5-3 140s) | Coordinator-level tests are inherently slow due to real LLM calls. Runtime is dominated by API latency, not test data. No optimization possible without reducing end-to-end coverage. Acceptance gates run advisory (never block PR creation), so runtime is acceptable. |
+| 2026-03-08 | Remove P1-2 (order-service.js single-shot) | P1-2 tested single-shot `instrumentFile()` on order-service.js — no retries. It failed intermittently due to LLM non-determinism (NDS-003: LLM rewrites `return await response.json()` when wrapping in spans). P3-2 covers the same file through the fix loop, which is how the agent works in production. P1-2 added ~49s of API cost per run without unique coverage — it measured single-shot quality on a file that the fix loop already tests with retries. A flaky test in an advisory suite trains you to ignore advisory results, which is worse than no test. |
 
 ## Out of Scope
 
