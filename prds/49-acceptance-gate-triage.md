@@ -25,7 +25,7 @@ Triage all 17 LLM-calling acceptance gate tests individually. For each test:
 - All 17 LLM-calling acceptance gate tests pass (or have been consciously adjusted with documented rationale)
 - Each resolution is categorized: agent fix, test adjustment, or both
 - Decision log captures the rationale for every test adjustment
-- Full acceptance gate suite runs green (all 48 tests pass)
+- Full acceptance gate suite runs green (all 47 tests pass — originally 48, P5-5 merged into P5-3)
 
 ## Test Inventory
 
@@ -57,9 +57,9 @@ File: `test/coordinator/acceptance-gate.test.ts`
 
 - [x] **P5-1**: `all RunResult schema fields populated with meaningful content` — FIXED (117s). Root Cause 5 fix + fraud-detection.js fixture triggers schema extensions.
 - [x] **P5-2**: `schema lifecycle deps called when agent produces extensions` — FIXED (137s). fraud-detection.js fixture produces extensions, computeSchemaDiff now called.
-- [x] **P5-3**: `live-check compliance report flows into RunResult.endOfRunValidation` — PASS (140s). Reliable.
+- [x] **P5-3**: `live-check compliance report flows into RunResult.endOfRunValidation` — PASS (140s). Reliable. P5-5 assertions merged into this test.
 - [x] **P5-4**: `onSchemaCheckpoint callback is passed through to dispatch` — FIXED (75s). vi.fn() spy fix verified.
-- [x] **P5-5**: `successful files have schemaHashBefore populated from dispatch` — PASS (230s). Reliable.
+- [x] ~~**P5-5**: `successful files have schemaHashBefore populated from dispatch`~~ — Merged into P5-3 (identical coordinator run, redundant API calls eliminated).
 - [x] **P5-6**: `no warnings when all schema operations succeed` — FIXED (78s). resolveSchemaForHash ENOENT warning eliminated by Root Cause 5 fix.
 
 ## Tiered Acceptance Testing
@@ -219,16 +219,16 @@ Resolves: P5-1, P5-2. Root Cause 6 (fixtures don't trigger extensions).
 ### Milestone 3: Review slow-but-passing tests
 Discussion items — no assumption that these need fixing.
 
-- [ ] Review P3-5 (113s): fix loop with retries on user-routes.js — worth the runtime?
-- [ ] Review P5-3 (140s): full coordinator with live-check — worth the runtime?
-- [ ] Review P5-5 (230s): full coordinator with schema hashes — worth the runtime?
-- [ ] Review coordinator test timing in general (P4/P5 tests are 130-250s each)
+- [x] Review P3-5 (113s): fix loop with retries on user-routes.js — keep as-is, exercises retry strategy selection (unique coverage)
+- [x] Review P5-3 (140s): full coordinator with live-check — keep as-is, now also covers P5-5 schema hash assertions
+- [x] Review P5-5 (230s): merged into P5-3 — identical coordinator run, saved ~230s of redundant API calls per suite run
+- [x] Review coordinator test timing in general — inherent to end-to-end LLM testing; no optimization without reducing coverage
 
 ### Milestone 4: Verify full suite green
 Final validation after all fixes.
 
-- [ ] Run full acceptance gate suite (all 48 tests)
-- [ ] Decision log complete with rationale for every adjustment
+- [ ] Run full acceptance gate suite (all 47 tests — P5-5 merged into P5-3) — deferred to pre-PR hook execution
+- [x] Decision log complete with rationale for every adjustment
 
 ## Decision Log
 
@@ -246,6 +246,8 @@ Final validation after all fixes.
 | 2026-03-08 | Root Cause 5: vals exec strips HOME/PATH | `vals exec` empties HOME and reduces PATH to system dirs. `execFile('weaver', ...)` fails with ENOENT because `~/.cargo/bin` is unreachable. Fix: use pre-loaded fixture schemas for `resolveSchemaForHash` in test deps. Real Weaver resolve covered by PRD 31 tests. |
 | 2026-03-08 | Root Cause 6: fixtures don't trigger extensions | Existing fixture files don't need new schema attributes, so LLM correctly produces zero extensions. P5-1/P5-2 fail because they assert on extension-dependent fields. Fix: add a fixture with unambiguous domain-specific operations that require new attributes. |
 | 2026-03-08 | Hard fail on schema extensions | Schema extension creation is a core agent capability. If the agent can't produce extensions for a fixture that obviously needs them, that's a real regression — not acceptable LLM variance. P5-1 and P5-2 should hard-fail, not use conditional assertions. |
+| 2026-03-08 | Merge P5-5 into P5-3 | P5-3 and P5-5 ran identical coordinator configurations (same 5 files, same deps, same API calls). Merging eliminates ~230s of redundant LLM API calls per suite run. P5-3 now asserts both live-check compliance and per-file schema hashes. |
+| 2026-03-08 | Keep slow tests as-is (P3-5 113s, P5-3 140s) | Coordinator-level tests are inherently slow due to real LLM calls. Runtime is dominated by API latency, not test data. No optimization possible without reducing end-to-end coverage. Acceptance gates run advisory (never block PR creation), so runtime is acceptable. |
 
 ## Out of Scope
 

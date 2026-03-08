@@ -99,6 +99,10 @@ Where N is the phase number (1-7). The skill reads the spec, tech stack, recomme
 
 Do not invent tasks outside the PRD structure. When a PRD exists, follow it. Do not commit manually during PRD work — `/prd-update-progress` handles commits, PRD updates, and journaling together.
 
+## Acceptance Gate Failures
+
+**Never dismiss acceptance gate test failures.** When the acceptance gate suite reports failures — whether during a hook, a manual run, or a `/prd-next` loop — treat every failure as a real signal that must be investigated. Do not rationalize failures as "unrelated to the current task" or "pre-existing." If the tests fail, something is wrong, and the current work cannot proceed until the failures are understood and resolved (or triaged into a dedicated PRD).
+
 ## Testing: Weaver CLI
 
 **Never mock the Weaver CLI.** Weaver is installed locally and runs fast (<1s per command except live-check). All tests that exercise Weaver behavior must run against the real binary. Mocking Weaver has hidden real bugs (wrong output format assumptions, deprecated commands, missing flags). Use real registry fixtures instead of fabricating Weaver output.

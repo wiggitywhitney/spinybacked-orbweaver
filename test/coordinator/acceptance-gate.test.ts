@@ -557,7 +557,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     expect(deps.cleanupSnapshot).toHaveBeenCalled();
   });
 
-  it('(d) live-check compliance report flows into RunResult.endOfRunValidation', { timeout: 600_000 }, async () => {
+  it('(d) live-check compliance report flows into RunResult and per-file schema hashes populated', { timeout: 600_000 }, async () => {
     const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig();
 
@@ -570,6 +570,16 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     expect(result.endOfRunValidation).toBe(
       'Schema compliance: 3/3 spans validated against registry. 0 violations found.',
     );
+
+    // Per-file schema hashes populated from dispatch (formerly P5-5)
+    const succeeded = result.fileResults.filter(r => r.status === 'success');
+    expect(succeeded.length).toBeGreaterThanOrEqual(1);
+
+    for (const r of succeeded) {
+      // schemaHashBefore is set during dispatch (computed from resolved schema)
+      expect(r.schemaHashBefore).toMatch(/^[0-9a-f]{64}$/);
+      expect(r.schemaHashAfter).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 
   it('(c) onSchemaCheckpoint callback is passed through to dispatch', { timeout: 600_000 }, async () => {
@@ -590,21 +600,6 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     );
   });
 
-  it('successful files have schemaHashBefore populated from dispatch', { timeout: 600_000 }, async () => {
-    const deps = makePhase5Deps(resolvedSchema, tempDir);
-    const config = makeConfig();
-
-    const result = await coordinate(tempDir, config, undefined, deps);
-
-    const succeeded = result.fileResults.filter(r => r.status === 'success');
-    expect(succeeded.length).toBeGreaterThanOrEqual(1);
-
-    for (const r of succeeded) {
-      // schemaHashBefore is set during dispatch (computed from resolved schema)
-      expect(r.schemaHashBefore).toMatch(/^[0-9a-f]{64}$/);
-      expect(r.schemaHashAfter).toMatch(/^[0-9a-f]{64}$/);
-    }
-  });
 
   it('no warnings when all schema operations succeed', { timeout: 600_000 }, async () => {
     const deps = makePhase5Deps(resolvedSchema, tempDir);

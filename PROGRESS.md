@@ -74,6 +74,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Merged P5-5 acceptance gate test into P5-3: both ran identical coordinator configurations with the same 5 files and API calls. Single test now validates both live-check compliance report and per-file schema hashes, eliminating ~230s of redundant LLM calls per suite run.
+- Added "Acceptance Gate Failures" project rule: acceptance gate failures must never be dismissed as unrelated to the current task — every failure must be investigated before work proceeds.
 - COV-006 validation now distinguishes business spans (broader operations containing auto-instrumented calls) from direct wrappers (single auto-instrumented call only). Statement-counting heuristic strips boilerplate before counting — aligns with spec "Never duplicate" exception.
 - P4-1/P4-2 acceptance gate tests adjusted to only assert OTel-on-disk and diagnostic fields for files with spansAdded > 0. Utility files correctly succeed with zero spans.
 - P5 acceptance gate `resolveSchemaForHash` deps now use pre-loaded fixture schemas instead of calling Weaver CLI — `vals exec` strips HOME and PATH, making `execFile('weaver')` fail with ENOENT. Real Weaver resolve covered by PRD 31 integration tests.
