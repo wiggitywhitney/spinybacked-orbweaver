@@ -30,7 +30,7 @@ const EXPENSIVE_PATTERNS = [
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "CDQ-006", tier 2, blocking false
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "CDQ-006", tier 2, blocking false
  */
 export function checkIsRecordingGuard(code: string, filePath: string): CheckResult[] {
   const project = new Project({
