@@ -141,7 +141,7 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '};',
       ].join('\n');
 
-      const results = checkEntryPointSpans(code, filePath);
+      const results = checkEntryPointSpans(code, '/app/services/orders.js');
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
@@ -162,7 +162,190 @@ describe('checkEntryPointSpans (COV-001)', () => {
         '};',
       ].join('\n');
 
+      const results = checkEntryPointSpans(code, '/app/services/orders.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags CJS exported async function with request-like params', () => {
+      const code = [
+        'module.exports.handleWebhook = async function handleWebhook(req, res) {',
+        '  res.json({ ok: true });',
+        '};',
+      ].join('\n');
+
       const results = checkEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('does not flag CJS exported async utility in non-service path', () => {
+      const code = [
+        'module.exports.formatDate = async function formatDate(input) {',
+        '  return new Date(input).toISOString();',
+        '};',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/utils/dates.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('ESM exported async functions — service module heuristics', () => {
+    it('flags ESM export in a service module path', () => {
+      const code = [
+        'export async function processOrder(order) {',
+        '  const result = await db.query("INSERT INTO orders...");',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/services/orders.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export with request-like parameter names', () => {
+      const code = [
+        'export async function handleRequest(req, res) {',
+        '  res.json({ ok: true });',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/lib/misc.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export with context parameter', () => {
+      const code = [
+        'export async function handleEvent(event, context) {',
+        '  return { statusCode: 200 };',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/lib/misc.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('does not flag ESM exported utility function in non-service path', () => {
+      const code = [
+        'export async function formatDate(input) {',
+        '  return new Date(input).toISOString();',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/utils/dates.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag ESM exported helper with generic params', () => {
+      const code = [
+        'export async function loadConfig(path) {',
+        '  const data = await fs.readFile(path, "utf8");',
+        '  return JSON.parse(data);',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/config/loader.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags ESM export in routes/ directory', () => {
+      const code = [
+        'export async function getUsers(pool) {',
+        '  return pool.query("SELECT * FROM users");',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/routes/users.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export in handlers/ directory', () => {
+      const code = [
+        'export async function onMessage(payload) {',
+        '  await queue.ack(payload.id);',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/handlers/messages.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export in controllers/ directory', () => {
+      const code = [
+        'export async function createUser(data) {',
+        '  return db.insert("users", data);',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/controllers/users.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export in api/ directory', () => {
+      const code = [
+        'export async function listItems(filters) {',
+        '  return db.query("SELECT * FROM items WHERE ...", filters);',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/api/items.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export in repo-relative service path', () => {
+      const code = [
+        'export async function processOrder(order) {',
+        '  const result = await db.query("INSERT INTO orders...");',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, 'services/orders.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export in Windows-style service path', () => {
+      const code = [
+        'export async function processOrder(order) {',
+        '  const result = await db.query("INSERT INTO orders...");',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, 'C:\\app\\services\\orders.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when ESM service function has span', () => {
+      const code = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function processOrder(order) {',
+        '  return tracer.startActiveSpan("processOrder", async (span) => {',
+        '    try {',
+        '      const result = await db.query("INSERT INTO orders...");',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, '/app/services/orders.js');
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
