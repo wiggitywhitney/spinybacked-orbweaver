@@ -47,9 +47,9 @@ const OUTBOUND_PATTERNS: Array<{
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "COV-002", tier 2, blocking true
+ * @returns CheckResult[] — one per finding (or a single passing result)
  */
-export function checkOutboundCallSpans(code: string, filePath: string): CheckResult {
+export function checkOutboundCallSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -73,7 +73,7 @@ export function checkOutboundCallSpans(code: string, filePath: string): CheckRes
   });
 
   if (unspannedCalls.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-002',
       passed: true,
       filePath,
@@ -81,28 +81,22 @@ export function checkOutboundCallSpans(code: string, filePath: string): CheckRes
       message: 'All outbound calls are enclosed in spans.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
-  const firstUnspanned = unspannedCalls[0];
-  const details = unspannedCalls
-    .map((c) => `  - ${c.callText} at line ${c.line}`)
-    .join('\n');
-
-  return {
-    ruleId: 'COV-002',
-    passed: false,
+  return unspannedCalls.map((c) => ({
+    ruleId: 'COV-002' as const,
+    passed: false as const,
     filePath,
-    lineNumber: firstUnspanned.line,
+    lineNumber: c.line,
     message:
-      `COV-002 check failed: ${unspannedCalls.length} outbound call(s) without enclosing spans.\n` +
-      `${details}\n` +
+      `COV-002 check failed: ${c.callText} at line ${c.line} has no enclosing span. ` +
       `Every outbound call (HTTP requests, database queries, message publishing) ` +
       `should be enclosed in a span via tracer.startActiveSpan() or tracer.startSpan() ` +
       `so that latency and errors are captured in traces.`,
-    tier: 2,
+    tier: 2 as const,
     blocking: true,
-  };
+  }));
 }
 
 /**

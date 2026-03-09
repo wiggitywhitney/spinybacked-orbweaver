@@ -8,6 +8,7 @@ import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CommitFileResultOptions } from '../git/per-file-commit.ts';
 import type { AggregateCommitInput } from '../git/aggregate-commit.ts';
+import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
 /** Options for the git workflow. */
 export interface GitWorkflowOptions {
@@ -16,6 +17,7 @@ export interface GitWorkflowOptions {
   noPr: boolean;
   dryRun: boolean;
   registryDir?: string;
+  targetPath?: string;
 }
 
 /** Result of the git workflow. */
@@ -31,6 +33,8 @@ export interface GitWorkflowDeps {
     projectDir: string,
     config: AgentConfig,
     callbacks?: CoordinatorCallbacks,
+    deps?: CoordinateDeps,
+    targetPath?: string,
   ) => Promise<RunResult>;
   createBranch: (dir: string, branchName: string) => Promise<void>;
   commitFileResult: (
@@ -76,7 +80,7 @@ export async function runGitWorkflow(
   deps: GitWorkflowDeps,
   callerCallbacks?: Partial<CoordinatorCallbacks>,
 ): Promise<GitWorkflowResult> {
-  const { projectDir, config, noPr, dryRun, registryDir } = options;
+  const { projectDir, config, noPr, dryRun, registryDir, targetPath } = options;
   const branchName = generateBranchName();
 
   // Step 1: Create feature branch (skip in dry-run)
@@ -107,7 +111,7 @@ export async function runGitWorkflow(
     },
   };
 
-  const runResult = await deps.coordinate(projectDir, config, callbacks);
+  const runResult = await deps.coordinate(projectDir, config, callbacks, undefined, targetPath);
 
   // Wait for all per-file commits to complete before aggregate commit
   await commitChain;

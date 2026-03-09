@@ -23,12 +23,13 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAutoInstrumentationPreference(code, filePath);
+      const results = checkAutoInstrumentationPreference(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('COV-006');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-006');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -50,9 +51,10 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
         '});',
       ].join('\n');
 
-      const result = checkAutoInstrumentationPreference(code, filePath);
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('COV-006');
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-006');
     });
 
     it('flags manual span whose callback body contains express route call', () => {
@@ -71,11 +73,12 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAutoInstrumentationPreference(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('COV-006');
-      expect(result.message).toContain('COV-006');
-      expect(result.message).toContain('express');
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-006');
+      expect(results[0].message).toContain('COV-006');
+      expect(results[0].message).toContain('express');
     });
 
     it('flags manual span wrapping http.request', () => {
@@ -93,9 +96,10 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAutoInstrumentationPreference(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('http');
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('http');
     });
 
     it('flags manual span wrapping pg query', () => {
@@ -113,9 +117,10 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAutoInstrumentationPreference(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('pg');
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('pg');
     });
 
     it('flags manual span wrapping redis call', () => {
@@ -133,9 +138,114 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
         '}',
       ].join('\n');
 
-      const result = checkAutoInstrumentationPreference(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('redis');
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('redis');
+    });
+  });
+
+  describe('business spans containing auto-instrumented calls (broader operations)', () => {
+    it('passes when span wraps business logic that includes a pg query among other statements', () => {
+      // This is the user-routes.js false positive scenario:
+      // A business span around getUsers() contains pool.query() but also has
+      // validation, transformation, and error handling — it's a broader operation.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getUsers(req, res) {',
+        '  return tracer.startActiveSpan("getUsers", (span) => {',
+        '    try {',
+        '      const filters = parseFilters(req.query);',
+        '      const result = await pool.query("SELECT * FROM users WHERE active = $1", [filters.active]);',
+        '      const users = result.rows.map(formatUser);',
+        '      return res.json(users);',
+        '    } catch (err) {',
+        '      span.recordException(err);',
+        '      span.setStatus({ code: 2 });',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-006');
+    });
+
+    it('passes when span wraps business logic that includes http.request among other statements', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function fetchUserProfile(userId) {',
+        '  return tracer.startActiveSpan("fetchUserProfile", (span) => {',
+        '    try {',
+        '      span.setAttribute("user.id", userId);',
+        '      const token = await getAuthToken();',
+        '      const response = await http.request(buildProfileUrl(userId));',
+        '      const profile = parseProfile(response);',
+        '      return profile;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags when span body has only the auto-instrumented call (single statement)', () => {
+      // A span that wraps ONLY pool.query() with no other business logic
+      // is genuinely duplicating auto-instrumentation.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getUsers() {',
+        '  return tracer.startActiveSpan("getUsers", (span) => {',
+        '    try {',
+        '      return pool.query("SELECT * FROM users");',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('pg');
+    });
+
+    it('passes when span contains multiple redis operations as part of a cache workflow', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getUserWithCache(id) {',
+        '  return tracer.startActiveSpan("getUserWithCache", (span) => {',
+        '    try {',
+        '      const cached = await redis.get(`user:${id}`);',
+        '      if (cached) return JSON.parse(cached);',
+        '      const user = await fetchFromDb(id);',
+        '      await redis.set(`user:${id}`, JSON.stringify(user));',
+        '      return user;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -143,9 +253,10 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkAutoInstrumentationPreference(code, filePath);
+      const results = checkAutoInstrumentationPreference(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'COV-006',
         passed: true,
         filePath,

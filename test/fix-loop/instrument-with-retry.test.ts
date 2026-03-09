@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
@@ -12,6 +13,9 @@ import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src
 import type { InstrumentFileResult, ConversationContext } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { InstrumentWithRetryDeps, InstrumentFileCallOptions } from '../../src/fix-loop/instrument-with-retry.ts';
+
+const require = createRequire(import.meta.url);
+const { version: PACKAGE_VERSION } = require('../../package.json') as { version: string };
 
 const zeroTokens: TokenUsage = {
   inputTokens: 0,
@@ -1789,5 +1793,68 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     expect(capturedOptions[2]!.failureHint).toBeDefined();
     expect(capturedOptions[2]!.conversationContext).toBeUndefined();
     expect(capturedOptions[2]!.feedbackMessage).toBeUndefined();
+  });
+});
+
+describe('instrumentWithRetry — agentVersion population', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'orb-retry-version-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('populates agentVersion from package.json on success', async () => {
+    const output = makeInstrumentationOutput();
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.agentVersion).toBeDefined();
+    expect(result.agentVersion).toBe(PACKAGE_VERSION);
+  });
+
+  it('populates agentVersion from package.json on failure', async () => {
+    const output = makeInstrumentationOutput();
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makeFailingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.agentVersion).toBeDefined();
+    expect(result.agentVersion).toBe(PACKAGE_VERSION);
+  });
+
+  it('populates agentVersion on unexpected error', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => { throw new Error('boom'); },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.agentVersion).toBeDefined();
+    expect(result.agentVersion).toBe(PACKAGE_VERSION);
   });
 });

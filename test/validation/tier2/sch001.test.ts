@@ -39,12 +39,13 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         'function doWork() { return 1; }',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('SCH-001');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('SCH-001');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
   });
 
@@ -70,11 +71,12 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       // Falls back to naming quality — "doWork" is valid (no dynamic values, bounded cardinality)
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('SCH-001');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('SCH-001');
     });
   });
 
@@ -90,9 +92,10 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when all span names match registry definitions', () => {
@@ -111,9 +114,10 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -129,15 +133,16 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('myapp.user.delete_user');
-      expect(result.message).toContain('SCH-001');
-      expect(result.lineNumber).toBeTypeOf('number');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('myapp.user.delete_user');
+      expect(results[0].message).toContain('SCH-001');
+      expect(results[0].lineNumber).toBeTypeOf('number');
     });
 
-    it('reports all non-matching span names', () => {
+    it('reports each non-matching span name as a separate CheckResult', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -153,11 +158,15 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('unknown.span.one');
-      expect(result.message).toContain('unknown.span.two');
+      expect(results).toHaveLength(2);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('unknown.span.one');
+      expect(results[1].passed).toBe(false);
+      expect(results[1].message).toContain('unknown.span.two');
+      // Each result has its own lineNumber
+      expect(results[0].lineNumber).not.toBe(results[1].lineNumber);
     });
   });
 
@@ -172,9 +181,10 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -193,9 +203,10 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       ].join('\n');
 
       // Template literals are not string literals — the check skips them (returns null from getSpanNameLiteral)
-      const result = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
-      expect(result.passed).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('flags span names containing UUIDs or numbers as unbounded cardinality', () => {
@@ -211,10 +222,11 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('unbounded cardinality');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('unbounded cardinality');
     });
   });
 
@@ -235,10 +247,12 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('not.in.registry');
+      // Only the non-matching span produces a result
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('not.in.registry');
     });
   });
 
@@ -254,9 +268,10 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const result = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'SCH-001',
         passed: true,
         filePath,

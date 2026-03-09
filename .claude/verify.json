@@ -1,5 +1,6 @@
 {
   "commands": {
-    "acceptance_test": "vals exec -f .vals.yaml -- npx vitest run test/**/acceptance-gate.test.ts"
+    "acceptance_test": "vals exec -f .vals.yaml -- bash -c 'shopt -s globstar && for p in /opt/homebrew/bin /usr/local/bin; do [ -x \"$p/node\" ] && export PATH=\"$p:$PATH\" && break; done && npx vitest run test/**/acceptance-gate.test.ts'",
+    "acceptance_test_ci": "acceptance-gate.yml"
   }
 }

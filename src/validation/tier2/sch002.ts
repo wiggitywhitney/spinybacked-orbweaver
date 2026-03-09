@@ -20,24 +20,24 @@ interface AttributeKeyIssue {
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param resolvedSchema - Resolved Weaver registry object
- * @returns CheckResult with ruleId "SCH-002", tier 2, blocking true
+ * @returns CheckResult[] with ruleId "SCH-002", tier 2, blocking true
  */
 export function checkAttributeKeysMatchRegistry(
   code: string,
   filePath: string,
   resolvedSchema: object,
-): CheckResult {
+): CheckResult[] {
   const registry = parseResolvedRegistry(resolvedSchema);
   const registryNames = getAllAttributeNames(registry);
 
   if (registryNames.size === 0) {
-    return pass(filePath, 'No registry attributes to check against.');
+    return [pass(filePath, 'No registry attributes to check against.')];
   }
 
   const usedAttributes = extractAttributeKeys(code);
 
   if (usedAttributes.length === 0) {
-    return pass(filePath, 'No setAttribute/setAttributes calls found to check.');
+    return [pass(filePath, 'No setAttribute/setAttributes calls found to check.')];
   }
 
   const issues: AttributeKeyIssue[] = [];
@@ -48,26 +48,21 @@ export function checkAttributeKeysMatchRegistry(
   }
 
   if (issues.length === 0) {
-    return pass(filePath, 'All attribute keys match registry names.');
+    return [pass(filePath, 'All attribute keys match registry names.')];
   }
 
-  const details = issues
-    .map((i) => `  - "${i.key}" at line ${i.line}`)
-    .join('\n');
-
-  return {
+  return issues.map((i) => ({
     ruleId: 'SCH-002',
     passed: false,
     filePath,
-    lineNumber: issues[0].line,
+    lineNumber: i.line,
     message:
-      `SCH-002 check failed: ${issues.length} attribute key(s) not found in the registry.\n` +
-      `${details}\n` +
+      `SCH-002 check failed: "${i.key}" at line ${i.line} not found in the registry.\n` +
       `Attribute keys must match names defined in the Weaver telemetry registry. ` +
       `Either use a registered attribute name or add a new attribute definition to the registry.`,
     tier: 2,
     blocking: true,
-  };
+  }));
 }
 
 interface AttributeKeyEntry {
@@ -86,7 +81,6 @@ function extractAttributeKeys(code: string): AttributeKeyEntry[] {
   const sourceFile = project.createSourceFile('check.js', code);
 
   const entries: AttributeKeyEntry[] = [];
-  const seen = new Set<string>();
 
   sourceFile.forEachDescendant((node) => {
     if (!Node.isCallExpression(node)) return;
@@ -101,9 +95,9 @@ function extractAttributeKeys(code: string): AttributeKeyEntry[] {
     if (!/\b(?:span|activeSpan|parentSpan|rootSpan|childSpan)\b/i.test(receiverText)) return;
 
     if (methodName === 'setAttribute') {
-      extractFromSetAttribute(node, entries, seen);
+      extractFromSetAttribute(node, entries);
     } else if (methodName === 'setAttributes') {
-      extractFromSetAttributes(node, entries, seen);
+      extractFromSetAttributes(node, entries);
     }
   });
 
@@ -116,7 +110,6 @@ function extractAttributeKeys(code: string): AttributeKeyEntry[] {
 function extractFromSetAttribute(
   callExpr: CallExpression,
   entries: AttributeKeyEntry[],
-  seen: Set<string>,
 ): void {
   const args = callExpr.getArguments();
   if (args.length < 2) return;
@@ -124,10 +117,7 @@ function extractFromSetAttribute(
   const firstArg = args[0];
   if (Node.isStringLiteral(firstArg)) {
     const key = firstArg.getLiteralValue();
-    if (!seen.has(key)) {
-      seen.add(key);
-      entries.push({ key, line: callExpr.getStartLineNumber() });
-    }
+    entries.push({ key, line: firstArg.getStartLineNumber() });
   }
 }
 
@@ -137,7 +127,6 @@ function extractFromSetAttribute(
 function extractFromSetAttributes(
   callExpr: CallExpression,
   entries: AttributeKeyEntry[],
-  seen: Set<string>,
 ): void {
   const args = callExpr.getArguments();
   if (args.length === 0) return;
@@ -153,8 +142,7 @@ function extractFromSetAttributes(
         } else if (Node.isIdentifier(nameNode)) {
           key = nameNode.getText();
         }
-        if (key && !seen.has(key)) {
-          seen.add(key);
+        if (key !== null) {
           entries.push({ key, line: prop.getStartLineNumber() });
         }
       }

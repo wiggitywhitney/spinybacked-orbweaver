@@ -20,12 +20,13 @@ describe('checkDomainAttributes (COV-005)', () => {
         '}',
       ].join('\n');
 
-      const result = checkDomainAttributes(code, filePath, []);
+      const results = checkDomainAttributes(code, filePath, []);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('COV-005');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(false);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-005');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(false);
     });
   });
 
@@ -55,8 +56,9 @@ describe('checkDomainAttributes (COV-005)', () => {
         '}',
       ].join('\n');
 
-      const result = checkDomainAttributes(code, filePath, registry);
-      expect(result.passed).toBe(true);
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -85,11 +87,11 @@ describe('checkDomainAttributes (COV-005)', () => {
         '}',
       ].join('\n');
 
-      const result = checkDomainAttributes(code, filePath, registry);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('COV-005');
-      expect(result.message).toContain('user.role');
-      expect(result.message).toContain('getUser');
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('user.role');
+      expect(results[0].message).toContain('getUser');
     });
   });
 
@@ -117,9 +119,10 @@ describe('checkDomainAttributes (COV-005)', () => {
         '}',
       ].join('\n');
 
-      const result = checkDomainAttributes(code, filePath, registry);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('user.email');
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('user.email');
     });
   });
 
@@ -143,8 +146,9 @@ describe('checkDomainAttributes (COV-005)', () => {
         '}',
       ].join('\n');
 
-      const result = checkDomainAttributes(code, filePath, registry);
-      expect(result.passed).toBe(true);
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -183,11 +187,11 @@ describe('checkDomainAttributes (COV-005)', () => {
         '}',
       ].join('\n');
 
-      const result = checkDomainAttributes(code, filePath, registry);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('createOrder');
-      expect(result.message).toContain('order.id');
-      expect(result.message).not.toContain('getUser');
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('createOrder');
+      expect(results[0].message).toContain('order.id');
     });
   });
 
@@ -195,9 +199,10 @@ describe('checkDomainAttributes (COV-005)', () => {
     it('returns correct structure on pass', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkDomainAttributes(code, filePath, []);
+      const results = checkDomainAttributes(code, filePath, []);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'COV-005',
         passed: true,
         filePath,

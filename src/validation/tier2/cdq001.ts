@@ -14,9 +14,9 @@ import type { CheckResult } from '../types.ts';
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "CDQ-001", tier 2, blocking true
+ * @returns CheckResult[] with ruleId "CDQ-001", tier 2, blocking true — one per unclosed span
  */
-export function checkSpansClosed(code: string, filePath: string): CheckResult {
+export function checkSpansClosed(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -45,7 +45,7 @@ export function checkSpansClosed(code: string, filePath: string): CheckResult {
   });
 
   if (unclosedSpans.length === 0) {
-    return {
+    return [{
       ruleId: 'CDQ-001',
       passed: true,
       filePath,
@@ -53,27 +53,21 @@ export function checkSpansClosed(code: string, filePath: string): CheckResult {
       message: 'All spans are properly closed with span.end() in finally blocks.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
-  const firstUnclosed = unclosedSpans[0];
-  const details = unclosedSpans
-    .map((s) => `  - "${s.name}" at line ${s.line}`)
-    .join('\n');
-
-  return {
+  return unclosedSpans.map((s) => ({
     ruleId: 'CDQ-001',
     passed: false,
     filePath,
-    lineNumber: firstUnclosed.line,
+    lineNumber: s.line,
     message:
-      `CDQ-001 check failed: ${unclosedSpans.length} span(s) missing span.end() in finally block.\n` +
-      `${details}\n` +
-      `Every span must be wrapped in try { ... } finally { span.end(); } to ensure ` +
+      `Span "${s.name}" at line ${s.line} is missing span.end() in finally block. ` +
+      `Wrap in try { ... } finally { span.end(); } to ensure ` +
       `the span is closed in all code paths (success, error, early return).`,
     tier: 2,
     blocking: true,
-  };
+  }));
 }
 
 /**

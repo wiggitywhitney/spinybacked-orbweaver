@@ -85,6 +85,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README.md with all sections: project overview, interface comparison (CLI/MCP/GitHub Action), prerequisites with setup links, project setup (auto-detect via `orb init` or manual `orb.yaml`), CLI reference, MCP integration for any MCP-compatible AI assistant, GitHub Action usage, full configuration reference, dry-run mode, license
 - DX verification: CLI cost ceiling output now includes dollar estimate (e.g., "estimated max cost $5.62") using `ceilingToDollars()` + `formatDollars()`; MCP `get-cost-ceiling` response includes `estimatedCostDollars` field; all 6 failure modes verified to produce actionable messages for AI intermediary consumption (no config, invalid path, agent failure, schema checkpoint failure, budget exceeded, early abort)
 
+### Changed
+
+- Merged P5-5 acceptance gate test into P5-3: both ran identical coordinator configurations with the same 5 files and API calls. Single test now validates both live-check compliance report and per-file schema hashes, eliminating ~230s of redundant LLM calls per suite run.
+- Added "Acceptance Gate Failures" project rule: acceptance gate failures must never be dismissed as unrelated to the current task — every failure must be investigated before work proceeds.
+- COV-006 validation now distinguishes business spans (broader operations containing auto-instrumented calls) from direct wrappers (single auto-instrumented call only). Statement-counting heuristic strips boilerplate before counting — aligns with spec "Never duplicate" exception.
+- P4-1/P4-2 acceptance gate tests adjusted to only assert OTel-on-disk and diagnostic fields for files with spansAdded > 0. Utility files correctly succeed with zero spans.
+- P5 acceptance gate `resolveSchemaForHash` deps now use pre-loaded fixture schemas instead of calling Weaver CLI — `vals exec` strips HOME and PATH, making `execFile('weaver')` fail with ENOENT. Real Weaver resolve covered by PRD 31 integration tests.
+- P4/P5 acceptance gate `filesProcessed` assertions updated from 4 to 5 after adding fraud-detection.js fixture.
+
 ### Fixed
 
 - `coordinate()` now passes `registryDir` to `dispatchFiles()` so per-file extension writing works in production (was only effective in tests)
@@ -100,3 +109,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Replaced all Weaver CLI mocks in `init-handler.test.ts` with real `execFileSync` calls against Weaver binary and registry fixtures; added 6 dedicated integration tests in `init-handler.integration.test.ts`; exported `isVersionSatisfied` for direct unit testing of version comparison logic
 - Replaced remaining Weaver CLI mocks in `acceptance-gate.test.ts` and `dx-verification.test.ts` with real Weaver calls against registry fixtures — zero Weaver mocks remain in the test suite
 - GitHub Action `action.yml` status filter: corrected `"failure"` to `"failed"` to match `FileResult.status` type — was silently reporting 0 failed files
+- P5-4 acceptance gate test: `makePhase5Deps().dispatchFiles` wrapped with `vi.fn().mockImplementation()` so `toHaveBeenCalledWith` assertion works (was a real function, not a spy)
+- P5-1/P5-2 acceptance gate tests: added fraud-detection.js fixture with domain-specific operations (fraud scoring, velocity checks, geolocation anomaly, device fingerprinting) that require schema extensions not in the test registry — exercises schema extension creation as a core agent capability

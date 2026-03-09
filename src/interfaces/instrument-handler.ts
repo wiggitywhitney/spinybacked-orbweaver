@@ -7,6 +7,7 @@ import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
 import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
+import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
 /** Options parsed from CLI arguments for the instrument command. */
 export interface InstrumentOptions {
@@ -30,6 +31,8 @@ export interface InstrumentDeps {
     projectDir: string,
     config: AgentConfig,
     callbacks?: CoordinatorCallbacks,
+    deps?: CoordinateDeps,
+    targetPath?: string,
   ) => Promise<RunResult>;
   gitWorkflow?: Partial<GitWorkflowDeps>;
   stderr: (msg: string) => void;
@@ -169,6 +172,7 @@ export async function handleInstrument(
         noPr: options.noPr,
         dryRun: options.dryRun,
         registryDir,
+        targetPath: options.path,
       },
       gitDeps,
       callbacks,

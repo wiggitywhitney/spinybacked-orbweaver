@@ -24,6 +24,22 @@ const ENTRY_POINT_PATTERNS: Array<{
 ];
 
 /**
+ * Parameter names that signal a function is a request/event handler entry point.
+ */
+const ENTRY_POINT_PARAM_NAMES = new Set([
+  'req', 'res', 'request', 'response',
+  'ctx', 'context',
+  'event',
+]);
+
+/**
+ * Directory names that indicate a file is a service module (entry point container).
+ * Matched as path segments — handles POSIX (/routes/), Windows (\routes\),
+ * and repo-relative paths (routes/file.js).
+ */
+const SERVICE_MODULE_DIRS = /(?:^|[\\/])(routes|handlers|controllers|api|services)(?:[\\/])/;
+
+/**
  * COV-001: Verify that entry points have spans.
  *
  * Detects:
@@ -37,9 +53,9 @@ const ENTRY_POINT_PATTERNS: Array<{
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "COV-001", tier 2, blocking true
+ * @returns CheckResult[] — one per finding (or a single passing result)
  */
-export function checkEntryPointSpans(code: string, filePath: string): CheckResult {
+export function checkEntryPointSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -72,10 +88,10 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
   });
 
   // Check exported async service functions
-  checkExportedAsyncFunctions(sourceFile, unspanned);
+  checkExportedAsyncFunctions(sourceFile, unspanned, filePath);
 
   if (unspanned.length === 0) {
-    return {
+    return [{
       ruleId: 'COV-001',
       passed: true,
       filePath,
@@ -83,27 +99,21 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
       message: 'All entry points have spans.',
       tier: 2,
       blocking: true,
-    };
+    }];
   }
 
-  const firstUnspanned = unspanned[0];
-  const details = unspanned
-    .map((u) => `  - ${u.description} at line ${u.line}`)
-    .join('\n');
-
-  return {
-    ruleId: 'COV-001',
-    passed: false,
+  return unspanned.map((u) => ({
+    ruleId: 'COV-001' as const,
+    passed: false as const,
     filePath,
-    lineNumber: firstUnspanned.line,
+    lineNumber: u.line,
     message:
-      `COV-001 check failed: ${unspanned.length} entry point(s) without spans.\n` +
-      `${details}\n` +
+      `COV-001 check failed: ${u.description} at line ${u.line}. ` +
       `Entry points (route handlers, server callbacks, exported service functions) ` +
       `must have spans for request tracing and error visibility.`,
-    tier: 2,
+    tier: 2 as const,
     blocking: true,
-  };
+  }));
 }
 
 /**
@@ -123,12 +133,30 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
 }
 
 /**
+ * Determine whether an exported async function looks like a service entry point.
+ * Uses two heuristics per the spec ("exported async functions from service modules"):
+ * 1. Parameter names that signal request/event handling (req, res, ctx, event, etc.)
+ * 2. File path in a service-module directory (routes/, handlers/, controllers/, api/, services/)
+ *
+ * Returns false for utility/helper functions in non-service directories with
+ * generic parameter names — these are exported for reuse, not as entry points.
+ */
+function isServiceEntryPoint(paramNames: string[], filePath: string): boolean {
+  if (paramNames.some((p) => ENTRY_POINT_PARAM_NAMES.has(p))) {
+    return true;
+  }
+  return SERVICE_MODULE_DIRS.test(filePath);
+}
+
+/**
  * Check exported async functions for missing spans.
- * Exported async functions are service entry points that should be traced.
+ * Only flags functions that look like service entry points (request handlers
+ * or exports from service module directories), not utility/helper exports.
  */
 function checkExportedAsyncFunctions(
   sourceFile: import('ts-morph').SourceFile,
   unspanned: Array<{ line: number; description: string }>,
+  filePath: string,
 ): void {
   // Check if exported functions are async and lack spans
   // Pattern: module.exports.name = async function ... or module.exports.name = async () => ...
@@ -144,6 +172,9 @@ function checkExportedAsyncFunctions(
 
     if (Node.isFunctionExpression(right) || Node.isArrowFunction(right)) {
       if (right.isAsync()) {
+        const paramNames = right.getParameters().map((p) => p.getName());
+        if (!isServiceEntryPoint(paramNames, filePath)) return;
+
         const bodyText = right.getText();
         if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
           unspanned.push({
@@ -159,6 +190,9 @@ function checkExportedAsyncFunctions(
   for (const fn of sourceFile.getFunctions()) {
     if (fn.isExported() && fn.isAsync()) {
       const name = fn.getName() ?? '<anonymous>';
+      const paramNames = fn.getParameters().map((p) => p.getName());
+      if (!isServiceEntryPoint(paramNames, filePath)) continue;
+
       const bodyText = fn.getText();
       if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
         unspanned.push({

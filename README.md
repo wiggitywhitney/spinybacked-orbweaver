@@ -19,6 +19,98 @@ The agent is schema-driven: your [Weaver](https://github.com/open-telemetry/weav
 
 Three interfaces: [**CLI**](#cli) for interactive use, [**MCP server**](#mcp-integration) for AI coding assistants (Claude Code, Cursor, and other MCP-compatible tools), and [**GitHub Action**](#github-action) for CI/CD pipelines.
 
+## Example: before and after
+
+Given an order processing module (`src/orders.js`):
+
+```javascript
+import { db } from './db.js';
+import { paymentGateway } from './payment.js';
+import { emailService } from './email.js';
+
+export async function processOrder(orderId) {
+  const order = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+
+  if (!order) {
+    throw new Error(`Order ${orderId} not found`);
+  }
+
+  const payment = await paymentGateway.charge({
+    amount: order.total,
+    currency: order.currency,
+    customerId: order.customerId,
+  });
+
+  await db.query(
+    'UPDATE orders SET status = $1, payment_id = $2 WHERE id = $3',
+    ['paid', payment.id, orderId]
+  );
+
+  await emailService.send({
+    to: order.customerEmail,
+    template: 'order-confirmation',
+    data: { orderId, total: order.total },
+  });
+
+  return { orderId, paymentId: payment.id, status: 'paid' };
+}
+```
+
+Running `orb instrument src/` produces:
+
+```javascript
+import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { db } from './db.js';
+import { paymentGateway } from './payment.js';
+import { emailService } from './email.js';
+
+const tracer = trace.getTracer('order');
+
+export async function processOrder(orderId) {
+  return tracer.startActiveSpan('processOrder', async (span) => {
+    try {
+      span.setAttribute('order.id', orderId);
+
+      const order = await db.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+
+      if (!order) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      const payment = await paymentGateway.charge({
+        amount: order.total,
+        currency: order.currency,
+        customerId: order.customerId,
+      });
+
+      await db.query(
+        'UPDATE orders SET status = $1, payment_id = $2 WHERE id = $3',
+        ['paid', payment.id, orderId]
+      );
+
+      await emailService.send({
+        to: order.customerEmail,
+        template: 'order-confirmation',
+        data: { orderId, total: order.total },
+      });
+
+      span.setAttribute('payment.id', payment.id);
+      span.setAttribute('order.status', 'paid');
+
+      return { orderId, paymentId: payment.id, status: 'paid' };
+    } catch (error) {
+      span.recordException(error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+```
+
+The agent imports only `@opentelemetry/api`, wraps the business logic in a span, sets schema-defined attributes (`order.id`, `payment.id`, `order.status`), and adds error recording — all validated against your Weaver registry.
+
 ## Choose your interface
 
 | Interface | Best for | How it works |
@@ -61,6 +153,27 @@ orb init
 ```
 
 This scans your project, auto-detects the schema directory and SDK init file, validates prerequisites, detects project type (service vs. distributable package), and writes `orb.yaml`. Use `--yes` to skip the confirmation prompt.
+
+```text
+$ orb init
+Checking prerequisites...
+Checking Weaver CLI...
+Checking port availability...
+Detecting SDK init file...
+Detecting Weaver schema...
+Validating Weaver schema...
+Detected project type: service (dependencyStrategy: dependencies)
+Writing orb.yaml...
+Created /path/to/your-project/orb.yaml
+```
+
+If a prerequisite is missing, `orb init` exits with code 1 and tells you what's needed:
+
+```text
+$ orb init
+Checking prerequisites...
+@opentelemetry/api not found in peerDependencies. Add it: npm install --save-peer @opentelemetry/api
+```
 
 ### Option B: Create `orb.yaml` manually
 
@@ -106,15 +219,47 @@ orb instrument src/
 
 Pass a directory to instrument all `.js` files in it, or a single file path to instrument one file. The agent discovers files, calculates a cost ceiling (displayed in dollars), asks for confirmation, then instruments each file sequentially. Each successful file gets its own commit on a feature branch. After all files are processed, the agent installs dependencies, updates the SDK init file, and opens a PR.
 
+```text
+$ orb instrument src/
+Cost ceiling: 1 files, 80000 max tokens, estimated max cost $1.87
+Proceed? [y/N] y
+Processing file 1 of 1: src/orders.js
+  src/orders.js: success (1 spans)
+
+Run complete: 1 succeeded, 0 failed, 0 skipped
+1 files processed: 1 succeeded, 0 failed, 0 skipped
+Branch: orb/instrument-1773021946100
+PR: https://github.com/your-org/your-repo/pull/42
+```
+
+Use `--yes` to skip the cost ceiling confirmation (also suppresses the cost ceiling display):
+
+```text
+$ orb instrument src/ --yes
+Processing file 1 of 1: src/orders.js
+  src/orders.js: success (1 spans)
+
+Run complete: 1 succeeded, 0 failed, 0 skipped
+1 files processed: 1 succeeded, 0 failed, 0 skipped
+Branch: orb/instrument-1773021946100
+```
+
+If `orb.yaml` is missing:
+
+```text
+$ orb instrument src/
+Configuration not found — run 'orb init' to create orb.yaml
+```
+
 #### Flags
 
 ```text
 --dry-run   Preview changes without modifying files or creating branches
 --output    Output format: text (default) or json
---yes       Skip cost ceiling confirmation
+--yes       Skip cost ceiling display and confirmation
 --verbose   Show config loading path
 --debug     Show full config as JSON
---no-pr     Create branch and commits but skip PR creation
+--no-pr     Skip PR creation (create branch and commits only)
 ```
 
 #### Exit codes
@@ -122,9 +267,9 @@ Pass a directory to instrument all `.js` files in it, or a single file path to i
 | Code | Meaning |
 |------|---------|
 | 0 | All files instrumented successfully |
-| 1 | Partial success — some files failed or were skipped |
+| 1 | Partial success — some files failed, or a configuration error occurred |
 | 2 | All files failed |
-| 3 | Abort — prerequisites failed, cost ceiling rejected, or early abort triggered |
+| 3 | Abort — cost ceiling rejected, or early abort triggered |
 
 ## MCP Integration
 
@@ -156,9 +301,18 @@ The server exposes two tools:
 
 **`get-cost-ceiling`** — Calculate the cost of an instrumentation run before committing to it. Fast, local-only, no LLM calls. Returns file count, total file size, max token ceiling, and estimated cost in dollars.
 
+```json
+{
+  "fileCount": 1,
+  "totalFileSizeBytes": 602,
+  "maxTokensCeiling": 80000,
+  "estimatedCostDollars": "$1.87"
+}
+```
+
 **`instrument`** — Run full instrumentation. Analyzes files, adds spans and attributes, validates against the rubric, retries on failure, and returns a hierarchical result (summary → per-file detail → schema integration data). Call `get-cost-ceiling` first to understand scope and cost.
 
-Both tools accept `projectDir` (absolute path) and an optional `path` to scope to a subdirectory or individual file. Additional optional overrides: `maxFilesPerRun`, `maxTokensPerFile`, and `exclude` patterns.
+Both tools accept `projectDir` (absolute path to project root). Additional optional overrides: `maxFilesPerRun`, `maxTokensPerFile`, and `exclude` patterns. To scope to a subdirectory or individual file, use `exclude` patterns.
 
 Progress is reported via MCP logging messages (`level: "info"`) with JSON payloads for each stage: `fileStart`, `fileComplete`, `schemaCheckpoint`, `validationStart`, `validationComplete`, `runComplete`.
 
@@ -232,9 +386,18 @@ Preview what the agent would do without modifying your project:
 orb instrument src/ --dry-run
 ```
 
+```text
+$ orb instrument src/ --dry-run --yes
+Processing file 1 of 1: src/orders.js
+  src/orders.js: success (1 spans)
+
+Run complete: 1 succeeded, 0 failed, 0 skipped
+1 files processed: 1 succeeded, 0 failed, 0 skipped
+```
+
 Dry-run mode runs the full analysis pipeline (LLM calls, validation, schema extensions) but reverts all file changes afterward. It skips branch creation, commits, PR creation, dependency installation, and end-of-run live-check. The schema diff is captured before reverting, so the summary shows what schema changes would have been made.
 
-Dry-run still costs tokens — the agent analyzes every file with real LLM calls. Use `get-cost-ceiling` (MCP) or check the cost estimate (CLI) to understand the cost before running.
+Dry-run still costs tokens — the agent analyzes every file with real LLM calls. Use `get-cost-ceiling` (MCP) or the cost ceiling prompt (CLI, without `--yes`) to understand the cost before running.
 
 ## License
 

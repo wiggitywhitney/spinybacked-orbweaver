@@ -11,12 +11,13 @@ describe('checkErrorVisibility (COV-003)', () => {
     it('passes when no spans exist', () => {
       const code = 'function greet(name) {\n  console.log("Hello " + name);\n}\n';
 
-      const result = checkErrorVisibility(code, filePath);
+      const results = checkErrorVisibility(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('COV-003');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('COV-003');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(true);
     });
 
     it('passes when span has recordException in catch', () => {
@@ -38,8 +39,9 @@ describe('checkErrorVisibility (COV-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkErrorVisibility(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when span has setStatus for error', () => {
@@ -60,8 +62,9 @@ describe('checkErrorVisibility (COV-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkErrorVisibility(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -84,11 +87,12 @@ describe('checkErrorVisibility (COV-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkErrorVisibility(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('COV-003');
-      expect(result.message).toContain('COV-003');
-      expect(result.message).toContain('error');
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-003');
+      expect(results[0].message).toContain('COV-003');
+      expect(results[0].message).toContain('error');
     });
 
     it('flags span with try/finally but no catch for error recording', () => {
@@ -107,9 +111,10 @@ describe('checkErrorVisibility (COV-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkErrorVisibility(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.message).toContain('error recording');
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('error recording');
     });
   });
 
@@ -133,8 +138,9 @@ describe('checkErrorVisibility (COV-003)', () => {
         '}',
       ].join('\n');
 
-      const result = checkErrorVisibility(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
   });
 
@@ -142,9 +148,10 @@ describe('checkErrorVisibility (COV-003)', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkErrorVisibility(code, filePath);
+      const results = checkErrorVisibility(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'COV-003',
         passed: true,
         filePath,

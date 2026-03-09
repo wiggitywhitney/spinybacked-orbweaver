@@ -232,6 +232,138 @@ describe('discoverFiles', () => {
     });
   });
 
+  describe('targetPath scoping', () => {
+    it('scopes discovery to a subdirectory when targetPath is a directory', async () => {
+      setupTestProject();
+
+      const files = await discoverFiles(TEST_DIR, {
+        exclude: [],
+        sdkInitFile: 'nonexistent.js',
+        maxFilesPerRun: 50,
+        targetPath: 'src/routes',
+      });
+
+      expect(files).toContain(join(TEST_DIR, 'src/routes/users.js'));
+      expect(files).toContain(join(TEST_DIR, 'src/routes/orders.js'));
+      expect(files).toHaveLength(2);
+      // Files outside the target directory are NOT included
+      expect(files).not.toContain(join(TEST_DIR, 'src/app.js'));
+      expect(files).not.toContain(join(TEST_DIR, 'src/utils/format.js'));
+    });
+
+    it('returns a single file when targetPath is a .js file', async () => {
+      setupTestProject();
+
+      const files = await discoverFiles(TEST_DIR, {
+        exclude: [],
+        sdkInitFile: 'nonexistent.js',
+        maxFilesPerRun: 50,
+        targetPath: 'src/app.js',
+      });
+
+      expect(files).toEqual([join(TEST_DIR, 'src/app.js')]);
+    });
+
+    it('returns a single file when targetPath is an absolute path to a .js file', async () => {
+      setupTestProject();
+
+      const files = await discoverFiles(TEST_DIR, {
+        exclude: [],
+        sdkInitFile: 'nonexistent.js',
+        maxFilesPerRun: 50,
+        targetPath: join(TEST_DIR, 'src/app.js'),
+      });
+
+      expect(files).toEqual([join(TEST_DIR, 'src/app.js')]);
+    });
+
+    it('throws when targetPath is a file that does not exist', async () => {
+      setupTestProject();
+
+      await expect(
+        discoverFiles(TEST_DIR, {
+          exclude: [],
+          sdkInitFile: 'nonexistent.js',
+          maxFilesPerRun: 50,
+          targetPath: 'src/missing.js',
+        }),
+      ).rejects.toThrow(/not found/i);
+    });
+
+    it('throws when targetPath is a non-.js file', async () => {
+      setupTestProject();
+
+      await expect(
+        discoverFiles(TEST_DIR, {
+          exclude: [],
+          sdkInitFile: 'nonexistent.js',
+          maxFilesPerRun: 50,
+          targetPath: 'README.md',
+        }),
+      ).rejects.toThrow(/\.js/);
+    });
+
+    it('throws when single-file targetPath is the SDK init file', async () => {
+      setupTestProject();
+
+      await expect(
+        discoverFiles(TEST_DIR, {
+          exclude: [],
+          sdkInitFile: 'sdk-init.js',
+          maxFilesPerRun: 50,
+          targetPath: 'sdk-init.js',
+        }),
+      ).rejects.toThrow(/sdk init/i);
+    });
+
+    it('applies exclude patterns within a targeted subdirectory', async () => {
+      setupTestProject();
+
+      const files = await discoverFiles(TEST_DIR, {
+        exclude: ['**/*.test.js'],
+        sdkInitFile: 'nonexistent.js',
+        maxFilesPerRun: 50,
+        targetPath: 'src',
+      });
+
+      expect(files).toContain(join(TEST_DIR, 'src/app.js'));
+      expect(files).not.toContain(join(TEST_DIR, 'src/app.test.js'));
+    });
+
+    it('treats targetPath of "." as discovering all files (current behavior)', async () => {
+      setupTestProject();
+
+      const filesWithDot = await discoverFiles(TEST_DIR, {
+        exclude: ['**/*.test.js', '**/*.spec.js'],
+        sdkInitFile: 'sdk-init.js',
+        maxFilesPerRun: 50,
+        targetPath: '.',
+      });
+
+      const filesWithout = await discoverFiles(TEST_DIR, {
+        exclude: ['**/*.test.js', '**/*.spec.js'],
+        sdkInitFile: 'sdk-init.js',
+        maxFilesPerRun: 50,
+      });
+
+      expect(filesWithDot).toEqual(filesWithout);
+    });
+
+    it('throws when targeted directory has no .js files', async () => {
+      mkdirSync(join(TEST_DIR, 'empty-dir'), { recursive: true });
+      createFile('src/app.js');
+
+      await expect(
+        discoverFiles(TEST_DIR, {
+          exclude: [],
+          sdkInitFile: 'nonexistent.js',
+          maxFilesPerRun: 50,
+          targetPath: 'empty-dir',
+        }),
+      ).rejects.toThrow(/no.*javascript.*files/i);
+    });
+  });
+
   describe('zero files discovered', () => {
     it('throws when no JS files are found', async () => {
       // Create directory with no JS files

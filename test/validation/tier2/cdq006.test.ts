@@ -11,12 +11,13 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
     it('passes when no setAttribute calls exist', () => {
       const code = 'function greet(name) {\n  console.log("Hello " + name);\n}\n';
 
-      const result = checkIsRecordingGuard(code, filePath);
+      const results = checkIsRecordingGuard(code, filePath);
 
-      expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('CDQ-006');
-      expect(result.tier).toBe(2);
-      expect(result.blocking).toBe(false);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('CDQ-006');
+      expect(results[0].tier).toBe(2);
+      expect(results[0].blocking).toBe(false);
     });
 
     it('passes when setAttribute uses simple values', () => {
@@ -34,8 +35,9 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
         '});',
       ].join('\n');
 
-      const result = checkIsRecordingGuard(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when expensive computation has isRecording guard', () => {
@@ -53,8 +55,9 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
         '});',
       ].join('\n');
 
-      const result = checkIsRecordingGuard(code, filePath);
-      expect(result.passed).toBe(true);
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
@@ -72,11 +75,11 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
         '});',
       ].join('\n');
 
-      const result = checkIsRecordingGuard(code, filePath);
-      expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('CDQ-006');
-      expect(result.message).toContain('CDQ-006');
-      expect(result.message).toContain('isRecording');
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('CDQ-006');
+      expect(results[0].message).toContain('isRecording');
     });
 
     it('flags method chain (.map) in setAttribute value', () => {
@@ -92,8 +95,9 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
         '});',
       ].join('\n');
 
-      const result = checkIsRecordingGuard(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('flags function call in setAttribute value', () => {
@@ -109,8 +113,9 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
         '});',
       ].join('\n');
 
-      const result = checkIsRecordingGuard(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('flags .reduce() in setAttribute value', () => {
@@ -126,8 +131,9 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
         '});',
       ].join('\n');
 
-      const result = checkIsRecordingGuard(code, filePath);
-      expect(result.passed).toBe(false);
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
   });
 
@@ -135,9 +141,10 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
 
-      const result = checkIsRecordingGuard(code, filePath);
+      const results = checkIsRecordingGuard(code, filePath);
 
-      expect(result).toEqual({
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
         ruleId: 'CDQ-006',
         passed: true,
         filePath,

@@ -24,9 +24,9 @@ const TRIVIAL_SETTER_PATTERN = /^set[A-Z]/;
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult with ruleId "RST-002", tier 2, blocking false
+ * @returns CheckResult[] — one per finding (or a single passing result), ruleId "RST-002", tier 2, blocking false
  */
-export function checkTrivialAccessorSpans(code: string, filePath: string): CheckResult {
+export function checkTrivialAccessorSpans(code: string, filePath: string): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -74,7 +74,7 @@ export function checkTrivialAccessorSpans(code: string, filePath: string): Check
   });
 
   if (flagged.length === 0) {
-    return {
+    return [{
       ruleId: 'RST-002',
       passed: true,
       filePath,
@@ -82,27 +82,21 @@ export function checkTrivialAccessorSpans(code: string, filePath: string): Check
       message: 'No spans found on trivial accessors.',
       tier: 2,
       blocking: false,
-    };
+    }];
   }
 
-  const firstFlagged = flagged[0];
-  const details = flagged
-    .map((f) => `  - "${f.name}" (${f.kind}) at line ${f.line}`)
-    .join('\n');
-
-  return {
+  return flagged.map((f) => ({
     ruleId: 'RST-002',
     passed: false,
     filePath,
-    lineNumber: firstFlagged.line,
+    lineNumber: f.line,
     message:
-      `RST-002 advisory: ${flagged.length} trivial accessor(s) have spans that add noise.\n` +
-      `${details}\n` +
+      `Trivial accessor "${f.name}" (${f.kind}) at line ${f.line} has a span that adds noise. ` +
       `Trivial accessors (get/set property accessors, simple getter/setter methods) ` +
       `do not need spans. Consider removing the span to reduce trace noise.`,
     tier: 2,
     blocking: false,
-  };
+  }));
 }
 
 /**

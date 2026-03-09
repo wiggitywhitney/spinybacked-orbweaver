@@ -25,13 +25,13 @@ interface SpanNameIssue {
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param resolvedSchema - Resolved Weaver registry object
- * @returns CheckResult with ruleId "SCH-001", tier 2, blocking true
+ * @returns CheckResult[] with ruleId "SCH-001", tier 2, blocking true
  */
 export function checkSpanNamesMatchRegistry(
   code: string,
   filePath: string,
   resolvedSchema: object,
-): CheckResult {
+): CheckResult[] {
   const registry = parseResolvedRegistry(resolvedSchema);
   const spanDefs = getSpanDefinitions(registry);
 
@@ -39,7 +39,7 @@ export function checkSpanNamesMatchRegistry(
   const spanNames = extractSpanNames(code);
 
   if (spanNames.length === 0) {
-    return pass(filePath, 'No span calls found to check.');
+    return [pass(filePath, 'No span calls found to check.')];
   }
 
   // Registry conformance mode: span definitions exist
@@ -64,7 +64,7 @@ function checkRegistryConformance(
   spanNames: SpanNameEntry[],
   spanDefs: { id: string }[],
   filePath: string,
-): CheckResult {
+): CheckResult[] {
   // Build set of valid operation names (span group IDs without "span." prefix)
   const validOperations = new Set<string>();
   for (const def of spanDefs) {
@@ -86,28 +86,24 @@ function checkRegistryConformance(
   }
 
   if (issues.length === 0) {
-    return pass(filePath, 'All span names match registry span definitions.');
+    return [pass(filePath, 'All span names match registry span definitions.')];
   }
 
   const availableOps = [...validOperations].sort().join(', ');
-  const details = issues
-    .map((i) => `  - "${i.spanName}" at line ${i.line}: ${i.reason}`)
-    .join('\n');
 
-  return {
+  return issues.map((i) => ({
     ruleId: 'SCH-001',
     passed: false,
     filePath,
-    lineNumber: issues[0].line,
+    lineNumber: i.line,
     message:
-      `SCH-001 check failed: ${issues.length} span name(s) not found in the registry.\n` +
-      `${details}\n` +
+      `SCH-001 check failed: "${i.spanName}" at line ${i.line}: ${i.reason}.\n` +
       `Available registry operations: ${availableOps}\n` +
       `Span names must match an operation defined in the Weaver telemetry registry. ` +
       `Either use a registered operation name or add a new span definition to the registry.`,
     tier: 2,
     blocking: true,
-  };
+  }));
 }
 
 /**
@@ -117,7 +113,7 @@ function checkRegistryConformance(
 function checkNamingQuality(
   spanNames: SpanNameEntry[],
   filePath: string,
-): CheckResult {
+): CheckResult[] {
   const issues: SpanNameIssue[] = [];
 
   for (const entry of spanNames) {
@@ -132,26 +128,21 @@ function checkNamingQuality(
   }
 
   if (issues.length === 0) {
-    return pass(filePath, 'Span names follow naming quality conventions (no registry span definitions to check against).');
+    return [pass(filePath, 'Span names follow naming quality conventions (no registry span definitions to check against).')];
   }
 
-  const details = issues
-    .map((i) => `  - "${i.spanName}" at line ${i.line}: ${i.reason}`)
-    .join('\n');
-
-  return {
+  return issues.map((i) => ({
     ruleId: 'SCH-001',
     passed: false,
     filePath,
-    lineNumber: issues[0].line,
+    lineNumber: i.line,
     message:
-      `SCH-001 check failed: ${issues.length} span name(s) have naming quality issues.\n` +
-      `${details}\n` +
+      `SCH-001 check failed: "${i.spanName}" at line ${i.line}: ${i.reason}.\n` +
       `Span names should have bounded cardinality — avoid embedding IDs, timestamps, ` +
       `or other dynamic values directly in span names. Use attributes for variable data.`,
     tier: 2,
     blocking: true,
-  };
+  }));
 }
 
 /**

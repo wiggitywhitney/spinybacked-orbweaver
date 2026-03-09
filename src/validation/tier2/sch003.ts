@@ -29,42 +29,37 @@ interface TypeViolation {
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param resolvedSchema - Resolved Weaver registry object
- * @returns CheckResult with ruleId "SCH-003", tier 2, blocking true
+ * @returns CheckResult[] with ruleId "SCH-003", tier 2, blocking true
  */
 export function checkAttributeValuesConformToTypes(
   code: string,
   filePath: string,
   resolvedSchema: object,
-): CheckResult {
+): CheckResult[] {
   const registry = parseResolvedRegistry(resolvedSchema);
   const attrDefs = getAttributeDefinitions(registry);
 
   if (attrDefs.size === 0) {
-    return pass(filePath, 'No registry type definitions to check against.');
+    return [pass(filePath, 'No registry type definitions to check against.')];
   }
 
   const violations = findTypeViolations(code, attrDefs);
 
   if (violations.length === 0) {
-    return pass(filePath, 'All attribute values conform to registry type definitions.');
+    return [pass(filePath, 'All attribute values conform to registry type definitions.')];
   }
 
-  const details = violations
-    .map((v) => `  - "${v.key}" at line ${v.line}: ${v.detail}`)
-    .join('\n');
-
-  return {
+  return violations.map((v) => ({
     ruleId: 'SCH-003',
     passed: false,
     filePath,
-    lineNumber: violations[0].line,
+    lineNumber: v.line,
     message:
-      `SCH-003 check failed: ${violations.length} attribute value(s) do not conform to registry types.\n` +
-      `${details}\n` +
+      `SCH-003 check failed: "${v.key}" at line ${v.line}: ${v.detail}.\n` +
       `Attribute values must match the types defined in the Weaver telemetry registry.`,
     tier: 2,
     blocking: true,
-  };
+  }));
 }
 
 /**

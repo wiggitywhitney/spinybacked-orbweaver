@@ -78,10 +78,12 @@ function groupByRuleId(failures: ValidationResult['blockingFailures']): Map<stri
 }
 
 /**
- * Build a set of error keys (ruleId:filePath) for duplicate detection.
+ * Build a set of error keys (ruleId:filePath:lineNumber) for duplicate detection.
+ * Including lineNumber prevents false positives when the same rule fails on
+ * different locations across attempts (issue #43).
  */
 function errorKeySet(failures: ValidationResult['blockingFailures']): Set<string> {
-  return new Set(failures.map(f => `${f.ruleId}:${f.filePath}`));
+  return new Set(failures.map(f => `${f.ruleId}:${f.filePath}:${f.lineNumber ?? 'null'}`));
 }
 
 /**
