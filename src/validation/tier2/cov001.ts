@@ -34,9 +34,10 @@ const ENTRY_POINT_PARAM_NAMES = new Set([
 
 /**
  * Directory names that indicate a file is a service module (entry point container).
- * Matched as path segments (e.g., /routes/ or /services/).
+ * Matched as path segments — handles POSIX (/routes/), Windows (\routes\),
+ * and repo-relative paths (routes/file.js).
  */
-const SERVICE_MODULE_DIRS = /\/(routes|handlers|controllers|api|services)\//;
+const SERVICE_MODULE_DIRS = /(?:^|[\\/])(routes|handlers|controllers|api|services)(?:[\\/])/;
 
 /**
  * COV-001: Verify that entry points have spans.

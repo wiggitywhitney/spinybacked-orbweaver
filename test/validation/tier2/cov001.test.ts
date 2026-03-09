@@ -303,6 +303,32 @@ describe('checkEntryPointSpans (COV-001)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('flags ESM export in repo-relative service path', () => {
+      const code = [
+        'export async function processOrder(order) {',
+        '  const result = await db.query("INSERT INTO orders...");',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, 'services/orders.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags ESM export in Windows-style service path', () => {
+      const code = [
+        'export async function processOrder(order) {',
+        '  const result = await db.query("INSERT INTO orders...");',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, 'C:\\app\\services\\orders.js');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('passes when ESM service function has span', () => {
       const code = [
         'import { trace } from "@opentelemetry/api";',
