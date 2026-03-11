@@ -46,7 +46,7 @@ export interface GitWorkflowDeps {
     projectDir: string,
     input: AggregateCommitInput,
   ) => Promise<string | undefined>;
-  renderPrSummary: (runResult: RunResult, config: AgentConfig) => string;
+  renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
   createPr: (projectDir: string, title: string, body: string) => Promise<string>;
   checkGhAvailable: () => Promise<boolean>;
   stderr: (msg: string) => void;
@@ -133,7 +133,7 @@ export async function runGitWorkflow(
     if (!ghAvailable) {
       deps.stderr('gh CLI not found — skipping PR creation. Use --no-pr to suppress this warning, or install gh: https://cli.github.com');
     } else {
-      const prBody = deps.renderPrSummary(runResult, config);
+      const prBody = deps.renderPrSummary(runResult, config, projectDir);
       const title = `Add OpenTelemetry instrumentation (${runResult.filesSucceeded} files)`;
       try {
         prUrl = await deps.createPr(projectDir, title, prBody);

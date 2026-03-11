@@ -83,9 +83,20 @@ export async function commitAggregateChanges(
 
   try {
     await stageFiles(projectDir, filesToStage);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to stage aggregate files [${filesToStage.join(', ')}]: ${msg}`);
+  }
+
+  try {
     const hash = await commit(projectDir, message);
     return hash;
-  } catch {
-    return undefined;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // "nothing to commit" is expected when files haven't actually changed
+    if (msg.includes('nothing to commit')) {
+      return undefined;
+    }
+    throw new Error(`Failed to commit aggregate changes: ${msg}`);
   }
 }

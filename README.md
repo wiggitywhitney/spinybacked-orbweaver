@@ -119,7 +119,7 @@ The agent imports only `@opentelemetry/api`, wraps the business logic in a span,
 | [MCP Server](#mcp-integration) | AI coding assistants (Claude Code, Cursor, etc.) | Agent calls `get-cost-ceiling` then `instrument` via MCP |
 | [GitHub Action](#github-action) | CI/CD pipelines, automated instrumentation | Add the action to a workflow, get results as step outputs |
 
-All three interfaces share the same `orb.yaml` configuration and produce the same results. The CLI and MCP server create feature branches with per-file commits and open PRs. The GitHub Action runs in CI and outputs JSON results.
+All three interfaces share the same `orb.yaml` configuration and produce the same results. The CLI creates feature branches with per-file commits and opens PRs. The MCP server and GitHub Action return structured JSON results for integration with AI assistants and CI pipelines.
 
 ## Prerequisites
 

@@ -60,10 +60,20 @@ export async function commitFileResult(
 
   try {
     await stageFiles(projectDir, filesToStage);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to stage ${relativePath}: ${msg}`);
+  }
+
+  try {
     const hash = await commit(projectDir, `instrument ${relativePath}`);
     return hash;
-  } catch {
-    // Staging or commit failed (e.g., file not in repo working tree)
-    return undefined;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // "nothing to commit" is expected when file hasn't actually changed
+    if (msg.includes('nothing to commit')) {
+      return undefined;
+    }
+    throw new Error(`Failed to commit ${relativePath}: ${msg}`);
   }
 }

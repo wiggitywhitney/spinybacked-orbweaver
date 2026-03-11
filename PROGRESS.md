@@ -95,6 +95,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-03-11) PR summary now uses repo-relative file paths instead of basename — prevents collapsing distinct files like `src/api/index.ts` and `src/routes/index.ts` in the status table
+- (2026-03-11) PR summary sanitizes markdown table cells: newlines collapsed, pipe characters escaped to prevent table corruption from multi-line schema extensions or failure reasons
+- (2026-03-11) Git commit functions (per-file and aggregate) now surface real git failures instead of silently swallowing all errors as `undefined` — only "nothing to commit" returns `undefined`
+
 - Merged P5-5 acceptance gate test into P5-3: both ran identical coordinator configurations with the same 5 files and API calls. Single test now validates both live-check compliance report and per-file schema hashes, eliminating ~230s of redundant LLM calls per suite run.
 - Added "Acceptance Gate Failures" project rule: acceptance gate failures must never be dismissed as unrelated to the current task — every failure must be investigated before work proceeds.
 - COV-006 validation now distinguishes business spans (broader operations containing auto-instrumented calls) from direct wrappers (single auto-instrumented call only). Statement-counting heuristic strips boilerplate before counting — aligns with spec "Never duplicate" exception.

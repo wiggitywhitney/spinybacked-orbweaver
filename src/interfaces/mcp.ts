@@ -144,7 +144,13 @@ export async function handleGetCostCeiling(
 
   // Compute cost ceiling
   const ceiling = await computeCostCeiling(filePaths, maxTokensPerFile, deps.statFile);
-  const estimatedCostDollars = formatDollars(ceilingToDollars(ceiling, config.agentModel));
+
+  let estimatedCostDollars: string;
+  try {
+    estimatedCostDollars = formatDollars(ceilingToDollars(ceiling, config.agentModel));
+  } catch {
+    estimatedCostDollars = 'unknown (unsupported model for pricing)';
+  }
 
   return {
     content: [{

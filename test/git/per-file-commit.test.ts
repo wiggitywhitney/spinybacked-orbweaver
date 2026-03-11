@@ -153,7 +153,7 @@ describe('commitFileResult', () => {
     expect(log.all[2].message).toBe('instrument src/handler.js');
   });
 
-  it('handles file outside project root gracefully by using absolute path in message', async () => {
+  it('returns undefined without committing for files outside the project root', async () => {
     // Edge case: file path that doesn't start with projectDir
     const externalDir = join(tmpdir(), `orb-external-${randomUUID()}`);
     await mkdir(externalDir, { recursive: true });

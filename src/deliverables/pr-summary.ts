@@ -6,24 +6,31 @@ import type { FileResult } from '../fix-loop/types.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CheckResult } from '../validation/types.ts';
 import { tokensToDollars, ceilingToDollars, formatDollars } from './cost-formatting.ts';
-import { basename } from 'node:path';
+import { relative, basename } from 'node:path';
+
+/** A function that converts a file path to a display string. */
+type DisplayFn = (filePath: string) => string;
 
 /**
  * Render a complete PR description from a RunResult and agent config.
  *
  * @param runResult - Aggregate result from the coordinator
  * @param config - Agent configuration (used for model, reviewSensitivity)
+ * @param projectDir - Absolute path to the project root, used to compute repo-relative paths.
+ *   When provided, file paths display as repo-relative (e.g., "src/api/index.ts").
+ *   When omitted, falls back to basename only.
  * @returns Markdown string for the PR body
  */
-export function renderPrSummary(runResult: RunResult, config: AgentConfig): string {
+export function renderPrSummary(runResult: RunResult, config: AgentConfig, projectDir?: string): string {
+  const display: DisplayFn = (filePath: string) => displayPath(filePath, projectDir);
   const sections: string[] = [];
 
   sections.push(renderSummaryHeader(runResult, config));
-  sections.push(renderPerFileStatus(runResult));
-  sections.push(renderSpanCategoryBreakdown(runResult));
+  sections.push(renderPerFileStatus(runResult, display));
+  sections.push(renderSpanCategoryBreakdown(runResult, display));
   sections.push(renderSchemaChanges(runResult));
-  sections.push(renderReviewSensitivity(runResult, config));
-  sections.push(renderAgentNotes(runResult));
+  sections.push(renderReviewSensitivity(runResult, config, display));
+  sections.push(renderAgentNotes(runResult, display));
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderAgentVersion(runResult));
   sections.push(renderWarnings(runResult));
@@ -42,12 +49,23 @@ function formatNumber(n: number): string {
 }
 
 /**
- * Extract just the filename from a path for display.
+ * Convert a file path to a display-friendly string.
+ *
+ * When projectDir is provided, returns the repo-relative path (e.g., "src/api/index.ts").
+ * Otherwise falls back to basename only.
  *
  * @param filePath - Absolute or relative file path
- * @returns Filename only (e.g., "api-client.js")
+ * @param projectDir - Optional project root for computing relative paths
+ * @returns Display-friendly path string
  */
-function displayPath(filePath: string): string {
+function displayPath(filePath: string, projectDir?: string): string {
+  if (projectDir) {
+    const rel = relative(projectDir, filePath);
+    // If relative path escapes the project root, fall back to basename
+    if (!rel.startsWith('..') && !rel.startsWith('/')) {
+      return rel;
+    }
+  }
   return basename(filePath);
 }
 
@@ -74,31 +92,39 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
   return lines.join('\n');
 }
 
-function renderPerFileStatus(runResult: RunResult): string {
+function renderPerFileStatus(runResult: RunResult, display: DisplayFn): string {
   const lines: string[] = ['## Per-File Results'];
   lines.push('');
   lines.push('| File | Status | Spans | Libraries | Schema Extensions |');
   lines.push('|------|--------|-------|-----------|-------------------|');
 
   for (const file of runResult.fileResults) {
-    const name = displayPath(file.path);
+    const name = display(file.path);
     const statusIcon = file.status === 'success' ? 'success' : file.status === 'failed' ? 'failed' : 'skipped';
     const libs = file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—';
     const exts = file.schemaExtensions.length > 0
-      ? file.schemaExtensions.map(e => `\`${e}\``).join(', ')
+      ? file.schemaExtensions.map(e => `\`${sanitizeCell(e)}\``).join(', ')
       : '—';
 
     lines.push(`| ${name} | ${statusIcon} | ${file.spansAdded} | ${libs} | ${exts} |`);
 
     if (file.status === 'failed' && file.reason) {
-      lines.push(`| | | | \\> ${file.reason} | |`);
+      lines.push(`| | | | \\> ${sanitizeCell(file.reason)} | |`);
     }
   }
 
   return lines.join('\n');
 }
 
-function renderSpanCategoryBreakdown(runResult: RunResult): string {
+/**
+ * Sanitize a string for use inside a markdown table cell.
+ * Collapses newlines and escapes pipe characters.
+ */
+function sanitizeCell(value: string): string {
+  return value.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
+}
+
+function renderSpanCategoryBreakdown(runResult: RunResult, display: DisplayFn): string {
   const filesWithCategories = runResult.fileResults.filter(
     (f): f is FileResult & { spanCategories: NonNullable<FileResult['spanCategories']> } =>
       f.spanCategories != null,
@@ -112,7 +138,7 @@ function renderSpanCategoryBreakdown(runResult: RunResult): string {
   lines.push('|------|---------------|----------------|---------------------|-----------------|');
 
   for (const file of filesWithCategories) {
-    const name = displayPath(file.path);
+    const name = display(file.path);
     const cats = file.spanCategories;
     lines.push(
       `| ${name} | ${cats.externalCalls} | ${cats.schemaDefined} | ${cats.serviceEntryPoints} | ${cats.totalFunctionsInFile} |`,
@@ -135,7 +161,7 @@ function renderSchemaChanges(runResult: RunResult): string {
   return lines.join('\n');
 }
 
-function renderReviewSensitivity(runResult: RunResult, config: AgentConfig): string {
+function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
   const lines: string[] = [];
 
   // Collect advisory annotations from all files
@@ -143,7 +169,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig): str
   for (const file of runResult.fileResults) {
     if (file.advisoryAnnotations) {
       for (const ann of file.advisoryAnnotations) {
-        allAdvisory.push({ file: displayPath(file.path), annotation: ann });
+        allAdvisory.push({ file: display(file.path), annotation: ann });
       }
     }
   }
@@ -157,7 +183,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig): str
 
   // Review sensitivity warnings
   if (config.reviewSensitivity !== 'off') {
-    const sensitivityWarnings = computeSensitivityWarnings(runResult, config);
+    const sensitivityWarnings = computeSensitivityWarnings(runResult, config, display);
     if (sensitivityWarnings.length > 0) {
       lines.push('## Review Attention');
       lines.push('');
@@ -193,7 +219,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig): str
  * @param config - Agent config with reviewSensitivity setting
  * @returns Array of warning strings
  */
-function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig): string[] {
+function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig, display: DisplayFn): string[] {
   const warnings: string[] = [];
   const filesWithCategories = runResult.fileResults.filter(
     (f): f is FileResult & { spanCategories: NonNullable<FileResult['spanCategories']> } =>
@@ -207,7 +233,7 @@ function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig): 
     for (const file of filesWithCategories) {
       if (file.spanCategories.serviceEntryPoints > 0) {
         warnings.push(
-          `**${displayPath(file.path)}**: ${file.spanCategories.serviceEntryPoints} service entry point span(s) — review recommended (tier 3)`,
+          `**${display(file.path)}**: ${file.spanCategories.serviceEntryPoints} service entry point span(s) — review recommended (tier 3)`,
         );
       }
     }
@@ -221,7 +247,7 @@ function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig): 
       for (const file of filesWithCategories) {
         if (file.spansAdded > threshold) {
           warnings.push(
-            `**${displayPath(file.path)}**: ${file.spansAdded} spans added (average: ${Math.round(mean)}) — outlier, review recommended`,
+            `**${display(file.path)}**: ${file.spansAdded} spans added (average: ${Math.round(mean)}) — outlier, review recommended`,
           );
         }
       }
@@ -231,7 +257,7 @@ function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig): 
   return warnings;
 }
 
-function renderAgentNotes(runResult: RunResult): string {
+function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
   const filesWithNotes = runResult.fileResults.filter(
     f => f.notes && f.notes.length > 0,
   );
@@ -242,7 +268,7 @@ function renderAgentNotes(runResult: RunResult): string {
   lines.push('');
 
   for (const file of filesWithNotes) {
-    lines.push(`**${displayPath(file.path)}**:`);
+    lines.push(`**${display(file.path)}**:`);
     for (const note of file.notes!) {
       lines.push(`- ${note}`);
     }
