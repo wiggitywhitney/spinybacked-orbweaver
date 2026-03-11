@@ -1,0 +1,10 @@
+# E2e tests run in CI, not locally.
+#
+# The acceptance gate workflow (.github/workflows/acceptance-gate.yml)
+# runs full end-to-end tests with real LLM calls against the complete
+# system. These are triggered on PR creation and run in GitHub Actions
+# where API keys are available via repository secrets.
+#
+# Local integration tests (test/**/*.integration.test.ts) cover real
+# Weaver binary interactions but are a separate tier — they mock other
+# dependencies and don't make LLM calls.
