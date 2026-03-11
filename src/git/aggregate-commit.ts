@@ -1,7 +1,7 @@
 // ABOUTME: Aggregate commit for SDK init file, fallback file, and package.json changes.
 // ABOUTME: Creates a single commit after per-file commits with all finalization artifacts.
 
-import { relative, join } from 'node:path';
+import { relative, join, isAbsolute } from 'node:path';
 import { access } from 'node:fs/promises';
 import { stageFiles, commit } from './git-wrapper.ts';
 
@@ -50,13 +50,19 @@ export async function commitAggregateChanges(
   // Stage SDK init file or fallback file
   if (input.sdkInitUpdated && input.sdkInitFilePath) {
     if (await fileExists(input.sdkInitFilePath)) {
-      filesToStage.push(relative(projectDir, input.sdkInitFilePath));
-      commitParts.push('SDK setup');
+      const relPath = relative(projectDir, input.sdkInitFilePath);
+      if (!relPath.startsWith('..') && !isAbsolute(relPath)) {
+        filesToStage.push(relPath);
+        commitParts.push('SDK setup');
+      }
     }
   } else if (input.fallbackFilePath) {
     if (await fileExists(input.fallbackFilePath)) {
-      filesToStage.push(relative(projectDir, input.fallbackFilePath));
-      commitParts.push('SDK setup');
+      const relPath = relative(projectDir, input.fallbackFilePath);
+      if (!relPath.startsWith('..') && !isAbsolute(relPath)) {
+        filesToStage.push(relPath);
+        commitParts.push('SDK setup');
+      }
     }
   }
 

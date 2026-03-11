@@ -134,11 +134,17 @@ export async function runGitWorkflow(
     if (!ghAvailable) {
       deps.stderr('gh CLI not found — skipping PR creation. Use --no-pr to suppress this warning, or install gh: https://cli.github.com');
     } else {
+      let pushSucceeded = false;
       try {
         await deps.pushBranch(projectDir, branchName);
+        pushSucceeded = true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        deps.stderr(`Push failed: ${msg}`);
+        deps.stderr(`Push failed — skipping PR creation: ${msg}`);
+      }
+
+      if (!pushSucceeded) {
+        return { runResult, branchName, prUrl: undefined };
       }
 
       const prBody = deps.renderPrSummary(runResult, config, projectDir);

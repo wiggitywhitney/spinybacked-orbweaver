@@ -240,15 +240,17 @@ describe('runGitWorkflow', () => {
       expect(deps.pushBranch).not.toHaveBeenCalled();
     });
 
-    it('reports push failure as a warning but still attempts PR creation', async () => {
+    it('skips PR creation when push fails', async () => {
       const deps = makeDeps({
         pushBranch: vi.fn().mockRejectedValue(new Error('push denied')),
       });
 
-      await runGitWorkflow(makeOptions(), deps);
+      const result = await runGitWorkflow(makeOptions(), deps);
 
       expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('push denied'));
-      expect(deps.createPr).toHaveBeenCalled();
+      expect(deps.createPr).not.toHaveBeenCalled();
+      expect(result.prUrl).toBeUndefined();
+      expect(result.branchName).toBeDefined();
     });
   });
 
