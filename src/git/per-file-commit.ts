@@ -1,7 +1,7 @@
 // ABOUTME: Per-file commit logic for the git workflow.
 // ABOUTME: Stages and commits instrumented code + schema changes for each successful file.
 
-import { relative, join } from 'node:path';
+import { relative, join, isAbsolute } from 'node:path';
 import { access } from 'node:fs/promises';
 import { stageFiles, commit } from './git-wrapper.ts';
 import type { FileResult } from '../fix-loop/types.ts';
@@ -39,8 +39,8 @@ export async function commitFileResult(
 
   const relativePath = relative(projectDir, result.path);
 
-  // If the file is outside the project dir, relative() returns an absolute-like path
-  if (relativePath.startsWith('..') || relativePath.startsWith('/')) {
+  // If the file is outside the project dir, relative() returns a path starting with '..' or an absolute path
+  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
     return undefined;
   }
 

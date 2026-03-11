@@ -155,7 +155,8 @@ jobs:
 
       - name: Verify summary output
         if: always() && steps.parse-results.outputs.summary != ''
+        env:
+          SUMMARY: ${{ steps.parse-results.outputs.summary }}
         run: |
-          SUMMARY="${{ steps.parse-results.outputs.summary }}"
           echo "Summary: $SUMMARY"
-          echo "$SUMMARY" | grep -q "succeeded" || { echo "::error::summary missing 'succeeded'"; exit 1; }
+          printf '%s' "$SUMMARY" | grep -Fq "succeeded" || { echo "::error::summary missing 'succeeded'"; exit 1; }

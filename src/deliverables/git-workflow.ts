@@ -157,9 +157,9 @@ export async function runGitWorkflow(
  * @returns True if gh is available and responds to --version
  */
 export async function checkGhAvailable(): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise((res) => {
     execFile('gh', ['--version'], { timeout: 5000 }, (error) => {
-      resolve(!error);
+      res(!error);
     });
   });
 }
