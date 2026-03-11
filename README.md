@@ -220,28 +220,51 @@ orb instrument src/
 Pass a directory to instrument all `.js` files in it, or a single file path to instrument one file. The agent discovers files, calculates a cost ceiling (displayed in dollars), asks for confirmation, then instruments each file sequentially. Each successful file gets its own commit on a feature branch. After all files are processed, the agent installs dependencies, updates the SDK init file, and opens a PR.
 
 ```text
-$ orb instrument src/
+$ orb instrument src/order-service.js
 Cost ceiling: 1 files, 80000 max tokens, estimated max cost $1.87
 Proceed? [y/N] y
-Processing file 1 of 1: src/orders.js
-  src/orders.js: success (1 spans)
+Processing file 1 of 1: src/order-service.js
+  src/order-service.js: success (2 spans)
 
 Run complete: 1 succeeded, 0 failed, 0 skipped
 1 files processed: 1 succeeded, 0 failed, 0 skipped
-Branch: orb/instrument-1773021946100
+Branch: orb/instrument-1741700000000
 PR: https://github.com/your-org/your-repo/pull/42
 ```
 
-Use `--yes` to skip the cost ceiling confirmation (also suppresses the cost ceiling display):
+With multiple files, progress shows each file and its outcome:
 
 ```text
-$ orb instrument src/ --yes
-Processing file 1 of 1: src/orders.js
-  src/orders.js: success (1 spans)
+$ orb instrument src/
+Cost ceiling: 5 files, 400000 max tokens, estimated max cost $9.36
+Proceed? [y/N] y
+Processing file 1 of 5: src/already-instrumented.js
+  src/already-instrumented.js: skipped
+Processing file 2 of 5: src/format-helpers.js
+  src/format-helpers.js: success (0 spans)
+Processing file 3 of 5: src/fraud-detection.js
+  src/fraud-detection.js: failed
+Processing file 4 of 5: src/order-service.js
+  src/order-service.js: success (2 spans)
+Processing file 5 of 5: src/user-routes.js
+  src/user-routes.js: success (3 spans)
+
+Run complete: 3 succeeded, 1 failed, 1 skipped
+5 files processed: 3 succeeded, 1 failed, 1 skipped
+Branch: orb/instrument-1741700000000
+PR: https://github.com/your-org/your-repo/pull/42
+```
+
+Use `--yes` to skip the cost ceiling confirmation:
+
+```text
+$ orb instrument src/order-service.js --yes
+Processing file 1 of 1: src/order-service.js
+  src/order-service.js: success (2 spans)
 
 Run complete: 1 succeeded, 0 failed, 0 skipped
 1 files processed: 1 succeeded, 0 failed, 0 skipped
-Branch: orb/instrument-1773021946100
+Branch: orb/instrument-1741700000000
 ```
 
 If `orb.yaml` is missing:
@@ -254,12 +277,46 @@ Configuration not found — run 'orb init' to create orb.yaml
 #### Flags
 
 ```text
---dry-run   Preview changes without modifying files or creating branches
+--dry-run   Preview changes without writing
 --output    Output format: text (default) or json
---yes       Skip cost ceiling display and confirmation
---verbose   Show config loading path
---debug     Show full config as JSON
+--yes       Skip cost ceiling confirmation
+--verbose   Show additional diagnostic output
+--debug     Show debug-level diagnostic output
 --no-pr     Skip PR creation (create branch and commits only)
+```
+
+The `--verbose` flag shows the config file path being loaded:
+
+```text
+$ orb instrument src/ --verbose --yes
+Loading config from /path/to/your-project/orb.yaml
+Config loaded from /path/to/your-project/orb.yaml
+Processing file 1 of 1: src/order-service.js
+...
+```
+
+The `--debug` flag shows the full resolved configuration as JSON:
+
+```text
+$ orb instrument src/ --debug --yes
+Config: {
+  "schemaPath": "semconv",
+  "sdkInitFile": "src/instrumentation.js",
+  "agentModel": "claude-sonnet-4-6",
+  "agentEffort": "medium",
+  ...
+}
+Processing file 1 of 1: src/order-service.js
+...
+```
+
+If you reject the cost ceiling, the agent aborts with exit code 3:
+
+```text
+$ orb instrument src/
+Cost ceiling: 1 files, 80000 max tokens, estimated max cost $1.87
+Proceed? [y/N] n
+Cost ceiling rejected by caller. 1 files, 1067 bytes, 80000 max tokens.
 ```
 
 #### Exit codes
@@ -313,6 +370,41 @@ The server exposes two tools:
 ```
 
 **`instrument`** — Run full instrumentation. Analyzes files, adds spans and attributes, validates against the rubric, retries on failure, and returns a hierarchical result (summary → per-file detail → schema integration data). Call `get-cost-ceiling` first to understand scope and cost.
+
+```json
+{
+  "summary": {
+    "filesProcessed": 1,
+    "filesSucceeded": 1,
+    "filesFailed": 0,
+    "filesSkipped": 0,
+    "librariesInstalled": [],
+    "libraryInstallFailures": [],
+    "sdkInitUpdated": false
+  },
+  "files": [
+    {
+      "path": "src/order-service.js",
+      "status": "success",
+      "spansAdded": 2,
+      "attributesCreated": 3,
+      "validationAttempts": 1
+    }
+  ],
+  "costCeiling": {
+    "fileCount": 1,
+    "totalFileSizeBytes": 1067,
+    "maxTokensCeiling": 80000
+  },
+  "actualTokenUsage": {
+    "inputTokens": 12500,
+    "outputTokens": 3200,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0
+  },
+  "warnings": []
+}
+```
 
 Both tools accept `projectDir` (absolute path to project root) and an optional `path` to scope to a subdirectory or individual file. Additional optional overrides: `maxFilesPerRun`, `maxTokensPerFile`, and `exclude` patterns.
 
@@ -389,9 +481,9 @@ orb instrument src/ --dry-run
 ```
 
 ```text
-$ orb instrument src/ --dry-run --yes
-Processing file 1 of 1: src/orders.js
-  src/orders.js: success (1 spans)
+$ orb instrument src/order-service.js --dry-run --yes
+Processing file 1 of 1: src/order-service.js
+  src/order-service.js: success (2 spans)
 
 Run complete: 1 succeeded, 0 failed, 0 skipped
 1 files processed: 1 succeeded, 0 failed, 0 skipped

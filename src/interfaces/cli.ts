@@ -69,10 +69,10 @@ export function buildParser() {
             default: false,
             describe: 'Show debug-level diagnostic output',
           })
-          .option('no-pr', {
+          .option('pr', {
             type: 'boolean' as const,
-            default: false,
-            describe: 'Skip PR creation (create branch and commits only)',
+            default: true,
+            describe: 'Create a PR after instrumentation (use --no-pr to skip)',
           });
       },
     )
@@ -112,7 +112,7 @@ export async function run(args?: string[]) {
         path: targetPath,
         projectDir,
         dryRun: Boolean(argv.dryRun),
-        noPr: Boolean(argv.noPr),
+        noPr: !argv.pr,
         output: (argv.output as 'text' | 'json') ?? 'text',
         yes: Boolean(argv.yes),
         verbose: Boolean(argv.verbose),

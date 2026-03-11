@@ -88,6 +88,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MCP Setup section updated to use `.mcp.json` (project-level config) with `${ANTHROPIC_API_KEY}` env var expansion instead of hardcoded keys
 - MCP `get-cost-ceiling` example updated with verified file size from real test run
 - `.mcp.json` added with orbweaver MCP server configuration for project-level Claude Code integration
+- (2026-03-11) README examples verified against real CLI execution (issue #46): added multi-file progress output, MCP instrument response example, verbose/debug flag output, cost ceiling rejection example
+- (2026-03-11) Acceptance gate CI workflow with label-based PR trigger (`run-acceptance` label), weekly cron, and workflow_dispatch
 
 ### Changed
 
@@ -115,3 +117,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub Action `action.yml` status filter: corrected `"failure"` to `"failed"` to match `FileResult.status` type — was silently reporting 0 failed files
 - P5-4 acceptance gate test: `makePhase5Deps().dispatchFiles` wrapped with `vi.fn().mockImplementation()` so `toHaveBeenCalledWith` assertion works (was a real function, not a spy)
 - P5-1/P5-2 acceptance gate tests: added fraud-detection.js fixture with domain-specific operations (fraud scoring, velocity checks, geolocation anomaly, device fingerprinting) that require schema extensions not in the test registry — exercises schema extension creation as a core agent capability
+- (2026-03-11) Fixed `--no-pr` yargs bug: option was defined as `no-pr` which conflicts with yargs strict mode negation handling; changed to `pr` with default `true` so `--no-pr` works as standard yargs boolean negation
+- (2026-03-11) README flag descriptions updated to match actual `--help` output
+- (2026-03-11) Live-check port constants shared between init handler and live-check module (issue #55)
