@@ -3,6 +3,7 @@
 
 import { join } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
+import { DEFAULT_GRPC_PORT, DEFAULT_ADMIN_PORT } from '../coordinator/live-check.ts';
 
 /** Options for the init command. */
 interface InitOptions {
@@ -32,7 +33,7 @@ interface InitResult {
 }
 
 const WEAVER_MIN_VERSION = '0.21.2';
-const LIVECHECK_PORTS = [14317, 14320];
+const LIVECHECK_PORTS = [DEFAULT_GRPC_PORT, DEFAULT_ADMIN_PORT];
 
 /** Common OTel SDK init file patterns relative to project root. */
 const SDK_INIT_PATTERNS = [

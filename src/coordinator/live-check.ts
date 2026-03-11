@@ -9,8 +9,8 @@ import type { Server } from 'node:net';
 import type { CoordinatorCallbacks } from './types.ts';
 
 /** Default Weaver OTLP receiver ports — non-standard to avoid conflicts with existing OTel collectors. */
-const DEFAULT_GRPC_PORT = 14317;
-const DEFAULT_ADMIN_PORT = 14320;
+export const DEFAULT_GRPC_PORT = 14317;
+export const DEFAULT_ADMIN_PORT = 14320;
 
 /** How long to wait for Weaver to start listening (ms). */
 const WEAVER_STARTUP_TIMEOUT_MS = 15_000;

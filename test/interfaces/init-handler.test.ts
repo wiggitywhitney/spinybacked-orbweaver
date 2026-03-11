@@ -227,6 +227,8 @@ describe('handleInit', () => {
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
+      expect(deps.writeFile).toHaveBeenCalledOnce();
       expect(result.warnings).toEqual(
         expect.arrayContaining([
           expect.stringContaining('14317'),
@@ -242,6 +244,8 @@ describe('handleInit', () => {
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
+      expect(deps.writeFile).toHaveBeenCalledOnce();
       expect(result.warnings).toEqual(
         expect.arrayContaining([
           expect.stringContaining('14320'),
