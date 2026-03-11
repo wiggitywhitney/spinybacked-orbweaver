@@ -121,3 +121,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - (2026-03-11) Fixed `--no-pr` yargs bug: option was defined as `no-pr` which conflicts with yargs strict mode negation handling; changed to `pr` with default `true` so `--no-pr` works as standard yargs boolean negation
 - (2026-03-11) README flag descriptions updated to match actual `--help` output
 - (2026-03-11) Live-check port constants shared between init handler and live-check module (issue #55)
+- (2026-03-11) Removed `commit-story` file: dependency from package.json so `npm install` works on clean clones; local journal integration preserved via `npm link`
