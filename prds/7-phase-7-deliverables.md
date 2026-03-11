@@ -1,7 +1,7 @@
 # PRD: Phase 7 — Deliverables (Git Workflow + PR + DX Polish)
 
 **Issue**: [#7](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/7)
-**Status**: Not Started
+**Status**: Complete
 **Priority**: High
 **Blocked by**: Phase 6 PRD (#6)
 **Created**: 2026-03-02
@@ -214,13 +214,13 @@ Phase 7 also extends:
 
 - [x] **Milestone 12: Acceptance gate CI with label-based PR triggers** — Update `.github/workflows/acceptance-gate.yml` to run acceptance gate tests via three triggers: (1) `workflow_dispatch` for manual/hook-driven runs, (2) `pull_request` with `run-acceptance` label for feature PRs, (3) weekly cron (`0 9 * * 1` — Monday 9am UTC) as a safety net on main. The `run-acceptance` GitHub label is created on the repo. PRs without the label skip acceptance tests (fast CI only). Advisory, not merge-blocking. Verify: (a) workflow file is valid YAML with all three triggers, (b) job-level `if` condition gates PR runs on the label, (c) `contains()` syntax used (not `github.event.label.name`), (d) API key injected as secret.
 
-- [ ] **Milestone 13: Progress log updated** — PROGRESS.md `[Unreleased]` section updated with Phase 7 additions during `/prd-update-progress`. Verify: PROGRESS.md includes entries for all Phase 7 features (git workflow, PR summary, cost formatting, dry-run, early abort, DX polish).
+- [x] **Milestone 13: Progress log updated** — PROGRESS.md `[Unreleased]` section updated with Phase 7 additions during `/prd-update-progress`. Verify: PROGRESS.md includes entries for all Phase 7 features (git workflow, PR summary, cost formatting, dry-run, early abort, DX polish).
 
 - [x] **Milestone 14: Pull in issue #55 fix (live-check port conflict)** — Once issue #55 is resolved on a separate branch and merged to main, merge main into `feature/prd-7-deliverables` before resuming README verification. The port fix changes `orb init` behavior (advisory instead of blocking port check, non-default Weaver ports) which affects README examples. Verify: `orb init` succeeds even when ports 4317/4320 are occupied.
 
-- [ ] **Milestone 15: GitHub Action verification workflow** — Separate CI workflow (`.github/workflows/verify-action.yml`) that exercises the composite `action.yml` against the test fixture project. Uses `uses: ./` to test the local action end-to-end: Node setup, Weaver binary install, `orb instrument --yes --output json`, result parsing into step outputs. Gated behind `run-acceptance` label (costs API money). Verify: (a) workflow runs successfully against `test/fixtures/project/` with proper setup (package.json, orb.yaml, semconv, git init), (b) step outputs `result` (valid JSON) and `summary` (human-readable string) are populated, (c) workflow is valid YAML with `run-acceptance` label gate.
+- [x] **Milestone 15: GitHub Action verification workflow** — Separate CI workflow (`.github/workflows/verify-action.yml`) that exercises the composite `action.yml` against the test fixture project. Uses `uses: ./` to test the local action end-to-end: Node setup, Weaver binary install, `orb instrument --yes --output json`, result parsing into step outputs. Gated behind `run-acceptance` label (costs API money). Verify: (a) workflow runs successfully against `test/fixtures/project/` with proper setup (package.json, orb.yaml, semconv, git init), (b) step outputs `result` (valid JSON) and `summary` (human-readable string) are populated, (c) workflow is valid YAML with `run-acceptance` label gate.
 
-- [ ] **Milestone 16: Acceptance gate passes** — Full end-to-end run from CLI produces a reviewable PR on a feature branch with per-file commits. PR description includes all specified sections. User can estimate cost, monitor progress, and understand failures. README and usage docs are complete. Verify against a real test JavaScript project with Weaver schema.
+- [x] **Milestone 16: Acceptance gate passes** — Full end-to-end run from CLI produces a reviewable PR on a feature branch with per-file commits. PR description includes all specified sections. User can estimate cost, monitor progress, and understand failures. README and usage docs are complete. Verify against a real test JavaScript project with Weaver schema.
 
 ## Dependencies
 
