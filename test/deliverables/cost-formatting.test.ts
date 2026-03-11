@@ -72,12 +72,12 @@ describe('tokensToDollars', () => {
       cacheCreationInputTokens: 0,
       cacheReadInputTokens: 0,
     };
-    // Opus: $15/MTok input, $75/MTok output
-    // 5k input = 0.075
-    // 1k output = 0.075
-    // Total = $0.15
+    // Opus: $5/MTok input, $25/MTok output
+    // 5k input = 0.025
+    // 1k output = 0.025
+    // Total = $0.05
     const result = tokensToDollars(usage, 'claude-opus-4-6');
-    expect(result).toBeCloseTo(0.15, 4);
+    expect(result).toBeCloseTo(0.05, 4);
   });
 
   it('accounts for cache read tokens at discounted rate', () => {

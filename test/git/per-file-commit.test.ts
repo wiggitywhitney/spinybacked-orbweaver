@@ -189,7 +189,7 @@ describe('commitFileResult', () => {
     const diff = await git.diff(['--name-only', 'HEAD~1', 'HEAD']);
     const committedFiles = diff.trim().split('\n');
     expect(committedFiles).toContain('src/app.js');
-    expect(committedFiles).not.toContain(expect.stringContaining('agent-extensions'));
+    expect(committedFiles.some(f => f.includes('agent-extensions'))).toBe(false);
   });
 
   it('skips schema extensions staging when file has no schema extensions', async () => {

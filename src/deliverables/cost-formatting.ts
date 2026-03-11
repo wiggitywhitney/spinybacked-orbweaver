@@ -30,10 +30,10 @@ export const PRICING: Record<string, {
     cacheWritePerMTok: 1.25,
   },
   'claude-opus-4-6': {
-    inputPerMTok: 15,
-    outputPerMTok: 75,
-    cacheReadPerMTok: 1.50,
-    cacheWritePerMTok: 18.75,
+    inputPerMTok: 5,
+    outputPerMTok: 25,
+    cacheReadPerMTok: 0.50,
+    cacheWritePerMTok: 6.25,
   },
 };
 

@@ -9,7 +9,7 @@
     },
     "spinybacked-orbweaver": {
       "command": "node",
-      "args": ["/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver/src/interfaces/mcp.ts"],
+      "args": ["./src/interfaces/mcp.ts"],
       "env": {
         "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
       }
