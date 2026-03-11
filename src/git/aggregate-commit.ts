@@ -71,6 +71,9 @@ export async function commitAggregateChanges(
     const lockPath = join(projectDir, 'package-lock.json');
     if (await fileExists(lockPath)) {
       filesToStage.push('package-lock.json');
+      if (!commitParts.includes('dependencies')) {
+        commitParts.push('dependencies');
+      }
     }
   }
 
