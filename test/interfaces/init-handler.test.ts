@@ -219,32 +219,32 @@ describe('handleInit', () => {
       }
     });
 
-    it('fails when port 4317 is not available', async () => {
+    it('warns but succeeds when port 14317 is not available', async () => {
       const deps = makeDeps({
-        checkPort: vi.fn(async (port: number) => port !== 4317),
+        checkPort: vi.fn(async (port: number) => port !== 14317),
       });
 
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
-      expect(result.success).toBe(false);
-      expect(result.errors).toEqual(
+      expect(result.success).toBe(true);
+      expect(result.warnings).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('4317'),
+          expect.stringContaining('14317'),
         ]),
       );
     });
 
-    it('fails when port 4320 is not available', async () => {
+    it('warns but succeeds when port 14320 is not available', async () => {
       const deps = makeDeps({
-        checkPort: vi.fn(async (port: number) => port !== 4320),
+        checkPort: vi.fn(async (port: number) => port !== 14320),
       });
 
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
-      expect(result.success).toBe(false);
-      expect(result.errors).toEqual(
+      expect(result.success).toBe(true);
+      expect(result.warnings).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('4320'),
+          expect.stringContaining('14320'),
         ]),
       );
     });

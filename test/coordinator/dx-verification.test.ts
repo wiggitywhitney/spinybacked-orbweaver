@@ -575,14 +575,14 @@ describe('DX Verification — Milestone 8', () => {
       const deps = makeDeps({
         runLiveCheck: vi.fn().mockResolvedValue({
           skipped: true,
-          warnings: ['Port 4317 is in use. Free this port to enable end-of-run schema validation. Skipping live-check.'],
+          warnings: ['Port 14317 is in use. Free this port to enable end-of-run schema validation. Skipping live-check.'],
         }),
       });
 
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
       expect(result.warnings).toContainEqual(
-        expect.stringContaining('Port 4317 is in use'),
+        expect.stringContaining('Port 14317 is in use'),
       );
       expect(result.endOfRunValidation).toBeUndefined();
     });

@@ -8,9 +8,9 @@ import type { ChildProcess } from 'node:child_process';
 import type { Server } from 'node:net';
 import type { CoordinatorCallbacks } from './types.ts';
 
-/** Default Weaver OTLP receiver ports. */
-const DEFAULT_GRPC_PORT = 4317;
-const DEFAULT_ADMIN_PORT = 4320;
+/** Default Weaver OTLP receiver ports — non-standard to avoid conflicts with existing OTel collectors. */
+const DEFAULT_GRPC_PORT = 14317;
+const DEFAULT_ADMIN_PORT = 14320;
 
 /** How long to wait for Weaver to start listening (ms). */
 const WEAVER_STARTUP_TIMEOUT_MS = 15_000;
@@ -61,9 +61,9 @@ export interface LiveCheckResult {
 
 /** Configuration options for the live-check workflow. */
 export interface LiveCheckOptions {
-  /** OTLP gRPC receiver port. Default: 4317. */
+  /** OTLP gRPC receiver port. Default: 14317. */
   grpcPort?: number;
-  /** Weaver admin HTTP port. Default: 4320. */
+  /** Weaver admin HTTP port. Default: 14320. */
   adminPort?: number;
   /** Inactivity timeout in seconds before Weaver auto-stops. Default: derived from TEST_SUITE_TIMEOUT_MS. */
   inactivityTimeoutSeconds?: number;
@@ -118,7 +118,7 @@ export async function checkPortAvailable(
  *
  * Workflow:
  * 1. Validate test command exists
- * 2. Check port availability (4317 gRPC, 4320 HTTP)
+ * 2. Check port availability (default: 14317 gRPC, 14320 HTTP)
  * 3. Start `weaver registry live-check -r <registryDir>`
  * 4. Wait for Weaver to be ready
  * 5. Run test suite with OTEL_EXPORTER_OTLP_ENDPOINT override

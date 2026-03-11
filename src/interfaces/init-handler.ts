@@ -32,7 +32,7 @@ interface InitResult {
 }
 
 const WEAVER_MIN_VERSION = '0.21.2';
-const REQUIRED_PORTS = [4317, 4320];
+const LIVECHECK_PORTS = [14317, 14320];
 
 /** Common OTel SDK init file patterns relative to project root. */
 const SDK_INIT_PATTERNS = [
@@ -206,19 +206,16 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     return { success: false, errors, warnings };
   }
 
-  // Check port availability
+  // Check port availability (advisory — port conflicts only affect live-check, not core instrumentation)
   deps.stderr('Checking port availability...');
-  for (const port of REQUIRED_PORTS) {
+  for (const port of LIVECHECK_PORTS) {
     const available = await deps.checkPort(port);
     if (!available) {
-      errors.push(
-        `Port ${port} is already in use. Weaver live-check requires ports 4317 (gRPC) and 4320 (HTTP). ` +
-        'Free the port and try again.',
+      warnings.push(
+        `Port ${port} is already in use. End-of-run live-check validation will be skipped unless this port is freed. ` +
+        'Core instrumentation is not affected.',
       );
     }
-  }
-  if (errors.length > 0) {
-    return { success: false, errors, warnings };
   }
 
   // Detect SDK init file
