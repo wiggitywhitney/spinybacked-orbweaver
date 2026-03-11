@@ -87,13 +87,14 @@ jobs:
 
           echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
 
-      # Run the same command the action uses: npx orb instrument --yes --output json
+      # Run the same command the action uses: orb instrument --yes --output json
+      # Use node to run bin/orb.js directly — npm ci doesn't create bin symlinks for the project's own package
       - name: Run instrumentation (same as action.yml)
         id: instrument
         working-directory: ${{ env.TEST_DIR }}
         run: |
-          export PATH="${GITHUB_WORKSPACE}/node_modules/.bin:$PATH"
-          RESULT=$(orb instrument --yes --output json src/order-service.js 2>orb-stderr.log) || EXIT_CODE=$?
+          ORB="node ${GITHUB_WORKSPACE}/bin/orb.js"
+          RESULT=$(${ORB} instrument --yes --output json src/order-service.js 2>orb-stderr.log) || EXIT_CODE=$?
           EXIT_CODE=${EXIT_CODE:-0}
 
           echo "--- stderr output ---"
