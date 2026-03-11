@@ -85,6 +85,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README.md with all sections: project overview, interface comparison (CLI/MCP/GitHub Action), prerequisites with setup links, project setup (auto-detect via `orb init` or manual `orb.yaml`), CLI reference, MCP integration for any MCP-compatible AI assistant, GitHub Action usage, full configuration reference, dry-run mode, license
 - DX verification: CLI cost ceiling output now includes dollar estimate (e.g., "estimated max cost $5.62") using `ceilingToDollars()` + `formatDollars()`; MCP `get-cost-ceiling` response includes `estimatedCostDollars` field; all 6 failure modes verified to produce actionable messages for AI intermediary consumption (no config, invalid path, agent failure, schema checkpoint failure, budget exceeded, early abort)
 
+- MCP Setup section updated to use `.mcp.json` (project-level config) with `${ANTHROPIC_API_KEY}` env var expansion instead of hardcoded keys
+- MCP `get-cost-ceiling` example updated with verified file size from real test run
+- `.mcp.json` added with orbweaver MCP server configuration for project-level Claude Code integration
+
 ### Changed
 
 - Merged P5-5 acceptance gate test into P5-3: both ran identical coordinator configurations with the same 5 files and API calls. Single test now validates both live-check compliance report and per-file schema hashes, eliminating ~230s of redundant LLM calls per suite run.

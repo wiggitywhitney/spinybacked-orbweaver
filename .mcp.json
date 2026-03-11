@@ -6,6 +6,13 @@
       "env": {
         "GITHUB_PAT": "${GITHUB_TOKEN}"
       }
+    },
+    "spinybacked-orbweaver": {
+      "command": "node",
+      "args": ["/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver/src/interfaces/mcp.ts"],
+      "env": {
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
+      }
     }
   }
 }

@@ -279,7 +279,7 @@ The MCP server exposes the agent to any [MCP-compatible](https://modelcontextpro
 
 ### Setup
 
-Add to your MCP client configuration (example for Claude Code's `.claude/settings.json`):
+Add to your project's `.mcp.json` (or your MCP client's global configuration):
 
 ```json
 {
@@ -288,12 +288,14 @@ Add to your MCP client configuration (example for Claude Code's `.claude/setting
       "command": "node",
       "args": ["/path/to/spinybacked-orbweaver/src/interfaces/mcp.ts"],
       "env": {
-        "ANTHROPIC_API_KEY": "your-key"
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
       }
     }
   }
 }
 ```
+
+The `${ANTHROPIC_API_KEY}` syntax expands from your shell environment. Claude Code and other MCP clients expand environment variables at startup.
 
 ### Tools
 
@@ -304,7 +306,7 @@ The server exposes two tools:
 ```json
 {
   "fileCount": 1,
-  "totalFileSizeBytes": 602,
+  "totalFileSizeBytes": 744,
   "maxTokensCeiling": 80000,
   "estimatedCostDollars": "$1.87"
 }
@@ -312,7 +314,7 @@ The server exposes two tools:
 
 **`instrument`** — Run full instrumentation. Analyzes files, adds spans and attributes, validates against the rubric, retries on failure, and returns a hierarchical result (summary → per-file detail → schema integration data). Call `get-cost-ceiling` first to understand scope and cost.
 
-Both tools accept `projectDir` (absolute path to project root). Additional optional overrides: `maxFilesPerRun`, `maxTokensPerFile`, and `exclude` patterns. To scope to a subdirectory or individual file, use `exclude` patterns.
+Both tools accept `projectDir` (absolute path to project root) and an optional `path` to scope to a subdirectory or individual file. Additional optional overrides: `maxFilesPerRun`, `maxTokensPerFile`, and `exclude` patterns.
 
 Progress is reported via MCP logging messages (`level: "info"`) with JSON payloads for each stage: `fileStart`, `fileComplete`, `schemaCheckpoint`, `validationStart`, `validationComplete`, `runComplete`.
 
