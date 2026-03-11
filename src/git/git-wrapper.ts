@@ -70,6 +70,17 @@ export async function getLog(
 }
 
 /**
+ * Push the current branch to the remote, setting upstream tracking.
+ * @param dir - The git repository directory.
+ * @param branchName - Name of the branch to push.
+ * @param remote - Remote name (defaults to 'origin').
+ */
+export async function pushBranch(dir: string, branchName: string, remote = 'origin'): Promise<void> {
+  const git = simpleGit(dir);
+  await git.push(remote, branchName, ['--set-upstream']);
+}
+
+/**
  * Get the name of the currently checked-out branch.
  * @param dir - The git repository directory.
  * @returns The current branch name.

@@ -101,6 +101,7 @@ function makeGitWorkflowDeps() {
     createBranch: vi.fn().mockResolvedValue(undefined),
     commitFileResult: vi.fn().mockResolvedValue('abc123'),
     commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
+    pushBranch: vi.fn().mockResolvedValue(undefined),
     renderPrSummary: vi.fn().mockReturnValue('# PR Summary'),
     createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
     checkGhAvailable: vi.fn().mockResolvedValue(false),

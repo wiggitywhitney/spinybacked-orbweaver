@@ -127,6 +127,7 @@ describe('git workflow integration', () => {
       createBranch,
       commitFileResult,
       commitAggregateChanges,
+      pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
       createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
       checkGhAvailable: vi.fn().mockResolvedValue(false),
@@ -181,6 +182,7 @@ describe('git workflow integration', () => {
       createBranch,
       commitFileResult,
       commitAggregateChanges,
+      pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
       createPr: vi.fn(),
       checkGhAvailable: vi.fn().mockResolvedValue(true),
@@ -230,6 +232,7 @@ describe('git workflow integration', () => {
       createBranch,
       commitFileResult,
       commitAggregateChanges,
+      pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
       createPr: vi.fn().mockImplementation(async (_dir, _title, body) => {
         capturedPrBody = body;

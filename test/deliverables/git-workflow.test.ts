@@ -76,6 +76,7 @@ function makeDeps(overrides?: Partial<GitWorkflowDeps>): GitWorkflowDeps {
     createBranch: vi.fn().mockResolvedValue(undefined),
     commitFileResult: vi.fn().mockResolvedValue('abc123'),
     commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
+    pushBranch: vi.fn().mockResolvedValue(undefined),
     renderPrSummary: vi.fn().mockReturnValue('# PR Summary\n\nMock summary'),
     createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
@@ -212,6 +213,42 @@ describe('runGitWorkflow', () => {
 
       // commitAggregateChanges should still be called — it returns undefined when nothing to stage
       expect(deps.commitAggregateChanges).toHaveBeenCalled();
+    });
+  });
+
+  describe('branch push', () => {
+    it('pushes the branch before creating a PR', async () => {
+      const deps = makeDeps();
+      const callOrder: string[] = [];
+      (deps.pushBranch as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+        callOrder.push('pushBranch');
+      });
+      (deps.createPr as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+        callOrder.push('createPr');
+        return 'https://github.com/test/repo/pull/1';
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(callOrder).toEqual(['pushBranch', 'createPr']);
+    });
+
+    it('skips push in dry-run mode', async () => {
+      const deps = makeDeps();
+      await runGitWorkflow(makeOptions({ dryRun: true }), deps);
+
+      expect(deps.pushBranch).not.toHaveBeenCalled();
+    });
+
+    it('reports push failure as a warning but still attempts PR creation', async () => {
+      const deps = makeDeps({
+        pushBranch: vi.fn().mockRejectedValue(new Error('push denied')),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('push denied'));
+      expect(deps.createPr).toHaveBeenCalled();
     });
   });
 

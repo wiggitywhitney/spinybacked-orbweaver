@@ -46,6 +46,7 @@ export interface GitWorkflowDeps {
     projectDir: string,
     input: AggregateCommitInput,
   ) => Promise<string | undefined>;
+  pushBranch: (dir: string, branchName: string) => Promise<void>;
   renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
   createPr: (projectDir: string, title: string, body: string) => Promise<string>;
   checkGhAvailable: () => Promise<boolean>;
@@ -126,13 +127,20 @@ export async function runGitWorkflow(
     });
   }
 
-  // Step 4: PR creation (skip in dry-run, --no-pr, no successes, or gh unavailable)
+  // Step 4: Push branch and create PR (skip in dry-run, --no-pr, no successes, or gh unavailable)
   let prUrl: string | undefined;
   if (!dryRun && !noPr && runResult.filesSucceeded > 0) {
     const ghAvailable = await deps.checkGhAvailable();
     if (!ghAvailable) {
       deps.stderr('gh CLI not found — skipping PR creation. Use --no-pr to suppress this warning, or install gh: https://cli.github.com');
     } else {
+      try {
+        await deps.pushBranch(projectDir, branchName);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        deps.stderr(`Push failed: ${msg}`);
+      }
+
       const prBody = deps.renderPrSummary(runResult, config, projectDir);
       const title = `Add OpenTelemetry instrumentation (${runResult.filesSucceeded} files)`;
       try {

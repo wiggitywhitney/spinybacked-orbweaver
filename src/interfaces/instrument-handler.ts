@@ -156,6 +156,8 @@ export async function handleInstrument(
         ?? (await import('../git/per-file-commit.ts')).commitFileResult,
       commitAggregateChanges: deps.gitWorkflow?.commitAggregateChanges
         ?? (await import('../git/aggregate-commit.ts')).commitAggregateChanges,
+      pushBranch: deps.gitWorkflow?.pushBranch
+        ?? (await import('../git/git-wrapper.ts')).pushBranch,
       renderPrSummary: deps.gitWorkflow?.renderPrSummary
         ?? (await import('../deliverables/pr-summary.ts')).renderPrSummary,
       createPr: deps.gitWorkflow?.createPr

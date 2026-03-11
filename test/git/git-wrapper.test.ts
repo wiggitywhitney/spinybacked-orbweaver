@@ -13,6 +13,7 @@ import {
   commit,
   getLog,
   getCurrentBranch,
+  pushBranch,
 } from '../../src/git/git-wrapper.ts';
 
 /**
@@ -145,6 +146,13 @@ describe('git-wrapper', () => {
       const log = await getLog(repoDir, { maxCount: 1 });
       expect(log.length).toBe(1);
       expect(log[0].message).toBe('add b.js');
+    });
+  });
+
+  describe('pushBranch', () => {
+    it('throws when no remote is configured', async () => {
+      await createBranch(repoDir, 'orb/instrument');
+      await expect(pushBranch(repoDir, 'orb/instrument')).rejects.toThrow();
     });
   });
 
