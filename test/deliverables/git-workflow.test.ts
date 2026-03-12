@@ -364,7 +364,10 @@ describe('runGitWorkflow', () => {
     it('returns the RunResult from coordinate', async () => {
       const expected = makeRunResult({ filesProcessed: 5 });
       const deps = makeDeps({
-        coordinate: vi.fn().mockResolvedValue(expected),
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(expected.fileResults[0], 0, 1);
+          return expected;
+        }),
       });
       const result = await runGitWorkflow(makeOptions(), deps);
 
