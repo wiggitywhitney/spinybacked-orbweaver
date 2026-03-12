@@ -34,7 +34,7 @@ export interface InstrumentDeps {
     deps?: CoordinateDeps,
     targetPath?: string,
   ) => Promise<RunResult>;
-  gitWorkflow?: Partial<GitWorkflowDeps>;
+  gitWorkflow?: Partial<Omit<GitWorkflowDeps, 'coordinate'>>;
   stderr: (msg: string) => void;
   stdout: (msg: string) => void;
   promptConfirm: (message: string) => Promise<boolean>;
