@@ -1858,3 +1858,159 @@ describe('instrumentWithRetry — agentVersion population', () => {
     expect(result.agentVersion).toBe(PACKAGE_VERSION);
   });
 });
+
+describe('instrumentWithRetry — retryable instrumentFile failures', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = '// original code\n';
+
+  const attempt1Tokens: TokenUsage = { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 100, cacheReadInputTokens: 50 };
+  const attempt2Tokens: TokenUsage = { inputTokens: 1100, outputTokens: 600, cacheCreationInputTokens: 110, cacheReadInputTokens: 60 };
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'retry-retryable-'));
+    testFilePath = join(testDir, 'test-file.js');
+    writeFileSync(testFilePath, originalContent);
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('retries when instrumentFile returns null parsed_output on first attempt', async () => {
+    let callCount = 0;
+    const goodOutput = makeInstrumentationOutput({ tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            success: false,
+            error: 'LLM response had null parsed_output — no structured output was returned',
+            tokenUsage: attempt1Tokens,
+          } as InstrumentFileResult;
+        }
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(2);
+    expect(callCount).toBe(2);
+    // Cumulative tokens include both attempts
+    expect(result.tokenUsage.inputTokens).toBe(attempt1Tokens.inputTokens + attempt2Tokens.inputTokens);
+  });
+
+  it('retries when instrumentFile returns elision detected on first attempt', async () => {
+    let callCount = 0;
+    const goodOutput = makeInstrumentationOutput({ tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            success: false,
+            error: 'Output rejected: elision detected. File is 200 lines shorter than original.',
+            tokenUsage: attempt1Tokens,
+          } as InstrumentFileResult;
+        }
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(2);
+    expect(callCount).toBe(2);
+  });
+
+  it('tracks retryable failures in errorProgression', async () => {
+    let callCount = 0;
+    const goodOutput = makeInstrumentationOutput({ tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            success: false,
+            error: 'LLM response had null parsed_output — no structured output was returned',
+            tokenUsage: attempt1Tokens,
+          } as InstrumentFileResult;
+        }
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    expect(result.errorProgression).toBeDefined();
+    expect(result.errorProgression!.length).toBeGreaterThanOrEqual(1);
+    // First entry should record the null output failure
+    expect(result.errorProgression![0]).toContain('null parsed_output');
+  });
+
+  it('does NOT retry terminal errors like API auth failures', async () => {
+    let callCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        return {
+          success: false,
+          error: 'Anthropic API call failed: 401 Unauthorized',
+          tokenUsage: attempt1Tokens,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(callCount).toBe(1);
+    expect(result.validationAttempts).toBe(1);
+  });
+
+  it('fails after exhausting all retries on persistent retryable error', async () => {
+    let callCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        return {
+          success: false,
+          error: 'LLM response had null parsed_output — no structured output was returned',
+          tokenUsage: attempt1Tokens,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    // Should have attempted all 3 times (1 initial + 2 retries)
+    expect(callCount).toBe(3);
+    expect(result.validationAttempts).toBe(3);
+    expect(result.reason).toContain('null parsed_output');
+  });
+});
