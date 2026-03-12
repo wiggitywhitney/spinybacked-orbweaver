@@ -282,12 +282,18 @@ function renderTokenUsage(runResult: RunResult, config: AgentConfig): string {
   const lines: string[] = ['## Token Usage'];
   lines.push('');
 
-  const ceilingDollars = ceilingToDollars(runResult.costCeiling, config.agentModel);
-  const actualDollars = tokensToDollars(runResult.actualTokenUsage, config.agentModel);
+  let costRow: string;
+  try {
+    const ceilingDollars = ceilingToDollars(runResult.costCeiling, config.agentModel);
+    const actualDollars = tokensToDollars(runResult.actualTokenUsage, config.agentModel);
+    costRow = `| **Cost** | ${formatDollars(ceilingDollars)} | ${formatDollars(actualDollars)} |`;
+  } catch {
+    costRow = `| **Cost** | unknown | unknown |`;
+  }
 
   lines.push('| | Ceiling | Actual |');
   lines.push('|---|---------|--------|');
-  lines.push(`| **Cost** | ${formatDollars(ceilingDollars)} | ${formatDollars(actualDollars)} |`);
+  lines.push(costRow);
   lines.push(`| **Input tokens** | ${formatNumber(runResult.costCeiling.maxTokensCeiling)} | ${formatNumber(runResult.actualTokenUsage.inputTokens)} |`);
   lines.push(`| **Output tokens** | — | ${formatNumber(runResult.actualTokenUsage.outputTokens)} |`);
 
