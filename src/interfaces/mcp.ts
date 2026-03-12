@@ -16,6 +16,7 @@ import type { CostCeiling, RunResult, CoordinatorCallbacks } from '../coordinato
 import type { FileResult } from '../fix-loop/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
+import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
 
 /**
  * Injectable dependencies for the MCP server.
@@ -144,10 +145,17 @@ export async function handleGetCostCeiling(
   // Compute cost ceiling
   const ceiling = await computeCostCeiling(filePaths, maxTokensPerFile, deps.statFile);
 
+  let estimatedCostDollars: string;
+  try {
+    estimatedCostDollars = formatDollars(ceilingToDollars(ceiling, config.agentModel));
+  } catch {
+    estimatedCostDollars = 'unknown (unsupported model for pricing)';
+  }
+
   return {
     content: [{
       type: 'text',
-      text: JSON.stringify(ceiling, null, 2),
+      text: JSON.stringify({ ...ceiling, estimatedCostDollars }, null, 2),
     }],
   };
 }

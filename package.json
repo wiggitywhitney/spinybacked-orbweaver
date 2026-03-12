@@ -36,7 +36,6 @@
     "@types/node": "^24.11.0",
     "@types/yargs": "^17.0.35",
     "@vitest/coverage-v8": "^4.0.18",
-    "commit-story": "file:../commit-story-v2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
@@ -44,6 +43,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "prettier": "^3.8.1",
+    "simple-git": "^3.33.0",
     "ts-morph": "^27.0.2",
     "yaml": "^2.8.2",
     "yargs": "^18.0.0",

@@ -7,6 +7,7 @@ import type { InstrumentDeps, InstrumentOptions } from '../../src/interfaces/ins
 import type { CoordinatorCallbacks, RunResult } from '../../src/coordinator/types.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
+import type { GitWorkflowDeps } from '../../src/deliverables/git-workflow.ts';
 import { CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 
 /** Minimal valid AgentConfig for testing. */
@@ -57,11 +58,24 @@ function makeOptions(overrides?: Partial<InstrumentOptions>): InstrumentOptions 
     path: './src',
     projectDir: '/test/project',
     dryRun: false,
+    noPr: true,
     output: 'text',
     yes: false,
     verbose: false,
     debug: false,
     ...overrides,
+  };
+}
+
+function makeGitWorkflowDeps(): Partial<GitWorkflowDeps> {
+  return {
+    createBranch: vi.fn().mockResolvedValue(undefined),
+    commitFileResult: vi.fn().mockResolvedValue('abc123'),
+    commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
+    pushBranch: vi.fn().mockResolvedValue(undefined),
+    renderPrSummary: vi.fn().mockReturnValue('# PR Summary'),
+    createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
+    checkGhAvailable: vi.fn().mockResolvedValue(false),
   };
 }
 
@@ -84,6 +98,7 @@ function makeDeps(overrides?: Partial<InstrumentDeps>): InstrumentDeps {
   return {
     loadConfig: vi.fn().mockResolvedValue({ success: true, config: makeConfig() }),
     coordinate: vi.fn().mockResolvedValue(makeRunResult({ filesProcessed: 3, filesSucceeded: 3 })),
+    gitWorkflow: makeGitWorkflowDeps(),
     stderr: vi.fn(),
     stdout: vi.fn(),
     promptConfirm: vi.fn().mockResolvedValue(true),

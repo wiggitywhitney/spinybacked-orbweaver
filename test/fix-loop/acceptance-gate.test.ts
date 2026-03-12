@@ -194,8 +194,10 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
         expect(fileOnDisk).not.toBe(originalCode);
       }
 
-      // Token usage always populated
-      expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Token usage always populated — inputTokens may be 0 when prompt caching
+      // serves the entire input from cache (cacheReadInputTokens instead)
+      const totalInput = result.tokenUsage.inputTokens + result.tokenUsage.cacheReadInputTokens;
+      expect(totalInput).toBeGreaterThan(0);
     });
   });
 

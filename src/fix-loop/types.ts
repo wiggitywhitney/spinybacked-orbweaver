@@ -49,6 +49,8 @@ export interface FileResult {
   schemaHashAfter?: string;
   /** Agent version identifier. */
   agentVersion?: string;
+  /** The ruleId of the first blocking validation failure, for early abort detection. */
+  firstBlockingRuleId?: string;
   /** Human-readable summary on failure — explains why the file failed. */
   reason?: string;
   /** Raw error output from the final attempt, for debugging. */

@@ -351,6 +351,7 @@ async function executeRetryLoop(
           return buildFailedResult(
             filePath, reason, lastError, cumulativeTokens,
             attempt, strategy, errorProgression, lastOutput,
+            validation.blockingFailures[0]?.ruleId,
           );
         }
         // Not yet on fresh regen — jump to the final attempt (fresh-regeneration)
@@ -375,6 +376,7 @@ async function executeRetryLoop(
   return buildFailedResult(
     filePath, reason, lastError, cumulativeTokens,
     maxAttempts, lastStrategy, errorProgression, lastOutput,
+    lastValidation!.blockingFailures[0]?.ruleId,
   );
 }
 
@@ -389,6 +391,7 @@ async function executeRetryLoop(
  * @param strategy - Strategy of the last completed attempt
  * @param errorProgression - Error summaries across attempts
  * @param output - Last successful instrumentation output (for metadata)
+ * @param firstBlockingRuleId - ruleId of the first blocking failure (for early abort detection)
  * @returns Complete failed FileResult
  */
 function buildFailedResult(
@@ -400,6 +403,7 @@ function buildFailedResult(
   strategy: ValidationStrategy,
   errorProgression?: string[],
   output?: InstrumentationOutput,
+  firstBlockingRuleId?: string,
 ): FileResult {
   return {
     path: filePath,
@@ -413,6 +417,7 @@ function buildFailedResult(
     errorProgression,
     spanCategories: output?.spanCategories,
     notes: output?.notes,
+    firstBlockingRuleId,
     reason,
     lastError,
     agentVersion: AGENT_VERSION,

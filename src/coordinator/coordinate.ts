@@ -228,6 +228,7 @@ export async function coordinate(
       },
       registryDir,
       schemaExtensionWarnings,
+      ...(config.dryRun ? { dryRun: true } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -322,33 +323,39 @@ export async function coordinate(
   }
 
   // Step 7b: End-of-run Weaver live-check (degrade and warn on failure)
-  try {
-    const liveCheckResult = await liveCheck(
-      registryDir,
-      projectDir,
-      config.testCommand,
-      deps?.liveCheckOptions,
-      undefined,
-      callbacks,
-    );
-    if (liveCheckResult.complianceReport) {
-      runResult.endOfRunValidation = liveCheckResult.complianceReport;
+  // Dry-run skips live-check — no persistent changes to validate
+  if (!config.dryRun) {
+    try {
+      const liveCheckResult = await liveCheck(
+        registryDir,
+        projectDir,
+        config.testCommand,
+        deps?.liveCheckOptions,
+        undefined,
+        callbacks,
+      );
+      if (liveCheckResult.complianceReport) {
+        runResult.endOfRunValidation = liveCheckResult.complianceReport;
+      }
+      if (liveCheckResult.warnings.length > 0) {
+        runResult.warnings.push(...liveCheckResult.warnings);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
     }
-    if (liveCheckResult.warnings.length > 0) {
-      runResult.warnings.push(...liveCheckResult.warnings);
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
   }
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)
-  const sdkInitPath = resolve(projectDir, config.sdkInitFile);
-  try {
-    await finalize(runResult, projectDir, sdkInitPath, config.dependencyStrategy, undefined);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    runResult.warnings.push(`Finalization failed (degraded): ${message}`);
+  // Dry-run skips finalization — no npm install, no SDK init file changes
+  if (!config.dryRun) {
+    const sdkInitPath = resolve(projectDir, config.sdkInitFile);
+    try {
+      await finalize(runResult, projectDir, sdkInitPath, config.dependencyStrategy, undefined);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      runResult.warnings.push(`Finalization failed (degraded): ${message}`);
+    }
   }
 
   return runResult;

@@ -1,0 +1,163 @@
+# Verify GitHub Action — exercises the action.yml commands end-to-end
+#
+# Runs the same steps as action.yml (Weaver install, orb instrument --yes
+# --output json, result parsing) against a test fixture project to verify
+# the action works on Ubuntu CI runners.
+#
+# Gated behind run-acceptance label (costs real API money).
+#
+# Secrets required: ANTHROPIC_API_KEY
+
+name: Verify GitHub Action
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-action-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-action:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'run-acceptance'))
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Install Weaver using the same method as action.yml
+      - name: Install Weaver CLI
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh | sh
+          weaver --version
+
+      # Set up a test project with all prerequisites
+      - name: Create test project
+        run: |
+          TEST_DIR="${RUNNER_TEMP}/test-project"
+          mkdir -p "$TEST_DIR/src" "$TEST_DIR/semconv"
+
+          cp test/fixtures/project/src/order-service.js "$TEST_DIR/src/"
+          cp test/fixtures/weaver-registry/valid/* "$TEST_DIR/semconv/"
+
+          cat > "$TEST_DIR/package.json" << 'PKGJSON'
+          {
+            "name": "action-test-project",
+            "version": "1.0.0",
+            "peerDependencies": {
+              "@opentelemetry/api": "^1.9.0"
+            }
+          }
+          PKGJSON
+
+          cat > "$TEST_DIR/src/instrumentation.js" << 'INITJS'
+          const { NodeSDK } = require('@opentelemetry/sdk-node');
+          const sdk = new NodeSDK({});
+          sdk.start();
+          INITJS
+
+          cat > "$TEST_DIR/orb.yaml" << 'ORBYAML'
+          schemaPath: semconv
+          sdkInitFile: src/instrumentation.js
+          ORBYAML
+
+          cd "$TEST_DIR"
+          git init
+          git config user.email "test@example.com"
+          git config user.name "Test"
+          git add -A
+          git commit -m "initial"
+
+          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+
+      # Run the same command the action uses: orb instrument --yes --output json
+      # Use node to run bin/orb.js directly — npm ci doesn't create bin symlinks for the project's own package
+      - name: Run instrumentation (same as action.yml)
+        id: instrument
+        working-directory: ${{ env.TEST_DIR }}
+        run: |
+          ORB="node ${GITHUB_WORKSPACE}/bin/orb.js"
+          RESULT=$(${ORB} instrument --yes --output json src/order-service.js 2>orb-stderr.log) || EXIT_CODE=$?
+          EXIT_CODE=${EXIT_CODE:-0}
+
+          echo "--- stderr output ---"
+          cat orb-stderr.log
+
+          echo "result<<RESULT_EOF" >> "$GITHUB_OUTPUT"
+          echo "${RESULT}" >> "$GITHUB_OUTPUT"
+          echo "RESULT_EOF" >> "$GITHUB_OUTPUT"
+
+          exit ${EXIT_CODE}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # Run the same result-parsing logic as action.yml's parse-results step
+      - name: Parse results (same as action.yml)
+        id: parse-results
+        if: always() && steps.instrument.outputs.result != ''
+        env:
+          RESULT: ${{ steps.instrument.outputs.result }}
+        run: |
+          FILES_PROCESSED=$(echo "${RESULT}" | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const r = d.fileResults || [];
+            const ok = r.filter(f => f.status === "success").length;
+            const fail = r.filter(f => f.status === "failed").length;
+            const skip = r.filter(f => f.status === "skipped").length;
+            console.log(ok + " succeeded, " + fail + " failed, " + skip + " skipped out of " + r.length + " files");
+          ' 2>/dev/null || echo "Unable to parse results")
+
+          SUMMARY="Instrumentation complete: ${FILES_PROCESSED}"
+          echo "summary=${SUMMARY}" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Instrumentation Summary::${SUMMARY}"
+
+      # Verify outputs are populated and valid
+      - name: Verify result is valid JSON with fileResults
+        if: always() && steps.instrument.outputs.result != ''
+        env:
+          RESULT: ${{ steps.instrument.outputs.result }}
+        run: |
+          echo "${RESULT}" | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            if (!d.fileResults || !Array.isArray(d.fileResults)) {
+              console.error("Missing or invalid fileResults array");
+              process.exit(1);
+            }
+            if (d.fileResults.length !== 1) {
+              console.error("Expected 1 file result, got", d.fileResults.length);
+              process.exit(1);
+            }
+            const f = d.fileResults[0];
+            console.log("File:", f.path);
+            console.log("Status:", f.status);
+            console.log("Spans added:", f.spansAdded);
+            if (f.status !== "success") {
+              console.error("Expected success, got", f.status);
+              process.exit(1);
+            }
+          '
+
+      - name: Verify summary output
+        if: always() && steps.parse-results.outputs.summary != ''
+        env:
+          SUMMARY: ${{ steps.parse-results.outputs.summary }}
+        run: |
+          echo "Summary: $SUMMARY"
+          printf '%s' "$SUMMARY" | grep -Fq "succeeded" || { echo "::error::summary missing 'succeeded'"; exit 1; }
