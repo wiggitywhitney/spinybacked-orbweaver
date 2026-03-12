@@ -14,7 +14,7 @@
     "bin/"
   ],
   "scripts": {
-    "prepare": "tsc -p tsconfig.build.json",
+    "prepare": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",
