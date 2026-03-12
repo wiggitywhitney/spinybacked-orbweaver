@@ -131,9 +131,15 @@ export async function handleInstrument(
       deps.stderr(`Processing file ${index + 1} of ${total}: ${path}`);
     },
     onFileComplete: (result, _index, _total) => {
-      const statusLabel = result.status === 'success'
-        ? `success (${result.spansAdded} spans)`
-        : result.status;
+      let statusLabel: string;
+      if (result.status === 'success') {
+        statusLabel = `success (${result.spansAdded} spans)`;
+      } else if (result.status === 'failed') {
+        const detail = result.reason || result.lastError || '';
+        statusLabel = detail ? `failed (${detail})` : 'failed';
+      } else {
+        statusLabel = result.status;
+      }
       deps.stderr(`  ${result.path}: ${statusLabel}`);
     },
     onRunComplete: (results) => {
