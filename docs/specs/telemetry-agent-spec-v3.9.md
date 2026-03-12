@@ -2,7 +2,7 @@
 
 **Status:** Draft v3.9
 **Created:** 2026-02-05
-**Updated:** 2026-03-02
+**Updated:** 2026-03-12
 **Purpose:** AI agent that auto-instruments JavaScript code with OpenTelemetry based on a Weaver schema (agent written in TypeScript)
 
 ## Revision History
@@ -22,6 +22,7 @@
 | v3.7 | 2026-02-26 | **JavaScript notation and design-document types:** Converted all TypeScript interface blocks and code examples to JavaScript/JSDoc notation. Standardized all field names to camelCase (JavaScript convention) — breaking change from v3.6 snake_case names (e.g. `spans_added` → `spansAdded`, `libraries_needed` → `librariesNeeded`, `last_error` → `lastError`). Added 7 new types discovered during design document work: `InstrumentationOutput` (agent's raw output), `SpanCategories`, `TokenUsage`, `CheckResult` (individual validation check), `ValidationResult` (aggregated validation chain output), `ValidateFileInput` (options object for validation chain), `RunResult` (coordinator's return type for interfaces). Evolved `FileResult`: added `"skipped"` status for already-instrumented files, `advisoryAnnotations` for Tier 2 PR display, `tokenUsage` for per-file cost tracking, `SpanCategories` reference. Converted system prompt instructions and file paths from TypeScript to JavaScript. |
 | v3.8 | 2026-02-26 | **Tech stack, SDK capabilities, and evaluation refinements:** Batch application of all known-but-unapplied spec changes from PRD #3 milestones 1-7. Technology Stack table expanded: added Node.js 24.x LTS, simple-git, Vitest, yaml, Zod, node:fs glob, node:child_process; updated Coordinator to JavaScript with ESM; pinned MCP SDK to v1.x. SDK capabilities added as architectural requirements: structured outputs (Zod schemas via `zodOutputFormat()`), prompt caching (`cache_control: {type: "ephemeral"}`), `countTokens()` for pre-flight budget checks, adaptive thinking with effort parameter (replacing deprecated `budget_tokens`). Added ts-morph scope analysis caveats (issues #561, #1351) and Prettier config resolution requirement. Converted remaining prose TypeScript→JavaScript references. Recommendations-derived changes: validator feedback must be LLM-consumable (structured, specific, actionable), FileResult population is mandatory, no-silent-failures principle. Rubric refinements: RST-004 I/O exemption, CDQ-008 tracer naming consistency, CDQ-007 conditional attributes. Added auto-instrumentation interaction model (detect, defer, document, never duplicate). Added independently runnable gates requirement. |
 | v3.9 | 2026-03-02 | **Agent language: TypeScript with native type stripping.** Restored TypeScript as the agent language (supersedes v3.7/v3.8 JavaScript decision). Node.js 24.x native type stripping enables direct `node src/index.ts` execution with zero build step — eliminating the only substantive advantage JavaScript had. `erasableSyntaxOnly` constraint enforced via tsconfig; `tsc --noEmit` as CI gate. All JSDoc `@typedef` interface blocks converted to TypeScript `interface` declarations. Technology Stack table updated: Coordinator row changed from JavaScript to TypeScript. Target files remain JavaScript (`**/*.js` globs, `node --check` validation, `allowJs: true` for ts-morph). |
+| v3.9.1 | 2026-03-12 | **Module system detection.** Added "Module System Detection" subsection to Coordinator section. Defines three-signal detection order for ESM vs CJS: `package.json` `"type"` field (primary), file extension `.mjs`/`.cjs` (per-file override), file content heuristic (fallback). Documents where detection applies (SDK init updates, fallback file generation). Closes gap that caused BUG-2 (#62). |
 
 ---
 
@@ -518,6 +519,20 @@ If a checkpoint fails, the Coordinator stops processing new files by default. Fi
 ### SDK Init File Parsing Scope
 
 The Coordinator supports SDK init files using the `NodeSDK` constructor pattern with an `instrumentations` array literal. It uses ts-morph to find the array, append new entries, and add corresponding import statements. If the SDK init file doesn't match a recognized pattern (e.g., instrumentations are constructed dynamically, spread from another file, or use `registerInstrumentations()`), the Coordinator writes a separate file (e.g., `orb-instrumentations.js`) exporting the new instrumentation instances, logs a warning with instructions for the user to integrate manually, and notes this in the PR summary. This keeps the Coordinator deterministic without requiring it to understand arbitrary SDK initialization patterns.
+
+### Module System Detection
+
+The Coordinator must determine whether the target project uses ESM or CommonJS before writing import statements (both in the SDK init file and in fallback files). Detection follows this priority order:
+
+1. **`package.json` `"type"` field** (primary signal) — `"module"` means ESM; `"commonjs"` or absent means CJS. The Coordinator reads `package.json` from the project root directory passed to `updateSdkInitFile`. This is the authoritative signal per Node.js module resolution rules.
+2. **File extension** — `.mjs` files are always ESM; `.cjs` files are always CJS, regardless of `package.json`. These per-file overrides take precedence over the `"type"` field for the specific file in question.
+3. **File content heuristic** (fallback) — If `package.json` is missing or unreadable and the file extension is `.js`, scan the file content for `import` declarations or `export` keywords. Presence indicates ESM; absence indicates CJS. This is the least reliable signal and exists only as a fallback when the other two are unavailable.
+
+The detection result determines whether the Coordinator generates `import { X } from 'pkg'` (ESM) or `const { X } = require('pkg')` (CJS) statements. It also determines whether fallback files use `export` or `module.exports`.
+
+This detection applies in two places:
+- **SDK init file updates** — appending new instrumentation imports and array entries to an existing file
+- **Fallback file generation** — writing a new `orb-instrumentations.js` file when the SDK init file doesn't match a recognized pattern
 
 ### Future: Parallel Processing
 
