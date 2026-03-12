@@ -75,6 +75,22 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('trace.getTracer');
   });
 
+  it('specifies a concrete tracer name derived from schema namespace', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Should contain the exact tracer name, not a placeholder or derivation instruction
+    expect(prompt).toContain("trace.getTracer('test_service')");
+    // Should NOT tell the LLM to "derive" the name — it should be given directly
+    expect(prompt).not.toContain('Derive the service name');
+  });
+
+  it('uses the schema namespace as the tracer name for different namespaces', () => {
+    const customSchema = makeSchema({ namespace: 'my_app' });
+    const prompt = buildSystemPrompt(customSchema);
+
+    expect(prompt).toContain("trace.getTracer('my_app')");
+  });
+
   it('includes instrumentation priority hierarchy', () => {
     const prompt = buildSystemPrompt(schema);
 

@@ -14,6 +14,7 @@ import type { OTelImportDetectionResult } from '../ast/import-detection.ts';
  */
 export function buildSystemPrompt(resolvedSchema: object): string {
   const schemaJson = JSON.stringify(resolvedSchema, null, 2);
+  const tracerName = (resolvedSchema as Record<string, unknown>).namespace as string | undefined ?? 'unknown_service';
 
   return `You are an instrumentation engineer. Your job is to add OpenTelemetry instrumentation to a JavaScript source file according to a Weaver schema contract.
 
@@ -42,7 +43,7 @@ Add \`import { trace, SpanStatusCode } from '@opentelemetry/api';\` at the top o
 
 ### Tracer Acquisition
 
-Add \`const tracer = trace.getTracer('<service-name>');\` at module scope if not already present. Derive the service name from the schema namespace. If a tracer variable is already declared, reuse it.
+Add \`const tracer = trace.getTracer('${tracerName}');\` at module scope if not already present. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.
 
 ### Manual Span Instrumentation (Path 2)
 
