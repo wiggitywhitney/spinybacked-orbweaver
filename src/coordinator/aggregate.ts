@@ -124,7 +124,7 @@ export async function finalizeResults(
 
   // Write SDK init file (degrade independently)
   try {
-    const sdkResult = await updateSdkInitFile(sdkInitFilePath, libraries);
+    const sdkResult = await updateSdkInitFile(sdkInitFilePath, libraries, projectDir);
     runResult.sdkInitUpdated = sdkResult.updated;
 
     if (sdkResult.warning) {
