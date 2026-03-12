@@ -111,7 +111,12 @@ export async function handleInstrument(
   // Build callbacks: wire coordinator progress to stderr output
   const callbacks: CoordinatorCallbacks = {
     onCostCeilingReady: async (ceiling) => {
-      const dollarEstimate = formatDollars(ceilingToDollars(ceiling, config.agentModel));
+      let dollarEstimate: string;
+      try {
+        dollarEstimate = formatDollars(ceilingToDollars(ceiling, config.agentModel));
+      } catch {
+        dollarEstimate = 'unknown (unsupported model for pricing)';
+      }
       deps.stderr(
         `Cost ceiling: ${ceiling.fileCount} files, ` +
         `${ceiling.maxTokensCeiling} max tokens, ` +
