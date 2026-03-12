@@ -151,6 +151,24 @@ function buildFailureHint(validation: ValidationResult): string | undefined {
 }
 
 /**
+ * Determine whether an instrumentFile error is retryable (transient) or terminal.
+ *
+ * Retryable: elision detection, null parsed output — these are transient LLM failures
+ * that may not recur on retry.
+ * Terminal: everything else (API auth, network, token budget, file read errors).
+ *
+ * Coupling: these substrings originate from instrumentFile() in src/agent/instrument-file.ts:
+ * - "null parsed_output" — from the null response.parsed_output check
+ * - "elision detected" — from detectElision() in src/agent/elision.ts
+ * If those upstream error messages change, this classification must be updated to match.
+ */
+function isRetryableInstrumentError(error: string): boolean {
+  if (error.includes('null parsed_output')) return true;
+  if (error.includes('elision detected')) return true;
+  return false;
+}
+
+/**
  * Determine the validation strategy for a given attempt number.
  * Attempt 1 = initial-generation.
  * If maxAttempts > 2, the last attempt = fresh-regeneration.
@@ -272,10 +290,16 @@ async function executeRetryLoop(
     );
 
     if (!instrumentResult.success) {
-      // instrumentFile failed — accumulate tokens and stop.
-      // File is already in original state (restored after prior attempt or never written).
       const failTokens = instrumentResult.tokenUsage ?? ZERO_TOKENS;
       cumulativeTokens = addTokenUsage(cumulativeTokens, failTokens);
+
+      if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
+        // Retryable failure — record in errorProgression and continue to next attempt
+        errorProgression.push(instrumentResult.error);
+        continue;
+      }
+
+      // Terminal failure or last attempt — stop immediately
       return buildFailedResult(
         filePath, instrumentResult.error, instrumentResult.error,
         cumulativeTokens, attempt, strategy, errorProgression, lastOutput,
