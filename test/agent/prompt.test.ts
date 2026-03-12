@@ -79,7 +79,7 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(schema);
 
     // Should contain the exact tracer name, not a placeholder or derivation instruction
-    expect(prompt).toContain("trace.getTracer('test_service')");
+    expect(prompt).toContain('trace.getTracer("test_service")');
     // Should NOT tell the LLM to "derive" the name — it should be given directly
     expect(prompt).not.toContain('Derive the service name');
   });
@@ -88,7 +88,36 @@ describe('buildSystemPrompt', () => {
     const customSchema = makeSchema({ namespace: 'my_app' });
     const prompt = buildSystemPrompt(customSchema);
 
-    expect(prompt).toContain("trace.getTracer('my_app')");
+    expect(prompt).toContain('trace.getTracer("my_app")');
+  });
+
+  it('falls back to unknown_service when namespace is missing', () => {
+    const noNamespace = makeSchema({ namespace: undefined });
+    const prompt = buildSystemPrompt(noNamespace);
+
+    expect(prompt).toContain('trace.getTracer("unknown_service")');
+  });
+
+  it('falls back to unknown_service when namespace is empty string', () => {
+    const emptyNamespace = makeSchema({ namespace: '' });
+    const prompt = buildSystemPrompt(emptyNamespace);
+
+    expect(prompt).toContain('trace.getTracer("unknown_service")');
+  });
+
+  it('falls back to unknown_service when namespace is non-string', () => {
+    const numericNamespace = makeSchema({ namespace: 42 });
+    const prompt = buildSystemPrompt(numericNamespace);
+
+    expect(prompt).toContain('trace.getTracer("unknown_service")');
+  });
+
+  it('safely escapes namespace with special characters', () => {
+    const specialNamespace = makeSchema({ namespace: 'my"service' });
+    const prompt = buildSystemPrompt(specialNamespace);
+
+    // JSON.stringify escapes the double quote
+    expect(prompt).toContain('trace.getTracer("my\\"service")');
   });
 
   it('includes instrumentation priority hierarchy', () => {
