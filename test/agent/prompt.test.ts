@@ -131,23 +131,25 @@ describe('buildSystemPrompt', () => {
     // Each framework should appear near its instrumentation package
     // so the LLM knows which package to recommend for which import
     const expectedMappings = [
-      ['@anthropic-ai/sdk', '@traceloop/instrumentation-anthropic'],
-      ['openai', '@traceloop/instrumentation-openai'],
-      ['@aws-sdk/client-bedrock-runtime', '@traceloop/instrumentation-bedrock'],
-      ['@google-cloud/vertexai', '@traceloop/instrumentation-vertexai'],
-      ['cohere-ai', '@traceloop/instrumentation-cohere'],
-      ['together-ai', '@traceloop/instrumentation-together'],
-      ['@langchain/*', '@traceloop/instrumentation-langchain'],
-      ['llamaindex', '@traceloop/instrumentation-llamaindex'],
-      ['@modelcontextprotocol/sdk', '@traceloop/instrumentation-mcp'],
-      ['@pinecone-database/pinecone', '@traceloop/instrumentation-pinecone'],
-      ['chromadb', '@traceloop/instrumentation-chromadb'],
-      ['@qdrant/js-client-rest', '@traceloop/instrumentation-qdrant'],
+      ['@anthropic-ai/sdk', '@traceloop/instrumentation-anthropic', 'AnthropicInstrumentation'],
+      ['openai', '@traceloop/instrumentation-openai', 'OpenAIInstrumentation'],
+      ['@aws-sdk/client-bedrock-runtime', '@traceloop/instrumentation-bedrock', 'BedrockInstrumentation'],
+      ['@google-cloud/vertexai', '@traceloop/instrumentation-vertexai', 'VertexAIInstrumentation'],
+      ['cohere-ai', '@traceloop/instrumentation-cohere', 'CohereInstrumentation'],
+      ['together-ai', '@traceloop/instrumentation-together', 'TogetherInstrumentation'],
+      ['langchain / @langchain/*', '@traceloop/instrumentation-langchain', 'LangChainInstrumentation'],
+      ['llamaindex', '@traceloop/instrumentation-llamaindex', 'LlamaIndexInstrumentation'],
+      ['@modelcontextprotocol/sdk', '@traceloop/instrumentation-mcp', 'MCPInstrumentation'],
+      ['@pinecone-database/pinecone', '@traceloop/instrumentation-pinecone', 'PineconeInstrumentation'],
+      ['chromadb', '@traceloop/instrumentation-chromadb', 'ChromaDBInstrumentation'],
+      ['@qdrant/js-client-rest', '@traceloop/instrumentation-qdrant', 'QdrantInstrumentation'],
     ];
 
-    for (const [framework, instrumentationPkg] of expectedMappings) {
-      expect(prompt, `missing mapping: ${framework} → ${instrumentationPkg}`)
-        .toContain(instrumentationPkg);
+    for (const [framework, instrumentationPkg, importName] of expectedMappings) {
+      expect(
+        prompt,
+        `missing mapping row: ${framework} → ${instrumentationPkg} (${importName})`,
+      ).toContain(`| ${framework} | ${instrumentationPkg} | ${importName} |`);
     }
   });
 
