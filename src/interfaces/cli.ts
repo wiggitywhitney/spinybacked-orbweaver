@@ -86,6 +86,12 @@ export function buildParser() {
  * Init and instrument commands are wired to real handlers.
  */
 export async function run(args?: string[]) {
+  try {
+    process.loadEnvFile('.env');
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+
   const parser = buildParser();
   const argv = await parser.parse(args ?? hideBin(process.argv));
 
