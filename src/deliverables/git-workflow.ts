@@ -192,7 +192,7 @@ export async function createPr(
   title: string,
   body: string,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((fulfill, reject) => {
     execFile(
       'gh',
       ['pr', 'create', '--title', title, '--body', body],
@@ -203,7 +203,7 @@ export async function createPr(
           reject(new Error(`gh pr create failed: ${errMsg}`));
           return;
         }
-        resolve(stdout.trim());
+        fulfill(stdout.trim());
       },
     );
   });
