@@ -21,6 +21,22 @@ export interface SdkInitResult {
 }
 
 /**
+ * Read the project's package.json to check for "type": "module".
+ * Returns true if ESM, false if CJS, null if package.json not found or unreadable.
+ */
+async function detectModuleSystemFromPackageJson(projectDir: string): Promise<boolean | null> {
+  try {
+    const pkgPath = join(projectDir, 'package.json');
+    const pkgText = await readFile(pkgPath, 'utf-8');
+    const pkg = JSON.parse(pkgText);
+    if (pkg.type === 'module') return true;
+    return false;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Detect whether a file uses ES module imports or CommonJS require.
  * Checks for import/export statements as ESM indicators.
  */
@@ -79,6 +95,7 @@ function findExistingInstrumentations(arrayText: string): Set<string> {
 export async function updateSdkInitFile(
   sdkInitFilePath: string,
   libraries: LibraryRequirement[],
+  projectDir?: string,
 ): Promise<SdkInitResult> {
   // Deduplicate by package name
   const uniqueLibraries = deduplicateLibraries(libraries);
@@ -88,7 +105,10 @@ export async function updateSdkInitFile(
   }
 
   const sourceText = await readFile(sdkInitFilePath, 'utf-8');
-  const esm = isEsmFile(sourceText);
+
+  // package.json "type" field is the primary signal; file content is the fallback
+  const pkgEsm = projectDir != null ? await detectModuleSystemFromPackageJson(projectDir) : null;
+  const esm = pkgEsm ?? isEsmFile(sourceText);
 
   // Try to find and update the NodeSDK instrumentations array
   const updateResult = tryUpdateNodeSdkPattern(sourceText, uniqueLibraries, esm);
