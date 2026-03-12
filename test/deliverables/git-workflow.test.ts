@@ -70,9 +70,21 @@ function makeRunResult(overrides?: Partial<RunResult>): RunResult {
   };
 }
 
+/**
+ * Default coordinate mock fires onFileComplete with a successful file,
+ * which triggers lazy branch creation in the workflow.
+ */
+function coordinateWithFileComplete() {
+  return vi.fn().mockImplementation(async (_dir: string, _config: unknown, callbacks: { onFileComplete?: (result: FileResult, index: number, total: number) => void }) => {
+    const result = makeRunResult();
+    callbacks?.onFileComplete?.(result.fileResults[0], 0, 1);
+    return result;
+  });
+}
+
 function makeDeps(overrides?: Partial<GitWorkflowDeps>): GitWorkflowDeps {
   return {
-    coordinate: vi.fn().mockResolvedValue(makeRunResult()),
+    coordinate: coordinateWithFileComplete(),
     createBranch: vi.fn().mockResolvedValue(undefined),
     commitFileResult: vi.fn().mockResolvedValue('abc123'),
     commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
@@ -98,20 +110,21 @@ function makeOptions(overrides?: Partial<GitWorkflowOptions>): GitWorkflowOption
 
 describe('runGitWorkflow', () => {
   describe('branch creation', () => {
-    it('creates a feature branch before calling coordinate', async () => {
+    it('creates branch lazily on first successful file commit', async () => {
       const deps = makeDeps();
       const callOrder: string[] = [];
       (deps.createBranch as ReturnType<typeof vi.fn>).mockImplementation(async () => {
         callOrder.push('createBranch');
       });
-      (deps.coordinate as ReturnType<typeof vi.fn>).mockImplementation(async () => {
-        callOrder.push('coordinate');
-        return makeRunResult();
+      (deps.commitFileResult as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+        callOrder.push('commitFileResult');
+        return 'abc123';
       });
 
       await runGitWorkflow(makeOptions(), deps);
 
-      expect(callOrder).toEqual(['createBranch', 'coordinate']);
+      // Branch is created just before the first per-file commit, not before coordinate
+      expect(callOrder).toEqual(['createBranch', 'commitFileResult']);
     });
 
     it('creates branch with orb/instrument prefix', async () => {
@@ -124,9 +137,39 @@ describe('runGitWorkflow', () => {
       );
     });
 
+    it('creates branch only once for multiple successful files', async () => {
+      const file1 = makeFileResult({ path: '/project/src/a.js', status: 'success' });
+      const file2 = makeFileResult({ path: '/project/src/b.js', status: 'success' });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(file1, 0, 2);
+          callbacks?.onFileComplete?.(file2, 1, 2);
+          return makeRunResult({ fileResults: [file1, file2], filesSucceeded: 2 });
+        }),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.createBranch).toHaveBeenCalledTimes(1);
+    });
+
     it('skips branch creation in dry-run mode', async () => {
       const deps = makeDeps();
       await runGitWorkflow(makeOptions({ dryRun: true }), deps);
+
+      expect(deps.createBranch).not.toHaveBeenCalled();
+    });
+
+    it('does not create branch when no files succeed', async () => {
+      const failedFile = makeFileResult({ status: 'failed', reason: 'Syntax error' });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(failedFile, 0, 1);
+          return makeRunResult({ fileResults: [failedFile], filesSucceeded: 0, filesFailed: 1 });
+        }),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
 
       expect(deps.createBranch).not.toHaveBeenCalled();
     });
@@ -182,9 +225,17 @@ describe('runGitWorkflow', () => {
 
   describe('aggregate commit', () => {
     it('commits aggregate changes after coordinate completes', async () => {
-      const deps = makeDeps();
-      const runResult = makeRunResult({ sdkInitUpdated: true, librariesInstalled: ['@opentelemetry/sdk-node'] });
-      (deps.coordinate as ReturnType<typeof vi.fn>).mockResolvedValue(runResult);
+      const successFile = makeFileResult({ status: 'success' });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(successFile, 0, 1);
+          return makeRunResult({
+            sdkInitUpdated: true,
+            librariesInstalled: ['@opentelemetry/sdk-node'],
+            fileResults: [successFile],
+          });
+        }),
+      });
 
       await runGitWorkflow(makeOptions(), deps);
 
@@ -204,10 +255,14 @@ describe('runGitWorkflow', () => {
       expect(deps.commitAggregateChanges).not.toHaveBeenCalled();
     });
 
-    it('skips aggregate commit when nothing changed', async () => {
-      const deps = makeDeps();
-      const runResult = makeRunResult({ sdkInitUpdated: false, librariesInstalled: [] });
-      (deps.coordinate as ReturnType<typeof vi.fn>).mockResolvedValue(runResult);
+    it('calls aggregate commit even when nothing changed (delegates to aggregate commit logic)', async () => {
+      const successFile = makeFileResult({ status: 'success' });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(successFile, 0, 1);
+          return makeRunResult({ sdkInitUpdated: false, librariesInstalled: [], fileResults: [successFile] });
+        }),
+      });
 
       await runGitWorkflow(makeOptions(), deps);
 
@@ -292,10 +347,12 @@ describe('runGitWorkflow', () => {
     });
 
     it('skips PR creation when no files succeeded', async () => {
+      const failedFile = makeFileResult({ status: 'failed', reason: 'error' });
       const deps = makeDeps({
-        coordinate: vi.fn().mockResolvedValue(
-          makeRunResult({ filesSucceeded: 0, filesFailed: 1 }),
-        ),
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(failedFile, 0, 1);
+          return makeRunResult({ filesSucceeded: 0, filesFailed: 1, fileResults: [failedFile] });
+        }),
       });
       await runGitWorkflow(makeOptions(), deps);
 

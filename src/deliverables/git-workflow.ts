@@ -82,12 +82,12 @@ export async function runGitWorkflow(
   callerCallbacks?: Partial<CoordinatorCallbacks>,
 ): Promise<GitWorkflowResult> {
   const { projectDir, config, noPr, dryRun, registryDir, targetPath } = options;
+  const absoluteRegistryDir = registryDir ? resolve(projectDir, registryDir) : undefined;
   const branchName = generateBranchName();
 
-  // Step 1: Create feature branch (skip in dry-run)
-  if (!dryRun) {
-    await deps.createBranch(projectDir, branchName);
-  }
+  // Step 1: Branch creation is deferred until the first per-file commit
+  // to avoid leaving empty branches when the run aborts (cost rejection, early abort).
+  let branchCreated = false;
 
   // Step 2: Call coordinate with per-file commit wired into callbacks
   // Chain commits sequentially to avoid concurrent git operations on the same repo
@@ -102,7 +102,14 @@ export async function runGitWorkflow(
       // Per-file commit for successful files (skip in dry-run)
       if (!dryRun && result.status === 'success') {
         commitChain = commitChain
-          .then(() => deps.commitFileResult(result, projectDir, { registryDir }))
+          .then(async () => {
+            // Lazy branch creation: create branch on first successful file
+            if (!branchCreated) {
+              await deps.createBranch(projectDir, branchName);
+              branchCreated = true;
+            }
+          })
+          .then(() => deps.commitFileResult(result, projectDir, { registryDir: absoluteRegistryDir }))
           .then(() => undefined)
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);
@@ -117,8 +124,8 @@ export async function runGitWorkflow(
   // Wait for all per-file commits to complete before aggregate commit
   await commitChain;
 
-  // Step 3: Aggregate commit (skip in dry-run)
-  if (!dryRun) {
+  // Step 3: Aggregate commit (skip in dry-run or if no branch was created)
+  if (!dryRun && branchCreated) {
     const sdkInitFilePath = resolve(projectDir, config.sdkInitFile);
     await deps.commitAggregateChanges(projectDir, {
       sdkInitUpdated: runResult.sdkInitUpdated,
@@ -127,9 +134,9 @@ export async function runGitWorkflow(
     });
   }
 
-  // Step 4: Push branch and create PR (skip in dry-run, --no-pr, no successes, or gh unavailable)
+  // Step 4: Push branch and create PR (skip if no branch, --no-pr, or gh unavailable)
   let prUrl: string | undefined;
-  if (!dryRun && !noPr && runResult.filesSucceeded > 0) {
+  if (branchCreated && !noPr && runResult.filesSucceeded > 0) {
     const ghAvailable = await deps.checkGhAvailable();
     if (!ghAvailable) {
       deps.stderr('gh CLI not found — skipping PR creation. Use --no-pr to suppress this warning, or install gh: https://cli.github.com');
@@ -160,7 +167,7 @@ export async function runGitWorkflow(
 
   return {
     runResult,
-    branchName: dryRun ? undefined : branchName,
+    branchName: branchCreated ? branchName : undefined,
     prUrl,
   };
 }
