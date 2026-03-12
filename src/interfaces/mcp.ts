@@ -423,7 +423,11 @@ function createProductionDeps(): McpDeps {
  * Called when the module is executed directly.
  */
 export async function startServer(): Promise<void> {
-  try { process.loadEnvFile('.env'); } catch { /* .env is optional */ }
+  try {
+    process.loadEnvFile('.env');
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
 
   const deps = createProductionDeps();
   const mcpServer = createMcpServer(deps);

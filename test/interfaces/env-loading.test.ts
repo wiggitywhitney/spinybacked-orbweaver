@@ -58,11 +58,19 @@ describe('.env auto-loading', () => {
     });
 
     it('does not throw when .env file is missing', async () => {
-      loadEnvFileSpy.mockImplementation(() => {
-        throw new Error('ENOENT: no such file or directory');
-      });
+      const err = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
+      loadEnvFileSpy.mockImplementation(() => { throw err; });
       const { run } = await import('../../src/interfaces/cli.ts');
-      await expect(run(['init'])).resolves.not.toThrow();
+      await expect(run(['init'])).resolves.toBeUndefined();
+    });
+
+    it('rethrows non-ENOENT errors from loadEnvFile', async () => {
+      const err = new Error('Permission denied') as NodeJS.ErrnoException;
+      err.code = 'EACCES';
+      loadEnvFileSpy.mockImplementation(() => { throw err; });
+      const { run } = await import('../../src/interfaces/cli.ts');
+      await expect(run(['init'])).rejects.toThrow('Permission denied');
     });
   });
 
@@ -74,11 +82,19 @@ describe('.env auto-loading', () => {
     });
 
     it('does not throw when .env file is missing', async () => {
-      loadEnvFileSpy.mockImplementation(() => {
-        throw new Error('ENOENT: no such file or directory');
-      });
+      const err = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
+      loadEnvFileSpy.mockImplementation(() => { throw err; });
       const { startServer } = await import('../../src/interfaces/mcp.ts');
-      await expect(startServer()).resolves.not.toThrow();
+      await expect(startServer()).resolves.toBeUndefined();
+    });
+
+    it('rethrows non-ENOENT errors from loadEnvFile', async () => {
+      const err = new Error('Permission denied') as NodeJS.ErrnoException;
+      err.code = 'EACCES';
+      loadEnvFileSpy.mockImplementation(() => { throw err; });
+      const { startServer } = await import('../../src/interfaces/mcp.ts');
+      await expect(startServer()).rejects.toThrow('Permission denied');
     });
   });
 });
