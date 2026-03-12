@@ -97,6 +97,60 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('openai');
   });
 
+  it('maps OpenLLMetry libraries to individual instrumentation packages, not the mega-bundle', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Must NOT reference the mega-bundle
+    expect(prompt).not.toContain('@traceloop/node-server-sdk');
+
+    // Must contain individual instrumentation package mappings
+    // LLM Providers
+    expect(prompt).toContain('@traceloop/instrumentation-anthropic');
+    expect(prompt).toContain('@traceloop/instrumentation-openai');
+    expect(prompt).toContain('@traceloop/instrumentation-bedrock');
+    expect(prompt).toContain('@traceloop/instrumentation-vertexai');
+    expect(prompt).toContain('@traceloop/instrumentation-cohere');
+    expect(prompt).toContain('@traceloop/instrumentation-together');
+
+    // Frameworks
+    expect(prompt).toContain('@traceloop/instrumentation-langchain');
+    expect(prompt).toContain('@traceloop/instrumentation-llamaindex');
+
+    // Protocols
+    expect(prompt).toContain('@traceloop/instrumentation-mcp');
+
+    // Vector Databases
+    expect(prompt).toContain('@traceloop/instrumentation-pinecone');
+    expect(prompt).toContain('@traceloop/instrumentation-chromadb');
+    expect(prompt).toContain('@traceloop/instrumentation-qdrant');
+  });
+
+  it('pairs each framework import with its instrumentation package', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Each framework should appear near its instrumentation package
+    // so the LLM knows which package to recommend for which import
+    const expectedMappings = [
+      ['@anthropic-ai/sdk', '@traceloop/instrumentation-anthropic'],
+      ['openai', '@traceloop/instrumentation-openai'],
+      ['@aws-sdk/client-bedrock-runtime', '@traceloop/instrumentation-bedrock'],
+      ['@google-cloud/vertexai', '@traceloop/instrumentation-vertexai'],
+      ['cohere-ai', '@traceloop/instrumentation-cohere'],
+      ['together-ai', '@traceloop/instrumentation-together'],
+      ['@langchain/*', '@traceloop/instrumentation-langchain'],
+      ['llamaindex', '@traceloop/instrumentation-llamaindex'],
+      ['@modelcontextprotocol/sdk', '@traceloop/instrumentation-mcp'],
+      ['@pinecone-database/pinecone', '@traceloop/instrumentation-pinecone'],
+      ['chromadb', '@traceloop/instrumentation-chromadb'],
+      ['@qdrant/js-client-rest', '@traceloop/instrumentation-qdrant'],
+    ];
+
+    for (const [framework, instrumentationPkg] of expectedMappings) {
+      expect(prompt, `missing mapping: ${framework} → ${instrumentationPkg}`)
+        .toContain(instrumentationPkg);
+    }
+  });
+
   it('includes diverse examples (at least 3)', () => {
     const prompt = buildSystemPrompt(schema);
 

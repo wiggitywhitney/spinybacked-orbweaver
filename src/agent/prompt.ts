@@ -107,8 +107,21 @@ These framework packages have trusted auto-instrumentation libraries. When detec
 **Core (@opentelemetry/auto-instrumentations-node):**
 pg, mysql, mysql2, mongodb, redis, ioredis, express, fastify, koa, @hapi/hapi, @grpc/grpc-js, http, https, node:http, node:https, mongoose, kafkajs, pino
 
-**OpenLLMetry (@traceloop/node-server-sdk):**
-@anthropic-ai/sdk, openai, @aws-sdk/client-bedrock-runtime, @google-cloud/vertexai, cohere-ai, together-ai, langchain, @langchain/*, llamaindex, @modelcontextprotocol/sdk, @pinecone-database/pinecone, chromadb, @qdrant/js-client-rest
+**OpenLLMetry (individual @traceloop/instrumentation-* packages):**
+| Framework Import | Instrumentation Package | Import Name |
+|---|---|---|
+| @anthropic-ai/sdk | @traceloop/instrumentation-anthropic | AnthropicInstrumentation |
+| openai | @traceloop/instrumentation-openai | OpenAIInstrumentation |
+| @aws-sdk/client-bedrock-runtime | @traceloop/instrumentation-bedrock | BedrockInstrumentation |
+| @google-cloud/vertexai | @traceloop/instrumentation-vertexai | VertexAIInstrumentation |
+| cohere-ai | @traceloop/instrumentation-cohere | CohereInstrumentation |
+| together-ai | @traceloop/instrumentation-together | TogetherInstrumentation |
+| langchain / @langchain/* | @traceloop/instrumentation-langchain | LangChainInstrumentation |
+| llamaindex | @traceloop/instrumentation-llamaindex | LlamaIndexInstrumentation |
+| @modelcontextprotocol/sdk | @traceloop/instrumentation-mcp | MCPInstrumentation |
+| @pinecone-database/pinecone | @traceloop/instrumentation-pinecone | PineconeInstrumentation |
+| chromadb | @traceloop/instrumentation-chromadb | ChromaDBInstrumentation |
+| @qdrant/js-client-rest | @traceloop/instrumentation-qdrant | QdrantInstrumentation |
 
 ${EXAMPLES_SECTION}
 
