@@ -321,6 +321,32 @@ sdk.start();
       expect(content).not.toContain("import { PgInstrumentation }");
     });
 
+    it('generates CJS require when package.json has explicit "type": "commonjs"', async () => {
+      await writeFile(join(testDir, 'package.json'), JSON.stringify({ type: 'commonjs' }), 'utf-8');
+
+      const sdkFile = await createSdkInitFile(`
+const { NodeSDK } = require('@opentelemetry/sdk-node');
+
+const sdk = new NodeSDK({
+  instrumentations: [],
+});
+
+sdk.start();
+`);
+
+      const libraries: LibraryRequirement[] = [
+        makeLibrary('@opentelemetry/instrumentation-pg', 'PgInstrumentation'),
+      ];
+
+      const result = await updateSdkInitFile(sdkFile, libraries, testDir);
+
+      expect(result.updated).toBe(true);
+
+      const content = await readFile(sdkFile, 'utf-8');
+      expect(content).toContain("require('@opentelemetry/instrumentation-pg')");
+      expect(content).not.toContain("import { PgInstrumentation }");
+    });
+
     it('falls back to file content heuristic when package.json is missing', async () => {
       // No package.json in testDir — should fall back to file content detection
       const sdkFile = await createSdkInitFile(`
