@@ -35,19 +35,18 @@ vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => {
   return { StdioServerTransport };
 });
 
-// Stub process.exit so run() doesn't kill the test runner.
-const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-
 describe('.env auto-loading', () => {
   let loadEnvFileSpy: ReturnType<typeof vi.spyOn>;
+  let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     loadEnvFileSpy = vi.spyOn(process, 'loadEnvFile').mockImplementation(() => undefined);
-    exitSpy.mockClear();
   });
 
   afterEach(() => {
     loadEnvFileSpy.mockRestore();
+    exitSpy.mockRestore();
   });
 
   describe('CLI run()', () => {
