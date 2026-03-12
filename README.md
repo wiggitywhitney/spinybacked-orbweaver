@@ -1,6 +1,6 @@
 # Spinybacked Orbweaver
 
-AI-powered OpenTelemetry instrumentation for JavaScript applications. Analyzes your source code, adds spans, attributes, and context propagation using LLM-guided code generation — validated against your [Weaver](https://github.com/open-telemetry/weaver) schema, [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/), and the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard.
+AI-powered OpenTelemetry instrumentation for JavaScript applications. Analyzes your source code, adds spans, attributes, and context propagation using LLM-guided code generation — validated against your [Weaver](https://github.com/open-telemetry/weaver) schema and the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. When your schema [declares OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the agent uses them for attribute naming and validates against them.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Node.js >= 24](https://img.shields.io/badge/Node.js-%3E%3D24-green.svg)](https://nodejs.org/)
@@ -15,7 +15,7 @@ Spinybacked Orbweaver is an AI agent that adds OpenTelemetry instrumentation to 
 4. **Retries** intelligently — multi-turn fixes with validation feedback, then fresh regeneration with failure hints if the agent gets stuck
 5. **Commits** each file individually on a feature branch, installs dependencies, and opens a PR with a detailed summary
 
-The agent is schema-driven: your [Weaver](https://github.com/open-telemetry/weaver) registry defines which spans and attributes exist, and the agent extends the registry as it discovers new instrumentation needs. Generated code follows [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) and is evaluated against the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. All generated code depends only on `@opentelemetry/api` — never SDK internals.
+The agent is schema-driven: your [Weaver](https://github.com/open-telemetry/weaver) registry defines which spans and attributes exist, and the agent extends the registry as it discovers new instrumentation needs. When your registry declares [OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the resolved schema includes semconv attributes — the agent prefers them for naming, and validation (SCH-002) checks attributes against the full resolved registry. Generated code is evaluated against the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. All generated code depends only on `@opentelemetry/api` — never SDK internals.
 
 Three interfaces: [**CLI**](#cli) for interactive use, [**MCP server**](#mcp-integration) for AI coding assistants (Claude Code, Cursor, and other MCP-compatible tools), and [**GitHub Action**](#github-action) for CI/CD pipelines.
 
