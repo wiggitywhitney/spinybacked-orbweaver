@@ -198,6 +198,9 @@ function getSpanContent(spanCall: CallExpression): string | null {
   }
 
   // For startSpan (non-callback style), find statements between span creation and span.end()
+  // Upper bound: stop after 10 statements to avoid walking the entire function body
+  // when span.end() is missing (CDQ-001 catches that separately).
+  const MAX_SPAN_WALK_STATEMENTS = 10;
   let current: import('ts-morph').Node | undefined = spanCall;
   while (current) {
     const parent = current.getParent();
@@ -205,9 +208,10 @@ function getSpanContent(spanCall: CallExpression): string | null {
       const statements = parent.getStatements();
       const startIdx = statements.findIndex(s => s === current);
       if (startIdx >= 0) {
-        // Collect text from span creation to span.end()
+        // Collect text from span creation to span.end(), bounded
         const parts: string[] = [];
-        for (let i = startIdx; i < statements.length; i++) {
+        const endIdx = Math.min(startIdx + MAX_SPAN_WALK_STATEMENTS, statements.length);
+        for (let i = startIdx; i < endIdx; i++) {
           const stmtText = statements[i].getText();
           parts.push(stmtText);
           if (stmtText.includes('.end()')) break;
