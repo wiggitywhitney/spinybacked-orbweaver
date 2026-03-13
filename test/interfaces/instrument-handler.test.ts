@@ -295,6 +295,35 @@ describe('handleInstrument', () => {
     });
   });
 
+  describe('MODULE_NOT_FOUND distinction', () => {
+    it('reports a specific message when dynamic import fails with ERR_MODULE_NOT_FOUND', async () => {
+      const moduleError = new Error("Cannot find module '../git/git-wrapper.ts'");
+      (moduleError as NodeJS.ErrnoException).code = 'ERR_MODULE_NOT_FOUND';
+
+      const deps = makeDeps({
+        resolveGitModule: vi.fn().mockRejectedValue(moduleError),
+      });
+      const result = await handleInstrument(makeOptions(), deps);
+      expect(result.exitCode).toBe(2);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const moduleMsg = stderrCalls.find((s: string) => s.includes('Module not found'));
+      expect(moduleMsg).toBeDefined();
+    });
+
+    it('reports generic message for non-MODULE_NOT_FOUND import errors', async () => {
+      const runtimeError = new Error('Cannot read properties of undefined');
+
+      const deps = makeDeps({
+        resolveGitModule: vi.fn().mockRejectedValue(runtimeError),
+      });
+      const result = await handleInstrument(makeOptions(), deps);
+      expect(result.exitCode).toBe(2);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const unexpectedMsg = stderrCalls.find((s: string) => s.includes('Unexpected error during module loading'));
+      expect(unexpectedMsg).toBeDefined();
+    });
+  });
+
   describe('error output', () => {
     it('reports config errors with suggestion to run orb init', async () => {
       const deps = makeDeps({
