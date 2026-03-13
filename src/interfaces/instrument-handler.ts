@@ -35,6 +35,8 @@ export interface InstrumentDeps {
     targetPath?: string,
   ) => Promise<RunResult>;
   gitWorkflow?: Partial<Omit<GitWorkflowDeps, 'coordinate'>>;
+  /** Override dynamic module resolution for git workflow deps (testing). */
+  resolveGitModule?: (modulePath: string) => Promise<Record<string, unknown>>;
   stderr: (msg: string) => void;
   stdout: (msg: string) => void;
   promptConfirm: (message: string) => Promise<boolean>;
@@ -152,32 +154,46 @@ export async function handleInstrument(
     },
   };
 
-  // Run git workflow (wraps coordinate with branch/commit/PR operations)
+  // Resolve dynamic imports for git workflow dependencies.
+  // Separated from execution so MODULE_NOT_FOUND errors (missing dependencies)
+  // are distinguishable from runtime failures in the workflow itself.
+  const loadModule = deps.resolveGitModule ?? ((p: string) => import(p));
+  let runGitWorkflow: typeof import('../deliverables/git-workflow.ts')['runGitWorkflow'];
+  let gitDeps: GitWorkflowDeps;
+  try {
+    const gitWorkflowMod = await loadModule('../deliverables/git-workflow.ts') as typeof import('../deliverables/git-workflow.ts');
+    runGitWorkflow = gitWorkflowMod.runGitWorkflow;
+    const gitWrapperMod = await loadModule('../git/git-wrapper.ts') as typeof import('../git/git-wrapper.ts');
+    const perFileCommitMod = await loadModule('../git/per-file-commit.ts') as typeof import('../git/per-file-commit.ts');
+    const aggregateCommitMod = await loadModule('../git/aggregate-commit.ts') as typeof import('../git/aggregate-commit.ts');
+    const prSummaryMod = await loadModule('../deliverables/pr-summary.ts') as typeof import('../deliverables/pr-summary.ts');
+    gitDeps = {
+      coordinate: deps.coordinate,
+      createBranch: deps.gitWorkflow?.createBranch ?? gitWrapperMod.createBranch,
+      commitFileResult: deps.gitWorkflow?.commitFileResult ?? perFileCommitMod.commitFileResult,
+      commitAggregateChanges: deps.gitWorkflow?.commitAggregateChanges ?? aggregateCommitMod.commitAggregateChanges,
+      pushBranch: deps.gitWorkflow?.pushBranch ?? gitWrapperMod.pushBranch,
+      renderPrSummary: deps.gitWorkflow?.renderPrSummary ?? prSummaryMod.renderPrSummary,
+      createPr: deps.gitWorkflow?.createPr ?? gitWorkflowMod.createPr,
+      checkGhAvailable: deps.gitWorkflow?.checkGhAvailable ?? gitWorkflowMod.checkGhAvailable,
+      stderr: deps.stderr,
+    };
+  } catch (err) {
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND') {
+      deps.stderr(`Module not found: ${err.message}. Check that all dependencies are installed.`);
+      return { exitCode: 2 };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    deps.stderr(`Unexpected error during module loading: ${message}`);
+    return { exitCode: 2 };
+  }
+
+  // Execute git workflow
   let runResult: RunResult;
   let prUrl: string | undefined;
   let branchName: string | undefined;
   try {
-    const { runGitWorkflow } = await import('../deliverables/git-workflow.ts');
     const registryDir = resolve(options.projectDir, config.schemaPath);
-    const gitDeps: GitWorkflowDeps = {
-      coordinate: deps.coordinate,
-      createBranch: deps.gitWorkflow?.createBranch
-        ?? (await import('../git/git-wrapper.ts')).createBranch,
-      commitFileResult: deps.gitWorkflow?.commitFileResult
-        ?? (await import('../git/per-file-commit.ts')).commitFileResult,
-      commitAggregateChanges: deps.gitWorkflow?.commitAggregateChanges
-        ?? (await import('../git/aggregate-commit.ts')).commitAggregateChanges,
-      pushBranch: deps.gitWorkflow?.pushBranch
-        ?? (await import('../git/git-wrapper.ts')).pushBranch,
-      renderPrSummary: deps.gitWorkflow?.renderPrSummary
-        ?? (await import('../deliverables/pr-summary.ts')).renderPrSummary,
-      createPr: deps.gitWorkflow?.createPr
-        ?? (await import('../deliverables/git-workflow.ts')).createPr,
-      checkGhAvailable: deps.gitWorkflow?.checkGhAvailable
-        ?? (await import('../deliverables/git-workflow.ts')).checkGhAvailable,
-      stderr: deps.stderr,
-    };
-
     const workflowResult = await runGitWorkflow(
       {
         projectDir: options.projectDir,
@@ -198,11 +214,6 @@ export async function handleInstrument(
       deps.stderr(err.message);
       const exitCode = isCostCeilingRejection(err) ? 3 : 2;
       return { exitCode };
-    }
-    // Distinguish missing modules (dependency not installed) from runtime failures
-    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND') {
-      deps.stderr(`Module not found: ${err.message}. Check that all dependencies are installed.`);
-      return { exitCode: 2 };
     }
     const message = err instanceof Error ? err.message : String(err);
     deps.stderr(`Unexpected error: ${message}`);
