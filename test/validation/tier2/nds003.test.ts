@@ -211,6 +211,74 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('cascading false positives', () => {
+    it('does not cascade when one line is genuinely missing', () => {
+      // 10 original lines; line 3 is removed in instrumented output.
+      // The bug: the forward pointer walks past line 3, then can't find
+      // lines 4-10 because instrIdx already passed them → 8 reported violations.
+      // The fix: only 1 violation (line 3).
+      const original = [
+        'const a = 1;',
+        'const b = 2;',
+        'const c = 3;',
+        'const d = 4;',
+        'const e = 5;',
+        'const f = 6;',
+        'const g = 7;',
+        'const h = 8;',
+        'const i = 9;',
+        'const j = 10;',
+      ].join('\n');
+
+      const instrumented = [
+        'const a = 1;',
+        'const b = 2;',
+        // line 3 removed
+        'const d = 4;',
+        'const e = 5;',
+        'const f = 6;',
+        'const g = 7;',
+        'const h = 8;',
+        'const i = 9;',
+        'const j = 10;',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const missing = results.filter((r) => !r.passed && r.message.includes('missing'));
+
+      // Only 1 genuinely missing line, not 8
+      expect(missing).toHaveLength(1);
+      expect(missing[0].message).toContain('const c = 3');
+    });
+
+    it('does not cascade when lines are reordered', () => {
+      // Lines b and c are swapped. The subsequence check should report
+      // only the reordered lines, not everything after them.
+      const original = [
+        'const a = 1;',
+        'const b = 2;',
+        'const c = 3;',
+        'const d = 4;',
+        'const e = 5;',
+      ].join('\n');
+
+      const instrumented = [
+        'const a = 1;',
+        'const c = 3;',
+        'const b = 2;',
+        'const d = 4;',
+        'const e = 5;',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const missing = results.filter((r) => !r.passed && r.message.includes('missing'));
+
+      // At most 1 line should be reported as missing (b, which moved after c)
+      // The old pointer walk would report b, d, e as all missing
+      expect(missing.length).toBeLessThanOrEqual(1);
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty original', () => {
       const results = checkNonInstrumentationDiff('', 'const x = 1;\n', filePath);
