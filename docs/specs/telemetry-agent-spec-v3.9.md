@@ -2,7 +2,7 @@
 
 **Status:** Draft v3.9
 **Created:** 2026-02-05
-**Updated:** 2026-03-12
+**Updated:** 2026-03-13
 **Purpose:** AI agent that auto-instruments JavaScript code with OpenTelemetry based on a Weaver schema (agent written in TypeScript)
 
 ## Revision History
@@ -25,6 +25,7 @@
 | v3.9.1 | 2026-03-12 | **Module system detection.** Added "Module System Detection" subsection to Coordinator section. Defines two-tier detection order for ESM vs CJS: `package.json` `"type"` field (primary), file content heuristic (fallback). Documents where detection applies (SDK init updates, fallback file generation). Notes that `.mjs`/`.cjs` extension detection is not implemented (PoC targets `**/*.js` only). Closes gap that caused BUG-2 (#62). |
 | v3.9.2 | 2026-03-12 | **SDK dependency placement for libraries.** Clarified that `@opentelemetry/sdk-node` must be a peerDependency for distributable packages (`dependencyStrategy: peerDependencies`), same rationale as the API. Coordinator should flag SDK packages in `dependencies` as a recommendation to move to `peerDependencies`. Closes SPEC-GAP-2 (#67). |
 | v3.9.3 | 2026-03-12 | **Failure classification for fix loop.** Added failure classification table to the fix loop section documenting which `instrumentFile` failures are retryable (elision, null parsed output, validation failures) vs terminal (token budget exceeded, file unreadable, API auth, network). Documents implementation coupling between `isRetryableInstrumentError` and upstream error messages. Closes SPEC-GAP-3 (#68). |
+| v3.9.4 | 2026-03-13 | **Token budget strategy for over-budget files.** Defined "accept and skip" strategy: files exceeding `maxTokensPerFile` are skipped via `countTokens()` pre-flight check with no API calls made. Documented why chunking and automatic budget increases are deferred. `maxTokensPerFile` is the user-facing escape hatch. Post-PoC path is function-level extraction. Closes SPEC-GAP-4 (#69). |
 
 ---
 
@@ -960,6 +961,17 @@ Attempt 3 (fresh regeneration):
 
 **`maxTokensPerFile` derivation:** A single API call for a typical file (~200 lines) costs roughly 8-12K tokens (system prompt ~5K, file content ~1K, schema context ~2K, output ~2-4K). A large file at the `largeFileThresholdLines` boundary (~500 lines) costs roughly 12-16K per call. With 3 total attempts (initial + multi-turn fix + fresh regeneration), worst-case usage is: attempt 1 (~16K) + attempt 2 multi-turn (~5K incremental) + attempt 3 fresh (~16K) ≈ 37K for a large file. The default of 80K provides ~2× headroom over this worst case, accommodating files somewhat above the large-file threshold and variance in schema/prompt size. **Note on schema size variability:** The "~2K schema context" estimate assumes a small registry (e.g., commit-story's ~10-15 span definitions). A production project with 50+ span definitions could push schema context to 8-10K tokens per call, shifting the per-call cost upward. The 2× headroom is intended to absorb this variance, but projects with large schemas may need to increase `maxTokensPerFile` accordingly. Files that exhaust 80K tokens across 3 attempts are genuinely intractable and should fail. This is a PoC default — production tuning should adjust based on observed usage patterns and actual schema size.
 
+**Files exceeding the token budget:** Some files are too large to instrument within the `maxTokensPerFile` budget. The Coordinator detects this during the pre-run cost ceiling calculation (see [Cost Visibility](#cost-visibility)): for each file, `countTokens()` returns the input token count for the full request (system prompt — which includes the embedded resolved schema — plus the per-file user message), which is then multiplied by the per-file attempt ceiling. When a file's estimated total cost exceeds `maxTokensPerFile`, the Coordinator skips the file without making any LLM calls and records it with `status: "skipped"`, `reason: "budget-exceeded"`, and a note explaining the estimated token cost. This is expected behavior, not a failure — the file is too large for the agent to process as a single unit.
+
+The PoC strategy for over-budget files is **accept and skip**:
+
+- **No file chunking.** Splitting a file into independently instrumentable sections requires understanding function boundaries, shared state, and import dependencies between chunks. This is a significant architectural addition that is not justified for PoC, where over-budget files are rare (1 of 21 in the evaluation run).
+- **No automatic budget increase.** Raising `maxTokensPerFile` for individual files defeats the purpose of the budget — it exists to prevent runaway cost, not to be bypassed. Users who encounter over-budget files should evaluate whether the file genuinely needs instrumentation or whether it should be excluded via the `exclude` config.
+- **`maxTokensPerFile` is configurable.** Users with large files and sufficient budget can increase the default. The config field already exists and is documented. This is the intended escape hatch — an explicit decision by the user, not an automatic escalation.
+- **Post-PoC: file splitting.** A future version could implement function-level extraction — identify instrumentable functions, extract them with their import context, instrument individually, and reassemble. This requires robust AST manipulation and careful handling of shared module scope (tracer declaration, import deduplication). Deferred to post-PoC.
+
+The Coordinator reports skipped-due-to-budget files in the PR summary alongside other skipped files (already-instrumented, excluded by pattern). Budget-skipped files populate `FileResult` as: `status: "skipped"`, `reason: "budget-exceeded"`, `spansAdded: 0`, `librariesNeeded: []`, `schemaExtensions: []`, `attributesCreated: 0`, `validationAttempts: 0`, `tokenUsage: {inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0}`, and a note in the `notes` array including the estimated total token cost across all attempts (i.e., `countTokens()` result × per-file attempt ceiling). Budget-skipped files count toward `maxFilesPerRun` since they are discovered and evaluated during the cost ceiling calculation. The `reason` field disambiguates skip causes: `"already-instrumented"` (existing OTel patterns detected), `"budget-exceeded"` (estimated cost exceeds `maxTokensPerFile`), or `"excluded"` (matched an `exclude` pattern). All skipped files share `status: "skipped"` with `spansAdded: 0`; the `reason` field distinguishes intent.
+
 **`maxFixAttempts` (default: 2, configurable):** This controls the number of *fix* attempts after the initial generation — i.e., the total number of attempts is `1 + maxFixAttempts`. The last fix attempt is always a fresh regeneration; all preceding fix attempts are multi-turn. Specific values: `maxFixAttempts: 0` disables the fix loop entirely (one shot). `maxFixAttempts: 1` gives initial + one multi-turn fix (no fresh regeneration). `maxFixAttempts: 2` (default) gives initial + one multi-turn fix + one fresh regeneration. `maxFixAttempts: N` (for N > 2) gives initial + (N-1) multi-turn fixes + one fresh regeneration. The research strongly discourages values above 3 — Olausson et al. showed diminishing returns from deep repair, and Aider's hardcoded 3 is the practical upper bound.
 
 **Rationale for defaults:** Aider hardcodes `max_reflections = 3` (3 fix attempts after the initial generation, for 4 total). Olausson et al. (ICLR 2024) found that 1 repair attempt per initial sample is the cost-effective sweet spot — additional repair iterations showed diminishing returns and sometimes *reduced* pass rates below baseline. Our agent uses external validation (compiler errors, lint output, Weaver check results) rather than LLM self-repair, which provides higher-quality feedback than the paper's baseline. The paper showed that feedback quality is the key bottleneck: human *explanations* improved repair rates by 1.58×. Our feedback falls between the paper's self-repair condition and human explanations — we provide specific *detection* (exact error, exact line) but not *diagnosis* (why it's wrong or how to fix it). This is a bet that external detection is enough to justify 2 fix attempts rather than 1, but it's not a derived conclusion — the research only proves that feedback quality matters, not where our feedback falls on the spectrum. The fresh regeneration attempt is the key innovation over Aider's uniform multi-turn approach — it provides the "diverse initial sample" benefit identified by Olausson et al. within a single file's budget. Tang et al. (NeurIPS 2024) further confirmed that intelligent repair budget allocation consistently outperforms naive iteration, framing repair as an exploration-exploitation tradeoff.
@@ -1160,7 +1172,7 @@ interface LibraryRequirement {
  */
 interface FileResult {
   path: string;
-  status: "success" | "failed" | "skipped";          // "skipped" for already-instrumented files
+  status: "success" | "failed" | "skipped";          // "skipped" for files not processed (see reason field)
   spansAdded: number;
   librariesNeeded: LibraryRequirement[];              // Coordinator handles installation + SDK registration
   schemaExtensions: string[];                         // IDs of new schema entries
@@ -1173,7 +1185,7 @@ interface FileResult {
   schemaHashBefore?: string;                          // hash of resolved schema before agent ran
   schemaHashAfter?: string;                           // hash of resolved schema after agent ran
   agentVersion?: string;                              // version of agent/prompt that produced this result
-  reason?: string;                                    // human-readable summary, e.g. "syntax errors after 3 attempts"
+  reason?: string;                                    // for skipped: "already-instrumented" | "budget-exceeded" | "excluded"; for failed: human-readable summary, e.g. "syntax errors after 3 attempts"
   lastError?: string;                                 // raw error output for debugging, e.g. "Unexpected token at line 42"
   advisoryAnnotations?: CheckResult[];                // Tier 2 advisory findings for PR display
   tokenUsage: TokenUsage;                             // Cumulative across all attempts
@@ -1192,7 +1204,7 @@ The `advisoryAnnotations` field captures Tier 2 advisory findings (Normal/Low im
 
 The `tokenUsage` field tracks cumulative token usage across all attempts for this file, making per-file cost data available to the coordinator and PR summary.
 
-The `"skipped"` status is for already-instrumented files (detected via existing OTel imports). Skipped files aren't failures — making this explicit lets the coordinator report them accurately in the PR summary.
+The `"skipped"` status covers files not processed for any reason: already-instrumented (existing OTel imports detected), budget-exceeded (estimated token cost exceeds `maxTokensPerFile`), or excluded (matched an `exclude` pattern). The `reason` field disambiguates the cause. Skipped files aren't failures — making the reason explicit lets the Coordinator report them accurately in the PR summary.
 
 **Populating FileResult fields is a requirement, not optional.** The first-draft implementation defined these fields but left most of them empty — `validationAttempts: 0`, `errorProgression: []`, `notes: []` — even on successful files. The result was that the PR summary, cost reporting, and debugging tools had no data to work with despite the data structures being correctly designed. Every function that produces a `FileResult` must populate all applicable fields. Integration tests must assert that diagnostic fields contain meaningful content, not just that `result.status === 'success'`.
 
