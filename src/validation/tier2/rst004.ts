@@ -202,5 +202,5 @@ function hasIOCalls(bodyText: string): boolean {
  * isn't in the IO_PATTERNS list, consistent with RST-001's handling.
  */
 function isAsyncFunction(isAsync: boolean, bodyText: string): boolean {
-  return isAsync || bodyText.includes('await ');
+  return isAsync || /\bawait[\s(]/.test(bodyText);
 }
