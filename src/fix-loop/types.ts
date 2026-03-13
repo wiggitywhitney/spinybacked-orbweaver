@@ -11,7 +11,8 @@ import type { LibraryRequirement, SpanCategories, TokenUsage } from '../agent/sc
 export type ValidationStrategy =
   | 'initial-generation'
   | 'multi-turn-fix'
-  | 'fresh-regeneration';
+  | 'fresh-regeneration'
+  | 'retry-initial';
 
 /**
  * Complete outcome of instrumenting a single file, including all retry metadata.
