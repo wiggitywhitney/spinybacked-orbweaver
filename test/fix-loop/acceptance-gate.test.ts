@@ -194,10 +194,14 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
         expect(fileOnDisk).not.toBe(originalCode);
       }
 
-      // Token usage always populated — inputTokens may be 0 when prompt caching
-      // serves the entire input from cache (cacheReadInputTokens instead)
-      const totalInput = result.tokenUsage.inputTokens + result.tokenUsage.cacheReadInputTokens;
-      expect(totalInput).toBeGreaterThan(0);
+      // Token usage: always > 0 on success (real API call completed).
+      // On failure, may be 0 if the API call failed before returning tokens
+      // (e.g., transient network error, rate limit, timeout).
+      expect(result.tokenUsage).toBeDefined();
+      if (result.status === 'success') {
+        const totalInput = result.tokenUsage.inputTokens + result.tokenUsage.cacheReadInputTokens;
+        expect(totalInput).toBeGreaterThan(0);
+      }
     });
   });
 
@@ -219,9 +223,12 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
         expect(result.validationStrategyUsed).toBe('fresh-regeneration');
       }
 
-      // Error progression length matches attempts
+      // errorProgression has one entry per attempt that reached validation or
+      // hit an instrument failure. May be fewer than validationAttempts if
+      // budget was exceeded between instrument and validation.
       expect(result.errorProgression).toBeDefined();
-      expect(result.errorProgression!.length).toBe(result.validationAttempts);
+      expect(result.errorProgression!.length).toBeGreaterThanOrEqual(1);
+      expect(result.errorProgression!.length).toBeLessThanOrEqual(result.validationAttempts);
     });
   });
 

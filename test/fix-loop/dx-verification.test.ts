@@ -549,8 +549,10 @@ describe('DX verification — FileResult field content for all exit paths', () =
       // Token usage captured from the failed call
       expect(result.tokenUsage).toEqual(attempt1Tokens);
 
-      // No errorProgression entries — validation never ran
-      expect(result.errorProgression).toEqual([]);
+      // errorProgression records the instrument failure even though validation never ran
+      expect(result.errorProgression).toEqual([
+        'LLM response had null parsed_output — the model returned an empty response',
+      ]);
 
       // No metadata from output since there was none
       expect(result.librariesNeeded).toEqual([]);
