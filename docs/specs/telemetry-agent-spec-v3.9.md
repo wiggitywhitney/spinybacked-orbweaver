@@ -2,7 +2,7 @@
 
 **Status:** Draft v3.9
 **Created:** 2026-02-05
-**Updated:** 2026-03-12
+**Updated:** 2026-03-13
 **Purpose:** AI agent that auto-instruments JavaScript code with OpenTelemetry based on a Weaver schema (agent written in TypeScript)
 
 ## Revision History
