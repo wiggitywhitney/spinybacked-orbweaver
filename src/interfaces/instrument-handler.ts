@@ -199,6 +199,11 @@ export async function handleInstrument(
       const exitCode = isCostCeilingRejection(err) ? 3 : 2;
       return { exitCode };
     }
+    // Distinguish missing modules (dependency not installed) from runtime failures
+    if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ERR_MODULE_NOT_FOUND') {
+      deps.stderr(`Module not found: ${err.message}. Check that all dependencies are installed.`);
+      return { exitCode: 2 };
+    }
     const message = err instanceof Error ? err.message : String(err);
     deps.stderr(`Unexpected error: ${message}`);
     return { exitCode: 2 };
