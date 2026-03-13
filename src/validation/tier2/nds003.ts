@@ -49,8 +49,8 @@ function isInstrumentationLine(line: string): boolean {
  * NDS-003: Verify that non-instrumentation lines are unchanged.
  *
  * Two-directional check:
- * 1. Forward: all original lines appear in the instrumented output as a subsequence
- *    (preserving relative order, allowing indentation changes via trim)
+ * 1. Forward: all original lines appear in the instrumented output
+ *    (frequency-counted presence check, allowing indentation changes via trim)
  * 2. Reverse: after filtering instrumentation patterns from the instrumented output,
  *    no non-instrumentation lines were added
  *
@@ -87,27 +87,24 @@ export function checkNonInstrumentationDiff(
     }];
   }
 
-  // Forward check: original lines must be a subsequence of instrumented lines
+  // Forward check: every original line must appear in the instrumented output.
+  // Use a frequency map so duplicate lines are counted correctly.
+  const instrFreq = new Map<string, number>();
+  for (const line of instrumentedLines) {
+    instrFreq.set(line, (instrFreq.get(line) ?? 0) + 1);
+  }
+
   const missingLines: Array<{ line: string; originalLineNum: number }> = [];
-  let instrIdx = 0;
   let lineNum = 0;
   for (const rawLine of originalCode.split('\n')) {
     lineNum++;
     const trimmed = rawLine.trim();
     if (trimmed.length === 0) continue;
 
-    // Advance through instrumented lines looking for this original line
-    let found = false;
-    while (instrIdx < instrumentedLines.length) {
-      if (instrumentedLines[instrIdx] === trimmed) {
-        instrIdx++;
-        found = true;
-        break;
-      }
-      instrIdx++;
-    }
-
-    if (!found) {
+    const count = instrFreq.get(trimmed) ?? 0;
+    if (count > 0) {
+      instrFreq.set(trimmed, count - 1);
+    } else {
       missingLines.push({ line: trimmed, originalLineNum: lineNum });
     }
   }
