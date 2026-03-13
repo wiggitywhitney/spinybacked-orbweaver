@@ -2020,12 +2020,12 @@ describe('isRetryableInstrumentError — regression guard for upstream error str
   // If someone changes the upstream strings without updating the matcher, these tests fail.
   it.each([
     {
-      name: 'null parsed_output (from instrument-file.ts:193)',
+      name: 'null parsed_output (retryable)',
       error: 'LLM response had null parsed_output — no structured output was returned',
       expected: true,
     },
     {
-      name: 'elision detected (from instrument-file.ts:205)',
+      name: 'elision detected (retryable)',
       error: 'Output rejected: elision detected. File is 200 lines shorter than original.',
       expected: true,
     },
