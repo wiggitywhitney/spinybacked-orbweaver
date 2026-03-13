@@ -162,7 +162,7 @@ function buildFailureHint(validation: ValidationResult): string | undefined {
  * - "elision detected" — from detectElision() in src/agent/elision.ts
  * If those upstream error messages change, this classification must be updated to match.
  */
-function isRetryableInstrumentError(error: string): boolean {
+export function isRetryableInstrumentError(error: string): boolean {
   if (error.includes('null parsed_output')) return true;
   if (error.includes('elision detected')) return true;
   return false;
