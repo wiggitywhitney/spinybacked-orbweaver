@@ -100,17 +100,16 @@ function renderPerFileStatus(runResult: RunResult, display: DisplayFn): string {
 
   for (const file of runResult.fileResults) {
     const name = display(file.path);
-    const statusIcon = file.status === 'success' ? 'success' : file.status === 'failed' ? 'failed' : 'skipped';
+    let statusText = file.status === 'success' ? 'success' : file.status === 'failed' ? 'failed' : 'skipped';
+    if (file.status === 'failed' && file.reason) {
+      statusText = `failed: ${sanitizeCell(file.reason)}`;
+    }
     const libs = file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—';
     const exts = file.schemaExtensions.length > 0
       ? file.schemaExtensions.map(e => `\`${sanitizeCell(e)}\``).join(', ')
       : '—';
 
-    lines.push(`| ${name} | ${statusIcon} | ${file.spansAdded} | ${libs} | ${exts} |`);
-
-    if (file.status === 'failed' && file.reason) {
-      lines.push(`| | | | \\> ${sanitizeCell(file.reason)} | |`);
-    }
+    lines.push(`| ${name} | ${statusText} | ${file.spansAdded} | ${libs} | ${exts} |`);
   }
 
   return lines.join('\n');

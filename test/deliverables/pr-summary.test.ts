@@ -114,6 +114,30 @@ describe('renderPrSummary', () => {
       expect(md).toContain('broken.js');
       expect(md).toMatch(/failed/i);
       expect(md).toContain('Syntax errors persisted after 3 attempts');
+      // Reason must not use broken \> markdown syntax in table cells
+      expect(md).not.toContain('\\>');
+    });
+
+    it('renders failure reason inline in the status cell', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/broken.js',
+            status: 'failed',
+            spansAdded: 0,
+            reason: 'Lint errors after retries',
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // The reason should appear in the same row as the file, in the status cell
+      const tableLines = md.split('\n').filter(l => l.includes('broken.js'));
+      expect(tableLines).toHaveLength(1);
+      expect(tableLines[0]).toContain('failed');
+      expect(tableLines[0]).toContain('Lint errors after retries');
     });
 
     it('includes skipped files', () => {
