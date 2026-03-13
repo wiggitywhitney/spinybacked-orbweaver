@@ -6,8 +6,8 @@ import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { validateFile } from '../../src/validation/chain.ts';
-import type { ValidateFileInput, ValidationConfig } from '../../src/validation/types.ts';
+import { validateFile, collectCheckResults } from '../../src/validation/chain.ts';
+import type { ValidateFileInput, ValidationConfig, CheckResult } from '../../src/validation/types.ts';
 
 const validRegistry = join(import.meta.dirname, '../fixtures/weaver-registry/valid');
 
@@ -257,6 +257,46 @@ describe('validateFile', () => {
       const cdq001Failure = result.blockingFailures.find((r) => r.ruleId === 'CDQ-001');
       expect(cdq001Failure).toBeDefined();
       expect(cdq001Failure?.passed).toBe(false);
+    });
+  });
+
+  describe('collectCheckResults', () => {
+    it('does not mutate the original CheckResult objects', () => {
+      const original: CheckResult = {
+        ruleId: 'CDQ-001',
+        passed: false,
+        filePath: '/tmp/test.js',
+        lineNumber: 5,
+        message: 'test',
+        tier: 2,
+        blocking: true,
+      };
+
+      const collected = collectCheckResults([original], false);
+
+      // The returned result should have blocking=false
+      expect(collected[0].blocking).toBe(false);
+      // The original object should be unchanged
+      expect(original.blocking).toBe(true);
+    });
+
+    it('normalizes a single result to an array', () => {
+      const single: CheckResult = {
+        ruleId: 'CDQ-001',
+        passed: true,
+        filePath: '/tmp/test.js',
+        lineNumber: null,
+        message: 'ok',
+        tier: 2,
+        blocking: false,
+      };
+
+      const collected = collectCheckResults(single, true);
+
+      expect(collected).toHaveLength(1);
+      expect(collected[0].blocking).toBe(true);
+      // Original not mutated
+      expect(single.blocking).toBe(false);
     });
   });
 

@@ -205,15 +205,12 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
  * from the validation config. Supports the migration from single-result
  * checks to per-finding array results (issue #43).
  */
-function collectCheckResults(
+export function collectCheckResults(
   result: CheckResult | CheckResult[],
   blocking: boolean,
 ): CheckResult[] {
   const results = Array.isArray(result) ? result : [result];
-  for (const r of results) {
-    r.blocking = blocking;
-  }
-  return results;
+  return results.map((r) => ({ ...r, blocking }));
 }
 
 /**
