@@ -143,6 +143,13 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('<namespace>.<category>.<operation>');
   });
 
+  it('requires new span names to be reported as schema extensions', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    expect(prompt).toContain('schemaExtensions');
+    expect(prompt).toContain('not already in the schema');
+  });
+
   it('includes auto-instrumentation library allowlist', () => {
     const prompt = buildSystemPrompt(schema);
 
