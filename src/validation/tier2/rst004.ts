@@ -55,6 +55,7 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
     if (fn.isExported()) continue;
     if (exportedNames.has(name)) continue;
     if (hasIOCalls(bodyText)) continue;
+    if (isAsyncFunction(fn.isAsync(), bodyText)) continue;
 
     flagged.push({ name, line: fn.getStartLineNumber(), kind: 'unexported function' });
   }
@@ -77,6 +78,11 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
       if (exportedNames.has(name)) continue;
       if (hasIOCalls(bodyText)) continue;
 
+      // Check async: arrow functions use the initializer node, function expressions use their own async flag
+      const isAsync = (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression)
+        && bodyText.includes('async');
+      if (isAsyncFunction(isAsync, bodyText)) continue;
+
       flagged.push({ name, line: initializer.getStartLineNumber(), kind: 'unexported function' });
     }
   }
@@ -91,6 +97,7 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
     const bodyText = node.getText();
     if (!hasSpanCall(bodyText)) return;
     if (hasIOCalls(bodyText)) return;
+    if (isAsyncFunction(node.isAsync(), bodyText)) return;
 
     flagged.push({ name, line: node.getStartLineNumber(), kind: 'private method' });
   });
@@ -187,4 +194,13 @@ function hasSpanCall(text: string): boolean {
  */
 function hasIOCalls(bodyText: string): boolean {
   return IO_PATTERNS.some((pattern) => bodyText.includes(pattern));
+}
+
+/**
+ * Check if a function is async or contains await.
+ * Async functions likely perform I/O even if the specific call
+ * isn't in the IO_PATTERNS list, consistent with RST-001's handling.
+ */
+function isAsyncFunction(isAsync: boolean, bodyText: string): boolean {
+  return isAsync || bodyText.includes('await ');
 }

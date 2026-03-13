@@ -170,6 +170,92 @@ describe('checkInternalDetailSpans (RST-004)', () => {
     });
   });
 
+  describe('async exemption', () => {
+    it('does not flag unexported async function with span', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function getUser(id) {',
+        '  return tracer.startActiveSpan("getUser", async (span) => {',
+        '    try {',
+        '      return lookupUser(id);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag unexported arrow function with await', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'const getUser = async (id) => {',
+        '  return tracer.startActiveSpan("getUser", async (span) => {',
+        '    try {',
+        '      const result = await lookupUser(id);',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '};',
+      ].join('\n');
+
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag private async class method with span', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'class UserService {',
+        '  async #loadProfile(id) {',
+        '    return tracer.startActiveSpan("loadProfile", async (span) => {',
+        '      try {',
+        '        return lookupProfile(id);',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags non-async unexported function without I/O', () => {
+      // Ensures async exemption doesn't accidentally exempt everything
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function formatName(first, last) {',
+        '  return tracer.startActiveSpan("formatName", (span) => {',
+        '    try {',
+        '      return `${first} ${last}`;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
