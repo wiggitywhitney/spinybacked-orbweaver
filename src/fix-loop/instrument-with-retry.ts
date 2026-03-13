@@ -266,23 +266,29 @@ async function executeRetryLoop(
   let lastStrategy: ValidationStrategy = 'initial-generation';
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const strategy = strategyForAttempt(attempt, maxAttempts);
-    lastStrategy = strategy;
+    const plannedStrategy = strategyForAttempt(attempt, maxAttempts);
 
     // Build call options for retry attempts based on strategy
     let callOptions: InstrumentFileCallOptions | undefined;
-    if (strategy === 'multi-turn-fix' && lastConversationContext && lastValidation) {
+    let actualStrategy: ValidationStrategy = plannedStrategy;
+    if (plannedStrategy === 'multi-turn-fix' && lastConversationContext && lastValidation) {
       // Multi-turn fix: grow the conversation with validation feedback
       callOptions = {
         conversationContext: lastConversationContext,
         feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
       };
-    } else if (strategy === 'fresh-regeneration' && lastValidation) {
+    } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint
       callOptions = {
         failureHint: buildFailureHint(lastValidation),
       };
+    } else if (plannedStrategy !== 'initial-generation') {
+      // No conversation context or validation available — this is a retry
+      // of initial generation triggered by a retryable failure, not a real
+      // multi-turn fix or fresh regeneration.
+      actualStrategy = 'retry-initial';
     }
+    lastStrategy = actualStrategy;
 
     // Call instrumentFile
     const instrumentResult = await instrumentFileFn(
@@ -302,7 +308,7 @@ async function executeRetryLoop(
       // Terminal failure or last attempt — stop immediately
       return buildFailedResult(
         filePath, instrumentResult.error, instrumentResult.error,
-        cumulativeTokens, attempt, strategy, errorProgression, lastOutput,
+        cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
       );
     }
 
@@ -319,7 +325,7 @@ async function executeRetryLoop(
     if (totalTokens(cumulativeTokens) > config.maxTokensPerFile) {
       const reason = `Token budget exceeded: ${totalTokens(cumulativeTokens)} tokens used, budget is ${config.maxTokensPerFile}`;
       return buildFailedResult(
-        filePath, reason, reason, cumulativeTokens, attempt, strategy, errorProgression, output,
+        filePath, reason, reason, cumulativeTokens, attempt, actualStrategy, errorProgression, output,
       );
     }
 
@@ -346,7 +352,7 @@ async function executeRetryLoop(
         schemaExtensions: output.schemaExtensions,
         attributesCreated: output.attributesCreated,
         validationAttempts: attempt,
-        validationStrategyUsed: strategy,
+        validationStrategyUsed: actualStrategy,
         errorProgression,
         spanCategories: output.spanCategories,
         notes: output.notes,
@@ -365,7 +371,7 @@ async function executeRetryLoop(
     if (attempt > 1 && previousValidation) {
       const oscillation = detectOscillation(validation, previousValidation);
       if (oscillation.shouldSkip) {
-        const isFreshRegen = strategy === 'fresh-regeneration';
+        const isFreshRegen = actualStrategy === 'fresh-regeneration';
         if (isFreshRegen) {
           // Already on fresh regeneration — bail immediately
           const reason = `Oscillation detected during fresh regeneration: ${oscillation.reason}`;
@@ -374,7 +380,7 @@ async function executeRetryLoop(
             .join('\n');
           return buildFailedResult(
             filePath, reason, lastError, cumulativeTokens,
-            attempt, strategy, errorProgression, lastOutput,
+            attempt, actualStrategy, errorProgression, lastOutput,
             validation.blockingFailures[0]?.ruleId,
           );
         }

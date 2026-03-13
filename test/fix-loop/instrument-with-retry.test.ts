@@ -1935,6 +1935,34 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     expect(callCount).toBe(2);
   });
 
+  it('reports retry-initial strategy when retryable failure triggers re-run', async () => {
+    let callCount = 0;
+    const goodOutput = makeInstrumentationOutput({ tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            success: false,
+            error: 'Output rejected: elision detected. File is 200 lines shorter than original.',
+            tokenUsage: attempt1Tokens,
+          } as InstrumentFileResult;
+        }
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    // Attempt 2 ran without conversation context — it was a retry of initial generation
+    expect(result.validationStrategyUsed).toBe('retry-initial');
+  });
+
   it('tracks retryable failures in errorProgression', async () => {
     let callCount = 0;
     const goodOutput = makeInstrumentationOutput({ tokenUsage: attempt2Tokens });
