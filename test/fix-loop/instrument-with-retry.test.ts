@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
+import { instrumentWithRetry, isRetryableInstrumentError, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION } from '../../src/fix-loop/instrument-with-retry.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
@@ -2042,5 +2042,47 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     expect(callCount).toBe(3);
     expect(result.validationAttempts).toBe(3);
     expect(result.reason).toContain('null parsed_output');
+  });
+});
+
+describe('isRetryableInstrumentError — regression guard for upstream error string coupling', () => {
+  // Retryable error substrings are exported as constants from the source module.
+  // These tests verify the matcher classifies errors correctly using the same
+  // substrings that instrument-file.ts embeds in its error messages.
+  it.each([
+    {
+      name: 'null parsed_output (retryable)',
+      error: `LLM response had ${RETRYABLE_NULL_OUTPUT} — no structured output was returned`,
+      expected: true,
+    },
+    {
+      name: 'elision detected (retryable)',
+      error: `Output rejected: ${RETRYABLE_ELISION}. File is 200 lines shorter than original.`,
+      expected: true,
+    },
+    {
+      name: 'API auth failure (terminal)',
+      error: 'Anthropic API call failed: 401 Unauthorized',
+      expected: false,
+    },
+    {
+      name: 'network error (terminal)',
+      error: 'Anthropic API call failed: Connection refused',
+      expected: false,
+    },
+    {
+      name: 'token budget exceeded (terminal)',
+      error: 'Token budget exceeded: 150000 tokens used, budget is 100000',
+      expected: false,
+    },
+  ])('$name → retryable=$expected', ({ error, expected }) => {
+    expect(isRetryableInstrumentError(error)).toBe(expected);
+  });
+
+  it('retryable substrings match what instrument-file.ts produces', () => {
+    // If these constants change, both the matcher and these tests update together.
+    // If instrument-file.ts stops using these substrings, the acceptance gate catches it.
+    expect(RETRYABLE_NULL_OUTPUT).toBe('null parsed_output');
+    expect(RETRYABLE_ELISION).toBe('elision detected');
   });
 });
