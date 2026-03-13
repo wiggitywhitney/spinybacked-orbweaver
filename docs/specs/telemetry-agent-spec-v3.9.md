@@ -961,7 +961,7 @@ Attempt 3 (fresh regeneration):
 
 **`maxTokensPerFile` derivation:** A single API call for a typical file (~200 lines) costs roughly 8-12K tokens (system prompt ~5K, file content ~1K, schema context ~2K, output ~2-4K). A large file at the `largeFileThresholdLines` boundary (~500 lines) costs roughly 12-16K per call. With 3 total attempts (initial + multi-turn fix + fresh regeneration), worst-case usage is: attempt 1 (~16K) + attempt 2 multi-turn (~5K incremental) + attempt 3 fresh (~16K) ≈ 37K for a large file. The default of 80K provides ~2× headroom over this worst case, accommodating files somewhat above the large-file threshold and variance in schema/prompt size. **Note on schema size variability:** The "~2K schema context" estimate assumes a small registry (e.g., commit-story's ~10-15 span definitions). A production project with 50+ span definitions could push schema context to 8-10K tokens per call, shifting the per-call cost upward. The 2× headroom is intended to absorb this variance, but projects with large schemas may need to increase `maxTokensPerFile` accordingly. Files that exhaust 80K tokens across 3 attempts are genuinely intractable and should fail. This is a PoC default — production tuning should adjust based on observed usage patterns and actual schema size.
 
-**Files exceeding the token budget:** Some files are too large to instrument within the `maxTokensPerFile` budget. The `countTokens()` pre-flight check (see SDK Capabilities) estimates token cost before making the first API call. When a file's estimated cost (system prompt + file content + schema context + expected output) exceeds the budget, the Coordinator skips the file without making any API calls and records it with `status: "skipped"` and a note explaining the budget exceeded reason. This is expected behavior, not a failure — the file is too large for the agent to process as a single unit.
+**Files exceeding the token budget:** Some files are too large to instrument within the `maxTokensPerFile` budget. The Coordinator detects this during the pre-run cost ceiling calculation (see [Cost Visibility](#cost-visibility)): for each file, `countTokens()` returns the input token count for the system prompt + file content, which is then multiplied by the per-file attempt ceiling. When a file's estimated total cost exceeds `maxTokensPerFile`, the Coordinator skips the file without making any LLM calls and records it with `status: "skipped"`, `reason: "budget-exceeded"`, and a note explaining the estimated token cost. This is expected behavior, not a failure — the file is too large for the agent to process as a single unit.
 
 The PoC strategy for over-budget files is **accept and skip**:
 
@@ -970,7 +970,7 @@ The PoC strategy for over-budget files is **accept and skip**:
 - **`maxTokensPerFile` is configurable.** Users with large files and sufficient budget can increase the default. The config field already exists and is documented. This is the intended escape hatch — an explicit decision by the user, not an automatic escalation.
 - **Post-PoC: file splitting.** A future version could implement function-level extraction — identify instrumentable functions, extract them with their import context, instrument individually, and reassemble. This requires robust AST manipulation and careful handling of shared module scope (tracer declaration, import deduplication). Deferred to post-PoC.
 
-The Coordinator reports skipped-due-to-budget files in the PR summary alongside other skipped files (already-instrumented, excluded by pattern). The `FileResult` for a budget-skipped file has `status: "skipped"`, `spansAdded: 0`, and a note in the `notes` array explaining the skip reason and the file's estimated token cost.
+The Coordinator reports skipped-due-to-budget files in the PR summary alongside other skipped files (already-instrumented, excluded by pattern). The `FileResult` for a budget-skipped file has `status: "skipped"`, `reason: "budget-exceeded"`, `spansAdded: 0`, and a note in the `notes` array including the file's estimated token cost. The `reason` field disambiguates skip causes: `"already-instrumented"` (existing OTel patterns detected), `"budget-exceeded"` (estimated cost exceeds `maxTokensPerFile`), or `"excluded"` (matched an `exclude` pattern). All skipped files share `status: "skipped"` with `spansAdded: 0`; the `reason` field distinguishes intent.
 
 **`maxFixAttempts` (default: 2, configurable):** This controls the number of *fix* attempts after the initial generation — i.e., the total number of attempts is `1 + maxFixAttempts`. The last fix attempt is always a fresh regeneration; all preceding fix attempts are multi-turn. Specific values: `maxFixAttempts: 0` disables the fix loop entirely (one shot). `maxFixAttempts: 1` gives initial + one multi-turn fix (no fresh regeneration). `maxFixAttempts: 2` (default) gives initial + one multi-turn fix + one fresh regeneration. `maxFixAttempts: N` (for N > 2) gives initial + (N-1) multi-turn fixes + one fresh regeneration. The research strongly discourages values above 3 — Olausson et al. showed diminishing returns from deep repair, and Aider's hardcoded 3 is the practical upper bound.
 
@@ -1172,7 +1172,7 @@ interface LibraryRequirement {
  */
 interface FileResult {
   path: string;
-  status: "success" | "failed" | "skipped";          // "skipped" for already-instrumented files
+  status: "success" | "failed" | "skipped";          // "skipped" for files not processed (see reason field)
   spansAdded: number;
   librariesNeeded: LibraryRequirement[];              // Coordinator handles installation + SDK registration
   schemaExtensions: string[];                         // IDs of new schema entries
@@ -1185,7 +1185,7 @@ interface FileResult {
   schemaHashBefore?: string;                          // hash of resolved schema before agent ran
   schemaHashAfter?: string;                           // hash of resolved schema after agent ran
   agentVersion?: string;                              // version of agent/prompt that produced this result
-  reason?: string;                                    // human-readable summary, e.g. "syntax errors after 3 attempts"
+  reason?: string;                                    // for skipped: "already-instrumented" | "budget-exceeded" | "excluded"; for failed: human-readable summary, e.g. "syntax errors after 3 attempts"
   lastError?: string;                                 // raw error output for debugging, e.g. "Unexpected token at line 42"
   advisoryAnnotations?: CheckResult[];                // Tier 2 advisory findings for PR display
   tokenUsage: TokenUsage;                             // Cumulative across all attempts
