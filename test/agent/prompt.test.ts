@@ -128,6 +128,28 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('Service entry points');
   });
 
+  it('includes span naming guidance that prioritizes schema-defined names', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Must instruct the agent to check schema spans[].name first
+    expect(prompt).toContain('spans[].name');
+    expect(prompt).toContain('schema-defined span name');
+  });
+
+  it('includes span naming convention for new spans', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // When no schema span matches, use namespace.category.operation convention
+    expect(prompt).toContain('<namespace>.<category>.<operation>');
+  });
+
+  it('requires new span names to be reported as schema extensions', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    expect(prompt).toContain('schemaExtensions');
+    expect(prompt).toContain('not already in the schema');
+  });
+
   it('includes auto-instrumentation library allowlist', () => {
     const prompt = buildSystemPrompt(schema);
 
