@@ -74,6 +74,14 @@ export async function myFunction(params) {
 
 For functions with existing try/catch blocks, wrap the entire function body — preserve the existing error handling inside the try block and add OTel error recording at the top of the catch block.
 
+### Span Naming
+
+When choosing a span name for \`tracer.startActiveSpan()\`:
+
+1. **Check the schema first.** Look at the \`spans[].name\` definitions in the schema above. If a schema-defined span name matches the function's purpose, use that exact name. Schema-defined names are authoritative — a human decided what these operations should be called.
+2. **Invent a name only if no schema span matches.** Follow the \`<namespace>.<category>.<operation>\` convention, where namespace comes from the schema, category groups related operations (e.g., \`git\`, \`context\`, \`ai\`), and operation describes the action (e.g., \`get_commit_diff\`, \`collect\`, \`generate\`).
+3. **Report new span names in \`schemaExtensions\`.** Any span name not already in the schema is a schema extension.
+
 ### Auto-Instrumentation Library Detection (Path 1)
 
 When a file imports a framework with an available auto-instrumentation library, record the library need in \`librariesNeeded\` instead of adding manual spans on those specific framework calls. A function may still receive a manual span as a service entry point even if it calls auto-instrumented libraries.
