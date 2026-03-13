@@ -136,7 +136,8 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
  * Determine whether an exported async function looks like a service entry point.
  * Uses two heuristics per the spec ("exported async functions from service modules"):
  * 1. Parameter names that signal request/event handling (req, res, ctx, event, etc.)
- * 2. File path in a service-module directory (routes/, handlers/, controllers/, api/, services/)
+ * 2. File path in a service-module directory (routes/, handlers/, controllers/, api/, services/,
+ *    middleware/, resolvers/, mutations/, queries/, endpoints/, jobs/, workers/, subscribers/, commands/)
  *
  * Returns false for utility/helper functions in non-service directories with
  * generic parameter names — these are exported for reuse, not as entry points.
