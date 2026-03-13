@@ -28,6 +28,17 @@ const IO_PATTERNS = [
 const MAX_UTILITY_LINES = 5;
 
 /**
+ * Lines of overhead added by the OTel span wrapper pattern:
+ *   1. tracer.startActiveSpan("name", (span) => {
+ *   2.   try {
+ *   3.   } finally {
+ *   4.     span.end();
+ * These lines are subtracted from total function line count to estimate
+ * the original function body size before instrumentation.
+ */
+export const SPAN_WRAPPER_OVERHEAD_LINES = 4;
+
+/**
  * RST-001: Flag spans on utility functions.
  *
  * A utility function is one that is:
@@ -136,7 +147,7 @@ function isUtilityWithSpan(
   // since the span adds ~4 lines of overhead (startActiveSpan, try, finally, span.end).
   // A utility function with span wrapper: ~5 original lines + 4 wrapper = ~9 total.
   // We use the total count minus estimated overhead.
-  const estimatedOriginalLines = bodyLineCount - 4;
+  const estimatedOriginalLines = bodyLineCount - SPAN_WRAPPER_OVERHEAD_LINES;
   if (estimatedOriginalLines > MAX_UTILITY_LINES) return false;
 
   // Check for I/O calls in body

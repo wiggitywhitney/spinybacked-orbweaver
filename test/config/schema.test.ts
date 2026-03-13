@@ -27,6 +27,8 @@ function makeFullConfig() {
     maxTokensPerFile: 80000,
     largeFileThresholdLines: 500,
     schemaCheckpointInterval: 5,
+    attributesPerFileThreshold: 30,
+    spansPerFileThreshold: 20,
     weaverMinVersion: '0.21.2',
     reviewSensitivity: 'moderate',
     dryRun: false,
@@ -68,6 +70,8 @@ describe('AgentConfigSchema', () => {
       expect(config.maxTokensPerFile).toBe(80000);
       expect(config.largeFileThresholdLines).toBe(500);
       expect(config.schemaCheckpointInterval).toBe(5);
+      expect(config.attributesPerFileThreshold).toBe(30);
+      expect(config.spansPerFileThreshold).toBe(20);
       expect(config.weaverMinVersion).toBe('0.21.2');
       expect(config.reviewSensitivity).toBe('moderate');
       expect(config.dryRun).toBe(false);

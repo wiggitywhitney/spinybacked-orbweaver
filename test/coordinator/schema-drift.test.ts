@@ -161,6 +161,48 @@ describe('detectSchemaDrift', () => {
     });
   });
 
+  describe('configurable thresholds', () => {
+    it('uses custom attribute threshold when provided', () => {
+      const results = [
+        makeResult('/src/big.js', { attributesCreated: 15, spansAdded: 3 }),
+      ];
+
+      // Default threshold is 30, so 15 would pass. With custom threshold of 10, it should flag.
+      const drift = detectSchemaDrift(results, { attributesPerFileThreshold: 10 });
+
+      expect(drift.driftDetected).toBe(true);
+      expect(drift.warnings).toHaveLength(1);
+      expect(drift.warnings[0]).toContain('/src/big.js');
+      expect(drift.warnings[0]).toContain('15');
+      expect(drift.warnings[0]).toContain('10'); // threshold value in message
+    });
+
+    it('uses custom span threshold when provided', () => {
+      const results = [
+        makeResult('/src/routes.js', { spansAdded: 12, attributesCreated: 3 }),
+      ];
+
+      // Default threshold is 20, so 12 would pass. With custom threshold of 10, it should flag.
+      const drift = detectSchemaDrift(results, { spansPerFileThreshold: 10 });
+
+      expect(drift.driftDetected).toBe(true);
+      expect(drift.warnings).toHaveLength(1);
+      expect(drift.warnings[0]).toContain('/src/routes.js');
+      expect(drift.warnings[0]).toContain('12');
+    });
+
+    it('falls back to defaults when thresholds not provided', () => {
+      const results = [
+        makeResult('/src/ok.js', { attributesCreated: 29, spansAdded: 19 }),
+      ];
+
+      // Just below default thresholds of 30/20 — should pass
+      const drift = detectSchemaDrift(results);
+
+      expect(drift.driftDetected).toBe(false);
+    });
+  });
+
   describe('drift summary', () => {
     it('includes total counts across all files', () => {
       const results = [

@@ -2,7 +2,7 @@
 // ABOUTME: Verifies detection of spans on sync, short, unexported, no-I/O functions.
 
 import { describe, it, expect } from 'vitest';
-import { checkUtilityFunctionSpans } from '../../../src/validation/tier2/rst001.ts';
+import { checkUtilityFunctionSpans, SPAN_WRAPPER_OVERHEAD_LINES } from '../../../src/validation/tier2/rst001.ts';
 
 describe('checkUtilityFunctionSpans (RST-001)', () => {
   const filePath = '/tmp/test-file.js';
@@ -183,6 +183,12 @@ describe('checkUtilityFunctionSpans (RST-001)', () => {
       expect(results[0].message).toContain('add');
       expect(results[1].passed).toBe(false);
       expect(results[1].message).toContain('subtract');
+    });
+  });
+
+  describe('SPAN_WRAPPER_OVERHEAD_LINES constant', () => {
+    it('is exported and equals 4 (startActiveSpan + try + finally + span.end)', () => {
+      expect(SPAN_WRAPPER_OVERHEAD_LINES).toBe(4);
     });
   });
 

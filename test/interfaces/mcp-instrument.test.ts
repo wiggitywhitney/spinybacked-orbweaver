@@ -26,6 +26,8 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     maxTokensPerFile: 80000,
     largeFileThresholdLines: 500,
     schemaCheckpointInterval: 5,
+    attributesPerFileThreshold: 30,
+    spansPerFileThreshold: 20,
     reviewSensitivity: 'moderate',
     dryRun: false,
     confirmEstimate: true,
