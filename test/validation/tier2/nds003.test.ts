@@ -273,9 +273,9 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       const results = checkNonInstrumentationDiff(original, instrumented, filePath);
       const missing = results.filter((r) => !r.passed && r.message.includes('missing'));
 
-      // At most 1 line should be reported as missing (b, which moved after c)
-      // The old pointer walk would report b, d, e as all missing
-      expect(missing.length).toBeLessThanOrEqual(1);
+      // With frequency map, all lines are present → no missing lines.
+      // The old pointer walk would report b, d, e as all missing.
+      expect(missing).toHaveLength(0);
     });
   });
 

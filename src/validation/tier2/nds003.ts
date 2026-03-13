@@ -49,8 +49,8 @@ function isInstrumentationLine(line: string): boolean {
  * NDS-003: Verify that non-instrumentation lines are unchanged.
  *
  * Two-directional check:
- * 1. Forward: all original lines appear in the instrumented output as a subsequence
- *    (preserving relative order, allowing indentation changes via trim)
+ * 1. Forward: all original lines appear in the instrumented output
+ *    (frequency-counted presence check, allowing indentation changes via trim)
  * 2. Reverse: after filtering instrumentation patterns from the instrumented output,
  *    no non-instrumentation lines were added
  *
