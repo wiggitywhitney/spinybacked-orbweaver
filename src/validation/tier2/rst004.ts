@@ -78,10 +78,10 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
       if (exportedNames.has(name)) continue;
       if (hasIOCalls(bodyText)) continue;
 
-      // Check async: arrow functions use the initializer node, function expressions use their own async flag
-      const isAsync = (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression)
-        && bodyText.includes('async');
-      if (isAsyncFunction(isAsync, bodyText)) continue;
+      // Use AST to detect async keyword on the declaration
+      const declIsAsync = (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))
+        && initializer.isAsync();
+      if (isAsyncFunction(declIsAsync, bodyText)) continue;
 
       flagged.push({ name, line: initializer.getStartLineNumber(), kind: 'unexported function' });
     }
