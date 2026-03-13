@@ -1204,7 +1204,7 @@ The `advisoryAnnotations` field captures Tier 2 advisory findings (Normal/Low im
 
 The `tokenUsage` field tracks cumulative token usage across all attempts for this file, making per-file cost data available to the coordinator and PR summary.
 
-The `"skipped"` status is for already-instrumented files (detected via existing OTel imports). Skipped files aren't failures — making this explicit lets the coordinator report them accurately in the PR summary.
+The `"skipped"` status covers files not processed for any reason: already-instrumented (existing OTel imports detected), budget-exceeded (estimated token cost exceeds `maxTokensPerFile`), or excluded (matched an `exclude` pattern). The `reason` field disambiguates the cause. Skipped files aren't failures — making the reason explicit lets the Coordinator report them accurately in the PR summary.
 
 **Populating FileResult fields is a requirement, not optional.** The first-draft implementation defined these fields but left most of them empty — `validationAttempts: 0`, `errorProgression: []`, `notes: []` — even on successful files. The result was that the PR summary, cost reporting, and debugging tools had no data to work with despite the data structures being correctly designed. Every function that produces a `FileResult` must populate all applicable fields. Integration tests must assert that diagnostic fields contain meaningful content, not just that `result.status === 'success'`.
 
