@@ -292,10 +292,10 @@ async function executeRetryLoop(
     if (!instrumentResult.success) {
       const failTokens = instrumentResult.tokenUsage ?? ZERO_TOKENS;
       cumulativeTokens = addTokenUsage(cumulativeTokens, failTokens);
+      errorProgression.push(instrumentResult.error);
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
-        // Retryable failure — record in errorProgression and continue to next attempt
-        errorProgression.push(instrumentResult.error);
+        // Retryable failure — continue to next attempt
         continue;
       }
 

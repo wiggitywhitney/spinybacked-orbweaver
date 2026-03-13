@@ -194,10 +194,14 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
         expect(fileOnDisk).not.toBe(originalCode);
       }
 
-      // Token usage always populated — inputTokens may be 0 when prompt caching
-      // serves the entire input from cache (cacheReadInputTokens instead)
-      const totalInput = result.tokenUsage.inputTokens + result.tokenUsage.cacheReadInputTokens;
-      expect(totalInput).toBeGreaterThan(0);
+      // Token usage: always > 0 on success (real API call completed).
+      // On failure, may be 0 if the API call failed before returning tokens
+      // (e.g., transient network error, rate limit, timeout).
+      expect(result.tokenUsage).toBeDefined();
+      if (result.status === 'success') {
+        const totalInput = result.tokenUsage.inputTokens + result.tokenUsage.cacheReadInputTokens;
+        expect(totalInput).toBeGreaterThan(0);
+      }
     });
   });
 
