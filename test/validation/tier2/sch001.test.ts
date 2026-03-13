@@ -230,6 +230,84 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
     });
   });
 
+  describe('HTTP status codes are not unbounded cardinality', () => {
+    it('does not flag span names containing HTTP status codes like 200', () => {
+      const schemaWithoutSpans = { groups: [] };
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function handleError() {',
+        '  return tracer.startActiveSpan("handle_http_200", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag span names containing status code 404', () => {
+      const schemaWithoutSpans = { groups: [] };
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function handleNotFound() {',
+        '  return tracer.startActiveSpan("error_404_handler", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag span names containing status code 500', () => {
+      const schemaWithoutSpans = { groups: [] };
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function handleError() {',
+        '  return tracer.startActiveSpan("handle_500_error", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags genuinely unbounded numeric patterns like timestamps', () => {
+      const schemaWithoutSpans = { groups: [] };
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("request-1709234567890", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('mixed — some match, some do not', () => {
     it('fails if any span name does not match registry', () => {
       const code = [

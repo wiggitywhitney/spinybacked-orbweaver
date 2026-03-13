@@ -146,17 +146,24 @@ function checkNamingQuality(
 }
 
 /**
+ * HTTP status codes (1xx–5xx) that appear in span names as fixed categories,
+ * not unbounded dynamic values. These are excluded from cardinality checks.
+ */
+const HTTP_STATUS_CODE_PATTERN = /^[1-5]\d{2}$/;
+
+/**
  * Check if a span name has patterns suggesting unbounded cardinality.
  * Detects embedded numbers, UUIDs, hex strings, and other dynamic patterns.
+ * Excludes HTTP status codes (100–599) which are finite, bounded categories.
  */
 function hasUnboundedCardinality(name: string): boolean {
-  // Contains numeric sequences (IDs, timestamps)
-  if (/\d{3,}/.test(name)) return true;
+  // Contains long numeric sequences (4+ digits — IDs, timestamps, not status codes)
+  if (/\d{4,}/.test(name)) return true;
   // Contains UUID-like patterns
   if (/[0-9a-f]{8,}/i.test(name)) return true;
-  // Contains segments that are purely numeric
+  // Contains segments that are purely numeric (excluding HTTP status codes)
   const segments = name.split(/[.\-_/]/);
-  if (segments.some((s) => s.length > 0 && /^\d+$/.test(s))) return true;
+  if (segments.some((s) => s.length > 0 && /^\d+$/.test(s) && !HTTP_STATUS_CODE_PATTERN.test(s))) return true;
   return false;
 }
 

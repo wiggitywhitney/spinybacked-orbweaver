@@ -3,11 +3,17 @@
 
 import type { FileResult } from '../fix-loop/types.ts';
 
-/** Per-file threshold for attributesCreated that triggers a drift warning. */
-const ATTRIBUTES_PER_FILE_THRESHOLD = 30;
+/** Default per-file threshold for attributesCreated that triggers a drift warning. */
+const DEFAULT_ATTRIBUTES_PER_FILE_THRESHOLD = 30;
 
-/** Per-file threshold for spansAdded that triggers a drift warning. */
-const SPANS_PER_FILE_THRESHOLD = 20;
+/** Default per-file threshold for spansAdded that triggers a drift warning. */
+const DEFAULT_SPANS_PER_FILE_THRESHOLD = 20;
+
+/** Optional overrides for drift detection thresholds. */
+export interface DriftThresholds {
+  attributesPerFileThreshold?: number;
+  spansPerFileThreshold?: number;
+}
 
 /** Result of drift detection analysis on a set of file results. */
 export interface DriftDetectionResult {
@@ -29,9 +35,13 @@ export interface DriftDetectionResult {
  * file paths and counts in the warning messages.
  *
  * @param results - FileResult array for files processed since last checkpoint
+ * @param thresholds - Optional threshold overrides (defaults: 30 attributes, 20 spans per file)
  * @returns Drift detection result with warnings and totals
  */
-export function detectSchemaDrift(results: FileResult[]): DriftDetectionResult {
+export function detectSchemaDrift(results: FileResult[], thresholds?: DriftThresholds): DriftDetectionResult {
+  const attrThreshold = thresholds?.attributesPerFileThreshold ?? DEFAULT_ATTRIBUTES_PER_FILE_THRESHOLD;
+  const spanThreshold = thresholds?.spansPerFileThreshold ?? DEFAULT_SPANS_PER_FILE_THRESHOLD;
+
   const warnings: string[] = [];
   let totalAttributesCreated = 0;
   let totalSpansAdded = 0;
@@ -42,17 +52,17 @@ export function detectSchemaDrift(results: FileResult[]): DriftDetectionResult {
     totalAttributesCreated += result.attributesCreated;
     totalSpansAdded += result.spansAdded;
 
-    if (result.attributesCreated >= ATTRIBUTES_PER_FILE_THRESHOLD) {
+    if (result.attributesCreated >= attrThreshold) {
       warnings.push(
         `Drift warning: file ${result.path} created ${result.attributesCreated} attributes` +
-        ` (threshold: ${ATTRIBUTES_PER_FILE_THRESHOLD}) — flagged for human review.`,
+        ` (threshold: ${attrThreshold}) — flagged for human review.`,
       );
     }
 
-    if (result.spansAdded >= SPANS_PER_FILE_THRESHOLD) {
+    if (result.spansAdded >= spanThreshold) {
       warnings.push(
         `Drift warning: file ${result.path} created ${result.spansAdded} spans` +
-        ` (threshold: ${SPANS_PER_FILE_THRESHOLD}) — flagged for human review.`,
+        ` (threshold: ${spanThreshold}) — flagged for human review.`,
       );
     }
   }
