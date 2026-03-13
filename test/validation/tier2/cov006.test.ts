@@ -249,6 +249,38 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
     });
   });
 
+  describe('startSpan content walk upper bound', () => {
+    it('does not walk entire function body when span.end() is missing', () => {
+      // Without upper bound, getSpanContent walks all remaining statements,
+      // potentially matching an auto-instrumented call far below the span.
+      const code = [
+        'function processOrder(order) {',
+        '  const span = tracer.startSpan("processOrder");',
+        '  const result = validateOrder(order);',
+        '  const a = step1(order);',
+        '  const b = step2(a);',
+        '  const c = step3(b);',
+        '  const d = step4(c);',
+        '  const e = step5(d);',
+        '  const f = step6(e);',
+        '  const g = step7(f);',
+        '  const h = step8(g);',
+        '  const i = step9(h);',
+        '  const j = step10(i);',
+        '  const data = pool.query("SELECT * FROM orders");',
+        '  return data;',
+        '}',
+      ].join('\n');
+
+      const results = checkAutoInstrumentationPreference(code, filePath);
+
+      // Should NOT flag the pg query as wrapped by the span —
+      // the walk should stop after a bounded number of statements
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';

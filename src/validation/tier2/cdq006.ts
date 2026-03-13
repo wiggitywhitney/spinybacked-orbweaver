@@ -50,8 +50,10 @@ export function checkIsRecordingGuard(code: string, filePath: string): CheckResu
     if (expr.getName() !== 'setAttribute') return;
 
     // Only flag span.setAttribute — skip unrelated APIs (Map, URLSearchParams, Element, etc.)
+    // Match any variable name that looks like a span receiver: known names, *Span suffix,
+    // or short single-letter variables commonly used for spans in callbacks.
     const receiverText = expr.getExpression().getText();
-    if (!receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return;
+    if (!isSpanReceiver(receiverText)) return;
 
     // Check the value argument (second argument)
     const args = node.getArguments();
@@ -96,6 +98,39 @@ export function checkIsRecordingGuard(code: string, filePath: string): CheckResu
     tier: 2,
     blocking: false,
   }));
+}
+
+/**
+ * Known unrelated APIs that have a .setAttribute() method.
+ * These should never be flagged as span receivers.
+ */
+const NON_SPAN_RECEIVERS = new Set([
+  'element', 'node', 'document', 'map', 'urlSearchParams',
+  'params', 'headers', 'formData', 'attributes',
+]);
+
+/**
+ * Check if a receiver expression is likely a span variable.
+ * Uses a broad approach: anything that isn't a known non-span API
+ * and is a simple identifier is treated as a potential span receiver.
+ * This avoids false negatives from non-standard variable names.
+ */
+function isSpanReceiver(receiverText: string): boolean {
+  // Dotted access like context.span, this.span — check the last segment
+  const parts = receiverText.split('.');
+  const name = parts[parts.length - 1].toLowerCase();
+
+  // Reject known non-span APIs
+  if (NON_SPAN_RECEIVERS.has(name)) return false;
+
+  // Accept known span patterns
+  if (/span/i.test(name)) return true;
+
+  // Accept simple identifiers (single variable names, not chained property access
+  // like element.style or map.entries) — these are likely span callback parameters
+  if (parts.length === 1) return true;
+
+  return false;
 }
 
 /**

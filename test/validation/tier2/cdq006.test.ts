@@ -137,6 +137,34 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
     });
   });
 
+  describe('expanded receiver matching', () => {
+    it('flags otelSpan.setAttribute with expensive value', () => {
+      const code = [
+        'function processData(otelSpan, items) {',
+        '  otelSpan.setAttribute("data.summary", JSON.stringify(items));',
+        '}',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      const failures = results.filter((r) => !r.passed);
+
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('flags arbitrarily-named span variables (e.g., s, telemetryHandle)', () => {
+      const code = [
+        'function processData(s, items) {',
+        '  s.setAttribute("data.summary", JSON.stringify(items));',
+        '}',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      const failures = results.filter((r) => !r.passed);
+
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';

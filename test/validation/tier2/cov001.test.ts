@@ -366,6 +366,33 @@ describe('checkEntryPointSpans (COV-001)', () => {
     });
   });
 
+  describe('expanded service module directories', () => {
+    it.each([
+      'middleware',
+      'resolvers',
+      'mutations',
+      'queries',
+      'endpoints',
+      'jobs',
+      'workers',
+      'subscribers',
+      'commands',
+    ])('flags exported async function without span in %s/ directory', (dir) => {
+      const testPath = `/project/src/${dir}/handler.js`;
+      const code = [
+        'module.exports.processTask = async (data) => {',
+        '  return doWork(data);',
+        '};',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, testPath);
+      const failures = results.filter((r) => !r.passed);
+
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].message).toContain('processTask');
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';

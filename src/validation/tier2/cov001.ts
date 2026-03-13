@@ -37,7 +37,7 @@ const ENTRY_POINT_PARAM_NAMES = new Set([
  * Matched as path segments — handles POSIX (/routes/), Windows (\routes\),
  * and repo-relative paths (routes/file.js).
  */
-const SERVICE_MODULE_DIRS = /(?:^|[\\/])(routes|handlers|controllers|api|services)(?:[\\/])/;
+const SERVICE_MODULE_DIRS = /(?:^|[\\/])(routes|handlers|controllers|api|services|middleware|resolvers|mutations|queries|endpoints|jobs|workers|subscribers|commands)(?:[\\/])/;
 
 /**
  * COV-001: Verify that entry points have spans.
