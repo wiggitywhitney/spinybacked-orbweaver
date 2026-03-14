@@ -65,6 +65,14 @@ describe('hasTestSuite', () => {
       expect(await hasTestSuite('yarn test', '/project', mockReadFile(pkgJson))).toBe(false);
     });
 
+    it('does not resolve npm test:unit through scripts.test', async () => {
+      const pkgJson = JSON.stringify({
+        scripts: { test: 'echo "Error: no test specified" && exit 1', 'test:unit': 'vitest run' },
+      });
+      // npm run test:unit should NOT check scripts.test — it's a different script
+      expect(await hasTestSuite('npm run test:unit', '/project', mockReadFile(pkgJson))).toBe(true);
+    });
+
     it('skips resolution when no projectDir is provided', async () => {
       // npm test without projectDir should pass (can't resolve, assume real)
       expect(await hasTestSuite('npm test')).toBe(true);

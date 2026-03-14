@@ -52,8 +52,10 @@ export async function hasTestSuite(
     if (pattern.test(trimmed)) return false;
   }
 
-  // For npm/yarn/pnpm test, resolve the actual script from package.json
-  if (projectDir && NPM_TEST_COMMANDS.some(cmd => trimmed.startsWith(cmd))) {
+  // For npm/yarn/pnpm test, resolve the actual script from package.json.
+  // Match exact command or command followed by space (for args like `npm test -- --coverage`).
+  // Avoid startsWith to prevent matching `npm test:unit` → scripts.test.
+  if (projectDir && NPM_TEST_COMMANDS.some(cmd => trimmed === cmd || trimmed.startsWith(cmd + ' '))) {
     const resolvedScript = await resolveNpmTestScript(projectDir, readFileFn);
     if (resolvedScript !== null) {
       // Check the resolved script against placeholder patterns
