@@ -152,13 +152,8 @@ export async function runGitWorkflow(
     const prBody = deps.renderPrSummary(runResult, config, projectDir);
     const title = `Add OpenTelemetry instrumentation (${runResult.filesSucceeded} files)`;
 
-    try {
-      prSummaryPath = await deps.writePrSummary(projectDir, prBody);
-      deps.stderr(`PR summary saved to ${prSummaryPath}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      deps.stderr(`Failed to write PR summary: ${msg}`);
-    }
+    prSummaryPath = await deps.writePrSummary(projectDir, prBody);
+    deps.stderr(`PR summary saved to ${prSummaryPath}`);
 
     const ghAvailable = await deps.checkGhAvailable();
     if (!ghAvailable) {

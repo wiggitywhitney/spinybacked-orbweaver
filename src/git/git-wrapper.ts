@@ -100,6 +100,14 @@ export async function getCurrentBranch(dir: string): Promise<string> {
  */
 export async function validateCredentials(dir: string): Promise<void> {
   const git = simpleGit(dir);
+
+  // Check if a remote is configured — repos without remotes (e.g., CI test fixtures)
+  // can't be validated, but the push will fail later with a clear error.
+  const remotes = await git.getRemotes();
+  if (remotes.length === 0) {
+    return;
+  }
+
   try {
     await git.listRemote(['--heads']);
   } catch (err) {

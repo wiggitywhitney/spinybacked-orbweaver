@@ -583,6 +583,15 @@ describe('runGitWorkflow', () => {
       expect(deps.writePrSummary).not.toHaveBeenCalled();
     });
 
+    it('propagates writePrSummary failure', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockRejectedValue(new Error('disk full')),
+      });
+
+      await expect(runGitWorkflow(makeOptions(), deps)).rejects.toThrow('disk full');
+      expect(deps.pushBranch).not.toHaveBeenCalled();
+    });
+
     it('skips PR summary when no files succeeded', async () => {
       const failedFile = makeFileResult({ status: 'failed', reason: 'error' });
       const deps = makeDeps({
