@@ -140,10 +140,10 @@ Bring it back to the problem. "Organizations need business logic visibility. Dev
 
 These were previously flagged as risks and have been confirmed resolved:
 
-- Schema evolution across files — working correctly since Phase 5 (per-file re-resolution)
-- NDS-003 inline finally false positive — fixed in codebase
-- NDS-003 cascading false positives — fixed via frequency map approach
-- COV-004/RST-004 validation contradiction — fixed via async function exemption
+- Schema evolution across files — working correctly since Phase 5 (PRD #31, `dispatch.ts:248-250`)
+- NDS-003 inline finally false positive — fixed (PR #90, `nds003.ts` INSTRUMENTATION_PATTERNS)
+- NDS-003 cascading false positives — fixed via frequency map approach (PR #90)
+- COV-004/RST-004 validation contradiction — fixed via async function exemption (PR #91)
 
 ---
 
