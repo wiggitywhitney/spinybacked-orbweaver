@@ -279,6 +279,60 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('safe instrumentation-motivated refactors', () => {
+    it('allows catch {} to become catch (error) {} for recordException', () => {
+      const original = [
+        'function doWork() {',
+        '  try {',
+        '    riskyCall();',
+        '  } catch {',
+        '    handleError();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      riskyCall();',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      handleError();',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still catches genuine business logic additions', () => {
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  console.log("debug");',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+      expect(failures[0].message).toContain('console.log');
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty original', () => {
       const results = checkNonInstrumentationDiff('', 'const x = 1;\n', filePath);
