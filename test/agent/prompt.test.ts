@@ -378,4 +378,35 @@ describe('buildUserMessage', () => {
 
     expect(message).toContain('3 lines');
   });
+
+  describe('prompt hygiene', () => {
+    it('does NOT contain anti-laziness directives in user message', () => {
+      const message = buildUserMessage('/test.js', 'const x = 1;', config);
+      const lower = message.toLowerCase();
+
+      expect(lower).not.toContain('be thorough');
+      expect(lower).not.toContain('try harder');
+      expect(lower).not.toContain('do not be lazy');
+    });
+
+    it('does NOT contain emotional/motivational language in user message', () => {
+      const message = buildUserMessage('/test.js', 'const x = 1;', config);
+      const lower = message.toLowerCase();
+
+      expect(lower).not.toContain('important to');
+      expect(lower).not.toContain('career');
+      expect(lower).not.toContain('crucial');
+    });
+
+    it('large file warning uses format specification not motivational language', () => {
+      const longCode = Array(600).fill('const x = 1;').join('\n');
+      const message = buildUserMessage('/test.js', longCode, config);
+      const lower = message.toLowerCase();
+
+      // Should reference concrete requirements, not emotional nudges
+      expect(message).toContain('complete file');
+      expect(lower).not.toContain('please be careful');
+      expect(lower).not.toContain('try your best');
+    });
+  });
 });
