@@ -68,7 +68,7 @@ The orchestrator coordinates the whole run:
 - A fresh agent is spun up for each file
 - That agent receives the resolved registry (what spans and attributes exist so far)
 - The agent instruments the file
-- Results are validated against 31 quality rules — derived from the community [Instrumentation Score spec](https://github.com/instrumentation-score/spec) and adapted for static code analysis — then returned to the agent for iteration
+- Results are validated against 32 quality rules — derived from the community [Instrumentation Score spec](https://github.com/instrumentation-score/spec) and adapted for static code analysis — then returned to the agent for iteration
 - The agent retries based on that feedback (fix and retry loop)
 
 The agent receives the quality rules upfront (as a scoring checklist in the prompt), and validation feedback during retries helps it correct rule violations in context.
@@ -133,7 +133,7 @@ Bring it back to the problem. "Organizations need business logic visibility. Dev
 |---|---|
 | Agent run doesn't complete cleanly | Run well in advance; have a known-good branch ready |
 | 25 minutes isn't enough for all this content | Practice and cut as needed — sections 5-6 are most likely to overrun |
-| Audience asks about IS scoring specifics | Be precise: "31 code-level rules derived from the Instrumentation Score spec, adapted for static analysis. The IS spec itself evaluates runtime OTLP telemetry — a different concern." |
+| Audience asks about IS scoring specifics | Be precise: "32 code-level rules derived from the Instrumentation Score spec, adapted for static analysis. The IS spec itself evaluates runtime OTLP telemetry — a different concern." |
 | Audience asks about failure rate | Have concrete numbers from the pre-talk run. "X of Y files instrumented successfully, Z failed with these reasons." |
 
 ### Resolved risks (from audit review 2026-03-14)
