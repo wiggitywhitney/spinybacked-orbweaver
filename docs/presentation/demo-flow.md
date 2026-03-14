@@ -68,7 +68,7 @@ The orchestrator coordinates the whole run:
 - A fresh agent is spun up for each file
 - That agent receives the resolved registry (what spans and attributes exist so far)
 - The agent instruments the file
-- Results are validated against 31 quality rules — derived from the community [Instrumentation Score spec](https://github.com/instrumentation-score/spec) and adapted for static code analysis — then fed back as feedback for the agent to iterate on
+- Results are validated against 31 quality rules — derived from the community [Instrumentation Score spec](https://github.com/instrumentation-score/spec) and adapted for static code analysis — then returned to the agent for iteration
 - The agent retries based on that feedback (fix and retry loop)
 
 The agent receives the quality rules upfront (as a scoring checklist in the prompt), and validation feedback during retries helps it correct rule violations in context.
@@ -79,7 +79,7 @@ Three-attempt strategy: initial generation → multi-turn fix with feedback → 
 
 If instrumentation fails at the file level after all attempts, a new agent is spun up that looks at individual functions within the file.
 
-> **Note to self:** Per-function fallback is tracked in PRD #106. Must be implemented before the presentation.
+Per-function fallback is tracked in PRD #106 and is a prerequisite for this section of the flow.
 
 ## 9. Schema Evolution Across Files
 
@@ -106,7 +106,7 @@ After a full run, the user gets a PR containing:
 
 - All the code changes (instrumented files)
 - PR body with details of what was instrumented
-- Live check validation results
+- Validation results (quality-rule checks, schema integrity, and test outcomes)
 - Failures and reasons for failures
 
 ## 12. Show the Agent's Work
