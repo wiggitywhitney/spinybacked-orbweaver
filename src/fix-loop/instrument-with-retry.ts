@@ -7,7 +7,7 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
-import { addTokenUsage, totalTokens } from './token-budget.ts';
+import { addTokenUsage, totalTokens, estimateMinTokens } from './token-budget.ts';
 import { detectOscillation } from './oscillation.ts';
 import type { FileResult, ValidationStrategy } from './types.ts';
 
@@ -262,6 +262,23 @@ async function executeRetryLoop(
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config);
+
+  // Pre-flight token estimate — skip files that are very likely to exceed the budget.
+  // Fail fast on impossible budgets (below fixed prompt overhead) to avoid wasting API tokens
+  // on calls that are guaranteed to exceed the budget regardless of file size.
+  // For realistic budgets, use a 2x safety margin since the heuristic is rough.
+  const FIXED_OVERHEAD = 4000;
+  if (config.maxTokensPerFile < FIXED_OVERHEAD) {
+    const reason = `Token budget (${config.maxTokensPerFile}) is below the fixed prompt overhead (~${FIXED_OVERHEAD} tokens). ` +
+      `No file can be instrumented at this budget. Increase maxTokensPerFile to at least ${FIXED_OVERHEAD}.`;
+    return buildFailedResult(filePath, reason, reason, ZERO_TOKENS, 0, 'initial-generation');
+  }
+  const estimatedTokens = estimateMinTokens(originalCode.length);
+  if (estimatedTokens > config.maxTokensPerFile * 2) {
+    const reason = `Pre-flight token estimate (${estimatedTokens}) exceeds budget (${config.maxTokensPerFile}). ` +
+      `File has ${originalCode.length} characters. Increase maxTokensPerFile or reduce file size.`;
+    return buildFailedResult(filePath, reason, reason, ZERO_TOKENS, 0, 'initial-generation');
+  }
 
   let cumulativeTokens: TokenUsage = { ...ZERO_TOKENS };
   const errorProgression: string[] = [];
