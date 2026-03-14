@@ -80,6 +80,7 @@ autoInstrumentation:
 - If an import appears in both `additionalMappings` and `disabledImports`, `disabledImports` takes precedence — the import is excluded from the merged allowlist. A warning is emitted.
 - If `additionalMappings` contains an import that matches a built-in mapping, the custom mapping overrides the built-in. A warning is emitted so users are aware of the customization.
 - Package names in `additionalMappings` must be valid npm package names (non-empty strings).
+- If `disabledImports` contains an import that doesn't exist in the built-in or `additionalMappings` lists, a warning is emitted (typo protection) but config validation still passes (forward-compatible if built-ins expand later).
 
 ### Allowlist Data Module
 
