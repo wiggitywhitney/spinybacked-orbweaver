@@ -2,7 +2,7 @@
 
 **Issue**: [#106](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/106)
 **Status**: Draft
-**Priority**: Medium
+**Priority**: High
 **Created**: 2026-03-13
 
 ## What Gets Built

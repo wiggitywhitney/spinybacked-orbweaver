@@ -71,7 +71,7 @@ The orchestrator coordinates the whole run:
 - Results are validated against 31 quality rules — derived from the community [Instrumentation Score spec](https://github.com/instrumentation-score/spec) and adapted for static code analysis — then fed back as feedback for the agent to iterate on
 - The agent retries based on that feedback (fix and retry loop)
 
-The agent receives both the quality rules upfront (as a scoring checklist in the prompt) and discovers specifics through validation feedback during retries.
+The agent receives the quality rules upfront (as a scoring checklist in the prompt), and validation feedback during retries helps it correct rule violations in context.
 
 ## 8. Fix and Retry Loop
 
