@@ -152,6 +152,17 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('not already in the schema');
   });
 
+  it('requires exhaustive registry search before inventing attribute keys', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Must instruct to check ALL registered keys for semantic equivalence
+    expect(prompt).toContain('semantic equivalence');
+    // Must explain that unregistered keys reduce schema fidelity
+    expect(prompt).toContain('schema fidelity');
+    // Must require rationale for why no existing key fits
+    expect(prompt).toContain('why no existing key');
+  });
+
   it('includes auto-instrumentation library allowlist', () => {
     const prompt = buildSystemPrompt(schema);
 

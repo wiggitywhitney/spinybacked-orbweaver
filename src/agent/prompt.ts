@@ -107,12 +107,13 @@ Functions that already contain \`tracer.startActiveSpan\`, \`tracer.startSpan\`,
 
 ### Attribute Priority
 
-When adding span attributes:
-1. Use OTel semantic conventions if a matching convention exists (e.g., \`http.method\`, \`db.statement\`)
-2. Use existing Weaver schema attributes if already defined
-3. Create new custom attributes under the project namespace prefix, following existing structural patterns
+When adding span attributes, you MUST exhaust registered keys before inventing new ones. Unregistered attribute keys reduce schema fidelity and make telemetry difficult to query consistently.
 
-Report new schema entries in \`schemaExtensions\`.
+1. **OTel semantic conventions first**: Use a matching convention if one exists (e.g., \`http.method\`, \`db.statement\`)
+2. **Weaver schema attributes second**: Check ALL registered attribute keys in the schema for semantic equivalence — not just exact name matches. A registered key that captures the same concept under a different name is the correct choice.
+3. **Invent only as a last resort**: Create new custom attributes under the project namespace prefix ONLY when no registered key fits. In \`schemaExtensions\`, include a rationale for why no existing key matched — this helps humans review and promote useful extensions into the registry.
+
+Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match.
 
 ## Auto-Instrumentation Library Allowlist
 
@@ -145,7 +146,7 @@ You are returning structured JSON via the output schema. Fill in each field:
 
 - \`instrumentedCode\`: The complete instrumented JavaScript file. Must be syntactically valid JavaScript. Must contain ALL original code plus instrumentation additions. No markdown fences, no explanations, no partial output. Files containing placeholder comments (\`// ...\`, \`// existing code\`, \`// rest of function\`, \`/* ... */\`) will be rejected by validation.
 - \`librariesNeeded\`: Array of \`{ package, importName }\` for auto-instrumentation libraries detected. Empty array if none.
-- \`schemaExtensions\`: Array of string IDs for any new schema entries created. Empty array if none.
+- \`schemaExtensions\`: Array of string IDs for any new schema entries created (attribute keys or span names not already in the schema). Empty array if none. Each extension MUST have a corresponding note in \`notes\` explaining why no existing key was a semantic match and what data the new key captures.
 - \`attributesCreated\`: Count of new span attributes added that were not in the existing schema. 0 if none.
 - \`spanCategories\`: Breakdown of spans added: \`{ externalCalls, schemaDefined, serviceEntryPoints, totalFunctionsInFile }\`. Set to null only if the file could not be processed at all.
 - \`notes\`: Array of judgment call explanations. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Never return an empty array — at minimum explain your instrumentation decisions.`;
