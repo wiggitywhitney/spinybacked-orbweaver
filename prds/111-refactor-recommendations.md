@@ -67,10 +67,10 @@ interface SuggestedRefactor {
 Refactor recommendations are generated when:
 
 1. A file exhausts all fix attempts (max retries reached)
-2. The same NDS-003 violation repeats across multiple attempts (persistence signal — the agent genuinely needs this transform)
-3. The LLM's output consistently contains the same non-instrumentation change
+2. The same NDS-003 violation repeats across **at least 2 consecutive attempts** at the same line number and rule ID (persistence signal — the agent genuinely needs this transform)
+3. The LLM's output consistently contains the same non-instrumentation change across those attempts
 
-Detection happens in the fix loop after retry exhaustion, by analyzing the pattern of NDS-003 violations across attempts.
+Detection happens in the fix loop after retry exhaustion, by comparing the `ruleId:filePath:lineNumber` keys of NDS-003 violations across the error progression. A recommendation is only generated when the same violation key appears in 2+ consecutive attempts — single-occurrence violations are not surfaced as recommendations.
 
 ### LLM Integration
 
@@ -84,8 +84,15 @@ The system prompt gains guidance telling the LLM to report transforms it would n
 Recommendations surface in three places:
 
 1. **`FileResult.suggestedRefactors`** — programmatic access for tooling
-2. **PR summary** — new "Recommended Refactors" section listing each recommendation with diff
-3. **CLI output** — summary line per file with recommendations count
+2. **PR summary** — new "Recommended Refactors" section listing each recommendation with description and unblocked rules (diffs are omitted from PR summaries to avoid leaking source code in public PRs)
+3. **CLI output** — summary line per file with recommendations count, full diffs available via `--verbose` flag
+
+#### Redaction
+
+Recommendation diffs contain user source code. To avoid leaking sensitive literals or proprietary logic:
+- PR summary shows description + rule + location only — no source diffs
+- CLI output shows full diffs only in `--verbose` mode (local terminal, not persisted)
+- `FileResult.suggestedRefactors` includes full diffs for programmatic consumers (CI tooling, local scripts) — these are not rendered to external-facing outputs by default
 
 ### User Workflow
 
@@ -116,7 +123,7 @@ Recommendations surface in three places:
 
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 - Recommendations are advisory only — they never block the agent's workflow or gate PR creation
-- The LLM may hallucinate recommendations; validation against actual NDS-003 violations provides a cross-check
+- Recommendations are only surfaced when backed by observed validator evidence: the recommendation must cite a specific `ruleId` and the violation must appear in the error progression from the retry loop. LLM-suggested refactors without a corresponding validator finding are suppressed.
 
 ## Decision Log
 
