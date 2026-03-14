@@ -582,4 +582,23 @@ describe('renderPrSummary', () => {
       expect(md).toMatch(/## Token Usage/i);
     });
   });
+
+  describe('live-check compliance report', () => {
+    it('renders end-of-run validation when present', () => {
+      const result = _makeRunResult({
+        endOfRunValidation: 'Schema compliance: 5/5 spans matched, 0 violations',
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Live-Check Compliance');
+      expect(md).toContain('5/5 spans matched');
+    });
+
+    it('omits live-check section when endOfRunValidation is absent', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('Live-Check');
+    });
+  });
 });

@@ -7,6 +7,7 @@ import { execFile as defaultExecFile } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import type { Server } from 'node:net';
 import type { CoordinatorCallbacks } from './types.ts';
+import { hasTestSuite } from './test-suite-detection.ts';
 
 /** Default Weaver OTLP receiver ports — non-standard to avoid conflicts with existing OTel collectors. */
 export const DEFAULT_GRPC_PORT = 14317;
@@ -147,11 +148,19 @@ export async function runLiveCheck(
   const adminPort = options?.adminPort ?? DEFAULT_ADMIN_PORT;
   const inactivityTimeoutSeconds = options?.inactivityTimeoutSeconds ?? Math.ceil(TEST_SUITE_TIMEOUT_MS / 1000);
 
-  // Step 1: Validate test command
+  // Step 1: Validate test command — check both empty and placeholder patterns
   if (!testCommand || testCommand.trim() === '') {
     return {
       skipped: true,
       warnings: ['No test command configured. Skipping end-of-run live-check.'],
+    };
+  }
+
+  // Detect npm default and other placeholder test commands
+  if (!await hasTestSuite(testCommand, projectDir)) {
+    return {
+      skipped: true,
+      warnings: ['No test suite detected (test command is a placeholder). Skipping end-of-run live-check.'],
     };
   }
 

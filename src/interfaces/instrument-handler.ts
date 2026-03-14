@@ -232,6 +232,12 @@ export async function handleInstrument(
       `${runResult.filesFailed} failed, ` +
       `${runResult.filesSkipped} skipped`,
     );
+    if (runResult.endOfRunValidation) {
+      deps.stderr(`Live-check: ${runResult.endOfRunValidation}`);
+    }
+    for (const warning of runResult.warnings) {
+      deps.stderr(`Warning: ${warning}`);
+    }
     if (branchName) {
       deps.stderr(`Branch: ${branchName}`);
     }
