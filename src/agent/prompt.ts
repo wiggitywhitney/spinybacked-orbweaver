@@ -115,6 +115,64 @@ When adding span attributes, you MUST exhaust registered keys before inventing n
 
 Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match.
 
+## Scoring Checklist
+
+Your output is scored against these rules. Violating gate rules causes immediate rejection and retry. Quality rules affect the instrumentation score.
+
+### Gate Rules (violation = rejection)
+
+- **NDS-001**: Output must be syntactically valid JavaScript (\`node --check\` must pass)
+- **NDS-002**: Pre-existing tests must still pass after your changes
+- **NDS-003**: Do NOT modify, remove, or reorder any non-instrumentation code. Only add instrumentation.
+- **API-001**: Import only from \`@opentelemetry/api\`. No SDK, exporter, or instrumentation-* imports.
+- **NDS-006**: Match the target project's module system. ESM project → ESM imports. CJS project → require().
+
+### Non-Destructiveness
+
+- **NDS-004**: Do NOT change exported function signatures — parameters, return types, or export declarations.
+- **NDS-005**: Do NOT restructure existing try/catch/finally blocks, reorder catch clauses, or change throw behavior.
+
+### Coverage
+
+- **COV-001**: Entry points (route handlers, request handlers, exported async service functions) MUST have spans.
+- **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
+- **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`).
+- **COV-004**: Long-running or async I/O operations should have spans.
+- **COV-005**: Use registry-defined attributes when the schema defines them for a span.
+- **COV-006**: Prefer auto-instrumentation libraries over manual spans for supported frameworks. Do NOT manually wrap calls that a library already covers.
+
+### Restraint
+
+- **RST-001**: Do NOT add spans to utility functions (synchronous, <5 lines, no I/O, unexported).
+- **RST-002**: Do NOT add spans to trivial accessors (getters/setters, single-property returns).
+- **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
+- **RST-004**: Do NOT add spans to unexported internal functions — unless they perform I/O or external calls.
+- **RST-005**: Do NOT add instrumentation to functions that already have spans (\`startActiveSpan\`, \`startSpan\`, \`tracer.\`).
+
+### API-Only Dependency
+
+- **API-002**: \`@opentelemetry/api\` must be a peerDependency (libraries) or dependency (applications).
+- **API-003**: Do NOT introduce vendor-specific SDKs (\`dd-trace\`, \`@newrelic/*\`, \`@splunk/otel\`).
+- **API-004**: Do NOT import from \`@opentelemetry/sdk-*\`, \`@opentelemetry/exporter-*\`, or \`@opentelemetry/instrumentation-*\` in source files.
+
+### Schema Fidelity
+
+- **SCH-001**: Use registry-defined span names when they match the operation. Do NOT invent names when the registry already defines one.
+- **SCH-002**: Use registry-defined attribute keys. Check for semantic equivalence, not just exact name matches.
+- **SCH-003**: Attribute values must conform to registry-defined types and constraints.
+- **SCH-004**: Do NOT create attributes that duplicate existing registry entries under a different name.
+
+### Code Quality
+
+- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern.
+- **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
+- **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`.
+- *(CDQ-004 removed — redundant with NDS-003)*
+- **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
+- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`.
+- **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields (\`email\`, \`password\`, \`ssn\`), or undefined values.
+- **CDQ-008**: Use the same tracer naming convention across all files. Do NOT vary the pattern.
+
 ## Auto-Instrumentation Library Allowlist
 
 These framework packages have trusted auto-instrumentation libraries. When detected in imports, record the library need in \`librariesNeeded\` — do not add manual spans for their specific framework calls.
