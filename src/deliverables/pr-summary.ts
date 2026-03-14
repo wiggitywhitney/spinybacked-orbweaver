@@ -33,6 +33,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderReviewSensitivity(runResult, config, display));
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderTokenUsage(runResult, config));
+  sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
   sections.push(renderWarnings(runResult));
 
@@ -315,6 +316,16 @@ function renderAgentVersion(runResult: RunResult): string {
   if (!version) return '';
 
   return `## Agent Version\n\n\`${version}\``;
+}
+
+function renderLiveCheckCompliance(runResult: RunResult): string {
+  if (!runResult.endOfRunValidation) return '';
+
+  const lines: string[] = ['## Live-Check Compliance'];
+  lines.push('');
+  lines.push(runResult.endOfRunValidation);
+
+  return lines.join('\n');
 }
 
 function renderWarnings(runResult: RunResult): string {

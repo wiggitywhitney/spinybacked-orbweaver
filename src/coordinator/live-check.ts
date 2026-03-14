@@ -147,11 +147,23 @@ export async function runLiveCheck(
   const adminPort = options?.adminPort ?? DEFAULT_ADMIN_PORT;
   const inactivityTimeoutSeconds = options?.inactivityTimeoutSeconds ?? Math.ceil(TEST_SUITE_TIMEOUT_MS / 1000);
 
-  // Step 1: Validate test command
+  // Step 1: Validate test command — check both empty and placeholder patterns
   if (!testCommand || testCommand.trim() === '') {
     return {
       skipped: true,
       warnings: ['No test command configured. Skipping end-of-run live-check.'],
+    };
+  }
+
+  // Detect npm default and other placeholder test commands
+  const noTestPatterns = [
+    /^\s*echo\s+["']Error:\s*no test/i,
+    /^\s*echo\s+["']no tests?["']/i,
+  ];
+  if (noTestPatterns.some(p => p.test(testCommand.trim()))) {
+    return {
+      skipped: true,
+      warnings: ['No test suite detected (test command is a placeholder). Skipping end-of-run live-check.'],
     };
   }
 

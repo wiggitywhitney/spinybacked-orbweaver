@@ -232,6 +232,9 @@ export async function handleInstrument(
       `${runResult.filesFailed} failed, ` +
       `${runResult.filesSkipped} skipped`,
     );
+    if (runResult.endOfRunValidation) {
+      deps.stderr(`Live-check: ${runResult.endOfRunValidation}`);
+    }
     if (branchName) {
       deps.stderr(`Branch: ${branchName}`);
     }
