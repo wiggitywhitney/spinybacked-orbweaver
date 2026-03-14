@@ -158,3 +158,4 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 | 2026-03-13 | Fallback-after-failure, not pre-flight routing | Avoids complexity threshold tuning; generates data for future pre-flight heuristic; smaller blast radius |
 | 2026-03-13 | Large file resilience only, not user-facing function targeting | Keeps scope bounded; user-facing `--functions` flag is a separate feature if needed |
 | 2026-03-13 | Tier 2 advisory on reassembled file, not blocking | Function-level may lose cross-function context that Tier 2 checks expect; don't block partial success |
+| 2026-03-14 | Code review + demo flow audits confirm P0 priority | External audits verified: NDS-003 inline finally fixed (removes one failure trigger), but per-function fallback remains the only path for files that overwhelm the agent (journal-graph.js, journal-manager.js). Demo flow sections 8 and 12 depend on this capability being implemented. |
