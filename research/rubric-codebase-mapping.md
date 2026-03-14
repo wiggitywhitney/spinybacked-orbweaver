@@ -102,6 +102,12 @@ commit_story.mcp_tool (tool handler in reflection-tool.js or context-capture-too
 
 **Evaluator action**: Grep all `.js` files for `@opentelemetry/` imports. Every match must resolve to `@opentelemetry/api`.
 
+### NDS-006: Module system consistency
+
+**Current state**: commit-story-v2 is an ESM project (`"type": "module"` in package.json, all source files are `.js`). All agent-added imports must use ESM syntax (`import`/`export`), not CJS (`require()`/`module.exports`).
+
+**Evaluator action**: Grep all agent-modified `.js` files for `require(` and `module.exports`. Any match is a gate failure — CJS in an ESM project passes `node --check` but fails at runtime.
+
 ---
 
 ## Dimension 1: Non-Destructiveness (NDS)
@@ -270,6 +276,8 @@ Also exports: `JournalState` (Annotation), `NODE_TEMPERATURES` (constant).
 ---
 
 ## Dimension 2: Coverage (COV)
+
+**Evaluation scope note**: Coverage rules (COV-001 through COV-006) are evaluated against instrumented files only. If the agent fails to instrument a file (gate failure, skipped file, or agent error), that file's coverage gaps are tracked in the failure analysis, not as COV rule violations.
 
 ### COV-001: Entry point operations have spans
 
