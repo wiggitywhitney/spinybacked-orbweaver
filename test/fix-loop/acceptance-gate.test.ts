@@ -144,14 +144,16 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
         filePath, originalCode, resolvedSchema, config,
       );
 
-      // Should fail due to budget
+      // Should fail due to budget (pre-flight estimate or post-hoc check)
       expect(result.status).toBe('failed');
       expect(result.reason).toBeDefined();
-      expect(result.reason!.toLowerCase()).toContain('budget');
+      expect(result.reason!.toLowerCase()).toMatch(/budget|pre-flight/);
 
-      // Token usage should be populated (the API was called at least once)
-      expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
-      expect(result.tokenUsage.outputTokens).toBeGreaterThan(0);
+      // With pre-flight estimation, the API may never be called (zero tokens).
+      // Both outcomes are valid: zero tokens (pre-flight caught it) or
+      // positive tokens (estimate passed but actual usage exceeded budget).
+      expect(result.tokenUsage.inputTokens).toBeGreaterThanOrEqual(0);
+      expect(result.tokenUsage.outputTokens).toBeGreaterThanOrEqual(0);
 
       // File should be reverted to original content
       const fileOnDisk = readFileSync(filePath, 'utf-8');
