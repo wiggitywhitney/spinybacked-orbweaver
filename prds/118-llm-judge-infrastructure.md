@@ -13,9 +13,9 @@ Shared infrastructure for calling an LLM to make semantic judgments on validatio
 
 ### Spec vs Rubric vs Implementation Gap
 
-The [telemetry agent spec](../docs/specs/telemetry-agent-spec-v3.9.md) (line 1738) defines Tier 2 checks as "concrete, AST-based, deterministic checks — not vague quality judgments." The spec intentionally scoped Tier 2 to automatable checks.
+The [telemetry agent spec](../docs/specs/telemetry-agent-spec-v3.9.md) (Two-Tier Validation Architecture section) defines Tier 2 checks as "concrete, AST-based, deterministic checks — not vague quality judgments." The spec intentionally scoped Tier 2 to automatable checks.
 
-The [evaluation rubric](../research/evaluation-rubric.md) (line 538) goes further: "All [three non-fully-automatable rules] are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 32/32, fully automatable with no specialized human knowledge required."
+The [evaluation rubric](../research/evaluation-rubric.md) (Automation Classification section) goes further: "All [three non-fully-automatable rules] are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 32/32, fully automatable with no specialized human knowledge required."
 
 The implementation brought the script-only portions of these rules into the Tier 2 fix loop but left the semantic judgment gaps unaddressed:
 
@@ -25,7 +25,7 @@ The implementation brought the script-only portions of these rules into the Tier
 | [SCH-001](../src/validation/tier2/sch001.ts) | Mixed-mode | Registry mode: exact string match. Fallback: regex cardinality check | Naming quality fallback cannot assess whether invented span names are "meaningful" or follow conventions |
 | NDS-005 | Semi-automatable | **Not implemented at all** — no file, not in [index](../src/validation/tier2/index.ts), not in [chain](../src/validation/chain.ts) | AST detection of error handling structural changes + semantic preservation judgment |
 
-The rubric (line 49) defines semi-automatable as: "Script provides partial signal but cannot produce a definitive pass/fail; requires semantic judgment to interpret. Script flags candidates; human or LLM judge makes the call."
+The rubric (Automation Classification table) defines semi-automatable as: "Script provides partial signal but cannot produce a definitive pass/fail; requires semantic judgment to interpret. Script flags candidates; human or LLM judge makes the call."
 
 ### Value of Inner-Loop Judges
 
@@ -59,6 +59,16 @@ The judge infrastructure handles:
 - Cost tracking (judge calls are tracked separately from instrumentation calls)
 - Error handling (judge failure = fall back to script-only verdict, never blocks the pipeline)
 - Model selection (use a fast/cheap model — Haiku — since judge questions are short and well-scoped)
+- Privacy/data minimization (see below)
+
+#### Privacy and Data Handling
+
+Judge prompts receive code context (attribute names, span names, error handling structures). To minimize exposure of sensitive data:
+
+- Judge prompts receive **identifiers only** (attribute keys, span names, function signatures) — not full source code or file contents
+- String literals, constants, and variable values are excluded from judge context unless semantically necessary (e.g., enum values for type checking)
+- The same API key and data-handling policies that govern the instrumentation agent apply to judge calls — no additional data exposure beyond what the agent already sees
+- Judge prompts are logged at the same level as instrumentation prompts for auditability
 
 ### Integration with Validation Chain
 
@@ -89,13 +99,18 @@ If the judge is unavailable (API error, cost limit), the script's existing behav
 
 **Note**: This only activates when the registry lacks span definitions. For well-configured registries, the existing exact match is sufficient.
 
+**Reliability policy for blocking verdicts**: Since SCH-001 fallback is blocking (triggers retry), judge reliability matters. A wrong verdict wastes a retry attempt. Safeguards:
+- Judge verdicts with `confidence < 0.7` are downgraded from blocking to advisory — the agent sees the suggestion but isn't forced to act on it
+- If the judge returns an error or times out, the check falls back to the script-only cardinality check (pass if no unbounded patterns)
+- Judge verdicts are included in the validation feedback so the agent (and humans reviewing the output) can see what the judge decided and why
+
 #### Milestone 3: NDS-005 — Error Handling Preservation (new rule)
 
 **Current**: Not implemented. No file exists.
 
 **With judge**: Two-part implementation:
 1. **Script** (new): AST analysis detecting structural changes to pre-existing `try`/`catch`/`finally` blocks in the agent's diff — reordered catch clauses, merged error handling blocks, modified throw statements.
-2. **Judge**: When the script flags a structural change, the judge asks: "Does the restructured error handling preserve the original propagation semantics? Same exception types caught? Same re-throw behavior? Same catch clause ordering?"
+2. **Judge**: When the script flags a structural change, the judge asks: "Does the restructured error handling preserve the original propagation semantics — exception types, re-throw behavior, and catch clause ordering?"
 
 **Dependency**: NDS-005 judge verdicts feed into the refactor recommendation system ([PRD #111](../prds/111-refactor-recommendations.md)). When the judge determines error handling was restructured in a non-preserving way, this becomes a candidate for a refactor recommendation rather than just a blocking failure.
 
@@ -123,7 +138,7 @@ If the judge is unavailable (API error, cost limit), the script's existing behav
 
 - Judge uses Haiku for cost efficiency — judge questions are short, well-scoped, and don't need deep reasoning
 - Judge calls are injectable (dependency injection) for testing — tests use mock judges, not real API calls
-- The spec (line 1738) says Tier 2 checks should be "deterministic." Adding LLM judges makes them non-deterministic. This is an intentional deviation from the spec, justified by the rubric's recommendation. The decision log captures this.
+- The spec (Two-Tier Validation Architecture section) says Tier 2 checks should be "deterministic." Adding LLM judges makes them non-deterministic. This is an intentional deviation from the spec, justified by the rubric's recommendation. The decision log captures this.
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 
 ## Decision Log
@@ -136,3 +151,5 @@ If the judge is unavailable (API error, cost limit), the script's existing behav
 | 2026-03-14 | Inner-loop judges, not post-run only | The agent can fix naming and attribute issues on retry. Post-run-only judges report problems without fixing them. Inner-loop judges produce better output for the same API cost. |
 | 2026-03-14 | Graceful fallback on judge failure | Judge unavailability should never block the pipeline. Script-only results are always available as fallback. |
 | 2026-03-14 | Intentional spec deviation | Spec says Tier 2 should be deterministic. Rubric says semi-automatable rules are candidates for LLM judges. We follow the rubric's recommendation here — the spec was written before the rubric refined the automation classifications. |
+| 2026-03-14 | Identifiers only in judge prompts | Judge receives attribute keys, span names, function signatures — not full source code. Minimizes sensitive data exposure while providing enough context for semantic judgment. |
+| 2026-03-14 | Confidence threshold for blocking verdicts | Judge verdicts with confidence < 0.7 are downgraded from blocking to advisory. Prevents low-confidence judgments from wasting retry attempts. |
