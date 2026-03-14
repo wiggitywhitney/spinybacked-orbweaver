@@ -90,8 +90,10 @@ function makeDeps(overrides?: Partial<GitWorkflowDeps>): GitWorkflowDeps {
     createBranch: vi.fn().mockResolvedValue(undefined),
     commitFileResult: vi.fn().mockResolvedValue('abc123'),
     commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
+    validateCredentials: vi.fn().mockResolvedValue(undefined),
     pushBranch: vi.fn().mockResolvedValue(undefined),
     renderPrSummary: vi.fn().mockReturnValue('# PR Summary\n\nMock summary'),
+    writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
     createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
     stderr: vi.fn(),
@@ -458,6 +460,151 @@ describe('runGitWorkflow', () => {
 
       expect(result.prUrl).toBeUndefined();
       expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('gh failed'));
+    });
+  });
+
+  describe('credential validation', () => {
+    it('validates credentials before calling coordinate', async () => {
+      const callOrder: string[] = [];
+      const deps = makeDeps({
+        validateCredentials: vi.fn().mockImplementation(async () => {
+          callOrder.push('validateCredentials');
+        }),
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callOrder.push('coordinate');
+          callbacks?.onFileComplete?.(makeFileResult(), 0, 1);
+          return makeRunResult();
+        }),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(callOrder).toEqual(['validateCredentials', 'coordinate']);
+    });
+
+    it('throws immediately when credentials are invalid', async () => {
+      const deps = makeDeps({
+        validateCredentials: vi.fn().mockRejectedValue(new Error('Authentication failed')),
+      });
+
+      await expect(runGitWorkflow(makeOptions(), deps)).rejects.toThrow('Authentication failed');
+      expect(deps.coordinate).not.toHaveBeenCalled();
+    });
+
+    it('skips credential validation in dry-run mode', async () => {
+      const deps = makeDeps({
+        validateCredentials: vi.fn().mockResolvedValue(undefined),
+      });
+
+      await runGitWorkflow(makeOptions({ dryRun: true }), deps);
+
+      expect(deps.validateCredentials).not.toHaveBeenCalled();
+    });
+
+    it('skips credential validation in --no-pr mode', async () => {
+      const deps = makeDeps({
+        validateCredentials: vi.fn().mockResolvedValue(undefined),
+      });
+
+      await runGitWorkflow(makeOptions({ noPr: true }), deps);
+
+      expect(deps.validateCredentials).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('PR summary persistence', () => {
+    it('writes PR summary to a local file before push', async () => {
+      const callOrder: string[] = [];
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockImplementation(async () => {
+          callOrder.push('writePrSummary');
+          return '/project/orb-pr-summary.md';
+        }),
+        pushBranch: vi.fn().mockImplementation(async () => {
+          callOrder.push('pushBranch');
+        }),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(callOrder).toEqual(['writePrSummary', 'pushBranch']);
+    });
+
+    it('returns prSummaryPath in the result', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+      });
+
+      const result = await runGitWorkflow(makeOptions(), deps);
+
+      expect(result.prSummaryPath).toBe('/project/orb-pr-summary.md');
+    });
+
+    it('preserves summary file even when push fails', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        pushBranch: vi.fn().mockRejectedValue(new Error('push denied')),
+      });
+
+      const result = await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.writePrSummary).toHaveBeenCalled();
+      expect(result.prSummaryPath).toBe('/project/orb-pr-summary.md');
+      expect(result.prUrl).toBeUndefined();
+    });
+
+    it('logs the summary file path', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('orb-pr-summary.md'));
+    });
+
+    it('skips PR summary in dry-run mode', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+      });
+
+      await runGitWorkflow(makeOptions({ dryRun: true }), deps);
+
+      expect(deps.writePrSummary).not.toHaveBeenCalled();
+    });
+
+    it('skips PR summary when --no-pr is set', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+      });
+
+      await runGitWorkflow(makeOptions({ noPr: true }), deps);
+
+      expect(deps.writePrSummary).not.toHaveBeenCalled();
+    });
+
+    it('propagates writePrSummary failure', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockRejectedValue(new Error('disk full')),
+      });
+
+      await expect(runGitWorkflow(makeOptions(), deps)).rejects.toThrow('disk full');
+      expect(deps.pushBranch).not.toHaveBeenCalled();
+    });
+
+    it('skips PR summary when no files succeeded', async () => {
+      const failedFile = makeFileResult({ status: 'failed', reason: 'error' });
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(failedFile, 0, 1);
+          return makeRunResult({ filesSucceeded: 0, filesFailed: 1, fileResults: [failedFile] });
+        }),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.writePrSummary).not.toHaveBeenCalled();
     });
   });
 });

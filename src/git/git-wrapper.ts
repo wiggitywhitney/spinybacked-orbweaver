@@ -90,3 +90,28 @@ export async function getCurrentBranch(dir: string): Promise<string> {
   const branchSummary = await git.branchLocal();
   return branchSummary.current;
 }
+
+/**
+ * Validate that git push credentials are configured and working.
+ * Uses `git ls-remote` as a lightweight auth check against the remote.
+ * Throws if credentials are invalid or the remote is unreachable.
+ *
+ * @param dir - The git repository directory.
+ */
+export async function validateCredentials(dir: string): Promise<void> {
+  const git = simpleGit(dir);
+
+  // Check if a remote is configured — repos without remotes (e.g., CI test fixtures)
+  // can't be validated, but the push will fail later with a clear error.
+  const remotes = await git.getRemotes();
+  if (remotes.length === 0) {
+    return;
+  }
+
+  try {
+    await git.listRemote(['--heads']);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Git credential validation failed: ${msg}`);
+  }
+}

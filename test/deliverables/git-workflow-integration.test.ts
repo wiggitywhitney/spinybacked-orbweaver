@@ -129,8 +129,10 @@ describe('git workflow integration', () => {
       createBranch,
       commitFileResult,
       commitAggregateChanges,
+      validateCredentials: vi.fn().mockResolvedValue(undefined),
       pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
+      writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/orb-pr-summary.md`),
       createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
       checkGhAvailable: vi.fn().mockResolvedValue(false),
       stderr: vi.fn(),
@@ -184,8 +186,10 @@ describe('git workflow integration', () => {
       createBranch,
       commitFileResult,
       commitAggregateChanges,
+      validateCredentials: vi.fn().mockResolvedValue(undefined),
       pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
+      writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/orb-pr-summary.md`),
       createPr: vi.fn(),
       checkGhAvailable: vi.fn().mockResolvedValue(true),
       stderr: vi.fn(),
@@ -234,8 +238,13 @@ describe('git workflow integration', () => {
       createBranch,
       commitFileResult,
       commitAggregateChanges,
+      validateCredentials: vi.fn().mockResolvedValue(undefined),
       pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
+      writePrSummary: vi.fn().mockImplementation(async (_dir: string, content: string) => {
+        capturedPrBody = content;
+        return `${repoDir}/orb-pr-summary.md`;
+      }),
       createPr: vi.fn().mockImplementation(async (_dir, _title, body) => {
         capturedPrBody = body;
         return 'https://github.com/test/repo/pull/1';
