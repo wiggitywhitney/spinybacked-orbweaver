@@ -265,8 +265,12 @@ async function executeRetryLoop(
 
   // Pre-flight token estimate — skip files that are very likely to exceed the budget.
   // This avoids spending real API tokens on files that can't possibly fit within budget.
+  // Uses a 2x safety margin since the heuristic is rough. Also skips the check entirely
+  // when the budget is below the fixed prompt overhead (unrealistic config) to avoid
+  // blocking all files on a misconfigured budget.
+  const FIXED_OVERHEAD = 4000;
   const estimatedTokens = estimateMinTokens(originalCode.length);
-  if (estimatedTokens > config.maxTokensPerFile) {
+  if (config.maxTokensPerFile >= FIXED_OVERHEAD && estimatedTokens > config.maxTokensPerFile * 2) {
     const reason = `Pre-flight token estimate (${estimatedTokens}) exceeds budget (${config.maxTokensPerFile}). ` +
       `File has ${originalCode.length} characters. Increase maxTokensPerFile or reduce file size.`;
     return buildFailedResult(filePath, reason, reason, ZERO_TOKENS, 0, 'initial-generation');

@@ -61,11 +61,13 @@ export function detectOscillation(
 
     if (setsEqual(currentKeys, previousKeys)) {
       const ruleBreakdown = [...groupByRuleId(current.blockingFailures).entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
         .map(([ruleId, count]) => `${ruleId} (×${count})`)
         .join(', ');
-      const affectedLines = current.blockingFailures
+      const affectedLines = [...new Set(current.blockingFailures
         .filter(f => f.lineNumber != null)
-        .map(f => `${f.ruleId}:${f.lineNumber}`)
+        .map(f => `${f.ruleId}:${f.lineNumber}`))]
+        .sort()
         .join(', ');
       return {
         shouldSkip: true,

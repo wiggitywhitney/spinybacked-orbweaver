@@ -98,8 +98,9 @@ describe('estimateMinTokens', () => {
     expect(estimate).toBeGreaterThan(0);
   });
 
-  it('returns 0 for empty source', () => {
-    expect(estimateMinTokens(0)).toBe(0);
+  it('returns fixed prompt overhead for empty source', () => {
+    // Even an empty file has system prompt + schema cost
+    expect(estimateMinTokens(0)).toBe(4000);
   });
 
   it('scales with source code length', () => {
