@@ -113,11 +113,12 @@ export async function installDependencies(
     }
   }
 
-  // For peerDependencies strategy, add peerDependenciesMeta
+  // For peerDependencies strategy, add peerDependenciesMeta for instrumentation packages only.
+  // @opentelemetry/api is excluded — it is unconditionally imported and must remain required.
   if (dependencyStrategy === 'peerDependencies') {
     const metaWarning = await addPeerDependenciesMeta(
       projectDir,
-      [...uniquePackages, '@opentelemetry/api'],
+      uniquePackages,
       readFileFn,
       writeFileFn,
     );
@@ -179,7 +180,10 @@ async function addPeerDependenciesMeta(
     const meta = pkg.peerDependenciesMeta ?? {};
 
     for (const name of packageNames) {
-      meta[name] = { optional: true };
+      // Preserve existing peerDependenciesMeta entries (e.g., explicit optional: false)
+      if (meta[name] == null) {
+        meta[name] = { optional: true };
+      }
     }
 
     pkg.peerDependenciesMeta = meta;
