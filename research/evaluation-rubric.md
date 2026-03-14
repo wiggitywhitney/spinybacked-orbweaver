@@ -537,7 +537,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 
 The three non-fully-automatable rules share a common trait: they involve semantic equivalence or quality judgment that structural/syntactic analysis cannot definitively resolve. All are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 32/32, fully automatable with no specialized human knowledge required.
 
-The 30 automatable rules succeed because their definitions can be operationalized into deterministic checks: framework-specific patterns are enumerable from `package.json`, export keywords make public/internal unambiguous, the telemetry registry encodes domain knowledge, and field-name pattern lists enable over-flagging where the cost of a false positive is far lower than the cost of manual review on every agent iteration.
+The 29 automatable rules succeed because their definitions can be operationalized into deterministic checks: framework-specific patterns are enumerable from `package.json`, export keywords make public/internal unambiguous, the telemetry registry encodes domain knowledge, and field-name pattern lists enable over-flagging where the cost of a false positive is far lower than the cost of manual review on every agent iteration.
 
 ---
 
