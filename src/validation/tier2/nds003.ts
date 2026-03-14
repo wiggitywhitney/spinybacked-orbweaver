@@ -39,10 +39,36 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * Normalize a line to handle safe instrumentation-motivated transformations.
+ * - catch {} and catch (varname) {} are normalized to the same form
+ *   so the forward check doesn't flag catch-variable-binding as a modification.
+ * - catch (e) and catch (error) etc. are normalized to catch (error)
+ *   so renamed catch variables don't trigger false positives.
+ */
+function normalizeLine(line: string): string {
+  // Normalize catch {} → catch (error) {} and catch (e) {} → catch (error) {}
+  return line.replace(
+    /\}\s*catch\s*(?:\(\s*\w+\s*\))?\s*\{/,
+    '} catch (error) {',
+  );
+}
+
+/**
+ * Safe instrumentation-motivated refactor patterns.
+ * These lines are not OTel boilerplate but are behavior-preserving
+ * transforms the agent makes to enable correct instrumentation.
+ */
+const SAFE_REFACTOR_PATTERNS: RegExp[] = [
+  // catch {} → catch (error) {} — binding error variable for span.recordException
+  /^\s*\}\s*catch\s*\(\s*\w+\s*\)\s*\{\s*$/,
+];
+
+/**
  * Check if a line is an instrumentation-related addition.
  */
 function isInstrumentationLine(line: string): boolean {
-  return INSTRUMENTATION_PATTERNS.some((pattern) => pattern.test(line));
+  return INSTRUMENTATION_PATTERNS.some((pattern) => pattern.test(line))
+    || SAFE_REFACTOR_PATTERNS.some((pattern) => pattern.test(line));
 }
 
 /**
@@ -66,12 +92,12 @@ export function checkNonInstrumentationDiff(
 ): CheckResult[] {
   const originalLines = originalCode
     .split('\n')
-    .map((l) => l.trim())
+    .map((l) => normalizeLine(l.trim()))
     .filter((l) => l.length > 0);
 
   const instrumentedLines = instrumentedCode
     .split('\n')
-    .map((l) => l.trim())
+    .map((l) => normalizeLine(l.trim()))
     .filter((l) => l.length > 0);
 
   // Empty original: any additions are fine (instrumenting an empty file)
@@ -98,7 +124,7 @@ export function checkNonInstrumentationDiff(
   let lineNum = 0;
   for (const rawLine of originalCode.split('\n')) {
     lineNum++;
-    const trimmed = rawLine.trim();
+    const trimmed = normalizeLine(rawLine.trim());
     if (trimmed.length === 0) continue;
 
     const count = instrFreq.get(trimmed) ?? 0;
@@ -114,7 +140,7 @@ export function checkNonInstrumentationDiff(
   const addedLines: Array<{ line: string; instrumentedLineNum: number }> = [];
   const rawInstrumentedLines = instrumentedCode.split('\n');
   for (let i = 0; i < rawInstrumentedLines.length; i++) {
-    const trimmed = rawInstrumentedLines[i].trim();
+    const trimmed = normalizeLine(rawInstrumentedLines[i].trim());
     if (trimmed.length === 0) continue;
     if (!isInstrumentationLine(trimmed) && !originalSet.has(trimmed)) {
       addedLines.push({ line: trimmed, instrumentedLineNum: i + 1 });
