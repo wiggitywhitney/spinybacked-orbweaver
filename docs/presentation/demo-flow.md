@@ -77,9 +77,7 @@ The agent receives the quality rules upfront (as a scoring checklist in the prom
 
 Three-attempt strategy: initial generation → multi-turn fix with feedback → fresh regeneration with failure hints.
 
-If instrumentation fails at the file level after all attempts, a new agent is spun up that looks at individual functions within the file.
-
-Per-function fallback is tracked in PRD #106 and is a prerequisite for this section of the flow.
+If instrumentation fails at the file level after all attempts, a new agent is spun up that looks at individual functions within the file. **This per-function fallback is not yet implemented** — it is tracked in PRD #106 and must be completed before the presentation. Until then, skip this paragraph during demo runs.
 
 ## 9. Schema Evolution Across Files
 
