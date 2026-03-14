@@ -68,7 +68,7 @@ Require AST diffing between original and instrumented code. More complex to impl
 | Risk | Likelihood | Mitigation |
 |------|-----------|-----------|
 | NDS-004/005 AST diffing produces false positives | Medium | Start advisory-only; promote to blocking after tuning against evaluation corpus |
-| API checks overlap with existing lint rules | Low | Check if Prettier or existing ESLint config already catches these; avoid duplicate enforcement |
+| API checks overlap with existing lint rules | Low | Check if existing ESLint rules (such as no-restricted-imports) or custom AST validators already enforce the policy; avoid duplicate enforcement |
 | NDS-006 module system detection is ambiguous for mixed files | Low | Use the original file's module system as ground truth; flag only when instrumented code introduces the wrong system |
 
 ## Acceptance Gate
