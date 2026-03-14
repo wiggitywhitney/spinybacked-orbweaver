@@ -144,9 +144,9 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 
 - [x] AST-based function extraction: parse a JS file, identify exported functions with boundaries and dependencies
 - [x] Per-function instrumentation: call `instrumentFile` with a function snippet, validate individually
-- [ ] Reassembly and deduplication: combine instrumented functions back into the file, deduplicate imports
-- [ ] Fix loop integration: wire function-level as a 4th-attempt fallback after whole-file exhaustion
-- [ ] FileResult partial status: add `'partial'` status with per-function detail fields
+- [x] Reassembly and deduplication: combine instrumented functions back into the file, deduplicate imports
+- [x] Fix loop integration: wire function-level as a 4th-attempt fallback after whole-file exhaustion
+- [x] FileResult partial status: add `'partial'` status with per-function detail fields
 - [ ] Coordinator and PR summary integration: partial results flow through aggregation and display
 - [ ] Tests: unit tests for extraction, reassembly, deduplication; integration test for full fallback flow
 - [ ] Evaluation validation: run against `journal-graph.js` and `journal-manager.js` from commit-story-v2
@@ -158,3 +158,4 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 | 2026-03-13 | Fallback-after-failure, not pre-flight routing | Avoids complexity threshold tuning; generates data for future pre-flight heuristic; smaller blast radius |
 | 2026-03-13 | Large file resilience only, not user-facing function targeting | Keeps scope bounded; user-facing `--functions` flag is a separate feature if needed |
 | 2026-03-13 | Tier 2 advisory on reassembled file, not blocking | Function-level may lose cross-function context that Tier 2 checks expect; don't block partial success |
+| 2026-03-14 | Full instrumentWithRetry per function, not single-shot | Monster files are often the heart of the app — each function deserves the same 3-attempt retry treatment (multi-turn fix, fresh regen, oscillation detection) as whole-file. Reuses existing retry loop code. Higher token spend is acceptable for quality. |

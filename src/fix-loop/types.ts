@@ -51,8 +51,8 @@ export type ValidationStrategy =
 export interface FileResult {
   /** Absolute path to the instrumented file. */
   path: string;
-  /** Final status after all attempts. */
-  status: 'success' | 'failed' | 'skipped';
+  /** Final status after all attempts. 'partial' means some functions were instrumented via fallback. */
+  status: 'success' | 'failed' | 'skipped' | 'partial';
   /** Number of spans added to the file. */
   spansAdded: number;
   /** Auto-instrumentation libraries the file needs. */
@@ -87,4 +87,10 @@ export interface FileResult {
   advisoryAnnotations?: CheckResult[];
   /** Cumulative token usage across all attempts. */
   tokenUsage: TokenUsage;
+  /** Number of functions successfully instrumented (present when status is 'partial'). */
+  functionsInstrumented?: number;
+  /** Number of functions skipped or failed during function-level fallback. */
+  functionsSkipped?: number;
+  /** Per-function detail from function-level fallback (present when status is 'partial'). */
+  functionResults?: FunctionResult[];
 }
