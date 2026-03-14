@@ -133,7 +133,7 @@ Runtime evaluation scope caveats: RES-002 requires multi-instance comparison. RE
 
 ---
 
-## Part 2: Code-Level Evaluation (31 Rules)
+## Part 2: Code-Level Evaluation (32 Rules)
 
 These rules evaluate the **source code** produced by an AI instrumentation agent. Unlike the Instrumentation Score (which monitors runtime OTLP streams), code-level evaluation assesses a point-in-time code diff with the goal of iterating on the agent.
 
@@ -184,6 +184,18 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Classification** | Automatable |
 | **Mechanism** | AST/grep: all `@opentelemetry/*` imports resolve to `@opentelemetry/api` only. |
 
+**SDK setup file exemption**: API-001 and API-004 evaluate application source files only. The SDK setup file (configured as `sdkInitFile` in orb.yaml, typically `src/instrumentation.js` or `src/instrumentation.ts`) is expected to import SDK packages and is exempt from these rules.
+
+#### NDS-006: Module System Consistency
+
+| | |
+|---|---|
+| **Scope** | Per-file |
+| **Impact** | Gate |
+| **Failure means** | Agent introduced module system mismatch |
+| **Classification** | Automatable |
+| **Mechanism** | Instrumentation code must use the same module system as the target project. ESM projects (`"type": "module"` in package.json or `.mjs` extensions) must receive ESM imports/exports. CJS projects must receive `require()`/`module.exports`. Mixed module systems that pass syntax checks but fail at runtime are a gate-level failure. Detection: parse `package.json` for `"type"` field and check file extensions; then verify all agent-added import/export statements use the matching module syntax. |
+
 ---
 
 ### Dimension 1: Non-Destructiveness (NDS)
@@ -222,6 +234,8 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 **Rationale**: The OTel library guidelines specify instrumenting "public APIs making network calls or performing long-running I/O operations" and "request/message handlers," while explicitly excluding thin wrappers and internal details. Auto-instrumentation libraries are preferred over manual spans when available, because libraries handle edge cases that manual spans miss and auto-update with framework changes.
 
 **Grounded in**: [OTel Library Instrumentation Guidelines](https://opentelemetry.io/docs/concepts/instrumentation/libraries/). Academic survey of 10 industrial systems observed 90-100% service coverage rates, with gaps attributed to non-core or legacy services ([PMC8629732](https://pmc.ncbi.nlm.nih.gov/articles/PMC8629732/)).
+
+**Evaluation scope note**: Coverage rules (COV-001 through COV-006) are evaluated against instrumented files only. Files that failed instrumentation are assessed separately in the failure analysis. A file that was never instrumented cannot fail a coverage rule — it is a coverage gap for the run, not a coverage rule violation.
 
 #### COV-001: Entry Points Have Spans
 
@@ -369,6 +383,8 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Classification** | Automatable |
 | **Mechanism** | AST/grep: flag imports from `@opentelemetry/sdk-*`, `@opentelemetry/exporter-*`, `@opentelemetry/instrumentation-*`, or any `@opentelemetry/*` path that is not `@opentelemetry/api`. |
 
+**Note**: See the SDK setup file exemption on API-001 — API-004 shares the same exemption.
+
 ---
 
 ### Dimension 5: Schema Fidelity (SCH)
@@ -501,25 +517,25 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 
 | Dimension | Prefix | Gates | Quality Rules | Total |
 |---|---|---|---|---|
-| Non-Destructiveness | NDS | 3 | 2 | 5 |
+| Non-Destructiveness | NDS | 4 | 2 | 6 |
 | Coverage | COV | — | 6 | 6 |
 | Restraint | RST | — | 5 | 5 |
 | API-Only Dependency | API | 1 | 3 | 4 |
 | Schema Fidelity | SCH | — | 4 | 4 |
 | Code Quality | CDQ | — | 7 | 7 |
-| **Total** | | **4** | **27** | **31** |
+| **Total** | | **5** | **27** | **32** |
 
 ### Automation Classification
 
 | Classification | Count | Rules |
 |---|---|---|
-| Automatable | 28 | NDS-001 through NDS-004, API-001, COV-001 through COV-006, RST-001 through RST-005, API-002 through API-004, SCH-002, SCH-003, CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-008 |
+| Automatable | 29 | NDS-001 through NDS-004, NDS-006, API-001, COV-001 through COV-006, RST-001 through RST-005, API-002 through API-004, SCH-002, SCH-003, CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-008 |
 | Mixed-mode (automatable in registry mode, semi-automatable in naming quality fallback) | 1 | SCH-001 |
 | Semi-automatable | 2 | NDS-005, SCH-004 |
 
-**90% fully automatable (28/31), 3% mixed-mode (1/31, SCH-001 — automatable when registry defines operation names, semi-automatable in naming quality fallback), 6% semi-automatable (2/31), 0% human-only.** Counts above reflect registry mode only; with naming quality fallback active, SCH-001 requires judgment.
+**91% fully automatable (29/32), 3% mixed-mode (1/32, SCH-001 — automatable when registry defines operation names, semi-automatable in naming quality fallback), 6% semi-automatable (2/32), 0% human-only.** Counts above reflect registry mode only; with naming quality fallback active, SCH-001 requires judgment.
 
-The three non-fully-automatable rules share a common trait: they involve semantic equivalence or quality judgment that structural/syntactic analysis cannot definitively resolve. All are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 31/31, fully automatable with no specialized human knowledge required.
+The three non-fully-automatable rules share a common trait: they involve semantic equivalence or quality judgment that structural/syntactic analysis cannot definitively resolve. All are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 32/32, fully automatable with no specialized human knowledge required.
 
 The 29 automatable rules succeed because their definitions can be operationalized into deterministic checks: framework-specific patterns are enumerable from `package.json`, export keywords make public/internal unambiguous, the telemetry registry encodes domain knowledge, and field-name pattern lists enable over-flagging where the cost of a false positive is far lower than the cost of manual review on every agent iteration.
 
