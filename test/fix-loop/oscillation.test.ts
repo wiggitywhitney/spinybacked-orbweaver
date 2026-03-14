@@ -269,4 +269,40 @@ describe('detectOscillation', () => {
       expect(result.reason).toContain('Error count increased');
     });
   });
+
+  describe('diagnostic detail in oscillation reasons', () => {
+    it('includes affected line numbers in error-count increase reason', () => {
+      const previous = makeValidation([
+        makeCheckResult({ ruleId: 'NDS-003', filePath: '/test.js', lineNumber: 42 }),
+      ]);
+      const current = makeValidation([
+        makeCheckResult({ ruleId: 'NDS-003', filePath: '/test.js', lineNumber: 42 }),
+        makeCheckResult({ ruleId: 'NDS-003', filePath: '/test.js', lineNumber: 75 }),
+      ]);
+
+      const result = detectOscillation(current, previous);
+
+      expect(result.shouldSkip).toBe(true);
+      expect(result.reason).toContain('NDS-003');
+      expect(result.reason).toContain('line 42');
+      expect(result.reason).toContain('line 75');
+    });
+
+    it('includes rule breakdown in duplicate error reason', () => {
+      const failures = [
+        makeCheckResult({ ruleId: 'NDS-003', filePath: '/test.js', lineNumber: 10 }),
+        makeCheckResult({ ruleId: 'NDS-003', filePath: '/test.js', lineNumber: 20 }),
+        makeCheckResult({ ruleId: 'COV-003', filePath: '/test.js', lineNumber: 30 }),
+      ];
+      const previous = makeValidation(failures);
+      const current = makeValidation(failures);
+
+      const result = detectOscillation(current, previous);
+
+      expect(result.shouldSkip).toBe(true);
+      expect(result.reason).toContain('NDS-003');
+      expect(result.reason).toContain('COV-003');
+      expect(result.reason).toContain('×2'); // NDS-003 appears twice
+    });
+  });
 });

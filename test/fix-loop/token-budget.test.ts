@@ -2,7 +2,7 @@
 // ABOUTME: Milestone 3 — verifies cumulative token arithmetic for budget enforcement.
 
 import { describe, it, expect } from 'vitest';
-import { addTokenUsage, totalTokens } from '../../src/fix-loop/token-budget.ts';
+import { addTokenUsage, totalTokens, estimateMinTokens } from '../../src/fix-loop/token-budget.ts';
 import type { TokenUsage } from '../../src/agent/schema.ts';
 
 describe('addTokenUsage', () => {
@@ -89,5 +89,31 @@ describe('totalTokens', () => {
     expect(totalTokens({ inputTokens: 0, outputTokens: 100, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 })).toBe(100);
     expect(totalTokens({ inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 100, cacheReadInputTokens: 0 })).toBe(100);
     expect(totalTokens({ inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 100 })).toBe(100);
+  });
+});
+
+describe('estimateMinTokens', () => {
+  it('returns a positive estimate for non-empty source', () => {
+    const estimate = estimateMinTokens(1000);
+    expect(estimate).toBeGreaterThan(0);
+  });
+
+  it('returns 0 for empty source', () => {
+    expect(estimateMinTokens(0)).toBe(0);
+  });
+
+  it('scales with source code length', () => {
+    const small = estimateMinTokens(1000);
+    const large = estimateMinTokens(10000);
+    expect(large).toBeGreaterThan(small);
+  });
+
+  it('estimates conservatively (underestimates real token usage)', () => {
+    // A 10K char file typically uses ~40K-80K tokens (input + output + overhead).
+    // Our estimate should be below that to avoid false rejections.
+    const estimate = estimateMinTokens(10000);
+    expect(estimate).toBeLessThan(80000);
+    // But should be meaningful, not trivially small
+    expect(estimate).toBeGreaterThan(1000);
   });
 });

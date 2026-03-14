@@ -40,3 +40,24 @@ export function totalTokens(usage: TokenUsage): number {
     + usage.cacheReadInputTokens
   );
 }
+
+/**
+ * Estimate the minimum token cost of instrumenting a file.
+ * Used as a pre-flight check to skip files that are very likely to exceed
+ * the budget, avoiding wasted API tokens.
+ *
+ * Heuristic: ~4 tokens per character for input (source code + system prompt overhead),
+ * output roughly matches input size. Multiply by 2 for input+output, add 20% overhead
+ * for prompt template and schema. This is intentionally conservative (underestimates)
+ * to avoid false rejections — only clearly over-budget files are skipped.
+ *
+ * @param sourceCodeLength - Length of the source file in characters
+ * @returns Estimated minimum token count for a single attempt
+ */
+export function estimateMinTokens(sourceCodeLength: number): number {
+  const tokensPerChar = 0.25; // ~4 chars per token
+  const inputEstimate = sourceCodeLength * tokensPerChar;
+  const outputEstimate = inputEstimate; // output ≈ input (instrumented code is similar size)
+  const overhead = 1.2; // 20% for prompt template, schema, thinking
+  return Math.ceil((inputEstimate + outputEstimate) * overhead);
+}

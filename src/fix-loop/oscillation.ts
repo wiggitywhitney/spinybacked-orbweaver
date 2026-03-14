@@ -43,9 +43,13 @@ export function detectOscillation(
   for (const [ruleId, currentCount] of currentByStage) {
     const previousCount = previousByStage.get(ruleId);
     if (previousCount !== undefined && currentCount > previousCount) {
+      const affectedLines = current.blockingFailures
+        .filter(f => f.ruleId === ruleId)
+        .map(f => f.lineNumber != null ? `line ${f.lineNumber}` : 'unknown line')
+        .join(', ');
       return {
         shouldSkip: true,
-        reason: `Error count increased for ${ruleId}: ${previousCount} → ${currentCount}`,
+        reason: `Error count increased for ${ruleId}: ${previousCount} → ${currentCount} (at ${affectedLines})`,
       };
     }
   }
@@ -56,9 +60,17 @@ export function detectOscillation(
     const previousKeys = errorKeySet(previous.blockingFailures);
 
     if (setsEqual(currentKeys, previousKeys)) {
+      const ruleBreakdown = [...groupByRuleId(current.blockingFailures).entries()]
+        .map(([ruleId, count]) => `${ruleId} (×${count})`)
+        .join(', ');
+      const affectedLines = current.blockingFailures
+        .filter(f => f.lineNumber != null)
+        .map(f => `${f.ruleId}:${f.lineNumber}`)
+        .join(', ');
       return {
         shouldSkip: true,
-        reason: 'Duplicate errors detected across consecutive attempts',
+        reason: `Duplicate errors across consecutive attempts: ${ruleBreakdown}` +
+          (affectedLines ? ` at ${affectedLines}` : ''),
       };
     }
   }

@@ -188,9 +188,25 @@ export async function instrumentFile(
     tokenUsage = extractTokenUsage(response.usage);
 
     if (response.parsed_output == null) {
+      // Extract diagnostics to help identify why structured output failed.
+      // Common causes: JSON parsing failures (e.g., backslash-heavy regex), output truncation,
+      // or the LLM returning content that doesn't match the Zod schema.
+      const stopReason = response.stop_reason ?? 'unknown';
+      const outputTokens = response.usage?.output_tokens ?? 0;
+      const rawPreview = response.content
+        ?.filter(b => b.type === 'text')
+        .map(b => ('text' in b ? (b as { text: string }).text : ''))
+        .join('')
+        .slice(0, 500) || '<no text content>';
+
       return {
         success: false,
-        error: 'LLM response had null parsed_output — no structured output was returned',
+        error: [
+          'LLM response had null parsed_output — no structured output was returned.',
+          `stop_reason: ${stopReason}`,
+          `output_tokens: ${outputTokens}`,
+          `raw_preview: ${rawPreview}`,
+        ].join('\n'),
         tokenUsage,
       };
     }
