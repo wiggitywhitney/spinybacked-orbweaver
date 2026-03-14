@@ -49,7 +49,7 @@ Import and dependency checks. Straightforward to implement as AST-based or regex
 | Prompt Rule | Description | Implementation Approach |
 |-------------|-------------|------------------------|
 | API-001 | Only import from `@opentelemetry/api` | AST: scan import declarations for `@opentelemetry/sdk-*`, `@opentelemetry/exporter-*`, `@opentelemetry/instrumentation-*` in instrumented code |
-| API-002 | `@opentelemetry/api` must be peerDependency (libraries) or dependency (apps) | Already checked in prerequisites — could add as post-instrumentation verification |
+| API-002 | `@opentelemetry/api` must be peerDependency (libraries) or dependency (apps) | Partially covered: `checkOtelApiDependency` runs pre-instrumentation and enforces peerDependency only (fails if in dependencies). Gap: no post-instrumentation re-check, and the library-vs-app distinction is not applied — apps using regular dependencies are rejected. Add post-instrumentation verification that respects project type. |
 | API-003 | No vendor-specific SDKs | AST: scan imports for `dd-trace`, `@newrelic/*`, `@splunk/otel` |
 | API-004 | No SDK internal imports | Same mechanism as API-001 — combined check |
 
