@@ -506,9 +506,9 @@ describe('instrumentWithRetry — token budget tracking', () => {
       validateFile: async () => makePassingValidation(testFilePath),
     };
 
-    // Even on instrumentFile failure, if budget exceeded, reason should mention budget
+    // Budget above fixed overhead (4000) but below the 50K tokens from the mock
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 1000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 10000 }), { deps },
     );
 
     expect(result.status).toBe('failed');
