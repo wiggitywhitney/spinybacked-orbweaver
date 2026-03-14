@@ -1,6 +1,6 @@
 # MCP SDK v1.27.x Gotchas
 
-Verified against SDK v1.27.1 type definitions on 2026-03-05.
+Verified against SDK v1.27.1 type definitions on 2026-03-05. Version pinning guidance updated 2026-03-14.
 
 ## Import Paths
 
@@ -31,4 +31,4 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 ## Version Pinning
 
 - Pin to `^1.27` (matching >=1.27.0 to <2.0.0).
-- v2 is pre-alpha as of March 2026. Do not upgrade.
+- v2 is nearing stable release as of March 2026. v1 will receive security patches for 6+ months after v2 ships. Evaluate v2 migration when it reaches GA and the MCP server code is next modified.
