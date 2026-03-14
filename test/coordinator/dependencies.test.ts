@@ -103,7 +103,7 @@ describe('installDependencies', () => {
       expect(instrCalls.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('adds peerDependenciesMeta with optional: true for each package', async () => {
+    it('adds peerDependenciesMeta with optional: true for instrumentation packages but not @opentelemetry/api', async () => {
       const exec = mockExec();
       const wf = mockWriteFile();
       const libraries: LibraryRequirement[] = [
@@ -123,7 +123,60 @@ describe('installDependencies', () => {
       const pkg = JSON.parse(writeCall!.content);
       expect(pkg.peerDependenciesMeta['@opentelemetry/instrumentation-http']).toEqual({ optional: true });
       expect(pkg.peerDependenciesMeta['@opentelemetry/instrumentation-pg']).toEqual({ optional: true });
-      expect(pkg.peerDependenciesMeta['@opentelemetry/api']).toEqual({ optional: true });
+      // @opentelemetry/api must NOT be marked optional — it is unconditionally imported
+      expect(pkg.peerDependenciesMeta['@opentelemetry/api']).toBeUndefined();
+    });
+
+    it('preserves existing required peerDependency status for @opentelemetry/api', async () => {
+      const exec = mockExec();
+      const wf = mockWriteFile();
+      const existingPkg = {
+        name: 'test-project',
+        peerDependencies: {
+          '@opentelemetry/api': '^1.0.0',
+        },
+      };
+      const libraries: LibraryRequirement[] = [
+        makeLibrary('@opentelemetry/instrumentation-http', 'HttpInstrumentation'),
+      ];
+
+      await installDependencies('/project', libraries, 'peerDependencies', {
+        exec,
+        readFile: mockReadFile(JSON.stringify(existingPkg)),
+        writeFile: wf,
+      });
+
+      const writeCall = wf.calls.find(c => c.path.includes('package.json'));
+      expect(writeCall).toBeDefined();
+      const pkg = JSON.parse(writeCall!.content);
+      // @opentelemetry/api must remain required (no optional: true meta)
+      expect(pkg.peerDependenciesMeta?.['@opentelemetry/api']).toBeUndefined();
+    });
+
+    it('does not overwrite existing non-optional peerDependenciesMeta entries', async () => {
+      const exec = mockExec();
+      const wf = mockWriteFile();
+      const existingPkg = {
+        name: 'test-project',
+        peerDependenciesMeta: {
+          '@opentelemetry/api': { optional: false },
+        },
+      };
+      const libraries: LibraryRequirement[] = [
+        makeLibrary('@opentelemetry/instrumentation-http', 'HttpInstrumentation'),
+      ];
+
+      await installDependencies('/project', libraries, 'peerDependencies', {
+        exec,
+        readFile: mockReadFile(JSON.stringify(existingPkg)),
+        writeFile: wf,
+      });
+
+      const writeCall = wf.calls.find(c => c.path.includes('package.json'));
+      expect(writeCall).toBeDefined();
+      const pkg = JSON.parse(writeCall!.content);
+      // Existing non-optional meta must not be overwritten
+      expect(pkg.peerDependenciesMeta['@opentelemetry/api']).toEqual({ optional: false });
     });
 
     it('preserves existing peerDependenciesMeta entries', async () => {
