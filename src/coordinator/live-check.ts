@@ -157,7 +157,7 @@ export async function runLiveCheck(
   }
 
   // Detect npm default and other placeholder test commands
-  if (!hasTestSuite(testCommand)) {
+  if (!await hasTestSuite(testCommand, projectDir)) {
     return {
       skipped: true,
       warnings: ['No test suite detected (test command is a placeholder). Skipping end-of-run live-check.'],

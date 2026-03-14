@@ -235,6 +235,9 @@ export async function handleInstrument(
     if (runResult.endOfRunValidation) {
       deps.stderr(`Live-check: ${runResult.endOfRunValidation}`);
     }
+    for (const warning of runResult.warnings) {
+      deps.stderr(`Warning: ${warning}`);
+    }
     if (branchName) {
       deps.stderr(`Branch: ${branchName}`);
     }
