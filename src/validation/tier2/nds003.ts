@@ -54,21 +54,10 @@ function normalizeLine(line: string): string {
 }
 
 /**
- * Safe instrumentation-motivated refactor patterns.
- * These lines are not OTel boilerplate but are behavior-preserving
- * transforms the agent makes to enable correct instrumentation.
- */
-const SAFE_REFACTOR_PATTERNS: RegExp[] = [
-  // catch {} → catch (error) {} — binding error variable for span.recordException
-  /^\s*\}\s*catch\s*\(\s*\w+\s*\)\s*\{\s*$/,
-];
-
-/**
  * Check if a line is an instrumentation-related addition.
  */
 function isInstrumentationLine(line: string): boolean {
-  return INSTRUMENTATION_PATTERNS.some((pattern) => pattern.test(line))
-    || SAFE_REFACTOR_PATTERNS.some((pattern) => pattern.test(line));
+  return INSTRUMENTATION_PATTERNS.some((pattern) => pattern.test(line));
 }
 
 /**
