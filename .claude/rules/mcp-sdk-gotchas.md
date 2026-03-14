@@ -31,4 +31,4 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 ## Version Pinning
 
 - Pin to `^1.27` (matching >=1.27.0 to <2.0.0).
-- v2 is nearing stable release as of March 2026. v1 will receive security patches for 6+ months after v2 ships. Evaluate v2 migration when it reaches GA and the MCP server code is next modified.
+- v2 is in active development (pre-alpha) as of March 2026 with published API docs, but is not yet stable. Continue using v1.x for production. v1 will receive security patches for 6+ months after v2 reaches GA. Evaluate v2 migration when it ships stable.
