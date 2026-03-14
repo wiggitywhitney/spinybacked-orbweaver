@@ -114,11 +114,14 @@ export async function installDependencies(
   }
 
   // For peerDependencies strategy, add peerDependenciesMeta for instrumentation packages only.
-  // @opentelemetry/api is excluded — it is unconditionally imported and must remain required.
+  // @opentelemetry/api is defensively filtered — it is unconditionally imported and must remain required.
   if (dependencyStrategy === 'peerDependencies') {
+    const instrumentationPackages = uniquePackages.filter(
+      (name) => name !== '@opentelemetry/api',
+    );
     const metaWarning = await addPeerDependenciesMeta(
       projectDir,
-      uniquePackages,
+      instrumentationPackages,
       readFileFn,
       writeFileFn,
     );
