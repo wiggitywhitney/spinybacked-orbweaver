@@ -573,6 +573,16 @@ describe('runGitWorkflow', () => {
       expect(deps.writePrSummary).not.toHaveBeenCalled();
     });
 
+    it('skips PR summary when --no-pr is set', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+      });
+
+      await runGitWorkflow(makeOptions({ noPr: true }), deps);
+
+      expect(deps.writePrSummary).not.toHaveBeenCalled();
+    });
+
     it('skips PR summary when no files succeeded', async () => {
       const failedFile = makeFileResult({ status: 'failed', reason: 'error' });
       const deps = makeDeps({
