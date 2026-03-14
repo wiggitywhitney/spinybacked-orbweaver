@@ -25,6 +25,7 @@ export interface GitWorkflowResult {
   runResult: RunResult;
   branchName?: string;
   prUrl?: string;
+  prSummaryPath?: string;
 }
 
 /** Injectable dependencies for testing. */
@@ -46,8 +47,10 @@ export interface GitWorkflowDeps {
     projectDir: string,
     input: AggregateCommitInput,
   ) => Promise<string | undefined>;
+  validateCredentials: (projectDir: string) => Promise<void>;
   pushBranch: (dir: string, branchName: string) => Promise<void>;
   renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
+  writePrSummary: (projectDir: string, content: string) => Promise<string>;
   createPr: (projectDir: string, title: string, body: string) => Promise<string>;
   checkGhAvailable: () => Promise<boolean>;
   stderr: (msg: string) => void;
@@ -84,6 +87,12 @@ export async function runGitWorkflow(
   const { projectDir, config, noPr, dryRun, registryDir, targetPath } = options;
   const absoluteRegistryDir = registryDir ? resolve(projectDir, registryDir) : undefined;
   const branchName = generateBranchName();
+
+  // Step 0: Validate git credentials before spending time/tokens on file processing.
+  // Skip when output won't be pushed (dry-run or --no-pr).
+  if (!dryRun && !noPr) {
+    await deps.validateCredentials(projectDir);
+  }
 
   // Step 1: Branch creation is deferred until the first per-file commit
   // to avoid leaving empty branches when the run aborts (cost rejection, early abort).
@@ -134,9 +143,23 @@ export async function runGitWorkflow(
     });
   }
 
-  // Step 4: Push branch and create PR (skip if no branch, --no-pr, or gh unavailable)
+  // Step 4: Render PR summary, persist locally, push branch, and create PR
   let prUrl: string | undefined;
+  let prSummaryPath: string | undefined;
   if (branchCreated && !noPr && runResult.filesSucceeded > 0) {
+    // Render and persist PR summary to a local file before push.
+    // The summary is preserved even if push or PR creation fails.
+    const prBody = deps.renderPrSummary(runResult, config, projectDir);
+    const title = `Add OpenTelemetry instrumentation (${runResult.filesSucceeded} files)`;
+
+    try {
+      prSummaryPath = await deps.writePrSummary(projectDir, prBody);
+      deps.stderr(`PR summary saved to ${prSummaryPath}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      deps.stderr(`Failed to write PR summary: ${msg}`);
+    }
+
     const ghAvailable = await deps.checkGhAvailable();
     if (!ghAvailable) {
       deps.stderr('gh CLI not found — skipping PR creation. Use --no-pr to suppress this warning, or install gh: https://cli.github.com');
@@ -151,11 +174,9 @@ export async function runGitWorkflow(
       }
 
       if (!pushSucceeded) {
-        return { runResult, branchName, prUrl: undefined };
+        return { runResult, branchName, prUrl: undefined, prSummaryPath };
       }
 
-      const prBody = deps.renderPrSummary(runResult, config, projectDir);
-      const title = `Add OpenTelemetry instrumentation (${runResult.filesSucceeded} files)`;
       try {
         prUrl = await deps.createPr(projectDir, title, prBody);
       } catch (err) {
@@ -169,6 +190,7 @@ export async function runGitWorkflow(
     runResult,
     branchName: branchCreated ? branchName : undefined,
     prUrl,
+    prSummaryPath,
   };
 }
 
