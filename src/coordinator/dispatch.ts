@@ -10,6 +10,7 @@ import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig 
 import { computeSchemaHash } from './schema-hash.ts';
 import { runSchemaCheckpoint } from './schema-checkpoint.ts';
 import { EarlyAbortTracker } from './early-abort.ts';
+import { hasTestSuite } from './test-suite-detection.ts';
 import type { SchemaCheckpointDeps } from './schema-checkpoint.ts';
 import {
   writeSchemaExtensions as defaultWriteSchemaExtensions,
@@ -148,6 +149,8 @@ interface DispatchFilesOptions {
   schemaExtensionWarnings?: string[];
   /** When true, revert every file after processing and skip schema checkpoints. */
   dryRun?: boolean;
+  /** Injectable test runner for checkpoint test execution (NDS-002). */
+  runTestCommand?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
 }
 
 /**
@@ -401,6 +404,28 @@ export async function dispatchFiles(
           }
 
           if (checkpointResult.passed) {
+            // Run test suite at checkpoint if configured and available
+            if (options?.runTestCommand && await hasTestSuite(config.testCommand, projectDir)) {
+              try {
+                const testResult = await options.runTestCommand(projectDir, config.testCommand);
+                if (!testResult.passed) {
+                  if (extWarnings) {
+                    extWarnings.push(
+                      `Checkpoint test run failed after file ${filesSinceLastCheckpoint} ` +
+                      `(${filePath}): ${testResult.error ?? 'tests failed'}`,
+                    );
+                  }
+                  stoppedByCheckpoint = true;
+                }
+              } catch (testErr) {
+                // Test infrastructure failure — degrade, don't stop
+                if (extWarnings) {
+                  const msg = testErr instanceof Error ? testErr.message : String(testErr);
+                  extWarnings.push(`Checkpoint test run infrastructure failure (degraded): ${msg}`);
+                }
+              }
+            }
+
             filesSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
           } else {

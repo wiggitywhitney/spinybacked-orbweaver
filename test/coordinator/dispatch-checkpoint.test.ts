@@ -672,4 +672,77 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       expect(onSchemaCheckpoint).toHaveBeenCalledWith(2, true);
     });
   });
+
+  describe('checkpoint test suite execution', () => {
+    it('runs test command at checkpoint intervals when tests exist', async () => {
+      const testRunCount = { value: 0 };
+      const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'vitest run' });
+      const files = await Promise.all([createFile('a.js'), createFile('b.js')]);
+
+      const results = await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDeps(),
+        checkpoint: passingCheckpointConfig,
+        runTestCommand: async () => {
+          testRunCount.value++;
+          return { passed: true };
+        },
+      });
+
+      expect(results).toHaveLength(2);
+      expect(testRunCount.value).toBe(1); // Ran once at checkpoint after file 2
+    });
+
+    it('stops processing when checkpoint test run fails', async () => {
+      const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'vitest run' });
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      const results = await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDeps(),
+        checkpoint: passingCheckpointConfig,
+        runTestCommand: async () => {
+          return { passed: false, error: 'Test suite failed: 2 tests broken' };
+        },
+      });
+
+      // Should stop after file 2 (checkpoint fires, tests fail)
+      expect(results.length).toBeLessThanOrEqual(2);
+    });
+
+    it('skips test run when testCommand is a placeholder', async () => {
+      const testRunCount = { value: 0 };
+      const config = makeConfig({
+        schemaCheckpointInterval: 2,
+        testCommand: 'echo "Error: no test specified" && exit 1',
+      });
+      const files = await Promise.all([createFile('a.js'), createFile('b.js')]);
+
+      const results = await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDeps(),
+        checkpoint: passingCheckpointConfig,
+        runTestCommand: async () => {
+          testRunCount.value++;
+          return { passed: true };
+        },
+      });
+
+      expect(results).toHaveLength(2);
+      expect(testRunCount.value).toBe(0); // Never called — placeholder detected
+    });
+
+    it('skips test run when no runTestCommand is provided', async () => {
+      const config = makeConfig({ schemaCheckpointInterval: 2 });
+      const files = await Promise.all([createFile('a.js'), createFile('b.js')]);
+
+      // No runTestCommand in options — should just run schema checkpoint
+      const results = await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDeps(),
+        checkpoint: passingCheckpointConfig,
+      });
+
+      expect(results).toHaveLength(2);
+    });
+  });
 });
