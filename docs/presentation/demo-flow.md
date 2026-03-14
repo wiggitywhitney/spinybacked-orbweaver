@@ -1,38 +1,51 @@
 # Spinybacked Orbweaver — Talk Demo Flow
 
 **Format:** 25-minute conference talk
-**Demo app:** commit-story-v2 (regular repo, not eval repo)
+**Demo app:** TBD (commit-story-v2 or another real codebase — see open items)
+
+---
+
+## Narrative Arc
+
+The talk is grounded in a real industry problem: **code-level telemetry instrumentation is valuable for organizations but developers don't want to do it.** This is the argument from [Code-Level Telemetry Instrumentation: From "Oh Hell No" to "Worth It"](https://www.cncf.io/blog/2025/11/07/code-level-telemetry-instrumentation-from-oh-hell-no-to-worth-it/) (CNCF blog, November 2025).
+
+The arc: "Organizations need business logic visibility → auto-instrumentation doesn't cover it → developers resist the manual work → so I built an agent that does it for them, validated against quality rules derived from community standards."
 
 ---
 
 ## Pre-Talk Setup
 
-- Run orbweaver against commit-story-v2 to completion before the talk starts
-- Disable git hooks on commit-story-v2 (lint, security, test hooks will interfere with live demo)
+- Run orbweaver against the demo app to completion before the talk starts
 - Keep a terminal tab open with the full agent logs for walkthrough during the talk
-- Be on main in commit-story-v2 at the start of the talk (the instrumented branch and its PR exist but aren't checked out yet)
+- Have the agent's PR ready on GitHub
+- Be on main in the demo app at the start of the talk (the instrumented branch and its PR exist but aren't checked out yet)
 
 ---
 
-## 1. Opening
+## 1. Opening — The Problem
 
-"I built an agent that auto-instruments JavaScript with good-practice OpenTelemetry."
+"Organizations need observability into their business logic. Auto-instrumentation covers the framework layer — HTTP servers, database clients, messaging — but not the code that makes your product unique."
 
-## 2. Demo — What Is Commit Story?
+Reference the CNCF blog as context: "I wrote about this gap last year — the challenge of getting developers to actually instrument their code." One sentence, then move on.
 
-Demo commit-story-v2. Show that when you make a commit, it automatically generates an engineering journal entry.
+## 2. The Gap
 
-## 3. The Problem
+Walk through what auto-instrumentation gives you (framework telemetry, kernel telemetry via eBPF, network telemetry via service mesh) and what it doesn't: insight into the business logic. The unique, differentiating code that makes your product yours.
 
-"I want to use the Datadog MCP server and telemetry data to draw me a diagram of how this software works."
+"Code-level instrumentation is where the real value is — and it's the part developers don't want to do."
 
-Try it. Can't do it — there's no telemetry.
+## 3. Why Developers Resist
 
-Pause. Let that land.
+Brief — don't belabor this, the audience already knows:
+
+- It's tedious and manual
+- Naming conventions are inconsistent across teams
+- It feels like a favor for the platform team, not a feature for developers
+- It rots — instrumentation without validation drifts over time
 
 ## 4. Pivot — "So I Built an Agent"
 
-Transition from the problem to the solution. High-level: this is an agent that analyzes JavaScript source files and adds OpenTelemetry instrumentation.
+Transition from the problem to the solution. High-level: this is an agent that analyzes JavaScript source files and adds OpenTelemetry instrumentation — validated against quality rules derived from community standards.
 
 ## 5. Prerequisites
 
@@ -46,7 +59,7 @@ Walk through what you need for the agent to work. Build up to the most important
 
 Describe Weaver — the semantic convention tooling.
 
-Click into the Weaver schema. Show what it looks like, what it defines.
+Click into the Weaver schema. Show what it looks like, what it defines. This is the foundation that makes the agent's output consistent and queryable.
 
 ## 7. How It Works — The Orchestrator
 
@@ -55,23 +68,23 @@ The orchestrator coordinates the whole run:
 - A fresh agent is spun up for each file
 - That agent receives the resolved registry (what spans and attributes exist so far)
 - The agent instruments the file
-- Results are scored against the instrumentation score spec and fed back as feedback
+- Results are validated against 32 quality rules — derived from the community [Instrumentation Score spec](https://github.com/instrumentation-score/spec) and adapted for static code analysis — then returned to the agent for iteration
 - The agent retries based on that feedback (fix and retry loop)
 
-Open question for audience (or just explain): the agent doesn't know the scoring rules upfront — it discovers them through feedback. (Note: issue #125 addresses adding lightweight scoring rules to the prompt.)
+The agent receives the quality rules upfront (as a scoring checklist in the prompt), and validation feedback during retries helps it correct rule violations in context.
 
 ## 8. Fix and Retry Loop
 
-If instrumentation fails at the file level, a new agent is spun up that looks at individual functions within the file.
+Three-attempt strategy: initial generation → multi-turn fix with feedback → fresh regeneration with failure hints.
 
-> **Note to self:** This per-function fallback is future work. Must be implemented before the presentation.
+If instrumentation fails at the file level after all attempts, a new agent is spun up that looks at individual functions within the file. **This per-function fallback is not yet implemented** — it is tracked in PRD #106 and must be completed before the presentation. Until then, skip this paragraph during demo runs.
 
 ## 9. Schema Evolution Across Files
 
 After each file is instrumented:
 
 - Results are fed back to the coordinator
-- The coordinator updates the resolved schema
+- The coordinator re-resolves the schema from the registry (picking up extensions written by earlier files)
 - The next file's agent receives the updated schema
 
 This means later files benefit from what was learned instrumenting earlier files.
@@ -81,7 +94,7 @@ This means later files benefit from what was learned instrumenting earlier files
 Every five files:
 
 - The test suite is run
-- The live telemetry check is run
+- The schema is validated for structural integrity and drift
 
 This catches regressions early rather than discovering them at the end.
 
@@ -91,7 +104,7 @@ After a full run, the user gets a PR containing:
 
 - All the code changes (instrumented files)
 - PR body with details of what was instrumented
-- Live check validation results
+- Validation results (quality-rule checks, schema integrity, and test outcomes)
 - Failures and reasons for failures
 
 ## 12. Show the Agent's Work
@@ -99,22 +112,18 @@ After a full run, the user gets a PR containing:
 Switch to the terminal tab with the agent logs. Show the audience:
 
 - **Logs:** How it looked at one file at a time, what feedback it gave for different files
-- **Logs:** How it dug into certain files to instrument specific functions
+- **Logs:** How it retried and fixed validation failures
 
 Show the PR that the agent created on GitHub:
 
 - **Before/after:** What an instrumented file looks like compared to the original
 - **PR body:** All the information provided — validation results, schema extensions, failures
 
-## 13. Final Demo — Closing the Loop
+The PR diff is the "worth it" moment — validated, schema-compliant instrumentation that a developer didn't have to write.
 
-Switch to the instrumented branch in commit-story-v2. Since it runs locally, the instrumented code is now what executes.
+## 13. Closing
 
-Make a commit. This time, the telemetry data flows to Datadog.
-
-Now ask Claude (with the Datadog MCP server) to use telemetry data only to build a diagram of how commit-story works.
-
-This time it works. The loop is closed.
+Bring it back to the problem. "Organizations need business logic visibility. Developers don't want to instrument. This agent does it for them — validated against community-derived quality rules, schema-compliant, non-destructive."
 
 ---
 
@@ -123,17 +132,27 @@ This time it works. The loop is closed.
 | Risk | Mitigation |
 |---|---|
 | Agent run doesn't complete cleanly | Run well in advance; have a known-good branch ready |
-| Venue network is unreliable | Identify what can be pre-cached or shown offline |
-| Datadog MCP diagram is underwhelming | Test end-to-end beforehand; have a known-good screenshot |
-| Git hooks interfere with live commits | Disable hooks on commit-story-v2 before the talk |
-| 25 minutes isn't enough for all this content | Practice and cut as needed — this doc has everything, cuts come later |
+| 25 minutes isn't enough for all this content | Practice and cut as needed — sections 5-6 are most likely to overrun |
+| Audience asks about IS scoring specifics | Be precise: "32 code-level rules derived from the Instrumentation Score spec, adapted for static analysis. The IS spec itself evaluates runtime OTLP telemetry — a different concern." |
+| Audience asks about failure rate | Have concrete numbers from the pre-talk run. "X of Y files instrumented successfully, Z failed with these reasons." |
+
+### Resolved risks (from audit review 2026-03-14)
+
+These were previously flagged as risks and have been confirmed resolved:
+
+- Schema evolution across files — working correctly since Phase 5 (PRD #31, `dispatch.ts:248-250`)
+- NDS-003 inline finally false positive — fixed (PR #90, `nds003.ts` INSTRUMENTATION_PATTERNS)
+- NDS-003 cascading false positives — fixed via frequency map approach (PR #90)
+- COV-004/RST-004 validation contradiction — fixed via async function exemption (PR #91)
 
 ---
 
 ## Open Items
 
-- [ ] Implement per-function fallback (section 8) before presentation
-- [ ] Decide: eval repo vs regular commit-story-v2 (leaning regular)
-- [ ] Test full end-to-end: agent run → PR → switch branch → commit → Datadog → MCP diagram
-- [ ] Disable hooks on commit-story-v2
+- [ ] Implement per-function fallback (section 8) — PRD #106
+- [ ] Choose demo app (commit-story-v2 or another real codebase)
+- [ ] Test full end-to-end: agent run → PR → review the output
+- [ ] Research spike: current industry conversation around code-level instrumentation benefits (validate framing)
+- [ ] Pre-seed telemetry data if the closing demo needs live data
 - [ ] Time a practice run to see what needs cutting
+- [ ] Prepare answers for: which quality rules? how long does a run take? what if the agent fails?
