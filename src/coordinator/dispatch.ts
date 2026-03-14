@@ -395,37 +395,39 @@ export async function dispatchFiles(
             resultsSinceCheckpoint,
           );
 
-          // Fire callback
+          // Run test suite at checkpoint if schema passed, configured, and available.
+          // Run BEFORE firing callback so the callback receives a composite result.
+          let checkpointPassed = checkpointResult.passed;
+          if (checkpointResult.passed && options?.runTestCommand && await hasTestSuite(config.testCommand, projectDir)) {
+            try {
+              const testResult = await options.runTestCommand(projectDir, config.testCommand);
+              if (!testResult.passed) {
+                checkpointPassed = false;
+                if (extWarnings) {
+                  extWarnings.push(
+                    `Checkpoint test run failed after file ${filesSinceLastCheckpoint} ` +
+                    `(${filePath}): ${testResult.error ?? 'tests failed'}`,
+                  );
+                }
+              }
+            } catch (testErr) {
+              // Test infrastructure failure — degrade, don't stop
+              if (extWarnings) {
+                const msg = testErr instanceof Error ? testErr.message : String(testErr);
+                extWarnings.push(`Checkpoint test run infrastructure failure (degraded): ${msg}`);
+              }
+            }
+          }
+
+          // Fire callback with composite result (schema + tests)
           let shouldContinue: boolean | void = undefined;
           try {
-            shouldContinue = callbacks?.onSchemaCheckpoint?.(i + 1, checkpointResult.passed);
+            shouldContinue = callbacks?.onSchemaCheckpoint?.(i + 1, checkpointPassed);
           } catch {
             // Callback failure must not abort dispatch
           }
 
-          if (checkpointResult.passed) {
-            // Run test suite at checkpoint if configured and available
-            if (options?.runTestCommand && await hasTestSuite(config.testCommand, projectDir)) {
-              try {
-                const testResult = await options.runTestCommand(projectDir, config.testCommand);
-                if (!testResult.passed) {
-                  if (extWarnings) {
-                    extWarnings.push(
-                      `Checkpoint test run failed after file ${filesSinceLastCheckpoint} ` +
-                      `(${filePath}): ${testResult.error ?? 'tests failed'}`,
-                    );
-                  }
-                  stoppedByCheckpoint = true;
-                }
-              } catch (testErr) {
-                // Test infrastructure failure — degrade, don't stop
-                if (extWarnings) {
-                  const msg = testErr instanceof Error ? testErr.message : String(testErr);
-                  extWarnings.push(`Checkpoint test run infrastructure failure (degraded): ${msg}`);
-                }
-              }
-            }
-
+          if (checkpointPassed) {
             filesSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
           } else {
