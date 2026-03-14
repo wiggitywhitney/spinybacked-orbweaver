@@ -163,6 +163,43 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('why no existing key');
   });
 
+  describe('scoring checklist', () => {
+    it('includes all 6 evaluation dimensions', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      expect(prompt).toContain('NDS-');
+      expect(prompt).toContain('COV-');
+      expect(prompt).toContain('RST-');
+      expect(prompt).toContain('API-');
+      expect(prompt).toContain('SCH-');
+      expect(prompt).toContain('CDQ-');
+    });
+
+    it('includes gate checks', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      expect(prompt).toContain('NDS-001');
+      expect(prompt).toContain('NDS-003');
+      expect(prompt).toContain('API-001');
+      expect(prompt).toContain('NDS-006');
+    });
+
+    it('includes restraint rules', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      expect(prompt).toContain('RST-001');
+      expect(prompt).toContain('RST-004');
+    });
+
+    it('includes code quality rules', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      expect(prompt).toContain('CDQ-001');
+      expect(prompt).toContain('CDQ-003');
+      expect(prompt).toContain('CDQ-007');
+    });
+  });
+
   it('includes auto-instrumentation library allowlist', () => {
     const prompt = buildSystemPrompt(schema);
 
