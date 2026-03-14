@@ -67,6 +67,24 @@ function makeSkippedResult(filePath: string): FileResult {
   };
 }
 
+/** Build a partial FileResult for testing (function-level fallback). */
+function makePartialResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
+  return {
+    path: filePath,
+    status: 'partial',
+    spansAdded: 2,
+    librariesNeeded: [],
+    schemaExtensions: [],
+    attributesCreated: 1,
+    validationAttempts: 3,
+    validationStrategyUsed: 'fresh-regeneration',
+    functionsInstrumented: 2,
+    functionsSkipped: 1,
+    tokenUsage: { inputTokens: 5000, outputTokens: 2000, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+    ...overrides,
+  };
+}
+
 function makeCostCeiling(overrides: Partial<CostCeiling> = {}): CostCeiling {
   return {
     fileCount: 3,
@@ -129,6 +147,24 @@ describe('aggregateResults', () => {
       expect(run.filesSucceeded).toBe(0);
       expect(run.filesFailed).toBe(0);
       expect(run.filesSkipped).toBe(0);
+    });
+
+    it('counts partial files separately from success, failed, and skipped', () => {
+      const results: FileResult[] = [
+        makeSuccessResult('/a.js'),
+        makeFailedResult('/b.js'),
+        makeSkippedResult('/c.js'),
+        makePartialResult('/d.js'),
+        makePartialResult('/e.js'),
+      ];
+
+      const run = aggregateResults(results, makeCostCeiling({ fileCount: 5 }));
+
+      expect(run.filesProcessed).toBe(5);
+      expect(run.filesSucceeded).toBe(1);
+      expect(run.filesFailed).toBe(1);
+      expect(run.filesSkipped).toBe(1);
+      expect(run.filesPartial).toBe(2);
     });
   });
 
@@ -291,6 +327,34 @@ describe('collectLibraries', () => {
 
     expect(libraries).toHaveLength(1);
     expect(libraries[0].package).toBe('@opentelemetry/instrumentation-http');
+  });
+
+  it('includes libraries from partial results', () => {
+    const results: FileResult[] = [
+      makeSuccessResult('/a.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+        ],
+      }),
+      makePartialResult('/b.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-pg', importName: 'PgInstrumentation' },
+        ],
+      }),
+      makeFailedResult('/c.js', {
+        librariesNeeded: [
+          { package: '@opentelemetry/instrumentation-redis', importName: 'RedisInstrumentation' },
+        ],
+      }),
+    ];
+
+    const libraries = collectLibraries(results);
+
+    expect(libraries).toHaveLength(2);
+    expect(libraries.map(l => l.package)).toEqual([
+      '@opentelemetry/instrumentation-http',
+      '@opentelemetry/instrumentation-pg',
+    ]);
   });
 
   it('returns empty for no successful results', () => {

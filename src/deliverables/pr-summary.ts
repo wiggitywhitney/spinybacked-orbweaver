@@ -79,6 +79,9 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
   if (runResult.filesFailed > 0) {
     lines.push(`- **Failed**: ${runResult.filesFailed}`);
   }
+  if (runResult.filesPartial > 0) {
+    lines.push(`- **Partial**: ${runResult.filesPartial}`);
+  }
   if (runResult.filesSkipped > 0) {
     lines.push(`- **Skipped**: ${runResult.filesSkipped}`);
   }
@@ -102,9 +105,15 @@ function renderPerFileStatus(runResult: RunResult, display: DisplayFn): string {
 
   for (const file of runResult.fileResults) {
     const name = display(file.path);
-    let statusText = file.status === 'success' ? 'success' : file.status === 'failed' ? 'failed' : 'skipped';
-    if (file.status === 'failed' && file.reason) {
-      statusText = `failed: ${sanitizeCell(file.reason)}`;
+    let statusText: string;
+    if (file.status === 'success') {
+      statusText = 'success';
+    } else if (file.status === 'failed') {
+      statusText = file.reason ? `failed: ${sanitizeCell(file.reason)}` : 'failed';
+    } else if (file.status === 'partial') {
+      statusText = `partial (${file.functionsInstrumented ?? 0}/${(file.functionsInstrumented ?? 0) + (file.functionsSkipped ?? 0)} functions)`;
+    } else {
+      statusText = 'skipped';
     }
     const libs = file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—';
     const exts = file.schemaExtensions.length > 0

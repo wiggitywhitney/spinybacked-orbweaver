@@ -288,7 +288,7 @@ export async function coordinate(
   runResult.warnings.push(...schemaDiffWarnings);
 
   // Step 6b: Run CDQ-008 cross-file tracer naming check (advisory, degrade and warn)
-  const successfulFiles = fileResults.filter(r => r.status === 'success');
+  const successfulFiles = fileResults.filter(r => r.status === 'success' || r.status === 'partial');
   if (successfulFiles.length > 0) {
     const readResults = await Promise.allSettled(
       successfulFiles.map(async (r) => ({

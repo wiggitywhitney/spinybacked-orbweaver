@@ -43,6 +43,7 @@ export interface RunResult {
   filesSucceeded: number;
   filesFailed: number;
   filesSkipped: number;
+  filesPartial: number;
   librariesInstalled: string[];
   libraryInstallFailures: string[];
   sdkInitUpdated: boolean;

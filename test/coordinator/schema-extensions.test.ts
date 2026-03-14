@@ -19,7 +19,7 @@ import type { FileResult } from '../../src/fix-loop/types.ts';
 function makeFileResult(
   filePath: string,
   extensions: string[] = [],
-  status: 'success' | 'failed' | 'skipped' = 'success',
+  status: 'success' | 'failed' | 'skipped' | 'partial' = 'success',
 ): FileResult {
   return {
     path: filePath,
@@ -74,6 +74,15 @@ describe('collectSchemaExtensions', () => {
     ];
     const collected = collectSchemaExtensions(results);
     expect(collected).toHaveLength(0);
+  });
+
+  it('collects extensions from partial file results', () => {
+    const results: FileResult[] = [
+      makeFileResult('/a.js', ['- id: myapp.order.total\n  type: int\n  brief: Order total']),
+      makeFileResult('/b.js', ['- id: myapp.order.status\n  type: string\n  brief: Order status'], 'partial'),
+    ];
+    const collected = collectSchemaExtensions(results);
+    expect(collected).toHaveLength(2);
   });
 
   it('deduplicates extensions with the same id', () => {

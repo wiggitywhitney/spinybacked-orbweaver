@@ -46,6 +46,7 @@ function makeRunResult(overrides?: Partial<RunResult>): RunResult {
     filesSucceeded: 0,
     filesFailed: 0,
     filesSkipped: 0,
+    filesPartial: 0,
     librariesInstalled: [],
     libraryInstallFailures: [],
     sdkInitUpdated: false,
@@ -285,7 +286,7 @@ describe('handleInstrument', () => {
     it('writes summary to stderr in text mode', async () => {
       const deps = makeDeps({
         coordinate: vi.fn().mockResolvedValue(
-          makeRunResult({ filesProcessed: 3, filesSucceeded: 2, filesFailed: 1, filesSkipped: 0 }),
+          makeRunResult({ filesProcessed: 3, filesSucceeded: 2, filesFailed: 1, filesSkipped: 0, filesPartial: 0 }),
         ),
       });
       await handleInstrument(makeOptions({ output: 'text' }), deps);

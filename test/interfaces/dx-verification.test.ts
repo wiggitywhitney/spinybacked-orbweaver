@@ -47,6 +47,7 @@ function makeRunResult(overrides?: Partial<RunResult>): RunResult {
     filesSucceeded: 0,
     filesFailed: 0,
     filesSkipped: 0,
+    filesPartial: 0,
     librariesInstalled: [],
     libraryInstallFailures: [],
     sdkInitUpdated: false,

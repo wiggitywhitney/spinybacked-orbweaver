@@ -69,6 +69,7 @@ function makeRunResult(overrides: Partial<RunResult> = {}): RunResult {
     filesSucceeded: 2,
     filesFailed: 0,
     filesSkipped: 1,
+    filesPartial: 0,
     librariesInstalled: ['@opentelemetry/instrumentation-express'],
     libraryInstallFailures: [],
     sdkInitUpdated: true,
@@ -250,6 +251,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         filesSucceeded: 0,
         filesFailed: 1,
         filesSkipped: 0,
+        filesPartial: 0,
       });
 
       // CLI
@@ -297,6 +299,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         filesSucceeded: 1,
         filesFailed: 1,
         filesSkipped: 0,
+        filesPartial: 0,
       });
 
       // CLI
@@ -378,6 +381,7 @@ describe('Interface Equivalence — Milestone 9', () => {
         filesSucceeded: 2,
         filesFailed: 0,
         filesSkipped: 0,
+        filesPartial: 0,
       });
 
       // CLI: capture callback invocations

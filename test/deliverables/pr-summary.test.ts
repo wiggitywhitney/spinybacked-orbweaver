@@ -52,6 +52,7 @@ function _makeRunResult(overrides: Partial<RunResult> = {}): RunResult {
     filesSucceeded: 2,
     filesFailed: 0,
     filesSkipped: 0,
+    filesPartial: 0,
     librariesInstalled: [],
     libraryInstallFailures: [],
     sdkInitUpdated: true,
@@ -158,6 +159,29 @@ describe('renderPrSummary', () => {
 
       expect(md).toContain('already-done.js');
       expect(md).toMatch(/skipped/i);
+    });
+
+    it('renders partial status with function-level detail', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/complex.js',
+            status: 'partial',
+            spansAdded: 4,
+            functionsInstrumented: 3,
+            functionsSkipped: 2,
+          }),
+        ],
+        filesSucceeded: 0,
+        filesPartial: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('complex.js');
+      expect(md).toMatch(/partial/i);
+      // Should show function counts in the status cell
+      expect(md).toContain('3');
+      expect(md).toContain('2');
     });
 
     it('shows libraries needed per file', () => {
@@ -480,6 +504,19 @@ describe('renderPrSummary', () => {
       const md = renderPrSummary(result, _makeConfig());
 
       expect(md).toMatch(/sdk.init/i);
+    });
+
+    it('shows partial count in summary header', () => {
+      const result = _makeRunResult({
+        filesProcessed: 4,
+        filesSucceeded: 1,
+        filesFailed: 1,
+        filesSkipped: 1,
+        filesPartial: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toMatch(/partial.*1/i);
     });
 
     it('mentions installed libraries', () => {

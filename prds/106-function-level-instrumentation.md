@@ -147,7 +147,7 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 - [x] Reassembly and deduplication: combine instrumented functions back into the file, deduplicate imports
 - [x] Fix loop integration: wire function-level as a 4th-attempt fallback after whole-file exhaustion
 - [x] FileResult partial status: add `'partial'` status with per-function detail fields
-- [ ] Coordinator and PR summary integration: partial results flow through aggregation and display
+- [x] Coordinator and PR summary integration: partial results flow through aggregation and display
 - [ ] Tests: unit tests for extraction, reassembly, deduplication; integration test for full fallback flow
 - [ ] Evaluation validation: run against `journal-graph.js` and `journal-manager.js` from commit-story-v2
 

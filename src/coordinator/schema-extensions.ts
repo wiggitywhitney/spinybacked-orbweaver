@@ -33,7 +33,7 @@ export function collectSchemaExtensions(results: FileResult[]): string[] {
   const extensions: string[] = [];
 
   for (const result of results) {
-    if (result.status !== 'success') continue;
+    if (result.status !== 'success' && result.status !== 'partial') continue;
     for (const ext of result.schemaExtensions) {
       if (!seen.has(ext)) {
         seen.add(ext);
