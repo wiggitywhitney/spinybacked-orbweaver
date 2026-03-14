@@ -167,7 +167,6 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern.
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
 - **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`.
-- *(CDQ-004 removed — redundant with NDS-003)*
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
 - **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`.
 - **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields (\`email\`, \`password\`, \`ssn\`), or undefined values.
