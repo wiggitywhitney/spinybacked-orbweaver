@@ -349,7 +349,7 @@ function renderWarnings(runResult: RunResult): string {
  * @returns Absolute path to the written file
  */
 export async function writePrSummary(projectDir: string, content: string): Promise<string> {
-  const filePath = join(projectDir, 'orb-pr-summary.md');
+  const filePath = join(projectDir, 'orbweaver-pr-summary.md');
   await writeFile(filePath, content, 'utf-8');
   return filePath;
 }

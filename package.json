@@ -7,7 +7,7 @@
     "node": ">=24.0.0"
   },
   "bin": {
-    "orb": "bin/orb.js"
+    "orbweaver": "bin/orbweaver.js"
   },
   "files": [
     "dist/",

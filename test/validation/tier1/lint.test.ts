@@ -11,7 +11,7 @@ describe('checkLint', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orb-lint-test-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-lint-test-'));
   });
 
   afterEach(() => {

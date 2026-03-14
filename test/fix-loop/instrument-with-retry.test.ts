@@ -123,7 +123,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-retry-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-retry-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -364,7 +364,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-budget-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-budget-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -522,7 +522,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-multiturn-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-multiturn-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -919,7 +919,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-freshregen-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-freshregen-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -1296,7 +1296,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-oscillation-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-oscillation-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -1608,7 +1608,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-highfix-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-highfix-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -1804,7 +1804,7 @@ describe('instrumentWithRetry — agentVersion population', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-retry-version-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-retry-version-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });

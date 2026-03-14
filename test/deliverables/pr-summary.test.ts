@@ -452,12 +452,12 @@ describe('renderPrSummary', () => {
     it('includes agent version when present on file results', () => {
       const result = _makeRunResult({
         fileResults: [
-          _makeFileResult({ agentVersion: 'orb-agent-v0.1.0' }),
+          _makeFileResult({ agentVersion: 'orbweaver-agent-v0.1.0' }),
         ],
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('orb-agent-v0.1.0');
+      expect(md).toContain('orbweaver-agent-v0.1.0');
     });
   });
 
@@ -542,14 +542,14 @@ describe('renderPrSummary', () => {
             ],
             schemaExtensions: ['myapp.api_client.fetch_data'],
             advisoryAnnotations: [],
-            agentVersion: 'orb-agent-v0.1.0',
+            agentVersion: 'orbweaver-agent-v0.1.0',
           }),
           _makeFileResult({
             path: '/project/src/db-handler.js',
             status: 'failed',
             spansAdded: 0,
             reason: 'Lint errors persisted after 3 attempts',
-            agentVersion: 'orb-agent-v0.1.0',
+            agentVersion: 'orbweaver-agent-v0.1.0',
           }),
         ],
         schemaDiff: '### Added\n- `myapp.api_client.fetch_data`',

@@ -23,7 +23,7 @@ describe('validateFile', () => {
   };
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orb-chain-test-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-chain-test-'));
   });
 
   afterEach(() => {

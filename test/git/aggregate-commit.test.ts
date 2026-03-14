@@ -12,7 +12,7 @@ import type { AggregateCommitInput } from '../../src/git/aggregate-commit.ts';
 
 /** Create an isolated git repo with an initial commit. */
 async function initTestRepo(): Promise<string> {
-  const dir = join(tmpdir(), `orb-aggregate-test-${randomUUID()}`);
+  const dir = join(tmpdir(), `orbweaver-aggregate-test-${randomUUID()}`);
   await mkdir(dir, { recursive: true });
   const git = simpleGit(dir);
   await git.init();
@@ -72,7 +72,7 @@ describe('commitAggregateChanges', () => {
   });
 
   it('includes fallback file in commit when SDK init pattern was unrecognized', async () => {
-    const fallbackPath = join(repoDir, 'src', 'orb-instrumentations.js');
+    const fallbackPath = join(repoDir, 'src', 'orbweaver-instrumentations.js');
     await mkdir(join(repoDir, 'src'), { recursive: true });
     await writeFile(fallbackPath, '// fallback instrumentations\n');
 
@@ -96,7 +96,7 @@ describe('commitAggregateChanges', () => {
     const git = simpleGit(repoDir);
     const diff = await git.diff(['--name-only', 'HEAD~1', 'HEAD']);
     const committedFiles = diff.trim().split('\n');
-    expect(committedFiles).toContain('src/orb-instrumentations.js');
+    expect(committedFiles).toContain('src/orbweaver-instrumentations.js');
     expect(committedFiles).toContain('package.json');
   });
 

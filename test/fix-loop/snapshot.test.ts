@@ -13,7 +13,7 @@ describe('file snapshot/restore', () => {
   const originalContent = 'const hello = "world";\nconsole.log(hello);\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-snapshot-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-snapshot-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });

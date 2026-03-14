@@ -21,7 +21,7 @@ describe('Phase 2 acceptance gate', () => {
   };
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orb-accept-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-accept-'));
   });
 
   afterEach(() => {

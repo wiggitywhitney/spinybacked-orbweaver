@@ -17,7 +17,7 @@ import type { AgentConfig } from '../../src/config/schema.ts';
 let testDir: string;
 
 beforeEach(() => {
-  testDir = join(tmpdir(), `orb-prereq-test-${Date.now()}`);
+  testDir = join(tmpdir(), `orbweaver-prereq-test-${Date.now()}`);
   mkdirSync(testDir, { recursive: true });
 });
 

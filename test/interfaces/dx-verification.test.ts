@@ -156,7 +156,7 @@ describe('DX verification', () => {
   });
 
   describe('CLI: missing config', () => {
-    it('directs user to run orb init when config is missing', async () => {
+    it('directs user to run orbweaver init when config is missing', async () => {
       const deps = makeCliDeps({
         loadConfig: vi.fn().mockResolvedValue({
           success: false,
@@ -167,7 +167,7 @@ describe('DX verification', () => {
 
       expect(result.exitCode).toBe(1);
       const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      expect(stderrMessages.some((s: string) => s.includes('orb init'))).toBe(true);
+      expect(stderrMessages.some((s: string) => s.includes('orbweaver init'))).toBe(true);
     });
   });
 
@@ -195,7 +195,7 @@ describe('DX verification', () => {
       await handleInstrument(makeCliOptions({ verbose: true }), deps);
 
       const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      expect(stderrMessages.some((s: string) => s.includes('orb.yaml'))).toBe(true);
+      expect(stderrMessages.some((s: string) => s.includes('orbweaver.yaml'))).toBe(true);
     });
 
     it('does not show verbose output when --verbose is not set', async () => {
@@ -270,31 +270,31 @@ describe('DX verification', () => {
   });
 
   describe('MCP: missing config', () => {
-    it('get-cost-ceiling suggests orb init when config is missing', async () => {
+    it('get-cost-ceiling suggests orbweaver init when config is missing', async () => {
       const deps = makeMcpDeps({
         loadConfig: vi.fn().mockResolvedValue({
           success: false,
-          error: { code: 'FILE_NOT_FOUND', message: 'Config file not found: /project/orb.yaml' },
+          error: { code: 'FILE_NOT_FOUND', message: 'Config file not found: /project/orbweaver.yaml' },
         }),
       });
       const result = await handleGetCostCeiling({ projectDir: '/project' }, deps);
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('orb init');
+      expect(result.content[0].text).toContain('orbweaver init');
     });
 
-    it('instrument suggests orb init when config is missing', async () => {
+    it('instrument suggests orbweaver init when config is missing', async () => {
       const deps = makeMcpDeps({
         loadConfig: vi.fn().mockResolvedValue({
           success: false,
-          error: { code: 'FILE_NOT_FOUND', message: 'Config file not found: /project/orb.yaml' },
+          error: { code: 'FILE_NOT_FOUND', message: 'Config file not found: /project/orbweaver.yaml' },
         }),
       });
       const logFn = vi.fn() as McpLogFn;
       const result = await handleInstrumentTool({ projectDir: '/project' }, deps, logFn);
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('orb init');
+      expect(result.content[0].text).toContain('orbweaver init');
     });
   });
 
@@ -304,7 +304,7 @@ describe('DX verification', () => {
         coordinate: vi.fn().mockRejectedValue(
           new CoordinatorAbortError(
             'Prerequisites failed — cannot proceed:\n' +
-            'package.json not found in /project — run orb init from the project root',
+            'package.json not found in /project — run orbweaver init from the project root',
           ),
         ),
       });

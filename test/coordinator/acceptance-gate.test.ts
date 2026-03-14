@@ -73,7 +73,7 @@ sdk.start();
  * Copies fixture files and creates supporting files (package.json, SDK init, schema dir).
  */
 function setupTempProject(): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'orb-acceptance-p4-'));
+  const tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-acceptance-p4-'));
 
   // Create directory structure
   mkdirSync(join(tempDir, 'src'), { recursive: true });
@@ -877,7 +877,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orb-prd31-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-prd31-'));
   });
 
   afterEach(() => {

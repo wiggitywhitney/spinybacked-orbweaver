@@ -19,7 +19,7 @@ import type { AgentConfig } from '../../src/config/schema.ts';
 
 /** Create an isolated git repo with initial commit. */
 async function initTestRepo(): Promise<string> {
-  const dir = join(tmpdir(), `orb-e2e-git-${randomUUID()}`);
+  const dir = join(tmpdir(), `orbweaver-e2e-git-${randomUUID()}`);
   await mkdir(dir, { recursive: true });
   const git = simpleGit(dir);
   await git.init();
@@ -132,7 +132,7 @@ describe('git workflow integration', () => {
       validateCredentials: vi.fn().mockResolvedValue(undefined),
       pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
-      writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/orb-pr-summary.md`),
+      writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/orbweaver-pr-summary.md`),
       createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
       checkGhAvailable: vi.fn().mockResolvedValue(false),
       stderr: vi.fn(),
@@ -149,7 +149,7 @@ describe('git workflow integration', () => {
 
     // Verify result
     expect(result.runResult).toBe(runResult);
-    expect(result.branchName).toMatch(/^orb\/instrument-/);
+    expect(result.branchName).toMatch(/^orbweaver\/instrument-/);
 
     // Verify branch was created
     const git = simpleGit(repoDir);
@@ -189,7 +189,7 @@ describe('git workflow integration', () => {
       validateCredentials: vi.fn().mockResolvedValue(undefined),
       pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
-      writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/orb-pr-summary.md`),
+      writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/orbweaver-pr-summary.md`),
       createPr: vi.fn(),
       checkGhAvailable: vi.fn().mockResolvedValue(true),
       stderr: vi.fn(),
@@ -206,7 +206,7 @@ describe('git workflow integration', () => {
     // Should still be on the original branch
     const git = simpleGit(repoDir);
     const branches = await git.branchLocal();
-    expect(branches.current).not.toMatch(/^orb\//);
+    expect(branches.current).not.toMatch(/^orbweaver\//);
   }, 10000);
 
   it('renders PR summary with all required sections', async () => {
@@ -243,7 +243,7 @@ describe('git workflow integration', () => {
       renderPrSummary,
       writePrSummary: vi.fn().mockImplementation(async (_dir: string, content: string) => {
         capturedPrBody = content;
-        return `${repoDir}/orb-pr-summary.md`;
+        return `${repoDir}/orbweaver-pr-summary.md`;
       }),
       createPr: vi.fn().mockImplementation(async (_dir, _title, body) => {
         capturedPrBody = body;

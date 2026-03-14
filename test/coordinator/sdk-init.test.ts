@@ -260,7 +260,7 @@ console.log('setup');
       const result = await updateSdkInitFile(sdkFile, libraries);
 
       expect(result.warning).toBeDefined();
-      expect(result.warning).toContain('orb-instrumentations.js');
+      expect(result.warning).toContain('orbweaver-instrumentations.js');
     });
   });
 

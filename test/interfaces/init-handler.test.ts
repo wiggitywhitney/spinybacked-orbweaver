@@ -1,4 +1,4 @@
-// ABOUTME: Tests for the orb init handler.
+// ABOUTME: Tests for the orbweaver init handler.
 // ABOUTME: Verifies prerequisite checks, project type detection, config creation, and --yes mode.
 
 import { describe, it, expect, vi } from 'vitest';
@@ -27,8 +27,8 @@ function makeDeps(overrides: Partial<InitDeps> = {}): InitDeps {
       throw new Error(`ENOENT: ${path}`);
     }),
     access: vi.fn(async (path: string) => {
-      // orb.yaml should NOT exist by default (init creates it)
-      if (path.endsWith('orb.yaml')) {
+      // orbweaver.yaml should NOT exist by default (init creates it)
+      if (path.endsWith('orbweaver.yaml')) {
         const err = new Error('ENOENT') as NodeJS.ErrnoException;
         err.code = 'ENOENT';
         throw err;
@@ -227,7 +227,7 @@ describe('handleInit', () => {
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
-      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orbweaver.yaml'));
       expect(deps.writeFile).toHaveBeenCalledOnce();
       expect(result.warnings).toEqual(
         expect.arrayContaining([
@@ -244,7 +244,7 @@ describe('handleInit', () => {
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
-      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orbweaver.yaml'));
       expect(deps.writeFile).toHaveBeenCalledOnce();
       expect(result.warnings).toEqual(
         expect.arrayContaining([
@@ -287,13 +287,13 @@ describe('handleInit', () => {
   });
 
   describe('config creation with --yes', () => {
-    it('creates orb.yaml with correct fields', async () => {
+    it('creates orbweaver.yaml with correct fields', async () => {
       const deps = makeDeps();
 
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
-      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orbweaver.yaml'));
       expect(deps.writeFile).toHaveBeenCalledOnce();
 
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
@@ -404,7 +404,7 @@ describe('handleInit', () => {
   });
 
   describe('writeFile error handling', () => {
-    it('returns structured error when orb.yaml write fails', async () => {
+    it('returns structured error when orbweaver.yaml write fails', async () => {
       const deps = makeDeps({
         writeFile: vi.fn(async () => { throw new Error('EACCES: permission denied'); }),
       });
@@ -414,7 +414,7 @@ describe('handleInit', () => {
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('Failed to write orb.yaml'),
+          expect.stringContaining('Failed to write orbweaver.yaml'),
         ]),
       );
     });
@@ -452,10 +452,10 @@ describe('handleInit', () => {
   });
 
   describe('existing config', () => {
-    it('fails when orb.yaml already exists', async () => {
+    it('fails when orbweaver.yaml already exists', async () => {
       const deps = makeDeps({
         access: vi.fn(async () => {
-          // orb.yaml exists — access succeeds
+          // orbweaver.yaml exists — access succeeds
         }),
       });
 
@@ -464,7 +464,7 @@ describe('handleInit', () => {
       expect(result.success).toBe(false);
       expect(result.errors).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('orb.yaml already exists'),
+          expect.stringContaining('orbweaver.yaml already exists'),
         ]),
       );
     });
