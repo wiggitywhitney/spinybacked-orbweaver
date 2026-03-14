@@ -116,10 +116,10 @@ function getCallbacks(deps: InstrumentDeps): CoordinatorCallbacks {
 
 describe('handleInstrument', () => {
   describe('config loading', () => {
-    it('loads config from orb.yaml in the project directory', async () => {
+    it('loads config from orbweaver.yaml in the project directory', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions(), deps);
-      expect(deps.loadConfig).toHaveBeenCalledWith('/test/project/orb.yaml');
+      expect(deps.loadConfig).toHaveBeenCalledWith('/test/project/orbweaver.yaml');
     });
 
     it('returns exit code 1 when config file is missing', async () => {
@@ -131,7 +131,7 @@ describe('handleInstrument', () => {
       });
       const result = await handleInstrument(makeOptions(), deps);
       expect(result.exitCode).toBe(1);
-      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('orb init'));
+      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('orbweaver init'));
     });
 
     it('returns exit code 1 when config validation fails', async () => {
@@ -325,7 +325,7 @@ describe('handleInstrument', () => {
   });
 
   describe('error output', () => {
-    it('reports config errors with suggestion to run orb init', async () => {
+    it('reports config errors with suggestion to run orbweaver init', async () => {
       const deps = makeDeps({
         loadConfig: vi.fn().mockResolvedValue({
           success: false,
@@ -334,7 +334,7 @@ describe('handleInstrument', () => {
       });
       await handleInstrument(makeOptions(), deps);
       const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      expect(stderrCalls.some((s: string) => s.includes('orb init'))).toBe(true);
+      expect(stderrCalls.some((s: string) => s.includes('orbweaver init'))).toBe(true);
     });
 
     it('reports coordinator abort errors to stderr', async () => {

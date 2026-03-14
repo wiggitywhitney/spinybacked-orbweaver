@@ -16,7 +16,7 @@ import { basename } from 'node:path';
  */
 export async function createSnapshot(filePath: string): Promise<string> {
   const fileName = basename(filePath);
-  const snapshotPath = join(tmpdir(), `orb-snapshot-${randomUUID()}-${fileName}`);
+  const snapshotPath = join(tmpdir(), `orbweaver-snapshot-${randomUUID()}-${fileName}`);
   await copyFile(filePath, snapshotPath);
   return snapshotPath;
 }

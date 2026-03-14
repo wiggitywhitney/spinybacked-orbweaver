@@ -30,7 +30,7 @@ type ConfigResult =
 const KNOWN_FIELDS = Object.keys(AgentConfigSchema.shape);
 
 /**
- * Load and validate an orb.yaml config file.
+ * Load and validate an orbweaver.yaml config file.
  *
  * @param filePath - Absolute or relative path to the YAML config file
  * @returns Structured result with validated config or descriptive error

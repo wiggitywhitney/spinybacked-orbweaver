@@ -470,7 +470,7 @@ export async function handleRequest(req, res) {
     let testDir: string;
 
     function setupTestDir(): string {
-      const dir = join(tmpdir(), `orb-dx-test-${Date.now()}`);
+      const dir = join(tmpdir(), `orbweaver-dx-test-${Date.now()}`);
       mkdirSync(dir, { recursive: true });
       return dir;
     }

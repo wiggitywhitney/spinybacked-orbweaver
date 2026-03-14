@@ -53,7 +53,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orb-acceptance-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-acceptance-'));
   });
 
   afterEach(() => {

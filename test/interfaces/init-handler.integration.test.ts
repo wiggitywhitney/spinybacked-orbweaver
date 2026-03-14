@@ -31,7 +31,7 @@ function makeIntegrationDeps(overrides: Partial<InitDeps> = {}): InitDeps {
       throw new Error(`ENOENT: ${path}`);
     }),
     access: vi.fn(async (path: string) => {
-      if (path.endsWith('orb.yaml')) {
+      if (path.endsWith('orbweaver.yaml')) {
         const err = new Error('ENOENT') as NodeJS.ErrnoException;
         err.code = 'ENOENT';
         throw err;
@@ -83,7 +83,7 @@ describe('init-handler — real Weaver integration', () => {
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
-      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orbweaver.yaml'));
     });
 
     it('fails when invalid registry is checked', async () => {
@@ -109,7 +109,7 @@ describe('init-handler — real Weaver integration', () => {
       const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
 
       expect(result.success).toBe(true);
-      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orb.yaml'));
+      expect(result.configPath).toBe(join(FIXTURES_DIR, 'orbweaver.yaml'));
       expect(deps.writeFile).toHaveBeenCalledOnce();
 
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;

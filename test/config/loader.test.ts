@@ -10,7 +10,7 @@ import { loadConfig, validateConfig } from '../../src/config/loader.ts';
 let testDir: string;
 
 beforeEach(() => {
-  testDir = join(tmpdir(), `orb-test-${Date.now()}`);
+  testDir = join(tmpdir(), `orbweaver-test-${Date.now()}`);
   mkdirSync(testDir, { recursive: true });
 });
 
@@ -25,8 +25,8 @@ function writeYaml(filename: string, content: string): string {
 }
 
 describe('loadConfig', () => {
-  it('loads and parses a valid minimal orb.yaml', async () => {
-    const configPath = writeYaml('orb.yaml', `
+  it('loads and parses a valid minimal orbweaver.yaml', async () => {
+    const configPath = writeYaml('orbweaver.yaml', `
 schemaPath: ./telemetry/registry
 sdkInitFile: ./src/telemetry/setup.js
 `);
@@ -40,7 +40,7 @@ sdkInitFile: ./src/telemetry/setup.js
   });
 
   it('loads a full config with all fields', async () => {
-    const configPath = writeYaml('orb.yaml', `
+    const configPath = writeYaml('orbweaver.yaml', `
 schemaPath: ./telemetry/registry
 sdkInitFile: ./src/telemetry/setup.js
 agentModel: claude-sonnet-4-6
@@ -84,7 +84,7 @@ exclude:
   });
 
   it('returns structured error for invalid YAML syntax', async () => {
-    const configPath = writeYaml('orb.yaml', `
+    const configPath = writeYaml('orbweaver.yaml', `
 schemaPath: ./telemetry/registry
 sdkInitFile: [invalid yaml
 `);
@@ -96,7 +96,7 @@ sdkInitFile: [invalid yaml
   });
 
   it('returns structured error for non-object YAML', async () => {
-    const configPath = writeYaml('orb.yaml', `just a string`);
+    const configPath = writeYaml('orbweaver.yaml', `just a string`);
     const result = await loadConfig(configPath);
     expect(result.success).toBe(false);
     if (!result.success) {

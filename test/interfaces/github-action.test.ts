@@ -108,10 +108,10 @@ describe('GitHub Action (action.yml)', () => {
       expect(run).toContain('weaver');
     });
 
-    it('runs orb instrument with --yes and --output json', () => {
+    it('runs orbweaver instrument with --yes and --output json', () => {
       const instrumentStep = steps.find(
         (s) =>
-          typeof s.run === 'string' && s.run.includes('orb instrument'),
+          typeof s.run === 'string' && s.run.includes('orbweaver instrument'),
       );
       expect(instrumentStep).toBeDefined();
       const run = instrumentStep!.run as string;

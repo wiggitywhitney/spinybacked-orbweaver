@@ -56,7 +56,7 @@ export async function processOrder(orderId) {
 }
 ```
 
-Running `orb instrument src/` produces:
+Running `orbweaver instrument src/` produces:
 
 ```javascript
 import { trace, SpanStatusCode } from '@opentelemetry/api';
@@ -115,11 +115,11 @@ The agent imports only `@opentelemetry/api`, wraps the business logic in a span,
 
 | Interface | Best for | How it works |
 |-----------|----------|--------------|
-| [CLI](#cli) | Interactive use, one-off instrumentation runs | Run `orb instrument` from your terminal |
+| [CLI](#cli) | Interactive use, one-off instrumentation runs | Run `orbweaver instrument` from your terminal |
 | [MCP Server](#mcp-integration) | AI coding assistants (Claude Code, Cursor, etc.) | Agent calls `get-cost-ceiling` then `instrument` via MCP |
 | [GitHub Action](#github-action) | CI/CD pipelines, automated instrumentation | Add the action to a workflow, get results as step outputs |
 
-All three interfaces share the same `orb.yaml` configuration and produce the same results. The CLI creates feature branches with per-file commits and opens PRs. The MCP server and GitHub Action return structured JSON results for integration with AI assistants and CI pipelines.
+All three interfaces share the same `orbweaver.yaml` configuration and produce the same results. The CLI creates feature branches with per-file commits and opens PRs. The MCP server and GitHub Action return structured JSON results for integration with AI assistants and CI pipelines.
 
 ## Prerequisites
 
@@ -132,30 +132,30 @@ All three interfaces share the same `orb.yaml` configuration and produce the sam
   export ANTHROPIC_API_KEY=your-key
   ```
 - **A [Weaver registry](https://github.com/open-telemetry/weaver/blob/main/docs/define-your-own-telemetry-schema.md)** — your project needs a telemetry schema directory that defines your spans and attributes ([setup guide](https://github.com/open-telemetry/weaver/blob/main/docs/define-your-own-telemetry-schema.md), [examples](https://github.com/open-telemetry/opentelemetry-weaver-examples))
-- **An [OTel SDK init file](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** — a file that initializes the OpenTelemetry SDK and registers instrumentations (e.g., `src/instrumentation.js`). `orb init` auto-detects common file names like `src/instrumentation.js`, `src/telemetry.js`, or `src/tracing.js`.
+- **An [OTel SDK init file](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** — a file that initializes the OpenTelemetry SDK and registers instrumentations (e.g., `src/instrumentation.js`). `orbweaver init` auto-detects common file names like `src/instrumentation.js`, `src/telemetry.js`, or `src/tracing.js`.
 - **`@opentelemetry/api` as a peerDependency** — must be in your `package.json` peerDependencies (not dependencies) to avoid silent trace loss from duplicate instances
 
 ### Optional
 
 - **`gh` CLI** — for automatic PR creation. Without it, the agent still creates the feature branch and commits; it just prints a warning and skips the PR. Use `--no-pr` to suppress the warning.
-- **An existing test suite** — if `testCommand` is configured in `orb.yaml`, the agent runs it as an end-of-run validation gate. If not configured, it skips the check with a note in the results.
+- **An existing test suite** — if `testCommand` is configured in `orbweaver.yaml`, the agent runs it as an end-of-run validation gate. If not configured, it skips the check with a note in the results.
 
 ## Project Setup
 
-Before using any interface, create an `orb.yaml` configuration file in your project root.
+Before using any interface, create an `orbweaver.yaml` configuration file in your project root.
 
-### Option A: Auto-detect with `orb init`
+### Option A: Auto-detect with `orbweaver init`
 
 If you have the [CLI installed](#installation), run from your project directory:
 
 ```bash
-orb init
+orbweaver init
 ```
 
-This scans your project, auto-detects the schema directory and SDK init file, validates prerequisites, detects project type (service vs. distributable package), and writes `orb.yaml`. Use `--yes` to skip the confirmation prompt.
+This scans your project, auto-detects the schema directory and SDK init file, validates prerequisites, detects project type (service vs. distributable package), and writes `orbweaver.yaml`. Use `--yes` to skip the confirmation prompt.
 
 ```text
-$ orb init
+$ orbweaver init
 Checking prerequisites...
 Checking Weaver CLI...
 Checking port availability...
@@ -163,21 +163,21 @@ Detecting SDK init file...
 Detecting Weaver schema...
 Validating Weaver schema...
 Detected project type: service (dependencyStrategy: dependencies)
-Writing orb.yaml...
-Created /path/to/your-project/orb.yaml
+Writing orbweaver.yaml...
+Created /path/to/your-project/orbweaver.yaml
 ```
 
-If a prerequisite is missing, `orb init` exits with code 1 and tells you what's needed:
+If a prerequisite is missing, `orbweaver init` exits with code 1 and tells you what's needed:
 
 ```text
-$ orb init
+$ orbweaver init
 Checking prerequisites...
 @opentelemetry/api not found in peerDependencies. Add it: npm install --save-peer @opentelemetry/api
 ```
 
-### Option B: Create `orb.yaml` manually
+### Option B: Create `orbweaver.yaml` manually
 
-Create `orb.yaml` in your project root with at minimum:
+Create `orbweaver.yaml` in your project root with at minimum:
 
 ```yaml
 schemaPath: semconv/          # relative path to your Weaver registry directory
@@ -194,11 +194,11 @@ This controls where the agent adds instrumentation packages in your `package.jso
 
 All other fields have sensible defaults — see [Configuration Reference](#configuration-reference) for the full list.
 
-Once `orb.yaml` exists, follow the setup for your interface: [CLI](#cli), [MCP](#mcp-integration), or [GitHub Action](#github-action).
+Once `orbweaver.yaml` exists, follow the setup for your interface: [CLI](#cli), [MCP](#mcp-integration), or [GitHub Action](#github-action).
 
 ## CLI
 
-Create an `orb.yaml` file first if you don't have one — see [Project Setup](#project-setup).
+Create an `orbweaver.yaml` file first if you don't have one — see [Project Setup](#project-setup).
 
 ### Installation
 
@@ -209,18 +209,18 @@ npm install
 npm link
 ```
 
-After linking, the `orb` command is available globally.
+After linking, the `orbweaver` command is available globally.
 
 ### Instrument
 
 ```bash
-orb instrument src/
+orbweaver instrument src/
 ```
 
 Pass a directory to instrument all `.js` files in it, or a single file path to instrument one file. The agent discovers files, calculates a cost ceiling (displayed in dollars), asks for confirmation, then instruments each file sequentially. Each successful file gets its own commit on a feature branch. After all files are processed, the agent installs dependencies, updates the SDK init file, and opens a PR.
 
 ```text
-$ orb instrument src/order-service.js
+$ orbweaver instrument src/order-service.js
 Cost ceiling: 1 files, 80000 max tokens, estimated max cost $1.87
 Proceed? [y/N] y
 Processing file 1 of 1: src/order-service.js
@@ -228,14 +228,14 @@ Processing file 1 of 1: src/order-service.js
 
 Run complete: 1 succeeded, 0 failed, 0 skipped
 1 files processed: 1 succeeded, 0 failed, 0 skipped
-Branch: orb/instrument-1741700000000
+Branch: orbweaver/instrument-1741700000000
 PR: https://github.com/your-org/your-repo/pull/42
 ```
 
 With multiple files, progress shows each file and its outcome:
 
 ```text
-$ orb instrument src/
+$ orbweaver instrument src/
 Cost ceiling: 5 files, 400000 max tokens, estimated max cost $9.36
 Proceed? [y/N] y
 Processing file 1 of 5: src/already-instrumented.js
@@ -251,27 +251,27 @@ Processing file 5 of 5: src/user-routes.js
 
 Run complete: 3 succeeded, 1 failed, 1 skipped
 5 files processed: 3 succeeded, 1 failed, 1 skipped
-Branch: orb/instrument-1741700000000
+Branch: orbweaver/instrument-1741700000000
 PR: https://github.com/your-org/your-repo/pull/42
 ```
 
 Use `--yes` to skip the cost ceiling confirmation:
 
 ```text
-$ orb instrument src/order-service.js --yes
+$ orbweaver instrument src/order-service.js --yes
 Processing file 1 of 1: src/order-service.js
   src/order-service.js: success (2 spans)
 
 Run complete: 1 succeeded, 0 failed, 0 skipped
 1 files processed: 1 succeeded, 0 failed, 0 skipped
-Branch: orb/instrument-1741700000000
+Branch: orbweaver/instrument-1741700000000
 ```
 
-If `orb.yaml` is missing:
+If `orbweaver.yaml` is missing:
 
 ```text
-$ orb instrument src/
-Configuration not found — run 'orb init' to create orb.yaml
+$ orbweaver instrument src/
+Configuration not found — run 'orbweaver init' to create orbweaver.yaml
 ```
 
 #### Flags
@@ -288,9 +288,9 @@ Configuration not found — run 'orb init' to create orb.yaml
 The `--verbose` flag shows the config file path being loaded:
 
 ```text
-$ orb instrument src/ --verbose --yes
-Loading config from /path/to/your-project/orb.yaml
-Config loaded from /path/to/your-project/orb.yaml
+$ orbweaver instrument src/ --verbose --yes
+Loading config from /path/to/your-project/orbweaver.yaml
+Config loaded from /path/to/your-project/orbweaver.yaml
 Processing file 1 of 1: src/order-service.js
 ...
 ```
@@ -298,7 +298,7 @@ Processing file 1 of 1: src/order-service.js
 The `--debug` flag shows the full resolved configuration as JSON:
 
 ```text
-$ orb instrument src/ --debug --yes
+$ orbweaver instrument src/ --debug --yes
 Config: {
   "schemaPath": "semconv",
   "sdkInitFile": "src/instrumentation.js",
@@ -313,7 +313,7 @@ Processing file 1 of 1: src/order-service.js
 If you reject the cost ceiling, the agent aborts with exit code 3:
 
 ```text
-$ orb instrument src/
+$ orbweaver instrument src/
 Cost ceiling: 1 files, 80000 max tokens, estimated max cost $1.87
 Proceed? [y/N] n
 Cost ceiling rejected by caller. 1 files, 1067 bytes, 80000 max tokens.
@@ -330,7 +330,7 @@ Cost ceiling rejected by caller. 1 files, 1067 bytes, 80000 max tokens.
 
 ## MCP Integration
 
-Create an `orb.yaml` file in your project first — see [Project Setup](#project-setup).
+Create an `orbweaver.yaml` file in your project first — see [Project Setup](#project-setup).
 
 The MCP server exposes the agent to any [MCP-compatible](https://modelcontextprotocol.io/) AI coding assistant over stdio transport.
 
@@ -412,7 +412,7 @@ Progress is reported via MCP logging messages (`level: "info"`) with JSON payloa
 
 ## GitHub Action
 
-Commit an `orb.yaml` file to your repo first — see [Project Setup](#project-setup).
+Commit an `orbweaver.yaml` file to your repo first — see [Project Setup](#project-setup).
 
 Add OpenTelemetry instrumentation as a step in your CI/CD pipeline.
 
@@ -442,11 +442,11 @@ Add OpenTelemetry instrumentation as a step in your CI/CD pipeline.
 | `result` | JSON result from the instrumentation run |
 | `summary` | Human-readable summary (e.g., "3 succeeded, 1 failed, 0 skipped out of 4 files") |
 
-The action runs `orb instrument --yes --output json`, so it skips cost confirmation and outputs structured JSON. Progress is reported via GitHub Actions notices.
+The action runs `orbweaver instrument --yes --output json`, so it skips cost confirmation and outputs structured JSON. Progress is reported via GitHub Actions notices.
 
 ## Configuration Reference
 
-`orb.yaml` configures the agent across all three interfaces. See [Project Setup](#project-setup) for how to create it.
+`orbweaver.yaml` configures the agent across all three interfaces. See [Project Setup](#project-setup) for how to create it.
 
 Only `schemaPath` and `sdkInitFile` are required — everything else has defaults.
 
@@ -477,11 +477,11 @@ Unrecognized fields are rejected with typo suggestions (e.g., "Unknown field 'sh
 Preview what the agent would do without modifying your project:
 
 ```bash
-orb instrument src/ --dry-run
+orbweaver instrument src/ --dry-run
 ```
 
 ```text
-$ orb instrument src/order-service.js --dry-run --yes
+$ orbweaver instrument src/order-service.js --dry-run --yes
 Processing file 1 of 1: src/order-service.js
   src/order-service.js: success (2 spans)
 

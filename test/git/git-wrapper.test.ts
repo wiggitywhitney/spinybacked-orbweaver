@@ -21,7 +21,7 @@ import {
  * Includes an initial commit so branch operations work.
  */
 async function initTestRepo(): Promise<string> {
-  const dir = join(tmpdir(), `orb-git-test-${randomUUID()}`);
+  const dir = join(tmpdir(), `orbweaver-git-test-${randomUUID()}`);
   await mkdir(dir, { recursive: true });
   const git = simpleGit(dir);
   await git.init();
@@ -56,17 +56,17 @@ describe('git-wrapper', () => {
 
   describe('createBranch', () => {
     it('creates and checks out a new branch', async () => {
-      await createBranch(repoDir, 'orb/instrument');
+      await createBranch(repoDir, 'orbweaver/instrument');
       const branch = await getCurrentBranch(repoDir);
-      expect(branch).toBe('orb/instrument');
+      expect(branch).toBe('orbweaver/instrument');
     });
 
     it('throws if branch already exists', async () => {
-      await createBranch(repoDir, 'orb/instrument');
+      await createBranch(repoDir, 'orbweaver/instrument');
       // Switch back to original branch
       const git = simpleGit(repoDir);
       await git.checkout('main').catch(() => git.checkout('master'));
-      await expect(createBranch(repoDir, 'orb/instrument')).rejects.toThrow();
+      await expect(createBranch(repoDir, 'orbweaver/instrument')).rejects.toThrow();
     });
   });
 
@@ -151,8 +151,8 @@ describe('git-wrapper', () => {
 
   describe('pushBranch', () => {
     it('throws when no remote is configured', async () => {
-      await createBranch(repoDir, 'orb/instrument');
-      await expect(pushBranch(repoDir, 'orb/instrument')).rejects.toThrow();
+      await createBranch(repoDir, 'orbweaver/instrument');
+      await expect(pushBranch(repoDir, 'orbweaver/instrument')).rejects.toThrow();
     });
   });
 
@@ -160,8 +160,8 @@ describe('git-wrapper', () => {
     it('creates branch, commits file, and reads log', async () => {
       // This is the PRD acceptance test: "unit tests create a branch,
       // commit a file, and read the commit log in an isolated test repo"
-      await createBranch(repoDir, 'orb/instrument');
-      expect(await getCurrentBranch(repoDir)).toBe('orb/instrument');
+      await createBranch(repoDir, 'orbweaver/instrument');
+      expect(await getCurrentBranch(repoDir)).toBe('orbweaver/instrument');
 
       await writeFile(join(repoDir, 'instrumented.js'), 'traced();\n');
       await stageFiles(repoDir, ['instrumented.js']);
@@ -169,7 +169,7 @@ describe('git-wrapper', () => {
 
       const log = await getLog(repoDir);
       expect(log[0].message).toBe('instrument instrumented.js');
-      expect(await getCurrentBranch(repoDir)).toBe('orb/instrument');
+      expect(await getCurrentBranch(repoDir)).toBe('orbweaver/instrument');
     });
   });
 });

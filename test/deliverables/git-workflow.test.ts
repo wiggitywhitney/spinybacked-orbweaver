@@ -93,7 +93,7 @@ function makeDeps(overrides?: Partial<GitWorkflowDeps>): GitWorkflowDeps {
     validateCredentials: vi.fn().mockResolvedValue(undefined),
     pushBranch: vi.fn().mockResolvedValue(undefined),
     renderPrSummary: vi.fn().mockReturnValue('# PR Summary\n\nMock summary'),
-    writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+    writePrSummary: vi.fn().mockResolvedValue('/project/orbweaver-pr-summary.md'),
     createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
     stderr: vi.fn(),
@@ -131,13 +131,13 @@ describe('runGitWorkflow', () => {
       expect(callOrder).toEqual(['createBranch', 'commitFileResult']);
     });
 
-    it('creates branch with orb/instrument prefix', async () => {
+    it('creates branch with orbweaver/instrument prefix', async () => {
       const deps = makeDeps();
       await runGitWorkflow(makeOptions(), deps);
 
       expect(deps.createBranch).toHaveBeenCalledWith(
         '/project',
-        expect.stringMatching(/^orb\/instrument-/),
+        expect.stringMatching(/^orbweaver\/instrument-/),
       );
     });
 
@@ -382,7 +382,7 @@ describe('runGitWorkflow', () => {
       const deps = makeDeps();
       const result = await runGitWorkflow(makeOptions(), deps);
 
-      expect(result.branchName).toMatch(/^orb\/instrument-/);
+      expect(result.branchName).toMatch(/^orbweaver\/instrument-/);
     });
 
     it('includes the PR URL when created', async () => {
@@ -518,7 +518,7 @@ describe('runGitWorkflow', () => {
       const deps = makeDeps({
         writePrSummary: vi.fn().mockImplementation(async () => {
           callOrder.push('writePrSummary');
-          return '/project/orb-pr-summary.md';
+          return '/project/orbweaver-pr-summary.md';
         }),
         pushBranch: vi.fn().mockImplementation(async () => {
           callOrder.push('pushBranch');
@@ -532,40 +532,40 @@ describe('runGitWorkflow', () => {
 
     it('returns prSummaryPath in the result', async () => {
       const deps = makeDeps({
-        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        writePrSummary: vi.fn().mockResolvedValue('/project/orbweaver-pr-summary.md'),
       });
 
       const result = await runGitWorkflow(makeOptions(), deps);
 
-      expect(result.prSummaryPath).toBe('/project/orb-pr-summary.md');
+      expect(result.prSummaryPath).toBe('/project/orbweaver-pr-summary.md');
     });
 
     it('preserves summary file even when push fails', async () => {
       const deps = makeDeps({
-        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        writePrSummary: vi.fn().mockResolvedValue('/project/orbweaver-pr-summary.md'),
         pushBranch: vi.fn().mockRejectedValue(new Error('push denied')),
       });
 
       const result = await runGitWorkflow(makeOptions(), deps);
 
       expect(deps.writePrSummary).toHaveBeenCalled();
-      expect(result.prSummaryPath).toBe('/project/orb-pr-summary.md');
+      expect(result.prSummaryPath).toBe('/project/orbweaver-pr-summary.md');
       expect(result.prUrl).toBeUndefined();
     });
 
     it('logs the summary file path', async () => {
       const deps = makeDeps({
-        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        writePrSummary: vi.fn().mockResolvedValue('/project/orbweaver-pr-summary.md'),
       });
 
       await runGitWorkflow(makeOptions(), deps);
 
-      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('orb-pr-summary.md'));
+      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('orbweaver-pr-summary.md'));
     });
 
     it('skips PR summary in dry-run mode', async () => {
       const deps = makeDeps({
-        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        writePrSummary: vi.fn().mockResolvedValue('/project/orbweaver-pr-summary.md'),
       });
 
       await runGitWorkflow(makeOptions({ dryRun: true }), deps);
@@ -575,7 +575,7 @@ describe('runGitWorkflow', () => {
 
     it('skips PR summary when --no-pr is set', async () => {
       const deps = makeDeps({
-        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        writePrSummary: vi.fn().mockResolvedValue('/project/orbweaver-pr-summary.md'),
       });
 
       await runGitWorkflow(makeOptions({ noPr: true }), deps);
@@ -595,7 +595,7 @@ describe('runGitWorkflow', () => {
     it('skips PR summary when no files succeeded', async () => {
       const failedFile = makeFileResult({ status: 'failed', reason: 'error' });
       const deps = makeDeps({
-        writePrSummary: vi.fn().mockResolvedValue('/project/orb-pr-summary.md'),
+        writePrSummary: vi.fn().mockResolvedValue('/project/orbweaver-pr-summary.md'),
         coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
           callbacks?.onFileComplete?.(failedFile, 0, 1);
           return makeRunResult({ filesSucceeded: 0, filesFailed: 1, fileResults: [failedFile] });

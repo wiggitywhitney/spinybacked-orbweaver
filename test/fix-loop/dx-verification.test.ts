@@ -138,7 +138,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orb-dx-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-dx-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });

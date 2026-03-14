@@ -104,10 +104,10 @@ describe('MCP instrument tool', () => {
   });
 
   describe('handleInstrumentTool', () => {
-    it('loads config from orb.yaml in projectDir', async () => {
+    it('loads config from orbweaver.yaml in projectDir', async () => {
       await handleInstrumentTool({ projectDir: '/project' }, deps, logFn);
 
-      expect(deps.loadConfig).toHaveBeenCalledWith('/project/orb.yaml');
+      expect(deps.loadConfig).toHaveBeenCalledWith('/project/orbweaver.yaml');
     });
 
     it('calls coordinate with confirmEstimate: false', async () => {
@@ -301,7 +301,7 @@ describe('MCP instrument tool', () => {
         success: false,
         error: {
           code: 'FILE_NOT_FOUND',
-          message: 'Config file not found: /project/orb.yaml',
+          message: 'Config file not found: /project/orbweaver.yaml',
         },
       });
 
@@ -309,7 +309,7 @@ describe('MCP instrument tool', () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('Config file not found');
-      expect(result.content[0].text).toContain('orb init');
+      expect(result.content[0].text).toContain('orbweaver init');
     });
 
     it('returns error when coordinate throws CoordinatorAbortError', async () => {

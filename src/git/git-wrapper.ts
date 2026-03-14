@@ -14,7 +14,7 @@ export interface LogEntry {
 /**
  * Create and check out a new local branch.
  * @param dir - The git repository directory.
- * @param branchName - Name of the branch to create (e.g., 'orb/instrument').
+ * @param branchName - Name of the branch to create (e.g., 'orbweaver/instrument').
  */
 export async function createBranch(dir: string, branchName: string): Promise<void> {
   const git = simpleGit(dir);

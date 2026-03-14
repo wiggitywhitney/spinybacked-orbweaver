@@ -1,4 +1,4 @@
-// ABOUTME: MCP server interface for the orb agent.
+// ABOUTME: MCP server interface for the orbweaver agent.
 // ABOUTME: Exposes get-cost-ceiling and instrument tools over stdio transport for Claude Code integration.
 
 import { fileURLToPath } from 'node:url';
@@ -101,15 +101,15 @@ export async function handleGetCostCeiling(
 ): Promise<ToolResult> {
   const { projectDir } = input;
 
-  // Load config from orb.yaml
-  const configPath = join(projectDir, 'orb.yaml');
+  // Load config from orbweaver.yaml
+  const configPath = join(projectDir, 'orbweaver.yaml');
   const configResult = await deps.loadConfig(configPath);
 
   if (!configResult.success) {
     return {
       content: [{
         type: 'text',
-        text: `Failed to load config: ${configResult.error.message}\n\nRun \`orb init\` to create a configuration file.`,
+        text: `Failed to load config: ${configResult.error.message}\n\nRun \`orbweaver init\` to create a configuration file.`,
       }],
       isError: true,
     };
@@ -226,15 +226,15 @@ export async function handleInstrumentTool(
 ): Promise<ToolResult> {
   const { projectDir } = input;
 
-  // Load config from orb.yaml
-  const configPath = join(projectDir, 'orb.yaml');
+  // Load config from orbweaver.yaml
+  const configPath = join(projectDir, 'orbweaver.yaml');
   const configResult = await deps.loadConfig(configPath);
 
   if (!configResult.success) {
     return {
       content: [{
         type: 'text',
-        text: `Failed to load config: ${configResult.error.message}\n\nRun \`orb init\` to create a configuration file.`,
+        text: `Failed to load config: ${configResult.error.message}\n\nRun \`orbweaver init\` to create a configuration file.`,
       }],
       isError: true,
     };
@@ -362,11 +362,11 @@ export function createMcpServer(deps: McpDeps): McpServer {
       path: z.string().optional()
         .describe('Optional path to scope discovery — a subdirectory (relative to projectDir) or a single .js file. Omit to discover all files in the project.'),
       maxFilesPerRun: z.number().int().positive().optional()
-        .describe('Override max files per run (default: from orb.yaml)'),
+        .describe('Override max files per run (default: from orbweaver.yaml)'),
       maxTokensPerFile: z.number().int().positive().optional()
-        .describe('Override max tokens per file (default: from orb.yaml)'),
+        .describe('Override max tokens per file (default: from orbweaver.yaml)'),
       exclude: z.array(z.string()).optional()
-        .describe('Override exclude patterns (default: from orb.yaml)'),
+        .describe('Override exclude patterns (default: from orbweaver.yaml)'),
     },
   }, async (input) => {
     return handleGetCostCeiling(input, deps);
@@ -388,11 +388,11 @@ export function createMcpServer(deps: McpDeps): McpServer {
       path: z.string().optional()
         .describe('Optional path to scope instrumentation — a subdirectory (relative to projectDir) or a single .js file. Omit to instrument all files in the project.'),
       maxFilesPerRun: z.number().int().positive().optional()
-        .describe('Override max files per run (default: from orb.yaml)'),
+        .describe('Override max files per run (default: from orbweaver.yaml)'),
       maxTokensPerFile: z.number().int().positive().optional()
-        .describe('Override max tokens per file (default: from orb.yaml)'),
+        .describe('Override max tokens per file (default: from orbweaver.yaml)'),
       exclude: z.array(z.string()).optional()
-        .describe('Override exclude patterns (default: from orb.yaml)'),
+        .describe('Override exclude patterns (default: from orbweaver.yaml)'),
     },
   }, async (input) => {
     const logFn: McpLogFn = (params) => {

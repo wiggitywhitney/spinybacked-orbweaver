@@ -85,7 +85,7 @@ function findExistingInstrumentations(arrayText: string): Set<string> {
  *
  * Uses ts-morph to find the `new NodeSDK({ instrumentations: [...] })` pattern.
  * Appends new entries to the array and adds corresponding import statements.
- * If the pattern doesn't match, writes a fallback `orb-instrumentations.js` file
+ * If the pattern doesn't match, writes a fallback `orbweaver-instrumentations.js` file
  * in the same directory as the SDK init file.
  *
  * @param sdkInitFilePath - Absolute path to the SDK init file
@@ -122,8 +122,8 @@ export async function updateSdkInitFile(
     return { updated: true, fallbackWritten: false };
   }
 
-  // Fallback: write orb-instrumentations.js
-  const fallbackPath = join(dirname(sdkInitFilePath), 'orb-instrumentations.js');
+  // Fallback: write orbweaver-instrumentations.js
+  const fallbackPath = join(dirname(sdkInitFilePath), 'orbweaver-instrumentations.js');
   const fallbackContent = generateFallbackFile(uniqueLibraries, esm);
   await writeFile(fallbackPath, fallbackContent, 'utf-8');
 
@@ -132,7 +132,7 @@ export async function updateSdkInitFile(
     fallbackWritten: true,
     fallbackPath,
     warning: `SDK init file does not match recognized NodeSDK pattern. ` +
-      `Instrumentation config written to orb-instrumentations.js — ` +
+      `Instrumentation config written to orbweaver-instrumentations.js — ` +
       `integrate manually into your telemetry setup.`,
   };
 }

@@ -11,7 +11,7 @@ describe('checkSyntax', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orb-syntax-test-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-syntax-test-'));
   });
 
   afterEach(() => {

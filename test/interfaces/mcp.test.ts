@@ -94,10 +94,10 @@ describe('MCP server', () => {
       });
     });
 
-    it('loads config from orb.yaml in projectDir', async () => {
+    it('loads config from orbweaver.yaml in projectDir', async () => {
       await handleGetCostCeiling({ projectDir: '/project' }, deps);
 
-      expect(deps.loadConfig).toHaveBeenCalledWith('/project/orb.yaml');
+      expect(deps.loadConfig).toHaveBeenCalledWith('/project/orbweaver.yaml');
     });
 
     it('uses config values for file discovery', async () => {
@@ -155,7 +155,7 @@ describe('MCP server', () => {
         success: false,
         error: {
           code: 'FILE_NOT_FOUND',
-          message: 'Config file not found: /project/orb.yaml',
+          message: 'Config file not found: /project/orbweaver.yaml',
         },
       });
 
@@ -166,7 +166,7 @@ describe('MCP server', () => {
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('Config file not found');
-      expect(result.content[0].text).toContain('orb init');
+      expect(result.content[0].text).toContain('orbweaver init');
     });
 
     it('returns error when file discovery fails', async () => {
@@ -195,7 +195,7 @@ describe('MCP server', () => {
       );
 
       // Config overrides should be applied
-      const configResult = await deps.loadConfig('/project/orb.yaml');
+      const configResult = await deps.loadConfig('/project/orbweaver.yaml');
       const baseConfig = (configResult as { config: AgentConfig }).config;
       expect(deps.discoverFiles).toHaveBeenCalledWith('/project', {
         exclude: ['**/vendor/**'],
