@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-14) Per-function instrumentation module (PRD #106, milestone 2): `instrumentFunctions()` iterates over extracted functions, calls `instrumentFile` with `buildContext()` snippets, validates each with Tier 1 only, tracks success/failure per function independently. Added `FunctionResult` type for per-function outcome tracking
 - (2026-03-14) AST-based function extraction for function-level instrumentation fallback (PRD #106, milestone 1): `extractExportedFunctions()` identifies exported functions with dependency tracking (imports, module-level constants, JSDoc), filters trivial and already-instrumented functions, and builds self-contained LLM context per function
 - Project scaffolding: TypeScript with erasableSyntaxOnly, Vitest, ESM module system
 - 7-phase PRD structure covering single-file instrumentation through git workflow

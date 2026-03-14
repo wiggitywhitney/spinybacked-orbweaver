@@ -5,6 +5,33 @@ import type { CheckResult } from '../validation/types.ts';
 import type { LibraryRequirement, SpanCategories, TokenUsage } from '../agent/schema.ts';
 
 /**
+ * Result of instrumenting a single extracted function.
+ * Used during function-level fallback when whole-file instrumentation fails.
+ */
+export interface FunctionResult {
+  /** Function name. */
+  name: string;
+  /** Whether instrumentation succeeded for this function. */
+  success: boolean;
+  /** Instrumented code for the function (present on success). */
+  instrumentedCode?: string;
+  /** Error message (present on failure). */
+  error?: string;
+  /** Number of spans added to this function. */
+  spansAdded: number;
+  /** Libraries needed by this function's instrumentation. */
+  librariesNeeded: LibraryRequirement[];
+  /** Schema extensions declared for this function. */
+  schemaExtensions: string[];
+  /** Custom attributes added. */
+  attributesCreated: number;
+  /** Agent notes. */
+  notes?: string[];
+  /** Token usage for this function's instrumentation call. */
+  tokenUsage: TokenUsage;
+}
+
+/**
  * The strategy used in the last completed validation attempt.
  * Reflects the attempt type, not the attempt number.
  */

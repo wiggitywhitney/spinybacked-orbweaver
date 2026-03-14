@@ -143,7 +143,7 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 ## Milestones
 
 - [x] AST-based function extraction: parse a JS file, identify exported functions with boundaries and dependencies
-- [ ] Per-function instrumentation: call `instrumentFile` with a function snippet, validate individually
+- [x] Per-function instrumentation: call `instrumentFile` with a function snippet, validate individually
 - [ ] Reassembly and deduplication: combine instrumented functions back into the file, deduplicate imports
 - [ ] Fix loop integration: wire function-level as a 4th-attempt fallback after whole-file exhaustion
 - [ ] FileResult partial status: add `'partial'` status with per-function detail fields
