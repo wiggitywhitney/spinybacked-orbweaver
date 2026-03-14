@@ -17,13 +17,13 @@ A configuration system that lets users control which auto-instrumentation librar
 
 ### Hardcoded Allowlist Limits Adoption
 
-The auto-instrumentation allowlist is hardcoded in the LLM prompt template (`src/agent/prompt.ts`, lines ~119-138). Users cannot:
+The auto-instrumentation allowlist is hardcoded in the LLM prompt template (`src/agent/prompt.ts`). Users cannot:
 
 - Add custom auto-instrumentation mappings for libraries not on the built-in list
 - Disable specific mappings (e.g., prefer manual spans for a framework with known auto-instrumentation issues)
 - Override the package or class name for a mapping
 
-The reserved `instrumentationMode` field in `orb.yaml` (config schema line 68) exists but is unused.
+The existing `instrumentationMode` field in `orb.yaml` is reserved but unused. This PRD does not use or repurpose `instrumentationMode` — it adds a new `autoInstrumentation` section. The `instrumentationMode` field will be removed as part of this work to avoid config confusion.
 
 ### No Package Installation Controls
 
@@ -67,21 +67,41 @@ autoInstrumentation:
   strictPackages: false  # Default: false. Set true for regulated environments.
 ```
 
+#### Mapping Object Fields
+
+- **`import`** (required): The import specifier to match (e.g., `"express"`, `"@anthropic-ai/sdk"`)
+- **`package`** (required): The npm package to install (e.g., `"@opentelemetry/instrumentation-express"`)
+- **`importName`** (required): The class name to import (e.g., `"ExpressInstrumentation"`)
+
+#### Validation Rules
+
+- Each `additionalMappings` entry must include all three fields (`import`, `package`, `importName`). Missing fields produce a config validation error.
+- Duplicate `import` values within `additionalMappings` produce a config validation error.
+- If an import appears in both `additionalMappings` and `disabledImports`, `disabledImports` takes precedence — the import is excluded from the merged allowlist. A warning is emitted.
+- If `additionalMappings` contains an import that matches a built-in mapping, the custom mapping overrides the built-in. A warning is emitted so users are aware of the customization.
+- Package names in `additionalMappings` must be valid npm package names (non-empty strings).
+
 ### Allowlist Data Module
 
 Extract the hardcoded allowlist from the prompt template into `src/agent/auto-instrumentation.ts`:
 
-- **Core OTel mappings**: `{ import: "express", package: "@opentelemetry/instrumentation-express", ... }`
-- **OpenLLMetry mappings**: `{ import: "@anthropic-ai/sdk", package: "@traceloop/instrumentation-anthropic", ... }`
+- **Core OTel mappings**: `{ import: "express", package: "@opentelemetry/instrumentation-express", importName: "ExpressInstrumentation" }`
+- **OpenLLMetry mappings**: `{ import: "@anthropic-ai/sdk", package: "@traceloop/instrumentation-anthropic", importName: "AnthropicInstrumentation" }`
 - **Merge function**: `resolveAllowlist(config) → MergedAllowlist` that:
   - Starts with built-in defaults
-  - Adds `additionalMappings`
+  - Applies `additionalMappings` (custom overrides built-in for same import)
   - Removes `disabledImports`
   - Returns the merged list for prompt injection and post-hoc filtering
 
+#### Merge Conflict Resolution
+
+- **additionalMappings + built-in overlap**: Custom mappings override built-in mappings for the same import, allowing users to customize package/class names. A warning is emitted.
+- **additionalMappings + disabledImports overlap**: `disabledImports` takes precedence — if an import is disabled, it's excluded even if it appears in `additionalMappings`. A warning is emitted.
+- **Validation**: Overlaps produce warnings, not errors. They are likely intentional (e.g., disabling a custom mapping during debugging).
+
 ### Prompt Integration
 
-`buildSystemPrompt(resolvedSchema)` gains a second parameter: `buildSystemPrompt(resolvedSchema, config)`.
+`buildSystemPrompt` gains a second optional parameter for config: `buildSystemPrompt(resolvedSchema, config?)`. The parameter is optional to maintain backward compatibility — callers without config get the current default behavior.
 
 The allowlist section of the prompt is generated dynamically from the merged allowlist instead of being a hardcoded string. Disabled imports are excluded from the prompt entirely — the LLM never sees them as auto-instrumentation candidates.
 
@@ -91,8 +111,11 @@ In `src/coordinator/aggregate.ts`, `collectLibraries()` gains filtering when `st
 
 1. After collecting all `librariesNeeded` from file results, filter against the merged allowlist
 2. Any package not in the merged allowlist is dropped
-3. Dropped packages are logged as warnings so users know what was blocked
+3. Dropped packages are logged as warnings with the package name and which file requested it, so users can promote useful suggestions into their config
 4. The filtered list proceeds to `installDependencies()`
+5. When `strictPackages: false` (default), no filtering occurs — current behavior preserved
+
+Note: `strictPackages` does not pin package versions. Version resolution follows npm's standard algorithm. Version pinning is orthogonal and can be addressed separately if needed.
 
 ### COV-006 Integration
 
@@ -100,12 +123,12 @@ In `src/coordinator/aggregate.ts`, `collectLibraries()` gains filtering when `st
 
 ## Milestones
 
-- [ ] Allowlist data module with built-in mappings extracted from prompt template, merge logic, and full test coverage
-- [ ] Config schema updated with `autoInstrumentation` field (additionalMappings, disabledImports, strictPackages) and validation tests
-- [ ] Prompt builder uses merged allowlist instead of hardcoded string, with config passed through from instrument-file.ts
-- [ ] `collectLibraries()` filters against merged allowlist when `strictPackages: true`, with warning logs for blocked packages
+- [ ] Allowlist data module with built-in mappings extracted from prompt template, merge logic, merge conflict resolution, and full test coverage
+- [ ] Config schema updated with `autoInstrumentation` field (additionalMappings, disabledImports, strictPackages), validation rules for edge cases, and `instrumentationMode` removed
+- [ ] Prompt builder uses merged allowlist instead of hardcoded string, with optional config parameter maintaining backward compatibility
+- [ ] `collectLibraries()` filters against merged allowlist when `strictPackages: true`, with warning logs for blocked packages including source file
 - [ ] COV-006 respects `disabledImports` — does not flag manual spans for disabled frameworks
-- [ ] Integration test: full pipeline with custom config (additionalMappings + disabledImports + strictPackages) produces expected behavior
+- [ ] Integration test: full pipeline with custom config (additionalMappings + disabledImports + strictPackages + edge cases) produces expected behavior
 - [ ] README documents the `autoInstrumentation` config section with examples for each use case
 
 ## Success Criteria
@@ -114,7 +137,7 @@ In `src/coordinator/aggregate.ts`, `collectLibraries()` gains filtering when `st
 2. Users can disable specific auto-instrumentation and get manual spans instead, without COV-006 violations
 3. With `strictPackages: true`, only known-good packages are installed — LLM hallucinations are filtered out
 4. Blocked packages are visible in warnings so users can promote useful suggestions into their config
-5. Default behavior (no `autoInstrumentation` config) is identical to current behavior — zero breaking changes
+5. Default behavior (no `autoInstrumentation` config) is identical to current behavior — zero user-facing breaking changes (internal API signature changes like adding an optional parameter are expected and acceptable)
 6. The built-in allowlist is maintained as a data structure, not embedded in a prompt template string
 
 ## Design Notes
@@ -131,3 +154,6 @@ In `src/coordinator/aggregate.ts`, `collectLibraries()` gains filtering when `st
 | 2026-03-14 | Use enabled/disabled terminology | OTel ecosystem convention — Java and Node.js both use this pattern |
 | 2026-03-14 | Filter at `collectLibraries()` not at LLM output | Keeps the LLM response intact for debugging; filtering is a policy decision, not a parsing concern |
 | 2026-03-14 | Promoted from issue to PRD | Scope expanded beyond a simple config field — includes prompt changes, post-hoc filtering, COV-006 integration, and documentation |
+| 2026-03-14 | Remove `instrumentationMode` field | Unused reserved field creates config confusion alongside the new `autoInstrumentation` section |
+| 2026-03-14 | `disabledImports` takes precedence over `additionalMappings` | Disabling is a safety/control decision that should override extension decisions |
+| 2026-03-14 | `buildSystemPrompt` config parameter is optional | Maintains backward compatibility — callers without config get default behavior |
