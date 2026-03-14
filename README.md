@@ -115,7 +115,7 @@ The agent imports only `@opentelemetry/api`, wraps the business logic in a span,
 
 | Interface | Best for | How it works |
 |-----------|----------|--------------|
-| [CLI](#cli) | Interactive use, one-off instrumentation runs | Run `orbweaverweaver instrument` from your terminal |
+| [CLI](#cli) | Interactive use, one-off instrumentation runs | Run `orbweaver instrument` from your terminal |
 | [MCP Server](#mcp-integration) | AI coding assistants (Claude Code, Cursor, etc.) | Agent calls `get-cost-ceiling` then `instrument` via MCP |
 | [GitHub Action](#github-action) | CI/CD pipelines, automated instrumentation | Add the action to a workflow, get results as step outputs |
 
