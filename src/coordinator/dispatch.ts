@@ -405,7 +405,7 @@ export async function dispatchFiles(
                 checkpointPassed = false;
                 if (extWarnings) {
                   extWarnings.push(
-                    `Checkpoint test run failed after file ${filesSinceLastCheckpoint} ` +
+                    `Checkpoint test run failed at file ${i + 1}/${total} ` +
                     `(${filePath}): ${testResult.error ?? 'tests failed'}`,
                   );
                 }

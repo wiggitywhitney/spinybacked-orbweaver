@@ -693,6 +693,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
     });
 
     it('stops processing when checkpoint test run fails', async () => {
+      const testRunCount = { value: 0 };
       const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'vitest run' });
       const files = await Promise.all([
         createFile('a.js'), createFile('b.js'),
@@ -703,12 +704,15 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
         deps: makeDeps(),
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => {
+          testRunCount.value++;
           return { passed: false, error: 'Test suite failed: 2 tests broken' };
         },
       });
 
-      // Should stop after file 2 (checkpoint fires, tests fail)
-      expect(results.length).toBeLessThanOrEqual(2);
+      // Test runner was invoked exactly once (at first checkpoint)
+      expect(testRunCount.value).toBe(1);
+      // Should stop at exactly 2 files (checkpoint fires after file 2, tests fail, no more files processed)
+      expect(results).toHaveLength(2);
     });
 
     it('skips test run when testCommand is a placeholder', async () => {
