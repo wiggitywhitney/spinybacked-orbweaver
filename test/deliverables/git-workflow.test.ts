@@ -615,8 +615,12 @@ describe('checkGhAvailable', () => {
     expect(typeof checkGhAvailable).toBe('function');
   });
 
-  it('resolves to a boolean when invoked against real gh CLI', async () => {
+  it('resolves to an object with available and optional warning when invoked against real gh CLI', async () => {
     const result = await checkGhAvailable();
-    expect(typeof result).toBe('boolean');
+    expect(typeof result).toBe('object');
+    expect(typeof result.available).toBe('boolean');
+    if (result.warning !== undefined) {
+      expect(typeof result.warning).toBe('string');
+    }
   });
 });
