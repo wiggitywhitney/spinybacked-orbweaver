@@ -27,6 +27,7 @@ import { checkForbiddenImports } from './tier2/api001.ts';
 import { checkOtelApiDependencyPlacement } from './tier2/api002.ts';
 import { checkModuleSystemMatch } from './tier2/nds006.ts';
 import { checkExportedSignaturePreservation } from './tier2/nds004.ts';
+import { checkControlFlowPreservation } from './tier2/nds005.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -206,6 +207,14 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     tier2Results.push(...collectCheckResults(
       checkExportedSignaturePreservation(originalCode, instrumentedCode, filePath),
       config.tier2Checks['NDS-004'].blocking,
+    ));
+  }
+
+  // NDS-005: Verify existing try/catch/finally structure is preserved after instrumentation.
+  if (config.tier2Checks['NDS-005']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkControlFlowPreservation(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['NDS-005'].blocking,
     ));
   }
 

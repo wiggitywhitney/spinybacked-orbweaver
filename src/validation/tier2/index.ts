@@ -31,6 +31,7 @@ export type {
 export { checkForbiddenImports } from './api001.ts';
 export { checkModuleSystemMatch } from './nds006.ts';
 export { checkExportedSignaturePreservation } from './nds004.ts';
+export { checkControlFlowPreservation } from './nds005.ts';
 export {
   parseResolvedRegistry,
   getSpanDefinitions,

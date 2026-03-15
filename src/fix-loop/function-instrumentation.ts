@@ -70,6 +70,7 @@ function buildTier1OnlyValidationConfig() {
       'API-001': { enabled: false, blocking: false },
       'NDS-006': { enabled: false, blocking: false },
       'NDS-004': { enabled: false, blocking: false },
+      'NDS-005': { enabled: false, blocking: false },
     },
   };
 }

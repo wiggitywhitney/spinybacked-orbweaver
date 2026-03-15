@@ -136,6 +136,7 @@ function buildValidationConfig(config: AgentConfig, projectRoot?: string) {
       'API-002': { enabled: true, blocking: true },
       'NDS-006': { enabled: true, blocking: true },
       'NDS-004': { enabled: true, blocking: false },
+      'NDS-005': { enabled: true, blocking: false },
     },
   };
 }
