@@ -28,6 +28,7 @@ export type {
   ResolvedEnumType,
   ResolvedEnumMember,
 } from './registry-types.ts';
+export { checkForbiddenImports } from './api001.ts';
 export {
   parseResolvedRegistry,
   getSpanDefinitions,

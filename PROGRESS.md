@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-15) API-001/003/004 forbidden import detection (PRD #135, milestone 1): combined Tier 2 check scanning ESM imports and CJS require() for OTel SDK packages, OTel internal packages, and vendor-specific tracing SDKs (dd-trace, @newrelic/*, @splunk/otel, @dynatrace/*, elastic-apm-node). Wired into validation chain as blocking check
+
 - (2026-03-14) Fix try-catch statement counting and add library descriptions to prompt (PRD #106): functions wrapped in a single try-catch (common async pattern like LangGraph nodes) were incorrectly filtered as trivial (1 top-level statement). `effectiveStatementCount()` now counts statements inside the try block. Auto-instrumentation allow list in system prompt now describes what each library covers and explicitly notes it does NOT cover application orchestration
 - (2026-03-14) Evaluation validation against commit-story-v2 files (PRD #106, milestone 8): acceptance gate test verifying journal-graph.js (629 lines, LangGraph state machine) and journal-manager.js (420 lines) produce instrumentation where run-3 produced zero. Both files pass — function-level fallback rescues previously-failing complex files
 - (2026-03-14) Function-level fallback integration tests and infinite recursion fix (PRD #106, milestone 7): 11 integration tests for full fallback flow covering partial result production, error progression, token accumulation, mixed success/failure, reassembly validation failure paths, and file restoration. Fixed infinite recursion bug where per-function `instrumentWithRetry` calls would trigger their own function-level fallback

@@ -23,6 +23,7 @@ import { checkSpanNamesMatchRegistry } from './tier2/sch001.ts';
 import { checkAttributeKeysMatchRegistry } from './tier2/sch002.ts';
 import { checkAttributeValuesConformToTypes } from './tier2/sch003.ts';
 import { checkNoRedundantSchemaEntries } from './tier2/sch004.ts';
+import { checkForbiddenImports } from './tier2/api001.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -166,6 +167,17 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     tier2Results.push(...collectCheckResults(
       checkIsRecordingGuard(instrumentedCode, filePath),
       config.tier2Checks['CDQ-006'].blocking,
+    ));
+  }
+
+  // API-001/003/004: Forbidden import detection (combined check)
+  // A single scan covers all three rules. Results are tagged with the
+  // specific ruleId (API-001 for OTel SDK imports, API-003 for vendor SDKs).
+  // API-004 (no SDK internal imports) uses the same mechanism as API-001.
+  if (config.tier2Checks['API-001']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkForbiddenImports(instrumentedCode, filePath),
+      config.tier2Checks['API-001'].blocking,
     ));
   }
 

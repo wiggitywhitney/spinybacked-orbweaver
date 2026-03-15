@@ -98,8 +98,8 @@ function summarizeErrors(validation: ValidationResult): string {
 
 /**
  * Build a default ValidationConfig from AgentConfig.
- * Enables all 17 Tier 2 checks with their blocking/advisory settings
- * per the PRD Dimension Rules tables (Phases 2, 4, 5).
+ * Enables all 18 Tier 2 checks with their blocking/advisory settings
+ * per the PRD Dimension Rules tables (Phases 2, 4, 5) and PRD #135.
  */
 function buildValidationConfig(config: AgentConfig) {
   return {
@@ -125,6 +125,8 @@ function buildValidationConfig(config: AgentConfig) {
       'SCH-002': { enabled: true, blocking: true },
       'SCH-003': { enabled: true, blocking: true },
       'SCH-004': { enabled: true, blocking: false },
+      // PRD #135 checks
+      'API-001': { enabled: true, blocking: true },
     },
   };
 }
