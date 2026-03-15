@@ -180,6 +180,7 @@ function formatRunResultForMcp(result: RunResult): object {
       filesSucceeded: result.filesSucceeded,
       filesFailed: result.filesFailed,
       filesSkipped: result.filesSkipped,
+      filesPartial: result.filesPartial,
       librariesInstalled: result.librariesInstalled,
       libraryInstallFailures: result.libraryInstallFailures,
       sdkInitUpdated: result.sdkInitUpdated,

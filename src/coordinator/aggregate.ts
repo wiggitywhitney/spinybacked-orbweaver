@@ -61,6 +61,7 @@ export function aggregateResults(
     filesSucceeded: results.filter(r => r.status === 'success').length,
     filesFailed: results.filter(r => r.status === 'failed').length,
     filesSkipped: results.filter(r => r.status === 'skipped').length,
+    filesPartial: results.filter(r => r.status === 'partial').length,
     librariesInstalled: [],
     libraryInstallFailures: [],
     sdkInitUpdated: false,
@@ -77,7 +78,7 @@ export function collectLibraries(results: FileResult[]): LibraryRequirement[] {
   const seen = new Set<string>();
   const libraries: LibraryRequirement[] = [];
   for (const r of results) {
-    if (r.status !== 'success') continue;
+    if (r.status !== 'success' && r.status !== 'partial') continue;
     for (const lib of r.librariesNeeded) {
       if (!seen.has(lib.package)) {
         seen.add(lib.package);

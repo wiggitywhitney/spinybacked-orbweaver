@@ -1,8 +1,8 @@
 # PRD: Function-Level Instrumentation for Large/Complex Files
 
 **Issue**: [#106](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/106)
-**Status**: Draft
-**Priority**: High
+**Status**: Complete (2026-03-14)
+**Priority**: Medium
 **Created**: 2026-03-13
 
 ## What Gets Built
@@ -142,14 +142,15 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 
 ## Milestones
 
-- [ ] AST-based function extraction: parse a JS file, identify exported functions with boundaries and dependencies
-- [ ] Per-function instrumentation: call `instrumentFile` with a function snippet, validate individually
-- [ ] Reassembly and deduplication: combine instrumented functions back into the file, deduplicate imports
-- [ ] Fix loop integration: wire function-level as a 4th-attempt fallback after whole-file exhaustion
-- [ ] FileResult partial status: add `'partial'` status with per-function detail fields
-- [ ] Coordinator and PR summary integration: partial results flow through aggregation and display
-- [ ] Tests: unit tests for extraction, reassembly, deduplication; integration test for full fallback flow
-- [ ] Evaluation validation: run against `journal-graph.js` and `journal-manager.js` from commit-story-v2
+- [x] AST-based function extraction: parse a JS file, identify exported functions with boundaries and dependencies
+- [x] Per-function instrumentation: call `instrumentFile` with a function snippet, validate individually
+- [x] Reassembly and deduplication: combine instrumented functions back into the file, deduplicate imports
+- [x] Fix loop integration: wire function-level as a 4th-attempt fallback after whole-file exhaustion
+- [x] FileResult partial status: add `'partial'` status with per-function detail fields
+- [x] Coordinator and PR summary integration: partial results flow through aggregation and display
+- [x] Tests: unit tests for extraction, reassembly, deduplication; integration test for full fallback flow
+- [x] Evaluation validation: run against `journal-graph.js` and `journal-manager.js` from commit-story-v2
+- [x] README update: update `maxTokensPerFile` default from 80k to 100k in examples, document function-level fallback feature, update cost ceiling examples
 
 ## Decision Log
 
@@ -158,4 +159,10 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 | 2026-03-13 | Fallback-after-failure, not pre-flight routing | Avoids complexity threshold tuning; generates data for future pre-flight heuristic; smaller blast radius |
 | 2026-03-13 | Large file resilience only, not user-facing function targeting | Keeps scope bounded; user-facing `--functions` flag is a separate feature if needed |
 | 2026-03-13 | Tier 2 advisory on reassembled file, not blocking | Function-level may lose cross-function context that Tier 2 checks expect; don't block partial success |
-| 2026-03-14 | Code review + demo flow audits confirm High priority | External audits verified: NDS-003 inline finally fixed (removes one failure trigger), but per-function fallback remains the only path for files that overwhelm the agent (journal-graph.js, journal-manager.js). Demo flow sections 8 and 12 depend on this capability being implemented. |
+| 2026-03-14 | Full instrumentWithRetry per function, not single-shot | Monster files are often the heart of the app — each function deserves the same 3-attempt retry treatment (multi-turn fix, fresh regen, oscillation detection) as whole-file. Reuses existing retry loop code. Higher token spend is acceptable for quality. |
+| 2026-03-14 | Try-catch statement counting fix, not re-export detection | Investigation showed ts-morph's `isExported()` correctly handles `export { ... }` blocks. The real bug: functions wrapped in a single try-catch (common async pattern) had 1 top-level statement, failing MIN_STATEMENTS=3. `effectiveStatementCount()` now counts inside the try block. All 3 LangGraph node functions use this pattern. |
+| 2026-03-14 | Library descriptions ("Covers" column) in system prompt | LLM over-relied on auto-instrumentation — treating `@traceloop/instrumentation-langchain` as sufficient and skipping manual spans on orchestration functions. Added explicit descriptions of what each library captures and does NOT cover. Result: journal-graph.js went from 1 span to 4 spans (all 3 node functions + generateJournalSections). |
+| 2026-03-14 | Token budget: soft retry limit, not hard kill | Post-hoc budget check was discarding already-completed LLM output — tokens already spent, throwing away good code is wasteful. Changed to: budget exceeded → still validate current attempt; if passes → success; if fails → stop retrying but report validation failure, not budget error. Pre-flight estimate remains a hard gate. |
+| 2026-03-14 | Default maxTokensPerFile raised from 80k to 100k | journal-graph.js used 77,513 tokens (97% of 80k budget). Too tight — slight variation could blow the budget. 100k gives comfortable headroom for complex files. |
+| 2026-03-14 | Comprehensive evaluation diagnostic logging | Evaluation tests now capture full diagnostic reports (status, spans, tokens, error progression, per-function breakdown, OTel presence checks) and save timestamped artifacts to `evaluation-output/`. No more re-running to find out what happened. |
+| 2026-03-14 | Both eval files succeed whole-file after fixes (function-level fallback not triggered) | journal-manager.js: success on attempt 2 (2 spans). journal-graph.js: success on attempt 3 with fresh-regen (4 spans). The prompt and extraction improvements made whole-file succeed — a better outcome than needing the fallback. Function-level fallback remains as safety net for files not yet encountered. |

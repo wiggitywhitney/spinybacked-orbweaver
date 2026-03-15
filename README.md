@@ -11,8 +11,8 @@ Spinybacked Orbweaver is an AI agent that adds OpenTelemetry instrumentation to 
 
 1. **Analyzes** each file to identify what should be instrumented — external calls (HTTP, DB, message queues), schema-defined spans, and service entry points
 2. **Generates** complete instrumented files using an LLM, preferring auto-instrumentation libraries over manual spans
-3. **Validates** every change against a two-tier rubric (32 rules covering syntax, non-destructiveness, coverage, restraint, schema fidelity, and code quality) — reverting any file that fails
-4. **Retries** intelligently — multi-turn fixes with validation feedback, then fresh regeneration with failure hints if the agent gets stuck
+3. **Validates** every change against a two-tier rubric ([32 rules](research/evaluation-rubric.md) covering syntax, non-destructiveness, coverage, restraint, schema fidelity, and code quality) — reverting any file that fails
+4. **Retries** intelligently — multi-turn fixes with validation feedback, fresh regeneration with failure hints, and function-level fallback that decomposes complex files into individual functions when whole-file attempts are exhausted
 5. **Commits** each file individually on a feature branch, installs dependencies, and opens a PR with a detailed summary
 
 The agent is schema-driven: your [Weaver](https://github.com/open-telemetry/weaver) registry defines which spans and attributes exist, and the agent extends the registry as it discovers new instrumentation needs. When your registry declares [OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the resolved schema includes semconv attributes — the agent prefers them for naming, and validation (SCH-002) checks attributes against the full resolved registry. Generated code is evaluated against the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. All generated code depends only on `@opentelemetry/api` — never SDK internals.
@@ -219,9 +219,11 @@ orbweaver instrument src/
 
 Pass a directory to instrument all `.js` files in it, or a single file path to instrument one file. The agent discovers files, calculates a cost ceiling (displayed in dollars), asks for confirmation, then instruments each file sequentially. Each successful file gets its own commit on a feature branch. After all files are processed, the agent installs dependencies, updates the SDK init file, and opens a PR.
 
+The cost ceiling is a conservative worst case (assumes output tokens equal input tokens, plus 30% thinking headroom). Actual costs are typically much lower — a 630-line LangGraph state machine that needed all 3 retry attempts used ~78k tokens, well under the 100k ceiling.
+
 ```text
 $ orbweaver instrument src/order-service.js
-Cost ceiling: 1 files, 80000 max tokens, estimated max cost $1.87
+Cost ceiling: 1 files, 100000 max tokens, estimated max cost $2.34
 Proceed? [y/N] y
 Processing file 1 of 1: src/order-service.js
   src/order-service.js: success (2 spans)
@@ -236,21 +238,21 @@ With multiple files, progress shows each file and its outcome:
 
 ```text
 $ orbweaver instrument src/
-Cost ceiling: 5 files, 400000 max tokens, estimated max cost $9.36
+Cost ceiling: 5 files, 500000 max tokens, estimated max cost $11.70
 Proceed? [y/N] y
 Processing file 1 of 5: src/already-instrumented.js
   src/already-instrumented.js: skipped
 Processing file 2 of 5: src/format-helpers.js
   src/format-helpers.js: success (0 spans)
 Processing file 3 of 5: src/fraud-detection.js
-  src/fraud-detection.js: failed
+  src/fraud-detection.js: partial (3/5 functions)
 Processing file 4 of 5: src/order-service.js
   src/order-service.js: success (2 spans)
 Processing file 5 of 5: src/user-routes.js
   src/user-routes.js: success (3 spans)
 
-Run complete: 3 succeeded, 1 failed, 1 skipped
-5 files processed: 3 succeeded, 1 failed, 1 skipped
+Run complete: 3 succeeded, 1 partial, 0 failed, 1 skipped
+5 files processed: 3 succeeded, 1 partial, 0 failed, 1 skipped
 Branch: orbweaver/instrument-1741700000000
 PR: https://github.com/your-org/your-repo/pull/42
 ```
@@ -314,9 +316,9 @@ If you reject the cost ceiling, the agent aborts with exit code 3:
 
 ```text
 $ orbweaver instrument src/
-Cost ceiling: 1 files, 80000 max tokens, estimated max cost $1.87
+Cost ceiling: 1 files, 100000 max tokens, estimated max cost $2.34
 Proceed? [y/N] n
-Cost ceiling rejected by caller. 1 files, 1067 bytes, 80000 max tokens.
+Cost ceiling rejected by caller. 1 files, 1067 bytes, 100000 max tokens.
 ```
 
 #### Exit codes
@@ -364,8 +366,8 @@ The server exposes two tools:
 {
   "fileCount": 1,
   "totalFileSizeBytes": 744,
-  "maxTokensCeiling": 80000,
-  "estimatedCostDollars": "$1.87"
+  "maxTokensCeiling": 100000,
+  "estimatedCostDollars": "$2.34"
 }
 ```
 
@@ -376,6 +378,7 @@ The server exposes two tools:
   "summary": {
     "filesProcessed": 1,
     "filesSucceeded": 1,
+    "filesPartial": 0,
     "filesFailed": 0,
     "filesSkipped": 0,
     "librariesInstalled": [],
@@ -394,7 +397,7 @@ The server exposes two tools:
   "costCeiling": {
     "fileCount": 1,
     "totalFileSizeBytes": 1067,
-    "maxTokensCeiling": 80000
+    "maxTokensCeiling": 100000
   },
   "actualTokenUsage": {
     "inputTokens": 12500,
@@ -461,7 +464,7 @@ Only `schemaPath` and `sdkInitFile` are required — everything else has default
 | `dependencyStrategy` | `dependencies` \| `peerDependencies` | `dependencies` | Where to add instrumentation packages — `dependencies` for services, `peerDependencies` for libraries |
 | `maxFilesPerRun` | number | `50` | Maximum files to process in one run |
 | `maxFixAttempts` | number | `2` | Retry attempts per file after initial generation (total attempts = 1 + this value) |
-| `maxTokensPerFile` | number | `80000` | Cumulative token budget per file across all attempts |
+| `maxTokensPerFile` | number | `100000` | Soft token budget per file — pre-flight estimate is a hard gate; post-hoc check stops further retries but never discards a passing result |
 | `largeFileThresholdLines` | number | `500` | Files above this threshold get special handling in the prompt |
 | `schemaCheckpointInterval` | number | `5` | Run `weaver registry check` every N files during processing |
 | `weaverMinVersion` | string | `0.21.2` | Minimum Weaver CLI version required |

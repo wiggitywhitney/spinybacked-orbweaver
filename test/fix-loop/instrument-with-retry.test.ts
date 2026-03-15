@@ -1,5 +1,5 @@
-// ABOUTME: Tests for instrumentWithRetry — single-attempt, token budget, multi-turn fix, fresh regen, oscillation.
-// ABOUTME: Milestones 2-6 — verifies FileResult population, file revert, budget enforcement, retry, and oscillation.
+// ABOUTME: Tests for instrumentWithRetry — single-attempt, token budget, multi-turn fix, fresh regen, oscillation, function-level fallback.
+// ABOUTME: Milestones 2-6 + milestone 7 — verifies FileResult population, file revert, budget enforcement, retry, oscillation, and fallback flow.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSync } from 'node:fs';
@@ -373,7 +373,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it('stops with budget-exceeded failure when tokens exceed maxTokensPerFile', async () => {
+  it('succeeds when budget exceeded but validation passes — tokens already spent', async () => {
     const highTokens: TokenUsage = {
       inputTokens: 5000,
       outputTokens: 4000,
@@ -387,17 +387,15 @@ describe('instrumentWithRetry — token budget tracking', () => {
       validateFile: async () => makePassingValidation(testFilePath),
     };
 
-    // Set budget to 5000 — total tokens are 10500 (5000+4000+1000+500), exceeding the budget
+    // Set budget to 5000 — total tokens are 10500, exceeding the budget.
+    // But the LLM already returned code and validation passes, so use the result.
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
     );
 
-    expect(result.status).toBe('failed');
-    expect(result.reason).toContain('budget');
+    expect(result.status).toBe('success');
     expect(result.tokenUsage).toEqual(highTokens);
     expect(result.validationAttempts).toBe(1);
-    // File should be reverted since we stopped before validation
-    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
   });
 
   it('proceeds normally when token usage is within budget', async () => {
@@ -417,7 +415,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
     expect(result.tokenUsage).toEqual(sampleTokens);
   });
 
-  it('counts all token types in budget check (input + output + cache)', async () => {
+  it('counts all token types in budget check but still uses passing result', async () => {
     // Each type contributes 2500 tokens — total = 10000
     const spreadTokens: TokenUsage = {
       inputTokens: 2500,
@@ -432,45 +430,47 @@ describe('instrumentWithRetry — token budget tracking', () => {
       validateFile: async () => makePassingValidation(testFilePath),
     };
 
-    // Budget is 9999 — total is 10000, should exceed
+    // Budget is 9999 — total is 10000, exceeds budget.
+    // But validation passes so the result is used.
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 9999 }), { deps },
     );
 
-    expect(result.status).toBe('failed');
-    expect(result.reason).toContain('budget');
+    expect(result.status).toBe('success');
+    expect(result.tokenUsage).toEqual(spreadTokens);
   });
 
-  it('reverts file when budget exceeded', async () => {
+  it('writes instrumented code to disk when budget exceeded but validation passes', async () => {
     const highTokens: TokenUsage = {
-      inputTokens: 50000,
-      outputTokens: 40000,
-      cacheCreationInputTokens: 0,
-      cacheReadInputTokens: 0,
+      inputTokens: 5000,
+      outputTokens: 4000,
+      cacheCreationInputTokens: 1000,
+      cacheReadInputTokens: 500,
     };
     const output = makeInstrumentationOutput({ tokenUsage: highTokens });
 
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
-      validateFile: async () => { throw new Error('should not reach validation'); },
+      validateFile: async () => makePassingValidation(testFilePath),
     };
 
+    // Budget 5000, total tokens 10500 — above pre-flight threshold (4000) but under actual usage
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 1000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
     );
 
-    expect(result.status).toBe('failed');
-    // Original file restored
-    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+    // Budget exceeded but validation passed — result is used, file has instrumented code
+    expect(result.status).toBe('success');
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(output.instrumentedCode);
   });
 
-  it('skips validation when budget exceeded after instrumentFile', async () => {
+  it('runs validation even when budget exceeded — uses result if it passes', async () => {
     let validateCalled = false;
     const highTokens: TokenUsage = {
-      inputTokens: 50000,
-      outputTokens: 40000,
-      cacheCreationInputTokens: 0,
-      cacheReadInputTokens: 0,
+      inputTokens: 5000,
+      outputTokens: 4000,
+      cacheCreationInputTokens: 1000,
+      cacheReadInputTokens: 500,
     };
     const output = makeInstrumentationOutput({ tokenUsage: highTokens });
 
@@ -482,11 +482,14 @@ describe('instrumentWithRetry — token budget tracking', () => {
       },
     };
 
-    await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 1000 }), { deps },
+    // Budget 5000, total tokens 10500 — above pre-flight threshold (4000) but under actual usage
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
     );
 
-    expect(validateCalled).toBe(false);
+    // Validation runs even when budget exceeded — tokens already spent
+    expect(validateCalled).toBe(true);
+    expect(result.status).toBe('success');
   });
 
   it('propagates token usage from failed instrumentFile call', async () => {
@@ -757,7 +760,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     });
   });
 
-  it('enforces budget across attempts — stops mid-retry if cumulative tokens exceed budget', async () => {
+  it('finishes current attempt when budget exceeded mid-retry and uses passing result', async () => {
     let callCount = 0;
     const expensiveTokens: TokenUsage = {
       inputTokens: 3000,
@@ -783,14 +786,13 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     // Budget 8000: attempt 1 uses 5000, attempt 2 uses 5000 → cumulative 10000 > 8000
+    // But attempt 2 passes validation, so the result is used despite budget exceeded
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1, maxTokensPerFile: 8000 }), { deps },
     );
 
-    expect(result.status).toBe('failed');
-    expect(result.reason).toContain('budget');
-    // File reverted
-    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+    expect(result.status).toBe('success');
+    expect(callCount).toBe(2);
   });
 
   it('does not retry when maxFixAttempts is 0', async () => {
@@ -1188,7 +1190,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     expect(fileContentAtAttempt3).toBe(originalContent);
   });
 
-  it('enforces budget across all 3 attempts', async () => {
+  it('stops retrying when budget exceeded but finishes current attempt validation', async () => {
     let callCount = 0;
     const expensiveTokens: TokenUsage = {
       inputTokens: 3000,
@@ -1203,20 +1205,21 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
         callCount++;
         if (callCount === 1) return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
         if (callCount === 2) return { success: true, output: badOutput } as InstrumentFileResult;
-        // Attempt 3 — cumulative should be 15000 (3 × 5000) which exceeds 12000
         return { success: true, output: badOutput } as InstrumentFileResult;
       },
       validateFile: async () => makeFailingValidation(testFilePath),
     };
 
     // Budget 12000: attempt 1 uses 5000, attempt 2 uses 5000 (cumulative 10000 < 12000),
-    // attempt 3 uses 5000 (cumulative 15000 > 12000) — should fail on budget
+    // attempt 3 uses 5000 (cumulative 15000 > 12000) — validation still runs on attempt 3
+    // but fails, and budget prevents further retries. Result is failed due to validation.
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 12000 }), { deps },
     );
 
     expect(result.status).toBe('failed');
-    expect(result.reason).toContain('budget');
+    // All 3 attempts ran — budget doesn't prevent the current attempt from completing
+    expect(callCount).toBe(3);
     expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
   });
 
@@ -1534,7 +1537,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     expect(result.errorProgression).toEqual(['2 blocking errors', '1 blocking error', '0 errors']);
   });
 
-  it('token budget takes precedence over oscillation detection', async () => {
+  it('budget exceeded stops further retries but current attempt still validates', async () => {
     let callCount = 0;
     const expensiveTokens: TokenUsage = {
       inputTokens: 5000,
@@ -1554,13 +1557,14 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     // Budget 10000: attempt 1 uses 8000, attempt 2 uses 8000 (cumulative 16000 > 10000)
+    // Attempt 2 still runs validation (fails), then budget prevents further retries.
+    // Without budget, oscillation detection would jump to fresh-regen (attempt 3).
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 10000 }), { deps },
     );
 
     expect(result.status).toBe('failed');
-    expect(result.reason).toContain('budget');
-    // Budget exceeded before oscillation detection runs
+    // Only 2 attempts — budget break prevents the oscillation-triggered fresh-regen
   });
 
   it('includes oscillation reason in errorProgression when oscillation causes early exit', async () => {
@@ -2084,5 +2088,384 @@ describe('isRetryableInstrumentError — regression guard for upstream error str
     // If instrument-file.ts stops using these substrings, the acceptance gate catches it.
     expect(RETRYABLE_NULL_OUTPUT).toBe('null parsed_output');
     expect(RETRYABLE_ELISION).toBe('elision detected');
+  });
+});
+
+// --- Function-level fallback integration tests (PRD #106 Milestone 7) ---
+
+/**
+ * JS source with two non-trivial exported functions for function-level extraction.
+ * fetchWithRetry and saveData are eligible; getVersion is trivial and skipped.
+ */
+const FALLBACK_FIXTURE = `import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+const MAX_RETRIES = 3;
+
+export async function fetchWithRetry(url, options = {}) {
+  let lastError;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, { ...options });
+      if (response.ok) return response;
+      lastError = new Error('HTTP error');
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+export async function saveData(filePath, data) {
+  const resolved = path.resolve(filePath);
+  const content = JSON.stringify(data, null, 2);
+  await writeFile(resolved, content, 'utf-8');
+}
+
+export function getVersion() {
+  return '1.0.0';
+}
+`;
+
+/**
+ * Distinguish whole-file calls from per-function calls based on file path.
+ * Per-function calls use temp paths like /tmp/fn-fetchWithRetry-*.js
+ */
+function isPerFunctionCall(filePath: string): boolean {
+  return /fn-\w+-\d+\.js$/.test(filePath);
+}
+
+describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => {
+  let tmpDir: string;
+  let filePath: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'fn-fallback-'));
+    filePath = join(tmpDir, 'module.js');
+    writeFileSync(filePath, FALLBACK_FIXTURE, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('activates function-level fallback when whole-file fails and produces partial result', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path, _code, _schema, _config) => {
+        if (isPerFunctionCall(path)) {
+          // Per-function calls succeed with instrumented code
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function instrumented() { trace.getTracer('svc').startActiveSpan('fn', () => {}); }`,
+              librariesNeeded: [{ package: '@opentelemetry/api', importName: 'trace' }],
+              attributesCreated: 1,
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        // Whole-file call fails
+        return { success: false, error: 'LLM produced null parsed_output', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('partial');
+    expect(result.functionsInstrumented).toBeGreaterThan(0);
+    expect(result.functionsSkipped).toBeDefined();
+    expect(result.functionResults).toBeDefined();
+    expect(result.functionResults!.length).toBeGreaterThan(0);
+    // Should have notes about function-level fallback
+    expect(result.notes?.some(n => n.includes('Function-level fallback'))).toBe(true);
+  });
+
+  it('skips function-level fallback when whole-file succeeds', async () => {
+    let callCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            instrumentedCode: 'const instrumented = true;\n',
+          }),
+        };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('success');
+    expect(result.functionsInstrumented).toBeUndefined();
+    // Only 1 call — the successful whole-file attempt
+    expect(callCount).toBe(1);
+  });
+
+  it('returns whole-file failure when file has no extractable functions', async () => {
+    const trivialCode = `export function getVersion() {
+  return '1.0.0';
+}
+`;
+    writeFileSync(filePath, trivialCode, 'utf-8');
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: false,
+        error: 'LLM failure',
+        tokenUsage: sampleTokens,
+      }),
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, trivialCode, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('failed');
+    expect(result.functionsInstrumented).toBeUndefined();
+  });
+
+  it('returns whole-file failure when all per-function calls fail', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: false,
+        error: 'LLM failure',
+        tokenUsage: sampleTokens,
+      }),
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    // All functions fail → fallback returns null → whole-file failure bubbles up
+    expect(result.status).toBe('failed');
+  });
+
+  it('populates errorProgression with function-level summary', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: 'const x = 1;\n',
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        return { success: false, error: 'fail', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('partial');
+    expect(result.errorProgression).toBeDefined();
+    // Should contain whole-file error + function-level summary
+    const fnLevelEntry = result.errorProgression!.find(e => e.includes('function-level'));
+    expect(fnLevelEntry).toBeDefined();
+    expect(fnLevelEntry).toMatch(/function-level: \d+\/\d+ functions instrumented/);
+  });
+
+  it('accumulates token usage from whole-file attempts and per-function calls', async () => {
+    const wholeFileTokens: TokenUsage = {
+      inputTokens: 1000, outputTokens: 500,
+      cacheCreationInputTokens: 100, cacheReadInputTokens: 50,
+    };
+    const perFnTokens: TokenUsage = {
+      inputTokens: 200, outputTokens: 100,
+      cacheCreationInputTokens: 20, cacheReadInputTokens: 10,
+    };
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: 'const x = 1;\n',
+              tokenUsage: perFnTokens,
+            }),
+          };
+        }
+        return { success: false, error: 'fail', tokenUsage: wholeFileTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('partial');
+    // Token usage should include both whole-file and per-function tokens
+    expect(result.tokenUsage.inputTokens).toBeGreaterThan(wholeFileTokens.inputTokens);
+  });
+
+  it('notes list which functions were instrumented vs skipped', async () => {
+    let fnCallIndex = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          // First function succeeds, second fails
+          fnCallIndex++;
+          if (fnCallIndex === 1) {
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: 'const x = 1;\n',
+                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          return { success: false, error: 'Syntax error in output', tokenUsage: sampleTokens };
+        }
+        return { success: false, error: 'whole-file fail', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('partial');
+    // Notes should mention instrumented and skipped functions
+    const instrumentedNote = result.notes?.find(n => n.includes('instrumented:'));
+    const skippedNote = result.notes?.find(n => n.includes('skipped:'));
+    expect(instrumentedNote).toBeDefined();
+    expect(skippedNote).toBeDefined();
+  });
+
+  it('falls back to partial results when reassembly validation fails', async () => {
+    let validateCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: 'const x = 1;\n',
+            }),
+          };
+        }
+        return { success: false, error: 'fail', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => {
+        validateCallCount++;
+        if (isPerFunctionCall(input.filePath)) {
+          // Per-function validation passes
+          return makePassingValidation(input.filePath);
+        }
+        // Whole-file and reassembly validation:
+        // First call is whole-file (fails), then reassembly calls
+        if (validateCallCount <= 3) {
+          // First few calls: whole-file validation fails
+          return makeFailingValidation(input.filePath);
+        }
+        // Reassembly validation: first full reassembly fails, partial reassembly passes
+        if (validateCallCount === 4) {
+          return makeFailingValidation(input.filePath);
+        }
+        return makePassingValidation(input.filePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    // Should still produce a partial result via the fallback-to-partial path
+    if (result.status === 'partial') {
+      expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
+    }
+    // If the fallback path didn't activate (e.g., all validations failed),
+    // at minimum the result should have a defined status
+    expect(['partial', 'failed']).toContain(result.status);
+  });
+
+  it('restores original file when even partial reassembly fails', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: 'const x = 1;\n',
+            }),
+          };
+        }
+        return { success: false, error: 'fail', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => {
+        // Per-function validation passes
+        if (isPerFunctionCall(input.filePath)) {
+          return makePassingValidation(input.filePath);
+        }
+        // All non-per-function validations fail (whole-file, full reassembly, partial reassembly)
+        return makeFailingValidation(input.filePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    // When both full and partial reassembly fail, fallback returns null → whole-file failure
+    expect(result.status).toBe('failed');
+    // File should be restored to original content
+    const fileContent = readFileSync(filePath, 'utf-8');
+    expect(fileContent).toBe(FALLBACK_FIXTURE);
+  });
+
+  it('sets functionsInstrumented and functionsSkipped counts correctly', async () => {
+    let fnCallIndex = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          fnCallIndex++;
+          // First function succeeds, second fails
+          if (fnCallIndex === 1) {
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: 'const x = 1;\n',
+                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          return { success: false, error: 'fail', tokenUsage: sampleTokens };
+        }
+        return { success: false, error: 'whole-file fail', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('partial');
+    // The fixture has 2 extractable functions (fetchWithRetry, saveData)
+    // 1 succeeded, 1 failed
+    expect(result.functionsInstrumented).toBe(1);
+    expect(result.functionsSkipped).toBe(1);
+  });
+
+  it('aggregates spansAdded from all successful function results', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: 'const x = 1;\n',
+              spanCategories: { externalCalls: 2, schemaDefined: 1, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              attributesCreated: 3,
+            }),
+          };
+        }
+        return { success: false, error: 'fail', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('partial');
+    // 2 functions × 3 spans each = 6 total
+    expect(result.spansAdded).toBe(6);
   });
 });

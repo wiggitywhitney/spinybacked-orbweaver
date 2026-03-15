@@ -1,15 +1,20 @@
 // ABOUTME: Core fix loop — orchestrates instrumentFile + validateFile with the hybrid 3-attempt strategy.
 // ABOUTME: Retry with multi-turn feedback, fresh regeneration, oscillation detection, and token budget tracking.
 
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
+import { Project } from 'ts-morph';
 import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import { addTokenUsage, totalTokens, estimateMinTokens } from './token-budget.ts';
 import { detectOscillation } from './oscillation.ts';
-import type { FileResult, ValidationStrategy } from './types.ts';
+import { extractExportedFunctions } from './function-extraction.ts';
+import { reassembleFunctions } from './function-reassembly.ts';
+import type { FileResult, FunctionResult, ValidationStrategy } from './types.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -47,6 +52,9 @@ export interface InstrumentWithRetryDeps {
  */
 interface InstrumentWithRetryOptions {
   deps?: InstrumentWithRetryDeps;
+  /** When true, skip function-level fallback. Used internally to prevent infinite
+   *  recursion when instrumentWithRetry is called per-function from functionLevelFallback. */
+  _skipFunctionFallback?: boolean;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -226,25 +234,42 @@ export async function instrumentWithRetry(
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
   const formatFeedbackFn = (await import('../validation/feedback.ts')).formatFeedbackForAgent;
 
+  let wholeFileResult: FileResult;
   try {
-    return await executeRetryLoop(
+    wholeFileResult = await executeRetryLoop(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
-    // We don't have access to the retry loop's internal state (attempt count,
-    // cumulative tokens), so report what we know: an unexpected error occurred.
     try {
       await writeFile(filePath, originalCode, 'utf-8');
     } catch {
       // Best-effort restore — file may be left in a modified state
     }
     const message = error instanceof Error ? error.message : String(error);
-    return buildFailedResult(
+    wholeFileResult = buildFailedResult(
       filePath, `Unexpected error: ${message}`, message, ZERO_TOKENS, 1, 'initial-generation',
     );
   }
+
+  // If whole-file succeeded, return directly
+  if (wholeFileResult.status === 'success') {
+    return wholeFileResult;
+  }
+
+  // Skip function-level fallback for recursive per-function calls (prevents infinite recursion)
+  if (options?._skipFunctionFallback) {
+    return wholeFileResult;
+  }
+
+  // Function-level fallback: decompose into functions, instrument each with full retry loop
+  const fallbackResult = await functionLevelFallback(
+    filePath, originalCode, resolvedSchema, config,
+    wholeFileResult, validateFileFn, options,
+  );
+
+  return fallbackResult ?? wholeFileResult;
 }
 
 /**
@@ -344,13 +369,10 @@ async function executeRetryLoop(
       lastConversationContext = instrumentResult.conversationContext;
     }
 
-    // Check token budget — file is still in original state at this point
-    if (totalTokens(cumulativeTokens) > config.maxTokensPerFile) {
-      const reason = `Token budget exceeded: ${totalTokens(cumulativeTokens)} tokens used, budget is ${config.maxTokensPerFile}`;
-      return buildFailedResult(
-        filePath, reason, reason, cumulativeTokens, attempt, actualStrategy, errorProgression, output,
-      );
-    }
+    // Check token budget — if exceeded, this is the last attempt regardless.
+    // We still validate the current output rather than discarding it: the API call
+    // already happened and the tokens are spent, so throwing away good code is wasteful.
+    const budgetExceeded = totalTokens(cumulativeTokens) > config.maxTokensPerFile;
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -417,9 +439,15 @@ async function executeRetryLoop(
     }
 
     previousValidation = validation;
+
+    // If budget exceeded, don't retry — the current attempt's output was validated
+    // (and failed), but we've already spent the tokens. No point burning more.
+    if (budgetExceeded) {
+      break;
+    }
   }
 
-  // All attempts exhausted
+  // All attempts exhausted (or budget exceeded after a failed validation)
   const failedRuleIds = lastValidation!.blockingFailures.map(f => f.ruleId).join(', ');
   const reason = `Validation failed: ${failedRuleIds} — ${lastValidation!.blockingFailures[0]?.message ?? 'unknown error'}`;
   const lastError = lastValidation!.blockingFailures
@@ -431,6 +459,239 @@ async function executeRetryLoop(
     maxAttempts, lastStrategy, errorProgression, lastOutput,
     lastValidation!.blockingFailures[0]?.ruleId,
   );
+}
+
+/**
+ * Function-level fallback: decompose a file into functions, run each through
+ * the full instrumentWithRetry loop, reassemble, and validate.
+ *
+ * Each function gets the same 3-attempt retry treatment as whole-file:
+ * initial generation → multi-turn fix → fresh regeneration. This gives
+ * the heart-of-the-app functions the best chance of quality instrumentation.
+ *
+ * Returns a FileResult with 'partial' status if at least one function was
+ * successfully instrumented, or null if the fallback is not applicable.
+ *
+ * This path activates only after the whole-file retry loop has been exhausted.
+ */
+async function functionLevelFallback(
+  filePath: string,
+  originalCode: string,
+  resolvedSchema: object,
+  config: AgentConfig,
+  wholeFileResult: FileResult,
+  validateFileFn: InstrumentWithRetryDeps['validateFile'],
+  retryOptions?: InstrumentWithRetryOptions,
+): Promise<FileResult | null> {
+  // Parse the file to extract functions
+  const project = new Project({
+    compilerOptions: { allowJs: true, noEmit: true },
+    skipAddingFilesFromTsConfig: true,
+  });
+  const sourceFile = project.createSourceFile(`${filePath}.tmp`, originalCode);
+  const extractedFunctions = extractExportedFunctions(sourceFile);
+
+  if (extractedFunctions.length === 0) {
+    return null; // No extractable functions — fallback not applicable
+  }
+
+  // Instrument each function through the full retry loop
+  const fnResults: FunctionResult[] = [];
+  const tmpBase = tmpdir();
+
+  for (const fn of extractedFunctions) {
+    const functionContext = fn.buildContext(sourceFile);
+    const tmpFilePath = join(tmpBase, `fn-${fn.name}-${Date.now()}.js`);
+
+    try {
+      // Write function context to temp file for instrumentWithRetry
+      await writeFile(tmpFilePath, functionContext, 'utf-8');
+
+      // Run the full retry loop on this function (with fallback disabled to prevent recursion)
+      const fileResult = await instrumentWithRetry(
+        tmpFilePath, functionContext, resolvedSchema, config,
+        { ...retryOptions, _skipFunctionFallback: true },
+      );
+
+      // Convert FileResult → FunctionResult
+      if (fileResult.status === 'success') {
+        // Read back the instrumented code from the temp file
+        const instrumentedCode = await readFile(tmpFilePath, 'utf-8');
+        fnResults.push({
+          name: fn.name,
+          success: true,
+          instrumentedCode,
+          spansAdded: fileResult.spansAdded,
+          librariesNeeded: fileResult.librariesNeeded,
+          schemaExtensions: fileResult.schemaExtensions,
+          attributesCreated: fileResult.attributesCreated,
+          notes: fileResult.notes,
+          tokenUsage: fileResult.tokenUsage,
+        });
+      } else {
+        fnResults.push({
+          name: fn.name,
+          success: false,
+          error: fileResult.reason ?? fileResult.lastError ?? 'Unknown failure',
+          spansAdded: 0,
+          librariesNeeded: [],
+          schemaExtensions: [],
+          attributesCreated: 0,
+          tokenUsage: fileResult.tokenUsage,
+        });
+      }
+    } finally {
+      // Clean up temp file
+      try {
+        const { unlink } = await import('node:fs/promises');
+        await unlink(tmpFilePath);
+      } catch {
+        // Best-effort cleanup
+      }
+    }
+  }
+
+  const successful = fnResults.filter(r => r.success);
+  if (successful.length === 0) {
+    return null; // All functions failed — fall through to whole-file failure
+  }
+
+  // Reassemble: replace instrumented functions in the original file
+  const reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
+
+  // Write reassembled code and run full validation (Tier 1 + Tier 2)
+  await writeFile(filePath, reassembledCode, 'utf-8');
+
+  const validationConfig = buildValidationConfig(config);
+  const validation = await validateFileFn({
+    originalCode,
+    instrumentedCode: reassembledCode,
+    filePath,
+    config: validationConfig,
+  });
+
+  // Calculate cumulative token usage (whole-file attempts + function-level)
+  let cumulativeTokens = { ...wholeFileResult.tokenUsage };
+  for (const r of fnResults) {
+    cumulativeTokens = addTokenUsage(cumulativeTokens, r.tokenUsage);
+  }
+
+  // Aggregate libraries and schema extensions from successful functions
+  const librariesNeeded = aggregateLibraries(fnResults);
+  const schemaExtensions = aggregateSchemaExtensions(fnResults);
+  const totalSpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
+  const totalAttributes = successful.reduce((sum, r) => sum + r.attributesCreated, 0);
+
+  // Build notes listing which functions were instrumented vs skipped
+  const notes = [
+    ...(wholeFileResult.notes ?? []),
+    `Function-level fallback: ${successful.length}/${extractedFunctions.length} functions instrumented`,
+    ...successful.map(r => `  instrumented: ${r.name} (${r.spansAdded} spans)`),
+    ...fnResults.filter(r => !r.success).map(r => `  skipped: ${r.name} — ${r.error}`),
+  ];
+
+  // Build error progression: whole-file errors + function-level summary
+  const errorProgression = [
+    ...(wholeFileResult.errorProgression ?? []),
+    `function-level: ${successful.length}/${extractedFunctions.length} functions instrumented`,
+  ];
+
+  if (validation.passed) {
+    return {
+      path: filePath,
+      status: 'partial',
+      spansAdded: totalSpans,
+      librariesNeeded,
+      schemaExtensions,
+      attributesCreated: totalAttributes,
+      validationAttempts: wholeFileResult.validationAttempts,
+      validationStrategyUsed: wholeFileResult.validationStrategyUsed,
+      errorProgression,
+      notes,
+      advisoryAnnotations: validation.advisoryFindings.length > 0
+        ? validation.advisoryFindings
+        : undefined,
+      agentVersion: AGENT_VERSION,
+      tokenUsage: cumulativeTokens,
+      functionsInstrumented: successful.length,
+      functionsSkipped: extractedFunctions.length - successful.length,
+      functionResults: fnResults,
+    };
+  }
+
+  // Reassembly validation failed — fall back to partial results:
+  // keep only the functions that passed individual validation
+  await writeFile(filePath, originalCode, 'utf-8');
+
+  const partialResults = fnResults.map(r =>
+    r.success ? r : { ...r, instrumentedCode: undefined },
+  );
+  const partialCode = reassembleFunctions(originalCode, extractedFunctions, partialResults);
+
+  await writeFile(filePath, partialCode, 'utf-8');
+  const partialValidation = await validateFileFn({
+    originalCode,
+    instrumentedCode: partialCode,
+    filePath,
+    config: validationConfig,
+  });
+
+  if (!partialValidation.passed) {
+    // Even partial reassembly fails — restore original and return null
+    await writeFile(filePath, originalCode, 'utf-8');
+    return null;
+  }
+
+  return {
+    path: filePath,
+    status: 'partial',
+    spansAdded: totalSpans,
+    librariesNeeded,
+    schemaExtensions,
+    attributesCreated: totalAttributes,
+    validationAttempts: wholeFileResult.validationAttempts,
+    validationStrategyUsed: wholeFileResult.validationStrategyUsed,
+    errorProgression,
+    notes: [...notes, 'Reassembly validation failed — using partial results'],
+    advisoryAnnotations: partialValidation.advisoryFindings.length > 0
+      ? partialValidation.advisoryFindings
+      : undefined,
+    agentVersion: AGENT_VERSION,
+    tokenUsage: cumulativeTokens,
+    functionsInstrumented: successful.length,
+    functionsSkipped: extractedFunctions.length - successful.length,
+    functionResults: fnResults,
+  };
+}
+
+/**
+ * Aggregate libraries needed across all successful function results, deduplicating by name.
+ */
+function aggregateLibraries(results: FunctionResult[]): FileResult['librariesNeeded'] {
+  const seen = new Map<string, FunctionResult['librariesNeeded'][0]>();
+  for (const r of results) {
+    if (!r.success) continue;
+    for (const lib of r.librariesNeeded) {
+      if (!seen.has(lib.package)) {
+        seen.set(lib.package, lib);
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+/**
+ * Aggregate schema extensions across all successful function results, deduplicating.
+ */
+function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
+  const seen = new Set<string>();
+  for (const r of results) {
+    if (!r.success) continue;
+    for (const ext of r.schemaExtensions) {
+      seen.add(ext);
+    }
+  }
+  return [...seen];
 }
 
 /**
