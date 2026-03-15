@@ -134,6 +134,8 @@ function buildValidationConfig(config: AgentConfig, projectRoot?: string) {
       // PRD #135 checks (advisory for initial rollout)
       'API-001': { enabled: true, blocking: false },
       'API-002': { enabled: true, blocking: false },
+      'API-003': { enabled: true, blocking: false },
+      'API-004': { enabled: true, blocking: false },
       'NDS-006': { enabled: true, blocking: false },
       'NDS-004': { enabled: true, blocking: false },
       'NDS-005': { enabled: true, blocking: false },
