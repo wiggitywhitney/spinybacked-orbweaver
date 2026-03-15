@@ -1,7 +1,7 @@
 # PRD: LLM-as-Judge Infrastructure for Semi-Automatable Validation Rules
 
 **Issue**: [#118](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/118)
-**Status**: Draft
+**Status**: Complete
 **Priority**: Medium
 **Created**: 2026-03-14
 
@@ -123,7 +123,7 @@ If the judge is unavailable (API error, cost limit), the script's existing behav
 - [x] SCH-001 judge integration: naming quality assessment in fallback mode, with convention-following suggestions
 - [x] NDS-005 script: AST detection of structural changes to pre-existing error handling blocks
 - [x] NDS-005 judge integration: semantic preservation check for flagged error handling changes, feeding into refactor recommendations
-- [ ] Integration test: full pipeline with registry that triggers all three judge-enhanced rules
+- [x] Integration test: full pipeline with registry that triggers all three judge-enhanced rules
 
 ## Success Criteria
 
