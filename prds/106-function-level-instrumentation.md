@@ -150,7 +150,7 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 - [x] Coordinator and PR summary integration: partial results flow through aggregation and display
 - [x] Tests: unit tests for extraction, reassembly, deduplication; integration test for full fallback flow
 - [x] Evaluation validation: run against `journal-graph.js` and `journal-manager.js` from commit-story-v2
-- [ ] README update: update `maxTokensPerFile` default from 80k to 100k in examples, document function-level fallback feature, update cost ceiling examples
+- [x] README update: update `maxTokensPerFile` default from 80k to 100k in examples, document function-level fallback feature, update cost ceiling examples
 
 ## Decision Log
 
