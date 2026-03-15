@@ -157,7 +157,7 @@ export async function runGitWorkflow(
 
     const ghAvailable = await deps.checkGhAvailable();
     if (!ghAvailable) {
-      deps.stderr('gh CLI is not installed or not authenticated — skipping PR creation. Run \'gh auth login\' to enable PR creation, or use --no-pr to skip.');
+      deps.stderr('gh CLI is not installed or not authenticated — skipping PR creation. Install gh (https://cli.github.com) and run \'gh auth login\' to enable PR creation, or use --no-pr to skip.');
     } else {
       let pushSucceeded = false;
       try {
