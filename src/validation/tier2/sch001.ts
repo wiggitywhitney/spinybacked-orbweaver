@@ -63,17 +63,33 @@ export async function checkSpanNamesMatchRegistry(
   const spanDefs = getSpanDefinitions(registry);
 
   // Extract span info in a single AST pass
-  const { literalNames: spanNames, nonLiteralCount } = extractSpanInfo(code);
+  const { literalNames: spanNames, nonLiteralCount, zeroArgCount } = extractSpanInfo(code);
 
-  if (spanNames.length === 0 && nonLiteralCount === 0) {
+  if (spanNames.length === 0 && nonLiteralCount === 0 && zeroArgCount === 0) {
     return { results: [pass(filePath, 'No span calls found to check.')], judgeTokenUsage: [] };
   }
 
-  // Non-literal span names (template literals, variables) are always naming quality failures —
-  // they suggest unbounded cardinality and bypass registry conformance checks.
-  const nonLiteralResults: CheckResult[] = [];
+  // Collect failures for problematic span call patterns
+  const problemResults: CheckResult[] = [];
+
+  // Zero-argument span calls are always failures — missing required span name
+  if (zeroArgCount > 0) {
+    problemResults.push({
+      ruleId: 'SCH-001',
+      passed: false,
+      filePath,
+      lineNumber: null,
+      message:
+        `SCH-001 check failed: ${zeroArgCount} span call(s) have no arguments. ` +
+        `startActiveSpan/startSpan require a span name as the first argument.`,
+      tier: 2,
+      blocking: true,
+    });
+  }
+
+  // Non-literal span names (template literals with substitutions, variables) indicate unbounded cardinality
   if (nonLiteralCount > 0) {
-    nonLiteralResults.push({
+    problemResults.push({
       ruleId: 'SCH-001',
       passed: false,
       filePath,
@@ -88,20 +104,28 @@ export async function checkSpanNamesMatchRegistry(
   }
 
   if (spanNames.length === 0) {
-    // Only non-literal names found — return those failures
-    return { results: nonLiteralResults, judgeTokenUsage: [] };
+    // Only problematic calls found — return those failures
+    return { results: problemResults, judgeTokenUsage: [] };
   }
 
   // Registry conformance mode: span definitions exist — no judge needed
   if (spanDefs.length > 0) {
     const conformanceResults = checkRegistryConformance(spanNames, spanDefs, filePath);
-    return { results: [...nonLiteralResults, ...conformanceResults], judgeTokenUsage: [] };
+    // Only include pass results when there are no problem results
+    const filtered = problemResults.length > 0
+      ? conformanceResults.filter(r => !r.passed)
+      : conformanceResults;
+    return { results: [...problemResults, ...filtered], judgeTokenUsage: [] };
   }
 
   // Naming quality fallback: no span definitions in registry
   const qualityResult = await checkNamingQuality(spanNames, filePath, judgeDeps);
+  // Only include pass results when there are no problem results
+  const filtered = problemResults.length > 0
+    ? qualityResult.results.filter(r => !r.passed)
+    : qualityResult.results;
   return {
-    results: [...nonLiteralResults, ...qualityResult.results],
+    results: [...problemResults, ...filtered],
     judgeTokenUsage: qualityResult.judgeTokenUsage,
   };
 }
@@ -209,12 +233,20 @@ async function checkNamingQuality(
   const judgeTokenUsage: TokenUsage[] = [];
 
   if (judgeDeps && cardinalityPassNames.length > 0) {
+    // Deduplicate by span name — same name gets the same verdict regardless of line number
+    const entriesByName = new Map<string, SpanNameEntry[]>();
     for (const entry of cardinalityPassNames) {
+      const entries = entriesByName.get(entry.name) ?? [];
+      entries.push(entry);
+      entriesByName.set(entry.name, entries);
+    }
+
+    for (const [spanName, entries] of entriesByName) {
       const result = await callJudge(
         {
           ruleId: 'SCH-001',
-          context: `Span name "${entry.name}" at line ${entry.line} in naming quality fallback mode (no registry span definitions available).`,
-          question: `Does span name "${entry.name}" follow a structured naming convention (e.g., dotted notation like "<namespace>.<category>.<operation>")? Is it descriptive and bounded? A single-word function name like "doStuff" or "process" is too vague.`,
+          context: `Span name "${spanName}" in naming quality fallback mode (no registry span definitions available).`,
+          question: `Does span name "${spanName}" follow a structured naming convention (e.g., dotted notation like "<namespace>.<category>.<operation>")? Is it descriptive and bounded? A single-word function name like "doStuff" or "process" is too vague.`,
           candidates: [],
         },
         judgeDeps.client,
@@ -230,22 +262,24 @@ async function checkNamingQuality(
         }
 
         if (!result.verdict.answer) {
-          // Judge says naming is poor
+          // Judge says naming is poor — apply verdict to all occurrences of this name
           const suggestion = result.verdict.suggestion ?? 'Use a structured dotted naming convention.';
           const isLowConfidence = result.verdict.confidence < JUDGE_CONFIDENCE_THRESHOLD;
-          judgeResults.push({
-            ruleId: 'SCH-001',
-            passed: false,
-            filePath,
-            lineNumber: entry.line,
-            message:
-              `SCH-001 check failed: "${entry.name}" at line ${entry.line} does not follow naming conventions ` +
-              `(judge confidence: ${Math.round(result.verdict.confidence * 100)}%` +
-              `${isLowConfidence ? ' — below threshold, downgraded to advisory' : ''}). ` +
-              suggestion,
-            tier: 2,
-            blocking: !isLowConfidence,
-          });
+          for (const entry of entries) {
+            judgeResults.push({
+              ruleId: 'SCH-001',
+              passed: false,
+              filePath,
+              lineNumber: entry.line,
+              message:
+                `SCH-001 check failed: "${entry.name}" at line ${entry.line} does not follow naming conventions ` +
+                `(judge confidence: ${Math.round(result.verdict.confidence * 100)}%` +
+                `${isLowConfidence ? ' — below threshold, downgraded to advisory' : ''}). ` +
+                suggestion,
+              tier: 2,
+              blocking: !isLowConfidence,
+            });
+          }
         }
       }
       // If result is null (judge failure), silently skip — graceful fallback to script-only
@@ -294,6 +328,7 @@ function hasUnboundedCardinality(name: string): boolean {
 interface SpanInfo {
   literalNames: SpanNameEntry[];
   nonLiteralCount: number;
+  zeroArgCount: number;
 }
 
 /**
@@ -309,6 +344,7 @@ function extractSpanInfo(code: string): SpanInfo {
 
   const literalNames: SpanNameEntry[] = [];
   let nonLiteralCount = 0;
+  let zeroArgCount = 0;
 
   sourceFile.forEachDescendant((node) => {
     if (!Node.isCallExpression(node)) return;
@@ -319,7 +355,10 @@ function extractSpanInfo(code: string): SpanInfo {
     if (!text.endsWith('.startActiveSpan') && !text.endsWith('.startSpan')) return;
 
     const args = node.getArguments();
-    if (args.length === 0) return;
+    if (args.length === 0) {
+      zeroArgCount++;
+      return;
+    }
 
     const firstArg = args[0];
     if (Node.isStringLiteral(firstArg)) {
@@ -331,7 +370,7 @@ function extractSpanInfo(code: string): SpanInfo {
     }
   });
 
-  return { literalNames, nonLiteralCount };
+  return { literalNames, nonLiteralCount, zeroArgCount };
 }
 
 function pass(filePath: string, message: string): CheckResult {
