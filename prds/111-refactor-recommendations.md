@@ -109,7 +109,7 @@ Recommendation diffs contain user source code. To avoid leaking sensitive litera
 - [x] Fix loop detects persistent NDS-003 patterns across retry attempts and collects refactor recommendations
 - [x] PR summary renders "Recommended Refactors" section with diffs and unblocked rules
 - [x] CLI output surfaces recommendation count per file and summary
-- [ ] Integration test: file with known NDS-003-blocking pattern produces correct recommendation with actionable diff
+- [x] Integration test: file with known NDS-003-blocking pattern produces correct recommendation with actionable diff
 
 ## Success Criteria
 

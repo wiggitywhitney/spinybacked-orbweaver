@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-15) Integration test for refactor recommendation end-to-end flow (PRD #111, milestone 6): realistic const-extraction fixture with real `validateFile` chain (Tier 1 + NDS-003). Verifies persistent NDS-003 detection across retry attempts produces actionable `SuggestedRefactor` with correct diff, reason, location, and unblocksRules. Includes sanity check confirming real validator catches the pattern and negative test for successful files. 3 new tests
+
 - (2026-03-15) CLI recommendation output for refactor suggestions (PRD #111, milestone 5): per-file `onFileComplete` callback appends recommendation count to status line (e.g., "failed (NDS-003) — 2 recommended refactors") with singular/plural handling. Post-run summary section lists each file's recommendations with description and unblocked rules. Verbose mode adds full diffs, line ranges, and reasons. Non-verbose shows hint to use `--verbose`. 7 new tests covering count display, summary rendering, verbose/non-verbose diff visibility, singular form, and empty-state suppression
 
 - (2026-03-15) PR summary "Recommended Refactors" section (PRD #111, milestone 4): `renderRecommendedRefactors()` in `pr-summary.ts` renders per-file refactor recommendations with description, reason, unblocked rules, and line range. Diffs omitted from PR summary per redaction requirements (source code stays local). Section only appears when files have suggested refactors. 6 new tests covering rendering, redaction, multi-file/multi-refactor, and empty-state suppression
