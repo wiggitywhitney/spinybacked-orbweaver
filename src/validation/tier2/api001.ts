@@ -44,6 +44,11 @@ const FORBIDDEN_PATTERNS: Array<{
     ruleId: 'API-001',
     category: 'OTel SDK package',
   },
+  {
+    pattern: /^@opentelemetry\/core$/,
+    ruleId: 'API-001',
+    category: 'OTel SDK internal package',
+  },
 
   // API-003: Vendor-specific SDKs
   {

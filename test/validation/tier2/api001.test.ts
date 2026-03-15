@@ -196,6 +196,40 @@ describe('checkForbiddenImports (API-001/003/004)', () => {
     });
   });
 
+  describe('API-004: OTel SDK internal imports (forbidden, same mechanism as API-001)', () => {
+    it('flags @opentelemetry/core', () => {
+      const code = 'import { hrTime } from "@opentelemetry/core";\n';
+
+      const results = checkForbiddenImports(code, filePath);
+      const failures = results.filter(r => !r.passed);
+
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('API-001');
+      expect(failures[0].message).toContain('@opentelemetry/core');
+    });
+
+    it('flags @opentelemetry/semantic-conventions', () => {
+      const code = 'import { SEMATTRS_HTTP_METHOD } from "@opentelemetry/semantic-conventions";\n';
+
+      const results = checkForbiddenImports(code, filePath);
+      const failures = results.filter(r => !r.passed);
+
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('API-001');
+      expect(failures[0].message).toContain('@opentelemetry/semantic-conventions');
+    });
+
+    it('flags @opentelemetry/resources (SDK internal)', () => {
+      const code = 'const { Resource } = require("@opentelemetry/resources");\n';
+
+      const results = checkForbiddenImports(code, filePath);
+      const failures = results.filter(r => !r.passed);
+
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('API-001');
+    });
+  });
+
   describe('multiple violations', () => {
     it('reports all forbidden imports in a single file', () => {
       const code = [
