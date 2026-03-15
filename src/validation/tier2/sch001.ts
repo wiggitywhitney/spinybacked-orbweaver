@@ -3,7 +3,11 @@
 
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { CheckResult } from '../types.ts';
+import type { TokenUsage } from '../../agent/schema.ts';
+import { callJudge } from '../judge.ts';
+import type { JudgeOptions } from '../judge.ts';
 import { parseResolvedRegistry, getSpanDefinitions } from './registry-types.ts';
 
 interface SpanNameIssue {
@@ -13,25 +17,48 @@ interface SpanNameIssue {
 }
 
 /**
+ * Optional judge dependencies for naming quality assessment.
+ * When provided, span names that pass the cardinality check are sent
+ * to the LLM judge for naming convention evaluation in fallback mode.
+ */
+export interface Sch001JudgeDeps {
+  client: Anthropic;
+  options?: JudgeOptions;
+}
+
+/**
+ * Result of SCH-001 check including judge token usage for cost tracking.
+ */
+export interface Sch001Result {
+  results: CheckResult[];
+  judgeTokenUsage: TokenUsage[];
+}
+
+/** Confidence threshold — judge verdicts below this downgrade from blocking to advisory. */
+const JUDGE_CONFIDENCE_THRESHOLD = 0.7;
+
+/**
  * SCH-001: Verify that span names match operation names in the resolved registry.
  *
  * In registry conformance mode (registry has span definitions), each span name
  * in code must match a span definition's operation name (the span group ID
- * without the "span." prefix).
+ * without the "span." prefix). No judge is used in this mode.
  *
  * In naming quality fallback mode (no span definitions), checks for bounded
- * cardinality and naming conventions.
+ * cardinality and (when judge is available) naming convention compliance.
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param resolvedSchema - Resolved Weaver registry object
- * @returns CheckResult[] with ruleId "SCH-001", tier 2, blocking true
+ * @param judgeDeps - Optional judge dependencies (Anthropic client). When absent, runs script-only.
+ * @returns Sch001Result with check results and judge token usage for cost tracking
  */
-export function checkSpanNamesMatchRegistry(
+export async function checkSpanNamesMatchRegistry(
   code: string,
   filePath: string,
   resolvedSchema: object,
-): CheckResult[] {
+  judgeDeps?: Sch001JudgeDeps,
+): Promise<Sch001Result> {
   const registry = parseResolvedRegistry(resolvedSchema);
   const spanDefs = getSpanDefinitions(registry);
 
@@ -39,16 +66,16 @@ export function checkSpanNamesMatchRegistry(
   const spanNames = extractSpanNames(code);
 
   if (spanNames.length === 0) {
-    return [pass(filePath, 'No span calls found to check.')];
+    return { results: [pass(filePath, 'No span calls found to check.')], judgeTokenUsage: [] };
   }
 
-  // Registry conformance mode: span definitions exist
+  // Registry conformance mode: span definitions exist — no judge needed
   if (spanDefs.length > 0) {
-    return checkRegistryConformance(spanNames, spanDefs, filePath);
+    return { results: checkRegistryConformance(spanNames, spanDefs, filePath), judgeTokenUsage: [] };
   }
 
   // Naming quality fallback: no span definitions in registry
-  return checkNamingQuality(spanNames, filePath);
+  return checkNamingQuality(spanNames, filePath, judgeDeps);
 }
 
 interface SpanNameEntry {
@@ -108,30 +135,35 @@ function checkRegistryConformance(
 
 /**
  * Naming quality fallback — when no registry span definitions exist,
- * check for bounded cardinality and naming convention.
+ * check for bounded cardinality and (when judge is available) naming convention.
+ *
+ * Two-tier detection:
+ * 1. Script: cardinality check catches embedded dynamic values
+ * 2. Judge (optional): for names passing cardinality, assess naming convention compliance
  */
-function checkNamingQuality(
+async function checkNamingQuality(
   spanNames: SpanNameEntry[],
   filePath: string,
-): CheckResult[] {
-  const issues: SpanNameIssue[] = [];
+  judgeDeps?: Sch001JudgeDeps,
+): Promise<Sch001Result> {
+  const cardinalityIssues: SpanNameIssue[] = [];
+  const cardinalityPassNames: SpanNameEntry[] = [];
 
   for (const entry of spanNames) {
     // Check for embedded dynamic values (numbers, UUIDs, hex strings)
     if (hasUnboundedCardinality(entry.name)) {
-      issues.push({
+      cardinalityIssues.push({
         spanName: entry.name,
         line: entry.line,
         reason: 'contains embedded dynamic values suggesting unbounded cardinality',
       });
+    } else {
+      cardinalityPassNames.push(entry);
     }
   }
 
-  if (issues.length === 0) {
-    return [pass(filePath, 'Span names follow naming quality conventions (no registry span definitions to check against).')];
-  }
-
-  return issues.map((i) => ({
+  // Script results — cardinality failures
+  const scriptResults: CheckResult[] = cardinalityIssues.map((i) => ({
     ruleId: 'SCH-001',
     passed: false,
     filePath,
@@ -143,6 +175,60 @@ function checkNamingQuality(
     tier: 2,
     blocking: true,
   }));
+
+  // Judge pass — for names that pass cardinality, assess naming convention
+  const judgeResults: CheckResult[] = [];
+  const judgeTokenUsage: TokenUsage[] = [];
+
+  if (judgeDeps && cardinalityPassNames.length > 0) {
+    for (const entry of cardinalityPassNames) {
+      const result = await callJudge(
+        {
+          ruleId: 'SCH-001',
+          context: `Span name "${entry.name}" at line ${entry.line} in naming quality fallback mode (no registry span definitions available).`,
+          question: `Does span name "${entry.name}" follow a structured naming convention (e.g., dotted notation like "<namespace>.<category>.<operation>")? Is it descriptive and bounded? A single-word function name like "doStuff" or "process" is too vague.`,
+          candidates: [],
+        },
+        judgeDeps.client,
+        judgeDeps.options,
+      );
+
+      if (result) {
+        judgeTokenUsage.push(result.tokenUsage);
+
+        if (!result.verdict.answer) {
+          // Judge says naming is poor
+          const suggestion = result.verdict.suggestion ?? 'Use a structured dotted naming convention.';
+          const isLowConfidence = result.verdict.confidence < JUDGE_CONFIDENCE_THRESHOLD;
+          judgeResults.push({
+            ruleId: 'SCH-001',
+            passed: false,
+            filePath,
+            lineNumber: entry.line,
+            message:
+              `SCH-001 check failed: "${entry.name}" at line ${entry.line} does not follow naming conventions ` +
+              `(judge confidence: ${Math.round(result.verdict.confidence * 100)}%` +
+              `${isLowConfidence ? ' — below threshold, downgraded to advisory' : ''}). ` +
+              suggestion,
+            tier: 2,
+            blocking: !isLowConfidence,
+          });
+        }
+      }
+      // If result is null (judge failure), silently skip — graceful fallback to script-only
+    }
+  }
+
+  const allResults = [...scriptResults, ...judgeResults];
+
+  if (allResults.length === 0) {
+    return {
+      results: [pass(filePath, 'Span names follow naming quality conventions (no registry span definitions to check against).')],
+      judgeTokenUsage,
+    };
+  }
+
+  return { results: allResults, judgeTokenUsage };
 }
 
 /**

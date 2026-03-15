@@ -246,10 +246,22 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   }
 
   if (config.tier2Checks['SCH-001']?.enabled && config.resolvedSchema) {
+    const judgeDeps = config.anthropicClient
+      ? { client: config.anthropicClient }
+      : undefined;
+    const sch001 = await checkSpanNamesMatchRegistry(
+      instrumentedCode,
+      filePath,
+      config.resolvedSchema,
+      judgeDeps,
+    );
     tier2Results.push(...collectCheckResults(
-      checkSpanNamesMatchRegistry(instrumentedCode, filePath, config.resolvedSchema),
+      sch001.results,
       config.tier2Checks['SCH-001'].blocking,
     ));
+    if (sch001.judgeTokenUsage.length > 0) {
+      judgeTokenUsage.push(...sch001.judgeTokenUsage);
+    }
   }
 
   if (config.tier2Checks['SCH-002']?.enabled && config.resolvedSchema) {
