@@ -104,7 +104,7 @@ Recommendation diffs contain user source code. To avoid leaking sensitive litera
 
 ## Milestones
 
-- [ ] `SuggestedRefactor` type defined in `FileResult` with full test coverage for the type and serialization
+- [x] `SuggestedRefactor` type defined in `FileResult` with full test coverage for the type and serialization
 - [ ] LLM output schema extended with `suggestedRefactors` field; prompt guidance instructs LLM to report needed-but-blocked transforms
 - [ ] Fix loop detects persistent NDS-003 patterns across retry attempts and collects refactor recommendations
 - [ ] PR summary renders "Recommended Refactors" section with diffs and unblocked rules
