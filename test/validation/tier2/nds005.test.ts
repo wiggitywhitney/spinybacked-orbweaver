@@ -1,0 +1,418 @@
+// ABOUTME: Tests for NDS-005 Tier 2 check — control flow preservation.
+// ABOUTME: Verifies that instrumentation does not restructure existing try/catch/finally blocks.
+
+import { describe, it, expect } from 'vitest';
+import { checkControlFlowPreservation } from '../../../src/validation/tier2/nds005.ts';
+
+describe('checkControlFlowPreservation (NDS-005)', () => {
+  const filePath = '/test/example.js';
+
+  describe('passing cases', () => {
+    it('passes when try/catch structure is preserved', () => {
+      const original = [
+        'async function fetchData() {',
+        '  try {',
+        '    const data = await fetch(url);',
+        '    return data.json();',
+        '  } catch (err) {',
+        '    console.error(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'const { trace } = require("@opentelemetry/api");',
+        'async function fetchData() {',
+        '  return trace.getTracer("app").startActiveSpan("fetchData", async (span) => {',
+        '    try {',
+        '      const data = await fetch(url);',
+        '      return data.json();',
+        '    } catch (err) {',
+        '      console.error(err);',
+        '      span.recordException(err);',
+        '      span.setStatus({ code: 2 });',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('NDS-005');
+    });
+
+    it('passes when no try/catch blocks exist in original', () => {
+      const original = [
+        'function add(a, b) {',
+        '  return a + b;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'const { trace } = require("@opentelemetry/api");',
+        'function add(a, b) {',
+        '  return trace.getTracer("app").startActiveSpan("add", (span) => {',
+        '    try {',
+        '      return a + b;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when new try/finally is added for span lifecycle', () => {
+      const original = [
+        'function process(data) {',
+        '  try {',
+        '    return transform(data);',
+        '  } catch (e) {',
+        '    log(e);',
+        '    return null;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'const { trace } = require("@opentelemetry/api");',
+        'function process(data) {',
+        '  return trace.getTracer("app").startActiveSpan("process", (span) => {',
+        '    try {',
+        '      try {',
+        '        return transform(data);',
+        '      } catch (e) {',
+        '        log(e);',
+        '        span.recordException(e);',
+        '        return null;',
+        '      }',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when try/catch/finally all preserved', () => {
+      const original = [
+        'function cleanup() {',
+        '  try {',
+        '    doWork();',
+        '  } catch (err) {',
+        '    handleError(err);',
+        '  } finally {',
+        '    releaseResources();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'const { trace } = require("@opentelemetry/api");',
+        'function cleanup() {',
+        '  return trace.getTracer("app").startActiveSpan("cleanup", (span) => {',
+        '    try {',
+        '      doWork();',
+        '    } catch (err) {',
+        '      handleError(err);',
+        '      span.recordException(err);',
+        '    } finally {',
+        '      releaseResources();',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes with multiple preserved try/catch blocks', () => {
+      const original = [
+        'function multi() {',
+        '  try {',
+        '    stepOne();',
+        '  } catch (e1) {',
+        '    handleOne(e1);',
+        '  }',
+        '  try {',
+        '    stepTwo();',
+        '  } catch (e2) {',
+        '    handleTwo(e2);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function multi() {',
+        '  try {',
+        '    stepOne();',
+        '  } catch (e1) {',
+        '    handleOne(e1);',
+        '  }',
+        '  try {',
+        '    stepTwo();',
+        '  } catch (e2) {',
+        '    handleTwo(e2);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when OTel lines are added inside existing catch blocks', () => {
+      const original = [
+        'async function query() {',
+        '  try {',
+        '    return await db.query(sql);',
+        '  } catch (err) {',
+        '    logger.error("query failed", err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'const { trace } = require("@opentelemetry/api");',
+        'async function query() {',
+        '  return trace.getTracer("app").startActiveSpan("query", async (span) => {',
+        '    try {',
+        '      return await db.query(sql);',
+        '    } catch (err) {',
+        '      logger.error("query failed", err);',
+        '      span.recordException(err);',
+        '      span.setStatus({ code: 2 });',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('failing cases', () => {
+    it('detects when catch clause is removed from try/catch', () => {
+      const original = [
+        'function riskyOp() {',
+        '  try {',
+        '    dangerousCall();',
+        '  } catch (err) {',
+        '    handleError(err);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function riskyOp() {',
+        '  try {',
+        '    dangerousCall();',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].ruleId).toBe('NDS-005');
+      expect(failures[0].message).toContain('NDS-005');
+      expect(failures[0].message).toContain('catch');
+    });
+
+    it('detects when finally clause is removed from try/catch/finally', () => {
+      const original = [
+        'function withCleanup() {',
+        '  try {',
+        '    doWork();',
+        '  } catch (err) {',
+        '    log(err);',
+        '  } finally {',
+        '    cleanup();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function withCleanup() {',
+        '  try {',
+        '    doWork();',
+        '  } catch (err) {',
+        '    log(err);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].ruleId).toBe('NDS-005');
+      expect(failures[0].message).toContain('finally');
+    });
+
+    it('detects when try/catch is entirely removed', () => {
+      const original = [
+        'function safe() {',
+        '  try {',
+        '    return JSON.parse(input);',
+        '  } catch (e) {',
+        '    return null;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function safe() {',
+        '  return JSON.parse(input);',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].ruleId).toBe('NDS-005');
+    });
+
+    it('detects when existing try/catch blocks are merged', () => {
+      const original = [
+        'function twoStep() {',
+        '  try {',
+        '    stepOne();',
+        '  } catch (e1) {',
+        '    handleOne(e1);',
+        '  }',
+        '  try {',
+        '    stepTwo();',
+        '  } catch (e2) {',
+        '    handleTwo(e2);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Merged into a single try/catch
+      const instrumented = [
+        'function twoStep() {',
+        '  try {',
+        '    stepOne();',
+        '    stepTwo();',
+        '  } catch (e) {',
+        '    handleOne(e);',
+        '    handleTwo(e);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].ruleId).toBe('NDS-005');
+    });
+
+    it('reports multiple violations for multiple restructured blocks', () => {
+      const original = [
+        'function multi() {',
+        '  try {',
+        '    a();',
+        '  } catch (e) {',
+        '    handleA(e);',
+        '  }',
+        '  try {',
+        '    b();',
+        '  } catch (err) {',
+        '    handleB(err);',
+        '  } finally {',
+        '    cleanB();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // First: catch removed. Second: finally removed.
+      const instrumented = [
+        'function multi() {',
+        '  try {',
+        '    a();',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '  try {',
+        '    b();',
+        '  } catch (err) {',
+        '    handleB(err);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBe(2);
+    });
+  });
+
+  describe('CheckResult structure', () => {
+    it('returns correct CheckResult fields for passing check', () => {
+      const code = [
+        'function foo() {',
+        '  try { bar(); } catch(e) { baz(e); }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(code, code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({
+        ruleId: 'NDS-005',
+        passed: true,
+        filePath,
+        lineNumber: null,
+        message: expect.stringContaining('preserved'),
+        tier: 2,
+        blocking: false,
+      });
+    });
+
+    it('returns correct CheckResult fields for failing check', () => {
+      const original = [
+        'function foo() {',
+        '  try { bar(); } catch(e) { baz(e); }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function foo() {',
+        '  bar();',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failure = results.find(r => !r.passed);
+      expect(failure).toBeDefined();
+      expect(failure!.ruleId).toBe('NDS-005');
+      expect(failure!.tier).toBe(2);
+      expect(failure!.blocking).toBe(false);
+      expect(failure!.filePath).toBe(filePath);
+    });
+  });
+});

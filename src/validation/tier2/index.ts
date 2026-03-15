@@ -28,6 +28,12 @@ export type {
   ResolvedEnumType,
   ResolvedEnumMember,
 } from './registry-types.ts';
+export { checkForbiddenImports } from './api001.ts';
+export { checkOtelApiDependencyPlacement } from './api002.ts';
+export { checkDoubleInstrumentation } from './rst005.ts';
+export { checkModuleSystemMatch } from './nds006.ts';
+export { checkExportedSignaturePreservation } from './nds004.ts';
+export { checkControlFlowPreservation } from './nds005.ts';
 export {
   parseResolvedRegistry,
   getSpanDefinitions,

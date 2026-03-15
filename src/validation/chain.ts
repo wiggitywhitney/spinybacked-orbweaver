@@ -23,6 +23,12 @@ import { checkSpanNamesMatchRegistry } from './tier2/sch001.ts';
 import { checkAttributeKeysMatchRegistry } from './tier2/sch002.ts';
 import { checkAttributeValuesConformToTypes } from './tier2/sch003.ts';
 import { checkNoRedundantSchemaEntries } from './tier2/sch004.ts';
+import { checkForbiddenImports } from './tier2/api001.ts';
+import { checkOtelApiDependencyPlacement } from './tier2/api002.ts';
+import { checkModuleSystemMatch } from './tier2/nds006.ts';
+import { checkExportedSignaturePreservation } from './tier2/nds004.ts';
+import { checkControlFlowPreservation } from './tier2/nds005.ts';
+import { checkDoubleInstrumentation } from './tier2/rst005.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -166,6 +172,75 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     tier2Results.push(...collectCheckResults(
       checkIsRecordingGuard(instrumentedCode, filePath),
       config.tier2Checks['CDQ-006'].blocking,
+    ));
+  }
+
+  // API-001/003/004: Forbidden import detection (combined check)
+  // A single scan covers all three rules. Results are tagged with the
+  // specific ruleId. Per-rule config lookup ensures each can be toggled independently.
+  const apiImportChecksEnabled =
+    config.tier2Checks['API-001']?.enabled ||
+    config.tier2Checks['API-003']?.enabled ||
+    config.tier2Checks['API-004']?.enabled;
+
+  if (apiImportChecksEnabled) {
+    for (const result of checkForbiddenImports(instrumentedCode, filePath)) {
+      const ruleConfig = config.tier2Checks[result.ruleId];
+      if (!ruleConfig?.enabled) continue;
+      tier2Results.push(...collectCheckResults([result], ruleConfig.blocking));
+    }
+  }
+
+  // API-002: Verify @opentelemetry/api dependency placement (library vs app).
+  // Requires projectRoot to read package.json.
+  if (config.tier2Checks['API-002']?.enabled) {
+    if (config.projectRoot) {
+      tier2Results.push(...collectCheckResults(
+        checkOtelApiDependencyPlacement(filePath, config.projectRoot),
+        config.tier2Checks['API-002'].blocking,
+      ));
+    } else {
+      tier2Results.push({
+        ruleId: 'API-002',
+        passed: true,
+        filePath,
+        lineNumber: null,
+        message: 'API-002: Skipped — projectRoot not configured, cannot read package.json.',
+        tier: 2,
+        blocking: false,
+      });
+    }
+  }
+
+  // NDS-006: Verify instrumented code uses the same module system as the original.
+  if (config.tier2Checks['NDS-006']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkModuleSystemMatch(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['NDS-006'].blocking,
+    ));
+  }
+
+  // NDS-004: Verify exported function signatures are preserved after instrumentation.
+  if (config.tier2Checks['NDS-004']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkExportedSignaturePreservation(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['NDS-004'].blocking,
+    ));
+  }
+
+  // NDS-005: Verify existing try/catch/finally structure is preserved after instrumentation.
+  if (config.tier2Checks['NDS-005']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkControlFlowPreservation(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['NDS-005'].blocking,
+    ));
+  }
+
+  // RST-005: Detect double-instrumentation — spans added to already-instrumented functions.
+  if (config.tier2Checks['RST-005']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkDoubleInstrumentation(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['RST-005'].blocking,
     ));
   }
 

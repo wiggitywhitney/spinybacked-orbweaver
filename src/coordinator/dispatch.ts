@@ -250,7 +250,7 @@ export async function dispatchFiles(
       const schemaHash = computeSchemaHash(schema as object);
 
       // Dispatch to fix loop
-      const result = await instrumentFn(filePath, fileContent, schema, config);
+      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir });
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);

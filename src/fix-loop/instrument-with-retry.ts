@@ -55,6 +55,8 @@ interface InstrumentWithRetryOptions {
   /** When true, skip function-level fallback. Used internally to prevent infinite
    *  recursion when instrumentWithRetry is called per-function from functionLevelFallback. */
   _skipFunctionFallback?: boolean;
+  /** Absolute path to project root. Enables API-002 dependency placement check. */
+  projectRoot?: string;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -98,12 +100,16 @@ function summarizeErrors(validation: ValidationResult): string {
 
 /**
  * Build a default ValidationConfig from AgentConfig.
- * Enables all 17 Tier 2 checks with their blocking/advisory settings
- * per the PRD Dimension Rules tables (Phases 2, 4, 5).
+ * Enables all Tier 2 checks with their blocking/advisory settings
+ * per the PRD Dimension Rules tables (Phases 2, 4, 5) and PRD #135.
+ *
+ * @param config - Agent configuration
+ * @param projectRoot - Optional project root for checks that need package.json access (API-002)
  */
-function buildValidationConfig(config: AgentConfig) {
+function buildValidationConfig(config: AgentConfig, projectRoot?: string) {
   return {
     enableWeaver: false,
+    projectRoot,
     tier2Checks: {
       // Phase 2 checks
       'CDQ-001': { enabled: true, blocking: true },
@@ -125,6 +131,15 @@ function buildValidationConfig(config: AgentConfig) {
       'SCH-002': { enabled: true, blocking: true },
       'SCH-003': { enabled: true, blocking: true },
       'SCH-004': { enabled: true, blocking: false },
+      // PRD #135 checks (advisory for initial rollout)
+      'API-001': { enabled: true, blocking: false },
+      'API-002': { enabled: true, blocking: false },
+      'API-003': { enabled: true, blocking: false },
+      'API-004': { enabled: true, blocking: false },
+      'NDS-006': { enabled: true, blocking: false },
+      'NDS-004': { enabled: true, blocking: false },
+      'NDS-005': { enabled: true, blocking: false },
+      'RST-005': { enabled: true, blocking: false },
     },
   };
 }
@@ -239,6 +254,7 @@ export async function instrumentWithRetry(
     wholeFileResult = await executeRetryLoop(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
+      options?.projectRoot,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -284,9 +300,10 @@ async function executeRetryLoop(
   instrumentFileFn: InstrumentWithRetryDeps['instrumentFile'],
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
   formatFeedbackFn: (result: ValidationResult) => string,
+  projectRoot?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
-  const validationConfig = buildValidationConfig(config);
+  const validationConfig = buildValidationConfig(config, projectRoot);
 
   // Pre-flight token estimate — skip files that are very likely to exceed the budget.
   // Fail fast on impossible budgets (below fixed prompt overhead) to avoid wasting API tokens
@@ -562,7 +579,7 @@ async function functionLevelFallback(
   // Write reassembled code and run full validation (Tier 1 + Tier 2)
   await writeFile(filePath, reassembledCode, 'utf-8');
 
-  const validationConfig = buildValidationConfig(config);
+  const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot);
   const validation = await validateFileFn({
     originalCode,
     instrumentedCode: reassembledCode,

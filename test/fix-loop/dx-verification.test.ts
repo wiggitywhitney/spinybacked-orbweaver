@@ -84,7 +84,7 @@ function makePassingValidation(filePath: string): ValidationResult {
     passed: true,
     tier1Results: [
       { ruleId: 'ELISION', passed: true, filePath, lineNumber: null, message: 'No elision detected', tier: 1, blocking: true },
-      { ruleId: 'SYNTAX', passed: true, filePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: true, filePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
     ],
     tier2Results: [],
     blockingFailures: [],
@@ -92,7 +92,7 @@ function makePassingValidation(filePath: string): ValidationResult {
   };
 }
 
-function makeFailingValidation(filePath: string, ruleId = 'SYNTAX', message = 'Unexpected token at line 5'): ValidationResult {
+function makeFailingValidation(filePath: string, ruleId = 'NDS-001', message = 'Unexpected token at line 5'): ValidationResult {
   return {
     passed: false,
     tier1Results: [
@@ -195,7 +195,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       const advisoryValidation: ValidationResult = {
         passed: true,
         tier1Results: [
-          { ruleId: 'SYNTAX', passed: true, filePath: testFilePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
+          { ruleId: 'NDS-001', passed: true, filePath: testFilePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
         ],
         tier2Results: [
           { ruleId: 'NDS-003', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Non-instrumentation line changed at line 10', tier: 2, blocking: false },
@@ -277,9 +277,9 @@ describe('DX verification — FileResult field content for all exit paths', () =
 
       // Use different errors per attempt to avoid triggering oscillation detection
       const validationErrors = [
-        makeFailingValidation(testFilePath, 'SYNTAX', 'Unexpected token at line 5'),
+        makeFailingValidation(testFilePath, 'NDS-001', 'Unexpected token at line 5'),
         makeFailingValidation(testFilePath, 'LINT', 'Formatting does not match Prettier config'),
-        makeFailingValidation(testFilePath, 'SYNTAX', 'Missing semicolon at line 12'),
+        makeFailingValidation(testFilePath, 'NDS-001', 'Missing semicolon at line 12'),
       ];
 
       const deps: InstrumentWithRetryDeps = {
@@ -304,11 +304,11 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.validationStrategyUsed).toBe('fresh-regeneration');
 
       // reason contains the failing ruleId from the last attempt and a human-readable message
-      expect(result.reason).toContain('SYNTAX');
+      expect(result.reason).toContain('NDS-001');
       expect(result.reason).toContain('Missing semicolon');
 
       // lastError contains the raw error output (ruleId: message format) from the last attempt
-      expect(result.lastError).toContain('SYNTAX');
+      expect(result.lastError).toContain('NDS-001');
       expect(result.lastError).toContain('Missing semicolon at line 12');
 
       // errorProgression has one entry per attempt
@@ -459,15 +459,15 @@ describe('DX verification — FileResult field content for all exit paths', () =
         makeOutput({ instrumentedCode: 'bad3;\n', tokenUsage: attempt3Tokens }),
       ];
 
-      // Same SYNTAX error every attempt → duplicate detection → oscillation bail on attempt 3
+      // Same NDS-001 error every attempt → duplicate detection → oscillation bail on attempt 3
       const syntaxError: ValidationResult = {
         passed: false,
         tier1Results: [
-          { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+          { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
         ],
         tier2Results: [],
         blockingFailures: [
-          { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+          { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
         ],
         advisoryFindings: [],
       };
@@ -496,7 +496,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.reason).toContain('fresh regeneration');
 
       // lastError contains the actual blocking failure details
-      expect(result.lastError).toContain('SYNTAX');
+      expect(result.lastError).toContain('NDS-001');
       expect(result.lastError).toContain('Unexpected token at line 5');
 
       // errorProgression records all attempts that ran

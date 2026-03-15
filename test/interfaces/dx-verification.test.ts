@@ -422,7 +422,7 @@ describe('DX verification', () => {
       const deps = makeCliDeps({
         coordinate: vi.fn().mockRejectedValue(
           new CoordinatorAbortError(
-            'Early abort: 3 consecutive files failed with the same error (SYNTAX). ' +
+            'Early abort: 3 consecutive files failed with the same error (NDS-001). ' +
             'This indicates a systemic issue — not a file-specific problem. ' +
             'Check your configuration, dependencies, and schema setup before retrying. ' +
             'Partial results from files processed before the abort are preserved.',
@@ -435,7 +435,7 @@ describe('DX verification', () => {
       const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
       const errorMsg = stderrMessages.join('\n');
       // Includes the ruleId
-      expect(errorMsg).toContain('SYNTAX');
+      expect(errorMsg).toContain('NDS-001');
       // Includes remediation
       expect(errorMsg).toContain('configuration');
       // Includes partial results note

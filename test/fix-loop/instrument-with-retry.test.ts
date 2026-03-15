@@ -49,7 +49,7 @@ function makePassingValidation(filePath: string): ValidationResult {
     passed: true,
     tier1Results: [
       { ruleId: 'ELISION', passed: true, filePath, lineNumber: null, message: 'No elision detected', tier: 1, blocking: true },
-      { ruleId: 'SYNTAX', passed: true, filePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: true, filePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
       { ruleId: 'LINT', passed: true, filePath, lineNumber: null, message: 'Lint passed', tier: 1, blocking: true },
     ],
     tier2Results: [],
@@ -63,11 +63,11 @@ function makeFailingValidation(filePath: string): ValidationResult {
     passed: false,
     tier1Results: [
       { ruleId: 'ELISION', passed: true, filePath, lineNumber: null, message: 'No elision detected', tier: 1, blocking: true },
-      { ruleId: 'SYNTAX', passed: false, filePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: false, filePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
     ],
     tier2Results: [],
     blockingFailures: [
-      { ruleId: 'SYNTAX', passed: false, filePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: false, filePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
     ],
     advisoryFindings: [],
   };
@@ -78,7 +78,7 @@ function makeValidationWithAdvisory(filePath: string): ValidationResult {
     passed: true,
     tier1Results: [
       { ruleId: 'ELISION', passed: true, filePath, lineNumber: null, message: 'No elision detected', tier: 1, blocking: true },
-      { ruleId: 'SYNTAX', passed: true, filePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: true, filePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
       { ruleId: 'LINT', passed: true, filePath, lineNumber: null, message: 'Lint passed', tier: 1, blocking: true },
     ],
     tier2Results: [
@@ -157,7 +157,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.errorProgression).toEqual(['0 errors']);
   });
 
-  it('passes all 17 Tier 2 checks to validateFile with correct blocking flags', async () => {
+  it('passes all 25 Tier 2 checks to validateFile with correct blocking flags', async () => {
     const output = makeInstrumentationOutput();
     let capturedConfig: ValidateFileInput['config'] | undefined;
     const deps: InstrumentWithRetryDeps = {
@@ -198,8 +198,40 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['SCH-003']).toEqual({ enabled: true, blocking: true });
     expect(checks['SCH-004']).toEqual({ enabled: true, blocking: false });
 
-    // Total: 17 checks
-    expect(Object.keys(checks)).toHaveLength(17);
+    // PRD #135 checks (8) — advisory for initial rollout
+    expect(checks['API-001']).toEqual({ enabled: true, blocking: false });
+    expect(checks['API-002']).toEqual({ enabled: true, blocking: false });
+    expect(checks['API-003']).toEqual({ enabled: true, blocking: false });
+    expect(checks['API-004']).toEqual({ enabled: true, blocking: false });
+    expect(checks['NDS-006']).toEqual({ enabled: true, blocking: false });
+    expect(checks['NDS-004']).toEqual({ enabled: true, blocking: false });
+    expect(checks['NDS-005']).toEqual({ enabled: true, blocking: false });
+    expect(checks['RST-005']).toEqual({ enabled: true, blocking: false });
+
+    // Total: 25 checks
+    expect(Object.keys(checks)).toHaveLength(25);
+
+    // projectRoot is undefined when not provided
+    expect(capturedConfig!.projectRoot).toBeUndefined();
+  });
+
+  it('passes projectRoot through to validation config when provided', async () => {
+    const output = makeInstrumentationOutput();
+    let capturedConfig: ValidateFileInput['config'] | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async (input: ValidateFileInput) => {
+        capturedConfig = input.config;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, projectRoot: '/tmp/my-project' },
+    );
+
+    expect(capturedConfig).toBeDefined();
+    expect(capturedConfig!.projectRoot).toBe('/tmp/my-project');
   });
 
   it('returns failed FileResult and reverts file when validation fails', async () => {
@@ -217,7 +249,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.path).toBe(testFilePath);
     expect(result.validationAttempts).toBe(1);
     expect(result.validationStrategyUsed).toBe('initial-generation');
-    expect(result.reason).toContain('SYNTAX');
+    expect(result.reason).toContain('NDS-001');
     expect(result.lastError).toBeDefined();
     expect(result.lastError!.length).toBeGreaterThan(0);
     expect(result.errorProgression).toEqual(['1 blocking error']);
@@ -1029,11 +1061,11 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     const syntaxFailingValidation: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5. The parser encountered an invalid expression.', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5. The parser encountered an invalid expression.', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5. The parser encountered an invalid expression.', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5. The parser encountered an invalid expression.', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
     };
@@ -1057,7 +1089,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     );
 
     // Failure hint should contain the ruleId and first sentence of the message
-    expect(attempt3Options!.failureHint).toContain('SYNTAX');
+    expect(attempt3Options!.failureHint).toContain('NDS-001');
     expect(attempt3Options!.failureHint).toContain('Unexpected token at line 5');
     // Should NOT contain the second sentence
     expect(attempt3Options!.failureHint).not.toContain('The parser encountered');
@@ -1259,12 +1291,12 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     const twoErrorValidation: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
         { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Lint error', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
         { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Lint error', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
@@ -1341,15 +1373,15 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     const badOutput2 = makeInstrumentationOutput({ instrumentedCode: 'bad2;\n', tokenUsage: attempt2Tokens });
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt3Tokens });
 
-    // Attempt 1: 1 SYNTAX error; Attempt 2: 2 SYNTAX errors (oscillation)
+    // Attempt 1: 1 NDS-001 error; Attempt 2: 2 NDS-001 errors (oscillation)
     const oneErrorValidation: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
     };
@@ -1357,13 +1389,13 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     const twoErrorValidation: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Syntax error 2', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Syntax error 2', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Syntax error 2', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Syntax error 2', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
     };
@@ -1458,15 +1490,15 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     const badOutput2 = makeInstrumentationOutput({ instrumentedCode: 'bad2;\n', tokenUsage: attempt2Tokens });
     const badOutput3 = makeInstrumentationOutput({ instrumentedCode: 'bad3;\n', tokenUsage: attempt3Tokens });
 
-    // Same SYNTAX error on same filePath in attempts 1, 2, and 3 → duplicate detection
+    // Same NDS-001 error on same filePath in attempts 1, 2, and 3 → duplicate detection
     const syntaxError: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
     };
@@ -1502,12 +1534,12 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     const twoErrorValidation: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
         { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Lint error', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Syntax error 1', tier: 1, blocking: true },
         { ruleId: 'LINT', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Lint error', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
@@ -1577,11 +1609,11 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     const syntaxError: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
     };
@@ -1740,11 +1772,11 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     const oneErrorValidation: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
     };
@@ -1752,13 +1784,13 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     const twoErrorValidation: ValidationResult = {
       passed: false,
       tier1Results: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Missing semicolon', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Missing semicolon', tier: 1, blocking: true },
       ],
       tier2Results: [],
       blockingFailures: [
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
-        { ruleId: 'SYNTAX', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Missing semicolon', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 10, message: 'Missing semicolon', tier: 1, blocking: true },
       ],
       advisoryFindings: [],
     };

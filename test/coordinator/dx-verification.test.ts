@@ -88,7 +88,7 @@ function makeFailedResult(filePath: string, overrides: Partial<FileResult> = {})
     reason: 'Validation failed after 3 attempts',
     lastError: 'COV-001: No spans on entry point handlers',
     errorProgression: [
-      'Attempt 1: SYNTAX — missing semicolon',
+      'Attempt 1: NDS-001 — missing semicolon',
       'Attempt 2: COV-001 — entry point not instrumented',
       'Attempt 3: COV-001 — still not instrumented',
     ],
@@ -432,9 +432,9 @@ describe('DX Verification — Milestone 8', () => {
             reason: 'Syntax error after 3 attempts',
             lastError: 'NDS-001: Unexpected token at line 42',
             errorProgression: [
-              'Attempt 1: SYNTAX — unexpected token',
-              'Attempt 2: SYNTAX — unexpected token',
-              'Attempt 3: SYNTAX — unexpected token',
+              'Attempt 1: NDS-001 — unexpected token',
+              'Attempt 2: NDS-001 — unexpected token',
+              'Attempt 3: NDS-001 — unexpected token',
             ],
           }),
           makeFailedResult('/project/bad2.js', {

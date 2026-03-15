@@ -112,7 +112,7 @@ describe('dispatchFiles early abort', () => {
     ]);
 
     const instrumentWithRetry = vi.fn()
-      .mockImplementation(async (filePath: string) => makeFailedResult(filePath, 'SYNTAX'));
+      .mockImplementation(async (filePath: string) => makeFailedResult(filePath, 'NDS-001'));
 
     const deps = makeDeps({ instrumentWithRetry });
     const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps });
@@ -131,7 +131,7 @@ describe('dispatchFiles early abort', () => {
       createFile('d.js'),
     ]);
 
-    const ruleIds = ['SYNTAX', 'LINT', 'SYNTAX', 'LINT'];
+    const ruleIds = ['NDS-001', 'LINT', 'NDS-001', 'LINT'];
     let callIdx = 0;
     const instrumentWithRetry = vi.fn()
       .mockImplementation(async (filePath: string) => {
@@ -159,9 +159,9 @@ describe('dispatchFiles early abort', () => {
     const instrumentWithRetry = vi.fn()
       .mockImplementation(async (filePath: string) => {
         callIdx++;
-        // Files 1-2 fail with SYNTAX, file 3 succeeds, files 4-5 fail with SYNTAX
+        // Files 1-2 fail with NDS-001, file 3 succeeds, files 4-5 fail with NDS-001
         if (callIdx === 3) return makeSuccessResult(filePath);
-        return makeFailedResult(filePath, 'SYNTAX');
+        return makeFailedResult(filePath, 'NDS-001');
       });
 
     const deps = makeDeps({ instrumentWithRetry });

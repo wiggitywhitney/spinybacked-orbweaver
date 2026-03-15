@@ -1,7 +1,7 @@
 # PRD: Validation Gap Coverage — Automate Unimplemented Scoring Checklist Rules
 
 **Issue**: [#135](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/135)
-**Status**: Draft
+**Status**: Complete
 **Priority**: Low
 **Created**: 2026-03-14
 
@@ -85,14 +85,14 @@ Require AST diffing between original and instrumented code. More complex to impl
 
 ## Milestones
 
-- [ ] API dimension checks: implement API-001, API-003, API-004 as a combined Tier 2 check scanning imports for forbidden packages
-- [ ] API-002 post-instrumentation verification: verify `@opentelemetry/api` is listed as peerDependency (library projects) or dependency (app projects) after instrumentation, with fixtures for both project types
-- [ ] NDS-006 module system check: detect ESM vs CJS in original, verify instrumented code matches
-- [ ] NDS-004 signature preservation check: AST-diff exported function signatures before/after instrumentation
-- [ ] NDS-005 control flow preservation check: AST-diff try/catch/finally block structure before/after
-- [ ] RST-005 post-LLM validation: move double-instrumentation detection into the validation chain (complement to pre-flight)
-- [ ] Naming unification: align SYNTAX→NDS-001, document NDS-002 checkpoint behavior, ensure consistent rule IDs in CheckResult
-- [ ] Tests for all new checks with positive and negative fixtures
+- [x] API dimension checks: implement API-001, API-003, API-004 as a combined Tier 2 check scanning imports for forbidden packages
+- [x] API-002 post-instrumentation verification: verify `@opentelemetry/api` is listed as peerDependency (library projects) or dependency (app projects) after instrumentation, with fixtures for both project types
+- [x] NDS-006 module system check: detect ESM vs CJS in original, verify instrumented code matches
+- [x] NDS-004 signature preservation check: AST-diff exported function signatures before/after instrumentation
+- [x] NDS-005 control flow preservation check: AST-diff try/catch/finally block structure before/after
+- [x] RST-005 post-LLM validation: move double-instrumentation detection into the validation chain (complement to pre-flight)
+- [x] Naming unification: align SYNTAX→NDS-001, document NDS-002 checkpoint behavior, ensure consistent rule IDs in CheckResult
+- [x] Tests for all new checks with positive and negative fixtures
 
 ## Design Notes
 

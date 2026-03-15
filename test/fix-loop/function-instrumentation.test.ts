@@ -73,7 +73,7 @@ function makePassingValidation(filePath: string): ValidationResult {
     passed: true,
     tier1Results: [
       { ruleId: 'ELISION', passed: true, filePath, lineNumber: null, message: 'OK', tier: 1, blocking: true },
-      { ruleId: 'SYNTAX', passed: true, filePath, lineNumber: null, message: 'OK', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: true, filePath, lineNumber: null, message: 'OK', tier: 1, blocking: true },
       { ruleId: 'LINT', passed: true, filePath, lineNumber: null, message: 'OK', tier: 1, blocking: true },
     ],
     tier2Results: [],
@@ -86,11 +86,11 @@ function makeFailingValidation(filePath: string): ValidationResult {
   return {
     passed: false,
     tier1Results: [
-      { ruleId: 'SYNTAX', passed: false, filePath, lineNumber: 3, message: 'Unexpected token', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: false, filePath, lineNumber: 3, message: 'Unexpected token', tier: 1, blocking: true },
     ],
     tier2Results: [],
     blockingFailures: [
-      { ruleId: 'SYNTAX', passed: false, filePath, lineNumber: 3, message: 'Unexpected token', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: false, filePath, lineNumber: 3, message: 'Unexpected token', tier: 1, blocking: true },
     ],
     advisoryFindings: [],
   };

@@ -35,7 +35,7 @@ describe('formatFeedbackForAgent', () => {
       const result = makeResult({
         tier1Results: [
           makeCheckResult({ ruleId: 'ELISION', message: 'No elision detected.' }),
-          makeCheckResult({ ruleId: 'SYNTAX', message: 'Syntax check passed.' }),
+          makeCheckResult({ ruleId: 'NDS-001', message: 'Syntax check passed.' }),
           makeCheckResult({ ruleId: 'LINT', message: 'Lint check passed.' }),
         ],
       });
@@ -43,7 +43,7 @@ describe('formatFeedbackForAgent', () => {
       const feedback = formatFeedbackForAgent(result);
 
       expect(feedback).toContain('ELISION | pass');
-      expect(feedback).toContain('SYNTAX | pass');
+      expect(feedback).toContain('NDS-001 | pass');
       expect(feedback).toContain('LINT | pass');
     });
   });
@@ -51,11 +51,11 @@ describe('formatFeedbackForAgent', () => {
   describe('failing validation', () => {
     it('formats failure with rule ID, status, path, and message', () => {
       const failedCheck = makeCheckResult({
-        ruleId: 'SYNTAX',
+        ruleId: 'NDS-001',
         passed: false,
         filePath: '/src/handler.js',
         lineNumber: 42,
-        message: 'SYNTAX check failed: Unexpected token at line 42.',
+        message: 'NDS-001 check failed: Unexpected token at line 42.',
       });
 
       const result = makeResult({
@@ -69,7 +69,7 @@ describe('formatFeedbackForAgent', () => {
 
       const feedback = formatFeedbackForAgent(result);
 
-      expect(feedback).toContain('SYNTAX | fail | /src/handler.js:42');
+      expect(feedback).toContain('NDS-001 | fail | /src/handler.js:42');
       expect(feedback).toContain('Unexpected token');
     });
 
@@ -110,7 +110,7 @@ describe('formatFeedbackForAgent', () => {
         passed: false,
         tier1Results: [
           makeCheckResult({ ruleId: 'ELISION' }),
-          makeCheckResult({ ruleId: 'SYNTAX' }),
+          makeCheckResult({ ruleId: 'NDS-001' }),
           makeCheckResult({ ruleId: 'LINT' }),
         ],
         tier2Results: [
@@ -200,7 +200,7 @@ describe('formatFeedbackForAgent', () => {
       const result = makeResult({
         tier1Results: [
           makeCheckResult({ ruleId: 'ELISION' }),
-          makeCheckResult({ ruleId: 'SYNTAX' }),
+          makeCheckResult({ ruleId: 'NDS-001' }),
         ],
       });
 
