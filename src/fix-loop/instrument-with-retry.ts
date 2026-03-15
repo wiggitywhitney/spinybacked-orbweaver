@@ -52,6 +52,9 @@ export interface InstrumentWithRetryDeps {
  */
 interface InstrumentWithRetryOptions {
   deps?: InstrumentWithRetryDeps;
+  /** When true, skip function-level fallback. Used internally to prevent infinite
+   *  recursion when instrumentWithRetry is called per-function from functionLevelFallback. */
+  _skipFunctionFallback?: boolean;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -252,6 +255,11 @@ export async function instrumentWithRetry(
 
   // If whole-file succeeded, return directly
   if (wholeFileResult.status === 'success') {
+    return wholeFileResult;
+  }
+
+  // Skip function-level fallback for recursive per-function calls (prevents infinite recursion)
+  if (options?._skipFunctionFallback) {
     return wholeFileResult;
   }
 
@@ -496,9 +504,10 @@ async function functionLevelFallback(
       // Write function context to temp file for instrumentWithRetry
       await writeFile(tmpFilePath, functionContext, 'utf-8');
 
-      // Run the full retry loop on this function
+      // Run the full retry loop on this function (with fallback disabled to prevent recursion)
       const fileResult = await instrumentWithRetry(
-        tmpFilePath, functionContext, resolvedSchema, config, retryOptions,
+        tmpFilePath, functionContext, resolvedSchema, config,
+        { ...retryOptions, _skipFunctionFallback: true },
       );
 
       // Convert FileResult → FunctionResult
