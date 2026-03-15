@@ -198,15 +198,16 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['SCH-003']).toEqual({ enabled: true, blocking: true });
     expect(checks['SCH-004']).toEqual({ enabled: true, blocking: false });
 
-    // PRD #135 checks (5)
+    // PRD #135 checks (6)
     expect(checks['API-001']).toEqual({ enabled: true, blocking: true });
     expect(checks['API-002']).toEqual({ enabled: true, blocking: true });
     expect(checks['NDS-006']).toEqual({ enabled: true, blocking: true });
     expect(checks['NDS-004']).toEqual({ enabled: true, blocking: false });
     expect(checks['NDS-005']).toEqual({ enabled: true, blocking: false });
+    expect(checks['RST-005']).toEqual({ enabled: true, blocking: false });
 
-    // Total: 22 checks
-    expect(Object.keys(checks)).toHaveLength(22);
+    // Total: 23 checks
+    expect(Object.keys(checks)).toHaveLength(23);
   });
 
   it('returns failed FileResult and reverts file when validation fails', async () => {

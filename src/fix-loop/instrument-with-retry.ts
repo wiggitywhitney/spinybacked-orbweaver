@@ -137,6 +137,7 @@ function buildValidationConfig(config: AgentConfig, projectRoot?: string) {
       'NDS-006': { enabled: true, blocking: true },
       'NDS-004': { enabled: true, blocking: false },
       'NDS-005': { enabled: true, blocking: false },
+      'RST-005': { enabled: true, blocking: false },
     },
   };
 }
