@@ -322,24 +322,19 @@ describe('full pipeline with all three judge-enhanced rules', () => {
 
     const result = await validateFile(input);
 
-    // Check that judge suggestions appear in the messages
-    const allMessages = result.tier2Results.map(r => r.message).join('\n');
-
     // SCH-004 suggestion about using the registered key
     const sch004Fails = result.tier2Results.filter(r => r.ruleId === 'SCH-004' && !r.passed);
-    if (sch004Fails.length > 0) {
-      const hasRecommendation = sch004Fails.some(r =>
-        r.message.includes('http.request.duration') || r.message.includes('request.latency'),
-      );
-      expect(hasRecommendation).toBe(true);
-    }
+    expect(sch004Fails.length).toBeGreaterThan(0);
+    const hasRecommendation = sch004Fails.some(r =>
+      r.message.includes('http.request.duration') || r.message.includes('request.latency'),
+    );
+    expect(hasRecommendation).toBe(true);
 
     // SCH-001 messages reference the span name
     const sch001Fails = result.tier2Results.filter(r => r.ruleId === 'SCH-001' && !r.passed);
-    if (sch001Fails.length > 0) {
-      const hasSpanRef = sch001Fails.some(r => r.message.includes('doStuff'));
-      expect(hasSpanRef).toBe(true);
-    }
+    expect(sch001Fails.length).toBeGreaterThan(0);
+    const hasSpanRef = sch001Fails.some(r => r.message.includes('doStuff'));
+    expect(hasSpanRef).toBe(true);
   });
 
   it('low-confidence SCH-001 verdict message indicates advisory downgrade', async () => {

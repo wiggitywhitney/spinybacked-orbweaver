@@ -317,7 +317,8 @@ function extractSpanNames(code: string): SpanNameEntry[] {
 }
 
 /**
- * Extract the span name as a string literal from a startActiveSpan/startSpan call.
+ * Extract the span name as a static string from a startActiveSpan/startSpan call.
+ * Accepts both string literals ("name") and no-substitution template literals (`name`).
  */
 function getSpanNameLiteral(callExpr: CallExpression): string | null {
   const args = callExpr.getArguments();
@@ -327,12 +328,24 @@ function getSpanNameLiteral(callExpr: CallExpression): string | null {
   if (Node.isStringLiteral(firstArg)) {
     return firstArg.getLiteralValue();
   }
+  if (Node.isNoSubstitutionTemplateLiteral(firstArg)) {
+    return firstArg.getLiteralValue();
+  }
   return null;
 }
 
 /**
- * Count startActiveSpan/startSpan calls where the first argument is NOT a string literal.
- * These are template literals, variables, concatenations, etc. that indicate unbounded cardinality.
+ * Check if a node is a static span name — either a string literal or
+ * a no-substitution template literal (backtick string without ${}).
+ */
+function isStaticSpanName(node: import('ts-morph').Node): boolean {
+  return Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node);
+}
+
+/**
+ * Count startActiveSpan/startSpan calls where the first argument is NOT a static string.
+ * Template literals with substitutions, variables, and concatenations indicate unbounded cardinality.
+ * No-substitution template literals (`name`) are treated as static — same as string literals.
  */
 function countNonLiteralSpanNames(code: string): number {
   const project = new Project({
@@ -354,8 +367,7 @@ function countNonLiteralSpanNames(code: string): number {
     const args = node.getArguments();
     if (args.length === 0) return;
 
-    // If the first arg is NOT a string literal, it's non-literal
-    if (!Node.isStringLiteral(args[0])) {
+    if (!isStaticSpanName(args[0])) {
       count++;
     }
   });

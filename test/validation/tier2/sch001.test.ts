@@ -210,6 +210,26 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results[0].message).toContain('non-literal');
     });
 
+    it('treats no-substitution template literals as static span names', async () => {
+      const schemaWithoutSpans = { groups: [] };
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan(`myapp.user.get_users`, (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // No-substitution template literals are static — treated like string literals
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('flags span names containing UUIDs or numbers as unbounded cardinality', async () => {
       const schemaWithoutSpans = { groups: [] };
 
