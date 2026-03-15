@@ -157,7 +157,7 @@ export async function runGitWorkflow(
 
     const ghAvailable = await deps.checkGhAvailable();
     if (!ghAvailable) {
-      deps.stderr('gh CLI not found — skipping PR creation. Use --no-pr to suppress this warning, or install gh: https://cli.github.com');
+      deps.stderr('gh CLI is not installed or not authenticated — skipping PR creation. Install gh (https://cli.github.com) and run \'gh auth login\' to enable PR creation, or use --no-pr to skip.');
     } else {
       let pushSucceeded = false;
       try {
@@ -190,13 +190,14 @@ export async function runGitWorkflow(
 }
 
 /**
- * Check whether the gh CLI is available on the system PATH.
+ * Check whether the gh CLI is installed and authenticated.
+ * Runs `gh auth status` which validates both installation and active credentials.
  *
- * @returns True if gh is available and responds to --version
+ * @returns True if gh is installed and authenticated
  */
 export async function checkGhAvailable(): Promise<boolean> {
   return new Promise((res) => {
-    execFile('gh', ['--version'], { timeout: 5000 }, (error) => {
+    execFile('gh', ['auth', 'status'], { timeout: 5000 }, (error) => {
       res(!error);
     });
   });

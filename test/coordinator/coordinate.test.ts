@@ -91,6 +91,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     readFileForAdvisory: vi.fn().mockResolvedValue(''),
+    checkGhAvailable: vi.fn().mockResolvedValue(true),
     ...overrides,
   };
 }
@@ -251,6 +252,29 @@ describe('coordinate', () => {
   });
 
   describe('degrade and warn — non-essential steps', () => {
+    it('warns early when gh CLI is not authenticated', async () => {
+      const deps = makeDeps({
+        checkGhAvailable: vi.fn().mockResolvedValue(false),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('gh CLI'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('gh auth login'))).toBe(true);
+      // Should still complete the run — gh auth is advisory, not blocking
+      expect(result.filesSucceeded).toBeGreaterThan(0);
+    });
+
+    it('does not warn when gh CLI is authenticated', async () => {
+      const deps = makeDeps({
+        checkGhAvailable: vi.fn().mockResolvedValue(true),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.every(w => !w.includes('gh CLI'))).toBe(true);
+    });
+
     it('reports finalization errors in warnings but returns valid RunResult', async () => {
       const deps = makeDeps({
         finalizeResults: vi.fn().mockRejectedValue(

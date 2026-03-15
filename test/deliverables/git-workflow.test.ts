@@ -614,4 +614,9 @@ describe('checkGhAvailable', () => {
   it('is a function', () => {
     expect(typeof checkGhAvailable).toBe('function');
   });
+
+  it('resolves to a boolean when invoked against real gh CLI', async () => {
+    const result = await checkGhAvailable();
+    expect(typeof result).toBe('boolean');
+  });
 });
