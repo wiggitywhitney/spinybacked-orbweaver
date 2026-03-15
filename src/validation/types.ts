@@ -62,6 +62,8 @@ export interface ValidationConfig {
   /** Resolved Weaver registry (from `weaver registry resolve -f json`).
    *  Used by SCH-001 through SCH-004 Tier 2 checks. */
   resolvedSchema?: object;
+  /** Absolute path to project root. Required for API-002 dependency placement check. */
+  projectRoot?: string;
 }
 
 /**

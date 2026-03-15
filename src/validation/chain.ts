@@ -24,6 +24,7 @@ import { checkAttributeKeysMatchRegistry } from './tier2/sch002.ts';
 import { checkAttributeValuesConformToTypes } from './tier2/sch003.ts';
 import { checkNoRedundantSchemaEntries } from './tier2/sch004.ts';
 import { checkForbiddenImports } from './tier2/api001.ts';
+import { checkOtelApiDependencyPlacement } from './tier2/api002.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -178,6 +179,15 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     tier2Results.push(...collectCheckResults(
       checkForbiddenImports(instrumentedCode, filePath),
       config.tier2Checks['API-001'].blocking,
+    ));
+  }
+
+  // API-002: Verify @opentelemetry/api dependency placement (library vs app).
+  // Requires projectRoot to read package.json.
+  if (config.tier2Checks['API-002']?.enabled && config.projectRoot) {
+    tier2Results.push(...collectCheckResults(
+      checkOtelApiDependencyPlacement(filePath, config.projectRoot),
+      config.tier2Checks['API-002'].blocking,
     ));
   }
 

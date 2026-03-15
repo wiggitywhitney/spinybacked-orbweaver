@@ -350,6 +350,7 @@ describe('dispatchFiles', () => {
 
       expect(instrumentWithRetry).toHaveBeenCalledWith(
         file1, content, expect.any(Object), config,
+        { projectRoot: tmpDir },
       );
     });
 

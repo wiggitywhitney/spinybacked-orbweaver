@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-15) API-002 post-instrumentation dependency placement verification (PRD #135, milestone 2): Tier 2 check verifying @opentelemetry/api is in peerDependencies (library projects) or dependencies (app projects). Project type detection via package.json heuristics (private field, main/exports/module/types fields). Threaded projectRoot through ValidationConfig, instrumentWithRetry, and dispatchFiles. 15 tests covering library/app scenarios, edge cases, and error handling
+
 - (2026-03-15) API-001/003/004 forbidden import detection (PRD #135, milestone 1): combined Tier 2 check scanning ESM imports and CJS require() for OTel SDK packages, OTel internal packages, and vendor-specific tracing SDKs (dd-trace, @newrelic/*, @splunk/otel, @dynatrace/*, elastic-apm-node). Wired into validation chain as blocking check
 
 - (2026-03-14) Fix try-catch statement counting and add library descriptions to prompt (PRD #106): functions wrapped in a single try-catch (common async pattern like LangGraph nodes) were incorrectly filtered as trivial (1 top-level statement). `effectiveStatementCount()` now counts statements inside the try block. Auto-instrumentation allow list in system prompt now describes what each library covers and explicitly notes it does NOT cover application orchestration
