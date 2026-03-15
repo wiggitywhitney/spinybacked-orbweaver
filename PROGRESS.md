@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-15) LLM-as-judge infrastructure (PRD #118, milestone 1): shared `callJudge()` module (`src/validation/judge.ts`) with `JudgeQuestion`/`JudgeVerdict` types, structured output via zodOutputFormat, Haiku model default, separate token usage tracking for judge calls, and graceful null-return fallback on any failure. 9 tests covering verdicts, fallback, model selection, and prompt content
+
 - (2026-03-15) Naming unification and test verification (PRD #135, milestones 7-8): renamed SYNTAX ruleId to NDS-001 for consistent scoring checklist alignment across all 32 rules. Updated CheckResult documentation with comprehensive rule ID catalog. Documented NDS-002 (test suite checkpoint) enforcement via coordinator. Added missing tier2 index exports (checkOtelApiDependencyPlacement, checkDoubleInstrumentation). All 6 new check test suites verified with positive and negative fixtures (api001, api002, nds004, nds005, nds006, rst005)
 
 - (2026-03-15) RST-005 post-LLM double-instrumentation detection (PRD #135, milestone 6): Tier 2 advisory check that detects when the LLM adds spans to functions already instrumented in the original code. Reuses detectSpanPatterns from import-detection.ts to count spans per function in both original and instrumented output, flagging functions where the count increases. Wired into validation chain and default config as advisory (blocking: false). 9 tests covering no-op, preserved spans, different-function instrumentation, double-wrapping, multiple violations, and CheckResult structure
