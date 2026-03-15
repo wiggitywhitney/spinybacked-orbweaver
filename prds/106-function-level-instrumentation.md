@@ -149,7 +149,7 @@ Validated against commit-story-v2 evaluation files that currently produce zero i
 - [x] FileResult partial status: add `'partial'` status with per-function detail fields
 - [x] Coordinator and PR summary integration: partial results flow through aggregation and display
 - [x] Tests: unit tests for extraction, reassembly, deduplication; integration test for full fallback flow
-- [ ] Evaluation validation: run against `journal-graph.js` and `journal-manager.js` from commit-story-v2
+- [x] Evaluation validation: run against `journal-graph.js` and `journal-manager.js` from commit-story-v2
 
 ## Decision Log
 
