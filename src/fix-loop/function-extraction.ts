@@ -62,7 +62,7 @@ export function extractExportedFunctions(sourceFile: SourceFile): ExtractedFunct
     const bodyText = fn.getBody()?.getText() ?? '';
     if (!isWorthInstrumenting(bodyText, effectiveStatementCount(fn.getStatements()))) continue;
 
-    const fullText = getFullFunctionText(fn, sourceFile);
+    const fullText = getFullFunctionText(fn);
     const jsDoc = getJsDocText(fn);
     const referenced = findReferencedIdentifiers(bodyText, moduleLevelConstants, importedIdentifiers);
 
@@ -247,7 +247,7 @@ function isWorthInstrumenting(bodyText: string, statementCount: number): boolean
 }
 
 /** Get the full text of a function declaration, including preceding JSDoc. */
-function getFullFunctionText(fn: FunctionDeclaration, _sourceFile: SourceFile): string {
+function getFullFunctionText(fn: FunctionDeclaration): string {
   return fn.getText();
 }
 
@@ -279,13 +279,6 @@ function buildImportLines(sourceFile: SourceFile, neededImports: string[]): stri
     if (defaultNeeded || neededNamed.length > 0) {
       // Reconstruct import with only needed specifiers
       const moduleSpecifier = importDecl.getModuleSpecifierValue();
-      const parts: string[] = [];
-
-      if (defaultNeeded) parts.push(defaultName!);
-      if (neededNamed.length > 0) {
-        const names = neededNamed.map(n => n.getText());
-        parts.push(`{ ${names.join(', ')} }`);
-      }
 
       if (defaultNeeded && neededNamed.length > 0) {
         lines.push(`import ${defaultName}, { ${neededNamed.map(n => n.getText()).join(', ')} } from '${moduleSpecifier}';`);

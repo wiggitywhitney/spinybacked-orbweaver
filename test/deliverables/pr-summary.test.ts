@@ -179,9 +179,8 @@ describe('renderPrSummary', () => {
 
       expect(md).toContain('complex.js');
       expect(md).toMatch(/partial/i);
-      // Should show function counts in the status cell
-      expect(md).toContain('3');
-      expect(md).toContain('2');
+      // Should show function counts in the partial status cell
+      expect(md).toMatch(/3\/5 functions/);
     });
 
     it('shows libraries needed per file', () => {

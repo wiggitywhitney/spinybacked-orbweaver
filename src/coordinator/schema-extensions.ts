@@ -22,7 +22,7 @@ export interface WriteSchemaExtensionsResult {
 const EXTENSIONS_FILENAME = 'agent-extensions.yaml';
 
 /**
- * Collect schema extension strings from successful file results.
+ * Collect schema extension strings from successful and partial file results.
  * Skips failed/skipped files and deduplicates by raw string content.
  *
  * @param results - Array of FileResult objects from the dispatch phase

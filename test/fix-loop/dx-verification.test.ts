@@ -117,7 +117,7 @@ const mockContext: ConversationContext = {
  */
 function assertRequiredFields(result: FileResult, filePath: string): void {
   expect(result.path).toBe(filePath);
-  expect(['success', 'failed', 'skipped']).toContain(result.status);
+  expect(['success', 'failed', 'skipped', 'partial']).toContain(result.status);
   expect(typeof result.spansAdded).toBe('number');
   expect(Array.isArray(result.librariesNeeded)).toBe(true);
   expect(Array.isArray(result.schemaExtensions)).toBe(true);
@@ -721,13 +721,13 @@ describe('DX verification — FileResult field content for all exit paths', () =
           config: makeConfig({ maxFixAttempts: 0 }),
         },
         {
-          name: 'budget exceeded',
+          name: 'budget exceeded with failing validation',
           deps: {
             instrumentFile: async () => ({
               success: true,
               output: makeOutput({ tokenUsage: { inputTokens: 90000, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 } }),
             }) as InstrumentFileResult,
-            validateFile: async () => makePassingValidation(testFilePath),
+            validateFile: async () => makeFailingValidation(testFilePath),
           },
           config: makeConfig({ maxFixAttempts: 0, maxTokensPerFile: 1000 }),
         },
