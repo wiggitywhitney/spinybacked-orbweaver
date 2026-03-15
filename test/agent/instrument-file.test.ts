@@ -103,6 +103,7 @@ export async function handleRequest(req, res) {
       serviceEntryPoints: 1,
       totalFunctionsInFile: 1,
     },
+    suggestedRefactors: [],
     notes: ['Added span to exported async function handleRequest'],
     ...overrides,
   };

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-15) LLM output schema and prompt guidance for refactor recommendations (PRD #111, milestone 2): `LlmSuggestedRefactorSchema` Zod schema with description, diff, reason, unblocksRules, and line range. Extended `LlmOutputSchema` and `InstrumentationOutputSchema` with optional `suggestedRefactors` array (defaults to `[]`). System prompt gains "Suggested Refactors" section with NDS-003 guidance and const-extraction example. Output format documents the new field. `instrument-file.ts` passes through LLM-reported refactors. 11 new tests for schema validation and prompt content
+
 - (2026-03-15) SuggestedRefactor type for refactor recommendations (PRD #111, milestone 1): `SuggestedRefactor` and `SuggestedRefactorLocation` interfaces defined in fix-loop types with description, unified diff, reason, unblocked rules, and file location. Added as optional `suggestedRefactors` field on `FileResult`. 11 tests covering type shape, JSON serialization round-trips, and FileResult integration
 
 - (2026-03-15) Full pipeline integration test for all three judge-enhanced rules (PRD #118, milestone 6): exercises `validateFile()` with SCH-004, SCH-001, and NDS-005 judge paths simultaneously. Verifies judge calls happen for all three rules, token usage is collected, verdicts appear in advisory/blocking results, graceful fallback on judge failure, pure script-only mode without client, suggestion text propagation, and low-confidence SCH-001 downgrade behavior. 6 tests covering the complete judge-enhanced validation pipeline

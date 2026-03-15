@@ -1,5 +1,5 @@
 // ABOUTME: Zod schemas for the Instrumentation Agent's structured LLM output.
-// ABOUTME: Defines InstrumentationOutput, SpanCategories, LibraryRequirement, and TokenUsage types.
+// ABOUTME: Defines InstrumentationOutput, LlmSuggestedRefactor, SpanCategories, LibraryRequirement, and TokenUsage types.
 
 import { z } from 'zod';
 
@@ -24,6 +24,21 @@ export const SpanCategoriesSchema = z.strictObject({
 });
 
 /**
+ * A refactor the LLM recommends the user make before re-running the agent.
+ * Reported when the LLM identifies code patterns that block safe instrumentation
+ * but cannot modify without violating NDS-003.
+ * Does not include filePath — the caller fills that in from context.
+ */
+export const LlmSuggestedRefactorSchema = z.strictObject({
+  description: z.string(),
+  diff: z.string(),
+  reason: z.string(),
+  unblocksRules: z.array(z.string()),
+  startLine: z.number().int().nonnegative(),
+  endLine: z.number().int().nonnegative(),
+});
+
+/**
  * The structured output schema sent to the LLM via zodOutputFormat.
  * This is what the LLM fills in. TokenUsage is excluded — it's populated
  * from the API response metadata by the caller.
@@ -35,6 +50,7 @@ export const LlmOutputSchema = z.strictObject({
   attributesCreated: z.number().int().nonnegative(),
   spanCategories: SpanCategoriesSchema.nullable(),
   notes: z.array(z.string()),
+  suggestedRefactors: z.array(LlmSuggestedRefactorSchema).default([]),
 });
 
 /**
@@ -58,11 +74,13 @@ export const InstrumentationOutputSchema = z.strictObject({
   attributesCreated: z.number().int().nonnegative(),
   spanCategories: SpanCategoriesSchema.nullable(),
   notes: z.array(z.string()),
+  suggestedRefactors: z.array(LlmSuggestedRefactorSchema).default([]),
   tokenUsage: TokenUsageSchema,
 });
 
 export type LibraryRequirement = z.infer<typeof LibraryRequirementSchema>;
 export type SpanCategories = z.infer<typeof SpanCategoriesSchema>;
+export type LlmSuggestedRefactor = z.infer<typeof LlmSuggestedRefactorSchema>;
 export type LlmOutput = z.infer<typeof LlmOutputSchema>;
 export type TokenUsage = z.infer<typeof TokenUsageSchema>;
 export type InstrumentationOutput = z.infer<typeof InstrumentationOutputSchema>;

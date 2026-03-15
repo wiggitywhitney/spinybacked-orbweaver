@@ -130,6 +130,7 @@ export function formatResponse(data) {
           serviceEntryPoints: 1,
           totalFunctionsInFile: 2,
         },
+        suggestedRefactors: [],
         notes: [
           'Added span to exported async function handleRequest',
           'formatResponse is a pure utility — no I/O, skipped per instrumentation rules',
@@ -192,6 +193,7 @@ export async function handleRequest(req, res) {
           serviceEntryPoints: 1,
           totalFunctionsInFile: 2,
         },
+        suggestedRefactors: [],
         notes: [
           'handleRequest: added span as exported async entry point',
           'formatResponse: pure synchronous utility — no outbound calls, no schema match. Skipped.',
@@ -239,6 +241,7 @@ export function formatResponse(data) {
         schemaExtensions: [],
         attributesCreated: 0,
         spanCategories: null,
+        suggestedRefactors: [],
         notes: [],
       };
       const client = makeMockClient(llmOutput);
@@ -274,6 +277,7 @@ export function formatResponse(data) {
         schemaExtensions: [],
         attributesCreated: 0,
         spanCategories: null,
+        suggestedRefactors: [],
         notes: [],
       };
       const client = makeMockClient(llmOutput);
@@ -303,6 +307,7 @@ export function formatResponse(data) {
         schemaExtensions: [],
         attributesCreated: 0,
         spanCategories: null,
+        suggestedRefactors: [],
         notes: [],
       };
       const client = makeMockClient(llmOutput, {
@@ -430,6 +435,7 @@ export async function handleRequest(req, res) {
         schemaExtensions: [],
         attributesCreated: 0,
         spanCategories: null,
+        suggestedRefactors: [],
         notes: [],
       });
 

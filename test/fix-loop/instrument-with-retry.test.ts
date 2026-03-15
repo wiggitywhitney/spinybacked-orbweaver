@@ -38,6 +38,7 @@ function makeInstrumentationOutput(overrides?: Partial<InstrumentationOutput>): 
     schemaExtensions: ['app.user.id'],
     attributesCreated: 2,
     spanCategories: { externalCalls: 1, schemaDefined: 1, serviceEntryPoints: 0, totalFunctionsInFile: 3 },
+    suggestedRefactors: [],
     notes: ['Added spans to exported functions'],
     tokenUsage: sampleTokens,
     ...overrides,

@@ -199,6 +199,37 @@ pg, mysql, mysql2, mongodb, redis, ioredis, express, fastify, koa, @hapi/hapi, @
 
 ${EXAMPLES_SECTION}
 
+## Suggested Refactors
+
+When you cannot instrument a function because doing so would require modifying non-instrumentation code (violating NDS-003), report the needed transform in \`suggestedRefactors\`. This gives the user actionable feedback instead of a silent failure.
+
+**When to report**: You identify a code pattern that blocks safe instrumentation — for example, an expression that needs to be extracted to a \`const\` so \`setAttribute\` can capture it, or a function structure that needs decomposition before spans can be added.
+
+**When NOT to report**: Do not report refactors for patterns you can work around. Only report transforms you genuinely need but cannot make without changing business logic.
+
+Each entry in \`suggestedRefactors\` has:
+- \`description\`: What the user should change (human-readable)
+- \`diff\`: Unified diff showing the before/after (the user applies this)
+- \`reason\`: Why the agent needs this change to instrument correctly
+- \`unblocksRules\`: Which validation rules block instrumentation (e.g., \`["NDS-003"]\`)
+- \`startLine\`: First line of the code that needs refactoring (1-based)
+- \`endLine\`: Last line of the code that needs refactoring (1-based)
+
+**Example**: A function passes a computed expression directly to a callback. You need a \`const\` to capture the value for \`setAttribute\`, but extracting it would modify non-instrumentation code:
+
+\`\`\`json
+{
+  "description": "Extract computed expression to a const variable",
+  "diff": "- processResult(items.filter(i => i.active).length);\\n+ const activeCount = items.filter(i => i.active).length;\\n+ processResult(activeCount);",
+  "reason": "setAttribute requires a simple variable reference, not an inline expression. Extracting to const enables span.setAttribute('item.active_count', activeCount).",
+  "unblocksRules": ["NDS-003"],
+  "startLine": 42,
+  "endLine": 42
+}
+\`\`\`
+
+Return an empty array if no refactors are needed.
+
 ## Output Format
 
 You are returning structured JSON via the output schema. Fill in each field:
@@ -208,6 +239,7 @@ You are returning structured JSON via the output schema. Fill in each field:
 - \`schemaExtensions\`: Array of string IDs for any new schema entries created (attribute keys or span names not already in the schema). Empty array if none. Each extension MUST have a corresponding note in \`notes\` explaining why no existing key was a semantic match and what data the new key captures.
 - \`attributesCreated\`: Count of new span attributes added that were not in the existing schema. 0 if none.
 - \`spanCategories\`: Breakdown of spans added: \`{ externalCalls, schemaDefined, serviceEntryPoints, totalFunctionsInFile }\`. Set to null only if the file could not be processed at all.
+- \`suggestedRefactors\`: Array of refactors the user should apply before re-running the agent. Empty array if no blocked transforms were identified. See the Suggested Refactors section above for field details.
 - \`notes\`: Array of judgment call explanations. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Never return an empty array — at minimum explain your instrumentation decisions.`;
 }
 
