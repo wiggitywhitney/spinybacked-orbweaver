@@ -42,7 +42,7 @@ const FORBIDDEN_PATTERNS: Array<{
   {
     pattern: /^@opentelemetry\/semantic-conventions$/,
     ruleId: 'API-001',
-    category: 'OTel SDK package',
+    category: 'OTel constants package',
   },
   {
     pattern: /^@opentelemetry\/core$/,

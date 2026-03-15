@@ -68,7 +68,7 @@ describe('detectOscillation', () => {
       ]);
 
       // Error count decreased: 2 → 1. Duplicate detection also won't fire
-      // because the key sets differ ({NDS-001:/a.js, SYNTAX:/b.js} vs {NDS-001:/a.js}).
+      // because the key sets differ ({NDS-001:/a.js, NDS-001:/b.js} vs {NDS-001:/a.js}).
       const result = detectOscillation(current, previous);
 
       expect(result.shouldSkip).toBe(false);
