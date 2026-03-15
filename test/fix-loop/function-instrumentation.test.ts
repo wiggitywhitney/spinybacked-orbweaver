@@ -263,7 +263,7 @@ describe('instrumentFunctions', () => {
     expect(capturedCode).toBe(contextCode);
   });
 
-  it('runs Tier 1 only (no Tier 2 checks)', async () => {
+  it('runs Tier 1 validation without Tier 2 checks', async () => {
     const functions = [makeExtractedFunction('checkFn')];
 
     let capturedConfig: ValidateFileInput['config'] | undefined;
