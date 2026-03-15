@@ -32,6 +32,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderSchemaChanges(runResult));
   sections.push(renderReviewSensitivity(runResult, config, display));
   sections.push(renderAgentNotes(runResult, display));
+  sections.push(renderRecommendedRefactors(runResult, display));
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
@@ -281,6 +282,36 @@ function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
     lines.push(`**${display(file.path)}**:`);
     for (const note of file.notes!) {
       lines.push(`- ${note}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
+function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): string {
+  const filesWithRefactors = runResult.fileResults.filter(
+    f => f.suggestedRefactors && f.suggestedRefactors.length > 0,
+  );
+
+  if (filesWithRefactors.length === 0) return '';
+
+  const lines: string[] = ['## Recommended Refactors'];
+  lines.push('');
+  lines.push('The following files failed instrumentation due to code patterns that block safe transforms. Apply these refactors, then re-run the agent on the affected files.');
+  lines.push('');
+
+  for (const file of filesWithRefactors) {
+    lines.push(`### ${display(file.path)}`);
+    lines.push('');
+    for (const refactor of file.suggestedRefactors!) {
+      const rules = refactor.unblocksRules.map(r => `\`${r}\``).join(', ');
+      const loc = refactor.location.startLine === refactor.location.endLine
+        ? `L${refactor.location.startLine}`
+        : `L${refactor.location.startLine}–${refactor.location.endLine}`;
+      lines.push(`- **${refactor.description}** (${loc})`);
+      lines.push(`  - ${refactor.reason}`);
+      lines.push(`  - Unblocks: ${rules}`);
     }
     lines.push('');
   }

@@ -619,6 +619,184 @@ describe('renderPrSummary', () => {
     });
   });
 
+  describe('recommended refactors section', () => {
+    it('renders section when files have suggested refactors', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/context-integrator.js',
+            status: 'failed',
+            spansAdded: 0,
+            suggestedRefactors: [
+              {
+                description: 'Extract complex expression to a const before setAttribute call',
+                diff: '- span.setAttribute("result", computeResult(a, b));\n+ const result = computeResult(a, b);\n+ span.setAttribute("result", result);',
+                reason: 'setAttribute requires a simple variable reference for safe capture',
+                unblocksRules: ['NDS-003'],
+                location: { filePath: '/project/src/context-integrator.js', startLine: 42, endLine: 44 },
+              },
+            ],
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig(), '/project');
+
+      expect(md).toContain('## Recommended Refactors');
+      expect(md).toContain('context-integrator.js');
+      expect(md).toContain('Extract complex expression');
+      expect(md).toContain('NDS-003');
+      expect(md).toContain('42');
+    });
+
+    it('omits diffs from PR summary for redaction', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/context-integrator.js',
+            status: 'failed',
+            spansAdded: 0,
+            suggestedRefactors: [
+              {
+                description: 'Extract expression to const',
+                diff: '- span.setAttribute("result", computeResult(a, b));\n+ const result = computeResult(a, b);',
+                reason: 'setAttribute requires simple variable',
+                unblocksRules: ['NDS-003'],
+                location: { filePath: '/project/src/context-integrator.js', startLine: 42, endLine: 44 },
+              },
+            ],
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Diff content must NOT appear in PR summary
+      expect(md).not.toContain('computeResult');
+      expect(md).not.toContain('span.setAttribute');
+    });
+
+    it('skips section when no files have suggested refactors', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({ suggestedRefactors: undefined }),
+          _makeFileResult({ suggestedRefactors: [] }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('Recommended Refactors');
+    });
+
+    it('renders multiple refactors across multiple files', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/context-integrator.js',
+            status: 'failed',
+            spansAdded: 0,
+            suggestedRefactors: [
+              {
+                description: 'Extract expression to const',
+                diff: 'diff content 1',
+                reason: 'setAttribute needs simple variable',
+                unblocksRules: ['NDS-003'],
+                location: { filePath: '/project/src/context-integrator.js', startLine: 42, endLine: 44 },
+              },
+            ],
+          }),
+          _makeFileResult({
+            path: '/project/src/journal-manager.js',
+            status: 'failed',
+            spansAdded: 0,
+            suggestedRefactors: [
+              {
+                description: 'Split nested callback into named function',
+                diff: 'diff content 2',
+                reason: 'Nested callbacks prevent span wrapping',
+                unblocksRules: ['NDS-003', 'COV-003'],
+                location: { filePath: '/project/src/journal-manager.js', startLine: 100, endLine: 120 },
+              },
+              {
+                description: 'Move inline computation to separate function',
+                diff: 'diff content 3',
+                reason: 'Cannot add span to inline expression',
+                unblocksRules: ['NDS-003'],
+                location: { filePath: '/project/src/journal-manager.js', startLine: 200, endLine: 210 },
+              },
+            ],
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 2,
+      });
+      const md = renderPrSummary(result, _makeConfig(), '/project');
+
+      expect(md).toContain('context-integrator.js');
+      expect(md).toContain('journal-manager.js');
+      expect(md).toContain('Extract expression to const');
+      expect(md).toContain('Split nested callback');
+      expect(md).toContain('Move inline computation');
+      // Multiple rules shown
+      expect(md).toContain('NDS-003');
+      expect(md).toContain('COV-003');
+    });
+
+    it('shows reason for each recommendation', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/file.js',
+            status: 'failed',
+            spansAdded: 0,
+            suggestedRefactors: [
+              {
+                description: 'Extract expression',
+                diff: 'diff',
+                reason: 'setAttribute requires a simple variable reference',
+                unblocksRules: ['NDS-003'],
+                location: { filePath: '/project/src/file.js', startLine: 10, endLine: 12 },
+              },
+            ],
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('setAttribute requires a simple variable reference');
+    });
+
+    it('shows line range in location', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/file.js',
+            status: 'failed',
+            spansAdded: 0,
+            suggestedRefactors: [
+              {
+                description: 'Extract expression',
+                diff: 'diff',
+                reason: 'reason',
+                unblocksRules: ['NDS-003'],
+                location: { filePath: '/project/src/file.js', startLine: 42, endLine: 48 },
+              },
+            ],
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toMatch(/L42[–-]48/);
+    });
+  });
+
   describe('live-check compliance report', () => {
     it('renders end-of-run validation when present', () => {
       const result = _makeRunResult({
