@@ -197,6 +197,28 @@ function findNewEsmPatterns(
     }
   }
 
+  // Check for new exported declarations (export function, export class, export const)
+  const originalExportedNames = new Set<string>();
+  originalSource.forEachChild((node) => {
+    if (Node.isExportable(node) && node.isExported()) {
+      if ('getName' in node && typeof node.getName === 'function') {
+        const name = node.getName();
+        if (name) originalExportedNames.add(name);
+      }
+    }
+  });
+
+  instrumentedSource.forEachChild((node) => {
+    if (Node.isExportable(node) && node.isExported()) {
+      if ('getName' in node && typeof node.getName === 'function') {
+        const name = node.getName();
+        if (name && !originalExportedNames.has(name)) {
+          newEsmLines.push(node.getStartLineNumber());
+        }
+      }
+    }
+  });
+
   return newEsmLines;
 }
 

@@ -1,7 +1,7 @@
 // ABOUTME: NDS-004 Tier 2 check — exported function signature preservation.
 // ABOUTME: Detects when instrumented code adds, removes, or renames parameters on exported functions.
 
-import { Project, Node, SyntaxKind } from 'ts-morph';
+import { Project, Node } from 'ts-morph';
 import type { SourceFile, FunctionDeclaration, VariableStatement } from 'ts-morph';
 import type { CheckResult } from '../types.ts';
 

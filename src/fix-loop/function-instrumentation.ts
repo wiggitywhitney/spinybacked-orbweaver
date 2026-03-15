@@ -72,6 +72,7 @@ function buildTier1OnlyValidationConfig() {
       'NDS-006': { enabled: false, blocking: false },
       'NDS-004': { enabled: false, blocking: false },
       'NDS-005': { enabled: false, blocking: false },
+      'RST-005': { enabled: false, blocking: false },
     },
   };
 }
