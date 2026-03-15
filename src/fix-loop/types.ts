@@ -5,6 +5,36 @@ import type { CheckResult } from '../validation/types.ts';
 import type { LibraryRequirement, SpanCategories, TokenUsage } from '../agent/schema.ts';
 
 /**
+ * Location of a suggested refactor in the user's source code.
+ */
+export interface SuggestedRefactorLocation {
+  /** Absolute file path. */
+  filePath: string;
+  /** First line of the code that needs refactoring (1-based). */
+  startLine: number;
+  /** Last line of the code that needs refactoring (1-based). */
+  endLine: number;
+}
+
+/**
+ * A recommended code refactor the user should make before re-running the agent.
+ * Generated when the agent identifies code patterns that block safe instrumentation
+ * but cannot modify them without violating non-destructive guarantees (NDS-003).
+ */
+export interface SuggestedRefactor {
+  /** Human-readable description of the refactor. */
+  description: string;
+  /** Code diff showing the change (unified diff format). */
+  diff: string;
+  /** Why the agent needs this change to instrument correctly. */
+  reason: string;
+  /** Which validation rule(s) the current code pattern triggers. */
+  unblocksRules: string[];
+  /** File path and line range. */
+  location: SuggestedRefactorLocation;
+}
+
+/**
  * Result of instrumenting a single extracted function.
  * Used during function-level fallback when whole-file instrumentation fails.
  */
@@ -93,4 +123,6 @@ export interface FileResult {
   functionsSkipped?: number;
   /** Per-function detail from function-level fallback (present when status is 'partial'). */
   functionResults?: FunctionResult[];
+  /** Recommended refactors the user should apply before re-running the agent on this file. */
+  suggestedRefactors?: SuggestedRefactor[];
 }

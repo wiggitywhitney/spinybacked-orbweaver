@@ -14,7 +14,8 @@ import { addTokenUsage, totalTokens, estimateMinTokens } from './token-budget.ts
 import { detectOscillation } from './oscillation.ts';
 import { extractExportedFunctions } from './function-extraction.ts';
 import { reassembleFunctions } from './function-reassembly.ts';
-import type { FileResult, FunctionResult, ValidationStrategy } from './types.ts';
+import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
+import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -330,6 +331,11 @@ async function executeRetryLoop(
   let lastConversationContext: ConversationContext | undefined;
   let lastStrategy: ValidationStrategy = 'initial-generation';
 
+  // Track NDS-003 violations and LLM refactors per validation-producing attempt
+  // for persistent violation detection and refactor recommendation collection.
+  const nds003ViolationsPerAttempt: import('../validation/types.ts').CheckResult[][] = [];
+  const llmRefactorsPerAttempt: import('../agent/schema.ts').LlmSuggestedRefactor[][] = [];
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const plannedStrategy = strategyForAttempt(attempt, maxAttempts);
 
@@ -370,10 +376,14 @@ async function executeRetryLoop(
         continue;
       }
 
-      // Terminal failure or last attempt — stop immediately
+      // Terminal failure or last attempt — flush any accumulated refactors
+      const persistentKeys = detectPersistentViolations(nds003ViolationsPerAttempt);
+      const refactors = collectSuggestedRefactors(llmRefactorsPerAttempt, persistentKeys, filePath);
       return buildFailedResult(
         filePath, instrumentResult.error, instrumentResult.error,
         cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+        undefined,
+        refactors.length > 0 ? refactors : undefined,
       );
     }
 
@@ -404,6 +414,12 @@ async function executeRetryLoop(
 
     lastValidation = validation;
     errorProgression.push(summarizeErrors(validation));
+
+    // Track NDS-003 violations and LLM refactors for persistence detection
+    nds003ViolationsPerAttempt.push(
+      validation.blockingFailures.filter(f => f.ruleId === 'NDS-003'),
+    );
+    llmRefactorsPerAttempt.push(output.suggestedRefactors ?? []);
 
     if (validation.passed) {
       return {
@@ -440,10 +456,13 @@ async function executeRetryLoop(
           const lastError = validation.blockingFailures
             .map(f => `${f.ruleId}: ${f.message}`)
             .join('\n');
+          const persistentKeys = detectPersistentViolations(nds003ViolationsPerAttempt);
+          const refactors = collectSuggestedRefactors(llmRefactorsPerAttempt, persistentKeys, filePath);
           return buildFailedResult(
             filePath, reason, lastError, cumulativeTokens,
             attempt, actualStrategy, errorProgression, lastOutput,
             validation.blockingFailures[0]?.ruleId,
+            refactors.length > 0 ? refactors : undefined,
           );
         }
         // Not yet on fresh regen — jump to the final attempt (fresh-regeneration)
@@ -471,10 +490,15 @@ async function executeRetryLoop(
     .map(f => `${f.ruleId}: ${f.message}`)
     .join('\n');
 
+  // Detect persistent NDS-003 violations and collect validator-backed refactor recommendations
+  const persistentKeys = detectPersistentViolations(nds003ViolationsPerAttempt);
+  const suggestedRefactors = collectSuggestedRefactors(llmRefactorsPerAttempt, persistentKeys, filePath);
+
   return buildFailedResult(
     filePath, reason, lastError, cumulativeTokens,
     maxAttempts, lastStrategy, errorProgression, lastOutput,
     lastValidation!.blockingFailures[0]?.ruleId,
+    suggestedRefactors.length > 0 ? suggestedRefactors : undefined,
   );
 }
 
@@ -723,6 +747,7 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
  * @param errorProgression - Error summaries across attempts
  * @param output - Last successful instrumentation output (for metadata)
  * @param firstBlockingRuleId - ruleId of the first blocking failure (for early abort detection)
+ * @param suggestedRefactors - Validator-backed refactor recommendations (when persistent NDS-003 detected)
  * @returns Complete failed FileResult
  */
 function buildFailedResult(
@@ -735,6 +760,7 @@ function buildFailedResult(
   errorProgression?: string[],
   output?: InstrumentationOutput,
   firstBlockingRuleId?: string,
+  suggestedRefactors?: SuggestedRefactor[],
 ): FileResult {
   return {
     path: filePath,
@@ -753,5 +779,6 @@ function buildFailedResult(
     lastError,
     agentVersion: AGENT_VERSION,
     tokenUsage,
+    suggestedRefactors,
   };
 }

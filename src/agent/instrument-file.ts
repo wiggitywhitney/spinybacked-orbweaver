@@ -137,6 +137,7 @@ export async function instrumentFile(
           attributesCreated: 0,
           spanCategories: null,
           notes: [`File already instrumented — all exported functions (${skippedNames}) have existing span patterns. No LLM call made.`],
+          suggestedRefactors: [],
           tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
         },
       };
@@ -231,6 +232,7 @@ export async function instrumentFile(
       attributesCreated: llmOutput.attributesCreated,
       spanCategories: llmOutput.spanCategories,
       notes: llmOutput.notes,
+      suggestedRefactors: llmOutput.suggestedRefactors,
       tokenUsage,
     };
 

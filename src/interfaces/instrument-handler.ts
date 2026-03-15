@@ -1,7 +1,7 @@
 // ABOUTME: Handler for the `orbweaver instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
@@ -142,6 +142,11 @@ export async function handleInstrument(
       } else {
         statusLabel = result.status;
       }
+      const refactorCount = result.suggestedRefactors?.length ?? 0;
+      if (refactorCount > 0) {
+        const noun = refactorCount === 1 ? 'refactor' : 'refactors';
+        statusLabel += ` — ${refactorCount} recommended ${noun}`;
+      }
       deps.stderr(`  ${result.path}: ${statusLabel}`);
     },
     onRunComplete: (results) => {
@@ -232,6 +237,31 @@ export async function handleInstrument(
       `${runResult.filesFailed} failed, ` +
       `${runResult.filesSkipped} skipped`,
     );
+    // Show recommended refactors summary for files that have them
+    const filesWithRefactors = runResult.fileResults.filter(
+      r => r.suggestedRefactors && r.suggestedRefactors.length > 0,
+    );
+    if (filesWithRefactors.length > 0) {
+      deps.stderr('');
+      deps.stderr('Recommended refactors:');
+      for (const file of filesWithRefactors) {
+        deps.stderr(`  ${basename(file.path)}:`);
+        for (const refactor of file.suggestedRefactors!) {
+          deps.stderr(`    - ${refactor.description} [${refactor.unblocksRules.join(', ')}]`);
+          if (options.verbose) {
+            deps.stderr(`      Lines ${refactor.location.startLine}-${refactor.location.endLine}`);
+            deps.stderr(`      Reason: ${refactor.reason}`);
+            deps.stderr(`      Diff:`);
+            for (const line of refactor.diff.split('\n')) {
+              deps.stderr(`        ${line}`);
+            }
+          }
+        }
+      }
+      if (!options.verbose) {
+        deps.stderr('  Run with --verbose for full diffs');
+      }
+    }
     if (runResult.endOfRunValidation) {
       deps.stderr(`Live-check: ${runResult.endOfRunValidation}`);
     }

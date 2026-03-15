@@ -1,7 +1,7 @@
 # PRD: Refactor Recommendations for Uninstrumentable Files
 
 **Issue**: [#111](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/111)
-**Status**: Draft
+**Status**: Complete (2026-03-15)
 **Priority**: Medium
 **Created**: 2026-03-14
 
@@ -104,12 +104,12 @@ Recommendation diffs contain user source code. To avoid leaking sensitive litera
 
 ## Milestones
 
-- [ ] `SuggestedRefactor` type defined in `FileResult` with full test coverage for the type and serialization
-- [ ] LLM output schema extended with `suggestedRefactors` field; prompt guidance instructs LLM to report needed-but-blocked transforms
-- [ ] Fix loop detects persistent NDS-003 patterns across retry attempts and collects refactor recommendations
-- [ ] PR summary renders "Recommended Refactors" section with diffs and unblocked rules
-- [ ] CLI output surfaces recommendation count per file and summary
-- [ ] Integration test: file with known NDS-003-blocking pattern produces correct recommendation with actionable diff
+- [x] `SuggestedRefactor` type defined in `FileResult` with full test coverage for the type and serialization
+- [x] LLM output schema extended with `suggestedRefactors` field; prompt guidance instructs LLM to report needed-but-blocked transforms
+- [x] Fix loop detects persistent NDS-003 patterns across retry attempts and collects refactor recommendations
+- [x] PR summary renders "Recommended Refactors" section with descriptions and unblocked rules (diffs redacted per Redaction section)
+- [x] CLI output surfaces recommendation count per file and summary
+- [x] Integration test: file with known NDS-003-blocking pattern produces correct recommendation with actionable diff
 
 ## Success Criteria
 

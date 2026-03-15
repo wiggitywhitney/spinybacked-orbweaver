@@ -303,6 +303,43 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('schemaExtensions');
     expect(prompt).toContain('spanCategories');
     expect(prompt).toContain('notes');
+    expect(prompt).toContain('suggestedRefactors');
+  });
+
+  describe('suggested refactors guidance', () => {
+    it('instructs LLM to report transforms blocked by NDS-003', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      expect(prompt).toContain('suggestedRefactors');
+      expect(prompt).toContain('NDS-003');
+    });
+
+    it('explains when to report suggested refactors', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      // Should explain the trigger: when instrumentation requires a code change
+      // that would violate non-destructiveness
+      expect(prompt).toContain('cannot instrument');
+    });
+
+    it('specifies the fields to include in each refactor', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      expect(prompt).toContain('description');
+      expect(prompt).toContain('diff');
+      expect(prompt).toContain('reason');
+      expect(prompt).toContain('unblocksRules');
+      expect(prompt).toContain('startLine');
+      expect(prompt).toContain('endLine');
+    });
+
+    it('uses example of const extraction pattern', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      // The most common NDS-003-blocking pattern: expression to const extraction
+      expect(prompt).toContain('const');
+      expect(prompt).toContain('setAttribute');
+    });
   });
 
   it('includes variable shadowing guidance', () => {

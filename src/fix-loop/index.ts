@@ -3,8 +3,9 @@
 
 export { instrumentWithRetry } from './instrument-with-retry.ts';
 export type { InstrumentWithRetryDeps, InstrumentFileCallOptions } from './instrument-with-retry.ts';
-export type { FileResult, FunctionResult, ValidationStrategy } from './types.ts';
+export type { FileResult, FunctionResult, ValidationStrategy, SuggestedRefactor, SuggestedRefactorLocation } from './types.ts';
 export { addTokenUsage, totalTokens } from './token-budget.ts';
 export { extractExportedFunctions } from './function-extraction.ts';
 export type { ExtractedFunction } from './function-extraction.ts';
 export { reassembleFunctions, deduplicateImports } from './function-reassembly.ts';
+export { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';

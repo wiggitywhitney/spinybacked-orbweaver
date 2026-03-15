@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { handleInstrument } from '../../src/interfaces/instrument-handler.ts';
 import type { InstrumentDeps, InstrumentOptions } from '../../src/interfaces/instrument-handler.ts';
 import type { RunResult, CoordinatorCallbacks } from '../../src/coordinator/types.ts';
-import type { FileResult } from '../../src/fix-loop/types.ts';
+import type { FileResult, SuggestedRefactor } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import { CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 import { handleGetCostCeiling, handleInstrumentTool } from '../../src/interfaces/mcp.ts';
@@ -454,6 +454,179 @@ describe('DX verification', () => {
       expect(parsed.estimatedCostDollars).toBeDefined();
       expect(typeof parsed.estimatedCostDollars).toBe('string');
       expect(parsed.estimatedCostDollars).toMatch(/^\$/);
+    });
+  });
+
+  describe('CLI: recommendation output', () => {
+    function makeRefactor(overrides?: Partial<SuggestedRefactor>): SuggestedRefactor {
+      return {
+        description: 'Extract complex expression into a const before setAttribute call',
+        diff: '- setAttribute("key", obj.nested.value)\n+ const val = obj.nested.value;\n+ setAttribute("key", val)',
+        reason: 'setAttribute requires a simple variable reference, not a complex expression',
+        unblocksRules: ['NDS-003'],
+        location: { filePath: '/project/src/context-integrator.js', startLine: 42, endLine: 44 },
+        ...overrides,
+      };
+    }
+
+    function makeFileResultWithRefactors(refactors: SuggestedRefactor[]): FileResult {
+      return {
+        path: '/project/src/context-integrator.js',
+        status: 'failed',
+        spansAdded: 0,
+        attributesCreated: 0,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        validationAttempts: 3,
+        validationStrategyUsed: 'fresh-regeneration',
+        reason: 'NDS-003 violation persisted across all attempts',
+        suggestedRefactors: refactors,
+        tokenUsage: { inputTokens: 3000, outputTokens: 1500, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      };
+    }
+
+    it('shows recommendation count per file in onFileComplete callback', async () => {
+      const refactors = [makeRefactor(), makeRefactor({ description: 'Second refactor' })];
+      const fileResult = makeFileResultWithRefactors(refactors);
+
+      const deps = makeCliDeps();
+      await handleInstrument(makeCliOptions(), deps);
+      const callbacks = (deps.coordinate as ReturnType<typeof vi.fn>).mock.calls[0][2] as CoordinatorCallbacks;
+
+      callbacks.onFileComplete!(fileResult, 0, 1);
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const fileLine = stderrMessages.find((s: string) => s.includes('context-integrator.js'));
+      expect(fileLine).toBeDefined();
+      expect(fileLine).toContain('2 recommended refactors');
+    });
+
+    it('does not show recommendation text when file has no refactors', async () => {
+      const fileResult: FileResult = {
+        path: '/project/src/clean-file.js',
+        status: 'failed',
+        spansAdded: 0,
+        attributesCreated: 0,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        validationAttempts: 3,
+        validationStrategyUsed: 'fresh-regeneration',
+        reason: 'Syntax errors',
+        tokenUsage: { inputTokens: 2000, outputTokens: 1000, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      };
+
+      const deps = makeCliDeps();
+      await handleInstrument(makeCliOptions(), deps);
+      const callbacks = (deps.coordinate as ReturnType<typeof vi.fn>).mock.calls[0][2] as CoordinatorCallbacks;
+
+      callbacks.onFileComplete!(fileResult, 0, 1);
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const fileLine = stderrMessages.find((s: string) => s.includes('clean-file.js'));
+      expect(fileLine).not.toContain('recommended refactor');
+    });
+
+    it('shows recommendation summary after run summary when files have refactors', async () => {
+      const refactors = [makeRefactor()];
+      const fileResult = makeFileResultWithRefactors(refactors);
+      const deps = makeCliDeps({
+        coordinate: vi.fn().mockResolvedValue(makeRunResult({
+          fileResults: [fileResult],
+          filesProcessed: 1,
+          filesFailed: 1,
+        })),
+      });
+      await handleInstrument(makeCliOptions(), deps);
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const refactorSummary = stderrMessages.find(
+        (s: string) => s.includes('Recommended refactors'),
+      );
+      expect(refactorSummary).toBeDefined();
+      // Should include file path
+      expect(stderrMessages.join('\n')).toContain('context-integrator.js');
+      // Should include description
+      expect(stderrMessages.join('\n')).toContain('Extract complex expression');
+    });
+
+    it('does not show recommendation summary when no files have refactors', async () => {
+      const deps = makeCliDeps({
+        coordinate: vi.fn().mockResolvedValue(makeRunResult({
+          fileResults: [{
+            path: '/project/src/clean.js',
+            status: 'success',
+            spansAdded: 2,
+            attributesCreated: 1,
+            librariesNeeded: [],
+            schemaExtensions: [],
+            validationAttempts: 1,
+            validationStrategyUsed: 'initial-generation' as const,
+            tokenUsage: { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+          }],
+          filesProcessed: 1,
+          filesSucceeded: 1,
+        })),
+      });
+      await handleInstrument(makeCliOptions(), deps);
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const refactorLine = stderrMessages.find((s: string) => s.includes('Recommended refactors'));
+      expect(refactorLine).toBeUndefined();
+    });
+
+    it('shows full diffs in verbose mode', async () => {
+      const refactors = [makeRefactor()];
+      const fileResult = makeFileResultWithRefactors(refactors);
+      const deps = makeCliDeps({
+        coordinate: vi.fn().mockResolvedValue(makeRunResult({
+          fileResults: [fileResult],
+          filesProcessed: 1,
+          filesFailed: 1,
+        })),
+      });
+      await handleInstrument(makeCliOptions({ verbose: true }), deps);
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const allOutput = stderrMessages.join('\n');
+      // Verbose shows diffs
+      expect(allOutput).toContain('setAttribute');
+      // Verbose shows location
+      expect(allOutput).toContain('42');
+    });
+
+    it('does not show diffs in non-verbose mode', async () => {
+      const refactors = [makeRefactor()];
+      const fileResult = makeFileResultWithRefactors(refactors);
+      const deps = makeCliDeps({
+        coordinate: vi.fn().mockResolvedValue(makeRunResult({
+          fileResults: [fileResult],
+          filesProcessed: 1,
+          filesFailed: 1,
+        })),
+      });
+      await handleInstrument(makeCliOptions({ verbose: false }), deps);
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const allOutput = stderrMessages.join('\n');
+      // Non-verbose should not show diff content
+      expect(allOutput).not.toContain('setAttribute("key"');
+    });
+
+    it('uses singular form for single refactor', async () => {
+      const refactors = [makeRefactor()];
+      const fileResult = makeFileResultWithRefactors(refactors);
+
+      const deps = makeCliDeps();
+      await handleInstrument(makeCliOptions(), deps);
+      const callbacks = (deps.coordinate as ReturnType<typeof vi.fn>).mock.calls[0][2] as CoordinatorCallbacks;
+
+      callbacks.onFileComplete!(fileResult, 0, 1);
+
+      const stderrMessages = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const fileLine = stderrMessages.find((s: string) => s.includes('context-integrator.js'));
+      expect(fileLine).toContain('1 recommended refactor');
+      // Should NOT have plural "refactors"
+      expect(fileLine).not.toMatch(/1 recommended refactors/);
     });
   });
 
