@@ -7,7 +7,21 @@
  * that an agent can use to fix the identified issue.
  */
 export interface CheckResult {
-  /** Rule identifier (e.g. "ELISION", "SYNTAX", "LINT", "WEAVER", "CDQ-001", "NDS-003"). */
+  /**
+   * Rule identifier matching the scoring checklist spec.
+   *
+   * Tier 1: "ELISION", "NDS-001" (syntax), "LINT", "WEAVER"
+   * Tier 2 — Coverage: "COV-001" through "COV-006"
+   * Tier 2 — Quality: "CDQ-001", "CDQ-006", "CDQ-008"
+   * Tier 2 — Restraint: "RST-001" through "RST-005"
+   * Tier 2 — Non-destructive: "NDS-003" through "NDS-006"
+   * Tier 2 — API: "API-001" through "API-004"
+   * Tier 2 — Schema: "SCH-001" through "SCH-004"
+   *
+   * Note: NDS-002 (tests still pass) is enforced by the coordinator's
+   * schema checkpoint (dispatch.ts), not as a per-file validation check.
+   * It runs the project's test suite at checkpoint intervals.
+   */
   ruleId: string;
   /** Whether this check passed. */
   passed: boolean;
@@ -29,9 +43,9 @@ export interface CheckResult {
 export interface ValidationResult {
   /** Whether all blocking checks passed. */
   passed: boolean;
-  /** Results from Tier 1 structural checks (elision, syntax, lint, Weaver static). */
+  /** Results from Tier 1 structural checks (ELISION, NDS-001, LINT, WEAVER). */
   tier1Results: CheckResult[];
-  /** Results from Tier 2 semantic checks (CDQ-001, NDS-003). */
+  /** Results from Tier 2 semantic checks (CDQ, COV, RST, NDS, API, SCH dimensions). */
   tier2Results: CheckResult[];
   /** All failed blocking checks from both tiers. */
   blockingFailures: CheckResult[];

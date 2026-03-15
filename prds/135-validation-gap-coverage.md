@@ -91,8 +91,8 @@ Require AST diffing between original and instrumented code. More complex to impl
 - [x] NDS-004 signature preservation check: AST-diff exported function signatures before/after instrumentation
 - [x] NDS-005 control flow preservation check: AST-diff try/catch/finally block structure before/after
 - [x] RST-005 post-LLM validation: move double-instrumentation detection into the validation chain (complement to pre-flight)
-- [ ] Naming unification: align SYNTAX→NDS-001, document NDS-002 checkpoint behavior, ensure consistent rule IDs in CheckResult
-- [ ] Tests for all new checks with positive and negative fixtures
+- [x] Naming unification: align SYNTAX→NDS-001, document NDS-002 checkpoint behavior, ensure consistent rule IDs in CheckResult
+- [x] Tests for all new checks with positive and negative fixtures
 
 ## Design Notes
 

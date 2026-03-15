@@ -86,7 +86,7 @@ describe('Phase 2 acceptance gate', () => {
     // Verify feedback format
     const feedback = formatFeedbackForAgent(result);
     expect(feedback).toContain('ELISION | pass');
-    expect(feedback).toContain('SYNTAX | pass');
+    expect(feedback).toContain('NDS-001 | pass');
     expect(feedback).toContain('LINT | pass');
     expect(feedback).toContain('CDQ-001 | pass');
     expect(feedback).toContain('NDS-003 | pass');

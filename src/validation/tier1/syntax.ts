@@ -32,7 +32,7 @@ function parseLineNumber(stderr: string, filePath: string): number | null {
  * writing instrumented code to the file path before calling this.
  *
  * @param filePath - Absolute path to the file to syntax-check
- * @returns CheckResult with ruleId "SYNTAX", tier 1, blocking true
+ * @returns CheckResult with ruleId "NDS-001", tier 1, blocking true
  */
 export function checkSyntax(filePath: string): CheckResult {
   try {
@@ -42,7 +42,7 @@ export function checkSyntax(filePath: string): CheckResult {
     });
 
     return {
-      ruleId: 'SYNTAX',
+      ruleId: 'NDS-001',
       passed: true,
       filePath,
       lineNumber: null,
@@ -64,12 +64,12 @@ export function checkSyntax(filePath: string): CheckResult {
     const lineNumber = parseLineNumber(stderr, filePath);
 
     return {
-      ruleId: 'SYNTAX',
+      ruleId: 'NDS-001',
       passed: false,
       filePath,
       lineNumber,
       message:
-        `SYNTAX check failed: node --check returned a non-zero exit code. ${stderr.trim()} ` +
+        `NDS-001 check failed: node --check returned a non-zero exit code. ${stderr.trim()} ` +
         `Fix the syntax error${lineNumber ? ` at line ${lineNumber}` : ''} and ensure the file is valid JavaScript.`,
       tier: 1,
       blocking: true,

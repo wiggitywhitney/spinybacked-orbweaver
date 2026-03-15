@@ -74,7 +74,7 @@ function makeFailedResult(filePath: string, overrides: Partial<FileResult> = {})
     validationAttempts: 3,
     validationStrategyUsed: 'fresh-regeneration',
     reason: 'Validation failed',
-    lastError: 'SYNTAX: parse error',
+    lastError: 'NDS-001: parse error',
     tokenUsage: { inputTokens: 3000, outputTokens: 1500, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
     ...overrides,
   };

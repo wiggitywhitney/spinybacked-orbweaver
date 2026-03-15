@@ -27,7 +27,7 @@ describe('checkSyntax', () => {
       const result = checkSyntax(filePath);
 
       expect(result.passed).toBe(true);
-      expect(result.ruleId).toBe('SYNTAX');
+      expect(result.ruleId).toBe('NDS-001');
       expect(result.tier).toBe(1);
       expect(result.blocking).toBe(true);
       expect(result.filePath).toBe(filePath);
@@ -76,10 +76,10 @@ describe('checkSyntax', () => {
       const result = checkSyntax(filePath);
 
       expect(result.passed).toBe(false);
-      expect(result.ruleId).toBe('SYNTAX');
+      expect(result.ruleId).toBe('NDS-001');
       expect(result.tier).toBe(1);
       expect(result.blocking).toBe(true);
-      expect(result.message).toContain('SYNTAX');
+      expect(result.message).toContain('NDS-001');
     });
 
     it('includes line number from stderr when available', () => {
@@ -121,7 +121,7 @@ describe('checkSyntax', () => {
 
       const result = checkSyntax(filePath);
       expect(result.passed).toBe(false);
-      expect(result.message).toContain('SYNTAX');
+      expect(result.message).toContain('NDS-001');
     });
   });
 
@@ -133,7 +133,7 @@ describe('checkSyntax', () => {
       const result = checkSyntax(filePath);
 
       expect(result).toEqual({
-        ruleId: 'SYNTAX',
+        ruleId: 'NDS-001',
         passed: true,
         filePath,
         lineNumber: null,

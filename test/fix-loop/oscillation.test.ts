@@ -30,7 +30,7 @@ describe('detectOscillation', () => {
   describe('no previous validation', () => {
     it('returns no oscillation when there is no previous validation', () => {
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js' }),
       ]);
 
       const result = detectOscillation(current, undefined);
@@ -43,32 +43,32 @@ describe('detectOscillation', () => {
   describe('error-count monotonicity', () => {
     it('detects oscillation when error count increases at the same validation stage', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Unexpected token at line 5' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Unexpected token at line 5' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Unexpected token at line 5' }),
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', lineNumber: 10, message: 'Unexpected token at line 10' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Unexpected token at line 5' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', lineNumber: 10, message: 'Unexpected token at line 10' }),
       ]);
 
       const result = detectOscillation(current, previous);
 
       expect(result.shouldSkip).toBe(true);
-      expect(result.reason).toContain('SYNTAX');
+      expect(result.reason).toContain('NDS-001');
       expect(result.reason).toContain('1');
       expect(result.reason).toContain('2');
     });
 
     it('does not detect oscillation when error count decreases at the same stage', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/a.js', message: 'Error 1' }),
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/b.js', message: 'Error 2' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/a.js', message: 'Error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/b.js', message: 'Error 2' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/a.js', message: 'Error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/a.js', message: 'Error 1' }),
       ]);
 
       // Error count decreased: 2 → 1. Duplicate detection also won't fire
-      // because the key sets differ ({SYNTAX:/a.js, SYNTAX:/b.js} vs {SYNTAX:/a.js}).
+      // because the key sets differ ({NDS-001:/a.js, SYNTAX:/b.js} vs {NDS-001:/a.js}).
       const result = detectOscillation(current, previous);
 
       expect(result.shouldSkip).toBe(false);
@@ -76,10 +76,10 @@ describe('detectOscillation', () => {
 
     it('detects oscillation via duplicate errors when count stays the same', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error A' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error A' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error B' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error B' }),
       ]);
 
       // Same count but different errors — monotonicity check passes (count didn't increase).
@@ -94,14 +94,14 @@ describe('detectOscillation', () => {
 
     it('does not apply across different validation stages', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Syntax error' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Syntax error' }),
       ]);
       const current = makeValidation([
         makeCheckResult({ ruleId: 'LINT', filePath: '/test.js', message: 'Lint error 1' }),
         makeCheckResult({ ruleId: 'LINT', filePath: '/test.js', lineNumber: 10, message: 'Lint error 2' }),
       ]);
 
-      // Previous had 1 SYNTAX error, current has 2 LINT errors.
+      // Previous had 1 NDS-001 error, current has 2 LINT errors.
       // Error-count comparison should NOT apply across stages.
       const result = detectOscillation(current, previous);
 
@@ -110,11 +110,11 @@ describe('detectOscillation', () => {
 
     it('checks each stage independently when multiple stages have errors', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Syntax error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Syntax error 1' }),
         makeCheckResult({ ruleId: 'LINT', filePath: '/test.js', message: 'Lint error 1' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Syntax error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Syntax error 1' }),
         makeCheckResult({ ruleId: 'LINT', filePath: '/test.js', message: 'Lint error 1' }),
         makeCheckResult({ ruleId: 'LINT', filePath: '/test.js', lineNumber: 20, message: 'Lint error 2' }),
       ]);
@@ -130,10 +130,10 @@ describe('detectOscillation', () => {
   describe('duplicate error detection', () => {
     it('detects duplicate errors when same ruleId + filePath appear in both attempts', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Unexpected token' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Unexpected token' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Unexpected token' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Unexpected token' }),
       ]);
 
       const result = detectOscillation(current, previous);
@@ -174,7 +174,7 @@ describe('detectOscillation', () => {
 
     it('does not detect duplicates when ruleId differs', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error' }),
       ]);
       const current = makeValidation([
         makeCheckResult({ ruleId: 'LINT', filePath: '/test.js', message: 'Error' }),
@@ -187,10 +187,10 @@ describe('detectOscillation', () => {
 
     it('does not detect duplicates when filePath differs', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/a.js', message: 'Error' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/a.js', message: 'Error' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/b.js', message: 'Error' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/b.js', message: 'Error' }),
       ]);
 
       const result = detectOscillation(current, previous);
@@ -200,12 +200,12 @@ describe('detectOscillation', () => {
 
     it('detects duplicates with multiple errors when all match', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error 1' }),
         makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', message: 'Span issue' }),
       ]);
       const current = makeValidation([
         makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', message: 'Different span issue' }),
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Different syntax error' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Different syntax error' }),
       ]);
 
       const result = detectOscillation(current, previous);
@@ -216,17 +216,17 @@ describe('detectOscillation', () => {
 
     it('does not detect duplicates when error sets only partially overlap', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error 1' }),
         makeCheckResult({ ruleId: 'CDQ-001', filePath: '/test.js', message: 'Span issue' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Same syntax error' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Same syntax error' }),
         makeCheckResult({ ruleId: 'NDS-003', filePath: '/test.js', message: 'New issue', tier: 2 }),
       ]);
 
       const result = detectOscillation(current, previous);
 
-      // Different error sets — not duplicates. SYNTAX count didn't increase.
+      // Different error sets — not duplicates. NDS-001 count didn't increase.
       expect(result.shouldSkip).toBe(false);
     });
   });
@@ -243,7 +243,7 @@ describe('detectOscillation', () => {
 
     it('returns no oscillation when previous had errors but current has none', () => {
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error' }),
       ]);
       const current = makeValidation([]);
 
@@ -255,11 +255,11 @@ describe('detectOscillation', () => {
     it('monotonicity check takes priority over duplicate detection', () => {
       // If error count increased AND errors are duplicated, report the monotonicity violation
       const previous = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error 1' }),
       ]);
       const current = makeValidation([
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', message: 'Error 1' }),
-        makeCheckResult({ ruleId: 'SYNTAX', filePath: '/test.js', lineNumber: 10, message: 'Error 2' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', message: 'Error 1' }),
+        makeCheckResult({ ruleId: 'NDS-001', filePath: '/test.js', lineNumber: 10, message: 'Error 2' }),
       ]);
 
       const result = detectOscillation(current, previous);

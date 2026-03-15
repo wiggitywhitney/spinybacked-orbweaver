@@ -98,7 +98,7 @@ describe('validateFile', () => {
       expect(result.tier1Results).toHaveLength(2);
       expect(result.tier1Results[0].ruleId).toBe('ELISION');
       expect(result.tier1Results[0].passed).toBe(true);
-      expect(result.tier1Results[1].ruleId).toBe('SYNTAX');
+      expect(result.tier1Results[1].ruleId).toBe('NDS-001');
       expect(result.tier1Results[1].passed).toBe(false);
     });
   });
