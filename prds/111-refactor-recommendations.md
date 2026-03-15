@@ -108,7 +108,7 @@ Recommendation diffs contain user source code. To avoid leaking sensitive litera
 - [x] LLM output schema extended with `suggestedRefactors` field; prompt guidance instructs LLM to report needed-but-blocked transforms
 - [x] Fix loop detects persistent NDS-003 patterns across retry attempts and collects refactor recommendations
 - [x] PR summary renders "Recommended Refactors" section with diffs and unblocked rules
-- [ ] CLI output surfaces recommendation count per file and summary
+- [x] CLI output surfaces recommendation count per file and summary
 - [ ] Integration test: file with known NDS-003-blocking pattern produces correct recommendation with actionable diff
 
 ## Success Criteria

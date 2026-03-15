@@ -142,6 +142,11 @@ export async function handleInstrument(
       } else {
         statusLabel = result.status;
       }
+      const refactorCount = result.suggestedRefactors?.length ?? 0;
+      if (refactorCount > 0) {
+        const noun = refactorCount === 1 ? 'refactor' : 'refactors';
+        statusLabel += ` — ${refactorCount} recommended ${noun}`;
+      }
       deps.stderr(`  ${result.path}: ${statusLabel}`);
     },
     onRunComplete: (results) => {
@@ -232,6 +237,32 @@ export async function handleInstrument(
       `${runResult.filesFailed} failed, ` +
       `${runResult.filesSkipped} skipped`,
     );
+    // Show recommended refactors summary for files that have them
+    const filesWithRefactors = runResult.fileResults.filter(
+      r => r.suggestedRefactors && r.suggestedRefactors.length > 0,
+    );
+    if (filesWithRefactors.length > 0) {
+      deps.stderr('');
+      deps.stderr('Recommended refactors:');
+      for (const file of filesWithRefactors) {
+        const basename = file.path.split('/').pop() ?? file.path;
+        deps.stderr(`  ${basename}:`);
+        for (const refactor of file.suggestedRefactors!) {
+          deps.stderr(`    - ${refactor.description} [${refactor.unblocksRules.join(', ')}]`);
+          if (options.verbose) {
+            deps.stderr(`      Lines ${refactor.location.startLine}-${refactor.location.endLine}`);
+            deps.stderr(`      Reason: ${refactor.reason}`);
+            deps.stderr(`      Diff:`);
+            for (const line of refactor.diff.split('\n')) {
+              deps.stderr(`        ${line}`);
+            }
+          }
+        }
+      }
+      if (!options.verbose) {
+        deps.stderr('  Run with --verbose for full diffs');
+      }
+    }
     if (runResult.endOfRunValidation) {
       deps.stderr(`Live-check: ${runResult.endOfRunValidation}`);
     }
