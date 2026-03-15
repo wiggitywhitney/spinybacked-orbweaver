@@ -65,7 +65,14 @@ export function checkOtelApiDependencyPlacement(
   const inDeps = deps && typeof deps === 'object' && '@opentelemetry/api' in deps;
 
   if (isLibrary(pkg)) {
-    // Libraries: must be in peerDependencies
+    // Libraries: must be in peerDependencies only (not also in dependencies)
+    if (inPeerDeps && inDeps) {
+      return [fail(
+        filePath,
+        `API-002: @opentelemetry/api is in both peerDependencies and dependencies for this library project. ` +
+        `Remove it from dependencies to avoid nested copies in node_modules.`,
+      )];
+    }
     if (inPeerDeps) {
       return [pass(filePath, `@opentelemetry/api correctly listed in peerDependencies for library project.`)];
     }
@@ -85,10 +92,15 @@ export function checkOtelApiDependencyPlacement(
     )];
   }
 
-  // Applications: accept either dependencies or peerDependencies
-  if (inDeps || inPeerDeps) {
-    const location = inPeerDeps ? 'peerDependencies' : 'dependencies';
-    return [pass(filePath, `@opentelemetry/api correctly listed in ${location} for application project.`)];
+  // Applications: must be in dependencies (not just peerDependencies)
+  if (inDeps) {
+    return [pass(filePath, `@opentelemetry/api correctly listed in dependencies for application project.`)];
+  }
+  if (inPeerDeps) {
+    return [fail(
+      filePath,
+      `API-002: @opentelemetry/api is in peerDependencies but application projects must list it in dependencies.`,
+    )];
   }
 
   return [fail(
@@ -106,7 +118,7 @@ function pass(filePath: string, message: string): CheckResult {
     lineNumber: null,
     message,
     tier: 2,
-    blocking: true,
+    blocking: false,
   };
 }
 
@@ -118,6 +130,6 @@ function fail(filePath: string, message: string): CheckResult {
     lineNumber: null,
     message,
     tier: 2,
-    blocking: true,
+    blocking: false,
   };
 }

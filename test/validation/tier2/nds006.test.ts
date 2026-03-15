@@ -199,6 +199,40 @@ describe('checkModuleSystemMatch (NDS-006)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags when an ESM file loses its only export signal', () => {
+      const original = [
+        'const app = createApp();',
+        'export default app;',
+      ].join('\n');
+
+      const instrumented = [
+        'const app = createApp();',
+      ].join('\n');
+
+      const failures = checkModuleSystemMatch(original, instrumented, filePath).filter(r => !r.passed);
+
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('NDS-006');
+      expect(failures[0].message).toContain('signal lost');
+    });
+
+    it('flags when a CJS file loses its only require signal', () => {
+      const original = [
+        'const fs = require("fs");',
+        'function read() { return fs.readFileSync("x"); }',
+      ].join('\n');
+
+      const instrumented = [
+        'function read() { return "mock"; }',
+      ].join('\n');
+
+      const failures = checkModuleSystemMatch(original, instrumented, filePath).filter(r => !r.passed);
+
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('NDS-006');
+      expect(failures[0].message).toContain('signal lost');
+    });
   });
 
   describe('mixed module system in original', () => {
@@ -240,7 +274,7 @@ describe('checkModuleSystemMatch (NDS-006)', () => {
         lineNumber: null,
         message: expect.any(String),
         tier: 2,
-        blocking: true,
+        blocking: false,
       });
     });
 
@@ -254,7 +288,7 @@ describe('checkModuleSystemMatch (NDS-006)', () => {
       expect(failure).toBeDefined();
       expect(failure!.ruleId).toBe('NDS-006');
       expect(failure!.tier).toBe(2);
-      expect(failure!.blocking).toBe(true);
+      expect(failure!.blocking).toBe(false);
       expect(failure!.lineNumber).toBeGreaterThan(0);
       expect(failure!.message).toBeTruthy();
     });

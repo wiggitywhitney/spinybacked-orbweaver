@@ -204,7 +204,7 @@ describe('checkForbiddenImports (API-001/003/004)', () => {
       const failures = results.filter(r => !r.passed);
 
       expect(failures).toHaveLength(1);
-      expect(failures[0].ruleId).toBe('API-001');
+      expect(failures[0].ruleId).toBe('API-004');
       expect(failures[0].message).toContain('@opentelemetry/core');
     });
 
@@ -285,7 +285,7 @@ describe('checkForbiddenImports (API-001/003/004)', () => {
         lineNumber: null,
         message: expect.any(String),
         tier: 2,
-        blocking: true,
+        blocking: false,
       });
     });
 
@@ -298,7 +298,7 @@ describe('checkForbiddenImports (API-001/003/004)', () => {
       expect(failure).toBeDefined();
       expect(failure!.ruleId).toBe('API-001');
       expect(failure!.tier).toBe(2);
-      expect(failure!.blocking).toBe(true);
+      expect(failure!.blocking).toBe(false);
       expect(failure!.lineNumber).toBeGreaterThan(0);
       expect(failure!.message).toBeTruthy();
     });

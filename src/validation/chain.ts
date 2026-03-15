@@ -177,22 +177,39 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
 
   // API-001/003/004: Forbidden import detection (combined check)
   // A single scan covers all three rules. Results are tagged with the
-  // specific ruleId (API-001 for OTel SDK imports, API-003 for vendor SDKs).
-  // API-004 (no SDK internal imports) uses the same mechanism as API-001.
-  if (config.tier2Checks['API-001']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkForbiddenImports(instrumentedCode, filePath),
-      config.tier2Checks['API-001'].blocking,
-    ));
+  // specific ruleId. Per-rule config lookup ensures each can be toggled independently.
+  const apiImportChecksEnabled =
+    config.tier2Checks['API-001']?.enabled ||
+    config.tier2Checks['API-003']?.enabled ||
+    config.tier2Checks['API-004']?.enabled;
+
+  if (apiImportChecksEnabled) {
+    for (const result of checkForbiddenImports(instrumentedCode, filePath)) {
+      const ruleConfig = config.tier2Checks[result.ruleId];
+      if (!ruleConfig?.enabled) continue;
+      tier2Results.push(...collectCheckResults([result], ruleConfig.blocking));
+    }
   }
 
   // API-002: Verify @opentelemetry/api dependency placement (library vs app).
   // Requires projectRoot to read package.json.
-  if (config.tier2Checks['API-002']?.enabled && config.projectRoot) {
-    tier2Results.push(...collectCheckResults(
-      checkOtelApiDependencyPlacement(filePath, config.projectRoot),
-      config.tier2Checks['API-002'].blocking,
-    ));
+  if (config.tier2Checks['API-002']?.enabled) {
+    if (config.projectRoot) {
+      tier2Results.push(...collectCheckResults(
+        checkOtelApiDependencyPlacement(filePath, config.projectRoot),
+        config.tier2Checks['API-002'].blocking,
+      ));
+    } else {
+      tier2Results.push({
+        ruleId: 'API-002',
+        passed: true,
+        filePath,
+        lineNumber: null,
+        message: 'API-002: Skipped — projectRoot not configured, cannot read package.json.',
+        tier: 2,
+        blocking: false,
+      });
+    }
   }
 
   // NDS-006: Verify instrumented code uses the same module system as the original.

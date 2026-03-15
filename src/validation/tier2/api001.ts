@@ -15,10 +15,10 @@ import type { CheckResult } from '../types.ts';
  */
 const FORBIDDEN_PATTERNS: Array<{
   pattern: RegExp;
-  ruleId: 'API-001' | 'API-003';
+  ruleId: 'API-001' | 'API-003' | 'API-004';
   category: string;
 }> = [
-  // API-001 / API-004: OTel packages other than @opentelemetry/api
+  // API-001: OTel packages other than @opentelemetry/api
   {
     pattern: /^@opentelemetry\/sdk-/,
     ruleId: 'API-001',
@@ -44,9 +44,10 @@ const FORBIDDEN_PATTERNS: Array<{
     ruleId: 'API-001',
     category: 'OTel constants package',
   },
+  // API-004: OTel SDK internal imports
   {
     pattern: /^@opentelemetry\/core$/,
-    ruleId: 'API-001',
+    ruleId: 'API-004',
     category: 'OTel SDK internal package',
   },
 
@@ -108,7 +109,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
   const violations: Array<{
     line: number;
     pkg: string;
-    ruleId: 'API-001' | 'API-003';
+    ruleId: 'API-001' | 'API-003' | 'API-004';
     category: string;
   }> = [];
 
@@ -157,7 +158,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
       lineNumber: null,
       message: 'No forbidden imports found. Only @opentelemetry/api is used.',
       tier: 2,
-      blocking: true,
+      blocking: false,
     }];
   }
 
@@ -172,7 +173,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
       `SDK configuration, exporters, and vendor SDKs belong in the deployment ` +
       `setup, not in instrumented source files.`,
     tier: 2 as const,
-    blocking: true,
+    blocking: false,
   }));
 }
 
@@ -181,7 +182,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
  */
 function matchForbiddenPackage(
   pkg: string,
-): { ruleId: 'API-001' | 'API-003'; category: string } | null {
+): { ruleId: 'API-001' | 'API-003' | 'API-004'; category: string } | null {
   for (const fp of FORBIDDEN_PATTERNS) {
     if (fp.pattern.test(pkg)) {
       return { ruleId: fp.ruleId, category: fp.category };

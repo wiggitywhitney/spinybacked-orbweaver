@@ -38,6 +38,22 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
       expect(results[0].ruleId).toBe('API-002');
     });
 
+    it('fails when @opentelemetry/api is in both dependencies and peerDependencies for a library', () => {
+      writePackageJson({
+        name: 'my-lib',
+        exports: { '.': './src/index.js' },
+        dependencies: { '@opentelemetry/api': '^1.0.0' },
+        peerDependencies: { '@opentelemetry/api': '^1.0.0' },
+      });
+
+      const results = checkOtelApiDependencyPlacement(filePath, projectRoot);
+      const failures = results.filter(r => !r.passed);
+
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('API-002');
+      expect(failures[0].message).toContain('both');
+    });
+
     it('fails when @opentelemetry/api is in dependencies (not peerDependencies) for a library', () => {
       writePackageJson({
         name: 'my-lib',
@@ -110,7 +126,7 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes when @opentelemetry/api is in peerDependencies for an app', () => {
+    it('fails when @opentelemetry/api is only in peerDependencies for an app', () => {
       writePackageJson({
         name: 'my-app',
         private: true,
@@ -118,9 +134,12 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
       });
 
       const results = checkOtelApiDependencyPlacement(filePath, projectRoot);
+      const failures = results.filter(r => !r.passed);
 
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('API-002');
+      expect(failures[0].message).toContain('peerDependencies');
+      expect(failures[0].message).toContain('must list it in dependencies');
     });
 
     it('fails when @opentelemetry/api is missing entirely from an app', () => {
@@ -221,7 +240,7 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
         lineNumber: null,
         message: expect.any(String),
         tier: 2,
-        blocking: true,
+        blocking: false,
       });
     });
 
@@ -238,7 +257,7 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
       expect(failure).toBeDefined();
       expect(failure!.ruleId).toBe('API-002');
       expect(failure!.tier).toBe(2);
-      expect(failure!.blocking).toBe(true);
+      expect(failure!.blocking).toBe(false);
       expect(failure!.lineNumber).toBeNull();
     });
   });

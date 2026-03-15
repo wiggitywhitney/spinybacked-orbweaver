@@ -264,12 +264,27 @@ export function checkModuleSystemMatch(
     return [passingResult(filePath)];
   }
 
-  // If instrumented matches original system (or is unknown/same), pass
-  if (
-    instrumentedSystem === originalSystem ||
-    instrumentedSystem === 'unknown'
-  ) {
+  // If instrumented matches original system, pass
+  if (instrumentedSystem === originalSystem) {
     return [passingResult(filePath)];
+  }
+
+  // If original had a clear module system but instrumented lost all signals,
+  // that means instrumentation stripped the module system markers — flag it
+  if (instrumentedSystem === 'unknown') {
+    return [{
+      ruleId: 'NDS-006',
+      passed: false as const,
+      filePath,
+      lineNumber: null,
+      message:
+        `NDS-006: Module system signal lost — original uses ${originalSystem.toUpperCase()}, ` +
+        `but instrumented code has no module system signals. ` +
+        `Instrumentation may have removed exports or imports. ` +
+        `Preserve the original file's ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} patterns.`,
+      tier: 2 as const,
+      blocking: false,
+    }];
   }
 
   // Mismatch detected — find the specific offending lines
@@ -308,7 +323,7 @@ export function checkModuleSystemMatch(
       `Instrumented code must use the same module system as the original file. ` +
       `Use ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} for instrumentation additions.`,
     tier: 2 as const,
-    blocking: true,
+    blocking: false,
   }));
 }
 
@@ -320,6 +335,6 @@ function passingResult(filePath: string): CheckResult {
     lineNumber: null,
     message: 'Module system preserved. Instrumented code uses the same module system as the original.',
     tier: 2,
-    blocking: true,
+    blocking: false,
   };
 }

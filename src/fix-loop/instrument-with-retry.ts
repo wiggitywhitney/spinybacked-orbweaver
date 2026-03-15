@@ -131,10 +131,10 @@ function buildValidationConfig(config: AgentConfig, projectRoot?: string) {
       'SCH-002': { enabled: true, blocking: true },
       'SCH-003': { enabled: true, blocking: true },
       'SCH-004': { enabled: true, blocking: false },
-      // PRD #135 checks
-      'API-001': { enabled: true, blocking: true },
-      'API-002': { enabled: true, blocking: true },
-      'NDS-006': { enabled: true, blocking: true },
+      // PRD #135 checks (advisory for initial rollout)
+      'API-001': { enabled: true, blocking: false },
+      'API-002': { enabled: true, blocking: false },
+      'NDS-006': { enabled: true, blocking: false },
       'NDS-004': { enabled: true, blocking: false },
       'NDS-005': { enabled: true, blocking: false },
       'RST-005': { enabled: true, blocking: false },
