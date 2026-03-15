@@ -62,9 +62,8 @@ export async function checkSpanNamesMatchRegistry(
   const registry = parseResolvedRegistry(resolvedSchema);
   const spanDefs = getSpanDefinitions(registry);
 
-  // Extract span name literals from code
-  const spanNames = extractSpanNames(code);
-  const nonLiteralCount = countNonLiteralSpanNames(code);
+  // Extract span info in a single AST pass
+  const { literalNames: spanNames, nonLiteralCount } = extractSpanInfo(code);
 
   if (spanNames.length === 0 && nonLiteralCount === 0) {
     return { results: [pass(filePath, 'No span calls found to check.')], judgeTokenUsage: [] };
@@ -288,73 +287,28 @@ function hasUnboundedCardinality(name: string): boolean {
 }
 
 /**
- * Extract span name string literals from startActiveSpan/startSpan calls.
+ * Result of a single AST pass over span-creating calls.
+ * Consolidates literal name extraction and non-literal counting
+ * to avoid parsing the same code twice.
  */
-function extractSpanNames(code: string): SpanNameEntry[] {
+interface SpanInfo {
+  literalNames: SpanNameEntry[];
+  nonLiteralCount: number;
+}
+
+/**
+ * Extract span info from startActiveSpan/startSpan calls in a single AST pass.
+ * Returns both literal span name entries and a count of non-literal (dynamic) span names.
+ */
+function extractSpanInfo(code: string): SpanInfo {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
   const sourceFile = project.createSourceFile('check.js', code);
 
-  const entries: SpanNameEntry[] = [];
-
-  sourceFile.forEachDescendant((node) => {
-    if (!Node.isCallExpression(node)) return;
-
-    const expr = node.getExpression();
-    const text = expr.getText();
-
-    if (!text.endsWith('.startActiveSpan') && !text.endsWith('.startSpan')) return;
-
-    const spanName = getSpanNameLiteral(node);
-    if (spanName) {
-      entries.push({ name: spanName, line: node.getStartLineNumber() });
-    }
-  });
-
-  return entries;
-}
-
-/**
- * Extract the span name as a static string from a startActiveSpan/startSpan call.
- * Accepts both string literals ("name") and no-substitution template literals (`name`).
- */
-function getSpanNameLiteral(callExpr: CallExpression): string | null {
-  const args = callExpr.getArguments();
-  if (args.length === 0) return null;
-
-  const firstArg = args[0];
-  if (Node.isStringLiteral(firstArg)) {
-    return firstArg.getLiteralValue();
-  }
-  if (Node.isNoSubstitutionTemplateLiteral(firstArg)) {
-    return firstArg.getLiteralValue();
-  }
-  return null;
-}
-
-/**
- * Check if a node is a static span name — either a string literal or
- * a no-substitution template literal (backtick string without ${}).
- */
-function isStaticSpanName(node: import('ts-morph').Node): boolean {
-  return Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node);
-}
-
-/**
- * Count startActiveSpan/startSpan calls where the first argument is NOT a static string.
- * Template literals with substitutions, variables, and concatenations indicate unbounded cardinality.
- * No-substitution template literals (`name`) are treated as static — same as string literals.
- */
-function countNonLiteralSpanNames(code: string): number {
-  const project = new Project({
-    compilerOptions: { allowJs: true },
-    useInMemoryFileSystem: true,
-  });
-  const sourceFile = project.createSourceFile('check-nonlit.js', code);
-
-  let count = 0;
+  const literalNames: SpanNameEntry[] = [];
+  let nonLiteralCount = 0;
 
   sourceFile.forEachDescendant((node) => {
     if (!Node.isCallExpression(node)) return;
@@ -367,12 +321,17 @@ function countNonLiteralSpanNames(code: string): number {
     const args = node.getArguments();
     if (args.length === 0) return;
 
-    if (!isStaticSpanName(args[0])) {
-      count++;
+    const firstArg = args[0];
+    if (Node.isStringLiteral(firstArg)) {
+      literalNames.push({ name: firstArg.getLiteralValue(), line: node.getStartLineNumber() });
+    } else if (Node.isNoSubstitutionTemplateLiteral(firstArg)) {
+      literalNames.push({ name: firstArg.getLiteralValue(), line: node.getStartLineNumber() });
+    } else {
+      nonLiteralCount++;
     }
   });
 
-  return count;
+  return { literalNames, nonLiteralCount };
 }
 
 function pass(filePath: string, message: string): CheckResult {
