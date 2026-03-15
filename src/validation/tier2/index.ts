@@ -30,6 +30,7 @@ export type {
 } from './registry-types.ts';
 export { checkForbiddenImports } from './api001.ts';
 export { checkModuleSystemMatch } from './nds006.ts';
+export { checkExportedSignaturePreservation } from './nds004.ts';
 export {
   parseResolvedRegistry,
   getSpanDefinitions,

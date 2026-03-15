@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-15) NDS-004 exported function signature preservation check (PRD #135, milestone 4): Tier 2 advisory check using ts-morph AST analysis to compare exported function parameter lists before/after instrumentation. Detects added, removed, and renamed parameters on ESM exports (function declarations, arrow functions, default exports) and CJS exports (exports.prop, module.exports). Wired into validation chain, index, and both config locations. 15 tests covering preserved signatures, parameter changes, missing functions, CJS patterns, and arrow exports
+
 - (2026-03-15) NDS-006 module system preservation check (PRD #135, milestone 3): Tier 2 check using ts-morph AST analysis to detect ESM (import/export) vs CJS (require/module.exports) in original code and flag when instrumented output introduces the wrong module system. Handles mixed and ambiguous originals gracefully. Wired into validation chain and both config locations. 13 tests covering ESM/CJS matching, mismatches, ambiguous files, and mixed originals
 
 - (2026-03-15) API-002 post-instrumentation dependency placement verification (PRD #135, milestone 2): Tier 2 check verifying @opentelemetry/api is in peerDependencies (library projects) or dependencies (app projects). Project type detection via package.json heuristics (private field, main/exports/module/types fields). Threaded projectRoot through ValidationConfig, instrumentWithRetry, and dispatchFiles. 15 tests covering library/app scenarios, edge cases, and error handling

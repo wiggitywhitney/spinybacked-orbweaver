@@ -26,6 +26,7 @@ import { checkNoRedundantSchemaEntries } from './tier2/sch004.ts';
 import { checkForbiddenImports } from './tier2/api001.ts';
 import { checkOtelApiDependencyPlacement } from './tier2/api002.ts';
 import { checkModuleSystemMatch } from './tier2/nds006.ts';
+import { checkExportedSignaturePreservation } from './tier2/nds004.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -197,6 +198,14 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     tier2Results.push(...collectCheckResults(
       checkModuleSystemMatch(originalCode, instrumentedCode, filePath),
       config.tier2Checks['NDS-006'].blocking,
+    ));
+  }
+
+  // NDS-004: Verify exported function signatures are preserved after instrumentation.
+  if (config.tier2Checks['NDS-004']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkExportedSignaturePreservation(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['NDS-004'].blocking,
     ));
   }
 
