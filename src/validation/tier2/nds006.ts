@@ -117,6 +117,16 @@ function findNewCjsPatterns(
         originalRequireLines.add(node.getText());
       }
     }
+
+    if (Node.isPropertyAccessExpression(node)) {
+      const text = node.getText();
+      if (text.startsWith('module.exports') || text.startsWith('exports.')) {
+        const parent = node.getParent();
+        if (parent && Node.isBinaryExpression(parent) && parent.getLeft() === node) {
+          originalExportLines.add(text);
+        }
+      }
+    }
   });
 
   const newCjsLines: number[] = [];
@@ -170,17 +180,19 @@ function findNewEsmPatterns(
     }
   }
 
-  // Check for new export declarations
-  const originalExportCount = originalSource.getExportDeclarations().length +
-    originalSource.getExportAssignments().length;
-  const instrExportCount = instrumentedSource.getExportDeclarations().length +
-    instrumentedSource.getExportAssignments().length;
+  // Check for new export declarations (by text content)
+  const originalExportTexts = new Set([
+    ...originalSource.getExportDeclarations().map(e => e.getText()),
+    ...originalSource.getExportAssignments().map(e => e.getText()),
+  ]);
 
-  if (instrExportCount > originalExportCount) {
-    for (const exp of instrumentedSource.getExportDeclarations()) {
+  for (const exp of instrumentedSource.getExportDeclarations()) {
+    if (!originalExportTexts.has(exp.getText())) {
       newEsmLines.push(exp.getStartLineNumber());
     }
-    for (const exp of instrumentedSource.getExportAssignments()) {
+  }
+  for (const exp of instrumentedSource.getExportAssignments()) {
+    if (!originalExportTexts.has(exp.getText())) {
       newEsmLines.push(exp.getStartLineNumber());
     }
   }
@@ -270,7 +282,7 @@ export function checkModuleSystemMatch(
     message:
       `NDS-006: Module system mismatch — original uses ${originalSystem.toUpperCase()}, ` +
       `but instrumented code introduces ${originalSystem === 'esm' ? 'CJS' : 'ESM'} patterns. ` +
-      `${v.description} at line ${v.line}. ` +
+      `${v.description}${v.line > 0 ? ` at line ${v.line}` : ''}. ` +
       `Instrumented code must use the same module system as the original file. ` +
       `Use ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} for instrumentation additions.`,
     tier: 2 as const,
