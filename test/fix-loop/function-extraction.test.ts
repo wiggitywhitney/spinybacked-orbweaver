@@ -159,6 +159,134 @@ describe('extractExportedFunctions', () => {
     });
   });
 
+  describe('re-export block pattern (export { a, b, c })', () => {
+    it('extracts functions exported via re-export block', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('reexport.js', `
+import { ChatAnthropic } from '@langchain/anthropic';
+
+const MODEL_TEMP = 0.7;
+
+async function summaryNode(state) {
+  const { context } = state;
+  const model = new ChatAnthropic({ temperature: MODEL_TEMP });
+  const result = await model.invoke([]);
+  return { summary: result.content };
+}
+
+async function technicalNode(state) {
+  const { context } = state;
+  const model = new ChatAnthropic({ temperature: 0.1 });
+  const result = await model.invoke([]);
+  return { technical: result.content };
+}
+
+function trivialHelper() {
+  return 42;
+}
+
+export { summaryNode, technicalNode, trivialHelper };
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      const names = result.map(f => f.name);
+
+      // summaryNode and technicalNode have 4 statements each — should be extracted
+      expect(names).toContain('summaryNode');
+      expect(names).toContain('technicalNode');
+      // trivialHelper has 1 statement — should be filtered as trivial
+      expect(names).not.toContain('trivialHelper');
+    });
+
+    it('tracks dependencies for re-exported functions', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('reexport-deps.js', `
+import { readFile } from 'node:fs/promises';
+
+const BASE_PATH = '/data';
+
+async function loadData(name) {
+  const fullPath = BASE_PATH + '/' + name;
+  const content = await readFile(fullPath, 'utf-8');
+  const parsed = JSON.parse(content);
+  return parsed;
+}
+
+export { loadData };
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      expect(result.length).toBe(1);
+
+      const fn = result[0];
+      expect(fn.name).toBe('loadData');
+      expect(fn.isAsync).toBe(true);
+      expect(fn.referencedConstants).toContain('BASE_PATH');
+      expect(fn.referencedImports).toContain('readFile');
+    });
+
+    it('extracts functions whose body is a single try-catch (common async pattern)', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      // This mirrors the journal-graph.js pattern: async function with try/catch wrapper
+      const sourceFile = project.createSourceFile('trycatch-pattern.js', `
+async function nodeHandler(state) {
+  try {
+    const { context } = state;
+    const model = getModel(0.7);
+    const result = await model.invoke([]);
+    const cleaned = cleanOutput(result.content);
+    return { output: cleaned };
+  } catch (error) {
+    return { output: '[Generation failed]', errors: [error.message] };
+  }
+}
+
+export { nodeHandler };
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      // The function has 1 top-level statement (try/catch) but is clearly non-trivial
+      expect(result.length).toBe(1);
+      expect(result[0].name).toBe('nodeHandler');
+    });
+
+    it('handles mixed export styles (inline export + re-export block)', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('mixed-exports.js', `
+export async function inlineExported(a, b) {
+  const x = a + b;
+  const y = x * 2;
+  const z = y - 1;
+  return z;
+}
+
+async function reExported(a, b) {
+  const x = a + b;
+  const y = x * 2;
+  const z = y - 1;
+  return z;
+}
+
+export { reExported };
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      const names = result.map(f => f.name);
+
+      expect(names).toContain('inlineExported');
+      expect(names).toContain('reExported');
+      expect(result.length).toBe(2);
+    });
+  });
+
   describe('edge cases', () => {
     it('returns empty array for file with no exported functions', () => {
       const project = new Project({

@@ -174,26 +174,28 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ## Auto-Instrumentation Library Allowlist
 
-These framework packages have trusted auto-instrumentation libraries. When detected in imports, record the library need in \`librariesNeeded\` — do not add manual spans for their specific framework calls.
+These framework packages have trusted auto-instrumentation libraries. When detected in imports, record the library need in \`librariesNeeded\`.
+
+**IMPORTANT**: Auto-instrumentation covers low-level framework calls (HTTP requests, DB queries, LLM API calls) but does NOT cover application-level orchestration logic. You should STILL add manual spans to functions that orchestrate these calls — the auto-instrumented calls become child spans of your manual spans, giving visibility into both the application flow and the framework internals.
 
 **Core (@opentelemetry/auto-instrumentations-node):**
 pg, mysql, mysql2, mongodb, redis, ioredis, express, fastify, koa, @hapi/hapi, @grpc/grpc-js, http, https, node:http, node:https, mongoose, kafkajs, pino
 
 **OpenLLMetry (individual @traceloop/instrumentation-* packages):**
-| Framework Import | Instrumentation Package | Import Name |
-|---|---|---|
-| @anthropic-ai/sdk | @traceloop/instrumentation-anthropic | AnthropicInstrumentation |
-| openai | @traceloop/instrumentation-openai | OpenAIInstrumentation |
-| @aws-sdk/client-bedrock-runtime | @traceloop/instrumentation-bedrock | BedrockInstrumentation |
-| @google-cloud/vertexai | @traceloop/instrumentation-vertexai | VertexAIInstrumentation |
-| cohere-ai | @traceloop/instrumentation-cohere | CohereInstrumentation |
-| together-ai | @traceloop/instrumentation-together | TogetherInstrumentation |
-| langchain / @langchain/* | @traceloop/instrumentation-langchain | LangChainInstrumentation |
-| llamaindex | @traceloop/instrumentation-llamaindex | LlamaIndexInstrumentation |
-| @modelcontextprotocol/sdk | @traceloop/instrumentation-mcp | MCPInstrumentation |
-| @pinecone-database/pinecone | @traceloop/instrumentation-pinecone | PineconeInstrumentation |
-| chromadb | @traceloop/instrumentation-chromadb | ChromaDBInstrumentation |
-| @qdrant/js-client-rest | @traceloop/instrumentation-qdrant | QdrantInstrumentation |
+| Framework Import | Instrumentation Package | Import Name | Covers |
+|---|---|---|---|
+| @anthropic-ai/sdk | @traceloop/instrumentation-anthropic | AnthropicInstrumentation | API calls (messages.create). NOT application logic calling the SDK. |
+| openai | @traceloop/instrumentation-openai | OpenAIInstrumentation | API calls (chat.completions.create). NOT application logic calling the SDK. |
+| @aws-sdk/client-bedrock-runtime | @traceloop/instrumentation-bedrock | BedrockInstrumentation | Bedrock API calls. NOT application orchestration. |
+| @google-cloud/vertexai | @traceloop/instrumentation-vertexai | VertexAIInstrumentation | Vertex AI API calls. NOT application orchestration. |
+| cohere-ai | @traceloop/instrumentation-cohere | CohereInstrumentation | Cohere API calls. NOT application orchestration. |
+| together-ai | @traceloop/instrumentation-together | TogetherInstrumentation | Together AI API calls. NOT application orchestration. |
+| langchain / @langchain/* | @traceloop/instrumentation-langchain | LangChainInstrumentation | model.invoke(), chain.invoke() calls. NOT custom graph nodes, state transitions, or orchestration functions. |
+| llamaindex | @traceloop/instrumentation-llamaindex | LlamaIndexInstrumentation | LlamaIndex query/retrieval calls. NOT application orchestration. |
+| @modelcontextprotocol/sdk | @traceloop/instrumentation-mcp | MCPInstrumentation | MCP tool calls and protocol messages. NOT application handlers. |
+| @pinecone-database/pinecone | @traceloop/instrumentation-pinecone | PineconeInstrumentation | Vector DB operations (upsert, query). NOT application logic. |
+| chromadb | @traceloop/instrumentation-chromadb | ChromaDBInstrumentation | Vector DB operations. NOT application logic. |
+| @qdrant/js-client-rest | @traceloop/instrumentation-qdrant | QdrantInstrumentation | Vector DB operations. NOT application logic. |
 
 ${EXAMPLES_SECTION}
 

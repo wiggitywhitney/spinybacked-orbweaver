@@ -60,7 +60,7 @@ export function extractExportedFunctions(sourceFile: SourceFile): ExtractedFunct
   for (const fn of sourceFile.getFunctions()) {
     if (!fn.isExported()) continue;
     const bodyText = fn.getBody()?.getText() ?? '';
-    if (!isWorthInstrumenting(bodyText, fn.getStatements().length)) continue;
+    if (!isWorthInstrumenting(bodyText, effectiveStatementCount(fn.getStatements()))) continue;
 
     const fullText = getFullFunctionText(fn, sourceFile);
     const jsDoc = getJsDocText(fn);
@@ -95,7 +95,8 @@ export function extractExportedFunctions(sourceFile: SourceFile): ExtractedFunct
       // For arrow functions, count statements from the body block
       let statementCount = 0;
       if (body && body.getKind() === SyntaxKind.Block) {
-        statementCount = (body as unknown as { getStatements(): unknown[] }).getStatements().length;
+        const statements = (body as unknown as { getStatements(): { getKind(): SyntaxKind; getTryBlock?(): { getStatements(): unknown[] } }[] }).getStatements();
+        statementCount = effectiveStatementCount(statements);
       } else {
         // Expression body (e.g., `() => expr`) counts as 1 statement
         statementCount = 1;
@@ -219,6 +220,23 @@ function findReferencedIdentifiers(
     new RegExp(`\\b${escapeRegex(name)}\\b`).test(bodyText),
   );
   return { constants, imports };
+}
+
+/**
+ * Count the effective number of statements in a function body.
+ * When the body is a single try-catch (common async pattern), counts the
+ * statements inside the try block instead of just counting 1 top-level statement.
+ * This prevents filtering out non-trivial functions like LangGraph node handlers
+ * that wrap their entire body in try/catch.
+ */
+function effectiveStatementCount(statements: { getKind(): SyntaxKind; getTryBlock?(): { getStatements(): unknown[] } }[]): number {
+  if (statements.length === 1 && statements[0].getKind() === SyntaxKind.TryStatement) {
+    const tryBlock = (statements[0] as unknown as { getTryBlock(): { getStatements(): unknown[] } }).getTryBlock();
+    if (tryBlock) {
+      return tryBlock.getStatements().length;
+    }
+  }
+  return statements.length;
 }
 
 /** Check if a function is worth instrumenting (not trivial, not already instrumented). */
