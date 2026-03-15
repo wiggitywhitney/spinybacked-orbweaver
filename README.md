@@ -11,7 +11,7 @@ Spinybacked Orbweaver is an AI agent that adds OpenTelemetry instrumentation to 
 
 1. **Analyzes** each file to identify what should be instrumented — external calls (HTTP, DB, message queues), schema-defined spans, and service entry points
 2. **Generates** complete instrumented files using an LLM, preferring auto-instrumentation libraries over manual spans
-3. **Validates** every change against a two-tier rubric (31 rules covering syntax, non-destructiveness, coverage, restraint, schema fidelity, and code quality) — reverting any file that fails
+3. **Validates** every change against a two-tier rubric ([32 rules](research/evaluation-rubric.md) covering syntax, non-destructiveness, coverage, restraint, schema fidelity, and code quality) — reverting any file that fails
 4. **Retries** intelligently — multi-turn fixes with validation feedback, fresh regeneration with failure hints, and function-level fallback that decomposes complex files into individual functions when whole-file attempts are exhausted
 5. **Commits** each file individually on a feature branch, installs dependencies, and opens a PR with a detailed summary
 
