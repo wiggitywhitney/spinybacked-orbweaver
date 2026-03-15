@@ -21,6 +21,7 @@ export { checkSpanNamesMatchRegistry } from './sch001.ts';
 export { checkAttributeKeysMatchRegistry } from './sch002.ts';
 export { checkAttributeValuesConformToTypes } from './sch003.ts';
 export { checkNoRedundantSchemaEntries } from './sch004.ts';
+export type { Sch004JudgeDeps, Sch004Result } from './sch004.ts';
 export type {
   ResolvedRegistry,
   ResolvedRegistryGroup,

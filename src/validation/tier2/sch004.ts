@@ -3,7 +3,11 @@
 
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { CheckResult } from '../types.ts';
+import type { TokenUsage } from '../../agent/schema.ts';
+import { callJudge } from '../judge.ts';
+import type { JudgeOptions } from '../judge.ts';
 import { parseResolvedRegistry, getAllAttributeNames } from './registry-types.ts';
 
 interface RedundancyFlag {
@@ -14,47 +18,66 @@ interface RedundancyFlag {
 }
 
 /**
+ * Optional judge dependencies for semantic equivalence detection.
+ * When provided, novel keys that the script's Jaccard similarity misses
+ * are sent to the LLM judge for semantic evaluation.
+ */
+export interface Sch004JudgeDeps {
+  client: Anthropic;
+  options?: JudgeOptions;
+}
+
+/**
+ * Result of SCH-004 check including judge token usage for cost tracking.
+ */
+export interface Sch004Result {
+  results: CheckResult[];
+  judgeTokenUsage: TokenUsage[];
+}
+
+/**
  * SCH-004: Flag attribute keys that may be redundant with existing registry entries.
  *
- * For each setAttribute key NOT in the registry, computes Jaccard similarity
- * on delimiter-split tokens against all registry attribute names. Flags matches
- * above 0.5 threshold.
- *
- * This is semi-automatable — string/token similarity catches obvious duplicates
- * (e.g., "http_request_duration" vs "http.request.duration") but not semantic
- * equivalence across different naming conventions.
+ * Two-tier detection:
+ * 1. Script: Jaccard token similarity >0.5 catches obvious duplicates
+ *    (e.g., "http_request_duration" vs "http.request.duration")
+ * 2. Judge (optional): For novel keys the script misses, an LLM judge
+ *    evaluates semantic equivalence (e.g., "request.latency" ≈ "http.request.duration")
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @param resolvedSchema - Resolved Weaver registry object
- * @returns CheckResult[] — one per finding (or a single passing result), ruleId "SCH-004", tier 2, blocking false (advisory)
+ * @param judgeDeps - Optional judge dependencies (Anthropic client). When absent, runs script-only.
+ * @returns Sch004Result with check results and judge token usage for cost tracking
  */
-export function checkNoRedundantSchemaEntries(
+export async function checkNoRedundantSchemaEntries(
   code: string,
   filePath: string,
   resolvedSchema: object,
-): CheckResult[] {
+  judgeDeps?: Sch004JudgeDeps,
+): Promise<Sch004Result> {
   const registry = parseResolvedRegistry(resolvedSchema);
   const registryNames = getAllAttributeNames(registry);
 
   if (registryNames.size === 0) {
-    return [pass(filePath, 'No registry attributes to check for redundancy.')];
+    return { results: [pass(filePath, 'No registry attributes to check for redundancy.')], judgeTokenUsage: [] };
   }
 
   const usedKeys = extractAttributeKeys(code);
 
   if (usedKeys.length === 0) {
-    return [pass(filePath, 'No setAttribute calls found to check.')];
+    return { results: [pass(filePath, 'No setAttribute calls found to check.')], judgeTokenUsage: [] };
   }
 
   // Only check keys that are NOT already in the registry
   const novelKeys = usedKeys.filter((k) => !registryNames.has(k.key));
 
   if (novelKeys.length === 0) {
-    return [pass(filePath, 'All attribute keys are registered — no redundancy concerns.')];
+    return { results: [pass(filePath, 'All attribute keys are registered — no redundancy concerns.')], judgeTokenUsage: [] };
   }
 
-  const flags: RedundancyFlag[] = [];
+  const scriptFlags: RedundancyFlag[] = [];
+  const unflaggedNovelKeys: AttributeKeyEntry[] = [];
   const registryNameList = [...registryNames];
 
   for (const entry of novelKeys) {
@@ -70,20 +93,19 @@ export function checkNoRedundantSchemaEntries(
     }
 
     if (bestMatch) {
-      flags.push({
+      scriptFlags.push({
         key: entry.key,
         line: entry.line,
         similarTo: bestMatch.name,
         similarity: bestMatch.similarity,
       });
+    } else {
+      unflaggedNovelKeys.push(entry);
     }
   }
 
-  if (flags.length === 0) {
-    return [pass(filePath, 'No obviously redundant attribute keys detected.')];
-  }
-
-  return flags.map((f) => ({
+  // Script results — these are the Jaccard similarity flags
+  const scriptResults: CheckResult[] = scriptFlags.map((f) => ({
     ruleId: 'SCH-004',
     passed: false,
     filePath,
@@ -91,9 +113,57 @@ export function checkNoRedundantSchemaEntries(
     message:
       `Attribute key "${f.key}" at line ${f.line} may be redundant with registry entry "${f.similarTo}" (${Math.round(f.similarity * 100)}% token overlap). ` +
       `Consider using the existing registry attribute instead of creating a new one.`,
-    tier: 2,
+    tier: 2 as const,
     blocking: false,
   }));
+
+  // Judge pass — for novel keys the script missed, ask the LLM judge
+  const judgeResults: CheckResult[] = [];
+  const judgeTokenUsage: TokenUsage[] = [];
+
+  if (judgeDeps && unflaggedNovelKeys.length > 0) {
+    for (const entry of unflaggedNovelKeys) {
+      const result = await callJudge(
+        {
+          ruleId: 'SCH-004',
+          context: `Novel attribute key "${entry.key}" at line ${entry.line} is not in the registry and has no high token-similarity match.`,
+          question: `Does attribute "${entry.key}" capture the same concept as any of the registered attribute keys? If yes, which one should be used instead?`,
+          candidates: registryNameList,
+        },
+        judgeDeps.client,
+        judgeDeps.options,
+      );
+
+      if (result) {
+        judgeTokenUsage.push(result.tokenUsage);
+
+        if (!result.verdict.answer) {
+          // Judge says this IS a semantic duplicate
+          const suggestion = result.verdict.suggestion ?? 'Use the matching registry key.';
+          judgeResults.push({
+            ruleId: 'SCH-004',
+            passed: false,
+            filePath,
+            lineNumber: entry.line,
+            message:
+              `Attribute key "${entry.key}" at line ${entry.line} appears to be a semantic duplicate of an existing registry entry (judge confidence: ${Math.round(result.verdict.confidence * 100)}%). ` +
+              suggestion,
+            tier: 2,
+            blocking: false,
+          });
+        }
+      }
+      // If result is null (judge failure), silently skip — graceful fallback to script-only
+    }
+  }
+
+  const allResults = [...scriptResults, ...judgeResults];
+
+  if (allResults.length === 0) {
+    return { results: [pass(filePath, 'No obviously redundant attribute keys detected.')], judgeTokenUsage };
+  }
+
+  return { results: allResults, judgeTokenUsage };
 }
 
 /**

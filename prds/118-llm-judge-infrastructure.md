@@ -119,7 +119,7 @@ If the judge is unavailable (API error, cost limit), the script's existing behav
 ## Milestones
 
 - [x] Judge infrastructure: `src/validation/judge.ts` with LLM call, cost tracking, graceful fallback, and test coverage
-- [ ] SCH-004 judge integration: semantic equivalence check for flagged novel attribute keys, with advisory feedback including concrete "use X instead" suggestions
+- [x] SCH-004 judge integration: semantic equivalence check for flagged novel attribute keys, with advisory feedback including concrete "use X instead" suggestions
 - [ ] SCH-001 judge integration: naming quality assessment in fallback mode, with convention-following suggestions
 - [ ] NDS-005 script: AST detection of structural changes to pre-existing error handling blocks
 - [ ] NDS-005 judge integration: semantic preservation check for flagged error handling changes, feeding into refactor recommendations

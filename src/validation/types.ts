@@ -1,6 +1,9 @@
 // ABOUTME: Shared type definitions for the validation chain.
 // ABOUTME: Defines CheckResult, ValidationResult, ValidationConfig, and ValidateFileInput.
 
+import type Anthropic from '@anthropic-ai/sdk';
+import type { TokenUsage } from '../agent/schema.ts';
+
 /**
  * Result of a single validation check.
  * Designed for LLM consumption — every field provides actionable information
@@ -51,6 +54,8 @@ export interface ValidationResult {
   blockingFailures: CheckResult[];
   /** All failed advisory checks from Tier 2. */
   advisoryFindings: CheckResult[];
+  /** Token usage from LLM judge calls (SCH-004, SCH-001, NDS-005). Tracked separately from instrumentation costs. */
+  judgeTokenUsage?: TokenUsage[];
 }
 
 /**
@@ -78,6 +83,8 @@ export interface ValidationConfig {
   resolvedSchema?: object;
   /** Absolute path to project root. Required for API-002 dependency placement check. */
   projectRoot?: string;
+  /** Anthropic client for LLM judge calls. When provided, semi-automatable rules use judge for semantic evaluation. */
+  anthropicClient?: Anthropic;
 }
 
 /**

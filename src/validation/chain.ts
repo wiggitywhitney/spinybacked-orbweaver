@@ -48,6 +48,7 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   const { originalCode, instrumentedCode, filePath, config } = input;
   const tier1Results: CheckResult[] = [];
   const tier2Results: CheckResult[] = [];
+  const judgeTokenUsage: import('../agent/schema.ts').TokenUsage[] = [];
 
   // --- Tier 1: Structural checks (short-circuit on first failure) ---
 
@@ -266,13 +267,25 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   }
 
   if (config.tier2Checks['SCH-004']?.enabled && config.resolvedSchema) {
+    const judgeDeps = config.anthropicClient
+      ? { client: config.anthropicClient }
+      : undefined;
+    const sch004 = await checkNoRedundantSchemaEntries(
+      instrumentedCode,
+      filePath,
+      config.resolvedSchema,
+      judgeDeps,
+    );
     tier2Results.push(...collectCheckResults(
-      checkNoRedundantSchemaEntries(instrumentedCode, filePath, config.resolvedSchema),
+      sch004.results,
       config.tier2Checks['SCH-004'].blocking,
     ));
+    if (sch004.judgeTokenUsage.length > 0) {
+      judgeTokenUsage.push(...sch004.judgeTokenUsage);
+    }
   }
 
-  return buildResult(tier1Results, tier2Results);
+  return buildResult(tier1Results, tier2Results, judgeTokenUsage);
 }
 
 /**
@@ -294,6 +307,7 @@ export function collectCheckResults(
 function buildResult(
   tier1Results: CheckResult[],
   tier2Results: CheckResult[],
+  judgeTokenUsage?: import('../agent/schema.ts').TokenUsage[],
 ): ValidationResult {
   const allResults = [...tier1Results, ...tier2Results];
   const blockingFailures = allResults.filter((r) => !r.passed && r.blocking);
@@ -305,5 +319,6 @@ function buildResult(
     tier2Results,
     blockingFailures,
     advisoryFindings,
+    ...(judgeTokenUsage && judgeTokenUsage.length > 0 ? { judgeTokenUsage } : {}),
   };
 }

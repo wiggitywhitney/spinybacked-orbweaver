@@ -758,7 +758,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
     expect(results[0].passed).toBe(true);
   });
 
-  it('(g) SCH-004 produces advisory results (non-blocking)', () => {
+  it('(g) SCH-004 produces advisory results (non-blocking)', async () => {
     const { checkNoRedundantSchemaEntries } = require('../../src/validation/tier2/sch004.ts');
 
     const code = [
@@ -774,14 +774,14 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const results = checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
+    const { results } = await checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
     expect(results).toHaveLength(1);
     expect(results[0].ruleId).toBe('SCH-004');
     expect(results[0].tier).toBe(2);
     expect(results[0].blocking).toBe(false);
   });
 
-  it('(g) all four SCH checkers produce CheckResult with standard format', () => {
+  it('(g) all four SCH checkers produce CheckResult with standard format', async () => {
     const { checkSpanNamesMatchRegistry } = require('../../src/validation/tier2/sch001.ts');
     const { checkAttributeKeysMatchRegistry } = require('../../src/validation/tier2/sch002.ts');
     const { checkAttributeValuesConformToTypes } = require('../../src/validation/tier2/sch003.ts');
@@ -799,7 +799,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const sch004Results = checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema);
+    const { results: sch004Results } = await checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema);
     expect(sch004Results).toHaveLength(1);
 
     const results = [

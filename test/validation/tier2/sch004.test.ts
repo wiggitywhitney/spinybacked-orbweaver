@@ -23,13 +23,13 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
   };
 
   describe('no attributes in code', () => {
-    it('passes when code has no setAttribute calls', () => {
+    it('passes when code has no setAttribute calls', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'function doWork() { return 1; }',
       ].join('\n');
 
-      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const { results } = await checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
@@ -40,7 +40,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
   });
 
   describe('all attributes in registry', () => {
-    it('passes when all attribute keys are in the registry', () => {
+    it('passes when all attribute keys are in the registry', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -54,7 +54,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const { results } = await checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
@@ -62,7 +62,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
   });
 
   describe('similar attribute names flagged', () => {
-    it('flags attribute key that differs only by separator style', () => {
+    it('flags attribute key that differs only by separator style', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -76,7 +76,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const { results } = await checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
@@ -84,7 +84,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
       expect(results[0].message).toContain('http.request.duration');
     });
 
-    it('flags attribute key with high token similarity', () => {
+    it('flags attribute key with high token similarity', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -98,7 +98,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const { results } = await checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
@@ -108,7 +108,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
   });
 
   describe('truly novel attributes', () => {
-    it('passes when attribute key has no similarity to registry entries', () => {
+    it('passes when attribute key has no similarity to registry entries', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -122,7 +122,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const { results } = await checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
@@ -130,7 +130,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
   });
 
   describe('empty schema', () => {
-    it('passes when no registry to compare against', () => {
+    it('passes when no registry to compare against', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -144,7 +144,7 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
         '}',
       ].join('\n');
 
-      const results = checkNoRedundantSchemaEntries(code, filePath, { groups: [] });
+      const { results } = await checkNoRedundantSchemaEntries(code, filePath, { groups: [] });
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
@@ -152,13 +152,13 @@ describe('checkNoRedundantSchemaEntries (SCH-004)', () => {
   });
 
   describe('CheckResult structure', () => {
-    it('returns correct structure — advisory, not blocking', () => {
+    it('returns correct structure — advisory, not blocking', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'function doWork() { return 1; }',
       ].join('\n');
 
-      const results = checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
+      const { results } = await checkNoRedundantSchemaEntries(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0]).toEqual({
