@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-15) Fix loop persistent NDS-003 detection and refactor recommendation collection (PRD #111, milestone 3): new `refactor-detection.ts` module with `detectPersistentViolations()` (identifies same ruleId:filePath:lineNumber across 2+ consecutive attempts) and `collectSuggestedRefactors()` (filters LLM refactors by validator evidence, deduplicates, converts to SuggestedRefactor with filePath). Integrated into `instrument-with-retry.ts` retry loop — tracks violations and refactors per attempt, populates `FileResult.suggestedRefactors` on both normal exhaustion and oscillation early-exit paths. 25 new tests (19 unit + 6 integration)
+
 - (2026-03-15) LLM output schema and prompt guidance for refactor recommendations (PRD #111, milestone 2): `LlmSuggestedRefactorSchema` Zod schema with description, diff, reason, unblocksRules, and line range. Extended `LlmOutputSchema` and `InstrumentationOutputSchema` with optional `suggestedRefactors` array (defaults to `[]`). System prompt gains "Suggested Refactors" section with NDS-003 guidance and const-extraction example. Output format documents the new field. `instrument-file.ts` passes through LLM-reported refactors. 11 new tests for schema validation and prompt content
 
 - (2026-03-15) SuggestedRefactor type for refactor recommendations (PRD #111, milestone 1): `SuggestedRefactor` and `SuggestedRefactorLocation` interfaces defined in fix-loop types with description, unified diff, reason, unblocked rules, and file location. Added as optional `suggestedRefactors` field on `FileResult`. 11 tests covering type shape, JSON serialization round-trips, and FileResult integration

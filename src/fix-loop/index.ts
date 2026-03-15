@@ -8,3 +8,4 @@ export { addTokenUsage, totalTokens } from './token-budget.ts';
 export { extractExportedFunctions } from './function-extraction.ts';
 export type { ExtractedFunction } from './function-extraction.ts';
 export { reassembleFunctions, deduplicateImports } from './function-reassembly.ts';
+export { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';

@@ -2502,3 +2502,216 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(result.spansAdded).toBe(6);
   });
 });
+
+describe('instrumentWithRetry — suggestedRefactors collection', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-refactors-test-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  function makeNds003FailingValidation(filePath: string, lineNumber: number = 42): ValidationResult {
+    return {
+      passed: false,
+      tier1Results: [
+        { ruleId: 'ELISION', passed: true, filePath, lineNumber: null, message: 'No elision detected', tier: 1, blocking: true },
+        { ruleId: 'NDS-001', passed: true, filePath, lineNumber: null, message: 'Syntax valid', tier: 1, blocking: true },
+      ],
+      tier2Results: [
+        { ruleId: 'NDS-003', passed: false, filePath, lineNumber, message: `NDS-003: original line ${lineNumber} missing/modified`, tier: 2, blocking: true },
+      ],
+      blockingFailures: [
+        { ruleId: 'NDS-003', passed: false, filePath, lineNumber, message: `NDS-003: original line ${lineNumber} missing/modified`, tier: 2, blocking: true },
+      ],
+      advisoryFindings: [],
+    };
+  }
+
+  it('populates suggestedRefactors when persistent NDS-003 violations detected across 2+ attempts', async () => {
+    let attemptCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        attemptCount++;
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            suggestedRefactors: [{
+              description: 'Extract expression to const',
+              diff: '- old\n+ new',
+              reason: 'setAttribute needs variable',
+              unblocksRules: ['NDS-003'],
+              startLine: 42,
+              endLine: 42,
+            }],
+          }),
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makeNds003FailingValidation(testFilePath, 42),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.suggestedRefactors).toBeDefined();
+    expect(result.suggestedRefactors).toHaveLength(1);
+    expect(result.suggestedRefactors![0].description).toBe('Extract expression to const');
+    expect(result.suggestedRefactors![0].unblocksRules).toEqual(['NDS-003']);
+    expect(result.suggestedRefactors![0].location.filePath).toBe(testFilePath);
+    expect(result.suggestedRefactors![0].location.startLine).toBe(42);
+  });
+
+  it('does not populate suggestedRefactors when NDS-003 appears in only 1 attempt', async () => {
+    let attemptCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        attemptCount++;
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            suggestedRefactors: [{
+              description: 'Extract expression to const',
+              diff: '- old\n+ new',
+              reason: 'setAttribute needs variable',
+              unblocksRules: ['NDS-003'],
+              startLine: 42,
+              endLine: 42,
+            }],
+          }),
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => {
+        // Only 1 attempt (maxFixAttempts: 0), so no consecutiveness possible
+        return makeNds003FailingValidation(testFilePath, 42);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, _skipFunctionFallback: true },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.suggestedRefactors).toBeUndefined();
+  });
+
+  it('does not populate suggestedRefactors when NDS-003 violations differ between attempts', async () => {
+    let attemptCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        attemptCount++;
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            suggestedRefactors: [{
+              description: 'Extract expression to const',
+              diff: '- old\n+ new',
+              reason: 'setAttribute needs variable',
+              unblocksRules: ['NDS-003'],
+              startLine: attemptCount === 1 ? 42 : 80,
+              endLine: attemptCount === 1 ? 42 : 80,
+            }],
+          }),
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => {
+        // Different line numbers each attempt
+        return makeNds003FailingValidation(testFilePath, attemptCount === 1 ? 42 : 80);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.suggestedRefactors).toBeUndefined();
+  });
+
+  it('does not populate suggestedRefactors on successful files', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({
+          suggestedRefactors: [{
+            description: 'Extract expression to const',
+            diff: '- old\n+ new',
+            reason: 'setAttribute needs variable',
+            unblocksRules: ['NDS-003'],
+            startLine: 42,
+            endLine: 42,
+          }],
+        }),
+      } as InstrumentFileResult),
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.suggestedRefactors).toBeUndefined();
+  });
+
+  it('filters out LLM refactors not backed by persistent validator evidence', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({
+          suggestedRefactors: [{
+            description: 'Unrelated refactor suggestion',
+            diff: '- old\n+ new',
+            reason: 'Some other reason',
+            unblocksRules: ['COV-003'], // Not NDS-003
+            startLine: 42,
+            endLine: 42,
+          }],
+        }),
+      } as InstrumentFileResult),
+      validateFile: async () => makeNds003FailingValidation(testFilePath, 42),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true },
+    );
+
+    expect(result.status).toBe('failed');
+    // NDS-003 is persistent but the LLM refactor cites COV-003, not NDS-003
+    expect(result.suggestedRefactors).toBeUndefined();
+  });
+
+  it('deduplicates refactors reported across multiple attempts', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({
+          suggestedRefactors: [{
+            description: 'Extract expression to const',
+            diff: '- old\n+ new',
+            reason: 'setAttribute needs variable',
+            unblocksRules: ['NDS-003'],
+            startLine: 42,
+            endLine: 42,
+          }],
+        }),
+      } as InstrumentFileResult),
+      validateFile: async () => makeNds003FailingValidation(testFilePath, 42),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, _skipFunctionFallback: true },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.suggestedRefactors).toHaveLength(1);
+  });
+});
