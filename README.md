@@ -3,7 +3,6 @@
 AI-powered OpenTelemetry instrumentation for JavaScript applications. Analyzes your source code, adds spans, attributes, and context propagation using LLM-guided code generation — validated against your [Weaver](https://github.com/open-telemetry/weaver) schema and the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. When your schema [declares OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the agent uses them for attribute naming and validates against them.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Node.js >= 24](https://img.shields.io/badge/Node.js-%3E%3D24-green.svg)](https://nodejs.org/)
 
 ## What is this?
 
@@ -125,20 +124,22 @@ All three interfaces share the same `orbweaver.yaml` configuration and produce t
 
 ### Required
 
-- **Node.js >= 24.0.0** — uses native type stripping and `fs.glob`
 - **[Weaver CLI](https://github.com/open-telemetry/weaver) >= 0.21.2** — schema validation and semantic convention resolution ([installation guide](https://github.com/open-telemetry/weaver/blob/main/docs/installation.md))
-- **Anthropic API key** — set once in your environment:
+- **Anthropic API key** — add to a `.env` file in the directory where you run orbweaver:
   ```bash
-  export ANTHROPIC_API_KEY=your-key
+  ANTHROPIC_API_KEY=your-key
   ```
+  Or set in your shell environment: `export ANTHROPIC_API_KEY=your-key`. See [`.env.example`](.env.example) for a template.
 - **A [Weaver registry](https://github.com/open-telemetry/weaver/blob/main/docs/define-your-own-telemetry-schema.md)** — your project needs a telemetry schema directory that defines your spans and attributes ([setup guide](https://github.com/open-telemetry/weaver/blob/main/docs/define-your-own-telemetry-schema.md), [examples](https://github.com/open-telemetry/opentelemetry-weaver-examples))
 - **An [OTel SDK init file](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** — a file that initializes the OpenTelemetry SDK and registers instrumentations (e.g., `src/instrumentation.js`). `orbweaver init` auto-detects common file names like `src/instrumentation.js`, `src/telemetry.js`, or `src/tracing.js`.
 - **`@opentelemetry/api` as a peerDependency** — must be in your `package.json` peerDependencies (not dependencies) to avoid silent trace loss from duplicate instances
 
 ### Optional
 
-- **`gh` CLI** — for automatic PR creation. Without it, the agent still creates the feature branch and commits; it just prints a warning and skips the PR. Use `--no-pr` to suppress the warning.
+- **`gh` CLI** — for automatic PR creation. If `gh auth login` credentials aren't available to subprocesses, set `GITHUB_TOKEN` in your `.env` file. Without gh auth, the agent still creates the feature branch and commits. Use `--no-pr` to suppress the warning.
 - **An existing test suite** — if `testCommand` is configured in `orbweaver.yaml`, the agent runs it as an end-of-run validation gate. If not configured, it skips the check with a note in the results.
+
+> **Note:** The orbweaver CLI itself requires Node.js >= 24 (native type stripping, `fs.glob`). Your target project can use any Node.js version.
 
 ## Project Setup
 

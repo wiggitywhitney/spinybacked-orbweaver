@@ -52,7 +52,7 @@ export interface GitWorkflowDeps {
   renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
   writePrSummary: (projectDir: string, content: string) => Promise<string>;
   createPr: (projectDir: string, title: string, body: string) => Promise<string>;
-  checkGhAvailable: () => Promise<boolean>;
+  checkGhAvailable: () => Promise<boolean | { available: boolean; warning?: string }>;
   stderr: (msg: string) => void;
 }
 
@@ -155,9 +155,14 @@ export async function runGitWorkflow(
     prSummaryPath = await deps.writePrSummary(projectDir, prBody);
     deps.stderr(`PR summary saved to ${prSummaryPath}`);
 
-    const ghAvailable = await deps.checkGhAvailable();
+    const ghResult = await deps.checkGhAvailable();
+    // Support both old boolean return and new object return
+    const ghAvailable = typeof ghResult === 'object' ? ghResult.available : ghResult;
+    const ghWarning = typeof ghResult === 'object' ? ghResult.warning : undefined;
     if (!ghAvailable) {
-      deps.stderr('gh CLI is not installed or not authenticated — skipping PR creation. Install gh (https://cli.github.com) and run \'gh auth login\' to enable PR creation, or use --no-pr to skip.');
+      const msg = ghWarning ??
+        'gh CLI is not installed or not authenticated — skipping PR creation. Install gh (https://cli.github.com) and run \'gh auth login\' to enable PR creation, or use --no-pr to skip.';
+      deps.stderr(msg);
     } else {
       let pushSucceeded = false;
       try {
@@ -190,17 +195,44 @@ export async function runGitWorkflow(
 }
 
 /**
- * Check whether the gh CLI is installed and authenticated.
- * Runs `gh auth status` which validates both installation and active credentials.
+ * Check whether the gh CLI is installed and has credentials available to subprocesses.
  *
- * @returns True if gh is installed and authenticated
+ * Uses `gh auth token` instead of `gh auth status` because `gh auth status` can
+ * pass when credentials are in the system keyring but unavailable to subprocesses
+ * (e.g., `gh pr create` run by the agent). `gh auth token` outputs the actual token,
+ * confirming credentials are accessible programmatically.
+ *
+ * @returns Object with `available` (gh is installed and has a token) and optional `warning`
  */
-export async function checkGhAvailable(): Promise<boolean> {
-  return new Promise((res) => {
+export async function checkGhAvailable(): Promise<{ available: boolean; warning?: string }> {
+  // First check if gh auth token works — this confirms credentials are accessible to subprocesses
+  const tokenAvailable = await new Promise<boolean>((res) => {
+    execFile('gh', ['auth', 'token'], { timeout: 5000 }, (error, stdout) => {
+      res(!error && stdout.trim().length > 0);
+    });
+  });
+
+  if (tokenAvailable) {
+    return { available: true };
+  }
+
+  // Token not available — check if gh auth status passes (keyring-only auth)
+  const statusPasses = await new Promise<boolean>((res) => {
     execFile('gh', ['auth', 'status'], { timeout: 5000 }, (error) => {
       res(!error);
     });
   });
+
+  if (statusPasses) {
+    return {
+      available: false,
+      warning:
+        'gh CLI is authenticated via keyring but credentials may not be available to subprocesses. ' +
+        'Set GITHUB_TOKEN in your .env file for reliable PR creation, or use --no-pr to skip.',
+    };
+  }
+
+  return { available: false };
 }
 
 /**

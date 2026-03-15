@@ -18,6 +18,7 @@ const PREREQUISITE_IDS = {
   OTEL_API_DEPENDENCY: 'OTEL_API_DEPENDENCY',
   SDK_INIT_FILE: 'SDK_INIT_FILE',
   WEAVER_SCHEMA: 'WEAVER_SCHEMA',
+  ANTHROPIC_API_KEY: 'ANTHROPIC_API_KEY',
 } as const;
 
 type PrerequisiteId = typeof PREREQUISITE_IDS[keyof typeof PREREQUISITE_IDS];
@@ -233,6 +234,32 @@ async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promi
 }
 
 /**
+ * Check that the ANTHROPIC_API_KEY environment variable is set and non-empty.
+ * This is the most common failure mode for new users — the API key is required
+ * for all LLM calls but wasn't previously validated during prerequisites.
+ *
+ * @returns Structured result indicating whether the API key is available
+ */
+function checkAnthropicApiKey(): PrerequisiteCheckResult {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (key && key.length > 0) {
+    return {
+      id: PREREQUISITE_IDS.ANTHROPIC_API_KEY,
+      passed: true,
+      message: 'ANTHROPIC_API_KEY found in environment.',
+    };
+  }
+
+  return {
+    id: PREREQUISITE_IDS.ANTHROPIC_API_KEY,
+    passed: false,
+    message:
+      'ANTHROPIC_API_KEY not found in environment. ' +
+      'Add it to a .env file in your project root or set it in your shell: export ANTHROPIC_API_KEY=your-key',
+  };
+}
+
+/**
  * Run all prerequisite checks for the project.
  * Each check produces a structured result; the aggregate reports whether all passed.
  *
@@ -246,6 +273,7 @@ async function checkPrerequisites(projectRoot: string, config: AgentConfig): Pro
     checkOtelApiDependency(projectRoot),
     checkSdkInitFile(projectRoot, config.sdkInitFile),
     checkWeaverSchema(projectRoot, config.schemaPath),
+    Promise.resolve(checkAnthropicApiKey()),
   ]);
 
   return {
@@ -259,6 +287,7 @@ export {
   checkOtelApiDependency,
   checkSdkInitFile,
   checkWeaverSchema,
+  checkAnthropicApiKey,
   checkPrerequisites,
   PREREQUISITE_IDS,
 };

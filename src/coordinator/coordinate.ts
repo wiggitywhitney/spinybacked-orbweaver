@@ -77,7 +77,7 @@ export interface CoordinateDeps {
     callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
   ) => Promise<LiveCheckResult>;
   readFileForAdvisory: (filePath: string) => Promise<string>;
-  checkGhAvailable?: () => Promise<boolean>;
+  checkGhAvailable?: () => Promise<boolean | { available: boolean; warning?: string }>;
   liveCheckOptions?: LiveCheckOptions;
 }
 
@@ -169,9 +169,13 @@ export async function coordinate(
   // Advisory: Check gh CLI authentication early so users know before tokens are spent
   const ghWarnings: string[] = [];
   try {
-    const ghAuthenticated = await checkGh();
-    if (!ghAuthenticated) {
+    const ghResult = await checkGh();
+    // Support both old boolean return and new object return
+    const ghAvailable = typeof ghResult === 'object' ? ghResult.available : ghResult;
+    const ghWarning = typeof ghResult === 'object' ? ghResult.warning : undefined;
+    if (!ghAvailable) {
       ghWarnings.push(
+        ghWarning ??
         'gh CLI is not installed or not authenticated — PR creation will be skipped. ' +
         'Run \'gh auth login\' to enable PR creation, or use --no-pr to suppress this warning.',
       );

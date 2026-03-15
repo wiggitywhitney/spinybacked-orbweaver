@@ -1,5 +1,5 @@
 // ABOUTME: Unit tests for prerequisite checks before instrumentation.
-// ABOUTME: Covers package.json, OTel API dependency, SDK init file, and Weaver schema checks.
+// ABOUTME: Covers package.json, OTel API dependency, SDK init file, Weaver schema, and API key checks.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
@@ -10,6 +10,7 @@ import {
   checkOtelApiDependency,
   checkSdkInitFile,
   checkWeaverSchema,
+  checkAnthropicApiKey,
   checkPrerequisites,
 } from '../../src/config/prerequisites.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
@@ -218,6 +219,43 @@ describe('checkWeaverSchema', () => {
   });
 });
 
+describe('checkAnthropicApiKey', () => {
+  const originalEnv = process.env.ANTHROPIC_API_KEY;
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.ANTHROPIC_API_KEY = originalEnv;
+    } else {
+      delete process.env.ANTHROPIC_API_KEY;
+    }
+  });
+
+  it('passes when ANTHROPIC_API_KEY is set', () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+    const result = checkAnthropicApiKey();
+    expect(result.passed).toBe(true);
+    expect(result.id).toBe('ANTHROPIC_API_KEY');
+    expect(result.message).toContain('ANTHROPIC_API_KEY');
+  });
+
+  it('fails when ANTHROPIC_API_KEY is not set', () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const result = checkAnthropicApiKey();
+    expect(result.passed).toBe(false);
+    expect(result.id).toBe('ANTHROPIC_API_KEY');
+    expect(result.message).toContain('not found');
+    expect(result.message).toContain('.env');
+  });
+
+  it('fails when ANTHROPIC_API_KEY is empty string', () => {
+    process.env.ANTHROPIC_API_KEY = '';
+    const result = checkAnthropicApiKey();
+    expect(result.passed).toBe(false);
+    expect(result.id).toBe('ANTHROPIC_API_KEY');
+    expect(result.message).toContain('not found');
+  });
+});
+
 describe('checkPrerequisites', () => {
   it('returns allPassed true when all checks pass', async () => {
     writeFile('package.json', JSON.stringify(makePackageJson({
@@ -228,8 +266,8 @@ describe('checkPrerequisites', () => {
 
     const config = makeMinimalConfig();
     const result = await checkPrerequisites(testDir, config);
-    // allPassed depends on weaver CLI availability — check structure
-    expect(result.checks).toHaveLength(4);
+    // allPassed depends on weaver CLI and env availability — check structure
+    expect(result.checks).toHaveLength(5);
     expect(result.checks[0].id).toBe('PACKAGE_JSON');
     expect(result.checks[0].passed).toBe(true);
     expect(result.checks[1].id).toBe('OTEL_API_DEPENDENCY');
