@@ -68,6 +68,7 @@ function buildTier1OnlyValidationConfig() {
       'SCH-003': { enabled: false, blocking: false },
       'SCH-004': { enabled: false, blocking: false },
       'API-001': { enabled: false, blocking: false },
+      'NDS-006': { enabled: false, blocking: false },
     },
   };
 }

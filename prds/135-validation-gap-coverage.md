@@ -87,7 +87,7 @@ Require AST diffing between original and instrumented code. More complex to impl
 
 - [x] API dimension checks: implement API-001, API-003, API-004 as a combined Tier 2 check scanning imports for forbidden packages
 - [x] API-002 post-instrumentation verification: verify `@opentelemetry/api` is listed as peerDependency (library projects) or dependency (app projects) after instrumentation, with fixtures for both project types
-- [ ] NDS-006 module system check: detect ESM vs CJS in original, verify instrumented code matches
+- [x] NDS-006 module system check: detect ESM vs CJS in original, verify instrumented code matches
 - [ ] NDS-004 signature preservation check: AST-diff exported function signatures before/after instrumentation
 - [ ] NDS-005 control flow preservation check: AST-diff try/catch/finally block structure before/after
 - [ ] RST-005 post-LLM validation: move double-instrumentation detection into the validation chain (complement to pre-flight)

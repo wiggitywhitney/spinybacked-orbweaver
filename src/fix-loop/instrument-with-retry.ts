@@ -134,6 +134,7 @@ function buildValidationConfig(config: AgentConfig, projectRoot?: string) {
       // PRD #135 checks
       'API-001': { enabled: true, blocking: true },
       'API-002': { enabled: true, blocking: true },
+      'NDS-006': { enabled: true, blocking: true },
     },
   };
 }

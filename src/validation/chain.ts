@@ -25,6 +25,7 @@ import { checkAttributeValuesConformToTypes } from './tier2/sch003.ts';
 import { checkNoRedundantSchemaEntries } from './tier2/sch004.ts';
 import { checkForbiddenImports } from './tier2/api001.ts';
 import { checkOtelApiDependencyPlacement } from './tier2/api002.ts';
+import { checkModuleSystemMatch } from './tier2/nds006.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
@@ -188,6 +189,14 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     tier2Results.push(...collectCheckResults(
       checkOtelApiDependencyPlacement(filePath, config.projectRoot),
       config.tier2Checks['API-002'].blocking,
+    ));
+  }
+
+  // NDS-006: Verify instrumented code uses the same module system as the original.
+  if (config.tier2Checks['NDS-006']?.enabled) {
+    tier2Results.push(...collectCheckResults(
+      checkModuleSystemMatch(originalCode, instrumentedCode, filePath),
+      config.tier2Checks['NDS-006'].blocking,
     ));
   }
 
