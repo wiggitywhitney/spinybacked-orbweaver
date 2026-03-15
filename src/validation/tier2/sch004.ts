@@ -127,7 +127,7 @@ export async function checkNoRedundantSchemaEntries(
         {
           ruleId: 'SCH-004',
           context: `Novel attribute key "${entry.key}" at line ${entry.line} is not in the registry and has no high token-similarity match.`,
-          question: `Does attribute "${entry.key}" capture the same concept as any of the registered attribute keys? If yes, which one should be used instead?`,
+          question: `Is attribute "${entry.key}" semantically distinct from all registered attribute keys? Answer true if it captures a unique concept not already represented in the registry. Answer false if it is a semantic duplicate of an existing key — and if so, which registered key should be used instead?`,
           candidates: registryNameList,
         },
         judgeDeps.client,
@@ -136,6 +136,11 @@ export async function checkNoRedundantSchemaEntries(
 
       if (result) {
         judgeTokenUsage.push(result.tokenUsage);
+
+        if (!result.verdict) {
+          // Parsed output was null — skip, graceful fallback to script-only
+          continue;
+        }
 
         if (!result.verdict.answer) {
           // Judge says this IS a semantic duplicate

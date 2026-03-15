@@ -88,9 +88,10 @@ describe('callJudge', () => {
     const result = await callJudge(makeQuestion(), client as any);
 
     expect(result).not.toBeNull();
-    expect(result!.verdict.answer).toBe(true);
-    expect(result!.verdict.suggestion).toBeUndefined();
-    expect(result!.verdict.confidence).toBe(0.85);
+    expect(result!.verdict).not.toBeNull();
+    expect(result!.verdict!.answer).toBe(true);
+    expect(result!.verdict!.suggestion).toBeUndefined();
+    expect(result!.verdict!.confidence).toBe(0.85);
   });
 
   it('returns null when the API call throws (graceful fallback)', async () => {
@@ -101,14 +102,17 @@ describe('callJudge', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null when parsed_output is null (graceful fallback)', async () => {
+  it('returns token usage but null verdict when parsed_output is null', async () => {
     const client = makeMockClient({
       parsed_output: null,
     });
 
     const result = await callJudge(makeQuestion(), client as any);
 
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.verdict).toBeNull();
+    expect(result!.tokenUsage.inputTokens).toBe(50);
+    expect(result!.tokenUsage.outputTokens).toBe(30);
   });
 
   it('uses claude-haiku-4-5-20251001 model by default', async () => {

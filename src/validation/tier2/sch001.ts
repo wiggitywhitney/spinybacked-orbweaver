@@ -64,18 +64,47 @@ export async function checkSpanNamesMatchRegistry(
 
   // Extract span name literals from code
   const spanNames = extractSpanNames(code);
+  const nonLiteralCount = countNonLiteralSpanNames(code);
+
+  if (spanNames.length === 0 && nonLiteralCount === 0) {
+    return { results: [pass(filePath, 'No span calls found to check.')], judgeTokenUsage: [] };
+  }
+
+  // Non-literal span names (template literals, variables) are always naming quality failures —
+  // they suggest unbounded cardinality and bypass registry conformance checks.
+  const nonLiteralResults: CheckResult[] = [];
+  if (nonLiteralCount > 0) {
+    nonLiteralResults.push({
+      ruleId: 'SCH-001',
+      passed: false,
+      filePath,
+      lineNumber: null,
+      message:
+        `SCH-001 check failed: ${nonLiteralCount} span name(s) use non-literal expressions ` +
+        `(template literals, variables, or concatenation). Span names must be static string ` +
+        `literals to ensure bounded cardinality. Use attributes for dynamic values.`,
+      tier: 2,
+      blocking: true,
+    });
+  }
 
   if (spanNames.length === 0) {
-    return { results: [pass(filePath, 'No span calls found to check.')], judgeTokenUsage: [] };
+    // Only non-literal names found — return those failures
+    return { results: nonLiteralResults, judgeTokenUsage: [] };
   }
 
   // Registry conformance mode: span definitions exist — no judge needed
   if (spanDefs.length > 0) {
-    return { results: checkRegistryConformance(spanNames, spanDefs, filePath), judgeTokenUsage: [] };
+    const conformanceResults = checkRegistryConformance(spanNames, spanDefs, filePath);
+    return { results: [...nonLiteralResults, ...conformanceResults], judgeTokenUsage: [] };
   }
 
   // Naming quality fallback: no span definitions in registry
-  return checkNamingQuality(spanNames, filePath, judgeDeps);
+  const qualityResult = await checkNamingQuality(spanNames, filePath, judgeDeps);
+  return {
+    results: [...nonLiteralResults, ...qualityResult.results],
+    judgeTokenUsage: qualityResult.judgeTokenUsage,
+  };
 }
 
 interface SpanNameEntry {
@@ -196,6 +225,11 @@ async function checkNamingQuality(
       if (result) {
         judgeTokenUsage.push(result.tokenUsage);
 
+        if (!result.verdict) {
+          // Parsed output was null — skip, graceful fallback to script-only
+          continue;
+        }
+
         if (!result.verdict.answer) {
           // Judge says naming is poor
           const suggestion = result.verdict.suggestion ?? 'Use a structured dotted naming convention.';
@@ -294,6 +328,39 @@ function getSpanNameLiteral(callExpr: CallExpression): string | null {
     return firstArg.getLiteralValue();
   }
   return null;
+}
+
+/**
+ * Count startActiveSpan/startSpan calls where the first argument is NOT a string literal.
+ * These are template literals, variables, concatenations, etc. that indicate unbounded cardinality.
+ */
+function countNonLiteralSpanNames(code: string): number {
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile('check-nonlit.js', code);
+
+  let count = 0;
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+
+    const expr = node.getExpression();
+    const text = expr.getText();
+
+    if (!text.endsWith('.startActiveSpan') && !text.endsWith('.startSpan')) return;
+
+    const args = node.getArguments();
+    if (args.length === 0) return;
+
+    // If the first arg is NOT a string literal, it's non-literal
+    if (!Node.isStringLiteral(args[0])) {
+      count++;
+    }
+  });
+
+  return count;
 }
 
 function pass(filePath: string, message: string): CheckResult {

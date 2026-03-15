@@ -387,6 +387,12 @@ describe('full pipeline with all three judge-enhanced rules', () => {
     );
     expect(downgraded).toBe(true);
 
+    // Verify the downgrade actually takes effect in the final classification:
+    // SCH-001 should appear in advisory findings, NOT in blocking failures
+    expect(result.advisoryFindings.some(r => r.ruleId === 'SCH-001')).toBe(true);
+    expect(result.blockingFailures.some(r => r.ruleId === 'SCH-001')).toBe(false);
+    expect(result.passed).toBe(true);
+
     // Token usage still collected even for low-confidence verdicts
     expect(result.judgeTokenUsage).toBeDefined();
     expect(result.judgeTokenUsage!.length).toBeGreaterThanOrEqual(1);

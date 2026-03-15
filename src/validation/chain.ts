@@ -316,13 +316,19 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
  * Normalize a check result (single or array) and apply the blocking flag
  * from the validation config. Supports the migration from single-result
  * checks to per-finding array results (issue #43).
+ *
+ * Per-finding blocking decisions are preserved: a finding that sets
+ * blocking: false (e.g., low-confidence judge verdict) stays advisory
+ * even if the rule-level config says blocking: true. The conjunction
+ * ensures a finding can only block if BOTH the config allows it AND
+ * the individual finding says it should.
  */
 export function collectCheckResults(
   result: CheckResult | CheckResult[],
   blocking: boolean,
 ): CheckResult[] {
   const results = Array.isArray(result) ? result : [result];
-  return results.map((r) => ({ ...r, blocking }));
+  return results.map((r) => ({ ...r, blocking: r.blocking && blocking }));
 }
 
 /**

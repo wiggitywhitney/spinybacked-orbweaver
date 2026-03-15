@@ -189,7 +189,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('naming quality fallback', () => {
-    it('flags span names with dynamic-looking patterns when no registry spans exist', async () => {
+    it('flags non-literal span names (template literals) as unbounded cardinality', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
@@ -202,11 +202,12 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      // Template literals are not string literals — the check skips them (returns null from getSpanNameLiteral)
+      // Template literals are not string literals — they indicate unbounded cardinality
       const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('non-literal');
     });
 
     it('flags span names containing UUIDs or numbers as unbounded cardinality', async () => {

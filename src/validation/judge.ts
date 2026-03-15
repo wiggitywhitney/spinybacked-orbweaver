@@ -34,10 +34,12 @@ export interface JudgeVerdict {
 }
 
 /**
- * Successful judge call result: verdict + cost tracking.
+ * Judge call result: verdict (or null if parsing failed) + cost tracking.
+ * When verdict is null, the LLM responded but output didn't match the schema.
+ * Token usage is still tracked for cost accounting.
  */
 export interface JudgeCallResult {
-  verdict: JudgeVerdict;
+  verdict: JudgeVerdict | null;
   tokenUsage: TokenUsage;
 }
 
@@ -122,10 +124,21 @@ export async function callJudge(
       messages: [
         { role: 'user', content: buildJudgeMessage(question) },
       ],
+    }, {
+      timeout: 10_000,
+      maxRetries: 1,
     });
 
+    // Always track token usage for cost accounting, even if parsing failed
+    const tokenUsage: TokenUsage = {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+      cacheCreationInputTokens: (response.usage as any).cache_creation_input_tokens ?? 0,
+      cacheReadInputTokens: (response.usage as any).cache_read_input_tokens ?? 0,
+    };
+
     if (response.parsed_output == null) {
-      return null;
+      return { verdict: null, tokenUsage };
     }
 
     const raw = response.parsed_output;
@@ -133,13 +146,6 @@ export async function callJudge(
       answer: raw.answer,
       confidence: raw.confidence,
       ...(raw.suggestion != null ? { suggestion: raw.suggestion } : {}),
-    };
-
-    const tokenUsage: TokenUsage = {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      cacheCreationInputTokens: (response.usage as any).cache_creation_input_tokens ?? 0,
-      cacheReadInputTokens: (response.usage as any).cache_read_input_tokens ?? 0,
     };
 
     return { verdict, tokenUsage };

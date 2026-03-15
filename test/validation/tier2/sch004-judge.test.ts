@@ -14,11 +14,11 @@ function makeMockClient(response: JudgeCallResult | null) {
   const parseFn = vi.fn().mockResolvedValue(
     response
       ? {
-          parsed_output: {
+          parsed_output: response.verdict ? {
             answer: response.verdict.answer,
             suggestion: response.verdict.suggestion ?? null,
             confidence: response.verdict.confidence,
-          },
+          } : null,
           usage: {
             input_tokens: response.tokenUsage.inputTokens,
             output_tokens: response.tokenUsage.outputTokens,

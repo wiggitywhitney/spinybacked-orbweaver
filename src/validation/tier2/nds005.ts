@@ -89,23 +89,36 @@ function extractBodyAnchor(tryStmt: TryStatement): string {
 
 /**
  * Extract normalized throw expressions from a catch clause's block,
- * ignoring OTel-added lines.
+ * ignoring OTel-added lines. Normalizes the catch binding variable
+ * name to a placeholder to avoid false positives from variable renames
+ * (e.g., `throw err` vs `throw e`) and to minimize source fragments
+ * sent to the judge prompt.
  */
 function extractCatchThrows(catchClause: import('ts-morph').CatchClause | undefined): string[] {
   if (!catchClause) return [];
+  const catchParamName = catchClause.getVariableDeclaration()?.getName();
   const throws: string[] = [];
   const block = catchClause.getBlock();
   block.forEachDescendant((node) => {
     if (Node.isThrowStatement(node)) {
       const text = node.getText().trim();
       if (!isOtelLine(text)) {
-        // Normalize: extract the throw expression (strip "throw " prefix and trailing ";")
-        const expr = node.getExpression()?.getText().trim() ?? '';
+        // Normalize: extract the throw expression and replace catch binding with placeholder
+        let expr = node.getExpression()?.getText().trim() ?? '';
+        if (catchParamName) {
+          // Replace all occurrences of the catch variable name with a stable placeholder
+          expr = expr.replace(new RegExp(`\\b${escapeRegExp(catchParamName)}\\b`, 'g'), '<CATCH_VAR>');
+        }
         throws.push(expr);
       }
     }
   });
   return throws;
+}
+
+/** Escape special regex characters in a string for use in RegExp constructor. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -382,6 +395,12 @@ export async function checkControlFlowPreservation(
 
       if (result) {
         judgeTokenUsage.push(result.tokenUsage);
+
+        if (!result.verdict) {
+          // Parsed output was null — keep script-only violation
+          finalViolations.push(violation);
+          continue;
+        }
 
         if (result.verdict.answer && result.verdict.confidence >= JUDGE_CONFIDENCE_THRESHOLD) {
           // Judge says semantics are preserved with sufficient confidence — clear this violation
