@@ -47,7 +47,7 @@ export const AgentConfigSchema = z.strictObject({
   // Limits and guardrails
   maxFilesPerRun: z.number().int().positive().default(50),
   maxFixAttempts: z.number().int().nonnegative().default(2),
-  maxTokensPerFile: z.number().int().positive().default(80000),
+  maxTokensPerFile: z.number().int().positive().default(100000),
   largeFileThresholdLines: z.number().int().positive().default(500),
   schemaCheckpointInterval: z.number().int().positive().default(5),
   attributesPerFileThreshold: z.number().int().positive().default(30),

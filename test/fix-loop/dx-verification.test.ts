@@ -371,8 +371,8 @@ describe('DX verification — FileResult field content for all exit paths', () =
     });
   });
 
-  describe('failure by budget exceeded exit path', () => {
-    it('populates reason with actual token counts and budget limit', async () => {
+  describe('budget exceeded — validation still runs, result used if passing', () => {
+    it('succeeds when budget exceeded but validation passes — tokens already spent', async () => {
       const expensiveTokens: TokenUsage = {
         inputTokens: 5000,
         outputTokens: 4000,
@@ -383,7 +383,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
 
       const deps: InstrumentWithRetryDeps = {
         instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
-        validateFile: async () => { throw new Error('should not reach'); },
+        validateFile: async () => makePassingValidation(testFilePath),
       };
 
       const result = await instrumentWithRetry(
@@ -391,23 +391,13 @@ describe('DX verification — FileResult field content for all exit paths', () =
       );
 
       assertRequiredFields(result, testFilePath);
-      expect(result.status).toBe('failed');
+      // Budget exceeded but validation passed — use the result, don't discard it
+      expect(result.status).toBe('success');
       expect(result.validationAttempts).toBe(1);
       expect(result.validationStrategyUsed).toBe('initial-generation');
 
-      // reason contains actual token usage and the budget limit
-      expect(result.reason).toContain('10500'); // 5000+4000+1000+500
-      expect(result.reason).toContain('5000');  // budget
-      expect(result.reason).toMatch(/budget/i);
-
-      // lastError matches reason for budget exceeded
-      expect(result.lastError).toContain('budget');
-
-      // tokenUsage reflects what was consumed before stopping
+      // tokenUsage reflects what was consumed
       expect(result.tokenUsage).toEqual(expensiveTokens);
-
-      // No errorProgression entries — validation never ran
-      expect(result.errorProgression).toEqual([]);
 
       // Metadata from the instrumentation output is preserved
       expect(result.librariesNeeded).toEqual(output.librariesNeeded);
@@ -415,11 +405,11 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.spanCategories).toEqual(output.spanCategories);
       expect(result.notes).toEqual(output.notes);
 
-      // File reverted
-      expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+      // File has instrumented code (not reverted)
+      expect(readFileSync(testFilePath, 'utf-8')).toBe(output.instrumentedCode);
     });
 
-    it('populates cumulative token usage when budget exceeded on attempt 2', async () => {
+    it('stops retrying when budget exceeded on attempt 2 but still validates', async () => {
       let callCount = 0;
       const expensiveTokens: TokenUsage = {
         inputTokens: 3000,
@@ -440,12 +430,12 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       // Budget 8000: attempt 1 uses 5500, attempt 2 uses 5500 → cumulative 11000 > 8000
+      // Attempt 2 still validates (fails), then budget prevents further retries
       const result = await instrumentWithRetry(
         testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1, maxTokensPerFile: 8000 }), { deps },
       );
 
       expect(result.status).toBe('failed');
-      expect(result.reason).toMatch(/budget/i);
       expect(result.validationAttempts).toBe(2);
       expect(result.validationStrategyUsed).toBe('multi-turn-fix');
 
@@ -453,9 +443,10 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.tokenUsage.inputTokens).toBe(6000); // 3000 + 3000
       expect(result.tokenUsage.outputTokens).toBe(5000); // 2500 + 2500
 
-      // errorProgression has a single entry from attempt 1 (attempt 2 didn't reach validation)
-      expect(result.errorProgression).toHaveLength(1);
+      // errorProgression has entries from both attempts (validation ran on both)
+      expect(result.errorProgression).toHaveLength(2);
       expect(result.errorProgression![0]).toMatch(/blocking error/);
+      expect(result.errorProgression![1]).toMatch(/blocking error/);
     });
   });
 

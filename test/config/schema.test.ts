@@ -24,7 +24,7 @@ function makeFullConfig() {
     dependencyStrategy: 'dependencies',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
-    maxTokensPerFile: 80000,
+    maxTokensPerFile: 100000,
     largeFileThresholdLines: 500,
     schemaCheckpointInterval: 5,
     attributesPerFileThreshold: 30,
@@ -67,7 +67,7 @@ describe('AgentConfigSchema', () => {
       expect(config.dependencyStrategy).toBe('dependencies');
       expect(config.maxFilesPerRun).toBe(50);
       expect(config.maxFixAttempts).toBe(2);
-      expect(config.maxTokensPerFile).toBe(80000);
+      expect(config.maxTokensPerFile).toBe(100000);
       expect(config.largeFileThresholdLines).toBe(500);
       expect(config.schemaCheckpointInterval).toBe(5);
       expect(config.attributesPerFileThreshold).toBe(30);

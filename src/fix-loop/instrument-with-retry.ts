@@ -369,13 +369,10 @@ async function executeRetryLoop(
       lastConversationContext = instrumentResult.conversationContext;
     }
 
-    // Check token budget — file is still in original state at this point
-    if (totalTokens(cumulativeTokens) > config.maxTokensPerFile) {
-      const reason = `Token budget exceeded: ${totalTokens(cumulativeTokens)} tokens used, budget is ${config.maxTokensPerFile}`;
-      return buildFailedResult(
-        filePath, reason, reason, cumulativeTokens, attempt, actualStrategy, errorProgression, output,
-      );
-    }
+    // Check token budget — if exceeded, this is the last attempt regardless.
+    // We still validate the current output rather than discarding it: the API call
+    // already happened and the tokens are spent, so throwing away good code is wasteful.
+    const budgetExceeded = totalTokens(cumulativeTokens) > config.maxTokensPerFile;
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -442,9 +439,15 @@ async function executeRetryLoop(
     }
 
     previousValidation = validation;
+
+    // If budget exceeded, don't retry — the current attempt's output was validated
+    // (and failed), but we've already spent the tokens. No point burning more.
+    if (budgetExceeded) {
+      break;
+    }
   }
 
-  // All attempts exhausted
+  // All attempts exhausted (or budget exceeded after a failed validation)
   const failedRuleIds = lastValidation!.blockingFailures.map(f => f.ruleId).join(', ');
   const reason = `Validation failed: ${failedRuleIds} — ${lastValidation!.blockingFailures[0]?.message ?? 'unknown error'}`;
   const lastError = lastValidation!.blockingFailures
