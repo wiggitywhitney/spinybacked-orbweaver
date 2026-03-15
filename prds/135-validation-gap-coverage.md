@@ -49,7 +49,7 @@ Import and dependency checks. Straightforward to implement as AST-based or regex
 | Prompt Rule | Description | Implementation Approach |
 |-------------|-------------|------------------------|
 | API-001 | Only import from `@opentelemetry/api` | AST: scan import declarations for `@opentelemetry/sdk-*`, `@opentelemetry/exporter-*`, `@opentelemetry/instrumentation-*` in instrumented code |
-| API-002 | `@opentelemetry/api` must be peerDependency (libraries) or dependency (apps) | Partially covered: `checkOtelApiDependency` runs pre-instrumentation and enforces peerDependency only (fails if in dependencies). Gap: no post-instrumentation re-check, and the library-vs-app distinction is not applied — apps using regular dependencies are rejected. Add post-instrumentation verification that respects project type. |
+| API-002 | `@opentelemetry/api` must be peerDependency (libraries) or dependency (apps) | Pre-instrumentation prerequisite (`checkOtelApiDependency`) enforces peerDependency only — fails if in dependencies, regardless of project type. Gap: no post-instrumentation re-check, and the library-vs-app distinction is not applied — apps using regular dependencies are incorrectly rejected. New work: post-instrumentation verification that respects project type. |
 | API-003 | No vendor-specific SDKs | AST: scan imports for `dd-trace`, `@newrelic/*`, `@splunk/otel` |
 | API-004 | No SDK internal imports | Same mechanism as API-001 — combined check |
 
@@ -75,7 +75,7 @@ Require AST diffing between original and instrumented code. More complex to impl
 
 | Criterion | Verification |
 |-----------|-------------|
-| All 32 prompt rules have corresponding validation checks | Audit: map each prompt rule to a validation chain check |
+| All 32 prompt rules have corresponding automated enforcement | Audit: map each prompt rule to a validation chain check, prerequisite check, or coordinator checkpoint |
 | API-001/003/004 catch forbidden imports | Test with fixtures containing `dd-trace`, `@opentelemetry/sdk-trace-node` imports |
 | NDS-004 catches signature changes | Test with fixture where instrumented code adds a parameter to an exported function |
 | NDS-005 catches try/catch restructuring | Test with fixture where instrumented code wraps existing try/catch in another try/catch |
@@ -86,7 +86,7 @@ Require AST diffing between original and instrumented code. More complex to impl
 ## Milestones
 
 - [ ] API dimension checks: implement API-001, API-003, API-004 as a combined Tier 2 check scanning imports for forbidden packages
-- [ ] API-002 post-instrumentation verification: verify `@opentelemetry/api` is listed as dependency/peerDependency after instrumentation
+- [ ] API-002 post-instrumentation verification: verify `@opentelemetry/api` is listed as peerDependency (library projects) or dependency (app projects) after instrumentation, with fixtures for both project types
 - [ ] NDS-006 module system check: detect ESM vs CJS in original, verify instrumented code matches
 - [ ] NDS-004 signature preservation check: AST-diff exported function signatures before/after instrumentation
 - [ ] NDS-005 control flow preservation check: AST-diff try/catch/finally block structure before/after
