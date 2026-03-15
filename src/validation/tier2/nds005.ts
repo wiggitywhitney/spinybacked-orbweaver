@@ -3,7 +3,11 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { SourceFile, TryStatement } from 'ts-morph';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { CheckResult } from '../types.ts';
+import type { TokenUsage } from '../../agent/schema.ts';
+import { callJudge } from '../judge.ts';
+import type { JudgeOptions } from '../judge.ts';
 
 /**
  * Structural fingerprint of a try/catch/finally block.
@@ -31,6 +35,27 @@ const OTEL_LINE_PATTERNS = [
   /tracer\.startActiveSpan\s*\(/,
   /tracer\.startSpan\s*\(/,
 ];
+
+/**
+ * Optional judge dependencies for semantic preservation assessment.
+ * When provided, structural violations flagged by the script are sent to
+ * the LLM judge to determine whether the change preserves error propagation semantics.
+ */
+export interface Nds005JudgeDeps {
+  client: Anthropic;
+  options?: JudgeOptions;
+}
+
+/**
+ * Result of NDS-005 check including judge token usage for cost tracking.
+ */
+export interface Nds005Result {
+  results: CheckResult[];
+  judgeTokenUsage: TokenUsage[];
+}
+
+/** Judge verdicts with confidence below this threshold do not clear script violations. */
+const JUDGE_CONFIDENCE_THRESHOLD = 0.7;
 
 function isOtelLine(line: string): boolean {
   const trimmed = line.trim();
@@ -198,13 +223,15 @@ function findBestMatch(
  * @param originalCode - The original source code before instrumentation
  * @param instrumentedCode - The agent's instrumented output
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult[] — one per violation, or a single passing result
+ * @param judgeDeps - Optional judge dependencies (Anthropic client). When absent, runs script-only.
+ * @returns Nds005Result with check results and judge token usage for cost tracking
  */
-export function checkControlFlowPreservation(
+export async function checkControlFlowPreservation(
   originalCode: string,
   instrumentedCode: string,
   filePath: string,
-): CheckResult[] {
+  judgeDeps?: Nds005JudgeDeps,
+): Promise<Nds005Result> {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -218,7 +245,7 @@ export function checkControlFlowPreservation(
 
   // No try/catch blocks in original — nothing to violate
   if (originalBlocks.length === 0) {
-    return [passingResult(filePath)];
+    return { results: [passingResult(filePath)], judgeTokenUsage: [] };
   }
 
   const violations: CheckResult[] = [];
@@ -328,10 +355,63 @@ export function checkControlFlowPreservation(
   }
 
   if (violations.length === 0) {
-    return [passingResult(filePath)];
+    return { results: [passingResult(filePath)], judgeTokenUsage: [] };
   }
 
-  return violations;
+  // Judge pass — for each violation, ask the judge whether the structural change
+  // preserves error propagation semantics. High-confidence "preserved" verdicts
+  // clear the violation; low-confidence or "not preserved" verdicts keep it.
+  if (judgeDeps) {
+    const judgeTokenUsage: TokenUsage[] = [];
+    const finalViolations: CheckResult[] = [];
+
+    for (const violation of violations) {
+      const result = await callJudge(
+        {
+          ruleId: 'NDS-005',
+          context: violation.message,
+          question:
+            'Does the restructured error handling preserve the original propagation semantics — ' +
+            'exception types, re-throw behavior, and catch clause ordering? ' +
+            'Answer true if semantics are preserved despite the structural change, false if not.',
+          candidates: [],
+        },
+        judgeDeps.client,
+        judgeDeps.options,
+      );
+
+      if (result) {
+        judgeTokenUsage.push(result.tokenUsage);
+
+        if (result.verdict.answer && result.verdict.confidence >= JUDGE_CONFIDENCE_THRESHOLD) {
+          // Judge says semantics are preserved with sufficient confidence — clear this violation
+          continue;
+        }
+
+        // Judge says semantics are NOT preserved, or low confidence — keep violation with judge context
+        const suggestion = result.verdict.suggestion
+          ? ` ${result.verdict.suggestion}`
+          : '';
+        finalViolations.push({
+          ...violation,
+          message:
+            `${violation.message} Judge assessment (confidence ${Math.round(result.verdict.confidence * 100)}%): ` +
+            `semantics ${result.verdict.answer ? 'possibly preserved (low confidence)' : 'not preserved'}.${suggestion}`,
+        });
+      } else {
+        // Judge failure — keep the script-only violation as-is
+        finalViolations.push(violation);
+      }
+    }
+
+    if (finalViolations.length === 0) {
+      return { results: [passingResult(filePath)], judgeTokenUsage };
+    }
+
+    return { results: finalViolations, judgeTokenUsage };
+  }
+
+  return { results: violations, judgeTokenUsage: [] };
 }
 
 function passingResult(filePath: string): CheckResult {

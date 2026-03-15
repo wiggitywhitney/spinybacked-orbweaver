@@ -231,10 +231,22 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
 
   // NDS-005: Verify existing try/catch/finally structure is preserved after instrumentation.
   if (config.tier2Checks['NDS-005']?.enabled) {
+    const judgeDeps = config.anthropicClient
+      ? { client: config.anthropicClient }
+      : undefined;
+    const nds005 = await checkControlFlowPreservation(
+      originalCode,
+      instrumentedCode,
+      filePath,
+      judgeDeps,
+    );
     tier2Results.push(...collectCheckResults(
-      checkControlFlowPreservation(originalCode, instrumentedCode, filePath),
+      nds005.results,
       config.tier2Checks['NDS-005'].blocking,
     ));
+    if (nds005.judgeTokenUsage.length > 0) {
+      judgeTokenUsage.push(...nds005.judgeTokenUsage);
+    }
   }
 
   // RST-005: Detect double-instrumentation — spans added to already-instrumented functions.

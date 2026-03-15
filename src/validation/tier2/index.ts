@@ -35,6 +35,7 @@ export { checkDoubleInstrumentation } from './rst005.ts';
 export { checkModuleSystemMatch } from './nds006.ts';
 export { checkExportedSignaturePreservation } from './nds004.ts';
 export { checkControlFlowPreservation } from './nds005.ts';
+export type { Nds005JudgeDeps, Nds005Result } from './nds005.ts';
 export {
   parseResolvedRegistry,
   getSpanDefinitions,
