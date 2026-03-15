@@ -372,6 +372,147 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
     });
   });
 
+  describe('throw statement modification detection', () => {
+    it('passes when throw statements in catch blocks are preserved', () => {
+      const original = [
+        'function fetchData() {',
+        '  try {',
+        '    return JSON.parse(input);',
+        '  } catch (err) {',
+        '    console.error(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function fetchData() {',
+        '  try {',
+        '    return JSON.parse(input);',
+        '  } catch (err) {',
+        '    console.error(err);',
+        '    span.recordException(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.every(r => r.passed)).toBe(true);
+    });
+
+    it('detects when a throw statement is removed from a catch block', () => {
+      const original = [
+        'function riskyOp() {',
+        '  try {',
+        '    dangerousCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function riskyOp() {',
+        '  try {',
+        '    dangerousCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '    span.recordException(err);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].message).toContain('throw');
+    });
+
+    it('detects when a throw expression is modified', () => {
+      const original = [
+        'function parse(data) {',
+        '  try {',
+        '    return JSON.parse(data);',
+        '  } catch (err) {',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function parse(data) {',
+        '  try {',
+        '    return JSON.parse(data);',
+        '  } catch (err) {',
+        '    throw new Error("wrapped: " + err.message);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].message).toContain('throw');
+    });
+
+    it('detects when a throw is added where none existed', () => {
+      const original = [
+        'function safeOp() {',
+        '  try {',
+        '    riskyCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function safeOp() {',
+        '  try {',
+        '    riskyCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].message).toContain('throw');
+    });
+
+    it('ignores OTel-only additions in catch blocks when comparing throws', () => {
+      const original = [
+        'function query() {',
+        '  try {',
+        '    return db.query(sql);',
+        '  } catch (err) {',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function query() {',
+        '  try {',
+        '    return db.query(sql);',
+        '  } catch (err) {',
+        '    span.recordException(err);',
+        '    span.setStatus({ code: 2 });',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.every(r => r.passed)).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct CheckResult fields for passing check', () => {
       const code = [

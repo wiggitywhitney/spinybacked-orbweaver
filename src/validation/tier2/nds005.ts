@@ -15,6 +15,8 @@ interface TryBlockFingerprint {
   /** First non-whitespace statement in the try body, used as a matching anchor. */
   bodyAnchor: string;
   lineNumber: number;
+  /** Normalized throw expressions in the catch block (excluding OTel lines). */
+  catchThrows: string[];
 }
 
 /**
@@ -61,6 +63,27 @@ function extractBodyAnchor(tryStmt: TryStatement): string {
 }
 
 /**
+ * Extract normalized throw expressions from a catch clause's block,
+ * ignoring OTel-added lines.
+ */
+function extractCatchThrows(catchClause: import('ts-morph').CatchClause | undefined): string[] {
+  if (!catchClause) return [];
+  const throws: string[] = [];
+  const block = catchClause.getBlock();
+  block.forEachDescendant((node) => {
+    if (Node.isThrowStatement(node)) {
+      const text = node.getText().trim();
+      if (!isOtelLine(text)) {
+        // Normalize: extract the throw expression (strip "throw " prefix and trailing ";")
+        const expr = node.getExpression()?.getText().trim() ?? '';
+        throws.push(expr);
+      }
+    }
+  });
+  return throws;
+}
+
+/**
  * Extract structural fingerprints of all try/catch/finally blocks in a source file.
  */
 function extractTryBlocks(sourceFile: SourceFile): TryBlockFingerprint[] {
@@ -78,6 +101,7 @@ function extractTryBlocks(sourceFile: SourceFile): TryBlockFingerprint[] {
       catchParamName: catchClause?.getVariableDeclaration()?.getName(),
       bodyAnchor: extractBodyAnchor(node),
       lineNumber: node.getStartLineNumber(),
+      catchThrows: extractCatchThrows(catchClause),
     });
   });
 
@@ -124,6 +148,7 @@ function extractInstrumentedTryBlocks(sourceFile: SourceFile): TryBlockFingerpri
       catchParamName: catchClause?.getVariableDeclaration()?.getName(),
       bodyAnchor: extractBodyAnchor(node),
       lineNumber: node.getStartLineNumber(),
+      catchThrows: extractCatchThrows(catchClause),
     });
   });
 
@@ -241,6 +266,48 @@ export function checkControlFlowPreservation(
         tier: 2,
         blocking: false,
       });
+    }
+
+    // Check throw statement preservation in catch blocks
+    if (origBlock.hasCatch && instrBlock.hasCatch) {
+      const origThrows = origBlock.catchThrows;
+      const instrThrows = instrBlock.catchThrows;
+
+      // Detect removed throws
+      for (const origThrow of origThrows) {
+        if (!instrThrows.includes(origThrow)) {
+          violations.push({
+            ruleId: 'NDS-005',
+            passed: false,
+            filePath,
+            lineNumber: instrBlock.lineNumber,
+            message:
+              `NDS-005: Throw statement modified in catch block at line ${origBlock.lineNumber}. ` +
+              `Original throws \`${origThrow}\` but instrumented code does not. ` +
+              `Instrumentation must not modify throw behavior in existing catch blocks.`,
+            tier: 2,
+            blocking: false,
+          });
+        }
+      }
+
+      // Detect added throws (changes error propagation semantics)
+      for (const instrThrow of instrThrows) {
+        if (!origThrows.includes(instrThrow)) {
+          violations.push({
+            ruleId: 'NDS-005',
+            passed: false,
+            filePath,
+            lineNumber: instrBlock.lineNumber,
+            message:
+              `NDS-005: Throw statement added to catch block at line ${origBlock.lineNumber}. ` +
+              `Instrumented code throws \`${instrThrow}\` which was not in the original. ` +
+              `Instrumentation must not add throw statements to existing catch blocks.`,
+            tier: 2,
+            blocking: false,
+          });
+        }
+      }
     }
 
     // Check finally clause preservation
