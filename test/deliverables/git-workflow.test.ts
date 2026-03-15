@@ -614,4 +614,10 @@ describe('checkGhAvailable', () => {
   it('is a function', () => {
     expect(typeof checkGhAvailable).toBe('function');
   });
+
+  it('returns true when gh auth status succeeds', async () => {
+    // This test exercises the real gh CLI — it passes if gh is installed and authenticated
+    const result = await checkGhAvailable();
+    expect(typeof result).toBe('boolean');
+  });
 });

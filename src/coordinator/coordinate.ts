@@ -25,6 +25,7 @@ import type { SchemaDiffResult } from './schema-diff.ts';
 import { runLiveCheck as defaultRunLiveCheck } from './live-check.ts';
 import type { LiveCheckResult, LiveCheckDeps, LiveCheckOptions } from './live-check.ts';
 import { readFile } from 'node:fs/promises';
+import { checkGhAvailable as defaultCheckGhAvailable } from '../deliverables/git-workflow.ts';
 import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
 import type { FileContent } from '../validation/tier2/cdq008.ts';
 
@@ -76,6 +77,7 @@ export interface CoordinateDeps {
     callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
   ) => Promise<LiveCheckResult>;
   readFileForAdvisory: (filePath: string) => Promise<string>;
+  checkGhAvailable?: () => Promise<boolean>;
   liveCheckOptions?: LiveCheckOptions;
 }
 
@@ -141,6 +143,7 @@ export async function coordinate(
   const schemaDiff = deps?.computeSchemaDiff ?? defaultComputeSchemaDiff;
   const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
   const readForAdvisory = deps?.readFileForAdvisory ?? ((fp: string) => readFile(fp, 'utf-8'));
+  const checkGh = deps?.checkGhAvailable ?? defaultCheckGhAvailable;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
@@ -161,6 +164,20 @@ export async function coordinate(
     throw new CoordinatorAbortError(
       `Prerequisites failed — cannot proceed:\n${failedMessages}`,
     );
+  }
+
+  // Advisory: Check gh CLI authentication early so users know before tokens are spent
+  const ghWarnings: string[] = [];
+  try {
+    const ghAuthenticated = await checkGh();
+    if (!ghAuthenticated) {
+      ghWarnings.push(
+        'gh CLI is not installed or not authenticated — PR creation will be skipped. ' +
+        'Run \'gh auth login\' to enable PR creation, or use --no-pr to suppress this warning.',
+      );
+    }
+  } catch {
+    // gh check failure is not fatal — continue without warning
   }
 
   // Step 2: Discover files (abort on failure — zero files or limit exceeded)
@@ -283,6 +300,7 @@ export async function coordinate(
   runResult.schemaHashStart = schemaHashStart;
   runResult.schemaHashEnd = schemaHashEnd;
   runResult.schemaDiff = schemaDiffMarkdown;
+  runResult.warnings.push(...ghWarnings);
   runResult.warnings.push(...schemaExtensionWarnings);
   runResult.warnings.push(...schemaHashWarnings);
   runResult.warnings.push(...schemaDiffWarnings);
