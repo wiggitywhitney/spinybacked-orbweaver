@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - (2026-03-14) AST-based function extraction for function-level instrumentation fallback (PRD #106, milestone 1): `extractExportedFunctions()` identifies exported functions with dependency tracking (imports, module-level constants, JSDoc), filters trivial and already-instrumented functions, and builds self-contained LLM context per function
 - Project scaffolding: TypeScript with erasableSyntaxOnly, Vitest, ESM module system
 - 7-phase PRD structure covering single-file instrumentation through git workflow
-- Evaluation rubric with 31 rules across 6 dimensions (4 gates + 27 quality rules: NDS, API, COV, RST, CDQ, SCH)
+- Evaluation rubric with 32 rules across 6 dimensions (5 gates + 27 quality rules: NDS, API, COV, RST, CDQ, SCH)
 - Telemetry agent spec v3.9 defining the complete agent architecture
 - Design document with cross-phase interfaces and module organization
 - Config validation (`src/config/`): Zod schema for `orb.yaml` with all config fields, typo detection via Levenshtein distance, structured error codes
