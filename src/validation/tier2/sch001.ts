@@ -290,7 +290,9 @@ async function checkNamingQuality(
 
   if (allResults.length === 0) {
     return {
-      results: [pass(filePath, 'Span names follow naming quality conventions (no registry span definitions to check against).')],
+      results: [pass(filePath, judgeTokenUsage.length > 0
+        ? 'Span names passed naming quality checks including judge assessment (no registry span definitions to check against).'
+        : 'Span names passed script cardinality checks (no registry span definitions available; naming judge not applied).')],
       judgeTokenUsage,
     };
   }
