@@ -33,13 +33,13 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   };
 
   describe('no spans in code', () => {
-    it('passes when code has no span calls', () => {
+    it('passes when code has no span calls', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'function doWork() { return 1; }',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
@@ -50,7 +50,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('no registry span definitions', () => {
-    it('falls back to naming quality check when registry has no span definitions', () => {
+    it('falls back to naming quality check when registry has no span definitions', async () => {
       const schemaWithoutSpans = {
         groups: [
           {
@@ -71,7 +71,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       // Falls back to naming quality — "doWork" is valid (no dynamic values, bounded cardinality)
       expect(results).toHaveLength(1);
@@ -81,7 +81,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('span names match registry', () => {
-    it('passes when span name matches a registry span operation', () => {
+    it('passes when span name matches a registry span operation', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -92,13 +92,13 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes when all span names match registry definitions', () => {
+    it('passes when all span names match registry definitions', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -114,7 +114,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
@@ -122,7 +122,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('span names not in registry', () => {
-    it('fails when span name is not in registry', () => {
+    it('fails when span name is not in registry', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -133,7 +133,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
@@ -142,7 +142,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results[0].lineNumber).toBeTypeOf('number');
     });
 
-    it('reports each non-matching span name as a separate CheckResult', () => {
+    it('reports each non-matching span name as a separate CheckResult', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -158,7 +158,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(2);
       expect(results[0].passed).toBe(false);
@@ -171,7 +171,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('startSpan support', () => {
-    it('detects span names from startSpan calls', () => {
+    it('detects span names from startSpan calls', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -181,7 +181,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
@@ -189,7 +189,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('naming quality fallback', () => {
-    it('flags span names with dynamic-looking patterns when no registry spans exist', () => {
+    it('flags non-literal span names (template literals) as unbounded cardinality', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
@@ -202,14 +202,35 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      // Template literals are not string literals — the check skips them (returns null from getSpanNameLiteral)
-      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      // Template literals are not string literals — they indicate unbounded cardinality
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('non-literal');
+    });
+
+    it('treats no-substitution template literals as static span names', async () => {
+      const schemaWithoutSpans = { groups: [] };
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan(`myapp.user.get_users`, (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // No-substitution template literals are static — treated like string literals
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('flags span names containing UUIDs or numbers as unbounded cardinality', () => {
+    it('flags span names containing UUIDs or numbers as unbounded cardinality', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
@@ -222,7 +243,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
@@ -231,7 +252,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('HTTP status codes are not unbounded cardinality', () => {
-    it('does not flag span names containing HTTP status codes like 200', () => {
+    it('does not flag span names containing HTTP status codes like 200', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
@@ -244,13 +265,13 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('does not flag span names containing status code 404', () => {
+    it('does not flag span names containing status code 404', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
@@ -263,13 +284,13 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('does not flag span names containing status code 500', () => {
+    it('does not flag span names containing status code 500', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
@@ -282,13 +303,13 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('still flags genuinely unbounded numeric patterns like timestamps', () => {
+    it('still flags genuinely unbounded numeric patterns like timestamps', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
@@ -301,7 +322,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
@@ -309,7 +330,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('mixed — some match, some do not', () => {
-    it('fails if any span name does not match registry', () => {
+    it('fails if any span name does not match registry', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -325,7 +346,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       // Only the non-matching span produces a result
       expect(results).toHaveLength(1);
@@ -335,7 +356,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('CheckResult structure', () => {
-    it('returns correct structure for passing check', () => {
+    it('returns correct structure for passing check', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -346,7 +367,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         '}',
       ].join('\n');
 
-      const results = checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
 
       expect(results).toHaveLength(1);
       expect(results[0]).toEqual({

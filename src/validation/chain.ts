@@ -48,6 +48,7 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   const { originalCode, instrumentedCode, filePath, config } = input;
   const tier1Results: CheckResult[] = [];
   const tier2Results: CheckResult[] = [];
+  const judgeTokenUsage: import('../agent/schema.ts').TokenUsage[] = [];
 
   // --- Tier 1: Structural checks (short-circuit on first failure) ---
 
@@ -230,10 +231,22 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
 
   // NDS-005: Verify existing try/catch/finally structure is preserved after instrumentation.
   if (config.tier2Checks['NDS-005']?.enabled) {
+    const judgeDeps = config.anthropicClient
+      ? { client: config.anthropicClient }
+      : undefined;
+    const nds005 = await checkControlFlowPreservation(
+      originalCode,
+      instrumentedCode,
+      filePath,
+      judgeDeps,
+    );
     tier2Results.push(...collectCheckResults(
-      checkControlFlowPreservation(originalCode, instrumentedCode, filePath),
+      nds005.results,
       config.tier2Checks['NDS-005'].blocking,
     ));
+    if (nds005.judgeTokenUsage.length > 0) {
+      judgeTokenUsage.push(...nds005.judgeTokenUsage);
+    }
   }
 
   // RST-005: Detect double-instrumentation — spans added to already-instrumented functions.
@@ -245,10 +258,22 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   }
 
   if (config.tier2Checks['SCH-001']?.enabled && config.resolvedSchema) {
+    const judgeDeps = config.anthropicClient
+      ? { client: config.anthropicClient }
+      : undefined;
+    const sch001 = await checkSpanNamesMatchRegistry(
+      instrumentedCode,
+      filePath,
+      config.resolvedSchema,
+      judgeDeps,
+    );
     tier2Results.push(...collectCheckResults(
-      checkSpanNamesMatchRegistry(instrumentedCode, filePath, config.resolvedSchema),
+      sch001.results,
       config.tier2Checks['SCH-001'].blocking,
     ));
+    if (sch001.judgeTokenUsage.length > 0) {
+      judgeTokenUsage.push(...sch001.judgeTokenUsage);
+    }
   }
 
   if (config.tier2Checks['SCH-002']?.enabled && config.resolvedSchema) {
@@ -266,26 +291,44 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   }
 
   if (config.tier2Checks['SCH-004']?.enabled && config.resolvedSchema) {
+    const judgeDeps = config.anthropicClient
+      ? { client: config.anthropicClient }
+      : undefined;
+    const sch004 = await checkNoRedundantSchemaEntries(
+      instrumentedCode,
+      filePath,
+      config.resolvedSchema,
+      judgeDeps,
+    );
     tier2Results.push(...collectCheckResults(
-      checkNoRedundantSchemaEntries(instrumentedCode, filePath, config.resolvedSchema),
+      sch004.results,
       config.tier2Checks['SCH-004'].blocking,
     ));
+    if (sch004.judgeTokenUsage.length > 0) {
+      judgeTokenUsage.push(...sch004.judgeTokenUsage);
+    }
   }
 
-  return buildResult(tier1Results, tier2Results);
+  return buildResult(tier1Results, tier2Results, judgeTokenUsage);
 }
 
 /**
  * Normalize a check result (single or array) and apply the blocking flag
  * from the validation config. Supports the migration from single-result
  * checks to per-finding array results (issue #43).
+ *
+ * Per-finding blocking decisions are preserved: a finding that sets
+ * blocking: false (e.g., low-confidence judge verdict) stays advisory
+ * even if the rule-level config says blocking: true. The conjunction
+ * ensures a finding can only block if BOTH the config allows it AND
+ * the individual finding says it should.
  */
 export function collectCheckResults(
   result: CheckResult | CheckResult[],
   blocking: boolean,
 ): CheckResult[] {
   const results = Array.isArray(result) ? result : [result];
-  return results.map((r) => ({ ...r, blocking }));
+  return results.map((r) => ({ ...r, blocking: r.blocking && blocking }));
 }
 
 /**
@@ -294,6 +337,7 @@ export function collectCheckResults(
 function buildResult(
   tier1Results: CheckResult[],
   tier2Results: CheckResult[],
+  judgeTokenUsage?: import('../agent/schema.ts').TokenUsage[],
 ): ValidationResult {
   const allResults = [...tier1Results, ...tier2Results];
   const blockingFailures = allResults.filter((r) => !r.passed && r.blocking);
@@ -305,5 +349,6 @@ function buildResult(
     tier2Results,
     blockingFailures,
     advisoryFindings,
+    ...(judgeTokenUsage && judgeTokenUsage.length > 0 ? { judgeTokenUsage } : {}),
   };
 }

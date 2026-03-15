@@ -294,7 +294,8 @@ describe('validateFile', () => {
       const collected = collectCheckResults(single, true);
 
       expect(collected).toHaveLength(1);
-      expect(collected[0].blocking).toBe(true);
+      // Per-finding blocking is preserved: false AND true = false
+      expect(collected[0].blocking).toBe(false);
       // Original not mutated
       expect(single.blocking).toBe(false);
     });

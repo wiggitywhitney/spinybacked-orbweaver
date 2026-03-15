@@ -1,4 +1,4 @@
-// ABOUTME: Tests for NDS-005 Tier 2 check — control flow preservation.
+// ABOUTME: Tests for NDS-005 Tier 2 check — control flow preservation (script-only).
 // ABOUTME: Verifies that instrumentation does not restructure existing try/catch/finally blocks.
 
 import { describe, it, expect } from 'vitest';
@@ -8,7 +8,7 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
   const filePath = '/test/example.js';
 
   describe('passing cases', () => {
-    it('passes when try/catch structure is preserved', () => {
+    it('passes when try/catch structure is preserved', async () => {
       const original = [
         'async function fetchData() {',
         '  try {',
@@ -40,13 +40,13 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
       expect(results[0].ruleId).toBe('NDS-005');
     });
 
-    it('passes when no try/catch blocks exist in original', () => {
+    it('passes when no try/catch blocks exist in original', async () => {
       const original = [
         'function add(a, b) {',
         '  return a + b;',
@@ -66,12 +66,12 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes when new try/finally is added for span lifecycle', () => {
+    it('passes when new try/finally is added for span lifecycle', async () => {
       const original = [
         'function process(data) {',
         '  try {',
@@ -102,12 +102,12 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes when try/catch/finally all preserved', () => {
+    it('passes when try/catch/finally all preserved', async () => {
       const original = [
         'function cleanup() {',
         '  try {',
@@ -137,12 +137,12 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes with multiple preserved try/catch blocks', () => {
+    it('passes with multiple preserved try/catch blocks', async () => {
       const original = [
         'function multi() {',
         '  try {',
@@ -173,12 +173,12 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes when OTel lines are added inside existing catch blocks', () => {
+    it('passes when OTel lines are added inside existing catch blocks', async () => {
       const original = [
         'async function query() {',
         '  try {',
@@ -208,14 +208,14 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
   });
 
   describe('failing cases', () => {
-    it('detects when catch clause is removed from try/catch', () => {
+    it('detects when catch clause is removed from try/catch', async () => {
       const original = [
         'function riskyOp() {',
         '  try {',
@@ -236,7 +236,7 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures.length).toBeGreaterThanOrEqual(1);
       expect(failures[0].ruleId).toBe('NDS-005');
@@ -244,7 +244,7 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
       expect(failures[0].message).toContain('catch');
     });
 
-    it('detects when finally clause is removed from try/catch/finally', () => {
+    it('detects when finally clause is removed from try/catch/finally', async () => {
       const original = [
         'function withCleanup() {',
         '  try {',
@@ -267,14 +267,14 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures.length).toBeGreaterThanOrEqual(1);
       expect(failures[0].ruleId).toBe('NDS-005');
       expect(failures[0].message).toContain('finally');
     });
 
-    it('detects when try/catch is entirely removed', () => {
+    it('detects when try/catch is entirely removed', async () => {
       const original = [
         'function safe() {',
         '  try {',
@@ -291,13 +291,13 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures.length).toBeGreaterThanOrEqual(1);
       expect(failures[0].ruleId).toBe('NDS-005');
     });
 
-    it('detects when existing try/catch blocks are merged', () => {
+    it('detects when existing try/catch blocks are merged', async () => {
       const original = [
         'function twoStep() {',
         '  try {',
@@ -326,13 +326,13 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures.length).toBeGreaterThanOrEqual(1);
       expect(failures[0].ruleId).toBe('NDS-005');
     });
 
-    it('reports multiple violations for multiple restructured blocks', () => {
+    it('reports multiple violations for multiple restructured blocks', async () => {
       const original = [
         'function multi() {',
         '  try {',
@@ -366,21 +366,162 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures.length).toBe(2);
     });
   });
 
+  describe('throw statement modification detection', () => {
+    it('passes when throw statements in catch blocks are preserved', async () => {
+      const original = [
+        'function fetchData() {',
+        '  try {',
+        '    return JSON.parse(input);',
+        '  } catch (err) {',
+        '    console.error(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function fetchData() {',
+        '  try {',
+        '    return JSON.parse(input);',
+        '  } catch (err) {',
+        '    console.error(err);',
+        '    span.recordException(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.every(r => r.passed)).toBe(true);
+    });
+
+    it('detects when a throw statement is removed from a catch block', async () => {
+      const original = [
+        'function riskyOp() {',
+        '  try {',
+        '    dangerousCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function riskyOp() {',
+        '  try {',
+        '    dangerousCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '    span.recordException(err);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].message).toContain('throw');
+    });
+
+    it('detects when a throw expression is modified', async () => {
+      const original = [
+        'function parse(data) {',
+        '  try {',
+        '    return JSON.parse(data);',
+        '  } catch (err) {',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function parse(data) {',
+        '  try {',
+        '    return JSON.parse(data);',
+        '  } catch (err) {',
+        '    throw new Error("wrapped: " + err.message);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].message).toContain('throw');
+    });
+
+    it('detects when a throw is added where none existed', async () => {
+      const original = [
+        'function safeOp() {',
+        '  try {',
+        '    riskyCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function safeOp() {',
+        '  try {',
+        '    riskyCall();',
+        '  } catch (err) {',
+        '    logError(err);',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThanOrEqual(1);
+      expect(failures[0].message).toContain('throw');
+    });
+
+    it('ignores OTel-only additions in catch blocks when comparing throws', async () => {
+      const original = [
+        'function query() {',
+        '  try {',
+        '    return db.query(sql);',
+        '  } catch (err) {',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function query() {',
+        '  try {',
+        '    return db.query(sql);',
+        '  } catch (err) {',
+        '    span.recordException(err);',
+        '    span.setStatus({ code: 2 });',
+        '    throw err;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.every(r => r.passed)).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
-    it('returns correct CheckResult fields for passing check', () => {
+    it('returns correct Nds005Result fields for passing check', async () => {
       const code = [
         'function foo() {',
         '  try { bar(); } catch(e) { baz(e); }',
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(code, code, filePath);
+      const { results, judgeTokenUsage } = await checkControlFlowPreservation(code, code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0]).toEqual({
         ruleId: 'NDS-005',
@@ -391,9 +532,10 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         tier: 2,
         blocking: false,
       });
+      expect(judgeTokenUsage).toHaveLength(0);
     });
 
-    it('returns correct CheckResult fields for failing check', () => {
+    it('returns correct CheckResult fields for failing check', async () => {
       const original = [
         'function foo() {',
         '  try { bar(); } catch(e) { baz(e); }',
@@ -406,7 +548,7 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         '}',
       ].join('\n');
 
-      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       const failure = results.find(r => !r.passed);
       expect(failure).toBeDefined();
       expect(failure!.ruleId).toBe('NDS-005');
