@@ -12,9 +12,8 @@ Spinybacked Orbweaver is an AI agent that adds OpenTelemetry instrumentation to 
 1. **Analyzes** each file to identify what should be instrumented — external calls (HTTP, DB, message queues), schema-defined spans, and service entry points
 2. **Generates** complete instrumented files using an LLM, preferring auto-instrumentation libraries over manual spans
 3. **Validates** every change against a two-tier rubric (31 rules covering syntax, non-destructiveness, coverage, restraint, schema fidelity, and code quality) — reverting any file that fails
-4. **Retries** intelligently — multi-turn fixes with validation feedback, then fresh regeneration with failure hints if the agent gets stuck
-5. **Falls back** to function-level instrumentation when whole-file attempts are exhausted — decomposes the file into individual exported functions, instruments each with the full retry loop, and reassembles the result with deduplicated imports
-6. **Commits** each file individually on a feature branch, installs dependencies, and opens a PR with a detailed summary
+4. **Retries** intelligently — multi-turn fixes with validation feedback, fresh regeneration with failure hints, and function-level fallback that decomposes complex files into individual functions when whole-file attempts are exhausted
+5. **Commits** each file individually on a feature branch, installs dependencies, and opens a PR with a detailed summary
 
 The agent is schema-driven: your [Weaver](https://github.com/open-telemetry/weaver) registry defines which spans and attributes exist, and the agent extends the registry as it discovers new instrumentation needs. When your registry declares [OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the resolved schema includes semconv attributes — the agent prefers them for naming, and validation (SCH-002) checks attributes against the full resolved registry. Generated code is evaluated against the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. All generated code depends only on `@opentelemetry/api` — never SDK internals.
 
@@ -219,6 +218,8 @@ orbweaver instrument src/
 ```
 
 Pass a directory to instrument all `.js` files in it, or a single file path to instrument one file. The agent discovers files, calculates a cost ceiling (displayed in dollars), asks for confirmation, then instruments each file sequentially. Each successful file gets its own commit on a feature branch. After all files are processed, the agent installs dependencies, updates the SDK init file, and opens a PR.
+
+The cost ceiling is a conservative worst case (assumes output tokens equal input tokens, plus 30% thinking headroom). Actual costs are typically much lower — a 630-line LangGraph state machine that needed all 3 retry attempts used ~78k tokens, well under the 100k ceiling.
 
 ```text
 $ orbweaver instrument src/order-service.js
