@@ -290,6 +290,7 @@ function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
 }
 
 function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): string {
+  const oneLine = (value: string) => value.replace(/\r?\n/g, ' ').trim();
   const filesWithRefactors = runResult.fileResults.filter(
     f => f.suggestedRefactors && f.suggestedRefactors.length > 0,
   );
@@ -309,8 +310,8 @@ function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): s
       const loc = refactor.location.startLine === refactor.location.endLine
         ? `L${refactor.location.startLine}`
         : `L${refactor.location.startLine}–${refactor.location.endLine}`;
-      lines.push(`- **${refactor.description}** (${loc})`);
-      lines.push(`  - ${refactor.reason}`);
+      lines.push(`- **${oneLine(refactor.description)}** (${loc})`);
+      lines.push(`  - ${oneLine(refactor.reason)}`);
       lines.push(`  - Unblocks: ${rules}`);
     }
     lines.push('');

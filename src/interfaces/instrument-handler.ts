@@ -1,7 +1,7 @@
 // ABOUTME: Handler for the `orbweaver instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
@@ -245,8 +245,7 @@ export async function handleInstrument(
       deps.stderr('');
       deps.stderr('Recommended refactors:');
       for (const file of filesWithRefactors) {
-        const basename = file.path.split('/').pop() ?? file.path;
-        deps.stderr(`  ${basename}:`);
+        deps.stderr(`  ${basename(file.path)}:`);
         for (const refactor of file.suggestedRefactors!) {
           deps.stderr(`    - ${refactor.description} [${refactor.unblocksRules.join(', ')}]`);
           if (options.verbose) {

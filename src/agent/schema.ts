@@ -33,10 +33,13 @@ export const LlmSuggestedRefactorSchema = z.strictObject({
   description: z.string(),
   diff: z.string(),
   reason: z.string(),
-  unblocksRules: z.array(z.string()),
-  startLine: z.number().int().nonnegative(),
-  endLine: z.number().int().nonnegative(),
-});
+  unblocksRules: z.array(z.string()).nonempty(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+}).refine(
+  ({ startLine, endLine }) => endLine >= startLine,
+  { message: 'endLine must be greater than or equal to startLine', path: ['endLine'] },
+);
 
 /**
  * The structured output schema sent to the LLM via zodOutputFormat.

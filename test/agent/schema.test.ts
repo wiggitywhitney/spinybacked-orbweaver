@@ -127,6 +127,28 @@ describe('LlmSuggestedRefactorSchema', () => {
       extra: 'not allowed',
     })).toThrow();
   });
+
+  it('rejects zero line numbers (1-based required)', () => {
+    expect(() => LlmSuggestedRefactorSchema.parse({
+      ...validRefactor,
+      startLine: 0,
+    })).toThrow();
+  });
+
+  it('rejects endLine less than startLine', () => {
+    expect(() => LlmSuggestedRefactorSchema.parse({
+      ...validRefactor,
+      startLine: 10,
+      endLine: 9,
+    })).toThrow();
+  });
+
+  it('rejects empty unblocksRules', () => {
+    expect(() => LlmSuggestedRefactorSchema.parse({
+      ...validRefactor,
+      unblocksRules: [],
+    })).toThrow();
+  });
 });
 
 describe('LlmOutputSchema', () => {

@@ -376,10 +376,14 @@ async function executeRetryLoop(
         continue;
       }
 
-      // Terminal failure or last attempt — stop immediately
+      // Terminal failure or last attempt — flush any accumulated refactors
+      const persistentKeys = detectPersistentViolations(nds003ViolationsPerAttempt);
+      const refactors = collectSuggestedRefactors(llmRefactorsPerAttempt, persistentKeys, filePath);
       return buildFailedResult(
         filePath, instrumentResult.error, instrumentResult.error,
         cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+        undefined,
+        refactors.length > 0 ? refactors : undefined,
       );
     }
 
