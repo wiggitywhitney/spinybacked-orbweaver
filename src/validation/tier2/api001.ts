@@ -39,12 +39,15 @@ const FORBIDDEN_PATTERNS: Array<{
     ruleId: 'API-001',
     category: 'OTel SDK package',
   },
+  // semantic-conventions is API-001 (not API-004) because it's a non-API package
+  // developers sometimes import directly, unlike @opentelemetry/core which is
+  // truly internal SDK plumbing that only the SDK itself should use.
   {
     pattern: /^@opentelemetry\/semantic-conventions$/,
     ruleId: 'API-001',
     category: 'OTel constants package',
   },
-  // API-004: OTel SDK internal imports
+  // API-004: OTel SDK internal imports (truly internal packages only the SDK uses)
   {
     pattern: /^@opentelemetry\/core$/,
     ruleId: 'API-004',

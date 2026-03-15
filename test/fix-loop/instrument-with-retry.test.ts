@@ -208,6 +208,28 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
 
     // Total: 23 checks
     expect(Object.keys(checks)).toHaveLength(23);
+
+    // projectRoot is undefined when not provided
+    expect(capturedConfig!.projectRoot).toBeUndefined();
+  });
+
+  it('passes projectRoot through to validation config when provided', async () => {
+    const output = makeInstrumentationOutput();
+    let capturedConfig: ValidateFileInput['config'] | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async (input: ValidateFileInput) => {
+        capturedConfig = input.config;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, projectRoot: '/tmp/my-project' },
+    );
+
+    expect(capturedConfig).toBeDefined();
+    expect(capturedConfig!.projectRoot).toBe('/tmp/my-project');
   });
 
   it('returns failed FileResult and reverts file when validation fails', async () => {

@@ -196,7 +196,7 @@ describe('checkForbiddenImports (API-001/003/004)', () => {
     });
   });
 
-  describe('API-004: OTel SDK internal imports (forbidden, same mechanism as API-001)', () => {
+  describe('API-004: OTel SDK internal imports', () => {
     it('flags @opentelemetry/core', () => {
       const code = 'import { hrTime } from "@opentelemetry/core";\n';
 
@@ -207,7 +207,9 @@ describe('checkForbiddenImports (API-001/003/004)', () => {
       expect(failures[0].ruleId).toBe('API-004');
       expect(failures[0].message).toContain('@opentelemetry/core');
     });
+  });
 
+  describe('API-001: non-API OTel packages (semantic-conventions, resources)', () => {
     it('flags @opentelemetry/semantic-conventions', () => {
       const code = 'import { SEMATTRS_HTTP_METHOD } from "@opentelemetry/semantic-conventions";\n';
 
@@ -219,7 +221,7 @@ describe('checkForbiddenImports (API-001/003/004)', () => {
       expect(failures[0].message).toContain('@opentelemetry/semantic-conventions');
     });
 
-    it('flags @opentelemetry/resources (SDK internal)', () => {
+    it('flags @opentelemetry/resources via CJS require', () => {
       const code = 'const { Resource } = require("@opentelemetry/resources");\n';
 
       const results = checkForbiddenImports(code, filePath);
