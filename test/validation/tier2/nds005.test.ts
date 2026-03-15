@@ -10,7 +10,7 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
   describe('passing cases', () => {
     it('passes when try/catch structure is preserved', () => {
       const original = [
-        'function fetchData() {',
+        'async function fetchData() {',
         '  try {',
         '    const data = await fetch(url);',
         '    return data.json();',
@@ -23,8 +23,8 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
 
       const instrumented = [
         'const { trace } = require("@opentelemetry/api");',
-        'function fetchData() {',
-        '  return trace.getTracer("app").startActiveSpan("fetchData", (span) => {',
+        'async function fetchData() {',
+        '  return trace.getTracer("app").startActiveSpan("fetchData", async (span) => {',
         '    try {',
         '      const data = await fetch(url);',
         '      return data.json();',
