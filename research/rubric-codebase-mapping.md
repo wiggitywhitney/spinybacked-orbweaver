@@ -12,7 +12,7 @@ This document maps each evaluation rubric rule to specific code sites in commit-
 - **Tests**: 320 tests across 11 files (Vitest with v8 coverage)
 - **Registry**: Weaver schema at `telemetry/registry/` with 5 attribute groups
 
-**IS rules note**: Most Instrumentation Score rules (MET-002 through MET-006) are likely N/A for this codebase — commit-story-v2 is a CLI tool that runs once per commit, so metrics are not a natural fit. Only 6 IS rules are statically checkable; see the [IS Rule Applicability Notes](#is-rule-applicability-notes) section at the end for details.
+**IS rules note**: Most Instrumentation Score rules (MET-002 through MET-006) are likely N/A for this codebase — commit-story-v2 is a CLI tool (distributed as an npm package) that runs once per commit, so metrics are not a natural fit. Only 6 IS rules are statically checkable; see the [IS Rule Applicability Notes](#is-rule-applicability-notes) section at the end for details.
 
 ## Expected Instrumentation Topology
 
