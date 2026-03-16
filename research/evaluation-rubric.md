@@ -184,7 +184,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Classification** | Automatable |
 | **Mechanism** | AST/grep: all `@opentelemetry/*` imports resolve to `@opentelemetry/api` only. |
 
-**SDK setup file exemption**: API-001 and API-004 evaluate application source files only. The SDK setup file (configured as `sdkInitFile` in orb.yaml, typically `src/instrumentation.js` or `src/instrumentation.ts`) is expected to import SDK packages and is exempt from these rules.
+**SDK setup file exemption**: API-001 and API-004 evaluate application source files only. The SDK setup file (configured as `sdkInitFile` in orbweaver.yaml, typically `src/instrumentation.js` or `src/instrumentation.ts`) is expected to import SDK packages and is exempt from these rules.
 
 #### NDS-006: Module System Consistency
 
