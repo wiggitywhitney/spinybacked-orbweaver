@@ -74,6 +74,13 @@ export async function myFunction(params) {
 
 For functions with existing try/catch blocks, wrap the entire function body — preserve the existing error handling inside the try block and add OTel error recording at the top of the catch block.
 
+### Error Handling
+
+Every catch block inside a span MUST have both \`span.recordException(error)\` AND \`span.setStatus({ code: SpanStatusCode.ERROR })\`. One without the other is incomplete:
+- \`setStatus\` alone marks the span as errored but loses the stack trace and exception details.
+- \`recordException\` alone attaches the exception event but doesn't change the span's status code.
+- Using \`span.setAttribute('error', ...)\` instead is wrong — use the standard OTel error recording API.
+
 ### Span Naming
 
 When choosing a span name for \`tracer.startActiveSpan()\`:
