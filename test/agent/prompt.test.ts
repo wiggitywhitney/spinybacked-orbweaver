@@ -77,6 +77,20 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('trace.getTracer');
   });
 
+  it('uses namespace-qualified placeholder in span example, not span. prefix', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    expect(prompt).toContain("'my_service.operation_name'");
+    expect(prompt).not.toContain("'span.name'");
+  });
+
+  it('prohibits undefined guards around setAttribute calls', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    expect(prompt).toContain('Do not add null/undefined checks around');
+    expect(prompt).toContain('span.setAttribute()');
+  });
+
   it('has dedicated error handling section emphasizing recordException + setStatus pairing', () => {
     const prompt = buildSystemPrompt(schema);
 
@@ -150,9 +164,10 @@ describe('buildSystemPrompt', () => {
   it('includes span naming guidance that prioritizes schema-defined names', () => {
     const prompt = buildSystemPrompt(schema);
 
-    // Must instruct the agent to check schema spans[].name first
-    expect(prompt).toContain('spans[].name');
-    expect(prompt).toContain('schema-defined span name');
+    // Must instruct the agent to check schema span groups and strip the span. prefix
+    expect(prompt).toContain('"type": "span"');
+    expect(prompt).toContain('Strip the `span.` prefix');
+    expect(prompt).toContain('Schema-defined names are authoritative');
   });
 
   it('includes span naming convention for new spans', () => {

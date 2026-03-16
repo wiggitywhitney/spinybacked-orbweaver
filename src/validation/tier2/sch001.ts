@@ -156,10 +156,15 @@ function checkRegistryConformance(
 
   for (const entry of spanNames) {
     if (!validOperations.has(entry.name)) {
+      // Detect the common mistake of using the registry group ID (with "span." prefix) as the span name
+      const strippedName = entry.name.startsWith('span.') ? entry.name.slice(5) : null;
+      const hasSpanPrefix = strippedName !== null && validOperations.has(strippedName);
       issues.push({
         spanName: entry.name,
         line: entry.line,
-        reason: 'not found in registry span definitions',
+        reason: hasSpanPrefix
+          ? `not found in registry span definitions. Hint: Remove the "span." prefix — registry group IDs include this prefix but runtime span names should not. Use "${strippedName}" instead`
+          : 'not found in registry span definitions',
       });
     }
   }

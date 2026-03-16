@@ -31,6 +31,7 @@ export function buildSystemPrompt(resolvedSchema: object, projectName?: string):
 - All OpenTelemetry imports must come from \`@opentelemetry/api\` only. Do not import from \`@opentelemetry/sdk-*\`, \`@opentelemetry/instrumentation-*\`, or any other \`@opentelemetry/*\` package.
 - The \`instrumentedCode\` field must contain the complete file — not a diff, not a partial file. Files containing placeholder comments (\`// ...\`, \`// existing code\`, \`// rest of function\`, \`/* ... */\`) will be rejected by validation.
 - Do not add comments explaining the instrumentation. The code speaks for itself.
+- Do not add null/undefined checks around \`span.setAttribute()\` calls. Pass attribute values directly — the OpenTelemetry API handles null and undefined safely. Adding guards is a non-instrumentation change that will be rejected.
 
 ## Schema Contract
 
@@ -56,7 +57,7 @@ Wrap function bodies with \`tracer.startActiveSpan()\`:
 
 \`\`\`javascript
 export async function myFunction(params) {
-  return tracer.startActiveSpan('span.name', async (span) => {
+  return tracer.startActiveSpan('my_service.operation_name', async (span) => {
     try {
       // original function body
       span.setAttribute('relevant.attribute', value);
@@ -87,7 +88,7 @@ Every catch block inside a span MUST have both \`span.recordException(error)\` A
 
 When choosing a span name for \`tracer.startActiveSpan()\`:
 
-1. **Check the schema first.** Look at the \`spans[].name\` definitions in the schema above. If a schema-defined span name matches the function's purpose, use that exact name. Schema-defined names are authoritative — a human decided what these operations should be called.
+1. **Check the schema first.** Look at groups with \`"type": "span"\` in the schema above. Each has an \`id\` field like \`span.my_service.operation_name\`. **Strip the \`span.\` prefix** — the \`span.\` is a Weaver registry convention, not part of the runtime span name. Use just \`my_service.operation_name\` in \`tracer.startActiveSpan()\`. Schema-defined names are authoritative — a human decided what these operations should be called.
 2. **Invent a name only if no schema span matches.** All invented span names MUST start with the schema's namespace prefix (the first segment of existing span names, e.g., \`commit_story\`). Use \`<namespace>.<category>.<operation>\` format. Do NOT invent new top-level prefixes — \`context.gather\`, \`mcp.start\`, \`summary.generate\` are wrong; \`commit_story.context.gather\`, \`commit_story.mcp.start\`, \`commit_story.summary.generate\` are correct.
 3. **Report new span names in \`schemaExtensions\`.** Any span name not already in the schema is a schema extension.
 
@@ -327,7 +328,7 @@ const pool = new Pool();
 const tracer = trace.getTracer('my-service');
 
 export async function getUsers(req, res) {
-  return tracer.startActiveSpan('getUsers', async (span) => {
+  return tracer.startActiveSpan('my_service.users.get_users', async (span) => {
     try {
       const result = await pool.query('SELECT * FROM users');
       span.setAttribute('db.row_count', result.rows.length);
@@ -369,7 +370,7 @@ import { readFile } from 'node:fs/promises';
 const tracer = trace.getTracer('my-service');
 
 export async function loadConfig(path) {
-  return tracer.startActiveSpan('loadConfig', async (span) => {
+  return tracer.startActiveSpan('my_service.config.load_config', async (span) => {
     try {
       const content = await readFile(path, 'utf-8');
       return JSON.parse(content);
@@ -396,7 +397,7 @@ import { trace, SpanStatusCode } from '@opentelemetry/api';
 const tracer = trace.getTracer('my-service');
 
 export async function handleRequest(req, res) {
-  return tracer.startActiveSpan('handleRequest', async (span) => {
+  return tracer.startActiveSpan('my_service.requests.handle_request', async (span) => {
     try {
       const result = await processData(req.body);
       span.setAttribute('result.count', result.length);
@@ -417,7 +418,7 @@ import { trace, SpanStatusCode } from '@opentelemetry/api';
 const tracer = trace.getTracer('my-service');
 
 export async function handleRequest(req, res) {
-  return tracer.startActiveSpan('handleRequest', async (span) => {
+  return tracer.startActiveSpan('my_service.requests.handle_request', async (span) => {
     try {
       const result = await processData(req.body);
       span.setAttribute('result.count', result.length);
@@ -451,7 +452,7 @@ import { trace, SpanStatusCode } from '@opentelemetry/api';
 const tracer = trace.getTracer('my-service');
 
 export async function processSpan(data) {
-  return tracer.startActiveSpan('processSpan', async (otelSpan) => {
+  return tracer.startActiveSpan('my_service.spans.process_span', async (otelSpan) => {
     try {
       const span = data.timeSpan;
       const duration = span.end - span.start;
@@ -496,7 +497,7 @@ const pool = new Pool();
 const tracer = trace.getTracer('my-service');
 
 export async function getUsers(req, res) {
-  return tracer.startActiveSpan('getUsers', async (span) => {
+  return tracer.startActiveSpan('my_service.users.get_users', async (span) => {
     try {
       const result = await pool.query('SELECT * FROM users');
       span.setAttribute('db.row_count', result.rows.length);

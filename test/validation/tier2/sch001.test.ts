@@ -168,6 +168,26 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       // Each result has its own lineNumber
       expect(results[0].lineNumber).not.toBe(results[1].lineNumber);
     });
+
+    it('includes span. prefix hint when agent uses registry group ID verbatim', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getUsers() {',
+        '  return tracer.startActiveSpan("span.myapp.user.get_users", (span) => {',
+        '    try { return []; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, resolvedSchema);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('span.myapp.user.get_users');
+      expect(results[0].message).toContain('Hint:');
+      expect(results[0].message).toContain('myapp.user.get_users');
+    });
   });
 
   describe('startSpan support', () => {
