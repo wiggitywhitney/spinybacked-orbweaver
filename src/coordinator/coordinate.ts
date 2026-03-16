@@ -483,18 +483,10 @@ export async function coordinate(
       callbacks?.onCheckpointRollback?.(checkpointWindowRef.files.map(f => f.path));
     } catch { /* callback failure must not abort */ }
 
-    // Update aggregate counts to reflect rollback
+    // Update aggregate counts to reflect rollback.
+    // All files in the checkpoint window were successfully processed before rollback.
     const rolledBackCount = checkpointWindowRef.files.length;
-    // Count how many were previously succeeded (only decrement those)
-    let successRolledBack = 0;
-    for (const tracked of checkpointWindowRef.files) {
-      // The status was just set to 'failed', check what it was before
-      // Since we only track files that dispatch returned as non-failed,
-      // and the window only contains files that were successfully processed,
-      // all rolled-back files were successes or partials
-      successRolledBack++;
-    }
-    runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - successRolledBack);
+    runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - rolledBackCount);
     runResult.filesFailed += rolledBackCount;
 
     runResult.warnings.push(
