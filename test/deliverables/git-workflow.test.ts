@@ -315,7 +315,8 @@ describe('runGitWorkflow', () => {
   });
 
   describe('PR creation', () => {
-    it('creates a PR with rendered summary after commits', async () => {
+    // Also verifies non-draft (tests passing) — default makeDeps has no endOfRunValidation failure
+    it('creates a non-draft PR with rendered summary after commits', async () => {
       const deps = makeDeps();
       await runGitWorkflow(makeOptions(), deps);
 
@@ -343,18 +344,6 @@ describe('runGitWorkflow', () => {
         expect.stringContaining('Add OpenTelemetry instrumentation'),
         expect.stringContaining('Mock summary'),
         { draft: true },
-      );
-    });
-
-    it('creates a normal (non-draft) PR when tests pass', async () => {
-      const deps = makeDeps();
-      await runGitWorkflow(makeOptions(), deps);
-
-      expect(deps.createPr).toHaveBeenCalledWith(
-        '/project',
-        expect.stringContaining('Add OpenTelemetry instrumentation'),
-        expect.stringContaining('Mock summary'),
-        { draft: false },
       );
     });
 
