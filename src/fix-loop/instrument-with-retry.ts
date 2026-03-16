@@ -422,10 +422,18 @@ async function executeRetryLoop(
     llmRefactorsPerAttempt.push(output.suggestedRefactors ?? []);
 
     if (validation.passed) {
+      const spansAdded = calculateSpansAdded(output);
+
+      // When the agent adds 0 spans but leaves OTel imports/tracer init behind,
+      // restore the original file so it's byte-identical to the input.
+      if (spansAdded === 0) {
+        await writeFile(filePath, originalCode, 'utf-8');
+      }
+
       return {
         path: filePath,
         status: 'success',
-        spansAdded: calculateSpansAdded(output),
+        spansAdded,
         librariesNeeded: output.librariesNeeded,
         schemaExtensions: output.schemaExtensions,
         attributesCreated: output.attributesCreated,
