@@ -162,6 +162,15 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('<namespace>.<category>.<operation>');
   });
 
+  it('enforces namespace prefix as a constraint, not guidance (#158)', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Must be a constraint (MUST), not guidance (Follow)
+    expect(prompt).toContain('MUST start with');
+    // Must have a negative constraint against inventing prefixes
+    expect(prompt).toContain('Do NOT invent new top-level prefixes');
+  });
+
   it('requires new span names to be reported as schema extensions', () => {
     const prompt = buildSystemPrompt(schema);
 

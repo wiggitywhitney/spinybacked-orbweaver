@@ -88,7 +88,7 @@ Every catch block inside a span MUST have both \`span.recordException(error)\` A
 When choosing a span name for \`tracer.startActiveSpan()\`:
 
 1. **Check the schema first.** Look at the \`spans[].name\` definitions in the schema above. If a schema-defined span name matches the function's purpose, use that exact name. Schema-defined names are authoritative — a human decided what these operations should be called.
-2. **Invent a name only if no schema span matches.** Follow the \`<namespace>.<category>.<operation>\` convention, where namespace comes from the schema, category groups related operations (e.g., \`git\`, \`context\`, \`ai\`), and operation describes the action (e.g., \`get_commit_diff\`, \`collect\`, \`generate\`).
+2. **Invent a name only if no schema span matches.** All invented span names MUST start with the schema's namespace prefix (the first segment of existing span names, e.g., \`commit_story\`). Use \`<namespace>.<category>.<operation>\` format. Do NOT invent new top-level prefixes — \`context.gather\`, \`mcp.start\`, \`summary.generate\` are wrong; \`commit_story.context.gather\`, \`commit_story.mcp.start\`, \`commit_story.summary.generate\` are correct.
 3. **Report new span names in \`schemaExtensions\`.** Any span name not already in the schema is a schema extension.
 
 ### Auto-Instrumentation Library Detection (Path 1)
