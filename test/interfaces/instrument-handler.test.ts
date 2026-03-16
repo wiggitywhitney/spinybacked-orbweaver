@@ -294,6 +294,34 @@ describe('handleInstrument', () => {
       const summaryLine = stderrCalls.find((s: string) => s.includes('3 files processed'));
       expect(summaryLine).toBeDefined();
     });
+
+    it('prints artifact locations block with branch, PR summary path, and diff command', async () => {
+      const fileResult = makeFileResult({ status: 'success' });
+      const runResult = makeRunResult({ filesProcessed: 1, filesSucceeded: 1, fileResults: [fileResult] });
+      // Mock coordinate to fire onFileComplete callback (triggers branch creation in runGitWorkflow)
+      const coordinateMock = vi.fn().mockImplementation(
+        async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
+          callbacks?.onFileComplete?.(fileResult, 0, 1);
+          return runResult;
+        },
+      );
+      const deps = makeDeps({
+        coordinate: coordinateMock,
+        gitWorkflow: {
+          ...makeGitWorkflowDeps(),
+          validateCredentials: vi.fn().mockResolvedValue(undefined),
+          writePrSummary: vi.fn().mockResolvedValue('/test/project/orbweaver-pr-summary.md'),
+          createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/42'),
+          checkGhAvailable: vi.fn().mockResolvedValue(true),
+        },
+      });
+      await handleInstrument(makeOptions({ noPr: false }), deps);
+      const output = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+
+      expect(output).toContain('PR summary:');
+      expect(output).toContain('orbweaver-pr-summary.md');
+      expect(output).toContain('git diff');
+    });
   });
 
   describe('MODULE_NOT_FOUND distinction', () => {

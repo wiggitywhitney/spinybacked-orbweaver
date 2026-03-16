@@ -2,6 +2,7 @@
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
 import { basename, join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
@@ -199,6 +200,7 @@ export async function handleInstrument(
   let runResult: RunResult;
   let prUrl: string | undefined;
   let branchName: string | undefined;
+  let prSummaryPath: string | undefined;
   try {
     const registryDir = resolve(options.projectDir, config.schemaPath);
     const workflowResult = await runGitWorkflow(
@@ -216,6 +218,7 @@ export async function handleInstrument(
     runResult = workflowResult.runResult;
     prUrl = workflowResult.prUrl;
     branchName = workflowResult.branchName;
+    prSummaryPath = workflowResult.prSummaryPath;
   } catch (err) {
     if (err instanceof CoordinatorAbortError) {
       deps.stderr(err.message);
@@ -268,11 +271,32 @@ export async function handleInstrument(
     for (const warning of runResult.warnings) {
       deps.stderr(`Warning: ${warning}`);
     }
-    if (branchName) {
-      deps.stderr(`Branch: ${branchName}`);
-    }
-    if (prUrl) {
-      deps.stderr(`PR: ${prUrl}`);
+    // Artifact locations summary
+    if (branchName || prSummaryPath || prUrl) {
+      deps.stderr('');
+      deps.stderr('Artifacts:');
+      if (branchName) {
+        let defaultBranch = 'main';
+        try {
+          const ref = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+            cwd: options.projectDir,
+            timeout: 5000,
+          }).toString().trim();
+          // ref is like "refs/remotes/origin/main" — extract the branch name
+          const parts = ref.split('/');
+          defaultBranch = parts[parts.length - 1] ?? 'main';
+        } catch {
+          // Fallback to 'main' if detection fails
+        }
+        deps.stderr(`  Branch: ${branchName}`);
+        deps.stderr(`  Diff: git diff ${defaultBranch}...${branchName}`);
+      }
+      if (prSummaryPath) {
+        deps.stderr(`  PR summary: ${prSummaryPath}`);
+      }
+      if (prUrl) {
+        deps.stderr(`  PR: ${prUrl}`);
+      }
     }
   }
 
