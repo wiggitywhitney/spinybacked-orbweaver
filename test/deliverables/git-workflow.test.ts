@@ -315,7 +315,8 @@ describe('runGitWorkflow', () => {
   });
 
   describe('PR creation', () => {
-    it('creates a PR with rendered summary after commits', async () => {
+    // Also verifies non-draft (tests passing) — default makeDeps has no endOfRunValidation failure
+    it('creates a non-draft PR with rendered summary after commits', async () => {
       const deps = makeDeps();
       await runGitWorkflow(makeOptions(), deps);
 
@@ -324,6 +325,25 @@ describe('runGitWorkflow', () => {
         '/project',
         expect.stringContaining('Add OpenTelemetry instrumentation'),
         expect.stringContaining('Mock summary'),
+        { draft: false },
+      );
+    });
+
+    it('creates a draft PR when end-of-run tests failed', async () => {
+      const runResult = makeRunResult({ endOfRunValidation: 'FAIL: 3 test failures' });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockImplementation(async (_dir: string, _config: unknown, callbacks: { onFileComplete?: (result: FileResult, index: number, total: number) => void }) => {
+          callbacks?.onFileComplete?.(runResult.fileResults[0], 0, 1);
+          return runResult;
+        }),
+      });
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.createPr).toHaveBeenCalledWith(
+        '/project',
+        expect.stringContaining('Add OpenTelemetry instrumentation'),
+        expect.stringContaining('Mock summary'),
+        { draft: true },
       );
     });
 
