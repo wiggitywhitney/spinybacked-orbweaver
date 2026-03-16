@@ -12,13 +12,13 @@ import type { OTelImportDetectionResult } from '../ast/import-detection.ts';
  * @param resolvedSchema - The resolved Weaver schema object (from `weaver registry resolve`)
  * @returns The complete system prompt string
  */
-export function buildSystemPrompt(resolvedSchema: object): string {
+export function buildSystemPrompt(resolvedSchema: object, projectName?: string): string {
   const schemaJson = JSON.stringify(resolvedSchema, null, 2);
   const rawNamespace = (resolvedSchema as Record<string, unknown>).namespace;
   const tracerName =
     typeof rawNamespace === 'string' && rawNamespace.trim().length > 0
       ? rawNamespace
-      : 'unknown_service';
+      : (projectName ?? 'unknown_service');
   const tracerNameLiteral = JSON.stringify(tracerName);
 
   return `You are an instrumentation engineer. Your job is to add OpenTelemetry instrumentation to a JavaScript source file according to a Weaver schema contract.
@@ -48,7 +48,7 @@ Add \`import { trace, SpanStatusCode } from '@opentelemetry/api';\` at the top o
 
 ### Tracer Acquisition
 
-Add \`const tracer = trace.getTracer(${tracerNameLiteral});\` at module scope if not already present. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.${tracerName === 'unknown_service' ? `\n\n**Note**: The tracer name is currently \\\`unknown_service\\\` because the schema has no namespace defined. If the project has a \\\`package.json\\\`, use its \\\`name\\\` field instead (e.g., \\\`trace.getTracer('my-project')\\\`). Check the source file's imports or the project root for a package.json name.` : ''}
+Add \`const tracer = trace.getTracer(${tracerNameLiteral});\` at module scope if not already present. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.
 
 ### Manual Span Instrumentation (Path 2)
 
@@ -175,7 +175,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern.
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
-- **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`.
+- **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
 - **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`.
 - **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields (\`email\`, \`password\`, \`ssn\`), or undefined values.

@@ -2,7 +2,7 @@
 // ABOUTME: Includes already-instrumented detection, schema re-resolution per file, and sequential dispatch to instrumentWithRetry.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
@@ -205,6 +205,17 @@ export async function dispatchFiles(
   const seenExtensions = new Set<string>();
   const abortTracker = new EarlyAbortTracker();
 
+  // Read project name from package.json for tracer naming fallback
+  let projectName: string | undefined;
+  try {
+    const pkgJson = JSON.parse(await readFile(join(projectDir, 'package.json'), 'utf-8'));
+    if (typeof pkgJson.name === 'string' && pkgJson.name.trim().length > 0) {
+      projectName = pkgJson.name.trim();
+    }
+  } catch {
+    // No package.json or unreadable — projectName stays undefined
+  }
+
   for (let i = 0; i < total; i++) {
     if (stoppedByCheckpoint) break;
     if (abortTracker.shouldAbort()) break;
@@ -245,8 +256,12 @@ export async function dispatchFiles(
         }
       }
 
-      // Resolve schema fresh for each file
+      // Resolve schema fresh for each file, injecting project name as namespace fallback
       const schema = await resolveFn(projectDir, config.schemaPath);
+      const schemaRecord = schema as Record<string, unknown>;
+      if (projectName && (!schemaRecord.namespace || (typeof schemaRecord.namespace === 'string' && schemaRecord.namespace.trim().length === 0))) {
+        schemaRecord.namespace = projectName;
+      }
       const schemaHash = computeSchemaHash(schema as object);
 
       // Dispatch to fix loop

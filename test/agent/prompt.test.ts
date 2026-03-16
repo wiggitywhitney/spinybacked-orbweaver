@@ -397,13 +397,27 @@ describe('buildSystemPrompt', () => {
   // --- Eval run-4 findings ---
 
   describe('eval run-4: tracer name fallback (#154)', () => {
-    it('instructs LLM to use package.json name when namespace is missing', () => {
+    it('uses projectName as tracer name when namespace is missing', () => {
+      const noNamespace = makeSchema({ namespace: undefined });
+      const prompt = buildSystemPrompt(noNamespace, 'my-cool-project');
+
+      expect(prompt).toContain('trace.getTracer("my-cool-project")');
+      expect(prompt).not.toContain('unknown_service');
+    });
+
+    it('prefers schema namespace over projectName', () => {
+      const withNamespace = makeSchema({ namespace: 'from_schema' });
+      const prompt = buildSystemPrompt(withNamespace, 'from_package_json');
+
+      expect(prompt).toContain('trace.getTracer("from_schema")');
+      expect(prompt).not.toContain('from_package_json');
+    });
+
+    it('falls back to unknown_service when both namespace and projectName are missing', () => {
       const noNamespace = makeSchema({ namespace: undefined });
       const prompt = buildSystemPrompt(noNamespace);
 
-      // The prompt should tell the LLM to look for the project name
-      // rather than silently using 'unknown_service'
-      expect(prompt).toContain('package.json');
+      expect(prompt).toContain('trace.getTracer("unknown_service")');
     });
   });
 
