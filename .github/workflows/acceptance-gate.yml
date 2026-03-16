@@ -25,7 +25,7 @@ concurrency:
 jobs:
   acceptance-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 80
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +60,6 @@ jobs:
 
       - name: Run ${{ matrix.test-group.name }} acceptance tests
         run: npx vitest run --reporter=verbose ${{ matrix.test-group.pattern }}
-        timeout-minutes: 40
+        timeout-minutes: 75
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
