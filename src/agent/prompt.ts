@@ -143,7 +143,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Coverage
 
-- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function.
+- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span.
 - **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
 - **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`).
 - **COV-004**: Long-running or async I/O operations should have spans.
