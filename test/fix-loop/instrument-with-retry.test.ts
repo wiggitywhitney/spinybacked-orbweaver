@@ -235,6 +235,46 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(capturedConfig!.projectRoot).toBe('/tmp/my-project');
   });
 
+  it('passes resolvedSchema through to validation config for SCH checks', async () => {
+    const output = makeInstrumentationOutput();
+    const schema = { spans: [{ name: 'http.request' }] };
+    let capturedConfig: ValidateFileInput['config'] | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async (input: ValidateFileInput) => {
+        capturedConfig = input.config;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, schema, makeConfig(), { deps },
+    );
+
+    expect(capturedConfig).toBeDefined();
+    expect(capturedConfig!.resolvedSchema).toBe(schema);
+  });
+
+  it('passes anthropicClient through to validation config for judge calls', async () => {
+    const output = makeInstrumentationOutput();
+    const mockClient = {} as import('@anthropic-ai/sdk').default;
+    let capturedConfig: ValidateFileInput['config'] | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async (input: ValidateFileInput) => {
+        capturedConfig = input.config;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, anthropicClient: mockClient },
+    );
+
+    expect(capturedConfig).toBeDefined();
+    expect(capturedConfig!.anthropicClient).toBe(mockClient);
+  });
+
   it('returns failed FileResult and reverts file when validation fails', async () => {
     const output = makeInstrumentationOutput();
     const deps: InstrumentWithRetryDeps = {
