@@ -80,12 +80,18 @@ describe('buildSystemPrompt', () => {
   it('has dedicated error handling section emphasizing recordException + setStatus pairing', () => {
     const prompt = buildSystemPrompt(schema);
 
-    // Must have a dedicated error handling section (not just inline mentions)
-    expect(prompt).toContain('### Error Handling');
-    // Must emphasize the pairing requirement
-    expect(prompt).toContain('MUST');
-    expect(prompt).toContain('recordException');
-    expect(prompt).toContain('setStatus');
+    // Extract the Error Handling section specifically
+    const sectionStart = prompt.indexOf('### Error Handling');
+    expect(sectionStart).toBeGreaterThan(-1);
+    const sectionEnd = prompt.indexOf('###', sectionStart + 1);
+    const section = prompt.slice(sectionStart, sectionEnd > -1 ? sectionEnd : undefined);
+
+    // Section-scoped assertions — these keywords appear elsewhere in the prompt,
+    // so checking the extracted section ensures the dedicated guidance exists.
+    expect(section).toContain('MUST');
+    expect(section).toContain('recordException');
+    expect(section).toContain('setStatus');
+    expect(section).toContain("setAttribute('error");
   });
 
   it('specifies a concrete tracer name derived from schema namespace', () => {
