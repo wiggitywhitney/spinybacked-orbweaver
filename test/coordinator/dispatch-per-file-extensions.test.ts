@@ -492,7 +492,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     expect(writeSchemaExtensions).toHaveBeenNthCalledWith(2, registryDir, [goodExt, newExt]);
   });
 
-  it('pushes rejection warnings into schemaExtensionWarnings when extensions are rejected', async () => {
+  it('pushes a single summary rejection warning after all files are processed', async () => {
     const file1 = await createFile('a.js', 'function a() {}');
 
     const extensionYaml = '- id: myapp.payment.amount\n  type: double';
@@ -519,6 +519,42 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     expect(schemaExtensionWarnings).toHaveLength(1);
     expect(schemaExtensionWarnings[0]).toContain('rejected by namespace enforcement');
     expect(schemaExtensionWarnings[0]).toContain('bad.namespace.attr');
+  });
+
+  it('emits one deduplicated rejection warning across multiple files, not one per file', async () => {
+    const file1 = await createFile('a.js', 'function a() {}');
+    const file2 = await createFile('b.js', 'function b() {}');
+    const file3 = await createFile('c.js', 'function c() {}');
+
+    const ext1 = '- id: myapp.payment.amount\n  type: double';
+    const ext2 = '- id: bad.other.attr\n  type: string';
+    const writeSchemaExtensions = vi.fn().mockResolvedValue(
+      makeWriteResult({ rejected: ['bad.namespace.attr', 'bad.other.attr'] }),
+    );
+    const deps = makeDeps({
+      instrumentWithRetry: vi.fn()
+        .mockResolvedValueOnce(makeSuccessResult(file1, { schemaExtensions: [ext1] }))
+        .mockResolvedValueOnce(makeSuccessResult(file2, { schemaExtensions: [ext2] }))
+        .mockResolvedValueOnce(makeSuccessResult(file3, { schemaExtensions: [ext1] })),
+      writeSchemaExtensions,
+    });
+
+    const config = makeConfig();
+    const registryDir = join(tmpDir, 'registry');
+    const schemaExtensionWarnings: string[] = [];
+
+    await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, {
+      deps,
+      registryDir,
+      schemaExtensionWarnings,
+    });
+
+    // Should be exactly ONE summary warning, not 3 per-file warnings
+    const rejectionWarnings = schemaExtensionWarnings.filter(w => w.includes('rejected by namespace'));
+    expect(rejectionWarnings).toHaveLength(1);
+    // Should contain both rejected IDs (deduplicated)
+    expect(rejectionWarnings[0]).toContain('bad.namespace.attr');
+    expect(rejectionWarnings[0]).toContain('bad.other.attr');
   });
 
   it('pushes write failure warnings into schemaExtensionWarnings', async () => {
