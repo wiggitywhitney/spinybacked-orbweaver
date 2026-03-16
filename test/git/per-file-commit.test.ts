@@ -210,9 +210,10 @@ describe('commitFileResult', () => {
     expect(commitHash).toBeUndefined();
   });
 
+  // Defense-in-depth: with hasStagedChanges() pre-check, this path returns early
+  // before reaching the case-insensitive error handler. This test ensures the
+  // error handler still works if the pre-check is ever removed.
   it('handles case-insensitive nothing-to-commit error from git', async () => {
-    // The git-wrapper throws 'Nothing staged to commit' (capital N).
-    // The per-file-commit handler must catch it case-insensitively.
     const srcDir = join(repoDir, 'src');
     await mkdir(srcDir, { recursive: true });
     const filePath = join(repoDir, 'src', 'no-changes.js');
