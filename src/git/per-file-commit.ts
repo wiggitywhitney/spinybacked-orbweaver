@@ -3,7 +3,7 @@
 
 import { relative, join, isAbsolute } from 'node:path';
 import { access } from 'node:fs/promises';
-import { stageFiles, commit } from './git-wrapper.ts';
+import { stageFiles, commit, hasStagedChanges } from './git-wrapper.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 
 /** The filename used for agent-generated schema extensions. */
@@ -65,13 +65,18 @@ export async function commitFileResult(
     throw new Error(`Failed to stage ${relativePath}: ${msg}`);
   }
 
+  // Skip commit if staging produced no actual changes (e.g., file content is identical)
+  if (!(await hasStagedChanges(projectDir))) {
+    return undefined;
+  }
+
   try {
     const hash = await commit(projectDir, `instrument ${relativePath}`);
     return hash;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // "nothing to commit" is expected when file hasn't actually changed
-    if (msg.includes('nothing to commit')) {
+    if (msg.toLowerCase().includes('nothing to commit') || msg.toLowerCase().includes('nothing staged')) {
       return undefined;
     }
     throw new Error(`Failed to commit ${relativePath}: ${msg}`);
