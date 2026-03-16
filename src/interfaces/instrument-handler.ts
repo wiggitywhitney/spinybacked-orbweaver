@@ -199,6 +199,7 @@ export async function handleInstrument(
   let runResult: RunResult;
   let prUrl: string | undefined;
   let branchName: string | undefined;
+  let prSummaryPath: string | undefined;
   try {
     const registryDir = resolve(options.projectDir, config.schemaPath);
     const workflowResult = await runGitWorkflow(
@@ -216,6 +217,7 @@ export async function handleInstrument(
     runResult = workflowResult.runResult;
     prUrl = workflowResult.prUrl;
     branchName = workflowResult.branchName;
+    prSummaryPath = workflowResult.prSummaryPath;
   } catch (err) {
     if (err instanceof CoordinatorAbortError) {
       deps.stderr(err.message);
@@ -268,11 +270,20 @@ export async function handleInstrument(
     for (const warning of runResult.warnings) {
       deps.stderr(`Warning: ${warning}`);
     }
-    if (branchName) {
-      deps.stderr(`Branch: ${branchName}`);
-    }
-    if (prUrl) {
-      deps.stderr(`PR: ${prUrl}`);
+    // Artifact locations summary
+    if (branchName || prSummaryPath || prUrl) {
+      deps.stderr('');
+      deps.stderr('Artifacts:');
+      if (branchName) {
+        deps.stderr(`  Branch: ${branchName}`);
+        deps.stderr(`  Diff: git diff main...${branchName}`);
+      }
+      if (prSummaryPath) {
+        deps.stderr(`  PR summary: ${prSummaryPath}`);
+      }
+      if (prUrl) {
+        deps.stderr(`  PR: ${prUrl}`);
+      }
     }
   }
 
