@@ -192,6 +192,43 @@ describe('commitFileResult', () => {
     expect(committedFiles.some(f => f.includes('agent-extensions'))).toBe(false);
   });
 
+  it('returns undefined without error when file has no staged changes', async () => {
+    // Simulate a file that was "instrumented" but content did not change (0 spans)
+    const srcDir = join(repoDir, 'src');
+    await mkdir(srcDir, { recursive: true });
+    const filePath = join(repoDir, 'src', 'unchanged.js');
+    await writeFile(filePath, '// original content\n');
+
+    // Commit the file first so it is tracked
+    const git = simpleGit(repoDir);
+    await git.add('src/unchanged.js');
+    await git.commit('add unchanged.js');
+
+    // Now try to commit it again without changes -- should return undefined, not throw
+    const result = makeFileResult({ path: filePath });
+    const commitHash = await commitFileResult(result, repoDir);
+    expect(commitHash).toBeUndefined();
+  });
+
+  it('handles case-insensitive nothing-to-commit error from git', async () => {
+    // The git-wrapper throws 'Nothing staged to commit' (capital N).
+    // The per-file-commit handler must catch it case-insensitively.
+    const srcDir = join(repoDir, 'src');
+    await mkdir(srcDir, { recursive: true });
+    const filePath = join(repoDir, 'src', 'no-changes.js');
+    await writeFile(filePath, '// no changes\n');
+
+    // Commit the file first
+    const git = simpleGit(repoDir);
+    await git.add('src/no-changes.js');
+    await git.commit('add no-changes.js');
+
+    // Try to commit without changes -- should gracefully return undefined
+    const result = makeFileResult({ path: filePath });
+    const commitHash = await commitFileResult(result, repoDir);
+    expect(commitHash).toBeUndefined();
+  });
+
   it('skips schema extensions staging when file has no schema extensions', async () => {
     const srcDir = join(repoDir, 'src');
     const registryDir = join(repoDir, 'telemetry', 'registry');

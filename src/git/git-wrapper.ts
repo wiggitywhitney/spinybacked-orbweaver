@@ -49,6 +49,18 @@ export async function commit(dir: string, message: string): Promise<string> {
 }
 
 /**
+ * Check whether there are any staged changes ready to commit.
+ * Useful for skipping no-op commits on unchanged files.
+ * @param dir - The git repository directory.
+ * @returns true if there are staged changes, false otherwise.
+ */
+export async function hasStagedChanges(dir: string): Promise<boolean> {
+  const git = simpleGit(dir);
+  const status = await git.status();
+  return status.staged.length > 0;
+}
+
+/**
  * Get the commit log for the current branch.
  * @param dir - The git repository directory.
  * @param options - Optional log options.

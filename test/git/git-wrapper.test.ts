@@ -14,6 +14,7 @@ import {
   getLog,
   getCurrentBranch,
   pushBranch,
+  hasStagedChanges,
 } from '../../src/git/git-wrapper.ts';
 
 /**
@@ -153,6 +154,30 @@ describe('git-wrapper', () => {
     it('throws when no remote is configured', async () => {
       await createBranch(repoDir, 'orbweaver/instrument');
       await expect(pushBranch(repoDir, 'orbweaver/instrument')).rejects.toThrow();
+    });
+  });
+
+  describe('hasStagedChanges', () => {
+    it('returns true when files are staged', async () => {
+      await writeFile(join(repoDir, 'new.js'), 'const x = 1;\n');
+      await stageFiles(repoDir, ['new.js']);
+
+      const result = await hasStagedChanges(repoDir);
+      expect(result).toBe(true);
+    });
+
+    it('returns false when nothing is staged', async () => {
+      const result = await hasStagedChanges(repoDir);
+      expect(result).toBe(false);
+    });
+
+    it('returns false after staging an already-committed file with no changes', async () => {
+      // File was committed in initial state. Running git add on it again stages nothing.
+      const git = simpleGit(repoDir);
+      await git.add('README.md');
+
+      const result = await hasStagedChanges(repoDir);
+      expect(result).toBe(false);
     });
   });
 
