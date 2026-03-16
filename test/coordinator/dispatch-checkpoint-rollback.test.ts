@@ -106,7 +106,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'vitest run' });
 
-      const results = await dispatchFiles(files, tmpDir, config, undefined, {
+      await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'ReferenceError: tracer is not defined' }),
