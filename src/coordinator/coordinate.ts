@@ -25,7 +25,8 @@ import {
 import type { SchemaDiffResult } from './schema-diff.ts';
 import { runLiveCheck as defaultRunLiveCheck } from './live-check.ts';
 import type { LiveCheckResult, LiveCheckDeps, LiveCheckOptions } from './live-check.ts';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile as defaultWriteFile } from 'node:fs/promises';
+import { restoreExtensionsFile as defaultRestoreExtensionsFile } from './schema-extensions.ts';
 import { checkGhAvailable as defaultCheckGhAvailable } from '../deliverables/git-workflow.ts';
 import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
 import type { FileContent } from '../validation/tier2/cdq008.ts';
@@ -115,6 +116,10 @@ export interface CoordinateDeps {
   hasTestSuite?: (testCommand: string, projectDir?: string) => Promise<boolean>;
   /** Injectable test runner for checkpoint tests. Runs test command without OTLP overrides. */
   executeProjectTests?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
+  /** Write file content for end-of-run rollback. Defaults to fs/promises writeFile. */
+  writeFileForRollback?: (filePath: string, content: string) => Promise<void>;
+  /** Restore schema extensions file from snapshot for end-of-run rollback. */
+  restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
 }
 
 /**
@@ -182,6 +187,8 @@ export async function coordinate(
   const checkGh = deps?.checkGhAvailable ?? defaultCheckGhAvailable;
   const detectTestSuite = deps?.hasTestSuite ?? defaultHasTestSuite;
   const runTests = deps?.executeProjectTests ?? executeProjectTests;
+  const writeForRollback = deps?.writeFileForRollback ?? ((fp: string, content: string) => defaultWriteFile(fp, content, 'utf-8'));
+  const restoreExtensions = deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
@@ -313,6 +320,12 @@ export async function coordinate(
   }
 
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
+  // checkpointWindowRef is populated by dispatch with files since the last passing checkpoint.
+  // Used for end-of-run rollback when live-check tests fail (M4/NDS-002).
+  const checkpointWindowRef: {
+    files: { path: string; originalContent: string; resultIndex: number }[];
+    extensionsSnapshot: string | null | undefined;
+  } = { files: [], extensionsSnapshot: undefined };
   let fileResults: FileResult[];
   try {
     fileResults = await dispatch(filePaths, projectDir, config, callbacks, {
@@ -325,6 +338,7 @@ export async function coordinate(
       ...(config.dryRun ? { dryRun: true } : {}),
       ...(checkpointTestRunner ? { runTestCommand: checkpointTestRunner } : {}),
       ...(baselineTestPassed !== undefined ? { baselineTestPassed } : {}),
+      checkpointWindowRef,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -422,6 +436,7 @@ export async function coordinate(
 
   // Step 7b: End-of-run Weaver live-check (degrade and warn on failure)
   // Dry-run skips live-check — no persistent changes to validate
+  let liveCheckTestsPassed: boolean | undefined;
   if (!config.dryRun) {
     try {
       const liveCheckResult = await liveCheck(
@@ -432,6 +447,7 @@ export async function coordinate(
         undefined,
         callbacks,
       );
+      liveCheckTestsPassed = liveCheckResult.testsPassed;
       if (liveCheckResult.complianceReport) {
         runResult.endOfRunValidation = liveCheckResult.complianceReport;
       }
@@ -442,6 +458,55 @@ export async function coordinate(
       const message = err instanceof Error ? err.message : String(err);
       runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
     }
+  }
+
+  // Step 7c: End-of-run test failure rollback (M4/NDS-002)
+  // When live-check tests fail, roll back files since the last passing checkpoint.
+  // Only triggered when: (1) tests explicitly failed, (2) checkpoint tracking was active,
+  // (3) there are files in the window to roll back, (4) baseline tests passed.
+  if (
+    liveCheckTestsPassed === false &&
+    checkpointWindowRef.files.length > 0 &&
+    baselineTestPassed === true
+  ) {
+    // Restore file content to pre-instrumentation state
+    for (const tracked of checkpointWindowRef.files) {
+      try {
+        await writeForRollback(tracked.path, tracked.originalContent);
+      } catch { /* best-effort file restore */ }
+      fileResults[tracked.resultIndex].status = 'failed';
+      fileResults[tracked.resultIndex].reason = 'Rolled back: end-of-run test failure';
+    }
+
+    // Restore schema extensions to last passing checkpoint state
+    if (checkpointWindowRef.extensionsSnapshot !== undefined) {
+      try {
+        await restoreExtensions(registryDir, checkpointWindowRef.extensionsSnapshot);
+      } catch { /* best-effort extension restore */ }
+    }
+
+    // Fire rollback callback
+    try {
+      callbacks?.onCheckpointRollback?.(checkpointWindowRef.files.map(f => f.path));
+    } catch { /* callback failure must not abort */ }
+
+    // Update aggregate counts to reflect rollback
+    const rolledBackCount = checkpointWindowRef.files.length;
+    // Count how many were previously succeeded (only decrement those)
+    let successRolledBack = 0;
+    for (const tracked of checkpointWindowRef.files) {
+      // The status was just set to 'failed', check what it was before
+      // Since we only track files that dispatch returned as non-failed,
+      // and the window only contains files that were successfully processed,
+      // all rolled-back files were successes or partials
+      successRolledBack++;
+    }
+    runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - successRolledBack);
+    runResult.filesFailed += rolledBackCount;
+
+    runResult.warnings.push(
+      `Rolled back ${rolledBackCount} file(s) due to end-of-run test failure`,
+    );
   }
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)

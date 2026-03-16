@@ -153,6 +153,11 @@ interface DispatchFilesOptions {
   runTestCommand?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
   /** Whether baseline tests passed before instrumentation. When false, checkpoint test failure does not trigger rollback. */
   baselineTestPassed?: boolean;
+  /** Mutable output — populated at end of dispatch with checkpoint window state for end-of-run rollback. */
+  checkpointWindowRef?: {
+    files: { path: string; originalContent: string; resultIndex: number }[];
+    extensionsSnapshot: string | null | undefined;
+  };
 }
 
 /**
@@ -588,6 +593,12 @@ export async function dispatchFiles(
       try { callbacks?.onFileComplete?.(failed, i, total); } catch { /* callback failure must not abort dispatch */ }
       abortTracker.record(failed);
     }
+  }
+
+  // Expose checkpoint window state for end-of-run rollback in coordinate()
+  if (options?.checkpointWindowRef) {
+    options.checkpointWindowRef.files = [...checkpointWindowFiles];
+    options.checkpointWindowRef.extensionsSnapshot = checkpointExtensionsSnapshot;
   }
 
   // Emit a single summary warning for all rejected extensions (deduplicated)
