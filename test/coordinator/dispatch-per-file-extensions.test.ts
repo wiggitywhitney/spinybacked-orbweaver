@@ -552,9 +552,11 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     // Should be exactly ONE summary warning, not 3 per-file warnings
     const rejectionWarnings = schemaExtensionWarnings.filter(w => w.includes('rejected by namespace'));
     expect(rejectionWarnings).toHaveLength(1);
-    // Should contain both rejected IDs (deduplicated)
-    expect(rejectionWarnings[0]).toContain('bad.namespace.attr');
-    expect(rejectionWarnings[0]).toContain('bad.other.attr');
+    // Should contain each rejected ID exactly once (deduplicated)
+    const idsPart = rejectionWarnings[0].split(': ')[1] ?? '';
+    const ids = idsPart.split(', ').filter(Boolean);
+    expect(ids).toEqual(expect.arrayContaining(['bad.namespace.attr', 'bad.other.attr']));
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('pushes write failure warnings into schemaExtensionWarnings', async () => {
