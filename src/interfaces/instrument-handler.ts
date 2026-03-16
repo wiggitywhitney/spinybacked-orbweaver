@@ -2,6 +2,7 @@
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
 import { basename, join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
@@ -275,8 +276,20 @@ export async function handleInstrument(
       deps.stderr('');
       deps.stderr('Artifacts:');
       if (branchName) {
+        let defaultBranch = 'main';
+        try {
+          const ref = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+            cwd: options.projectDir,
+            timeout: 5000,
+          }).toString().trim();
+          // ref is like "refs/remotes/origin/main" — extract the branch name
+          const parts = ref.split('/');
+          defaultBranch = parts[parts.length - 1] ?? 'main';
+        } catch {
+          // Fallback to 'main' if detection fails
+        }
         deps.stderr(`  Branch: ${branchName}`);
-        deps.stderr(`  Diff: git diff main...${branchName}`);
+        deps.stderr(`  Diff: git diff ${defaultBranch}...${branchName}`);
       }
       if (prSummaryPath) {
         deps.stderr(`  PR summary: ${prSummaryPath}`);
