@@ -191,6 +191,30 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.advisoryAnnotations).toBeUndefined();
     });
 
+    it('restores original file when agent output has 0 spans (#161)', async () => {
+      const zeroSpanOutput = makeOutput({
+        instrumentedCode: 'import { trace } from "@opentelemetry/api";\nconst tracer = trace.getTracer("test");\nconst hello = "world";\nexport function greet() { return hello; }\n',
+        spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+        attributesCreated: 0,
+        librariesNeeded: [],
+        schemaExtensions: [],
+      });
+      const deps: InstrumentWithRetryDeps = {
+        instrumentFile: async () => ({ success: true, output: zeroSpanOutput }) as InstrumentFileResult,
+        validateFile: async () => makePassingValidation(testFilePath),
+      };
+
+      const result = await instrumentWithRetry(
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+      );
+
+      expect(result.status).toBe('success');
+      expect(result.spansAdded).toBe(0);
+      // File should be restored to original content — no OTel imports left behind
+      const fileContent = readFileSync(testFilePath, 'utf-8');
+      expect(fileContent).toBe(originalContent);
+    });
+
     it('populates advisoryAnnotations with CheckResult content on success with advisory findings', async () => {
       const output = makeOutput();
       const advisoryValidation: ValidationResult = {
