@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { Project } from 'ts-morph';
+import Anthropic from '@anthropic-ai/sdk';
 import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
@@ -58,6 +59,8 @@ interface InstrumentWithRetryOptions {
   _skipFunctionFallback?: boolean;
   /** Absolute path to project root. Enables API-002 dependency placement check. */
   projectRoot?: string;
+  /** Anthropic client for LLM judge calls during validation. When omitted, a new client is created. */
+  anthropicClient?: Anthropic;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -106,11 +109,20 @@ function summarizeErrors(validation: ValidationResult): string {
  *
  * @param config - Agent configuration
  * @param projectRoot - Optional project root for checks that need package.json access (API-002)
+ * @param resolvedSchema - Weaver registry for SCH-001 through SCH-004 checks
+ * @param anthropicClient - Anthropic client for LLM judge calls (SCH-001, SCH-004, NDS-005)
  */
-function buildValidationConfig(config: AgentConfig, projectRoot?: string) {
+function buildValidationConfig(
+  config: AgentConfig,
+  projectRoot?: string,
+  resolvedSchema?: object,
+  anthropicClient?: Anthropic,
+) {
   return {
     enableWeaver: false,
     projectRoot,
+    resolvedSchema,
+    anthropicClient,
     tier2Checks: {
       // Phase 2 checks
       'CDQ-001': { enabled: true, blocking: true },
@@ -249,13 +261,14 @@ export async function instrumentWithRetry(
   const instrumentFileFn = deps?.instrumentFile ?? (await import('../agent/index.ts')).instrumentFile;
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
   const formatFeedbackFn = (await import('../validation/feedback.ts')).formatFeedbackForAgent;
+  const anthropicClient = options?.anthropicClient ?? new Anthropic();
 
   let wholeFileResult: FileResult;
   try {
     wholeFileResult = await executeRetryLoop(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
-      options?.projectRoot,
+      options?.projectRoot, anthropicClient,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -302,9 +315,10 @@ async function executeRetryLoop(
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
   formatFeedbackFn: (result: ValidationResult) => string,
   projectRoot?: string,
+  anthropicClient?: Anthropic,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
-  const validationConfig = buildValidationConfig(config, projectRoot);
+  const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
 
   // Pre-flight token estimate — skip files that are very likely to exceed the budget.
   // Fail fast on impossible budgets (below fixed prompt overhead) to avoid wasting API tokens
@@ -611,7 +625,7 @@ async function functionLevelFallback(
   // Write reassembled code and run full validation (Tier 1 + Tier 2)
   await writeFile(filePath, reassembledCode, 'utf-8');
 
-  const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot);
+  const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
   const validation = await validateFileFn({
     originalCode,
     instrumentedCode: reassembledCode,
