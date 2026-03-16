@@ -9,3 +9,14 @@ groups:
         requirement_level: required
       - ref: test_app.order.total
         requirement_level: recommended
+
+  - id: span.test_app.charge_payment
+    type: span
+    stability: development
+    brief: Charge payment for an order via external API
+    span_kind: client
+    attributes:
+      - ref: test_app.order.id
+        requirement_level: required
+      - ref: test_app.order.total
+        requirement_level: recommended
