@@ -202,8 +202,10 @@ export async function dispatchFiles(
   const total = filePaths.length;
   const results: FileResult[] = [];
   const interval = config.schemaCheckpointInterval;
+  const locThreshold = config.checkpointLocThreshold;
   const checkpointConfig = options?.checkpoint;
   let filesSinceLastCheckpoint = 0;
+  let locSinceLastCheckpoint = 0;
   let lastCheckpointResultIndex = 0;
   let stoppedByCheckpoint = false;
 
@@ -293,6 +295,16 @@ export async function dispatchFiles(
       result.schemaHashAfter = schemaHash;
       results.push(result);
       filesSinceLastCheckpoint++;
+
+      // Compute LOC delta for LOC-aware checkpoint cadence (PRD #156 M5)
+      if (locThreshold !== undefined && result.status === 'success') {
+        try {
+          const instrumentedContent = await readFile(filePath, 'utf-8');
+          const originalLines = fileContent.split('\n').length;
+          const instrumentedLines = instrumentedContent.split('\n').length;
+          locSinceLastCheckpoint += Math.abs(instrumentedLines - originalLines);
+        } catch { /* LOC tracking degrades gracefully — re-read failure is non-fatal */ }
+      }
 
       // Track file in checkpoint window for potential rollback on test failure
       if (!isDryRun && options?.runTestCommand) {
@@ -436,9 +448,11 @@ export async function dispatchFiles(
         }
       }
 
-      // Run periodic schema checkpoint after every N processed (non-skipped) files
-      // Dry-run skips checkpoints — schema changes are transient and will be reverted
-      if (!isDryRun && checkpointConfig && interval > 0 && filesSinceLastCheckpoint >= interval) {
+      // Run periodic schema checkpoint after every N processed (non-skipped) files,
+      // or when cumulative LOC changed exceeds checkpointLocThreshold (additive triggers).
+      // Dry-run skips checkpoints — schema changes are transient and will be reverted.
+      const locThresholdExceeded = locThreshold !== undefined && locSinceLastCheckpoint >= locThreshold;
+      if (!isDryRun && checkpointConfig && interval > 0 && (filesSinceLastCheckpoint >= interval || locThresholdExceeded)) {
         try {
           const resultsSinceCheckpoint = results.slice(lastCheckpointResultIndex);
           const checkpointResult = await runSchemaCheckpoint(
@@ -494,6 +508,7 @@ export async function dispatchFiles(
               } catch { /* best effort — rollback degrades if snapshot fails */ }
             }
             filesSinceLastCheckpoint = 0;
+            locSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
           } else if (testFailedAtCheckpoint && options?.baselineTestPassed !== false) {
             // Test failure with passing baseline — roll back files in checkpoint window
@@ -538,6 +553,7 @@ export async function dispatchFiles(
               } catch { /* best effort */ }
             }
             filesSinceLastCheckpoint = 0;
+            locSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
           } else {
             // Schema failure or baseline-already-failing — original stop/continue behavior
@@ -546,6 +562,7 @@ export async function dispatchFiles(
             } else {
               // Continue despite failure — reset counters
               filesSinceLastCheckpoint = 0;
+              locSinceLastCheckpoint = 0;
               lastCheckpointResultIndex = results.length;
             }
           }
@@ -553,6 +570,7 @@ export async function dispatchFiles(
           // Checkpoint infrastructure failure — degrade and warn, don't stop
           // Reset counters so next checkpoint attempts at the normal interval
           filesSinceLastCheckpoint = 0;
+          locSinceLastCheckpoint = 0;
           lastCheckpointResultIndex = results.length;
           if (extWarnings) {
             const msg = checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr);

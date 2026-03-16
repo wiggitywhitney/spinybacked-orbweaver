@@ -141,7 +141,7 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 - [x] Milestone 2: Wire Checkpoint Test Execution
 - [x] Milestone 3: Test Failure File Identification and Rollback
 - [x] Milestone 4: End-of-Run Test Failure Handling
-- [ ] Milestone 5: Stretch — LOC-Aware Checkpoint Cadence
+- [x] Milestone 5: Stretch — LOC-Aware Checkpoint Cadence
 
 ## Acceptance Criteria
 
@@ -151,7 +151,7 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 - [x] 4. When checkpoint tests fail, files since the last passing checkpoint are rolled back and marked as `failed`
 - [x] 5. The instrumented branch does not contain code that consistently fails the project's test suite, and failed instrumentation is rolled back when detected by checkpoint or end-of-run tests
 - [x] 6. PR summary includes a "Rolled Back Files" section when test-failure rollbacks occur
-- [ ] 7. (Stretch) Checkpoint frequency increases when cumulative LOC changed exceeds a configurable threshold
+- [x] 7. (Stretch) Checkpoint frequency increases when cumulative LOC changed exceeds a configurable threshold
 
 ## Design Notes
 

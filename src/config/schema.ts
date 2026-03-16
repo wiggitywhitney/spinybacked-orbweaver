@@ -50,6 +50,7 @@ export const AgentConfigSchema = z.strictObject({
   maxTokensPerFile: z.number().int().positive().default(100000),
   largeFileThresholdLines: z.number().int().positive().default(500),
   schemaCheckpointInterval: z.number().int().positive().default(5),
+  checkpointLocThreshold: z.number().int().positive().optional(),
   attributesPerFileThreshold: z.number().int().positive().default(30),
   spansPerFileThreshold: z.number().int().positive().default(20),
   weaverMinVersion: z.string().default('0.21.2'),
