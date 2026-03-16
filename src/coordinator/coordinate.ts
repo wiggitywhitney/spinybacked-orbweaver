@@ -3,6 +3,7 @@
 
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, CostCeiling, RunResult } from './types.ts';
@@ -24,10 +25,43 @@ import {
 import type { SchemaDiffResult } from './schema-diff.ts';
 import { runLiveCheck as defaultRunLiveCheck } from './live-check.ts';
 import type { LiveCheckResult, LiveCheckDeps, LiveCheckOptions } from './live-check.ts';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile as defaultWriteFile } from 'node:fs/promises';
+import { restoreExtensionsFile as defaultRestoreExtensionsFile } from './schema-extensions.ts';
 import { checkGhAvailable as defaultCheckGhAvailable } from '../deliverables/git-workflow.ts';
 import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
 import type { FileContent } from '../validation/tier2/cdq008.ts';
+import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
+
+/**
+ * Run a project's test suite without OTLP overrides.
+ * Used for checkpoint tests — validates code correctness, not telemetry emission.
+ *
+ * @param projectDir - Project root (cwd for the test command)
+ * @param testCommand - Shell command to run (e.g., "npm test")
+ * @returns Whether the tests passed, with error details on failure
+ */
+export function executeProjectTests(
+  projectDir: string,
+  testCommand: string,
+): Promise<{ passed: boolean; error?: string }> {
+  const cmd = process.platform === 'win32' ? 'cmd.exe' : 'sh';
+  const args = process.platform === 'win32' ? ['/c', testCommand] : ['-c', testCommand];
+
+  return new Promise((resolve) => {
+    execFile(cmd, args, {
+      cwd: projectDir,
+      timeout: 300_000,
+      maxBuffer: 10 * 1024 * 1024,
+    }, (error, _stdout, stderr) => {
+      if (error) {
+        const errorMsg = stderr?.trim() || error.message;
+        resolve({ passed: false, error: errorMsg });
+        return;
+      }
+      resolve({ passed: true });
+    });
+  });
+}
 
 /**
  * Error thrown when the coordinator must abort the run.
@@ -79,6 +113,14 @@ export interface CoordinateDeps {
   readFileForAdvisory: (filePath: string) => Promise<string>;
   checkGhAvailable?: () => Promise<boolean | { available: boolean; warning?: string }>;
   liveCheckOptions?: LiveCheckOptions;
+  /** Injectable test suite detection for checkpoint test wiring. */
+  hasTestSuite?: (testCommand: string, projectDir?: string) => Promise<boolean>;
+  /** Injectable test runner for checkpoint tests. Runs test command without OTLP overrides. */
+  executeProjectTests?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
+  /** Write file content for end-of-run rollback. Defaults to fs/promises writeFile. */
+  writeFileForRollback?: (filePath: string, content: string) => Promise<void>;
+  /** Restore schema extensions file from snapshot for end-of-run rollback. */
+  restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
 }
 
 /**
@@ -144,9 +186,14 @@ export async function coordinate(
   const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
   const readForAdvisory = deps?.readFileForAdvisory ?? ((fp: string) => readFile(fp, 'utf-8'));
   const checkGh = deps?.checkGhAvailable ?? defaultCheckGhAvailable;
+  const detectTestSuite = deps?.hasTestSuite ?? defaultHasTestSuite;
+  const runTests = deps?.executeProjectTests ?? executeProjectTests;
+  const writeForRollback = deps?.writeFileForRollback ?? ((fp: string, content: string) => defaultWriteFile(fp, content, 'utf-8'));
+  const restoreExtensions = deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
+  const checkpointTestWarnings: string[] = [];
 
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;
@@ -239,7 +286,47 @@ export async function coordinate(
     schemaDiffWarnings.push(`Baseline snapshot failed (degraded): ${message}`);
   }
 
+  // Step 4d: Detect test suite for checkpoint test execution (degrade and warn on failure)
+  // Dry-run skips checkpoint tests — files are reverted, test results would be meaningless
+  let checkpointTestRunner: ((pd: string, tc: string) => Promise<{ passed: boolean; error?: string }>) | undefined;
+  if (!config.dryRun) {
+    try {
+      const projectHasTests = await detectTestSuite(config.testCommand, projectDir);
+      if (projectHasTests) {
+        checkpointTestRunner = runTests;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      checkpointTestWarnings.push(`Checkpoint test suite detection failed (degraded): ${message}`);
+    }
+  }
+
+  // Step 4e: Record baseline test results for checkpoint rollback (degrade and warn on failure)
+  // If the project's tests already fail before instrumentation, checkpoint test failures
+  // should not trigger rollback (can't distinguish instrumentation breakage from pre-existing)
+  let baselineTestPassed: boolean | undefined;
+  if (checkpointTestRunner) {
+    try {
+      const baselineResult = await runTests(projectDir, config.testCommand);
+      baselineTestPassed = baselineResult.passed;
+      if (!baselineResult.passed) {
+        checkpointTestWarnings.push(
+          'Baseline test suite has pre-existing failures — checkpoint test rollback disabled',
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      checkpointTestWarnings.push(`Baseline test recording failed (degraded): ${message}`);
+    }
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
+  // checkpointWindowRef is populated by dispatch with files since the last passing checkpoint.
+  // Used for end-of-run rollback when live-check tests fail (M4/NDS-002).
+  const checkpointWindowRef: {
+    files: { path: string; originalContent: string; resultIndex: number }[];
+    extensionsSnapshot: string | null | undefined;
+  } = { files: [], extensionsSnapshot: undefined };
   let fileResults: FileResult[];
   try {
     fileResults = await dispatch(filePaths, projectDir, config, callbacks, {
@@ -250,6 +337,9 @@ export async function coordinate(
       registryDir,
       schemaExtensionWarnings,
       ...(config.dryRun ? { dryRun: true } : {}),
+      ...(checkpointTestRunner ? { runTestCommand: checkpointTestRunner } : {}),
+      ...(baselineTestPassed !== undefined ? { baselineTestPassed } : {}),
+      checkpointWindowRef,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -264,19 +354,7 @@ export async function coordinate(
   // Warnings from per-file writes are pushed into schemaExtensionWarnings.
   const extensions = collectSchemaExtensions(fileResults);
 
-  // Step 5c: Compute schema hash at run end (after extensions written)
-  let schemaHashEnd: string | undefined;
-  if (schemaHashStart !== undefined) {
-    try {
-      const endSchema = await resolveForHash(projectDir, config.schemaPath);
-      schemaHashEnd = computeSchemaHash(endSchema);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      schemaHashWarnings.push(`Schema hash computation at run end failed (degraded): ${message}`);
-    }
-  }
-
-  // Step 5d: Compute schema diff against baseline (degrade and warn on failure)
+  // Step 5c: Compute schema diff against baseline BEFORE cleanup (needs baseline snapshot on disk)
   let schemaDiffMarkdown: string | undefined;
   if (baselineSnapshotDir && extensions.length > 0) {
     try {
@@ -294,20 +372,25 @@ export async function coordinate(
     }
   }
 
-  // Step 5e: Clean up baseline snapshot (always, best effort)
+  // Step 5d: Clean up baseline snapshot (always, best effort)
   if (baselineSnapshotDir) {
     try { await cleanupSnap(baselineSnapshotDir); } catch { /* best effort cleanup */ }
   }
 
+  // Step 5e: Compute schema hash at run end (after extensions written)
+  // Deferred to after end-of-run rollback so it reflects final state.
+  let schemaHashEnd: string | undefined;
+
   // Step 6: Aggregate results
   const runResult = aggregateResults(fileResults, costCeiling);
   runResult.schemaHashStart = schemaHashStart;
-  runResult.schemaHashEnd = schemaHashEnd;
+  // schemaHashEnd is set after end-of-run rollback (Step 7d) to reflect final state
   runResult.schemaDiff = schemaDiffMarkdown;
   runResult.warnings.push(...ghWarnings);
   runResult.warnings.push(...schemaExtensionWarnings);
   runResult.warnings.push(...schemaHashWarnings);
   runResult.warnings.push(...schemaDiffWarnings);
+  runResult.warnings.push(...checkpointTestWarnings);
 
   // Step 6b: Run CDQ-008 cross-file tracer naming check (advisory, degrade and warn)
   const successfulFiles = fileResults.filter(r => r.status === 'success' || r.status === 'partial');
@@ -346,6 +429,7 @@ export async function coordinate(
 
   // Step 7b: End-of-run Weaver live-check (degrade and warn on failure)
   // Dry-run skips live-check — no persistent changes to validate
+  let liveCheckTestsPassed: boolean | undefined;
   if (!config.dryRun) {
     try {
       const liveCheckResult = await liveCheck(
@@ -356,6 +440,7 @@ export async function coordinate(
         undefined,
         callbacks,
       );
+      liveCheckTestsPassed = liveCheckResult.testsPassed;
       if (liveCheckResult.complianceReport) {
         runResult.endOfRunValidation = liveCheckResult.complianceReport;
       }
@@ -367,6 +452,59 @@ export async function coordinate(
       runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
     }
   }
+
+  // Step 7c: End-of-run test failure rollback (M4/NDS-002)
+  // When live-check tests fail, roll back files since the last passing checkpoint.
+  // Only triggered when: (1) tests explicitly failed, (2) checkpoint tracking was active,
+  // (3) there are files in the window to roll back, (4) baseline tests passed.
+  if (
+    liveCheckTestsPassed === false &&
+    checkpointWindowRef.files.length > 0 &&
+    baselineTestPassed === true
+  ) {
+    // Restore file content to pre-instrumentation state
+    for (const tracked of checkpointWindowRef.files) {
+      try {
+        await writeForRollback(tracked.path, tracked.originalContent);
+      } catch { /* best-effort file restore */ }
+      fileResults[tracked.resultIndex].status = 'failed';
+      fileResults[tracked.resultIndex].reason = 'Rolled back: end-of-run test failure';
+    }
+
+    // Restore schema extensions to last passing checkpoint state
+    if (checkpointWindowRef.extensionsSnapshot !== undefined) {
+      try {
+        await restoreExtensions(registryDir, checkpointWindowRef.extensionsSnapshot);
+      } catch { /* best-effort extension restore */ }
+    }
+
+    // Fire rollback callback
+    try {
+      callbacks?.onCheckpointRollback?.(checkpointWindowRef.files.map(f => f.path));
+    } catch { /* callback failure must not abort */ }
+
+    // Update aggregate counts to reflect rollback.
+    // All files in the checkpoint window were successfully processed before rollback.
+    const rolledBackCount = checkpointWindowRef.files.length;
+    runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - rolledBackCount);
+    runResult.filesFailed += rolledBackCount;
+
+    runResult.warnings.push(
+      `Rolled back ${rolledBackCount} file(s) due to end-of-run test failure`,
+    );
+  }
+
+  // Step 7d: Compute schema hash at run end (after potential rollback so it reflects final state)
+  if (schemaHashStart !== undefined) {
+    try {
+      const endSchema = await resolveForHash(projectDir, config.schemaPath);
+      schemaHashEnd = computeSchemaHash(endSchema);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaHashWarnings.push(`Schema hash computation at run end failed (degraded): ${message}`);
+    }
+  }
+  runResult.schemaHashEnd = schemaHashEnd;
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)
   // Dry-run skips finalization — no npm install, no SDK init file changes

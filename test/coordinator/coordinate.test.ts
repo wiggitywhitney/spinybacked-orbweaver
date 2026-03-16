@@ -92,6 +92,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     readFileForAdvisory: vi.fn().mockResolvedValue(''),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
+    hasTestSuite: vi.fn().mockResolvedValue(false),
     ...overrides,
   };
 }
@@ -826,6 +827,389 @@ describe('coordinate', () => {
         'peerDependencies',       // dependencyStrategy
         undefined,                // finalizeDeps
       );
+    });
+  });
+
+  describe('checkpoint test wiring (NDS-002)', () => {
+    it('passes runTestCommand to dispatchFiles when project has a test suite', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeDefined();
+      expect(typeof options.runTestCommand).toBe('function');
+    });
+
+    it('does not pass runTestCommand when test command is a placeholder', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(false),
+      });
+      const config = makeConfig({
+        testCommand: 'echo "Error: no test specified" && exit 1',
+      });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeUndefined();
+    });
+
+    it('does not pass runTestCommand in dry-run mode', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+      });
+      const config = makeConfig({ dryRun: true, testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeUndefined();
+    });
+
+    it('degrades gracefully when hasTestSuite throws', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockRejectedValue(new Error('fs read failed')),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Should still complete the run without runTestCommand
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeUndefined();
+      expect(result.filesProcessed).toBeGreaterThan(0);
+      expect(result.warnings.some((w: string) => w.includes('test suite detection'))).toBe(true);
+    });
+
+    it('runTestCommand delegates to executeProjectTests when invoked', async () => {
+      const executeProjectTests = vi.fn().mockResolvedValue({ passed: true });
+      const dispatchFiles = vi.fn().mockImplementation(
+        async (filePaths: string[], _projectDir: string, _config: AgentConfig, _callbacks: unknown, options: Record<string, unknown>) => {
+          // Simulate dispatch calling runTestCommand (as it would at a checkpoint)
+          const runner = options?.runTestCommand as ((pd: string, tc: string) => Promise<unknown>) | undefined;
+          if (runner) {
+            await runner('/project', 'vitest run');
+          }
+          return filePaths.map((fp: string) => makeSuccessResult(fp));
+        },
+      );
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests,
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      expect(executeProjectTests).toHaveBeenCalledWith('/project', 'vitest run');
+    });
+  });
+
+  describe('baseline test recording for checkpoint rollback', () => {
+    it('passes baselineTestPassed=true when baseline tests pass', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.baselineTestPassed).toBe(true);
+    });
+
+    it('passes baselineTestPassed=false when baseline tests fail', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: false, error: 'pre-existing failures' }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.baselineTestPassed).toBe(false);
+      expect(result.warnings.some((w: string) => w.includes('pre-existing failures'))).toBe(true);
+    });
+
+    it('does not record baseline when no test suite detected', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const executeProjectTests = vi.fn().mockResolvedValue({ passed: true });
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(false),
+        executeProjectTests,
+      });
+      const config = makeConfig({ testCommand: 'echo "no tests"' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.baselineTestPassed).toBeUndefined();
+      // executeProjectTests called once for baseline (via the coordinate function's runTests reference)
+      // But checkpointTestRunner is undefined when hasTestSuite returns false, so baseline is skipped
+    });
+
+    it('degrades gracefully when baseline test recording throws', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockRejectedValue(new Error('spawn failed')),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Should still complete — baseline failure is not fatal
+      expect(result.filesProcessed).toBeGreaterThan(0);
+      expect(result.warnings.some((w: string) => w.includes('Baseline test recording failed'))).toBe(true);
+    });
+  });
+
+  describe('end-of-run test failure rollback (NDS-002 / M4)', () => {
+    /**
+     * Helper: build deps where checkpoint tests are active and live-check reports failure.
+     * The dispatchFiles mock populates the checkpointWindowRef to simulate files in the
+     * untested window at end of dispatch.
+     */
+    function makeRollbackDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
+      const writeFileForRollback = vi.fn().mockResolvedValue(undefined);
+      const restoreExtensionsFile = vi.fn().mockResolvedValue(undefined);
+      return makeDeps({
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          complianceReport: 'some report',
+          warnings: ['End-of-run test suite failed: tests exited with code 1'],
+        }),
+        dispatchFiles: vi.fn().mockImplementation(
+          async (filePaths: string[], _pd: string, _cfg: AgentConfig, _cb: unknown, options: Record<string, unknown>) => {
+            const ref = options?.checkpointWindowRef as {
+              files: { path: string; originalContent: string; resultIndex: number }[];
+              extensionsSnapshot: string | null | undefined;
+            } | undefined;
+            if (ref) {
+              ref.files = filePaths.map((fp, i) => ({
+                path: fp,
+                originalContent: `// original content of ${fp}`,
+                resultIndex: i,
+              }));
+              ref.extensionsSnapshot = 'extensions-snapshot-content';
+            }
+            return filePaths.map(fp => makeSuccessResult(fp));
+          },
+        ),
+        writeFileForRollback,
+        restoreExtensionsFile,
+        ...overrides,
+      });
+    }
+
+    it('rolls back files when end-of-run live-check tests fail', async () => {
+      const deps = makeRollbackDeps();
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // All files should be marked as failed with rollback reason
+      for (const fr of result.fileResults) {
+        expect(fr.status).toBe('failed');
+        expect(fr.reason).toContain('Rolled back');
+        expect(fr.reason).toContain('end-of-run');
+      }
+      // Files should be restored to original content
+      expect(deps.writeFileForRollback).toHaveBeenCalledTimes(2);
+      expect(deps.writeFileForRollback).toHaveBeenCalledWith(
+        '/project/a.js',
+        '// original content of /project/a.js',
+      );
+    });
+
+    it('restores schema extensions on end-of-run rollback', async () => {
+      const deps = makeRollbackDeps();
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      expect(deps.restoreExtensionsFile).toHaveBeenCalledWith(
+        expect.stringContaining('schemas/registry'),
+        'extensions-snapshot-content',
+      );
+    });
+
+    it('updates aggregate counts after end-of-run rollback', async () => {
+      const deps = makeRollbackDeps();
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Both files were originally success, now rolled back to failed
+      expect(result.filesFailed).toBe(2);
+      expect(result.filesSucceeded).toBe(0);
+    });
+
+    it('adds rollback warning to RunResult', async () => {
+      const deps = makeRollbackDeps();
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.warnings.some((w: string) =>
+        w.includes('Rolled back') && w.includes('end-of-run'),
+      )).toBe(true);
+    });
+
+    it('fires onCheckpointRollback callback with rolled-back paths', async () => {
+      const onCheckpointRollback = vi.fn();
+      const deps = makeRollbackDeps();
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onCheckpointRollback }, deps);
+
+      expect(onCheckpointRollback).toHaveBeenCalledWith(['/project/a.js', '/project/b.js']);
+    });
+
+    it('does not roll back when live-check tests pass', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: true,
+          complianceReport: 'all good',
+          warnings: [],
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.filesSucceeded).toBe(2);
+      expect(result.filesFailed).toBe(0);
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
+    });
+
+    it('does not roll back when no checkpoint tests ran', async () => {
+      const deps = makeDeps({
+        hasTestSuite: vi.fn().mockResolvedValue(false),
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed'],
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // No rollback — checkpoint tests weren't active, can't identify culprits
+      expect(result.filesSucceeded).toBe(2);
+      expect(result.warnings.some((w: string) => w.includes('End-of-run test suite failed'))).toBe(true);
+    });
+
+    it('does not roll back when baseline tests failed', async () => {
+      const deps = makeRollbackDeps({
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: false, error: 'pre-existing' }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // No rollback — can't distinguish instrumentation breakage from pre-existing failures
+      expect(result.filesSucceeded).toBe(2);
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
+    });
+
+    it('skips end-of-run rollback in dry-run mode', async () => {
+      const writeFileForRollback = vi.fn();
+      const deps = makeRollbackDeps({ writeFileForRollback });
+      const config = makeConfig({ testCommand: 'vitest run', dryRun: true });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Dry-run skips both checkpoint tests and live-check, so no rollback
+      expect(writeFileForRollback).not.toHaveBeenCalled();
+    });
+
+    it('does not roll back when checkpoint window is empty (all checkpoints passed)', async () => {
+      const deps = makeRollbackDeps({
+        dispatchFiles: vi.fn().mockImplementation(
+          async (filePaths: string[], _pd: string, _cfg: AgentConfig, _cb: unknown, options: Record<string, unknown>) => {
+            const ref = options?.checkpointWindowRef as {
+              files: { path: string; originalContent: string; resultIndex: number }[];
+              extensionsSnapshot: string | null | undefined;
+            } | undefined;
+            // Empty window = all checkpoints passed and cleared the window
+            if (ref) {
+              ref.files = [];
+              ref.extensionsSnapshot = undefined;
+            }
+            return filePaths.map(fp => makeSuccessResult(fp));
+          },
+        ),
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed'],
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.filesSucceeded).toBe(2);
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
+    });
+
+    it('degrades gracefully when file restore fails during rollback', async () => {
+      const deps = makeRollbackDeps({
+        writeFileForRollback: vi.fn().mockRejectedValue(new Error('EACCES')),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      // Should not throw — rollback is best-effort
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Files still marked as failed even if restore fails
+      expect(result.fileResults.every(fr => fr.status === 'failed')).toBe(true);
+      expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
     });
   });
 });

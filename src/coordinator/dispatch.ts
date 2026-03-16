@@ -151,6 +151,13 @@ interface DispatchFilesOptions {
   dryRun?: boolean;
   /** Injectable test runner for checkpoint test execution (NDS-002). */
   runTestCommand?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
+  /** Whether baseline tests passed before instrumentation. When false, checkpoint test failure does not trigger rollback. */
+  baselineTestPassed?: boolean;
+  /** Mutable output — populated at end of dispatch with checkpoint window state for end-of-run rollback. */
+  checkpointWindowRef?: {
+    files: { path: string; originalContent: string; resultIndex: number }[];
+    extensionsSnapshot: string | null | undefined;
+  };
 }
 
 /**
@@ -195,10 +202,19 @@ export async function dispatchFiles(
   const total = filePaths.length;
   const results: FileResult[] = [];
   const interval = config.schemaCheckpointInterval;
+  const locThreshold = config.checkpointLocThreshold;
   const checkpointConfig = options?.checkpoint;
   let filesSinceLastCheckpoint = 0;
+  let locSinceLastCheckpoint = 0;
   let lastCheckpointResultIndex = 0;
   let stoppedByCheckpoint = false;
+
+  // Checkpoint window tracking for rollback on test failure (NDS-002 / PRD #156 M3)
+  // Stores original content and result index for each file since the last passing checkpoint,
+  // enabling bulk rollback when checkpoint tests detect instrumentation-caused breakage.
+  const checkpointWindowFiles: { path: string; originalContent: string; resultIndex: number }[] = [];
+  let checkpointExtensionsSnapshot: string | null | undefined;
+  let checkpointAccumulatorLength = 0;
 
   // In-memory accumulator for schema extensions across files (deduped)
   const accumulatedExtensions: string[] = [];
@@ -215,6 +231,14 @@ export async function dispatchFiles(
     }
   } catch {
     // No package.json or unreadable — projectName stays undefined
+  }
+
+  // Take initial checkpoint window snapshot for rollback capability
+  if (registryDir && !isDryRun && options?.runTestCommand) {
+    try {
+      checkpointExtensionsSnapshot = await snapshotFn(registryDir);
+      checkpointAccumulatorLength = accumulatedExtensions.length;
+    } catch { /* best effort — rollback degrades if snapshot fails */ }
   }
 
   for (let i = 0; i < total; i++) {
@@ -393,6 +417,27 @@ export async function dispatchFiles(
         }
       }
 
+      // Compute LOC delta and track checkpoint window AFTER file status is finalized.
+      // Deferred from pre-extension to avoid counting reverted/failed files.
+      if (result.status === 'success' || result.status === 'partial') {
+        if (locThreshold !== undefined) {
+          try {
+            const instrumentedContent = await readFile(filePath, 'utf-8');
+            const originalLines = fileContent.split('\n').length;
+            const instrumentedLines = instrumentedContent.split('\n').length;
+            locSinceLastCheckpoint += Math.abs(instrumentedLines - originalLines);
+          } catch { /* LOC tracking degrades gracefully — re-read failure is non-fatal */ }
+        }
+
+        if (!isDryRun && options?.runTestCommand) {
+          checkpointWindowFiles.push({
+            path: filePath,
+            originalContent: fileContent,
+            resultIndex: results.length - 1,
+          });
+        }
+      }
+
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
       abortTracker.record(result);
 
@@ -405,9 +450,11 @@ export async function dispatchFiles(
         }
       }
 
-      // Run periodic schema checkpoint after every N processed (non-skipped) files
-      // Dry-run skips checkpoints — schema changes are transient and will be reverted
-      if (!isDryRun && checkpointConfig && interval > 0 && filesSinceLastCheckpoint >= interval) {
+      // Run periodic schema checkpoint after every N processed (non-skipped) files,
+      // or when cumulative LOC changed exceeds checkpointLocThreshold (additive triggers).
+      // Dry-run skips checkpoints — schema changes are transient and will be reverted.
+      const locThresholdExceeded = locThreshold !== undefined && locSinceLastCheckpoint >= locThreshold;
+      if (!isDryRun && checkpointConfig && interval > 0 && (filesSinceLastCheckpoint >= interval || locThresholdExceeded)) {
         try {
           const resultsSinceCheckpoint = results.slice(lastCheckpointResultIndex);
           const checkpointResult = await runSchemaCheckpoint(
@@ -422,11 +469,13 @@ export async function dispatchFiles(
           // Run test suite at checkpoint if schema passed, configured, and available.
           // Run BEFORE firing callback so the callback receives a composite result.
           let checkpointPassed = checkpointResult.passed;
+          let testFailedAtCheckpoint = false;
           if (checkpointResult.passed && options?.runTestCommand && await hasTestSuite(config.testCommand, projectDir)) {
             try {
               const testResult = await options.runTestCommand(projectDir, config.testCommand);
               if (!testResult.passed) {
                 checkpointPassed = false;
+                testFailedAtCheckpoint = true;
                 if (extWarnings) {
                   extWarnings.push(
                     `Checkpoint test run failed at file ${i + 1}/${total} ` +
@@ -435,7 +484,9 @@ export async function dispatchFiles(
                 }
               }
             } catch (testErr) {
-              // Test infrastructure failure — degrade, don't stop
+              // Test infrastructure failure — mark as unverified so window is not cleared
+              checkpointPassed = false;
+              testFailedAtCheckpoint = true;
               if (extWarnings) {
                 const msg = testErr instanceof Error ? testErr.message : String(testErr);
                 extWarnings.push(`Checkpoint test run infrastructure failure (degraded): ${msg}`);
@@ -452,15 +503,78 @@ export async function dispatchFiles(
           }
 
           if (checkpointPassed) {
+            // Checkpoint passed — clear window and take new snapshot for next window
+            checkpointWindowFiles.length = 0;
+            if (registryDir) {
+              // Clear stale state before refreshing — if snapshotFn fails,
+              // stale values would cause rollback to wrong checkpoint
+              checkpointExtensionsSnapshot = undefined;
+              checkpointAccumulatorLength = 0;
+              try {
+                checkpointExtensionsSnapshot = await snapshotFn(registryDir);
+                checkpointAccumulatorLength = accumulatedExtensions.length;
+              } catch { /* best effort — rollback degrades if snapshot fails */ }
+            }
             filesSinceLastCheckpoint = 0;
+            locSinceLastCheckpoint = 0;
+            lastCheckpointResultIndex = results.length;
+          } else if (testFailedAtCheckpoint && options?.baselineTestPassed === true) {
+            // Test failure with passing baseline — roll back files in checkpoint window
+            for (const tracked of checkpointWindowFiles) {
+              try {
+                await writeFile(tracked.path, tracked.originalContent, 'utf-8');
+              } catch { /* best-effort file restore */ }
+              results[tracked.resultIndex].status = 'failed';
+              results[tracked.resultIndex].reason =
+                `Rolled back: checkpoint test failure at file ${i + 1}/${total}`;
+            }
+
+            // Restore schema extensions to last passing checkpoint state
+            if (registryDir && checkpointExtensionsSnapshot !== undefined) {
+              accumulatedExtensions.length = checkpointAccumulatorLength;
+              seenExtensions.clear();
+              for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+              try {
+                await restoreFn(registryDir, checkpointExtensionsSnapshot);
+              } catch { /* best-effort restore */ }
+            }
+
+            // Fire rollback callback
+            try {
+              callbacks?.onCheckpointRollback?.(checkpointWindowFiles.map(f => f.path));
+            } catch { /* callback failure must not abort dispatch */ }
+
+            // Surface rollback in warnings
+            if (extWarnings) {
+              extWarnings.push(
+                `Rolled back ${checkpointWindowFiles.length} file(s) at checkpoint ` +
+                `(file ${i + 1}/${total}) due to test failure`,
+              );
+            }
+
+            // Reset window and take new snapshot — always continue after rollback
+            checkpointWindowFiles.length = 0;
+            if (registryDir) {
+              // Clear stale state before refreshing — if snapshotFn fails,
+              // stale values would cause rollback to wrong checkpoint
+              checkpointExtensionsSnapshot = undefined;
+              checkpointAccumulatorLength = 0;
+              try {
+                checkpointExtensionsSnapshot = await snapshotFn(registryDir);
+                checkpointAccumulatorLength = accumulatedExtensions.length;
+              } catch { /* best effort */ }
+            }
+            filesSinceLastCheckpoint = 0;
+            locSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
           } else {
-            // On failure: stop unless callback explicitly returns true
+            // Schema failure or baseline-already-failing — original stop/continue behavior
             if (shouldContinue !== true) {
               stoppedByCheckpoint = true;
             } else {
               // Continue despite failure — reset counters
               filesSinceLastCheckpoint = 0;
+              locSinceLastCheckpoint = 0;
               lastCheckpointResultIndex = results.length;
             }
           }
@@ -468,6 +582,7 @@ export async function dispatchFiles(
           // Checkpoint infrastructure failure — degrade and warn, don't stop
           // Reset counters so next checkpoint attempts at the normal interval
           filesSinceLastCheckpoint = 0;
+          locSinceLastCheckpoint = 0;
           lastCheckpointResultIndex = results.length;
           if (extWarnings) {
             const msg = checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr);
@@ -508,6 +623,12 @@ export async function dispatchFiles(
       try { callbacks?.onFileComplete?.(failed, i, total); } catch { /* callback failure must not abort dispatch */ }
       abortTracker.record(failed);
     }
+  }
+
+  // Expose checkpoint window state for end-of-run rollback in coordinate()
+  if (options?.checkpointWindowRef) {
+    options.checkpointWindowRef.files = [...checkpointWindowFiles];
+    options.checkpointWindowRef.extensionsSnapshot = checkpointExtensionsSnapshot;
   }
 
   // Emit a single summary warning for all rejected extensions (deduplicated)

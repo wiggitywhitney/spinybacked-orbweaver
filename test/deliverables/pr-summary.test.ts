@@ -797,6 +797,82 @@ describe('renderPrSummary', () => {
     });
   });
 
+  describe('rolled back files section', () => {
+    it('renders section when files were rolled back due to test failure', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/good.js',
+            status: 'success',
+          }),
+          _makeFileResult({
+            path: '/project/src/regular-failed.js',
+            status: 'failed',
+            spansAdded: 0,
+            reason: 'Syntax errors after retries',
+          }),
+          _makeFileResult({
+            path: '/project/src/rolled-back-a.js',
+            status: 'failed',
+            spansAdded: 0,
+            reason: 'Rolled back: end-of-run test failure',
+          }),
+          _makeFileResult({
+            path: '/project/src/rolled-back-b.js',
+            status: 'failed',
+            spansAdded: 0,
+            reason: 'Rolled back: end-of-run test failure',
+          }),
+        ],
+        filesSucceeded: 1,
+        filesFailed: 3,
+      });
+      const md = renderPrSummary(result, _makeConfig(), '/project');
+
+      expect(md).toContain('## Rolled Back Files');
+      expect(md).toContain('rolled-back-a.js');
+      expect(md).toContain('rolled-back-b.js');
+      expect(md).toContain('end-of-run test failure');
+      // The successful file should NOT appear in rolled-back section
+      expect(md.split('## Rolled Back Files')[1]).not.toContain('good.js');
+      // Regular failed file (not rolled back) should NOT appear in rolled-back section
+      expect(md.split('## Rolled Back Files')[1]).not.toContain('regular-failed.js');
+    });
+
+    it('includes checkpoint rollback files in the section', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/checkpoint-fail.js',
+            status: 'failed',
+            spansAdded: 0,
+            reason: 'Rolled back: checkpoint test failure at file 5/10',
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig(), '/project');
+
+      expect(md).toContain('## Rolled Back Files');
+      expect(md).toContain('checkpoint-fail.js');
+    });
+
+    it('omits section when no files were rolled back', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({ status: 'success' }),
+          _makeFileResult({ status: 'failed', reason: 'Syntax errors after retries' }),
+        ],
+        filesSucceeded: 1,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('## Rolled Back Files');
+    });
+  });
+
   describe('live-check compliance report', () => {
     it('renders end-of-run validation when present', () => {
       const result = _makeRunResult({

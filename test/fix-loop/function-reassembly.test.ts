@@ -386,3 +386,193 @@ describe('deduplicateImports', () => {
     expect(result[0]).toContain('SpanStatusCode');
   });
 });
+
+describe('reassembleFunctions — tracer init detection', () => {
+  const fileWithImports = `import { readFile } from 'node:fs/promises';
+
+const CONFIG = { timeout: 5000 };
+
+export async function fetchData(url) {
+  const resp = await fetch(url);
+  return resp.json();
+}
+
+export function processItems(items) {
+  return items.map(i => i.value);
+}
+`;
+
+  it('collects const tracer = trace.getTracer(...) from instrumented code and inserts at module scope', () => {
+    const extractedFunctions: ExtractedFunction[] = [
+      makeExtractedFunction({
+        name: 'fetchData',
+        startLine: 5,
+        endLine: 8,
+        sourceText: 'export async function fetchData(url) { /* original */ }',
+      }),
+    ];
+
+    const functionResults: FunctionResult[] = [
+      makeFunctionResult({
+        name: 'fetchData',
+        instrumentedCode: `import { trace, SpanStatusCode } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-service');
+
+export async function fetchData(url) {
+  return tracer.startActiveSpan('fetchData', async (span) => {
+    const resp = await fetch(url);
+    span.setStatus({ code: SpanStatusCode.OK });
+    span.end();
+    return resp.json();
+  });
+}`,
+      }),
+    ];
+
+    const result = reassembleFunctions(fileWithImports, extractedFunctions, functionResults);
+
+    // Should have the OTel import
+    expect(result).toContain("import { SpanStatusCode, trace } from '@opentelemetry/api'");
+    // Should have the tracer init at module scope (after imports, before functions)
+    expect(result).toContain("const tracer = trace.getTracer('my-service')");
+    // Should have the instrumented function referencing tracer
+    expect(result).toContain('tracer.startActiveSpan');
+    // Tracer init should appear before the function
+    const tracerIdx = result.indexOf("const tracer = trace.getTracer('my-service')");
+    const fnIdx = result.indexOf('export async function fetchData');
+    expect(tracerIdx).toBeLessThan(fnIdx);
+  });
+
+  it('deduplicates identical tracer init lines from multiple functions', () => {
+    const extractedFunctions: ExtractedFunction[] = [
+      makeExtractedFunction({
+        name: 'fetchData',
+        startLine: 5,
+        endLine: 8,
+        sourceText: 'export async function fetchData(url) { /* original */ }',
+      }),
+      makeExtractedFunction({
+        name: 'processItems',
+        startLine: 10,
+        endLine: 12,
+        sourceText: 'export function processItems(items) { /* original */ }',
+      }),
+    ];
+
+    const functionResults: FunctionResult[] = [
+      makeFunctionResult({
+        name: 'fetchData',
+        instrumentedCode: `import { trace } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-service');
+
+export async function fetchData(url) {
+  return tracer.startActiveSpan('fetchData', async (span) => {
+    span.end();
+    return {};
+  });
+}`,
+      }),
+      makeFunctionResult({
+        name: 'processItems',
+        instrumentedCode: `import { trace } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-service');
+
+export function processItems(items) {
+  return tracer.startActiveSpan('processItems', (span) => {
+    span.end();
+    return items;
+  });
+}`,
+      }),
+    ];
+
+    const result = reassembleFunctions(fileWithImports, extractedFunctions, functionResults);
+
+    // Tracer init should appear exactly once
+    const tracerInitCount = (result.match(/const tracer = trace\.getTracer/g) || []).length;
+    expect(tracerInitCount).toBe(1);
+  });
+
+  it('does not insert tracer init when functions use inline trace.getTracer().startActiveSpan()', () => {
+    const extractedFunctions: ExtractedFunction[] = [
+      makeExtractedFunction({
+        name: 'fetchData',
+        startLine: 5,
+        endLine: 8,
+        sourceText: 'export async function fetchData(url) { /* original */ }',
+      }),
+    ];
+
+    const functionResults: FunctionResult[] = [
+      makeFunctionResult({
+        name: 'fetchData',
+        instrumentedCode: `import { trace } from '@opentelemetry/api';
+
+export async function fetchData(url) {
+  return trace.getTracer('my-service').startActiveSpan('fetchData', async (span) => {
+    span.end();
+    return {};
+  });
+}`,
+      }),
+    ];
+
+    const result = reassembleFunctions(fileWithImports, extractedFunctions, functionResults);
+
+    // Should NOT have a standalone tracer init line
+    expect(result).not.toMatch(/^const tracer = trace\.getTracer/m);
+    // Should still have the inline usage in the function
+    expect(result).toContain("trace.getTracer('my-service').startActiveSpan");
+  });
+
+  it('does not duplicate tracer init that already exists in the original file', () => {
+    const fileWithExistingTracer = `import { trace } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-service');
+
+export function existingInstrumented() {
+  return tracer.startActiveSpan('existing', (span) => {
+    span.end();
+  });
+}
+
+export function newFunction(x) {
+  return x + 1;
+}
+`;
+
+    const extractedFunctions: ExtractedFunction[] = [
+      makeExtractedFunction({
+        name: 'newFunction',
+        startLine: 11,
+        endLine: 13,
+        sourceText: 'export function newFunction(x) { return x + 1; }',
+      }),
+    ];
+
+    const functionResults: FunctionResult[] = [
+      makeFunctionResult({
+        name: 'newFunction',
+        instrumentedCode: `import { trace } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-service');
+
+export function newFunction(x) {
+  return tracer.startActiveSpan('newFunction', (span) => {
+    span.end();
+    return x + 1;
+  });
+}`,
+      }),
+    ];
+
+    const result = reassembleFunctions(fileWithExistingTracer, extractedFunctions, functionResults);
+
+    // Tracer init should still appear exactly once (the original)
+    const tracerInitCount = (result.match(/const tracer = trace\.getTracer/g) || []).length;
+    expect(tracerInitCount).toBe(1);
+  });
+});

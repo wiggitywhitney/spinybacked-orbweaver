@@ -250,6 +250,51 @@ describe('AgentConfigSchema', () => {
     });
   });
 
+  describe('checkpointLocThreshold', () => {
+    it('is undefined by default when omitted', () => {
+      const result = AgentConfigSchema.safeParse(makeMinimalConfig());
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.checkpointLocThreshold).toBeUndefined();
+      }
+    });
+
+    it('accepts a positive integer', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        checkpointLocThreshold: 200,
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.checkpointLocThreshold).toBe(200);
+      }
+    });
+
+    it('rejects zero', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        checkpointLocThreshold: 0,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects negative values', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        checkpointLocThreshold: -10,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects non-integer values', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        checkpointLocThreshold: 10.5,
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('reserved fields', () => {
     it('accepts instrumentationMode without error', () => {
       const result = AgentConfigSchema.safeParse({

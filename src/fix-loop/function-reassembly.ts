@@ -25,6 +25,13 @@ const OTEL_IMPORT_PREFIXES = [
 ];
 
 /**
+ * Pattern to match tracer initialization statements like:
+ *   const tracer = trace.getTracer('service-name');
+ *   const tracer = trace.getTracer("service-name");
+ */
+const TRACER_INIT_PATTERN = /^\s*const\s+tracer\s*=\s*trace\.getTracer\s*\(/;
+
+/**
  * Reassemble individually instrumented functions back into the original file.
  *
  * For each successful FunctionResult:
@@ -59,13 +66,19 @@ export function reassembleFunctions(
 
   const lines = originalFileContent.split('\n');
   const newOtelImports: string[] = [];
+  const newTracerInits: string[] = [];
 
   // Collect the set of existing imports in the original file for comparison
   const originalImportLines = new Set<string>();
+  // Collect existing tracer init lines so we don't duplicate them
+  const originalTracerInits = new Set<string>();
   for (const line of lines) {
     const trimmed = line.trim();
     if (IMPORT_PATTERN.test(trimmed)) {
       originalImportLines.add(trimmed);
+    }
+    if (TRACER_INIT_PATTERN.test(trimmed)) {
+      originalTracerInits.add(trimmed);
     }
   }
 
@@ -95,6 +108,14 @@ export function reassembleFunctions(
       }
     }
 
+    // Collect tracer init lines from the instrumented code
+    const instrumentedTracerInits = extractTracerInitLines(result.instrumentedCode);
+    for (const init of instrumentedTracerInits) {
+      if (!originalTracerInits.has(init)) {
+        newTracerInits.push(init);
+      }
+    }
+
     replacements.push({
       startLine: extracted.startLine,
       endLine: extracted.endLine,
@@ -121,6 +142,23 @@ export function reassembleFunctions(
     let insertIdx = findImportInsertPosition(lines);
     for (const imp of dedupedImports) {
       lines.splice(insertIdx, 0, imp);
+      insertIdx++;
+    }
+  }
+
+  // Deduplicate and insert tracer init lines after imports
+  if (newTracerInits.length > 0) {
+    const dedupedInits = [...new Set(newTracerInits)];
+
+    // Insert after the last import line (which may have shifted due to new imports above)
+    let insertIdx = findImportInsertPosition(lines);
+    // Add a blank line before tracer init if the line before isn't already blank
+    if (insertIdx > 0 && lines[insertIdx - 1].trim() !== '') {
+      lines.splice(insertIdx, 0, '');
+      insertIdx++;
+    }
+    for (const init of dedupedInits) {
+      lines.splice(insertIdx, 0, init);
       insertIdx++;
     }
   }
@@ -211,6 +249,16 @@ function extractImportLines(code: string): string[] {
   return code.split('\n')
     .map(line => line.trim())
     .filter(line => IMPORT_PATTERN.test(line));
+}
+
+/**
+ * Extract tracer initialization lines from code.
+ * Matches patterns like: const tracer = trace.getTracer('service-name');
+ */
+function extractTracerInitLines(code: string): string[] {
+  return code.split('\n')
+    .map(line => line.trim())
+    .filter(line => TRACER_INIT_PATTERN.test(line));
 }
 
 /**

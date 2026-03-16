@@ -33,6 +33,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderReviewSensitivity(runResult, config, display));
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderRecommendedRefactors(runResult, display));
+  sections.push(renderRolledBackFiles(runResult, display));
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
@@ -318,6 +319,27 @@ function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): s
   }
 
   return lines.join('\n').trimEnd();
+}
+
+function renderRolledBackFiles(runResult: RunResult, display: DisplayFn): string {
+  const rolledBack = runResult.fileResults.filter(
+    f => f.status === 'failed' && f.reason?.startsWith('Rolled back:'),
+  );
+
+  if (rolledBack.length === 0) return '';
+
+  const lines: string[] = ['## Rolled Back Files'];
+  lines.push('');
+  lines.push('The following files were rolled back to their pre-instrumentation state due to test failures.');
+  lines.push('');
+  lines.push('| File | Reason |');
+  lines.push('|------|--------|');
+
+  for (const file of rolledBack) {
+    lines.push(`| ${display(file.path)} | ${sanitizeCell(file.reason ?? '')} |`);
+  }
+
+  return lines.join('\n');
 }
 
 function renderTokenUsage(runResult: RunResult, config: AgentConfig): string {

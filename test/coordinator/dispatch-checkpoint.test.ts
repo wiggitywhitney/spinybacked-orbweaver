@@ -692,7 +692,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       expect(testRunCount.value).toBe(1); // Ran once at checkpoint after file 2
     });
 
-    it('stops processing when checkpoint test run fails', async () => {
+    it('rolls back files and continues when checkpoint test run fails', async () => {
       const testRunCount = { value: 0 };
       const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'vitest run' });
       const files = await Promise.all([
@@ -707,12 +707,41 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
           testRunCount.value++;
           return { passed: false, error: 'Test suite failed: 2 tests broken' };
         },
+        baselineTestPassed: true,
       });
 
-      // Test runner was invoked exactly once (at first checkpoint)
+      // All files processed — rollback continues instead of stopping
+      expect(results).toHaveLength(4);
+      // Test runner invoked at each checkpoint (after file 2 and file 4)
+      expect(testRunCount.value).toBe(2);
+      // Rolled-back files marked as failed
+      expect(results.every(r => r.status === 'failed')).toBe(true);
+    });
+
+    it('stops processing when checkpoint test fails with baseline already failing', async () => {
+      const testRunCount = { value: 0 };
+      const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'vitest run' });
+      const files = await Promise.all([
+        createFile('a.js'), createFile('b.js'),
+        createFile('c.js'), createFile('d.js'),
+      ]);
+
+      const results = await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDeps(),
+        checkpoint: passingCheckpointConfig,
+        runTestCommand: async () => {
+          testRunCount.value++;
+          return { passed: false, error: 'Test suite failed: 2 tests broken' };
+        },
+        baselineTestPassed: false,
+      });
+
+      // With baseline already failing, no rollback — falls through to stop behavior
       expect(testRunCount.value).toBe(1);
-      // Should stop at exactly 2 files (checkpoint fires after file 2, tests fail, no more files processed)
       expect(results).toHaveLength(2);
+      // Files not rolled back — they remain successful
+      expect(results[0].status).toBe('success');
+      expect(results[1].status).toBe('success');
     });
 
     it('skips test run when testCommand is a placeholder', async () => {
