@@ -3,6 +3,7 @@
 
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, CostCeiling, RunResult } from './types.ts';
@@ -28,6 +29,37 @@ import { readFile } from 'node:fs/promises';
 import { checkGhAvailable as defaultCheckGhAvailable } from '../deliverables/git-workflow.ts';
 import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
 import type { FileContent } from '../validation/tier2/cdq008.ts';
+import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
+
+/**
+ * Run a project's test suite without OTLP overrides.
+ * Used for checkpoint tests — validates code correctness, not telemetry emission.
+ *
+ * @param projectDir - Project root (cwd for the test command)
+ * @param testCommand - Shell command to run (e.g., "npm test")
+ * @returns Whether the tests passed, with error details on failure
+ */
+export function executeProjectTests(
+  projectDir: string,
+  testCommand: string,
+): Promise<{ passed: boolean; error?: string }> {
+  const cmd = process.platform === 'win32' ? 'cmd.exe' : 'sh';
+  const args = process.platform === 'win32' ? ['/c', testCommand] : ['-c', testCommand];
+
+  return new Promise((resolve) => {
+    execFile(cmd, args, {
+      cwd: projectDir,
+      timeout: 300_000,
+    }, (error, _stdout, stderr) => {
+      if (error) {
+        const errorMsg = stderr?.trim() || error.message;
+        resolve({ passed: false, error: errorMsg });
+        return;
+      }
+      resolve({ passed: true });
+    });
+  });
+}
 
 /**
  * Error thrown when the coordinator must abort the run.
@@ -79,6 +111,10 @@ export interface CoordinateDeps {
   readFileForAdvisory: (filePath: string) => Promise<string>;
   checkGhAvailable?: () => Promise<boolean | { available: boolean; warning?: string }>;
   liveCheckOptions?: LiveCheckOptions;
+  /** Injectable test suite detection for checkpoint test wiring. */
+  hasTestSuite?: (testCommand: string, projectDir?: string) => Promise<boolean>;
+  /** Injectable test runner for checkpoint tests. Runs test command without OTLP overrides. */
+  executeProjectTests?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
 }
 
 /**
@@ -144,9 +180,12 @@ export async function coordinate(
   const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
   const readForAdvisory = deps?.readFileForAdvisory ?? ((fp: string) => readFile(fp, 'utf-8'));
   const checkGh = deps?.checkGhAvailable ?? defaultCheckGhAvailable;
+  const detectTestSuite = deps?.hasTestSuite ?? defaultHasTestSuite;
+  const runTests = deps?.executeProjectTests ?? executeProjectTests;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
+  const checkpointTestWarnings: string[] = [];
 
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;
@@ -239,6 +278,21 @@ export async function coordinate(
     schemaDiffWarnings.push(`Baseline snapshot failed (degraded): ${message}`);
   }
 
+  // Step 4d: Detect test suite for checkpoint test execution (degrade and warn on failure)
+  // Dry-run skips checkpoint tests — files are reverted, test results would be meaningless
+  let checkpointTestRunner: ((pd: string, tc: string) => Promise<{ passed: boolean; error?: string }>) | undefined;
+  if (!config.dryRun) {
+    try {
+      const projectHasTests = await detectTestSuite(config.testCommand, projectDir);
+      if (projectHasTests) {
+        checkpointTestRunner = runTests;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      checkpointTestWarnings.push(`Checkpoint test suite detection failed (degraded): ${message}`);
+    }
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   let fileResults: FileResult[];
   try {
@@ -250,6 +304,7 @@ export async function coordinate(
       registryDir,
       schemaExtensionWarnings,
       ...(config.dryRun ? { dryRun: true } : {}),
+      ...(checkpointTestRunner ? { runTestCommand: checkpointTestRunner } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -308,6 +363,7 @@ export async function coordinate(
   runResult.warnings.push(...schemaExtensionWarnings);
   runResult.warnings.push(...schemaHashWarnings);
   runResult.warnings.push(...schemaDiffWarnings);
+  runResult.warnings.push(...checkpointTestWarnings);
 
   // Step 6b: Run CDQ-008 cross-file tracer naming check (advisory, degrade and warn)
   const successfulFiles = fileResults.filter(r => r.status === 'success' || r.status === 'partial');

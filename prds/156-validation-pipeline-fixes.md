@@ -138,7 +138,7 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 ## Milestone Completion
 
 - [x] Milestone 1: Tracer Init in Function-Level Reassembly
-- [ ] Milestone 2: Wire Checkpoint Test Execution
+- [x] Milestone 2: Wire Checkpoint Test Execution
 - [ ] Milestone 3: Test Failure File Identification and Rollback
 - [ ] Milestone 4: End-of-Run Test Failure Handling
 - [ ] Milestone 5: Stretch — LOC-Aware Checkpoint Cadence
@@ -146,8 +146,8 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 ## Acceptance Criteria
 
 - [x] 1. After function-level reassembly, every file that contains `tracer.startActiveSpan()` also has a `const tracer = trace.getTracer(...)` declaration at module scope
-- [ ] 2. `coordinate()` passes a test command to `dispatchFiles()` when the target project has a test suite
-- [ ] 3. Checkpoint tests run at configured intervals during file dispatch (default: every 5 files)
+- [x] 2. `coordinate()` passes a test command to `dispatchFiles()` when the target project has a test suite
+- [x] 3. Checkpoint tests run at configured intervals during file dispatch (default: every 5 files)
 - [ ] 4. When checkpoint tests fail, files since the last passing checkpoint are rolled back and marked as `failed`
 - [ ] 5. The instrumented branch does not contain code that consistently fails the project's test suite, and failed instrumentation is rolled back when detected by checkpoint or end-of-run tests
 - [ ] 6. PR summary includes a "Rolled Back Files" section when test-failure rollbacks occur

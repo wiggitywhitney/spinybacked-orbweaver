@@ -828,4 +828,102 @@ describe('coordinate', () => {
       );
     });
   });
+
+  describe('checkpoint test wiring (NDS-002)', () => {
+    it('passes runTestCommand to dispatchFiles when project has a test suite', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeDefined();
+      expect(typeof options.runTestCommand).toBe('function');
+    });
+
+    it('does not pass runTestCommand when test command is a placeholder', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(false),
+      });
+      const config = makeConfig({
+        testCommand: 'echo "Error: no test specified" && exit 1',
+      });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeUndefined();
+    });
+
+    it('does not pass runTestCommand in dry-run mode', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+      });
+      const config = makeConfig({ dryRun: true, testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeUndefined();
+    });
+
+    it('degrades gracefully when hasTestSuite throws', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockRejectedValue(new Error('fs read failed')),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Should still complete the run without runTestCommand
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.runTestCommand).toBeUndefined();
+      expect(result.filesProcessed).toBeGreaterThan(0);
+      expect(result.warnings.some((w: string) => w.includes('test suite detection'))).toBe(true);
+    });
+
+    it('runTestCommand delegates to executeProjectTests when invoked', async () => {
+      const executeProjectTests = vi.fn().mockResolvedValue({ passed: true });
+      const dispatchFiles = vi.fn().mockImplementation(
+        async (filePaths: string[], _projectDir: string, _config: AgentConfig, _callbacks: unknown, options: Record<string, unknown>) => {
+          // Simulate dispatch calling runTestCommand (as it would at a checkpoint)
+          const runner = options?.runTestCommand as ((pd: string, tc: string) => Promise<unknown>) | undefined;
+          if (runner) {
+            await runner('/project', 'vitest run');
+          }
+          return filePaths.map((fp: string) => makeSuccessResult(fp));
+        },
+      );
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests,
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      expect(executeProjectTests).toHaveBeenCalledWith('/project', 'vitest run');
+    });
+  });
 });

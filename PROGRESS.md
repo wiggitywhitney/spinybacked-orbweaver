@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-03-16) Wire checkpoint test execution in coordinate (PRD #156, milestone 2): `coordinate()` now detects project test suites via `hasTestSuite()` and passes `runTestCommand` to `dispatchFiles()` when tests exist and not in dry-run mode. New `executeProjectTests()` runs the test command via `sh -c` without OTLP overrides (checkpoint tests validate code correctness, not telemetry emission). Both functions are injectable via `CoordinateDeps` for testability. Gracefully degrades when test suite detection fails. 5 new tests
+
 ### Fixed
 
 - (2026-03-16) Tracer init detection in function-level reassembly (PRD #156, milestone 1): `reassembleFunctions()` now detects `const tracer = trace.getTracer(...)` declarations in instrumented function code and inserts them at module scope alongside OTel imports. Deduplicates identical tracer init lines across multiple functions. Skips insertion when the original file already has a tracer init or when functions use inline `trace.getTracer().startActiveSpan()`. Fixes the root cause of all 32 `ReferenceError: tracer is not defined` failures in eval run-4. 4 new tests
