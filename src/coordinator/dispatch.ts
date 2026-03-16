@@ -357,6 +357,10 @@ export async function dispatchFiles(
               extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
             }
           }
+          // Restore original file content (same as validation failure path)
+          try {
+            await writeFile(filePath, fileContent, 'utf-8');
+          } catch { /* best-effort restore — failure already recorded above */ }
         }
       }
 
