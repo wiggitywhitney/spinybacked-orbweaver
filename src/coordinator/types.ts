@@ -26,6 +26,8 @@ export interface CoordinatorCallbacks {
   onFileStart?: (path: string, index: number, total: number) => void;
   onFileComplete?: (result: FileResult, index: number, total: number) => void;
   onSchemaCheckpoint?: (filesProcessed: number, passed: boolean) => boolean | void;
+  /** Fires after checkpoint test failure triggers rollback. Receives paths of rolled-back files. */
+  onCheckpointRollback?: (rolledBackPaths: string[]) => void;
   onValidationStart?: () => void;
   onValidationComplete?: (passed: boolean, complianceReport: string) => void;
   onRunComplete?: (results: FileResult[]) => void;

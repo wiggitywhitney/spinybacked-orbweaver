@@ -293,6 +293,25 @@ export async function coordinate(
     }
   }
 
+  // Step 4e: Record baseline test results for checkpoint rollback (degrade and warn on failure)
+  // If the project's tests already fail before instrumentation, checkpoint test failures
+  // should not trigger rollback (can't distinguish instrumentation breakage from pre-existing)
+  let baselineTestPassed: boolean | undefined;
+  if (checkpointTestRunner) {
+    try {
+      const baselineResult = await runTests(projectDir, config.testCommand);
+      baselineTestPassed = baselineResult.passed;
+      if (!baselineResult.passed) {
+        checkpointTestWarnings.push(
+          'Baseline test suite has pre-existing failures — checkpoint test rollback disabled',
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      checkpointTestWarnings.push(`Baseline test recording failed (degraded): ${message}`);
+    }
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   let fileResults: FileResult[];
   try {
@@ -305,6 +324,7 @@ export async function coordinate(
       schemaExtensionWarnings,
       ...(config.dryRun ? { dryRun: true } : {}),
       ...(checkpointTestRunner ? { runTestCommand: checkpointTestRunner } : {}),
+      ...(baselineTestPassed !== undefined ? { baselineTestPassed } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

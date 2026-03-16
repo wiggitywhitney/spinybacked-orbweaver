@@ -92,6 +92,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     readFileForAdvisory: vi.fn().mockResolvedValue(''),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
+    hasTestSuite: vi.fn().mockResolvedValue(false),
     ...overrides,
   };
 }
@@ -924,6 +925,81 @@ describe('coordinate', () => {
       await coordinate('/project', config, undefined, deps);
 
       expect(executeProjectTests).toHaveBeenCalledWith('/project', 'vitest run');
+    });
+  });
+
+  describe('baseline test recording for checkpoint rollback', () => {
+    it('passes baselineTestPassed=true when baseline tests pass', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.baselineTestPassed).toBe(true);
+    });
+
+    it('passes baselineTestPassed=false when baseline tests fail', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: false, error: 'pre-existing failures' }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.baselineTestPassed).toBe(false);
+      expect(result.warnings.some((w: string) => w.includes('pre-existing failures'))).toBe(true);
+    });
+
+    it('does not record baseline when no test suite detected', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const executeProjectTests = vi.fn().mockResolvedValue({ passed: true });
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(false),
+        executeProjectTests,
+      });
+      const config = makeConfig({ testCommand: 'echo "no tests"' });
+
+      await coordinate('/project', config, undefined, deps);
+
+      const options = dispatchFiles.mock.calls[0][4];
+      expect(options.baselineTestPassed).toBeUndefined();
+      // executeProjectTests called once for baseline (via the coordinate function's runTests reference)
+      // But checkpointTestRunner is undefined when hasTestSuite returns false, so baseline is skipped
+    });
+
+    it('degrades gracefully when baseline test recording throws', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([
+        makeSuccessResult('/project/a.js'),
+      ]);
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockRejectedValue(new Error('spawn failed')),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Should still complete — baseline failure is not fatal
+      expect(result.filesProcessed).toBeGreaterThan(0);
+      expect(result.warnings.some((w: string) => w.includes('Baseline test recording failed'))).toBe(true);
     });
   });
 });

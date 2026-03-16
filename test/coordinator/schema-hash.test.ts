@@ -243,6 +243,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
       runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
       readFileForAdvisory: vi.fn().mockResolvedValue(''),
+      hasTestSuite: vi.fn().mockResolvedValue(false),
     };
     const config = makeConfig();
 
@@ -276,6 +277,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
       runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
       readFileForAdvisory: vi.fn().mockResolvedValue(''),
+      hasTestSuite: vi.fn().mockResolvedValue(false),
     };
     const config = makeConfig();
 
@@ -303,6 +305,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
       runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
       readFileForAdvisory: vi.fn().mockResolvedValue(''),
+      hasTestSuite: vi.fn().mockResolvedValue(false),
     };
     const config = makeConfig();
 
@@ -326,6 +329,7 @@ describe('coordinate — RunResult schema hash fields', () => {
       computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
       runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
       readFileForAdvisory: vi.fn().mockResolvedValue(''),
+      hasTestSuite: vi.fn().mockResolvedValue(false),
     };
     const config = makeConfig();
 

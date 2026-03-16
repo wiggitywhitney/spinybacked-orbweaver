@@ -148,6 +148,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     readFileForAdvisory: vi.fn().mockResolvedValue(''),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
+    hasTestSuite: vi.fn().mockResolvedValue(false),
     ...overrides,
   };
 }
