@@ -2,7 +2,7 @@
 // ABOUTME: Verifies extensions are written after each successful file and accumulate across files.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { FileResult } from '../../src/fix-loop/types.ts';
@@ -824,5 +824,81 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     // Second write still attempted (file 1's extensions rolled back, file 2 has its own)
     expect(writeSchemaExtensions).toHaveBeenCalledTimes(2);
+  });
+
+  it('restores original file content when validation fails after writing extensions', async () => {
+    const originalContent = 'function a() { return 1; }';
+    const file1 = await createFile('a.js', originalContent);
+
+    const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+    const instrumentedContent = 'import { trace } from "@opentelemetry/api";\nfunction a() { return 1; }';
+
+    // instrumentWithRetry writes to the file on success — simulate that
+    const instrumentWithRetry = vi.fn().mockImplementation(async (filePath: string) => {
+      await writeFile(filePath, instrumentedContent, 'utf-8');
+      return makeSuccessResult(filePath, { schemaExtensions: [extensionYaml] });
+    });
+
+    const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+    const validateRegistry = vi.fn().mockResolvedValue({
+      passed: false,
+      error: 'Invalid attribute type "doubble"',
+    });
+    const restoreExtensionsFile = vi.fn().mockResolvedValue(undefined);
+    const snapshotExtensionsFile = vi.fn().mockResolvedValue('previous-content');
+
+    const deps = makeDeps({
+      instrumentWithRetry,
+      writeSchemaExtensions,
+      validateRegistry,
+      snapshotExtensionsFile,
+      restoreExtensionsFile,
+    });
+    const config = makeConfig();
+    const registryDir = join(tmpDir, 'registry');
+
+    await dispatchFiles([file1], tmpDir, config, undefined, {
+      deps,
+      registryDir,
+    });
+
+    // The file on disk should be restored to original content
+    const fileOnDisk = await readFile(file1, 'utf-8');
+    expect(fileOnDisk).toBe(originalContent);
+  });
+
+  it('restores original file content when writeSchemaExtensions throws', async () => {
+    const originalContent = 'function a() { return 1; }';
+    const file1 = await createFile('a.js', originalContent);
+
+    const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+    const instrumentedContent = 'import { trace } from "@opentelemetry/api";\nfunction a() { return 1; }';
+
+    const instrumentWithRetry = vi.fn().mockImplementation(async (filePath: string) => {
+      await writeFile(filePath, instrumentedContent, 'utf-8');
+      return makeSuccessResult(filePath, { schemaExtensions: [extensionYaml] });
+    });
+
+    const writeSchemaExtensions = vi.fn().mockRejectedValue(new Error('Weaver write crashed'));
+    const snapshotExtensionsFile = vi.fn().mockResolvedValue('previous-content');
+    const restoreExtensionsFile = vi.fn().mockResolvedValue(undefined);
+
+    const deps = makeDeps({
+      instrumentWithRetry,
+      writeSchemaExtensions,
+      snapshotExtensionsFile,
+      restoreExtensionsFile,
+    });
+    const config = makeConfig();
+    const registryDir = join(tmpDir, 'registry');
+
+    await dispatchFiles([file1], tmpDir, config, undefined, {
+      deps,
+      registryDir,
+    });
+
+    // The file on disk should be restored to original content
+    const fileOnDisk = await readFile(file1, 'utf-8');
+    expect(fileOnDisk).toBe(originalContent);
   });
 });

@@ -312,7 +312,7 @@ export async function dispatchFiles(
             }
           }
 
-          // Roll back extensions on validation failure
+          // Roll back extensions and file content on validation failure
           if (validationFailed) {
             extensionRollbackDone = true;
             accumulatedExtensions.length = accumulatorLengthSnapshot;
@@ -326,6 +326,12 @@ export async function dispatchFiles(
                 extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
               }
             }
+            // Restore original file content — the fix loop wrote instrumented code
+            // to disk (it considered the file a success), but the registry validation
+            // failed, so the instrumented code references unregistered attributes.
+            try {
+              await writeFile(filePath, fileContent, 'utf-8');
+            } catch { /* best-effort restore — failure already recorded above */ }
           } else {
             // Re-resolve schema after writing extensions to compute meaningful schemaHashAfter
             const updatedSchema = await resolveFn(projectDir, config.schemaPath);
@@ -351,6 +357,10 @@ export async function dispatchFiles(
               extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
             }
           }
+          // Restore original file content (same as validation failure path)
+          try {
+            await writeFile(filePath, fileContent, 'utf-8');
+          } catch { /* best-effort restore — failure already recorded above */ }
         }
       }
 
