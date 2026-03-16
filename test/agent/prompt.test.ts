@@ -77,6 +77,17 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('trace.getTracer');
   });
 
+  it('has dedicated error handling section emphasizing recordException + setStatus pairing', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Must have a dedicated error handling section (not just inline mentions)
+    expect(prompt).toContain('### Error Handling');
+    // Must emphasize the pairing requirement
+    expect(prompt).toContain('MUST');
+    expect(prompt).toContain('recordException');
+    expect(prompt).toContain('setStatus');
+  });
+
   it('specifies a concrete tracer name derived from schema namespace', () => {
     const prompt = buildSystemPrompt(schema);
 
