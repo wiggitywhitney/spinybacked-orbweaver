@@ -1,7 +1,7 @@
 # PRD: Validation Pipeline Fixes — Tracer Init, Checkpoint Tests, Test Failure Handling
 
 **Issue**: [#156](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/156)
-**Status**: Draft
+**Status**: In Progress
 **Priority**: High
 **Created**: 2026-03-16
 **Source**: Evaluation run-4 findings #2 and #7
@@ -135,15 +135,23 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 | Closed #103 | "Fix loop diagnostics" — oscillation detection, token budget tracking complete |
 | Closed PRD #106 | "Function-level instrumentation" — implemented reassembly but missed tracer init |
 
+## Milestone Completion
+
+- [x] Milestone 1: Tracer Init in Function-Level Reassembly
+- [ ] Milestone 2: Wire Checkpoint Test Execution
+- [ ] Milestone 3: Test Failure File Identification and Rollback
+- [ ] Milestone 4: End-of-Run Test Failure Handling
+- [ ] Milestone 5: Stretch — LOC-Aware Checkpoint Cadence
+
 ## Acceptance Criteria
 
-1. After function-level reassembly, every file that contains `tracer.startActiveSpan()` also has a `const tracer = trace.getTracer(...)` declaration at module scope
-2. `coordinate()` passes a test command to `dispatchFiles()` when the target project has a test suite
-3. Checkpoint tests run at configured intervals during file dispatch (default: every 5 files)
-4. When checkpoint tests fail, files since the last passing checkpoint are rolled back and marked as `failed`
-5. The instrumented branch does not contain code that consistently fails the project's test suite, and failed instrumentation is rolled back when detected by checkpoint or end-of-run tests
-6. PR summary includes a "Rolled Back Files" section when test-failure rollbacks occur
-7. (Stretch) Checkpoint frequency increases when cumulative LOC changed exceeds a configurable threshold
+- [x] 1. After function-level reassembly, every file that contains `tracer.startActiveSpan()` also has a `const tracer = trace.getTracer(...)` declaration at module scope
+- [ ] 2. `coordinate()` passes a test command to `dispatchFiles()` when the target project has a test suite
+- [ ] 3. Checkpoint tests run at configured intervals during file dispatch (default: every 5 files)
+- [ ] 4. When checkpoint tests fail, files since the last passing checkpoint are rolled back and marked as `failed`
+- [ ] 5. The instrumented branch does not contain code that consistently fails the project's test suite, and failed instrumentation is rolled back when detected by checkpoint or end-of-run tests
+- [ ] 6. PR summary includes a "Rolled Back Files" section when test-failure rollbacks occur
+- [ ] 7. (Stretch) Checkpoint frequency increases when cumulative LOC changed exceeds a configurable threshold
 
 ## Design Notes
 
