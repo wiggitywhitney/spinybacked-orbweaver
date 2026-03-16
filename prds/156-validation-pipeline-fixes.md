@@ -73,12 +73,14 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 **Problem:** When tests fail (at checkpoint or end-of-run), there's no mechanism to identify which file caused the failure or to roll back the offending instrumentation.
 
 **Fix:** Implement a bisection or last-known-good strategy:
-- At each checkpoint, if tests fail, the file(s) since the last passing checkpoint are candidates
-- Roll back candidate file(s) to their pre-instrumentation state
-- Mark the file as `failed` with a diagnostic message explaining the test failure
+- Before instrumentation begins, run the project's test suite to establish a **baseline** of existing failures (store failure signatures and test IDs)
+- At each checkpoint, if tests fail, compare failure signatures against the baseline — only new failures indicate instrumentation-caused breakage
+- Roll back candidate file(s) that introduced new failures to their pre-instrumentation state
+- Mark rolled-back files as `failed` with a diagnostic distinguishing "introduced by instrumentation" from "pre-existing"
+- Files associated with pre-existing or flaky failures are not rolled back
 - Continue processing remaining files
 
-**Design decision:** Start with a simple "roll back all files since last passing checkpoint" strategy. Bisection (identifying the exact failing file when multiple were added) is a refinement that can come later. The checkpoint interval already bounds the blast radius.
+**Design decision:** Start with a simple "roll back all files since last passing checkpoint" strategy. Bisection (identifying the exact failing file when multiple were added) is a refinement that can come later. The checkpoint interval already bounds the blast radius. Baseline test recording adds one test suite run at the start but prevents false rollbacks from pre-existing failures.
 
 **Key files:**
 - `src/coordinator/dispatch.ts` — add rollback logic after failed checkpoint test
@@ -139,7 +141,7 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 2. `coordinate()` passes a test command to `dispatchFiles()` when the target project has a test suite
 3. Checkpoint tests run at configured intervals during file dispatch (default: every 5 files)
 4. When checkpoint tests fail, files since the last passing checkpoint are rolled back and marked as `failed`
-5. The instrumented branch never contains code that fails the project's test suite
+5. The instrumented branch does not contain code that consistently fails the project's test suite, and failed instrumentation is rolled back when detected by checkpoint or end-of-run tests
 6. PR summary includes a "Rolled Back Files" section when test-failure rollbacks occur
 7. (Stretch) Checkpoint frequency increases when cumulative LOC changed exceeds a configurable threshold
 
@@ -156,3 +158,5 @@ When end-of-run tests fail, `runLiveCheck()` adds a warning to `runResult.warnin
 | 2026-03-16 | Start with "roll back all since last checkpoint" strategy | Bisection is a refinement; checkpoint interval bounds blast radius |
 | 2026-03-16 | LOC-aware cadence is a stretch goal | File-count checkpoints provide most value; LOC is refinement |
 | 2026-03-16 | Combine eval findings #2 and #7 into single PRD | Same root cause (insufficient per-file validation), same files touched |
+| 2026-03-16 | Record baseline test failures before instrumentation | Prevents false rollbacks from pre-existing/flaky test failures (CodeRabbit review feedback) |
+| 2026-03-16 | Soften AC 5 absolute guarantee | "Never fails" is too strong given flaky tests and edge cases (CodeRabbit review feedback) |
