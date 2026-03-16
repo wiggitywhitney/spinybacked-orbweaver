@@ -246,23 +246,23 @@ Also exports: `JournalState` (Annotation), `NODE_TEMPERATURES` (constant).
 
 **Error handling patterns to preserve** (15 sites):
 
-| File | Lines | Pattern | Behavior |
-|---|---|---|---|
-| `src/index.js` | 102-109 | `isGitRepository()` try/catch | Silent catch → return false |
-| `src/index.js` | 116-126 | `isValidCommitRef()` try/catch | Silent catch → return false |
-| `src/index.js` | 148-168 | `getPreviousCommitTime()` try/catch | Catch → return 24hr fallback |
-| `src/index.js` | 286-294 | `main()` `.catch()` | Log error → process.exit(1) |
-| `src/collectors/git-collector.js` | 21-37 | `runGit()` try/catch | Map error code 128 → meaningful message, rethrow |
-| `src/collectors/claude-collector.js` | 110-127 | `parseJSONLFile()` try/catch (per line) | Skip malformed JSON lines, continue |
-| `src/integrators/filters/sensitive-filter.js` | 123-137 | `redactSensitiveData()` | No try/catch (pure function, exceptions bubble) |
-| `src/managers/journal-manager.js` | 185-211 | `saveJournalEntry()` try/catch | Silent catch on readFile (file not found = first entry) |
-| `src/managers/journal-manager.js` | 338-387 | `discoverReflections()` nested try/catch | Skip unreadable files/dirs, continue processing |
-| `src/generators/journal-graph.js` | 436-463 | `summaryNode()` try/catch | Catch → return error state (no rethrow) |
-| `src/generators/journal-graph.js` | 471-506 | `technicalNode()` try/catch | Catch → return error state (no rethrow) |
-| `src/generators/journal-graph.js` | 515-554 | `dialogueNode()` try/catch | Catch → return error state (no rethrow) |
-| `src/mcp/tools/reflection-tool.js` | 90-111 | Tool handler try/catch | Catch → return error as tool response |
-| `src/mcp/tools/context-capture-tool.js` | 98-119 | Tool handler try/catch | Catch → return error as tool response |
-| `src/mcp/server.js` | 59-62 | `main()` `.catch()` | Log error → process.exit(1) |
+| File | Lines | Pattern | Behavior | NDS-005 Sub |
+|---|---|---|---|---|
+| `src/index.js` | 102-109 | `isGitRepository()` try/catch | Silent catch → return false | 005b candidate |
+| `src/index.js` | 116-126 | `isValidCommitRef()` try/catch | Silent catch → return false | 005b candidate |
+| `src/index.js` | 148-168 | `getPreviousCommitTime()` try/catch | Catch → return 24hr fallback | 005b candidate |
+| `src/index.js` | 286-294 | `main()` `.catch()` | Log error → process.exit(1) | 005a only |
+| `src/collectors/git-collector.js` | 21-37 | `runGit()` try/catch | Map error code 128 → meaningful message, rethrow | 005a only |
+| `src/collectors/claude-collector.js` | 110-127 | `parseJSONLFile()` try/catch (per line) | Skip malformed JSON lines, continue | 005b candidate |
+| `src/integrators/filters/sensitive-filter.js` | 123-137 | `redactSensitiveData()` | No try/catch (pure function, exceptions bubble) | N/A |
+| `src/managers/journal-manager.js` | 185-211 | `saveJournalEntry()` try/catch | Silent catch on readFile (file not found = first entry) | 005b candidate |
+| `src/managers/journal-manager.js` | 338-387 | `discoverReflections()` nested try/catch | Skip unreadable files/dirs, continue processing | 005b candidate |
+| `src/generators/journal-graph.js` | 436-463 | `summaryNode()` try/catch | Catch → return error state (no rethrow) | 005b candidate |
+| `src/generators/journal-graph.js` | 471-506 | `technicalNode()` try/catch | Catch → return error state (no rethrow) | 005b candidate |
+| `src/generators/journal-graph.js` | 515-554 | `dialogueNode()` try/catch | Catch → return error state (no rethrow) | 005b candidate |
+| `src/mcp/tools/reflection-tool.js` | 90-111 | Tool handler try/catch | Catch → return error as tool response | 005a only |
+| `src/mcp/tools/context-capture-tool.js` | 98-119 | Tool handler try/catch | Catch → return error as tool response | 005a only |
+| `src/mcp/server.js` | 59-62 | `main()` `.catch()` | Log error → process.exit(1) | 005a only |
 
 **Key patterns the agent must preserve**:
 
@@ -271,7 +271,11 @@ Also exports: `JournalState` (Annotation), `NODE_TEMPERATURES` (constant).
 - **Skip + continue**: `parseJSONLFile()` and `discoverReflections()` skip bad data and keep going. The agent must not convert these into span failures.
 - **Error state accumulation**: Graph nodes catch LLM errors and return them as state (not rethrown). The agent must not change this to rethrow.
 
-**Evaluator action**: For each error handling site, verify the catch behavior is identical before/after. This is one of the two semi-automatable rules — structural AST diff catches obvious changes, but subtle semantic changes (e.g., wrapping an existing catch in a new try/finally for span management) require judgment.
+**Evaluator action**: For each error handling site, evaluate using the appropriate sub-classification:
+- **NDS-005a sites** (005a only): Verify the catch structure and propagation behavior is identical before/after. These are genuine error handlers where recording exceptions as errors is correct.
+- **NDS-005b candidates**: Verify the catch structure is preserved AND check whether the agent added `recordException()`/`setStatus(ERROR)`. Silent catches (return default/fallback, no rethrow) should NOT have error recording — the catch IS the expected behavior.
+
+This is one of the two semi-automatable rules — structural AST diff catches obvious changes, but subtle semantic changes (e.g., wrapping an existing catch in a new try/finally for span management) require judgment.
 
 ---
 
@@ -615,9 +619,9 @@ All unexported functions are listed under RST-001. Additionally:
 
 **Current `package.json`**: No `@opentelemetry/api` dependency.
 
-**Expected after instrumentation**: commit-story-v2 is a CLI tool (application), not a library. Therefore `@opentelemetry/api` should be in `dependencies`, not `peerDependencies`.
+**Expected after instrumentation**: commit-story-v2 is distributed as an npm package (library), not a standalone application. Therefore `@opentelemetry/api` should be in `peerDependencies`, not `dependencies`. This ensures consumers choose their own OTel SDK version and avoids multiple API instances in `node_modules` (which causes silent trace loss via no-op fallbacks).
 
-**Evaluator action**: Check `package.json` after agent run. `@opentelemetry/api` must be in `dependencies`. If in `peerDependencies`, the agent incorrectly classified this as a library.
+**Evaluator action**: Check `package.json` after agent run. `@opentelemetry/api` must be in `peerDependencies`. If in `dependencies`, the agent incorrectly classified this as an application.
 
 ### API-003: No vendor-specific instrumentation SDKs
 
@@ -738,7 +742,9 @@ See COV-005 for the complete attribute-to-source mapping. The evaluator checks:
 
 **Expected**: `trace.getTracer('commit-story')` or `trace.getTracer('commit-story', '2.0.0')`. The library name should match the package name. Version is recommended but not required.
 
-**Evaluator action**: Verify `trace.getTracer()` calls include a string argument. Flag calls with no argument or empty string.
+**Evaluator action**: Verify `trace.getTracer()` calls include a semantically correct string argument matching `package.json#name` (expected: `'commit-story'`). Flag calls with no argument, empty string, or generic defaults like `'unknown_service'`. This is a semantic check — the name must be correct, not merely present.
+
+**History note**: This bug existed in run-3 (all files used incorrect tracer names) but was not captured because the evaluator only checked for the presence of a string argument.
 
 ### CDQ-003: Error recording uses standard OTel pattern
 
@@ -780,7 +786,9 @@ CDQ-004 (incidental modifications) was removed from the rubric — it was redund
 - `.map(...)`, `.reduce(...)`, `.join(...)` — e.g., formatting session data
 - Function calls that iterate data
 
-If the agent sets attributes using simple variables or literals, this rule passes trivially.
+**Exempt (cheap computation)**: `toISOString()`, `String()`, `Number()`, `Boolean()`, `toString()`, and simple property access chains. These O(1) conversions do not require `isRecording()` guards.
+
+If the agent sets attributes using simple variables, literals, or exempt conversions, this rule passes trivially.
 
 ### CDQ-007: No unbounded or PII attributes
 
