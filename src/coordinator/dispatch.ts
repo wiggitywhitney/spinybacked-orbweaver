@@ -203,6 +203,7 @@ export async function dispatchFiles(
   // In-memory accumulator for schema extensions across files (deduped)
   const accumulatedExtensions: string[] = [];
   const seenExtensions = new Set<string>();
+  const rejectedExtensionIds = new Set<string>();
   const abortTracker = new EarlyAbortTracker();
 
   for (let i = 0; i < total; i++) {
@@ -282,10 +283,8 @@ export async function dispatchFiles(
                 accumulatedExtensions.splice(j, 1);
               }
             }
-            if (extWarnings) {
-              extWarnings.push(
-                `Schema extensions rejected by namespace enforcement: ${writeResult.rejected.join(', ')}`,
-              );
+            for (const id of writeResult.rejected) {
+              rejectedExtensionIds.add(id);
             }
           }
 
@@ -494,6 +493,13 @@ export async function dispatchFiles(
       try { callbacks?.onFileComplete?.(failed, i, total); } catch { /* callback failure must not abort dispatch */ }
       abortTracker.record(failed);
     }
+  }
+
+  // Emit a single summary warning for all rejected extensions (deduplicated)
+  if (extWarnings && rejectedExtensionIds.size > 0) {
+    extWarnings.push(
+      `Schema extensions rejected by namespace enforcement: ${[...rejectedExtensionIds].join(', ')}`,
+    );
   }
 
   return results;
