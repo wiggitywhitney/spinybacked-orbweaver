@@ -224,6 +224,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Classification** | Semi-automatable |
 | **Mechanism** | AST: detect structural changes to pre-existing `try`/`catch`/`finally` blocks, reordered catch clauses, merged error handling blocks, and modified throw statements in the agent's diff; flag any modification to existing error handling structure. |
 | **Why semi-automatable** | The script catches new try/finally that re-throws (benign instrumentation pattern) vs. agent never touching existing error handling (pass). The hard case is the agent *restructuring* existing error handling — merging try/catch blocks, reordering catch clauses, wrapping throws in new logic. The AST detects structural changes, but whether the restructured version preserves original propagation semantics (same exception types, same re-throw behavior) requires semantic judgment. Candidate for LLM-as-judge evaluation. |
+| **Sub-classifications** | Two sub-classifications with Important impact:<br><br>**NDS-005a (Structural breakage)**: The agent restructured, merged, removed, or reordered pre-existing error handling blocks, altering error propagation semantics. Evaluated via AST diff of error handling structures.<br><br>**NDS-005b (Expected-condition recording)**: The agent preserved the error handling structure but added `recordException()` + `setStatus(ERROR)` in catch blocks that handle expected conditions (validation failures, missing optional resources, graceful fallbacks). Identified by checking whether the original catch block was a "silent catch" — returns a default/fallback value without rethrowing.<br><br>NDS-005a is more severe but NDS-005b is more common. |
 
 ---
 
@@ -459,7 +460,8 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Scope** | Per-file |
 | **Impact** | Normal |
 | **Classification** | Automatable |
-| **Mechanism** | AST/grep: verify `trace.getTracer()` calls include a library name string argument. Version argument recommended but not required per OTel API spec. |
+| **Mechanism** | AST/grep: verify `trace.getTracer()` calls include a semantically correct library name argument. The name must match the project's `package.json#name` or a deliberate derivative (e.g., dotted-path variant). Generic defaults (`'unknown_service'`, `'default'`), empty strings, and missing arguments all fail. Version argument recommended but not required per OTel API spec. |
+| **Note** | This is a semantic check, not a pattern check. A `getTracer()` call with a non-empty string argument that does not match the project identity still fails. This distinction was clarified in run-5 after run-3 and run-4 both had incorrect tracer names that passed the pattern-only check. |
 
 *CDQ-004 was removed — it checked for incidental modifications to non-instrumentation code, which is redundant with the NDS-003 gate.*
 
@@ -489,6 +491,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Impact** | Low |
 | **Classification** | Automatable |
 | **Mechanism** | AST: detect `setAttribute` calls whose value argument contains function calls, method chains (`.map`, `.reduce`, `.join`, `.filter`), or serialization (`JSON.stringify`) without a preceding `span.isRecording()` check in the same scope. |
+| **Exemption** | Trivial type conversions are exempt: `toISOString()`, `String()`, `Number()`, `Boolean()`, `toString()`, and simple property access chains. These are O(1) operations whose cost is negligible compared to the `isRecording()` guard itself. Only operations that iterate data or serialize objects require the guard. |
 
 #### CDQ-007: No Unbounded or PII Attributes
 
