@@ -48,7 +48,7 @@ Add \`import { trace, SpanStatusCode } from '@opentelemetry/api';\` at the top o
 
 ### Tracer Acquisition
 
-Add \`const tracer = trace.getTracer(${tracerNameLiteral});\` at module scope if not already present. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.
+Add \`const tracer = trace.getTracer(${tracerNameLiteral});\` at module scope if not already present. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.${tracerName === 'unknown_service' ? `\n\n**Note**: The tracer name is currently \\\`unknown_service\\\` because the schema has no namespace defined. If the project has a \\\`package.json\\\`, use its \\\`name\\\` field instead (e.g., \\\`trace.getTracer('my-project')\\\`). Check the source file's imports or the project root for a package.json name.` : ''}
 
 ### Manual Span Instrumentation (Path 2)
 
@@ -80,6 +80,8 @@ Every catch block inside a span MUST have both \`span.recordException(error)\` A
 - \`setStatus\` alone marks the span as errored but loses the stack trace and exception details.
 - \`recordException\` alone attaches the exception event but doesn't change the span's status code.
 - Using \`span.setAttribute('error', ...)\` instead is wrong — use the standard OTel error recording API.
+
+**Exception — expected-condition catches (control flow):** If the original catch block is empty (\`catch {}\` or \`catch (_e) {}\`) or handles an expected condition (e.g., file-not-found ENOENT checks, optional feature detection, graceful fallback paths), do NOT add \`recordException\` or \`setStatus\`. These catches represent normal control flow, not errors. \`setStatus\` is a one-way latch — once set to ERROR, it cannot be changed back. Marking expected conditions as errors pollutes error metrics and triggers false alerts.
 
 ### Span Naming
 
@@ -141,7 +143,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Coverage
 
-- **COV-001**: Entry points (route handlers, request handlers, exported async service functions) MUST have spans.
+- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function.
 - **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
 - **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`).
 - **COV-004**: Long-running or async I/O operations should have spans.
@@ -150,7 +152,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Restraint
 
-- **RST-001**: Do NOT add spans to utility functions (synchronous, <5 lines, no I/O, unexported).
+- **RST-001**: Do NOT add spans to pure synchronous data transformations (no I/O, no async, no network/disk access) regardless of export status — especially when called from a parent that already has a span. Being exported does not make a function instrumentable.
 - **RST-002**: Do NOT add spans to trivial accessors (getters/setters, single-property returns).
 - **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
 - **RST-004**: Do NOT add spans to unexported internal functions — unless they perform I/O or external calls.

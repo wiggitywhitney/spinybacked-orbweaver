@@ -394,6 +394,62 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('rejected');
   });
 
+  // --- Eval run-4 findings ---
+
+  describe('eval run-4: tracer name fallback (#154)', () => {
+    it('instructs LLM to use package.json name when namespace is missing', () => {
+      const noNamespace = makeSchema({ namespace: undefined });
+      const prompt = buildSystemPrompt(noNamespace);
+
+      // The prompt should tell the LLM to look for the project name
+      // rather than silently using 'unknown_service'
+      expect(prompt).toContain('package.json');
+    });
+  });
+
+  describe('eval run-4: expected-condition catch blocks (#157)', () => {
+    it('distinguishes expected-condition catches from error catches', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      const sectionStart = prompt.indexOf('### Error Handling');
+      const sectionEnd = prompt.indexOf('###', sectionStart + 1);
+      const section = prompt.slice(sectionStart, sectionEnd > -1 ? sectionEnd : undefined);
+
+      // Must have guidance about expected-condition catches
+      expect(section).toContain('expected');
+      expect(section).toContain('control flow');
+    });
+  });
+
+  describe('eval run-4: over-instrumentation of sync functions (#159)', () => {
+    it('RST-001 protects pure sync functions regardless of export status', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      // RST-001 should NOT be limited to unexported functions
+      expect(prompt).not.toContain('RST-001**: Do NOT add spans to utility functions (synchronous, <5 lines, no I/O, unexported)');
+      // Should mention that export status alone is not a reason to instrument
+      expect(prompt).toContain('regardless of export');
+    });
+  });
+
+  describe('eval run-4: missing root span guidance (#162)', () => {
+    it('COV-001 includes CLI entry points', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      const cov001Start = prompt.indexOf('COV-001');
+      const cov001End = prompt.indexOf('\n- **COV-002');
+      const cov001 = prompt.slice(cov001Start, cov001End > -1 ? cov001End : undefined);
+
+      expect(cov001).toContain('CLI');
+    });
+
+    it('includes root span guidance', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      expect(prompt).toContain('root span');
+    });
+  });
+
   // Claude 4.x prompt hygiene checks
   describe('Claude 4.x prompt hygiene', () => {
     it('does NOT contain anti-laziness directives', () => {
