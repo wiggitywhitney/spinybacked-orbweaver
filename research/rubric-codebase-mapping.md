@@ -436,13 +436,23 @@ All 15 error handling sites listed under NDS-005. Key ones:
 | `child_process` | `@opentelemetry/instrumentation-child_process` | git-collector.js, commit-analyzer.js, index.js |
 | `fs` | `@opentelemetry/instrumentation-fs` | claude-collector.js, journal-manager.js, MCP tools, journal-paths.js |
 
+**Auto-instrumentation partially available (OpenLLMetry)**:
+
+| Module | Package | JS Coverage | Notes |
+|---|---|---|---|
+| `@langchain/anthropic` (ChatAnthropic) | `@traceloop/instrumentation-langchain` | Chat model calls (`handleChatModelStart`/`End`) | Captures model name, token counts, prompt/completion content via LangChain callback injection. Span names follow `{ComponentName}.{type}` pattern (e.g., `ChatAnthropic.chat`). Uses Traceloop custom attributes (`traceloop.span.kind`, `traceloop.entity.*`), not OTel GenAI semconvs. |
+| `@langchain/langgraph` | `@traceloop/instrumentation-langchain` | LLM calls within nodes only (indirect) | **Significant gap in JS**: LangGraph node execution, state transitions, conditional routing, and graph compilation are NOT instrumented. Only LLM calls made via LangChain wrappers inside nodes are captured. The Python package has LangGraph-specific patches (`Pregel.stream`, `Command.__init__`); the JS package does not. Manual spans are required for graph-level orchestration visibility. |
+
 **Auto-instrumentation NOT available**:
 
 | Module | Notes |
 |---|---|
-| `@langchain/anthropic` (ChatAnthropic) | No OTel auto-instrumentation package — manual spans required |
-| `@langchain/langgraph` | No OTel auto-instrumentation package — manual spans required |
 | `@modelcontextprotocol/sdk` | No OTel auto-instrumentation package — manual spans required |
+
+**OpenLLMetry evaluation guidance for commit-story-v2**: The `@traceloop/instrumentation-langchain` JS package provides partial auto-instrumentation for LangChain operations but has significant LangGraph gaps. For this codebase:
+- `journal-graph.js` (LangGraph graph with `summaryNode`, `technicalNode`, `dialogueNode`): Auto-instrumentation would capture the `ChatAnthropic.invoke()` calls within each node, but NOT the graph orchestration, node dispatch, or state transitions. Manual spans on graph nodes and the `generateJournalSections` entry point are justified — they provide orchestration visibility that auto-instrumentation cannot.
+- If the agent uses `@traceloop/instrumentation-langchain` AND adds manual spans on the same `ChatAnthropic.invoke()` calls, that IS redundant (COV-006 fail). But manual spans on graph nodes alongside auto-instrumented LLM calls is the correct pattern.
+- Known JS reliability issues: [openllmetry-js#471](https://github.com/traceloop/openllmetry-js/issues/471) documents auto-instrumentation not fully supported in some JS environments. The force-instrumentation workaround covers `langchain/chains`, `langchain/agents`, `langchain/tools` but NOT `@langchain/langgraph`.
 
 **Evaluator decision tree**:
 
