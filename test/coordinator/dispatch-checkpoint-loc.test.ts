@@ -304,8 +304,14 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
       expect(results[1].status).toBe('failed');
       expect(results[0].reason).toContain('Rolled back');
 
-      // File 3 was processed after rollback
-      // (LOC counter reset, so no additional checkpoint for just 1 file)
+      // Verify checkpoint fired exactly once (LOC-triggered at file 2)
+      expect(onSchemaCheckpoint).toHaveBeenCalledTimes(1);
+
+      // Verify rolled-back files were restored on disk
+      const contentA = await readFile(files[0], 'utf-8');
+      const contentB = await readFile(files[1], 'utf-8');
+      expect(contentA).not.toContain('// instrumented line');
+      expect(contentB).not.toContain('// instrumented line');
     });
   });
 });

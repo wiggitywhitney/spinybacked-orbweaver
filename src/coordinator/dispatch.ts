@@ -296,25 +296,6 @@ export async function dispatchFiles(
       results.push(result);
       filesSinceLastCheckpoint++;
 
-      // Compute LOC delta for LOC-aware checkpoint cadence (PRD #156 M5)
-      if (locThreshold !== undefined && result.status === 'success') {
-        try {
-          const instrumentedContent = await readFile(filePath, 'utf-8');
-          const originalLines = fileContent.split('\n').length;
-          const instrumentedLines = instrumentedContent.split('\n').length;
-          locSinceLastCheckpoint += Math.abs(instrumentedLines - originalLines);
-        } catch { /* LOC tracking degrades gracefully — re-read failure is non-fatal */ }
-      }
-
-      // Track file in checkpoint window for potential rollback on test failure
-      if (!isDryRun && options?.runTestCommand) {
-        checkpointWindowFiles.push({
-          path: filePath,
-          originalContent: fileContent,
-          resultIndex: results.length - 1,
-        });
-      }
-
       // Track whether the extension block already handled rollback
       let extensionRollbackDone = false;
 
@@ -436,6 +417,27 @@ export async function dispatchFiles(
         }
       }
 
+      // Compute LOC delta and track checkpoint window AFTER file status is finalized.
+      // Deferred from pre-extension to avoid counting reverted/failed files.
+      if (result.status === 'success' || result.status === 'partial') {
+        if (locThreshold !== undefined) {
+          try {
+            const instrumentedContent = await readFile(filePath, 'utf-8');
+            const originalLines = fileContent.split('\n').length;
+            const instrumentedLines = instrumentedContent.split('\n').length;
+            locSinceLastCheckpoint += Math.abs(instrumentedLines - originalLines);
+          } catch { /* LOC tracking degrades gracefully — re-read failure is non-fatal */ }
+        }
+
+        if (!isDryRun && options?.runTestCommand) {
+          checkpointWindowFiles.push({
+            path: filePath,
+            originalContent: fileContent,
+            resultIndex: results.length - 1,
+          });
+        }
+      }
+
       try { callbacks?.onFileComplete?.(result, i, total); } catch { /* callback failure must not abort dispatch */ }
       abortTracker.record(result);
 
@@ -482,7 +484,9 @@ export async function dispatchFiles(
                 }
               }
             } catch (testErr) {
-              // Test infrastructure failure — degrade, don't stop
+              // Test infrastructure failure — mark as unverified so window is not cleared
+              checkpointPassed = false;
+              testFailedAtCheckpoint = true;
               if (extWarnings) {
                 const msg = testErr instanceof Error ? testErr.message : String(testErr);
                 extWarnings.push(`Checkpoint test run infrastructure failure (degraded): ${msg}`);
@@ -502,6 +506,10 @@ export async function dispatchFiles(
             // Checkpoint passed — clear window and take new snapshot for next window
             checkpointWindowFiles.length = 0;
             if (registryDir) {
+              // Clear stale state before refreshing — if snapshotFn fails,
+              // stale values would cause rollback to wrong checkpoint
+              checkpointExtensionsSnapshot = undefined;
+              checkpointAccumulatorLength = 0;
               try {
                 checkpointExtensionsSnapshot = await snapshotFn(registryDir);
                 checkpointAccumulatorLength = accumulatedExtensions.length;
@@ -510,7 +518,7 @@ export async function dispatchFiles(
             filesSinceLastCheckpoint = 0;
             locSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
-          } else if (testFailedAtCheckpoint && options?.baselineTestPassed !== false) {
+          } else if (testFailedAtCheckpoint && options?.baselineTestPassed === true) {
             // Test failure with passing baseline — roll back files in checkpoint window
             for (const tracked of checkpointWindowFiles) {
               try {
@@ -547,6 +555,10 @@ export async function dispatchFiles(
             // Reset window and take new snapshot — always continue after rollback
             checkpointWindowFiles.length = 0;
             if (registryDir) {
+              // Clear stale state before refreshing — if snapshotFn fails,
+              // stale values would cause rollback to wrong checkpoint
+              checkpointExtensionsSnapshot = undefined;
+              checkpointAccumulatorLength = 0;
               try {
                 checkpointExtensionsSnapshot = await snapshotFn(registryDir);
                 checkpointAccumulatorLength = accumulatedExtensions.length;

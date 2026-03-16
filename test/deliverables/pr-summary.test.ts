@@ -806,6 +806,12 @@ describe('renderPrSummary', () => {
             status: 'success',
           }),
           _makeFileResult({
+            path: '/project/src/regular-failed.js',
+            status: 'failed',
+            spansAdded: 0,
+            reason: 'Syntax errors after retries',
+          }),
+          _makeFileResult({
             path: '/project/src/rolled-back-a.js',
             status: 'failed',
             spansAdded: 0,
@@ -819,7 +825,7 @@ describe('renderPrSummary', () => {
           }),
         ],
         filesSucceeded: 1,
-        filesFailed: 2,
+        filesFailed: 3,
       });
       const md = renderPrSummary(result, _makeConfig(), '/project');
 
@@ -829,6 +835,8 @@ describe('renderPrSummary', () => {
       expect(md).toContain('end-of-run test failure');
       // The successful file should NOT appear in rolled-back section
       expect(md.split('## Rolled Back Files')[1]).not.toContain('good.js');
+      // Regular failed file (not rolled back) should NOT appear in rolled-back section
+      expect(md.split('## Rolled Back Files')[1]).not.toContain('regular-failed.js');
     });
 
     it('includes checkpoint rollback files in the section', () => {

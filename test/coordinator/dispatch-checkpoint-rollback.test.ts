@@ -195,9 +195,15 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
       expect(results).toHaveLength(2);
       expect(results[0].status).toBe('success');
       expect(results[1].status).toBe('success');
+
+      // Verify files stayed instrumented on disk (not rolled back)
+      const contentA = await readFile(files[0], 'utf-8');
+      const contentB = await readFile(files[1], 'utf-8');
+      expect(contentA).toContain('INSTRUMENTED');
+      expect(contentB).toContain('INSTRUMENTED');
     });
 
-    it('rolls back when baselineTestPassed is not provided (defaults to rollback-enabled)', async () => {
+    it('does not roll back when baselineTestPassed is not provided (unknown baseline)', async () => {
       const files = await Promise.all([
         createFile('a.js'),
         createFile('b.js'),
@@ -209,12 +215,12 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
         deps: makeDepsWithDiskWrite(),
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
-        // No baselineTestPassed — should default to rollback enabled
+        // No baselineTestPassed — unknown baseline should NOT trigger rollback
       });
 
       expect(results).toHaveLength(2);
-      expect(results[0].status).toBe('failed');
-      expect(results[1].status).toBe('failed');
+      expect(results[0].status).toBe('success');
+      expect(results[1].status).toBe('success');
     });
   });
 
@@ -395,6 +401,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
       // Should have a warning about the test failure AND a warning about rollback
       const rollbackWarning = warnings.find(w => w.toLowerCase().includes('rolled back'));
       expect(rollbackWarning).toBeDefined();
+      expect(warnings.some(w => w.includes('ReferenceError: tracer is not defined'))).toBe(true);
     });
   });
 });

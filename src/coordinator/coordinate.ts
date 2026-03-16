@@ -51,6 +51,7 @@ export function executeProjectTests(
     execFile(cmd, args, {
       cwd: projectDir,
       timeout: 300_000,
+      maxBuffer: 10 * 1024 * 1024,
     }, (error, _stdout, stderr) => {
       if (error) {
         const errorMsg = stderr?.trim() || error.message;
@@ -353,19 +354,7 @@ export async function coordinate(
   // Warnings from per-file writes are pushed into schemaExtensionWarnings.
   const extensions = collectSchemaExtensions(fileResults);
 
-  // Step 5c: Compute schema hash at run end (after extensions written)
-  let schemaHashEnd: string | undefined;
-  if (schemaHashStart !== undefined) {
-    try {
-      const endSchema = await resolveForHash(projectDir, config.schemaPath);
-      schemaHashEnd = computeSchemaHash(endSchema);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      schemaHashWarnings.push(`Schema hash computation at run end failed (degraded): ${message}`);
-    }
-  }
-
-  // Step 5d: Compute schema diff against baseline (degrade and warn on failure)
+  // Step 5c: Compute schema diff against baseline BEFORE cleanup (needs baseline snapshot on disk)
   let schemaDiffMarkdown: string | undefined;
   if (baselineSnapshotDir && extensions.length > 0) {
     try {
@@ -383,15 +372,19 @@ export async function coordinate(
     }
   }
 
-  // Step 5e: Clean up baseline snapshot (always, best effort)
+  // Step 5d: Clean up baseline snapshot (always, best effort)
   if (baselineSnapshotDir) {
     try { await cleanupSnap(baselineSnapshotDir); } catch { /* best effort cleanup */ }
   }
 
+  // Step 5e: Compute schema hash at run end (after extensions written)
+  // Deferred to after end-of-run rollback so it reflects final state.
+  let schemaHashEnd: string | undefined;
+
   // Step 6: Aggregate results
   const runResult = aggregateResults(fileResults, costCeiling);
   runResult.schemaHashStart = schemaHashStart;
-  runResult.schemaHashEnd = schemaHashEnd;
+  // schemaHashEnd is set after end-of-run rollback (Step 7d) to reflect final state
   runResult.schemaDiff = schemaDiffMarkdown;
   runResult.warnings.push(...ghWarnings);
   runResult.warnings.push(...schemaExtensionWarnings);
@@ -508,6 +501,18 @@ export async function coordinate(
       `Rolled back ${rolledBackCount} file(s) due to end-of-run test failure`,
     );
   }
+
+  // Step 7d: Compute schema hash at run end (after potential rollback so it reflects final state)
+  if (schemaHashStart !== undefined) {
+    try {
+      const endSchema = await resolveForHash(projectDir, config.schemaPath);
+      schemaHashEnd = computeSchemaHash(endSchema);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      schemaHashWarnings.push(`Schema hash computation at run end failed (degraded): ${message}`);
+    }
+  }
+  runResult.schemaHashEnd = schemaHashEnd;
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)
   // Dry-run skips finalization — no npm install, no SDK init file changes

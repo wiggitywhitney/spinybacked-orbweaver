@@ -707,6 +707,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
           testRunCount.value++;
           return { passed: false, error: 'Test suite failed: 2 tests broken' };
         },
+        baselineTestPassed: true,
       });
 
       // All files processed — rollback continues instead of stopping
