@@ -213,6 +213,38 @@ describe('writeSchemaExtensions', () => {
     expect(result.rejected[0]).toContain('wrong_namespace.order.total');
   });
 
+  it('accepts bare string IDs as extensions (LLM output format) (#155)', async () => {
+    // The LLM outputs plain string IDs like "myapp.context.collect"
+    // rather than YAML objects. The parser must handle both formats.
+    const extensions = [
+      'myapp.context.collect',
+      'myapp.git.get_diff',
+    ];
+
+    const result = await writeSchemaExtensions(registryDir, extensions);
+
+    expect(result.written).toBe(true);
+    expect(result.extensionCount).toBe(2);
+    expect(result.rejected).toHaveLength(0);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    expect(content).toContain('myapp.context.collect');
+    expect(content).toContain('myapp.git.get_diff');
+  });
+
+  it('rejects bare string IDs with wrong namespace prefix (#155)', async () => {
+    const extensions = [
+      'wrong_namespace.context.collect',
+    ];
+
+    const result = await writeSchemaExtensions(registryDir, extensions);
+
+    expect(result.written).toBe(false);
+    expect(result.extensionCount).toBe(0);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]).toContain('wrong_namespace.context.collect');
+  });
+
   it('handles multiple extensions across files', async () => {
     const extensions = [
       '- id: myapp.order.total\n  type: int\n  stability: development\n  brief: Order total',

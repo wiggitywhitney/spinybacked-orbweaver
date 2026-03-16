@@ -94,6 +94,16 @@ export function parseExtension(extensionYaml: string): Record<string, unknown> |
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
+    // Bare string ID from LLM output (e.g., "myapp.context.collect")
+    // Wrap in a minimal object with the ID and sensible defaults.
+    if (typeof parsed === 'string' && parsed.includes('.')) {
+      return {
+        id: parsed,
+        type: 'string',
+        stability: 'development',
+        brief: `Agent-discovered attribute: ${parsed}`,
+      };
+    }
     return null;
   } catch {
     return null;
