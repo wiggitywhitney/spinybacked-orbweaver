@@ -208,6 +208,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
         testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
       );
 
+      expect(result.status).toBe('success');
       expect(result.spansAdded).toBe(0);
       // File should be restored to original content — no OTel imports left behind
       const fileContent = readFileSync(testFilePath, 'utf-8');

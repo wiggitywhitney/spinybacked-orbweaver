@@ -646,6 +646,10 @@ async function functionLevelFallback(
   ];
 
   if (validation.passed) {
+    // Restore original file when 0 spans added (same as executeRetryLoop)
+    if (totalSpans === 0) {
+      await writeFile(filePath, originalCode, 'utf-8');
+    }
     return {
       path: filePath,
       status: 'partial',
@@ -689,6 +693,11 @@ async function functionLevelFallback(
     // Even partial reassembly fails — restore original and return null
     await writeFile(filePath, originalCode, 'utf-8');
     return null;
+  }
+
+  // Restore original file when 0 spans added (same as executeRetryLoop)
+  if (totalSpans === 0) {
+    await writeFile(filePath, originalCode, 'utf-8');
   }
 
   return {
