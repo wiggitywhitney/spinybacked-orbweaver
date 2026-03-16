@@ -12,13 +12,13 @@ import type { OTelImportDetectionResult } from '../ast/import-detection.ts';
  * @param resolvedSchema - The resolved Weaver schema object (from `weaver registry resolve`)
  * @returns The complete system prompt string
  */
-export function buildSystemPrompt(resolvedSchema: object): string {
+export function buildSystemPrompt(resolvedSchema: object, projectName?: string): string {
   const schemaJson = JSON.stringify(resolvedSchema, null, 2);
   const rawNamespace = (resolvedSchema as Record<string, unknown>).namespace;
   const tracerName =
     typeof rawNamespace === 'string' && rawNamespace.trim().length > 0
       ? rawNamespace
-      : 'unknown_service';
+      : (projectName ?? 'unknown_service');
   const tracerNameLiteral = JSON.stringify(tracerName);
 
   return `You are an instrumentation engineer. Your job is to add OpenTelemetry instrumentation to a JavaScript source file according to a Weaver schema contract.
@@ -81,6 +81,8 @@ Every catch block inside a span MUST have both \`span.recordException(error)\` A
 - \`recordException\` alone attaches the exception event but doesn't change the span's status code.
 - Using \`span.setAttribute('error', ...)\` instead is wrong — use the standard OTel error recording API.
 
+**Exception — expected-condition catches (control flow):** If the original catch block is empty (\`catch {}\` or \`catch (_e) {}\`) or handles an expected condition (e.g., file-not-found ENOENT checks, optional feature detection, graceful fallback paths), do NOT add \`recordException\` or \`setStatus\`. These catches represent normal control flow, not errors. \`setStatus\` is a one-way latch — once set to ERROR, it cannot be changed back. Marking expected conditions as errors pollutes error metrics and triggers false alerts.
+
 ### Span Naming
 
 When choosing a span name for \`tracer.startActiveSpan()\`:
@@ -141,7 +143,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Coverage
 
-- **COV-001**: Entry points (route handlers, request handlers, exported async service functions) MUST have spans.
+- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span.
 - **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
 - **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`).
 - **COV-004**: Long-running or async I/O operations should have spans.
@@ -150,7 +152,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Restraint
 
-- **RST-001**: Do NOT add spans to utility functions (synchronous, <5 lines, no I/O, unexported).
+- **RST-001**: Do NOT add spans to pure synchronous data transformations (no I/O, no async, no network/disk access) regardless of export status — especially when called from a parent that already has a span. Being exported does not make a function instrumentable.
 - **RST-002**: Do NOT add spans to trivial accessors (getters/setters, single-property returns).
 - **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
 - **RST-004**: Do NOT add spans to unexported internal functions — unless they perform I/O or external calls.
@@ -173,7 +175,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern.
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
-- **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`.
+- **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
 - **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`.
 - **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields (\`email\`, \`password\`, \`ssn\`), or undefined values.
