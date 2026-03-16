@@ -328,7 +328,7 @@ const pool = new Pool();
 const tracer = trace.getTracer('my-service');
 
 export async function getUsers(req, res) {
-  return tracer.startActiveSpan('getUsers', async (span) => {
+  return tracer.startActiveSpan('my_service.users.get_users', async (span) => {
     try {
       const result = await pool.query('SELECT * FROM users');
       span.setAttribute('db.row_count', result.rows.length);
@@ -370,7 +370,7 @@ import { readFile } from 'node:fs/promises';
 const tracer = trace.getTracer('my-service');
 
 export async function loadConfig(path) {
-  return tracer.startActiveSpan('loadConfig', async (span) => {
+  return tracer.startActiveSpan('my_service.config.load_config', async (span) => {
     try {
       const content = await readFile(path, 'utf-8');
       return JSON.parse(content);
@@ -397,7 +397,7 @@ import { trace, SpanStatusCode } from '@opentelemetry/api';
 const tracer = trace.getTracer('my-service');
 
 export async function handleRequest(req, res) {
-  return tracer.startActiveSpan('handleRequest', async (span) => {
+  return tracer.startActiveSpan('my_service.requests.handle_request', async (span) => {
     try {
       const result = await processData(req.body);
       span.setAttribute('result.count', result.length);
@@ -418,7 +418,7 @@ import { trace, SpanStatusCode } from '@opentelemetry/api';
 const tracer = trace.getTracer('my-service');
 
 export async function handleRequest(req, res) {
-  return tracer.startActiveSpan('handleRequest', async (span) => {
+  return tracer.startActiveSpan('my_service.requests.handle_request', async (span) => {
     try {
       const result = await processData(req.body);
       span.setAttribute('result.count', result.length);
@@ -452,7 +452,7 @@ import { trace, SpanStatusCode } from '@opentelemetry/api';
 const tracer = trace.getTracer('my-service');
 
 export async function processSpan(data) {
-  return tracer.startActiveSpan('processSpan', async (otelSpan) => {
+  return tracer.startActiveSpan('my_service.spans.process_span', async (otelSpan) => {
     try {
       const span = data.timeSpan;
       const duration = span.end - span.start;
@@ -497,7 +497,7 @@ const pool = new Pool();
 const tracer = trace.getTracer('my-service');
 
 export async function getUsers(req, res) {
-  return tracer.startActiveSpan('getUsers', async (span) => {
+  return tracer.startActiveSpan('my_service.users.get_users', async (span) => {
     try {
       const result = await pool.query('SELECT * FROM users');
       span.setAttribute('db.row_count', result.rows.length);
