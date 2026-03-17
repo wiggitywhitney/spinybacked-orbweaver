@@ -641,3 +641,67 @@ describe('ensureTracerAfterImports', () => {
     expect(result).toBe(code);
   });
 });
+
+describe('reassembleFunctions — JSDoc deduplication (#189)', () => {
+  const fileWithJsDoc = `import { readFile } from 'node:fs/promises';
+
+/**
+ * Load a config file.
+ * @param {string} path - config path
+ */
+export async function loadConfig(path) {
+  const content = await readFile(path, 'utf-8');
+  return JSON.parse(content);
+}
+`;
+
+  it('does not duplicate JSDoc when startLine includes JSDoc range', () => {
+    const extractedFunctions: ExtractedFunction[] = [
+      makeExtractedFunction({
+        name: 'loadConfig',
+        // startLine includes the JSDoc block (line 3 = /**)
+        startLine: 3,
+        endLine: 10,
+        sourceText: 'export async function loadConfig(path) {\n  const content = await readFile(path, \'utf-8\');\n  return JSON.parse(content);\n}',
+        jsDoc: '/**\n * Load a config file.\n * @param {string} path - config path\n */',
+      }),
+    ];
+
+    const functionResults: FunctionResult[] = [
+      makeFunctionResult({
+        name: 'loadConfig',
+        instrumentedCode: `import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { readFile } from 'node:fs/promises';
+
+const tracer = trace.getTracer('my-service');
+
+/**
+ * Load a config file.
+ * @param {string} path - config path
+ */
+export async function loadConfig(path) {
+  return tracer.startActiveSpan('svc.config.load', async (span) => {
+    try {
+      const content = await readFile(path, 'utf-8');
+      return JSON.parse(content);
+    } catch (error) {
+      span.recordException(error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}`,
+      }),
+    ];
+
+    const result = reassembleFunctions(fileWithJsDoc, extractedFunctions, functionResults);
+
+    // Count JSDoc occurrences — should be exactly 1
+    const jsDocCount = (result.match(/Load a config file/g) || []).length;
+    expect(jsDocCount).toBe(1);
+    // Should have the instrumented version
+    expect(result).toContain('startActiveSpan');
+  });
+});

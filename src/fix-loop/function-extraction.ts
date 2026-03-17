@@ -80,13 +80,19 @@ export function extractExportedFunctions(
     const jsDoc = getJsDocText(fn);
     const referenced = findReferencedIdentifiers(bodyText, moduleLevelConstants, importedIdentifiers);
 
+    // Include JSDoc lines in the replacement range so reassembly overwrites them
+    const jsDocs = fn.getJsDocs();
+    const fnStartLine = jsDocs.length > 0
+      ? jsDocs[0].getStartLineNumber()
+      : fn.getStartLineNumber();
+
     results.push(buildExtractedFunction(
       fn.getName() ?? '<anonymous>',
       fn.isAsync(),
       fullText,
       jsDoc,
       referenced,
-      fn.getStartLineNumber(),
+      fnStartLine,
       fn.getEndLineNumber(),
     ));
   }
@@ -124,13 +130,19 @@ export function extractExportedFunctions(
       const jsDoc = getJsDocText(varStatement);
       const referenced = findReferencedIdentifiers(bodyText, moduleLevelConstants, importedIdentifiers);
 
+      // Include JSDoc lines in the replacement range so reassembly overwrites them
+      const varJsDocs = varStatement.getJsDocs();
+      const varStartLine = varJsDocs.length > 0
+        ? varJsDocs[0].getStartLineNumber()
+        : varStatement.getStartLineNumber();
+
       results.push(buildExtractedFunction(
         decl.getName(),
         funcNode.isAsync(),
         fullText,
         jsDoc,
         referenced,
-        varStatement.getStartLineNumber(),
+        varStartLine,
         varStatement.getEndLineNumber(),
       ));
     }
