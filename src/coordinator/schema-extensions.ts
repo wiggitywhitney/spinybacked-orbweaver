@@ -152,11 +152,11 @@ export async function writeSchemaExtensions(
       continue;
     }
 
-    const id = attr.id as string | undefined;
-    if (!id) {
-      rejected.push('(no id)');
+    if (typeof attr.id !== 'string' || attr.id.length === 0) {
+      rejected.push(String(attr.id ?? '(no id)'));
       continue;
     }
+    const id = attr.id;
 
     // Span-type extensions have IDs like "span.myapp.process_order" —
     // strip the "span." prefix before checking the namespace.
@@ -194,12 +194,11 @@ export async function writeSchemaExtensions(
   if (validSpans.length > 0) {
     for (const span of validSpans) {
       groups.push({
-        id: span.id,
+        ...span,
         type: 'span',
         stability: span.stability ?? 'development',
-        brief: span.brief ?? `Agent-discovered span`,
+        brief: span.brief ?? 'Agent-discovered span',
         span_kind: span.span_kind ?? 'internal',
-        ...(span.attributes ? { attributes: span.attributes } : {}),
       });
     }
   }

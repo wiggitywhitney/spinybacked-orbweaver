@@ -213,6 +213,19 @@ describe('writeSchemaExtensions', () => {
     expect(result.rejected[0]).toContain('wrong_namespace.order.total');
   });
 
+  it('rejects extensions with non-string id (e.g., numeric) (#176)', async () => {
+    const extensions = [
+      '- id: 123\n  type: int\n  stability: development\n  brief: Numeric ID',
+    ];
+
+    const result = await writeSchemaExtensions(registryDir, extensions);
+
+    expect(result.written).toBe(false);
+    expect(result.extensionCount).toBe(0);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]).toContain('123');
+  });
+
   it('accepts bare string IDs as extensions (LLM output format) (#155)', async () => {
     // The LLM outputs plain string IDs like "myapp.context.collect"
     // rather than YAML objects. The parser must handle both formats.
