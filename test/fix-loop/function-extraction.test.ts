@@ -104,7 +104,7 @@ describe('extractExportedFunctions', () => {
 
       // fetchWithRetry has JSDoc starting at line 10, function at line 16
       const fetchFn = findByName(result, 'fetchWithRetry')!;
-      expect(fetchFn.jsDoc).toBeDefined();
+      expect(fetchFn.jsDoc).not.toBeNull();
       // startLine should include the JSDoc block, not just the function keyword
       expect(fetchFn.startLine).toBe(10);
     });
