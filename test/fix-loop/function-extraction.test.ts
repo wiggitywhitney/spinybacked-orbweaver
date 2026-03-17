@@ -256,6 +256,28 @@ export { nodeHandler };
       expect(result[0].name).toBe('nodeHandler');
     });
 
+    it('extracts arrow functions re-exported via export block', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('arrow-reexport.js', `
+const helperFn = async (x) => {
+  const a = x + 1;
+  const b = a * 2;
+  const c = b - 3;
+  return c;
+};
+
+export { helperFn };
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      const names = result.map(f => f.name);
+
+      expect(names).toContain('helperFn');
+      expect(result.length).toBe(1);
+    });
+
     it('handles mixed export styles (inline export + re-export block)', () => {
       const project = new Project({
         compilerOptions: { allowJs: true, noEmit: true },
@@ -337,6 +359,91 @@ export { reExported };
       `);
       const result = extractExportedFunctions(sourceFile);
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('includeNonExported option', () => {
+    it('excludes non-exported functions by default', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('mixed.js', `
+function internalHelper(x) {
+  const a = x + 1;
+  const b = a * 2;
+  const c = b - 3;
+  return c;
+}
+
+export function publicApi(x) {
+  const a = internalHelper(x);
+  const b = a + 10;
+  const c = b * 3;
+  return c;
+}
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      const names = result.map(f => f.name);
+      expect(names).toContain('publicApi');
+      expect(names).not.toContain('internalHelper');
+    });
+
+    it('includes non-exported functions when includeNonExported is true', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('mixed2.js', `
+function internalHelper(x) {
+  const a = x + 1;
+  const b = a * 2;
+  const c = b - 3;
+  return c;
+}
+
+export function publicApi(x) {
+  const a = internalHelper(x);
+  const b = a + 10;
+  const c = b * 3;
+  return c;
+}
+      `);
+      const result = extractExportedFunctions(sourceFile, { includeNonExported: true });
+      const names = result.map(f => f.name);
+      expect(names).toContain('publicApi');
+      expect(names).toContain('internalHelper');
+    });
+
+    it('still filters trivial non-exported functions', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('trivial-internal.js', `
+function trivialHelper() {
+  return 42;
+}
+
+function nonTrivial(x) {
+  const a = x + 1;
+  const b = a * 2;
+  const c = b - 3;
+  return c;
+}
+
+export function main() {
+  const a = nonTrivial(1);
+  const b = trivialHelper();
+  const c = a + b;
+  return c;
+}
+      `);
+      const result = extractExportedFunctions(sourceFile, { includeNonExported: true });
+      const names = result.map(f => f.name);
+      expect(names).toContain('main');
+      expect(names).toContain('nonTrivial');
+      expect(names).not.toContain('trivialHelper');
     });
   });
 });

@@ -182,10 +182,10 @@ function extractFunctionFromInstrumentedCode(
   const lines = instrumentedCode.split('\n');
 
   // Patterns to find the function declaration start
-  // Handles: export async function name, export function name, export const name =
+  // Handles exported and non-exported: [export] [async] function name, [export] const name =
   const functionStartPatterns = [
-    new RegExp(`^\\s*export\\s+(async\\s+)?function\\s+${escapeRegex(functionName)}\\s*\\(`),
-    new RegExp(`^\\s*export\\s+const\\s+${escapeRegex(functionName)}\\s*=`),
+    new RegExp(`^\\s*(export\\s+)?(async\\s+)?function\\s+${escapeRegex(functionName)}\\s*\\(`),
+    new RegExp(`^\\s*(export\\s+)?const\\s+${escapeRegex(functionName)}\\s*=`),
   ];
 
   // Also look for JSDoc preceding the function
@@ -329,6 +329,64 @@ export function deduplicateImports(imports: string[]): string[] {
   }
 
   return result;
+}
+
+/**
+ * Ensure tracer initialization (`const tracer = trace.getTracer(...)`) appears
+ * after all import statements, not between them. The LLM sometimes places the
+ * tracer init between import lines, which is an ES module syntax error.
+ *
+ * @param code - Instrumented code that may have misplaced tracer init
+ * @returns Code with tracer init moved after the last import
+ */
+export function ensureTracerAfterImports(code: string): string {
+  const lines = code.split('\n');
+  const tracerInitIndices: number[] = [];
+  let lastImportIdx = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (IMPORT_PATTERN.test(trimmed)) {
+      lastImportIdx = i;
+    }
+    if (TRACER_INIT_PATTERN.test(trimmed)) {
+      tracerInitIndices.push(i);
+    }
+  }
+
+  // No tracer init or no imports — nothing to fix
+  if (tracerInitIndices.length === 0 || lastImportIdx === -1) return code;
+
+  // Check if any tracer init is between imports (before the last import)
+  const misplacedIndices = tracerInitIndices.filter(i => i < lastImportIdx);
+  if (misplacedIndices.length === 0) return code;
+
+  // Extract the misplaced lines, remove them, and re-insert after last import
+  const misplacedLines = misplacedIndices.map(i => lines[i]);
+
+  // Remove in reverse order to preserve indices
+  for (const idx of [...misplacedIndices].reverse()) {
+    lines.splice(idx, 1);
+  }
+
+  // Recalculate last import position after removals
+  let newLastImportIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (IMPORT_PATTERN.test(lines[i].trim())) {
+      newLastImportIdx = i;
+    }
+  }
+
+  // Insert after last import with blank line spacing
+  const insertIdx = newLastImportIdx + 1;
+  const toInsert: string[] = [];
+  if (insertIdx > 0 && lines[insertIdx - 1]?.trim() !== '') {
+    toInsert.push('');
+  }
+  toInsert.push(...misplacedLines);
+  lines.splice(insertIdx, 0, ...toInsert);
+
+  return lines.join('\n');
 }
 
 function escapeRegex(str: string): string {

@@ -40,25 +40,39 @@ export interface ExtractedFunction {
   buildContext: (sourceFile: SourceFile) => string;
 }
 
+/** Options for function extraction. */
+export interface ExtractFunctionsOptions {
+  /** When true, include non-exported functions that are worth instrumenting. */
+  includeNonExported?: boolean;
+}
+
 /**
- * Extract exported functions suitable for per-function instrumentation.
+ * Extract functions suitable for per-function instrumentation.
  *
- * Filters out:
- * - Non-exported functions (internal helpers)
+ * By default, filters out:
+ * - Non-exported functions (internal helpers) — unless `includeNonExported` is set
  * - Trivial functions (fewer than MIN_STATEMENTS statements)
  * - Already-instrumented functions (contain OTel span patterns)
  *
  * For each qualifying function, identifies which module-level constants and
  * imports it references, so the LLM receives sufficient context.
  */
-export function extractExportedFunctions(sourceFile: SourceFile): ExtractedFunction[] {
+export function extractExportedFunctions(
+  sourceFile: SourceFile,
+  options?: ExtractFunctionsOptions,
+): ExtractedFunction[] {
+  const includeNonExported = options?.includeNonExported ?? false;
   const moduleLevelConstants = collectModuleLevelConstants(sourceFile);
   const importedIdentifiers = collectImportedIdentifiers(sourceFile);
   const results: ExtractedFunction[] = [];
 
+  // Collect names exported via re-export blocks (export { a, b })
+  const reExportedNames = collectReExportedNames(sourceFile);
+
   // Process function declarations
   for (const fn of sourceFile.getFunctions()) {
-    if (!fn.isExported()) continue;
+    const fnName = fn.getName();
+    if (!includeNonExported && !fn.isExported() && !(fnName && reExportedNames.has(fnName))) continue;
     const bodyText = fn.getBody()?.getText() ?? '';
     if (!isWorthInstrumenting(bodyText, effectiveStatementCount(fn.getStatements()))) continue;
 
@@ -79,7 +93,9 @@ export function extractExportedFunctions(sourceFile: SourceFile): ExtractedFunct
 
   // Process variable-assigned arrow/function expressions
   for (const varStatement of sourceFile.getVariableStatements()) {
-    if (!varStatement.isExported()) continue;
+    const varDeclName = varStatement.getDeclarations()[0]?.getName();
+    const isReExported = varDeclName ? reExportedNames.has(varDeclName) : false;
+    if (!includeNonExported && !varStatement.isExported() && !isReExported) continue;
 
     for (const decl of varStatement.getDeclarations()) {
       const initializer = decl.getInitializer();
@@ -205,6 +221,19 @@ function collectImportedIdentifiers(sourceFile: SourceFile): string[] {
     }
   }
   return identifiers;
+}
+
+/** Collect names from re-export blocks like `export { a, b, c }`. */
+function collectReExportedNames(sourceFile: SourceFile): Set<string> {
+  const names = new Set<string>();
+  for (const exportDecl of sourceFile.getExportDeclarations()) {
+    // Only handle local re-exports (no module specifier = `export { a, b }`)
+    if (exportDecl.getModuleSpecifierValue()) continue;
+    for (const namedExport of exportDecl.getNamedExports()) {
+      names.add(namedExport.getName());
+    }
+  }
+  return names;
 }
 
 /** Check if a function body references any of the given identifiers. */

@@ -2,7 +2,7 @@
 // ABOUTME: Verifies reassembly of instrumented functions back into the original file with deduplication.
 
 import { describe, it, expect } from 'vitest';
-import { reassembleFunctions, deduplicateImports } from '../../src/fix-loop/function-reassembly.ts';
+import { reassembleFunctions, deduplicateImports, ensureTracerAfterImports } from '../../src/fix-loop/function-reassembly.ts';
 import type { FunctionResult } from '../../src/fix-loop/types.ts';
 import type { ExtractedFunction } from '../../src/fix-loop/function-extraction.ts';
 
@@ -574,5 +574,70 @@ export function newFunction(x) {
     // Tracer init should still appear exactly once (the original)
     const tracerInitCount = (result.match(/const tracer = trace\.getTracer/g) || []).length;
     expect(tracerInitCount).toBe(1);
+  });
+});
+
+describe('ensureTracerAfterImports', () => {
+  it('moves tracer init from between imports to after the last import', () => {
+    const code = [
+      "import { readFile } from 'node:fs/promises';",
+      "const tracer = trace.getTracer('commit-story');",
+      "import path from 'node:path';",
+      '',
+      'export function main() {',
+      '  return tracer.startActiveSpan("main", (span) => {',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = ensureTracerAfterImports(code);
+
+    // Tracer init should be after the last import
+    const lines = result.split('\n');
+    const lastImportIdx = lines.findLastIndex(l => l.trim().startsWith('import '));
+    const tracerIdx = lines.findIndex(l => l.includes('trace.getTracer'));
+    expect(tracerIdx).toBeGreaterThan(lastImportIdx);
+    // All imports should be contiguous
+    expect(result).toContain("import { readFile }");
+    expect(result).toContain("import path");
+  });
+
+  it('returns code unchanged when tracer init is already after imports', () => {
+    const code = [
+      "import { readFile } from 'node:fs/promises';",
+      "import path from 'node:path';",
+      '',
+      "const tracer = trace.getTracer('commit-story');",
+      '',
+      'export function main() {',
+      '  return 42;',
+      '}',
+    ].join('\n');
+
+    const result = ensureTracerAfterImports(code);
+    expect(result).toBe(code);
+  });
+
+  it('returns code unchanged when there are no imports', () => {
+    const code = [
+      "const tracer = trace.getTracer('commit-story');",
+      '',
+      'function main() { return 42; }',
+    ].join('\n');
+
+    const result = ensureTracerAfterImports(code);
+    expect(result).toBe(code);
+  });
+
+  it('returns code unchanged when there is no tracer init', () => {
+    const code = [
+      "import { readFile } from 'node:fs/promises';",
+      '',
+      'export function main() { return 42; }',
+    ].join('\n');
+
+    const result = ensureTracerAfterImports(code);
+    expect(result).toBe(code);
   });
 });
