@@ -319,6 +319,7 @@ describe('DX verification', () => {
       expect(result.content[0].text).toContain('package.json not found');
       // Error includes a suggestion for what to do
       expect(result.content[0].text).toContain('project root');
+      expect(result.content[0].text).toContain('spiny-orb init');
     });
 
     it('instrument unexpected error includes the error message', async () => {
