@@ -155,10 +155,9 @@ export async function handleInstrument(
       const failed = results.filter(r => r.status === 'failed').length;
       const partial = results.filter(r => r.status === 'partial').length;
       const skipped = results.filter(r => r.status === 'skipped').length;
-      const parts = [`${succeeded} succeeded`, `${failed} failed`];
-      if (partial > 0) parts.push(`${partial} partial`);
-      parts.push(`${skipped} skipped`);
-      deps.stderr(`\nRun complete: ${parts.join(', ')}`);
+      deps.stderr(
+        `\nRun complete: ${succeeded} succeeded, ${failed} failed, ${partial} partial, ${skipped} skipped`,
+      );
     },
   };
 
@@ -224,6 +223,9 @@ export async function handleInstrument(
     branchName = workflowResult.branchName;
     prSummaryPath = workflowResult.prSummaryPath;
   } catch (err) {
+    const runEndTime = new Date();
+    const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
+    deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
     if (err instanceof CoordinatorAbortError) {
       deps.stderr(err.message);
       const exitCode = isCostCeilingRejection(err) ? 3 : 2;
@@ -241,14 +243,10 @@ export async function handleInstrument(
   if (options.output === 'json') {
     deps.stdout(JSON.stringify(runResult, null, 2));
   } else {
-    const summaryParts = [
-      `${runResult.filesSucceeded} succeeded`,
-      `${runResult.filesFailed} failed`,
-    ];
-    if (runResult.filesPartial > 0) summaryParts.push(`${runResult.filesPartial} partial`);
-    summaryParts.push(`${runResult.filesSkipped} skipped`);
     deps.stderr(
-      `${runResult.filesProcessed} files processed: ${summaryParts.join(', ')}`,
+      `${runResult.filesProcessed} files processed: ` +
+      `${runResult.filesSucceeded} succeeded, ${runResult.filesFailed} failed, ` +
+      `${runResult.filesPartial} partial, ${runResult.filesSkipped} skipped`,
     );
     // Show recommended refactors summary for files that have them
     const filesWithRefactors = runResult.fileResults.filter(
