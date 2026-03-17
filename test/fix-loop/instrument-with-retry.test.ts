@@ -2299,6 +2299,47 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(result.functionsInstrumented).toBeUndefined();
   });
 
+  it('catches syntax errors after function-level assembly and excludes culprit (#187)', async () => {
+    let fnCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (callPath, _code, _schema, _config) => {
+        if (isPerFunctionCall(callPath)) {
+          fnCallCount++;
+          if (fnCallCount === 1) {
+            // First function: return code with a corrupted module-level import (imimport)
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: `imimport { trace } from '@opentelemetry/api';\nexport async function fetchWithRetry(url) {\n  return trace.getTracer('svc').startActiveSpan('fn', async (span) => {\n    span.end();\n  });\n}`,
+                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          // Second function: valid code
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nimport { writeFile } from 'node:fs/promises';\nimport path from 'node:path';\nexport async function saveData(filePath, data) {\n  return trace.getTracer('svc').startActiveSpan('save', async (span) => {\n    const resolved = path.resolve(filePath);\n    const content = JSON.stringify(data, null, 2);\n    await writeFile(resolved, content, 'utf-8');\n    span.end();\n  });\n}`,
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        // Whole-file call fails
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    // The whole-file syntax check should catch the module-level imimport corruption
+    // The result should still be partial — the valid function (saveData) is kept
+    expect(result.status).toBe('partial');
+    // The file on disk should NOT contain the corrupted import
+    const finalContent = readFileSync(filePath, 'utf-8');
+    expect(finalContent).not.toContain('imimport');
+  });
+
   it('returns whole-file failure when all per-function calls fail', async () => {
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({
