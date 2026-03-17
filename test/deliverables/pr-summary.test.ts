@@ -214,14 +214,14 @@ describe('renderPrSummary', () => {
     it('shows retry attempt count per file in the table', () => {
       const result = _makeRunResult({
         fileResults: [
-          _makeFileResult({ validationAttempts: 3 }),
+          _makeFileResult({ spansAdded: 1, validationAttempts: 5 }),
         ],
       });
       const md = renderPrSummary(result, _makeConfig());
 
       const tableRow = md.split('\n').find(l => l.includes('example.js'));
       expect(tableRow).toBeDefined();
-      expect(tableRow).toContain('3');
+      expect(tableRow).toContain('5');
     });
 
     it('shows per-file cost in the table', () => {

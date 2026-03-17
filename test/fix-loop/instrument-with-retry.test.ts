@@ -2844,12 +2844,22 @@ describe('instrumentWithRetry — time budget', () => {
   });
 
   it('proceeds normally when time budget is not exceeded', async () => {
+    // Fail on attempt 1, succeed on attempt 2 — so the budget check (attempt > 1) is exercised
+    const failOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: sampleTokens });
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'const instrumented = true;\n', tokenUsage: sampleTokens });
+
+    let callCount = 0;
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async () => ({ success: true, output: goodOutput }) as InstrumentFileResult,
-      validateFile: async () => makePassingValidation(testFilePath),
+      instrumentFile: async () => {
+        callCount++;
+        return { success: true, output: callCount === 1 ? failOutput : goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => callCount === 1
+        ? makeFailingValidation(testFilePath)
+        : makePassingValidation(testFilePath),
     };
 
+    // Clock always returns 0 — elapsed is always 0, well within the 60s budget
     const clock = () => 0;
 
     const result = await instrumentWithRetry(
@@ -2858,6 +2868,8 @@ describe('instrumentWithRetry — time budget', () => {
       { deps, clock },
     );
 
+    // Both attempts ran — the budget check fired at attempt 2 and did not abort
+    expect(callCount).toBe(2);
     expect(result.status).toBe('success');
   });
 });
