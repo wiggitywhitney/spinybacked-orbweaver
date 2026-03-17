@@ -12,7 +12,7 @@ import type { FileResult } from '../../src/fix-loop/types.ts';
 
 /** Create an isolated git repo with an initial commit. */
 async function initTestRepo(): Promise<string> {
-  const dir = join(tmpdir(), `orbweaver-perfile-test-${randomUUID()}`);
+  const dir = join(tmpdir(), `spiny-orb-perfile-test-${randomUUID()}`);
   await mkdir(dir, { recursive: true });
   const git = simpleGit(dir);
   await git.init();
@@ -155,7 +155,7 @@ describe('commitFileResult', () => {
 
   it('returns undefined without committing for files outside the project root', async () => {
     // Edge case: file path that doesn't start with projectDir
-    const externalDir = join(tmpdir(), `orbweaver-external-${randomUUID()}`);
+    const externalDir = join(tmpdir(), `spiny-orb-external-${randomUUID()}`);
     await mkdir(externalDir, { recursive: true });
     const filePath = join(externalDir, 'external.js');
     await writeFile(filePath, '// instrumented\n');

@@ -1,4 +1,4 @@
-// ABOUTME: Zod schema for orbweaver.yaml agent configuration.
+// ABOUTME: Zod schema for spiny-orb.yaml agent configuration.
 // ABOUTME: Defines AgentConfigSchema with defaults, enum constraints, and strict unknown-field rejection.
 
 import { z } from 'zod';
@@ -10,7 +10,7 @@ import { z } from 'zod';
 const AgentEffort = z.enum(['low', 'medium', 'high']);
 
 /**
- * Dependency installation strategy — set during `orbweaver init` based on project type.
+ * Dependency installation strategy — set during `spiny-orb init` based on project type.
  * dependencies: for services (backend APIs, workers). peerDependencies: for distributable packages.
  */
 const DependencyStrategy = z.enum(['dependencies', 'peerDependencies']);
@@ -22,7 +22,7 @@ const DependencyStrategy = z.enum(['dependencies', 'peerDependencies']);
 const ReviewSensitivity = z.enum(['strict', 'moderate', 'off']);
 
 /**
- * Zod schema for orbweaver.yaml — the single source of truth for config shape.
+ * Zod schema for spiny-orb.yaml — the single source of truth for config shape.
  * All optional fields have defaults so the parsed output is fully populated.
  *
  * The schema uses z.strictObject to reject unknown fields (typo detection

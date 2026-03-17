@@ -469,7 +469,7 @@ describe('Interface Equivalence — Milestone 9', () => {
 
       const configWithOverride = makeConfig({ maxFilesPerRun: 10 });
 
-      // CLI: maxFilesPerRun comes from config (already in orbweaver.yaml)
+      // CLI: maxFilesPerRun comes from config (already in spiny-orb.yaml)
       const cliDeps: InstrumentDeps = {
         loadConfig: vi.fn().mockResolvedValue({ success: true, config: configWithOverride }),
         coordinate: cliConfigCapture,
@@ -506,7 +506,7 @@ describe('Interface Equivalence — Milestone 9', () => {
   describe('GitHub Action equivalence by construction', () => {
     it('action.yml invokes CLI with --yes and --output json', async () => {
       // This is verified structurally in github-action.test.ts
-      // The Action runs `npx orbweaver instrument --yes --output json <path>`
+      // The Action runs `npx spiny-orb instrument --yes --output json <path>`
       // which is the exact same code path as CLI with those flags.
       // Here we verify the CLI path with --yes --output json produces valid JSON.
       const cliStdout = vi.fn();
@@ -572,7 +572,7 @@ describe('Interface Equivalence — Milestone 9', () => {
       const cliDeps: InstrumentDeps = {
         loadConfig: vi.fn().mockResolvedValue({
           success: false,
-          error: { code: 'FILE_NOT_FOUND', message: 'orbweaver.yaml not found' },
+          error: { code: 'FILE_NOT_FOUND', message: 'spiny-orb.yaml not found' },
         }),
         coordinate: vi.fn(),
         stderr: stderrCapture,
@@ -584,7 +584,7 @@ describe('Interface Equivalence — Milestone 9', () => {
       const result = await handleInstrument(makeCliOptions(), cliDeps);
       expect(result.exitCode).not.toBe(0);
       expect(stderrCapture.mock.calls.some(
-        (c: unknown[]) => (c[0] as string).includes('orbweaver init'),
+        (c: unknown[]) => (c[0] as string).includes('spiny-orb init'),
       )).toBe(true);
     });
 
@@ -592,7 +592,7 @@ describe('Interface Equivalence — Milestone 9', () => {
       const mcpDeps: McpDeps = {
         loadConfig: vi.fn().mockResolvedValue({
           success: false,
-          error: { code: 'FILE_NOT_FOUND', message: 'orbweaver.yaml not found' },
+          error: { code: 'FILE_NOT_FOUND', message: 'spiny-orb.yaml not found' },
         }),
         discoverFiles: vi.fn().mockResolvedValue([]),
         statFile: vi.fn().mockResolvedValue({ size: 0 }),
@@ -606,7 +606,7 @@ describe('Interface Equivalence — Milestone 9', () => {
       );
 
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('orbweaver init');
+      expect(result.content[0].text).toContain('spiny-orb init');
     });
 
     it('both interfaces handle unexpected errors without crashing', async () => {

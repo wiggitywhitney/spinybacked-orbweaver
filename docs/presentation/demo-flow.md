@@ -15,7 +15,7 @@ The arc: "Organizations need business logic visibility → auto-instrumentation 
 
 ## Pre-Talk Setup
 
-- Run orbweaver against the demo app to completion before the talk starts
+- Run spiny-orb against the demo app to completion before the talk starts
 - Keep a terminal tab open with the full agent logs for walkthrough during the talk
 - Have the agent's PR ready on GitHub
 - Be on main in the demo app at the start of the talk (the instrumented branch and its PR exist but aren't checked out yet)

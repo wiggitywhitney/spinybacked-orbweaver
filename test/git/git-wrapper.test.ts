@@ -24,7 +24,7 @@ import {
  * Includes an initial commit so branch operations work.
  */
 async function initTestRepo(): Promise<string> {
-  const dir = join(tmpdir(), `orbweaver-git-test-${randomUUID()}`);
+  const dir = join(tmpdir(), `spiny-orb-git-test-${randomUUID()}`);
   await mkdir(dir, { recursive: true });
   const git = simpleGit(dir);
   await git.init();
@@ -59,17 +59,17 @@ describe('git-wrapper', () => {
 
   describe('createBranch', () => {
     it('creates and checks out a new branch', async () => {
-      await createBranch(repoDir, 'orbweaver/instrument');
+      await createBranch(repoDir, 'spiny-orb/instrument');
       const branch = await getCurrentBranch(repoDir);
-      expect(branch).toBe('orbweaver/instrument');
+      expect(branch).toBe('spiny-orb/instrument');
     });
 
     it('throws if branch already exists', async () => {
-      await createBranch(repoDir, 'orbweaver/instrument');
+      await createBranch(repoDir, 'spiny-orb/instrument');
       // Switch back to original branch
       const git = simpleGit(repoDir);
       await git.checkout('main').catch(() => git.checkout('master'));
-      await expect(createBranch(repoDir, 'orbweaver/instrument')).rejects.toThrow();
+      await expect(createBranch(repoDir, 'spiny-orb/instrument')).rejects.toThrow();
     });
   });
 
@@ -154,8 +154,8 @@ describe('git-wrapper', () => {
 
   describe('pushBranch', () => {
     it('throws when no remote is configured', async () => {
-      await createBranch(repoDir, 'orbweaver/instrument');
-      await expect(pushBranch(repoDir, 'orbweaver/instrument')).rejects.toThrow();
+      await createBranch(repoDir, 'spiny-orb/instrument');
+      await expect(pushBranch(repoDir, 'spiny-orb/instrument')).rejects.toThrow();
     });
   });
 
@@ -230,7 +230,7 @@ describe('git-wrapper', () => {
 
     beforeEach(async () => {
       // Create a bare repo to serve as remote
-      bareDir = join(tmpdir(), `orbweaver-bare-${randomUUID()}`);
+      bareDir = join(tmpdir(), `spiny-orb-bare-${randomUUID()}`);
       await mkdir(bareDir, { recursive: true });
       const bare = simpleGit(bareDir);
       await bare.init(true);
@@ -245,17 +245,17 @@ describe('git-wrapper', () => {
     });
 
     it('pushes successfully to a local remote without token', async () => {
-      await createBranch(repoDir, 'orbweaver/test-push');
+      await createBranch(repoDir, 'spiny-orb/test-push');
       await writeFile(join(repoDir, 'push-test.js'), 'const x = 1;\n');
       await stageFiles(repoDir, ['push-test.js']);
       await commit(repoDir, 'test push');
 
-      await pushBranch(repoDir, 'orbweaver/test-push');
+      await pushBranch(repoDir, 'spiny-orb/test-push');
 
       // Verify the branch exists in the bare remote
       const bare = simpleGit(bareDir);
       const branches = await bare.branch();
-      expect(branches.all).toContain('orbweaver/test-push');
+      expect(branches.all).toContain('spiny-orb/test-push');
     });
 
     // This test hits real github.com — the assertion on error text depends on
@@ -271,7 +271,7 @@ describe('git-wrapper', () => {
         await git.removeRemote('origin');
         await git.addRemote('origin', 'https://github.com/owner/repo.git');
 
-        await createBranch(repoDir, 'orbweaver/test-token-push');
+        await createBranch(repoDir, 'spiny-orb/test-token-push');
         await writeFile(join(repoDir, 'token-test.js'), 'const x = 1;\n');
         await stageFiles(repoDir, ['token-test.js']);
         await commit(repoDir, 'test token push');
@@ -279,7 +279,7 @@ describe('git-wrapper', () => {
         // Push will fail (fake token against real GitHub), but verifies:
         // 1. The token-authenticated path is taken (error says "Invalid username or token")
         // 2. The token itself does NOT appear in the error message
-        const err = await pushBranch(repoDir, 'orbweaver/test-token-push').catch((e: Error) => e);
+        const err = await pushBranch(repoDir, 'spiny-orb/test-token-push').catch((e: Error) => e);
         expect(err).toBeInstanceOf(Error);
         expect((err as Error).message).not.toContain('ghp_test_token_for_unit_test');
         // Git strips credentials from URLs in its error output, so the error
@@ -299,7 +299,7 @@ describe('git-wrapper', () => {
     });
 
     it('succeeds for local file:// remotes', async () => {
-      const bareDir = join(tmpdir(), `orbweaver-bare-${randomUUID()}`);
+      const bareDir = join(tmpdir(), `spiny-orb-bare-${randomUUID()}`);
       try {
         await mkdir(bareDir, { recursive: true });
         const bare = simpleGit(bareDir);
@@ -319,8 +319,8 @@ describe('git-wrapper', () => {
     it('creates branch, commits file, and reads log', async () => {
       // This is the PRD acceptance test: "unit tests create a branch,
       // commit a file, and read the commit log in an isolated test repo"
-      await createBranch(repoDir, 'orbweaver/instrument');
-      expect(await getCurrentBranch(repoDir)).toBe('orbweaver/instrument');
+      await createBranch(repoDir, 'spiny-orb/instrument');
+      expect(await getCurrentBranch(repoDir)).toBe('spiny-orb/instrument');
 
       await writeFile(join(repoDir, 'instrumented.js'), 'traced();\n');
       await stageFiles(repoDir, ['instrumented.js']);
@@ -328,7 +328,7 @@ describe('git-wrapper', () => {
 
       const log = await getLog(repoDir);
       expect(log[0].message).toBe('instrument instrumented.js');
-      expect(await getCurrentBranch(repoDir)).toBe('orbweaver/instrument');
+      expect(await getCurrentBranch(repoDir)).toBe('spiny-orb/instrument');
     });
   });
 });

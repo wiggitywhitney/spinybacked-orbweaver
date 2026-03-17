@@ -136,7 +136,7 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
   let testFilePath: string;
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-refactor-integration-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-refactor-integration-'));
     testFilePath = join(testDir, 'greet.js');
     writeFileSync(testFilePath, originalCode, 'utf-8');
   });

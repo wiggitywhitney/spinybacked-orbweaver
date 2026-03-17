@@ -106,7 +106,7 @@ export async function discoverFiles(
   if (absolutePaths.length > maxFilesPerRun) {
     throw new Error(
       `Discovered ${absolutePaths.length} files, which exceeds maxFilesPerRun limit of ${maxFilesPerRun}. ` +
-      `Adjust the limit in orbweaver.yaml or target a subdirectory.`,
+      `Adjust the limit in spiny-orb.yaml or target a subdirectory.`,
     );
   }
 

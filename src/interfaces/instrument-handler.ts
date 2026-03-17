@@ -1,4 +1,4 @@
-// ABOUTME: Handler for the `orbweaver instrument` command.
+// ABOUTME: Handler for the `spiny-orb instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
 import { basename, join, resolve } from 'node:path';
@@ -79,7 +79,7 @@ export async function handleInstrument(
   deps: InstrumentDeps,
 ): Promise<InstrumentResult> {
   // Load config
-  const configPath = join(options.projectDir, 'orbweaver.yaml');
+  const configPath = join(options.projectDir, 'spiny-orb.yaml');
 
   if (options.verbose) {
     deps.stderr(`Loading config from ${configPath}`);
@@ -89,7 +89,7 @@ export async function handleInstrument(
 
   if (!configResult.success) {
     if (configResult.error.code === 'FILE_NOT_FOUND') {
-      deps.stderr(`Configuration not found — run 'orbweaver init' to create orbweaver.yaml`);
+      deps.stderr(`Configuration not found — run 'spiny-orb init' to create spiny-orb.yaml`);
     } else {
       deps.stderr(`Configuration error: ${configResult.error.message}`);
     }

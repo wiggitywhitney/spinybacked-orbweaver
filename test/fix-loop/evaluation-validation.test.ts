@@ -235,7 +235,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Evaluation Validation — PRD-106 Function-
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-eval-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'spiny-orb-eval-'));
   });
 
   afterEach(() => {

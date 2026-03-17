@@ -1,2 +1,2 @@
-// Entry point for spinybacked-orbweaver
+// Entry point for spiny-orb
 export {};
