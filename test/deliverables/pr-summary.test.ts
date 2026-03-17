@@ -455,6 +455,31 @@ describe('renderPrSummary', () => {
       expect(md).toContain('handleRequest');
     });
 
+    it('does not suppress COV-004 for "process" when notes only mention "processOrder" (word boundary)', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            notes: ['Skipping processOrder (RST-001: trivial wrapper)'],
+            advisoryAnnotations: [
+              {
+                ruleId: 'COV-004',
+                passed: false,
+                filePath: '/project/src/api.js',
+                lineNumber: 5,
+                message: '"process" (async function) at line 5 has no span.',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // "process" is a different function from "processOrder" — advisory must not be suppressed
+      expect(md).toContain('COV-004');
+    });
+
     it('keeps COV-004 when notes mention the function but not as a skip', () => {
       const result = _makeRunResult({
         fileResults: [

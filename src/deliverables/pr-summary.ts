@@ -198,9 +198,13 @@ function filterContradictingAdvisories(
     if (!match) return true;
     const fnName = match[1];
 
+    // Use word-boundary matching to avoid false suppression (e.g., "process" in "processOrder")
+    const escaped = fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const fnPattern = new RegExp(`\\b${escaped}\\b`);
+
     // Suppress if any note mentions this function in a skip context
     const isSkipped = notes.some(note =>
-      note.includes(fnName) && /skip|RST-00[1-5]/i.test(note),
+      fnPattern.test(note) && /skip|RST-00[1-5]/i.test(note),
     );
     return !isSkipped;
   });
