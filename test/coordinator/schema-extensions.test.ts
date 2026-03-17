@@ -282,6 +282,72 @@ describe('writeSchemaExtensions', () => {
     expect(result.extensionCount).toBe(0);
   });
 
+  it('accepts span-type extensions with correct namespace prefix (#176)', async () => {
+    const extensions = [
+      'span.myapp.process_order',
+      'span.myapp.charge_payment',
+    ];
+
+    const result = await writeSchemaExtensions(registryDir, extensions);
+
+    expect(result.written).toBe(true);
+    expect(result.extensionCount).toBe(2);
+    expect(result.rejected).toHaveLength(0);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    expect(content).toContain('span.myapp.process_order');
+    expect(content).toContain('span.myapp.charge_payment');
+  });
+
+  it('outputs span-type extensions with type "span" not "attribute_group" (#176)', async () => {
+    const extensions = [
+      'span.myapp.process_order',
+      '- id: myapp.order.total\n  type: int\n  stability: development\n  brief: Order total',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ id: string; type: string }> };
+
+    // Should have two groups: one for spans, one for attributes
+    const spanGroup = parsed.groups.find(g => g.type === 'span');
+    const attrGroup = parsed.groups.find(g => g.type === 'attribute_group');
+
+    expect(spanGroup).toBeDefined();
+    expect(attrGroup).toBeDefined();
+  });
+
+  it('rejects span-type extensions with wrong namespace prefix (#176)', async () => {
+    const extensions = [
+      'span.wrong_namespace.process_order',
+    ];
+
+    const result = await writeSchemaExtensions(registryDir, extensions);
+
+    expect(result.written).toBe(false);
+    expect(result.extensionCount).toBe(0);
+    expect(result.rejected).toHaveLength(1);
+    expect(result.rejected[0]).toContain('span.wrong_namespace.process_order');
+  });
+
+  it('accepts YAML-object span extensions with correct namespace (#176)', async () => {
+    const extensions = [
+      '- id: span.myapp.process_order\n  type: span\n  stability: development\n  brief: Process an order\n  span_kind: internal',
+    ];
+
+    const result = await writeSchemaExtensions(registryDir, extensions);
+
+    expect(result.written).toBe(true);
+    expect(result.extensionCount).toBe(1);
+    expect(result.rejected).toHaveLength(0);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ type: string }> };
+    const spanGroup = parsed.groups.find(g => g.type === 'span');
+    expect(spanGroup).toBeDefined();
+  });
+
   it('parses extensions with enum type members', async () => {
     const extensions = [
       '- id: myapp.payment.method\n  type:\n    members:\n      - id: credit_card\n        value: credit_card\n        brief: Credit card payment\n        stability: development\n      - id: cash\n        value: cash\n        brief: Cash payment\n        stability: development\n  stability: development\n  brief: Payment method used',
