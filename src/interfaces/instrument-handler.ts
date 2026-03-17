@@ -223,9 +223,6 @@ export async function handleInstrument(
     branchName = workflowResult.branchName;
     prSummaryPath = workflowResult.prSummaryPath;
   } catch (err) {
-    const runEndTime = new Date();
-    const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
-    deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
     if (err instanceof CoordinatorAbortError) {
       deps.stderr(err.message);
       const exitCode = isCostCeilingRejection(err) ? 3 : 2;
@@ -234,12 +231,13 @@ export async function handleInstrument(
     const message = err instanceof Error ? err.message : String(err);
     deps.stderr(`Unexpected error: ${message}`);
     return { exitCode: 2 };
+  } finally {
+    const runEndTime = new Date();
+    const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
+    deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
   }
 
   // Output results
-  const runEndTime = new Date();
-  const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
-  deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
   if (options.output === 'json') {
     deps.stdout(JSON.stringify(runResult, null, 2));
   } else {
