@@ -12,6 +12,7 @@ import {
   extractNamespacePrefix,
   snapshotExtensionsFile,
   restoreExtensionsFile,
+  extractSpanNamesFromCode,
 } from '../../src/coordinator/schema-extensions.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 
@@ -454,5 +455,51 @@ describe('restoreExtensionsFile', () => {
     await mkdir(filePath);
 
     await expect(restoreExtensionsFile(registryDir, null)).rejects.toThrow();
+  });
+});
+
+describe('extractSpanNamesFromCode', () => {
+  it('extracts span names from startActiveSpan calls with single quotes', () => {
+    const code = `tracer.startActiveSpan('myapp.process_order', (span) => { span.end(); });`;
+    expect(extractSpanNamesFromCode(code)).toEqual(['myapp.process_order']);
+  });
+
+  it('extracts span names from startActiveSpan calls with double quotes', () => {
+    const code = `tracer.startActiveSpan("myapp.handle_request", (span) => { span.end(); });`;
+    expect(extractSpanNamesFromCode(code)).toEqual(['myapp.handle_request']);
+  });
+
+  it('extracts multiple span names from a file', () => {
+    const code = [
+      `tracer.startActiveSpan('commit_story.auto_summarize.generate_daily', (span) => {`,
+      `tracer.startActiveSpan('commit_story.auto_summarize.generate_weekly', (span) => {`,
+      `tracer.startActiveSpan('commit_story.auto_summarize.generate_monthly', (span) => {`,
+    ].join('\n');
+    const names = extractSpanNamesFromCode(code);
+    expect(names).toHaveLength(3);
+    expect(names).toContain('commit_story.auto_summarize.generate_daily');
+    expect(names).toContain('commit_story.auto_summarize.generate_weekly');
+    expect(names).toContain('commit_story.auto_summarize.generate_monthly');
+  });
+
+  it('deduplicates span names that appear multiple times', () => {
+    const code = [
+      `tracer.startActiveSpan('myapp.process', (span) => { span.end(); });`,
+      `tracer.startActiveSpan('myapp.process', (span) => { span.end(); });`,
+    ].join('\n');
+    expect(extractSpanNamesFromCode(code)).toEqual(['myapp.process']);
+  });
+
+  it('returns empty array when no startActiveSpan calls exist', () => {
+    const code = `function doWork() { return 42; }`;
+    expect(extractSpanNamesFromCode(code)).toEqual([]);
+  });
+
+  it('ignores span names that are dynamic (template literals or variables)', () => {
+    const code = [
+      'tracer.startActiveSpan(`dynamic.${name}`, (span) => {});',
+      'tracer.startActiveSpan(spanName, (span) => {});',
+    ].join('\n');
+    expect(extractSpanNamesFromCode(code)).toEqual([]);
   });
 });

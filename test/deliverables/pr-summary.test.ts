@@ -401,6 +401,85 @@ describe('renderPrSummary', () => {
       expect(md).toContain('CDQ-001');
       expect(md).toContain('camelCase');
     });
+
+    it('suppresses COV-004 advisories for functions deliberately skipped in notes', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            notes: ['Skipping doFetch (RST-001: pure synchronous function, no I/O)'],
+            advisoryAnnotations: [
+              {
+                ruleId: 'COV-004',
+                passed: false,
+                filePath: '/project/src/api.js',
+                lineNumber: 10,
+                message: '"doFetch" (async function) at line 10 has no span. Async functions benefit from spans.',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // COV-004 for a function explicitly skipped by the agent should be suppressed
+      // Note: 'doFetch' still appears in Agent Notes — assert on the advisory finding's absence
+      expect(md).not.toContain('COV-004');
+      expect(md).not.toContain('"doFetch" (async function)');
+    });
+
+    it('keeps COV-004 advisories for functions not mentioned in skip notes', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            notes: ['Added spans to all async entry points'],
+            advisoryAnnotations: [
+              {
+                ruleId: 'COV-004',
+                passed: false,
+                filePath: '/project/src/api.js',
+                lineNumber: 20,
+                message: '"handleRequest" (async function) at line 20 has no span. Async functions benefit from spans.',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // COV-004 for a function NOT mentioned as skipped should still appear
+      expect(md).toContain('COV-004');
+      expect(md).toContain('handleRequest');
+    });
+
+    it('keeps COV-004 when notes mention the function but not as a skip', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            notes: ['Added span to processOrder, instrumented doFetch with trace context'],
+            advisoryAnnotations: [
+              {
+                ruleId: 'COV-004',
+                passed: false,
+                filePath: '/project/src/api.js',
+                lineNumber: 10,
+                message: '"doFetch" (async function) at line 10 has no span.',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Notes mention doFetch but not as a skip — advisory should still appear
+      expect(md).toContain('COV-004');
+      expect(md).toContain('doFetch');
+    });
   });
 
   describe('agent notes section', () => {
