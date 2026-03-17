@@ -204,6 +204,21 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('why no existing key');
   });
 
+  it('guides adding contextual attributes for schema-uncovered files (#184)', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    // Must instruct agent to derive attributes from function parameters and return values
+    expect(prompt).toContain('Function parameters');
+    expect(prompt).toContain('Return values');
+  });
+
+  it('instructs converting Date objects to ISO strings before setAttribute (#184)', () => {
+    const prompt = buildSystemPrompt(schema);
+
+    expect(prompt).toContain('Date');
+    expect(prompt).toContain('toISOString');
+  });
+
   describe('scoring checklist', () => {
     it('includes all 6 evaluation dimensions', () => {
       const prompt = buildSystemPrompt(schema);
