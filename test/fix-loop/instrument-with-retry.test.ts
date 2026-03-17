@@ -2796,3 +2796,68 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
     expect(result.suggestedRefactors).toHaveLength(1);
   });
 });
+
+describe('instrumentWithRetry — time budget', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-retry-time-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('aborts before a retry attempt when maxTimePerFile is exceeded', async () => {
+    const failingOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: sampleTokens });
+
+    let callCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        return { success: true, output: failingOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => makeFailingValidation(testFilePath),
+    };
+
+    // Clock returns 0 on first call, then 6000ms on second — exceeds 5s budget between attempt 1 and 2
+    let clockCalls = 0;
+    const clock = () => {
+      clockCalls++;
+      return clockCalls === 1 ? 0 : 6_000;
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {},
+      makeConfig({ maxFixAttempts: 2, maxTimePerFile: 5 }),
+      { deps, clock },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toMatch(/time budget/i);
+    // Only 1 instrumentFile call — the second attempt was aborted before it ran
+    expect(callCount).toBe(1);
+  });
+
+  it('proceeds normally when time budget is not exceeded', async () => {
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'const instrumented = true;\n', tokenUsage: sampleTokens });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output: goodOutput }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const clock = () => 0;
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {},
+      makeConfig({ maxFixAttempts: 2, maxTimePerFile: 60 }),
+      { deps, clock },
+    );
+
+    expect(result.status).toBe('success');
+  });
+});

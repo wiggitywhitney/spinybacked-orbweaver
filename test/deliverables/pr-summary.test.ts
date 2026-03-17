@@ -210,6 +210,35 @@ describe('renderPrSummary', () => {
 
       expect(md).toContain('myapp.api_client.fetch_data');
     });
+
+    it('shows retry attempt count per file in the table', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({ validationAttempts: 3 }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const tableRow = md.split('\n').find(l => l.includes('example.js'));
+      expect(tableRow).toBeDefined();
+      expect(tableRow).toContain('3');
+    });
+
+    it('shows per-file cost in the table', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            tokenUsage: _makeTokenUsage({ inputTokens: 10_000, outputTokens: 2_000 }),
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const tableRow = md.split('\n').find(l => l.includes('example.js'));
+      expect(tableRow).toBeDefined();
+      // Table row should contain a dollar amount for per-file cost
+      expect(tableRow).toMatch(/\$[\d.]+/);
+    });
   });
 
   describe('span category breakdown section', () => {
