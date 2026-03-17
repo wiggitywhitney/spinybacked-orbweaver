@@ -59,6 +59,8 @@ interface InstrumentWithRetryOptions {
   /** When true, skip function-level fallback. Used internally to prevent infinite
    *  recursion when instrumentWithRetry is called per-function from functionLevelFallback. */
   _skipFunctionFallback?: boolean;
+  /** Clock function returning milliseconds — injectable for testing. Defaults to Date.now. */
+  clock?: () => number;
   /** Absolute path to project root. Enables API-002 dependency placement check. */
   projectRoot?: string;
   /** Anthropic client for LLM judge calls during validation. When omitted, a new client is created. */
@@ -270,7 +272,7 @@ export async function instrumentWithRetry(
     wholeFileResult = await executeRetryLoop(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
-      options?.projectRoot, anthropicClient,
+      options?.projectRoot, anthropicClient, options?.clock,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -318,6 +320,7 @@ async function executeRetryLoop(
   formatFeedbackFn: (result: ValidationResult) => string,
   projectRoot?: string,
   anthropicClient?: Anthropic,
+  clock?: () => number,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -346,13 +349,33 @@ async function executeRetryLoop(
   let previousValidation: ValidationResult | undefined;
   let lastConversationContext: ConversationContext | undefined;
   let lastStrategy: ValidationStrategy = 'initial-generation';
+  let completedAttempts = 0;
 
   // Track NDS-003 violations and LLM refactors per validation-producing attempt
   // for persistent violation detection and refactor recommendation collection.
   const nds003ViolationsPerAttempt: import('../validation/types.ts').CheckResult[][] = [];
   const llmRefactorsPerAttempt: import('../agent/schema.ts').LlmSuggestedRefactor[][] = [];
 
+  const now = clock ?? Date.now;
+  const startTime = now();
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    completedAttempts = attempt;
+    // Check time budget before each retry attempt (not before the first attempt)
+    if (attempt > 1 && config.maxTimePerFile !== undefined) {
+      const elapsed = now() - startTime;
+      if (elapsed > config.maxTimePerFile * 1000) {
+        const reason = `Time budget exceeded (${config.maxTimePerFile}s). Elapsed: ${Math.round(elapsed / 1000)}s.`;
+        const persistentKeys = detectPersistentViolations(nds003ViolationsPerAttempt);
+        const refactors = collectSuggestedRefactors(llmRefactorsPerAttempt, persistentKeys, filePath);
+        return buildFailedResult(
+          filePath, reason, reason, cumulativeTokens,
+          attempt - 1, lastStrategy, errorProgression, lastOutput,
+          undefined,
+          refactors.length > 0 ? refactors : undefined,
+        );
+      }
+    }
     const plannedStrategy = strategyForAttempt(attempt, maxAttempts);
 
     // Build call options for retry attempts based on strategy
@@ -523,7 +546,7 @@ async function executeRetryLoop(
 
   return buildFailedResult(
     filePath, reason, lastError, cumulativeTokens,
-    maxAttempts, lastStrategy, errorProgression, lastOutput,
+    completedAttempts, lastStrategy, errorProgression, lastOutput,
     lastValidation!.blockingFailures[0]?.ruleId,
     suggestedRefactors.length > 0 ? suggestedRefactors : undefined,
   );

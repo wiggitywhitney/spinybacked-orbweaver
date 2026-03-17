@@ -27,7 +27,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   const sections: string[] = [];
 
   sections.push(renderSummaryHeader(runResult, config));
-  sections.push(renderPerFileStatus(runResult, display));
+  sections.push(renderPerFileStatus(runResult, config, display));
   sections.push(renderSpanCategoryBreakdown(runResult, display));
   sections.push(renderSchemaChanges(runResult));
   sections.push(renderReviewSensitivity(runResult, config, display));
@@ -99,11 +99,11 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
   return lines.join('\n');
 }
 
-function renderPerFileStatus(runResult: RunResult, display: DisplayFn): string {
+function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
   const lines: string[] = ['## Per-File Results'];
   lines.push('');
-  lines.push('| File | Status | Spans | Libraries | Schema Extensions |');
-  lines.push('|------|--------|-------|-----------|-------------------|');
+  lines.push('| File | Status | Spans | Attempts | Cost | Libraries | Schema Extensions |');
+  lines.push('|------|--------|-------|----------|------|-----------|-------------------|');
 
   for (const file of runResult.fileResults) {
     const name = display(file.path);
@@ -121,8 +121,14 @@ function renderPerFileStatus(runResult: RunResult, display: DisplayFn): string {
     const exts = file.schemaExtensions.length > 0
       ? file.schemaExtensions.map(e => `\`${sanitizeCell(e)}\``).join(', ')
       : '—';
+    let costStr = '—';
+    try {
+      costStr = formatDollars(tokensToDollars(file.tokenUsage, config.agentModel));
+    } catch {
+      // Unknown model — leave as —
+    }
 
-    lines.push(`| ${name} | ${statusText} | ${file.spansAdded} | ${libs} | ${exts} |`);
+    lines.push(`| ${name} | ${statusText} | ${file.spansAdded} | ${file.validationAttempts} | ${costStr} | ${libs} | ${exts} |`);
   }
 
   return lines.join('\n');

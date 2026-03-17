@@ -313,6 +313,30 @@ describe('AgentConfigSchema', () => {
     });
   });
 
+  describe('maxTimePerFile', () => {
+    it('accepts a positive integer for maxTimePerFile', () => {
+      const result = AgentConfigSchema.safeParse({ ...makeMinimalConfig(), maxTimePerFile: 300 });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.maxTimePerFile).toBe(300);
+    });
+
+    it('is undefined when absent (no default)', () => {
+      const result = AgentConfigSchema.safeParse(makeMinimalConfig());
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.maxTimePerFile).toBeUndefined();
+    });
+
+    it('rejects zero', () => {
+      const result = AgentConfigSchema.safeParse({ ...makeMinimalConfig(), maxTimePerFile: 0 });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects a non-integer', () => {
+      const result = AgentConfigSchema.safeParse({ ...makeMinimalConfig(), maxTimePerFile: 30.5 });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('unknown fields', () => {
     it('rejects unknown fields', () => {
       const result = AgentConfigSchema.safeParse({

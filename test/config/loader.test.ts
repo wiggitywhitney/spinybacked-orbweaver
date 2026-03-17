@@ -149,8 +149,8 @@ describe('typo detection', () => {
     if (!result.success) {
       expect(result.error.code).toBe('UNKNOWN_FIELDS');
       expect(result.error.message).toContain('maxSpanPerFile');
-      // Levenshtein: maxSpanPerFile → maxTokensPerFile (distance 4) is closer than maxFilesPerRun (distance 5)
-      expect(result.error.message).toContain('maxTokensPerFile');
+      // Levenshtein: maxSpanPerFile → maxTimePerFile (distance 3) is now closest
+      expect(result.error.message).toContain('maxTimePerFile');
     }
   });
 
