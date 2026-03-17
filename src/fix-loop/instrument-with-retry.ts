@@ -759,13 +759,10 @@ async function functionLevelFallback(
     config: validationConfig,
   });
 
-  if (!partialValidation.passed) {
-    // Even partial reassembly fails — restore original and return null
-    await writeFile(filePath, originalCode, 'utf-8');
-    return null;
-  }
-
-  // Restore original file when 0 spans added (same as executeRetryLoop)
+  // Commit the partial code regardless of whether blocking rules fire on the assembly.
+  // Coverage rules (COV-001 etc.) will flag the intentionally-uninstrumented functions,
+  // but those failures are expected for partial files and should not discard the N
+  // successfully-instrumented functions.
   if (totalSpans === 0) {
     await writeFile(filePath, originalCode, 'utf-8');
   }

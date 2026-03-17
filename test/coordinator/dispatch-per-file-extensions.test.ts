@@ -60,6 +60,23 @@ function makeSuccessResult(filePath: string, overrides: Partial<FileResult> = {}
   };
 }
 
+function makePartialResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
+  return {
+    path: filePath,
+    status: 'partial',
+    spansAdded: 2,
+    librariesNeeded: [],
+    schemaExtensions: [],
+    attributesCreated: 1,
+    validationAttempts: 1,
+    validationStrategyUsed: 'initial-generation',
+    tokenUsage: { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+    functionsInstrumented: 1,
+    functionsSkipped: 1,
+    ...overrides,
+  };
+}
+
 function makeFailedResult(filePath: string, overrides: Partial<FileResult> = {}): FileResult {
   return {
     path: filePath,
@@ -181,6 +198,30 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     });
 
     expect(writeSchemaExtensions).not.toHaveBeenCalled();
+  });
+
+  it('calls writeSchemaExtensions after a partial file with extensions', async () => {
+    const file1 = await createFile('a.js', 'function a() {}');
+
+    const extensionYaml = '- id: myapp.payment.amount\n  type: double';
+    const writeSchemaExtensions = vi.fn().mockResolvedValue(makeWriteResult());
+    const deps = makeDeps({
+      instrumentWithRetry: vi.fn().mockResolvedValue(
+        makePartialResult(file1, { schemaExtensions: [extensionYaml] }),
+      ),
+      writeSchemaExtensions,
+    });
+
+    const config = makeConfig();
+    const registryDir = join(tmpDir, 'registry');
+
+    await dispatchFiles([file1], tmpDir, config, undefined, {
+      deps,
+      registryDir,
+    });
+
+    expect(writeSchemaExtensions).toHaveBeenCalledTimes(1);
+    expect(writeSchemaExtensions).toHaveBeenCalledWith(registryDir, [extensionYaml]);
   });
 
   it('does not call writeSchemaExtensions for skipped files', async () => {
