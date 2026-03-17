@@ -1,6 +1,6 @@
 # Verify GitHub Action — exercises the action.yml commands end-to-end
 #
-# Runs the same steps as action.yml (Weaver install, orbweaver instrument --yes
+# Runs the same steps as action.yml (Weaver install, spiny-orb instrument --yes
 # --output json, result parsing) against a test fixture project to verify
 # the action works on Ubuntu CI runners.
 #
@@ -73,7 +73,7 @@ jobs:
           sdk.start();
           INITJS
 
-          cat > "$TEST_DIR/orbweaver.yaml" << 'ORBYAML'
+          cat > "$TEST_DIR/spiny-orb.yaml" << 'ORBYAML'
           schemaPath: semconv
           sdkInitFile: src/instrumentation.js
           ORBYAML
@@ -87,18 +87,18 @@ jobs:
 
           echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
 
-      # Run the same command the action uses: orbweaver instrument --yes --output json
-      # Use node to run bin/orbweaver.js directly — npm ci doesn't create bin symlinks for the project's own package
+      # Run the same command the action uses: spiny-orb instrument --yes --output json
+      # Use node to run bin/spiny-orb.js directly — npm ci doesn't create bin symlinks for the project's own package
       - name: Run instrumentation (same as action.yml)
         id: instrument
         working-directory: ${{ env.TEST_DIR }}
         run: |
-          ORB="node ${GITHUB_WORKSPACE}/bin/orbweaver.js"
-          RESULT=$(${ORB} instrument --yes --output json src/order-service.js 2>orbweaver-stderr.log) || EXIT_CODE=$?
+          ORB="node ${GITHUB_WORKSPACE}/bin/spiny-orb.js"
+          RESULT=$(${ORB} instrument --yes --output json src/order-service.js 2>spiny-orb-stderr.log) || EXIT_CODE=$?
           EXIT_CODE=${EXIT_CODE:-0}
 
           echo "--- stderr output ---"
-          cat orbweaver-stderr.log
+          cat spiny-orb-stderr.log
 
           echo "result<<RESULT_EOF" >> "$GITHUB_OUTPUT"
           echo "${RESULT}" >> "$GITHUB_OUTPUT"

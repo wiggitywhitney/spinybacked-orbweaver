@@ -59,10 +59,10 @@ export interface GitWorkflowDeps {
 /**
  * Generate a unique branch name for the instrumentation run.
  *
- * @returns Branch name in the format `orbweaver/instrument-<timestamp>`
+ * @returns Branch name in the format `spiny-orb/instrument-<timestamp>`
  */
 function generateBranchName(): string {
-  return `orbweaver/instrument-${Date.now()}`;
+  return `spiny-orb/instrument-${Date.now()}`;
 }
 
 /**

@@ -34,7 +34,7 @@ export type ReadFileFn = (path: string) => Promise<string>;
  * - Other common no-test placeholder patterns
  * - `npm test` / `yarn test` when package.json scripts.test is a placeholder
  *
- * @param testCommand - The configured test command from orbweaver.yaml
+ * @param testCommand - The configured test command from spiny-orb.yaml
  * @param projectDir - Project root for resolving npm test → package.json (optional)
  * @param readFileFn - Injectable file reader for testing (optional)
  * @returns true if the command appears to run real tests

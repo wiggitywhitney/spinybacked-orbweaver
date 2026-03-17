@@ -461,6 +461,6 @@ startTelemetry();
     });
 
     expect(runResult.sdkInitUpdated).toBe(false);
-    expect(runResult.warnings.some(w => w.includes('orbweaver-instrumentations.js'))).toBe(true);
+    expect(runResult.warnings.some(w => w.includes('spiny-orb-instrumentations.js'))).toBe(true);
   });
 });

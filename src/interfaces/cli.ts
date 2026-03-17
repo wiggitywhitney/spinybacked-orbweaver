@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ABOUTME: CLI entry point for the orbweaver command.
+// ABOUTME: CLI entry point for the spiny-orb command.
 // ABOUTME: Defines init and instrument commands with yargs, wired to real handlers.
 
 import { fileURLToPath } from 'node:url';
@@ -19,7 +19,7 @@ import { promptConfirm } from './prompt.ts';
  */
 export function buildParser() {
   return yargs()
-    .scriptName('orbweaver')
+    .scriptName('spiny-orb')
     .usage('$0 <command> [options]')
     .command(
       'init',
@@ -76,7 +76,7 @@ export function buildParser() {
           });
       },
     )
-    .demandCommand(1, 'You must specify a command. Run orbweaver --help for usage.')
+    .demandCommand(1, 'You must specify a command. Run spiny-orb --help for usage.')
     .strict()
     .help();
 }
