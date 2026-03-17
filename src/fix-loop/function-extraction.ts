@@ -93,7 +93,9 @@ export function extractExportedFunctions(
 
   // Process variable-assigned arrow/function expressions
   for (const varStatement of sourceFile.getVariableStatements()) {
-    if (!includeNonExported && !varStatement.isExported()) continue;
+    const varDeclName = varStatement.getDeclarations()[0]?.getName();
+    const isReExported = varDeclName ? reExportedNames.has(varDeclName) : false;
+    if (!includeNonExported && !varStatement.isExported() && !isReExported) continue;
 
     for (const decl of varStatement.getDeclarations()) {
       const initializer = decl.getInitializer();

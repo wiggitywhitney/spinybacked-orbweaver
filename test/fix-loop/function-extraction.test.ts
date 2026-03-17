@@ -256,6 +256,28 @@ export { nodeHandler };
       expect(result[0].name).toBe('nodeHandler');
     });
 
+    it('extracts arrow functions re-exported via export block', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('arrow-reexport.js', `
+const helperFn = async (x) => {
+  const a = x + 1;
+  const b = a * 2;
+  const c = b - 3;
+  return c;
+};
+
+export { helperFn };
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      const names = result.map(f => f.name);
+
+      expect(names).toContain('helperFn');
+      expect(result.length).toBe(1);
+    });
+
     it('handles mixed export styles (inline export + re-export block)', () => {
       const project = new Project({
         compilerOptions: { allowJs: true, noEmit: true },
