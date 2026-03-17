@@ -17,6 +17,7 @@ import { extractExportedFunctions } from './function-extraction.ts';
 import { reassembleFunctions, ensureTracerAfterImports } from './function-reassembly.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
+import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
 import { checkSyntax } from '../validation/tier1/syntax.ts';
 
 const require = createRequire(import.meta.url);
@@ -476,7 +477,7 @@ async function executeRetryLoop(
         status: 'success',
         spansAdded,
         librariesNeeded: output.librariesNeeded,
-        schemaExtensions: output.schemaExtensions,
+        schemaExtensions: supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode),
         attributesCreated: output.attributesCreated,
         validationAttempts: attempt,
         validationStrategyUsed: actualStrategy,
@@ -748,7 +749,7 @@ async function functionLevelFallback(
       status: 'partial',
       spansAdded: totalSpans,
       librariesNeeded,
-      schemaExtensions,
+      schemaExtensions: supplementSchemaExtensions(schemaExtensions, reassembledCode),
       attributesCreated: totalAttributes,
       validationAttempts: wholeFileResult.validationAttempts,
       validationStrategyUsed: wholeFileResult.validationStrategyUsed,
@@ -795,7 +796,7 @@ async function functionLevelFallback(
     status: 'partial',
     spansAdded: totalSpans,
     librariesNeeded,
-    schemaExtensions,
+    schemaExtensions: supplementSchemaExtensions(schemaExtensions, partialCode),
     attributesCreated: totalAttributes,
     validationAttempts: wholeFileResult.validationAttempts,
     validationStrategyUsed: wholeFileResult.validationStrategyUsed,
@@ -840,6 +841,23 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
     }
   }
   return [...seen];
+}
+
+/**
+ * Supplement schema extensions with span names extracted from instrumented code.
+ * Adds any span names found in startActiveSpan calls that are not already registered.
+ *
+ * @param extensions - Agent-reported schema extensions
+ * @param code - Instrumented code to scan for span names
+ * @returns Deduplicated extensions including auto-detected span names
+ */
+function supplementSchemaExtensions(extensions: string[], code: string): string[] {
+  const spanNames = extractSpanNamesFromCode(code);
+  const registered = new Set(extensions);
+  const missing = spanNames
+    .filter(name => !registered.has(`span.${name}`))
+    .map(name => `span.${name}`);
+  return missing.length > 0 ? [...extensions, ...missing] : extensions;
 }
 
 /**

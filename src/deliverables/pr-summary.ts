@@ -179,14 +179,54 @@ function renderSchemaChanges(runResult: RunResult): string {
   return lines.join('\n');
 }
 
+/**
+ * Filter advisory annotations to remove COV-004 findings for functions
+ * the agent deliberately chose not to instrument.
+ *
+ * A COV-004 finding is suppressed when the file's notes mention the function
+ * name in a skip-decision context (containing "skip" or a restraint rule ID
+ * like RST-001 through RST-005).
+ */
+function filterContradictingAdvisories(
+  annotations: CheckResult[],
+  notes: string[] | undefined,
+): CheckResult[] {
+  if (!notes || notes.length === 0) return annotations;
+
+  const cov004 = annotations.filter(a => a.ruleId === 'COV-004');
+  if (cov004.length === 0) return annotations;
+
+  const other = annotations.filter(a => a.ruleId !== 'COV-004');
+
+  const filteredCov004 = cov004.filter(ann => {
+    // Extract function name from message: "functionName" (reason) at line N...
+    const match = ann.message.match(/^"([^"]+)"/);
+    if (!match) return true;
+    const fnName = match[1];
+
+    // Use word-boundary matching to avoid false suppression (e.g., "process" in "processOrder")
+    const escaped = fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const fnPattern = new RegExp(`\\b${escaped}\\b`);
+
+    // Suppress if any note mentions this function in a skip context
+    const isSkipped = notes.some(note =>
+      fnPattern.test(note) && /skip|RST-00[1-5]/i.test(note),
+    );
+    return !isSkipped;
+  });
+
+  return [...other, ...filteredCov004];
+}
+
 function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
   const lines: string[] = [];
 
-  // Collect advisory annotations from all files
+  // Collect advisory annotations from all files, filtering contradictions
   const allAdvisory: Array<{ file: string; annotation: CheckResult }> = [];
   for (const file of runResult.fileResults) {
     if (file.advisoryAnnotations) {
-      for (const ann of file.advisoryAnnotations) {
+      const filtered = filterContradictingAdvisories(file.advisoryAnnotations, file.notes);
+      for (const ann of filtered) {
         allAdvisory.push({ file: display(file.path), annotation: ann });
       }
     }

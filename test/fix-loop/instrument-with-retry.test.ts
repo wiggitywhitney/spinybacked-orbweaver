@@ -2870,3 +2870,41 @@ describe('instrumentWithRetry — time budget', () => {
     expect(result.status).toBe('success');
   });
 });
+
+describe('instrumentWithRetry — supplementSchemaExtensions', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'function greet() { return "hello"; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-supplement-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('adds a span name that is a prefix of an existing extension', async () => {
+    // 'myapp.process' is a substring of 'span.myapp.process_order', which is already registered.
+    // Substring matching would incorrectly skip adding span.myapp.process — Set-based exact
+    // matching must add it because 'span.myapp.process' is not in the extensions list.
+    const output = makeInstrumentationOutput({
+      instrumentedCode: `tracer.startActiveSpan('myapp.process', (span) => { span.end(); });\n`,
+      schemaExtensions: ['span.myapp.process_order'],
+    });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.schemaExtensions).toContain('span.myapp.process_order');
+    expect(result.schemaExtensions).toContain('span.myapp.process');
+  });
+});

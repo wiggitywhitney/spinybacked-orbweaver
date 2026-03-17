@@ -259,3 +259,23 @@ export async function restoreExtensionsFile(
     await writeFile(filePath, snapshot, 'utf-8');
   }
 }
+
+/**
+ * Extract span names used in startActiveSpan calls from instrumented code.
+ *
+ * Finds all `startActiveSpan('name', ...)` and `startActiveSpan("name", ...)`
+ * calls and returns the unique literal string span names. Dynamic span names
+ * (template literals, variables) are intentionally ignored.
+ *
+ * @param code - Instrumented JavaScript source code
+ * @returns Deduplicated array of span name strings found in the code
+ */
+export function extractSpanNamesFromCode(code: string): string[] {
+  const names = new Set<string>();
+  // Match startActiveSpan('name', ...) and startActiveSpan("name", ...)
+  const pattern = /startActiveSpan\s*\(\s*(['"])([^'"]+)\1/g;
+  for (const match of code.matchAll(pattern)) {
+    names.add(match[2]);
+  }
+  return [...names];
+}
