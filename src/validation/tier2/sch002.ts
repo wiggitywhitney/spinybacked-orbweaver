@@ -51,15 +51,21 @@ export function checkAttributeKeysMatchRegistry(
     return [pass(filePath, 'All attribute keys match registry names.')];
   }
 
+  // Build a suggestion of valid registry attribute names for the feedback
+  const registryNamesList = [...registryNames].sort();
+  const suggestionsText = registryNamesList.length <= 30
+    ? `Valid registry attributes: ${registryNamesList.join(', ')}`
+    : `Valid registry attributes (${registryNamesList.length} total, showing first 30): ${registryNamesList.slice(0, 30).join(', ')}`;
+
   return issues.map((i) => ({
     ruleId: 'SCH-002',
     passed: false,
     filePath,
     lineNumber: i.line,
     message:
-      `SCH-002 check failed: "${i.key}" at line ${i.line} not found in the registry.\n` +
-      `Attribute keys must match names defined in the Weaver telemetry registry. ` +
-      `Either use a registered attribute name or add a new attribute definition to the registry.`,
+      `SCH-002 check failed: "${i.key}" at line ${i.line} not found in the registry. ` +
+      `Use a registered attribute name from the schema, or report it as a schemaExtension. ` +
+      `${suggestionsText}`,
     tier: 2,
     blocking: true,
   }));

@@ -97,6 +97,9 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
       expect(results[0].message).toContain('user.custom.field');
       expect(results[0].message).toContain('SCH-002');
       expect(results[0].lineNumber).toBeTypeOf('number');
+      // Feedback should include valid registry attribute names
+      expect(results[0].message).toContain('Valid registry attributes');
+      expect(results[0].message).toContain('http.request.method');
     });
 
     it('reports each non-matching attribute key as a separate CheckResult', () => {
