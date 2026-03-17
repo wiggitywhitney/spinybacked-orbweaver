@@ -153,9 +153,10 @@ export async function handleInstrument(
     onRunComplete: (results) => {
       const succeeded = results.filter(r => r.status === 'success').length;
       const failed = results.filter(r => r.status === 'failed').length;
+      const partial = results.filter(r => r.status === 'partial').length;
       const skipped = results.filter(r => r.status === 'skipped').length;
       deps.stderr(
-        `\nRun complete: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped`,
+        `\nRun complete: ${succeeded} succeeded, ${failed} failed, ${partial} partial, ${skipped} skipped`,
       );
     },
   };
@@ -197,6 +198,8 @@ export async function handleInstrument(
   }
 
   // Execute git workflow
+  const runStartTime = new Date();
+  deps.stderr(`Started: ${runStartTime.toISOString()}`);
   let runResult: RunResult;
   let prUrl: string | undefined;
   let branchName: string | undefined;
@@ -228,6 +231,10 @@ export async function handleInstrument(
     const message = err instanceof Error ? err.message : String(err);
     deps.stderr(`Unexpected error: ${message}`);
     return { exitCode: 2 };
+  } finally {
+    const runEndTime = new Date();
+    const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
+    deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
   }
 
   // Output results
@@ -236,9 +243,8 @@ export async function handleInstrument(
   } else {
     deps.stderr(
       `${runResult.filesProcessed} files processed: ` +
-      `${runResult.filesSucceeded} succeeded, ` +
-      `${runResult.filesFailed} failed, ` +
-      `${runResult.filesSkipped} skipped`,
+      `${runResult.filesSucceeded} succeeded, ${runResult.filesFailed} failed, ` +
+      `${runResult.filesPartial} partial, ${runResult.filesSkipped} skipped`,
     );
     // Show recommended refactors summary for files that have them
     const filesWithRefactors = runResult.fileResults.filter(

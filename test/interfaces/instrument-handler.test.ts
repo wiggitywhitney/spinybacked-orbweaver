@@ -295,6 +295,59 @@ describe('handleInstrument', () => {
       expect(summaryLine).toBeDefined();
     });
 
+    it('includes partial count in text output summary (#188)', async () => {
+      const deps = makeDeps({
+        coordinate: vi.fn().mockResolvedValue(
+          makeRunResult({ filesProcessed: 10, filesSucceeded: 5, filesFailed: 2, filesSkipped: 1, filesPartial: 2 }),
+        ),
+      });
+      await handleInstrument(makeOptions({ output: 'text' }), deps);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const summaryLine = stderrCalls.find((s: string) => s.includes('10 files processed'));
+      expect(summaryLine).toBeDefined();
+      expect(summaryLine).toContain('2 partial');
+    });
+
+    it('always shows partial count even when zero (#188)', async () => {
+      const deps = makeDeps({
+        coordinate: vi.fn().mockResolvedValue(
+          makeRunResult({ filesProcessed: 3, filesSucceeded: 2, filesFailed: 1, filesSkipped: 0, filesPartial: 0 }),
+        ),
+      });
+      await handleInstrument(makeOptions({ output: 'text' }), deps);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const summaryLine = stderrCalls.find((s: string) => s.includes('3 files processed'));
+      expect(summaryLine).toBeDefined();
+      expect(summaryLine).toContain('0 partial');
+    });
+
+    it('prints run start and end timestamps (#188)', async () => {
+      const deps = makeDeps({
+        coordinate: vi.fn().mockResolvedValue(
+          makeRunResult({ filesProcessed: 1, filesSucceeded: 1 }),
+        ),
+      });
+      await handleInstrument(makeOptions({ output: 'text' }), deps);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const startLine = stderrCalls.find((s: string) => s.includes('Started'));
+      const endLine = stderrCalls.find((s: string) => s.includes('Completed'));
+      expect(startLine).toBeDefined();
+      expect(endLine).toBeDefined();
+    });
+
+    it('prints completion timestamp even on error paths (#188)', async () => {
+      const deps = makeDeps({
+        coordinate: vi.fn().mockRejectedValue(new Error('workflow failed')),
+      });
+      const result = await handleInstrument(makeOptions({ output: 'text' }), deps);
+      expect(result.exitCode).toBe(2);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const startLine = stderrCalls.find((s: string) => s.includes('Started'));
+      const endLine = stderrCalls.find((s: string) => s.includes('Completed'));
+      expect(startLine).toBeDefined();
+      expect(endLine).toBeDefined();
+    });
+
     it('prints artifact locations block with branch, PR summary path, and diff command', async () => {
       const fileResult = makeFileResult({ status: 'success' });
       const runResult = makeRunResult({ filesProcessed: 1, filesSucceeded: 1, fileResults: [fileResult] });
@@ -440,6 +493,30 @@ describe('handleInstrument', () => {
         s.includes('2') && s.includes('succeeded'),
       );
       expect(summaryLine).toBeDefined();
+    });
+
+    it('onRunComplete includes partial count in summary (#188)', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions(), deps);
+      const callbacks = getCallbacks(deps);
+
+      // Clear prior stderr calls from handleInstrument so we only see onRunComplete output
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const results = [
+        makeFileResult({ status: 'success' }),
+        makeFileResult({ status: 'partial' }),
+        makeFileResult({ status: 'partial' }),
+        makeFileResult({ status: 'failed' }),
+      ];
+      callbacks.onRunComplete!(results);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const summaryLine = stderrCalls.find((s: string) =>
+        s.includes('Run complete'),
+      );
+      expect(summaryLine).toBeDefined();
+      expect(summaryLine).toContain('2 partial');
     });
   });
 
