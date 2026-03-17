@@ -31,6 +31,7 @@ export function buildSystemPrompt(resolvedSchema: object, projectName?: string):
 - All OpenTelemetry imports must come from \`@opentelemetry/api\` only. Do not import from \`@opentelemetry/sdk-*\`, \`@opentelemetry/instrumentation-*\`, or any other \`@opentelemetry/*\` package.
 - The \`instrumentedCode\` field must contain the complete file — not a diff, not a partial file. Files containing placeholder comments (\`// ...\`, \`// existing code\`, \`// rest of function\`, \`/* ... */\`) will be rejected by validation.
 - Do not add comments explaining the instrumentation. The code speaks for itself.
+- Do not add, modify, or duplicate JSDoc comments. Preserve existing JSDoc exactly as-is. If a function has a JSDoc block, keep it unchanged — do not regenerate or rewrite it.
 - Do not add null/undefined checks around \`span.setAttribute()\` calls. Pass attribute values directly — the OpenTelemetry API handles null and undefined safely. Adding guards is a non-instrumentation change that will be rejected.
 
 ## Schema Contract

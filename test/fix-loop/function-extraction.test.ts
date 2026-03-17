@@ -98,6 +98,17 @@ describe('extractExportedFunctions', () => {
       expect(fetchFn.endLine).toBeGreaterThan(fetchFn.startLine);
     });
 
+    it('startLine includes JSDoc when present (#189)', () => {
+      const sourceFile = getSourceFile('complex-module.js');
+      const result = extractExportedFunctions(sourceFile);
+
+      // fetchWithRetry has JSDoc starting at line 10, function at line 16
+      const fetchFn = findByName(result, 'fetchWithRetry')!;
+      expect(fetchFn.jsDoc).toBeDefined();
+      // startLine should include the JSDoc block, not just the function keyword
+      expect(fetchFn.startLine).toBe(10);
+    });
+
     it('reports isAsync correctly', () => {
       const sourceFile = getSourceFile('complex-module.js');
       const result = extractExportedFunctions(sourceFile);
