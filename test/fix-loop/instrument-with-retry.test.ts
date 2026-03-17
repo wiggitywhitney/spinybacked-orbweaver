@@ -2306,11 +2306,11 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
         if (isPerFunctionCall(callPath)) {
           fnCallCount++;
           if (fnCallCount === 1) {
-            // First function: return code with a syntax error (missing closing brace)
+            // First function: return code with a corrupted module-level import (imimport)
             return {
               success: true,
               output: makeInstrumentationOutput({
-                instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function fetchWithRetry(url) {\n  return trace.getTracer('svc').startActiveSpan('fn', async (span) => {\n    span.end();\n  );\n}`,
+                instrumentedCode: `imimport { trace } from '@opentelemetry/api';\nexport async function fetchWithRetry(url) {\n  return trace.getTracer('svc').startActiveSpan('fn', async (span) => {\n    span.end();\n  });\n}`,
                 spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
               }),
             };
@@ -2332,18 +2332,10 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    // The syntax-breaking function should be excluded, but the valid one kept
-    // Result should be partial (some functions succeeded)
-    expect(result.status === 'partial' || result.status === 'failed').toBe(true);
-    if (result.functionResults) {
-      const failed = result.functionResults.filter(r => !r.success);
-      // At least one function should be marked as failed due to syntax error
-      const syntaxFailed = failed.find(r => r.error?.includes('syntax error'));
-      if (syntaxFailed) {
-        expect(syntaxFailed.error).toContain('syntax error');
-      }
-    }
-    // Original file should not be corrupted — either restored or validly instrumented
+    // The whole-file syntax check should catch the module-level imimport corruption
+    // The result should still be partial — the valid function (saveData) is kept
+    expect(result.status).toBe('partial');
+    // The file on disk should NOT contain the corrupted import
     const finalContent = readFileSync(filePath, 'utf-8');
     expect(finalContent).not.toContain('imimport');
   });

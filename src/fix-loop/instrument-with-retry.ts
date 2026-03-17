@@ -618,7 +618,7 @@ async function functionLevelFallback(
     }
   }
 
-  const successful = fnResults.filter(r => r.success);
+  let successful = fnResults.filter(r => r.success);
   if (successful.length === 0) {
     return null; // All functions failed — fall through to whole-file failure
   }
@@ -630,18 +630,30 @@ async function functionLevelFallback(
   await writeFile(filePath, reassembledCode, 'utf-8');
 
   // Whole-file syntax check catches assembly errors (corrupted imports, bad splicing)
-  const syntaxResult = checkSyntax(filePath);
-  if (!syntaxResult.passed) {
+  let syntaxPassed: boolean;
+  try {
+    syntaxPassed = checkSyntax(filePath).passed;
+  } catch {
+    await writeFile(filePath, originalCode, 'utf-8');
+    return null;
+  }
+
+  if (!syntaxPassed) {
     // Identify which function's instrumentation broke syntax by testing each one individually
     for (const fn of extractedFunctions) {
       const result = fnResults.find(r => r.name === fn.name);
       if (!result?.success) continue;
       const singleReassembled = reassembleFunctions(originalCode, extractedFunctions, [result]);
       await writeFile(filePath, singleReassembled, 'utf-8');
-      const singleCheck = checkSyntax(filePath);
-      if (!singleCheck.passed) {
+      try {
+        const singleCheck = checkSyntax(filePath);
+        if (!singleCheck.passed) {
+          result.success = false;
+          result.error = `Whole-file syntax error after assembly: ${singleCheck.message}`;
+        }
+      } catch {
         result.success = false;
-        result.error = `Whole-file syntax error after assembly: ${singleCheck.message}`;
+        result.error = 'Whole-file syntax check threw an unexpected error';
       }
     }
 
@@ -654,12 +666,20 @@ async function functionLevelFallback(
 
     reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
     await writeFile(filePath, reassembledCode, 'utf-8');
-    const retryCheck = checkSyntax(filePath);
-    if (!retryCheck.passed) {
+    try {
+      const retryCheck = checkSyntax(filePath);
+      if (!retryCheck.passed) {
+        await writeFile(filePath, originalCode, 'utf-8');
+        return null;
+      }
+    } catch {
       await writeFile(filePath, originalCode, 'utf-8');
       return null;
     }
   }
+
+  // Recompute successful after syntax check may have marked additional functions as failed
+  successful = fnResults.filter(r => r.success);
 
   const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
   const validation = await validateFileFn({
