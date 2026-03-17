@@ -257,6 +257,36 @@ describe('git-wrapper', () => {
       const branches = await bare.branch();
       expect(branches.all).toContain('orbweaver/test-push');
     });
+
+    it('attempts token-authenticated URL for HTTPS remotes', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      try {
+        process.env.GITHUB_TOKEN = 'ghp_test_token_for_unit_test';
+
+        // Replace the local remote with an HTTPS URL (unreachable, but exercises the code path)
+        const git = simpleGit(repoDir);
+        await git.removeRemote('origin');
+        await git.addRemote('origin', 'https://github.com/owner/repo.git');
+
+        await createBranch(repoDir, 'orbweaver/test-token-push');
+        await writeFile(join(repoDir, 'token-test.js'), 'const x = 1;\n');
+        await stageFiles(repoDir, ['token-test.js']);
+        await commit(repoDir, 'test token push');
+
+        // Push will fail (fake token against real GitHub), but verifies:
+        // 1. The token-authenticated path is taken (error says "Invalid username or token")
+        // 2. The token itself does NOT appear in the error message
+        const err = await pushBranch(repoDir, 'orbweaver/test-token-push').catch((e: Error) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect((err as Error).message).not.toContain('ghp_test_token_for_unit_test');
+        // Git strips credentials from URLs in its error output, so the error
+        // references the bare URL — but "Invalid username or token" confirms
+        // credentials were actually sent (vs "Password authentication is not supported")
+        expect((err as Error).message).toMatch(/Authentication failed|Invalid username/);
+      } finally {
+        process.env.GITHUB_TOKEN = originalToken;
+      }
+    });
   });
 
   describe('validateCredentials with GITHUB_TOKEN', () => {

@@ -90,6 +90,13 @@ export async function getLog(
  * @param token - Optional GitHub token (typically from GITHUB_TOKEN env var).
  * @returns The URL with embedded credentials, or the original URL.
  */
+/**
+ * Strip embedded tokens from error messages to prevent credential leakage in logs.
+ */
+function sanitizeTokenFromError(msg: string): string {
+  return msg.replace(/x-access-token:[^@]+@/g, 'x-access-token:***@');
+}
+
 export function resolveAuthenticatedUrl(remoteUrl: string, token: string | undefined): string {
   if (!token || !remoteUrl.startsWith('https://')) {
     return remoteUrl;
@@ -118,7 +125,12 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
     if (remoteUrl) {
       const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
       if (authUrl !== remoteUrl) {
-        await git.push(authUrl, branchName, ['--set-upstream']);
+        try {
+          await git.push(authUrl, branchName, ['--set-upstream']);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(sanitizeTokenFromError(msg));
+        }
         return;
       }
     }
@@ -167,7 +179,7 @@ export async function validateCredentials(dir: string): Promise<void> {
           await git.listRemote([authUrl, '--heads']);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          throw new Error(`Git credential validation failed: ${msg}`);
+          throw new Error(`Git credential validation failed: ${sanitizeTokenFromError(msg)}`);
         }
         return;
       }
