@@ -56,6 +56,13 @@ export interface RunResult {
   /** Run-level advisory findings from cross-file checks (e.g., CDQ-008 tracer naming). */
   runLevelAdvisory: import('../validation/types.ts').CheckResult[];
   warnings: string[];
+  /**
+   * Auto-instrumentation packages identified for a library project.
+   * These are not installed as dependencies — deployers should add them to
+   * their application's telemetry setup instead.
+   * Only populated when the project is detected as a library (peerDependencies heuristic).
+   */
+  companionPackages?: string[];
 }
 
 /**
