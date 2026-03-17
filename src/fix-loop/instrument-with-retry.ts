@@ -17,6 +17,7 @@ import { extractExportedFunctions } from './function-extraction.ts';
 import { reassembleFunctions, ensureTracerAfterImports } from './function-reassembly.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
+import { checkSyntax } from '../validation/tier1/syntax.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -623,10 +624,42 @@ async function functionLevelFallback(
   }
 
   // Reassemble: replace instrumented functions in the original file
-  const reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
+  let reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
 
-  // Write reassembled code and run full validation (Tier 1 + Tier 2)
+  // Write reassembled code and check syntax before running full validation
   await writeFile(filePath, reassembledCode, 'utf-8');
+
+  // Whole-file syntax check catches assembly errors (corrupted imports, bad splicing)
+  const syntaxResult = checkSyntax(filePath);
+  if (!syntaxResult.passed) {
+    // Identify which function's instrumentation broke syntax by testing each one individually
+    for (const fn of extractedFunctions) {
+      const result = fnResults.find(r => r.name === fn.name);
+      if (!result?.success) continue;
+      const singleReassembled = reassembleFunctions(originalCode, extractedFunctions, [result]);
+      await writeFile(filePath, singleReassembled, 'utf-8');
+      const singleCheck = checkSyntax(filePath);
+      if (!singleCheck.passed) {
+        result.success = false;
+        result.error = `Whole-file syntax error after assembly: ${singleCheck.message}`;
+      }
+    }
+
+    // Retry reassembly without the culprits
+    const remaining = fnResults.filter(r => r.success);
+    if (remaining.length === 0) {
+      await writeFile(filePath, originalCode, 'utf-8');
+      return null;
+    }
+
+    reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
+    await writeFile(filePath, reassembledCode, 'utf-8');
+    const retryCheck = checkSyntax(filePath);
+    if (!retryCheck.passed) {
+      await writeFile(filePath, originalCode, 'utf-8');
+      return null;
+    }
+  }
 
   const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
   const validation = await validateFileFn({

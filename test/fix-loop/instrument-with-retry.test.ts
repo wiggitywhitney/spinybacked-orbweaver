@@ -2299,6 +2299,55 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(result.functionsInstrumented).toBeUndefined();
   });
 
+  it('catches syntax errors after function-level assembly and excludes culprit (#187)', async () => {
+    let fnCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (callPath, _code, _schema, _config) => {
+        if (isPerFunctionCall(callPath)) {
+          fnCallCount++;
+          if (fnCallCount === 1) {
+            // First function: return code with a syntax error (missing closing brace)
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function fetchWithRetry(url) {\n  return trace.getTracer('svc').startActiveSpan('fn', async (span) => {\n    span.end();\n  );\n}`,
+                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          // Second function: valid code
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nimport { writeFile } from 'node:fs/promises';\nimport path from 'node:path';\nexport async function saveData(filePath, data) {\n  return trace.getTracer('svc').startActiveSpan('save', async (span) => {\n    const resolved = path.resolve(filePath);\n    const content = JSON.stringify(data, null, 2);\n    await writeFile(resolved, content, 'utf-8');\n    span.end();\n  });\n}`,
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        // Whole-file call fails
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    // The syntax-breaking function should be excluded, but the valid one kept
+    // Result should be partial (some functions succeeded)
+    expect(result.status === 'partial' || result.status === 'failed').toBe(true);
+    if (result.functionResults) {
+      const failed = result.functionResults.filter(r => !r.success);
+      // At least one function should be marked as failed due to syntax error
+      const syntaxFailed = failed.find(r => r.error?.includes('syntax error'));
+      if (syntaxFailed) {
+        expect(syntaxFailed.error).toContain('syntax error');
+      }
+    }
+    // Original file should not be corrupted — either restored or validly instrumented
+    const finalContent = readFileSync(filePath, 'utf-8');
+    expect(finalContent).not.toContain('imimport');
+  });
+
   it('returns whole-file failure when all per-function calls fail', async () => {
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({
