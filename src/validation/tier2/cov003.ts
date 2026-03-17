@@ -203,14 +203,19 @@ function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): 
   // Single return statement with a default/fallback value
   if (statements.length === 1) {
     const stmtText = statements[0].getText().trim();
-    if (/^return\s+(null|undefined|false|true|\{\}|\[\]|''|""|0|-1);?$/.test(stmtText)) {
+    if (/^return\s+(null|undefined|false|\{\}|\[\]|''|"");?$/.test(stmtText)) {
       return true;
     }
   }
 
-  // Error-code checks (e.g., `if (err.code === 'ENOENT')`)
+  // Error-code checks (e.g., `if (err.code === 'ENOENT')`) — but only when the
+  // catch doesn't rethrow on non-expected paths. A catch that checks ENOENT and
+  // rethrows other errors has a genuine error path that needs recording.
   if (EXPECTED_CONDITION_PATTERNS.some((pattern) => bodyText.includes(pattern))) {
-    return true;
+    const hasThrow = bodyText.includes('throw ') || bodyText.includes('throw;');
+    if (!hasThrow) {
+      return true;
+    }
   }
 
   return false;

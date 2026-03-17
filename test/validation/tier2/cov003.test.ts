@@ -231,7 +231,7 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes when catch checks for ENOENT (expected condition)', () => {
+    it('flags ENOENT catch that rethrows non-expected errors (mixed path)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -242,6 +242,29 @@ describe('checkErrorVisibility (COV-003)', () => {
         '    } catch (err) {',
         '      if (err.code === "ENOENT") return null;',
         '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when ENOENT catch does not rethrow (pure fallback)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function loadIfExists(path) {',
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      if (err.code === "ENOENT") return null;',
+        '      return null;',
         '    } finally {',
         '      span.end();',
         '    }',
