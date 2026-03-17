@@ -15,6 +15,8 @@ import {
   getCurrentBranch,
   pushBranch,
   hasStagedChanges,
+  resolveAuthenticatedUrl,
+  validateCredentials,
 } from '../../src/git/git-wrapper.ts';
 
 /**
@@ -178,6 +180,103 @@ describe('git-wrapper', () => {
 
       const result = await hasStagedChanges(repoDir);
       expect(result).toBe(false);
+    });
+  });
+
+  describe('resolveAuthenticatedUrl', () => {
+    it('embeds token in HTTPS URL', () => {
+      const result = resolveAuthenticatedUrl(
+        'https://github.com/owner/repo.git',
+        'ghp_abc123',
+      );
+      expect(result).toBe('https://x-access-token:ghp_abc123@github.com/owner/repo.git');
+    });
+
+    it('handles HTTPS URL with existing credentials', () => {
+      const result = resolveAuthenticatedUrl(
+        'https://olduser:oldpass@github.com/owner/repo.git',
+        'ghp_new',
+      );
+      expect(result).toBe('https://x-access-token:ghp_new@github.com/owner/repo.git');
+    });
+
+    it('returns original URL when no token provided', () => {
+      const result = resolveAuthenticatedUrl(
+        'https://github.com/owner/repo.git',
+        undefined,
+      );
+      expect(result).toBe('https://github.com/owner/repo.git');
+    });
+
+    it('returns original URL for SSH remotes even with token', () => {
+      const result = resolveAuthenticatedUrl(
+        'git@github.com:owner/repo.git',
+        'ghp_abc123',
+      );
+      expect(result).toBe('git@github.com:owner/repo.git');
+    });
+
+    it('returns original URL for empty token', () => {
+      const result = resolveAuthenticatedUrl(
+        'https://github.com/owner/repo.git',
+        '',
+      );
+      expect(result).toBe('https://github.com/owner/repo.git');
+    });
+  });
+
+  describe('pushBranch with GITHUB_TOKEN', () => {
+    let bareDir: string;
+
+    beforeEach(async () => {
+      // Create a bare repo to serve as remote
+      bareDir = join(tmpdir(), `orbweaver-bare-${randomUUID()}`);
+      await mkdir(bareDir, { recursive: true });
+      const bare = simpleGit(bareDir);
+      await bare.init(true);
+
+      // Add as remote to test repo
+      const git = simpleGit(repoDir);
+      await git.addRemote('origin', bareDir);
+    });
+
+    afterEach(async () => {
+      await rm(bareDir, { recursive: true, force: true });
+    });
+
+    it('pushes successfully to a local remote without token', async () => {
+      await createBranch(repoDir, 'orbweaver/test-push');
+      await writeFile(join(repoDir, 'push-test.js'), 'const x = 1;\n');
+      await stageFiles(repoDir, ['push-test.js']);
+      await commit(repoDir, 'test push');
+
+      await pushBranch(repoDir, 'orbweaver/test-push');
+
+      // Verify the branch exists in the bare remote
+      const bare = simpleGit(bareDir);
+      const branches = await bare.branch();
+      expect(branches.all).toContain('orbweaver/test-push');
+    });
+  });
+
+  describe('validateCredentials with GITHUB_TOKEN', () => {
+    it('succeeds for repos without remotes', async () => {
+      // repoDir has no remote by default
+      await expect(validateCredentials(repoDir)).resolves.not.toThrow();
+    });
+
+    it('succeeds for local file:// remotes', async () => {
+      const bareDir = join(tmpdir(), `orbweaver-bare-${randomUUID()}`);
+      await mkdir(bareDir, { recursive: true });
+      const bare = simpleGit(bareDir);
+      await bare.init(true);
+
+      const git = simpleGit(repoDir);
+      await git.addRemote('origin', bareDir);
+
+      await expect(validateCredentials(repoDir)).resolves.not.toThrow();
+
+      await rm(bareDir, { recursive: true, force: true });
     });
   });
 

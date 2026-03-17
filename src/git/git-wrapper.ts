@@ -82,13 +82,48 @@ export async function getLog(
 }
 
 /**
+ * Resolve an authenticated remote URL when GITHUB_TOKEN is available.
+ * Embeds the token in HTTPS URLs using the x-access-token scheme.
+ * Returns the original URL unchanged for SSH remotes or when no token is provided.
+ *
+ * @param remoteUrl - The git remote URL.
+ * @param token - Optional GitHub token (typically from GITHUB_TOKEN env var).
+ * @returns The URL with embedded credentials, or the original URL.
+ */
+export function resolveAuthenticatedUrl(remoteUrl: string, token: string | undefined): string {
+  if (!token || !remoteUrl.startsWith('https://')) {
+    return remoteUrl;
+  }
+  // Strip existing credentials (user:pass@) if present
+  const stripped = remoteUrl.replace(/^https:\/\/[^@]+@/, 'https://');
+  return stripped.replace('https://', `https://x-access-token:${token}@`);
+}
+
+/**
  * Push the current branch to the remote, setting upstream tracking.
+ * When GITHUB_TOKEN is set in the environment and the remote uses HTTPS,
+ * the token is embedded in the push URL to avoid authentication failures
+ * in non-interactive environments.
+ *
  * @param dir - The git repository directory.
  * @param branchName - Name of the branch to push.
  * @param remote - Remote name (defaults to 'origin').
  */
 export async function pushBranch(dir: string, branchName: string, remote = 'origin'): Promise<void> {
   const git = simpleGit(dir);
+  const token = process.env.GITHUB_TOKEN;
+
+  if (token) {
+    const remoteUrl = (await git.remote(['get-url', remote]))?.trim();
+    if (remoteUrl) {
+      const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
+      if (authUrl !== remoteUrl) {
+        await git.push(authUrl, branchName, ['--set-upstream']);
+        return;
+      }
+    }
+  }
+
   await git.push(remote, branchName, ['--set-upstream']);
 }
 
@@ -118,6 +153,25 @@ export async function validateCredentials(dir: string): Promise<void> {
   const remotes = await git.getRemotes();
   if (remotes.length === 0) {
     return;
+  }
+
+  // When GITHUB_TOKEN is available and the remote is HTTPS, validate with the
+  // token-authenticated URL so the check matches what pushBranch will actually do.
+  const token = process.env.GITHUB_TOKEN;
+  if (token) {
+    const remoteUrl = (await git.remote(['get-url', 'origin']))?.trim();
+    if (remoteUrl) {
+      const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
+      if (authUrl !== remoteUrl) {
+        try {
+          await git.listRemote([authUrl, '--heads']);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(`Git credential validation failed: ${msg}`);
+        }
+        return;
+      }
+    }
   }
 
   try {
