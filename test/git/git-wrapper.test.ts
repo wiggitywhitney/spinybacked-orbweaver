@@ -258,6 +258,9 @@ describe('git-wrapper', () => {
       expect(branches.all).toContain('orbweaver/test-push');
     });
 
+    // This test hits real github.com — the assertion on error text depends on
+    // GitHub's response wording. If it breaks, update the regex to match the
+    // new wording while still confirming credentials were sent.
     it('attempts token-authenticated URL for HTTPS remotes', async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
@@ -297,16 +300,18 @@ describe('git-wrapper', () => {
 
     it('succeeds for local file:// remotes', async () => {
       const bareDir = join(tmpdir(), `orbweaver-bare-${randomUUID()}`);
-      await mkdir(bareDir, { recursive: true });
-      const bare = simpleGit(bareDir);
-      await bare.init(true);
+      try {
+        await mkdir(bareDir, { recursive: true });
+        const bare = simpleGit(bareDir);
+        await bare.init(true);
 
-      const git = simpleGit(repoDir);
-      await git.addRemote('origin', bareDir);
+        const git = simpleGit(repoDir);
+        await git.addRemote('origin', bareDir);
 
-      await expect(validateCredentials(repoDir)).resolves.not.toThrow();
-
-      await rm(bareDir, { recursive: true, force: true });
+        await expect(validateCredentials(repoDir)).resolves.not.toThrow();
+      } finally {
+        await rm(bareDir, { recursive: true, force: true });
+      }
     });
   });
 
