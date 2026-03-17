@@ -153,10 +153,12 @@ export async function handleInstrument(
     onRunComplete: (results) => {
       const succeeded = results.filter(r => r.status === 'success').length;
       const failed = results.filter(r => r.status === 'failed').length;
+      const partial = results.filter(r => r.status === 'partial').length;
       const skipped = results.filter(r => r.status === 'skipped').length;
-      deps.stderr(
-        `\nRun complete: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped`,
-      );
+      const parts = [`${succeeded} succeeded`, `${failed} failed`];
+      if (partial > 0) parts.push(`${partial} partial`);
+      parts.push(`${skipped} skipped`);
+      deps.stderr(`\nRun complete: ${parts.join(', ')}`);
     },
   };
 
@@ -197,6 +199,8 @@ export async function handleInstrument(
   }
 
   // Execute git workflow
+  const runStartTime = new Date();
+  deps.stderr(`Started: ${runStartTime.toISOString()}`);
   let runResult: RunResult;
   let prUrl: string | undefined;
   let branchName: string | undefined;
@@ -234,11 +238,17 @@ export async function handleInstrument(
   if (options.output === 'json') {
     deps.stdout(JSON.stringify(runResult, null, 2));
   } else {
+    const runEndTime = new Date();
+    const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
+    deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
+    const summaryParts = [
+      `${runResult.filesSucceeded} succeeded`,
+      `${runResult.filesFailed} failed`,
+    ];
+    if (runResult.filesPartial > 0) summaryParts.push(`${runResult.filesPartial} partial`);
+    summaryParts.push(`${runResult.filesSkipped} skipped`);
     deps.stderr(
-      `${runResult.filesProcessed} files processed: ` +
-      `${runResult.filesSucceeded} succeeded, ` +
-      `${runResult.filesFailed} failed, ` +
-      `${runResult.filesSkipped} skipped`,
+      `${runResult.filesProcessed} files processed: ${summaryParts.join(', ')}`,
     );
     // Show recommended refactors summary for files that have them
     const filesWithRefactors = runResult.fileResults.filter(
