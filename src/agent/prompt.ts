@@ -126,6 +126,21 @@ When adding span attributes, you MUST exhaust registered keys before inventing n
 
 Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match.
 
+### Schema-Uncovered Files
+
+When a file has NO registry-defined attributes for its spans, you MUST still add contextual attributes. Derive 1-2 domain-relevant attributes per span from:
+- **Function parameters**: Input values that identify the operation (IDs, paths, names, counts)
+- **Return values**: Output characteristics that aid debugging (result counts, status indicators, sizes)
+
+A span with zero attributes provides minimal diagnostic value. Even without registry guidance, function signatures reveal what data matters.
+
+### Attribute Type Safety
+
+OpenTelemetry attributes must be primitive types: string, number, boolean, or arrays of these. Do NOT pass objects directly to \`span.setAttribute()\`. Common violations:
+- **Date objects**: Convert to ISO strings with \`.toISOString()\` before setting (e.g., \`span.setAttribute('task.created_at', date.toISOString())\`)
+- **Objects/Maps**: Extract specific primitive fields instead of passing the whole object
+- **Arrays of objects**: Map to arrays of primitive values first
+
 ## Scoring Checklist
 
 Your output is scored against these rules. Violating gate rules causes immediate rejection and retry. Quality rules affect the instrumentation score.
