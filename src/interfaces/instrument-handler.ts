@@ -235,12 +235,12 @@ export async function handleInstrument(
   }
 
   // Output results
+  const runEndTime = new Date();
+  const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
+  deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
   if (options.output === 'json') {
     deps.stdout(JSON.stringify(runResult, null, 2));
   } else {
-    const runEndTime = new Date();
-    const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
-    deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
     const summaryParts = [
       `${runResult.filesSucceeded} succeeded`,
       `${runResult.filesFailed} failed`,
