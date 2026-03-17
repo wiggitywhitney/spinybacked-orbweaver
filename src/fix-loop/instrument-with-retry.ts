@@ -14,7 +14,7 @@ import type { ValidateFileInput, ValidationResult } from '../validation/types.ts
 import { addTokenUsage, totalTokens, estimateMinTokens } from './token-budget.ts';
 import { detectOscillation } from './oscillation.ts';
 import { extractExportedFunctions } from './function-extraction.ts';
-import { reassembleFunctions } from './function-reassembly.ts';
+import { reassembleFunctions, ensureTracerAfterImports } from './function-reassembly.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 
@@ -415,6 +415,9 @@ async function executeRetryLoop(
     // already happened and the tokens are spent, so throwing away good code is wasteful.
     const budgetExceeded = totalTokens(cumulativeTokens) > config.maxTokensPerFile;
 
+    // Fix tracer init placement: ensure it's after all imports, not between them
+    output.instrumentedCode = ensureTracerAfterImports(output.instrumentedCode);
+
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
 
@@ -552,7 +555,7 @@ async function functionLevelFallback(
     skipAddingFilesFromTsConfig: true,
   });
   const sourceFile = project.createSourceFile(`${filePath}.tmp`, originalCode);
-  const extractedFunctions = extractExportedFunctions(sourceFile);
+  const extractedFunctions = extractExportedFunctions(sourceFile, { includeNonExported: true });
 
   if (extractedFunctions.length === 0) {
     return null; // No extractable functions — fallback not applicable
