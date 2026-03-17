@@ -94,9 +94,18 @@ export function parseExtension(extensionYaml: string): Record<string, unknown> |
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
-    // Bare string ID from LLM output (e.g., "myapp.context.collect")
+    // Bare string ID from LLM output (e.g., "myapp.context.collect" or "span.myapp.process_order")
     // Wrap in a minimal object with the ID and sensible defaults.
     if (typeof parsed === 'string' && parsed.includes('.')) {
+      if (parsed.startsWith('span.')) {
+        return {
+          id: parsed,
+          type: 'span',
+          stability: 'development',
+          brief: `Agent-discovered span: ${parsed.slice('span.'.length)}`,
+          span_kind: 'internal',
+        };
+      }
       return {
         id: parsed,
         type: 'string',
@@ -133,6 +142,7 @@ export async function writeSchemaExtensions(
 
   const namespacePrefix = await extractNamespacePrefix(registryDir);
   const validAttributes: Array<Record<string, unknown>> = [];
+  const validSpans: Array<Record<string, unknown>> = [];
   const rejected: string[] = [];
 
   for (const ext of extensions) {
@@ -142,34 +152,64 @@ export async function writeSchemaExtensions(
       continue;
     }
 
-    const id = attr.id as string | undefined;
-    if (!id || !id.startsWith(`${namespacePrefix}.`)) {
-      rejected.push(String(id ?? '(no id)'));
+    if (typeof attr.id !== 'string' || attr.id.length === 0) {
+      rejected.push(String(attr.id ?? '(no id)'));
+      continue;
+    }
+    const id = attr.id;
+
+    // Span-type extensions have IDs like "span.myapp.process_order" —
+    // strip the "span." prefix before checking the namespace.
+    const isSpan = id.startsWith('span.') || attr.type === 'span';
+    const namespacePart = isSpan && id.startsWith('span.') ? id.slice('span.'.length) : id;
+
+    if (!namespacePart.startsWith(`${namespacePrefix}.`)) {
+      rejected.push(id);
       continue;
     }
 
-    validAttributes.push(attr);
+    if (isSpan) {
+      validSpans.push(attr);
+    } else {
+      validAttributes.push(attr);
+    }
   }
 
-  if (validAttributes.length === 0) {
+  if (validAttributes.length === 0 && validSpans.length === 0) {
     return { written: false, extensionCount: 0, filePath, rejected };
   }
 
-  const yamlContent = stringify({
-    groups: [{
+  const groups: Array<Record<string, unknown>> = [];
+
+  if (validAttributes.length > 0) {
+    groups.push({
       id: `registry.${namespacePrefix}.agent_extensions`,
       type: 'attribute_group',
       display_name: 'Agent-Created Attributes',
       brief: 'Attributes created by the instrumentation agent',
       attributes: validAttributes,
-    }],
-  });
+    });
+  }
+
+  if (validSpans.length > 0) {
+    for (const span of validSpans) {
+      groups.push({
+        ...span,
+        type: 'span',
+        stability: span.stability ?? 'development',
+        brief: span.brief ?? 'Agent-discovered span',
+        span_kind: span.span_kind ?? 'internal',
+      });
+    }
+  }
+
+  const yamlContent = stringify({ groups });
 
   await writeFile(filePath, yamlContent, 'utf-8');
 
   return {
     written: true,
-    extensionCount: validAttributes.length,
+    extensionCount: validAttributes.length + validSpans.length,
     filePath,
     rejected,
   };
