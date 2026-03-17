@@ -81,6 +81,11 @@ export async function getLog(
   }));
 }
 
+/** Strip embedded tokens from error messages to prevent credential leakage in logs. */
+function sanitizeTokenFromError(msg: string): string {
+  return msg.replace(/x-access-token:[^@]+@/g, 'x-access-token:***@');
+}
+
 /**
  * Resolve an authenticated remote URL when GITHUB_TOKEN is available.
  * Embeds the token in HTTPS URLs using the x-access-token scheme.
@@ -90,13 +95,6 @@ export async function getLog(
  * @param token - Optional GitHub token (typically from GITHUB_TOKEN env var).
  * @returns The URL with embedded credentials, or the original URL.
  */
-/**
- * Strip embedded tokens from error messages to prevent credential leakage in logs.
- */
-function sanitizeTokenFromError(msg: string): string {
-  return msg.replace(/x-access-token:[^@]+@/g, 'x-access-token:***@');
-}
-
 export function resolveAuthenticatedUrl(remoteUrl: string, token: string | undefined): string {
   if (!token || !remoteUrl.startsWith('https://')) {
     return remoteUrl;
