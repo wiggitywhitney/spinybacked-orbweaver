@@ -103,12 +103,15 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
 
         // Case 1: try/catch exists but catch doesn't record on span
         if (catchClause) {
-          const catchText = catchClause.getText();
-          if (!hasErrorRecording(catchText, spanParam)) {
-            issues.push({
-              line: tryStmt.getStartLineNumber(),
-              description: `catch block at line ${catchClause.getStartLineNumber()} does not record error on span`,
-            });
+          // Exempt expected-condition catches (empty, fallback returns, ENOENT checks, continue)
+          if (!isExpectedConditionCatch(catchClause)) {
+            const catchText = catchClause.getText();
+            if (!hasErrorRecording(catchText, spanParam)) {
+              issues.push({
+                line: tryStmt.getStartLineNumber(),
+                description: `catch block at line ${catchClause.getStartLineNumber()} does not record error on span`,
+              });
+            }
           }
         }
 
@@ -154,6 +157,68 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
     tier: 2 as const,
     blocking: true,
   }));
+}
+
+/**
+ * Expected-condition error code patterns — catches that check for these
+ * represent normal control flow (file-not-found, optional features),
+ * not genuine errors that should be recorded on spans.
+ */
+const EXPECTED_CONDITION_PATTERNS = [
+  'ENOENT',
+  'ENOTDIR',
+  'EACCES',
+  'MODULE_NOT_FOUND',
+  'ERR_MODULE_NOT_FOUND',
+];
+
+/**
+ * Detect whether a catch clause handles an expected condition (control flow)
+ * rather than a genuine error. Expected-condition catches are exempt from
+ * COV-003 error recording requirements because recording them as errors
+ * pollutes metrics and triggers false alerts (NDS-005b violations).
+ *
+ * Patterns detected:
+ * - Empty catch blocks: `catch {}` or `catch (_e) {}`
+ * - Default-value returns: `catch (e) { return null; }` or `catch { return {}; }`
+ * - Error-code checks: `if (err.code === 'ENOENT')` patterns
+ * - Loop control flow: `catch (e) { continue; }`
+ */
+function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): boolean {
+  const block = catchClause.getBlock();
+  const statements = block.getStatements();
+
+  // Empty catch body: `catch {}` or `catch (_e) {}`
+  if (statements.length === 0) {
+    return true;
+  }
+
+  const bodyText = block.getText();
+
+  // Single statement that is just `continue;`
+  if (statements.length === 1 && bodyText.includes('continue;')) {
+    return true;
+  }
+
+  // Single return statement with a default/fallback value
+  if (statements.length === 1) {
+    const stmtText = statements[0].getText().trim();
+    if (/^return\s+(null|undefined|false|\{\}|\[\]|''|"");?$/.test(stmtText)) {
+      return true;
+    }
+  }
+
+  // Error-code checks (e.g., `if (err.code === 'ENOENT')`) — but only when the
+  // catch doesn't rethrow on non-expected paths. A catch that checks ENOENT and
+  // rethrows other errors has a genuine error path that needs recording.
+  if (EXPECTED_CONDITION_PATTERNS.some((pattern) => bodyText.includes(pattern))) {
+    const hasThrow = bodyText.includes('throw ') || bodyText.includes('throw;');
+    if (!hasThrow) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
