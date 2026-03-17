@@ -144,6 +144,163 @@ describe('checkErrorVisibility (COV-003)', () => {
     });
   });
 
+  describe('expected-condition catch exemption', () => {
+    it('passes when catch is empty (control flow)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function tryLoadConfig(path) {',
+        '  return tracer.startActiveSpan("tryLoadConfig", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch {',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when catch has unused error param (empty body)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function tryLoadConfig(path) {',
+        '  return tracer.startActiveSpan("tryLoadConfig", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (_e) {',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when catch returns a default value (graceful fallback)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getConfig(path) {',
+        '  return tracer.startActiveSpan("getConfig", (span) => {',
+        '    try {',
+        '      return JSON.parse(readFileSync(path));',
+        '    } catch (err) {',
+        '      return {};',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when catch returns null/undefined/false (graceful fallback)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function findFile(path) {',
+        '  return tracer.startActiveSpan("findFile", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      return null;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when catch checks for ENOENT (expected condition)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function loadIfExists(path) {',
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      if (err.code === "ENOENT") return null;',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when catch uses continue (loop control flow)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function processAll(items) {',
+        '  return tracer.startActiveSpan("processAll", (span) => {',
+        '    for (const item of items) {',
+        '      try {',
+        '        processItem(item);',
+        '      } catch (err) {',
+        '        continue;',
+        '      }',
+        '    }',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags catch that logs but does not record on span', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function riskyOperation() {',
+        '  return tracer.startActiveSpan("riskyOperation", (span) => {',
+        '    try {',
+        '      return dangerousCall();',
+        '    } catch (error) {',
+        '      console.error("Operation failed:", error);',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
