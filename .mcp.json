@@ -7,7 +7,7 @@
         "GITHUB_PAT": "${GITHUB_TOKEN}"
       }
     },
-    "spinybacked-orbweaver": {
+    "spiny-orb": {
       "command": "node",
       "args": ["./dist/interfaces/mcp.js"],
       "env": {

@@ -1,5 +1,5 @@
-// ABOUTME: Handler for the `orbweaver init` command.
-// ABOUTME: Checks prerequisites, detects project type, and creates orbweaver.yaml config file.
+// ABOUTME: Handler for the `spiny-orb init` command.
+// ABOUTME: Checks prerequisites, detects project type, and creates spiny-orb.yaml config file.
 
 import { join } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
@@ -106,14 +106,14 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   const { projectDir, yes } = options;
   const errors: string[] = [];
   const warnings: string[] = [];
-  const configPath = join(projectDir, 'orbweaver.yaml');
+  const configPath = join(projectDir, 'spiny-orb.yaml');
 
   deps.stderr('Checking prerequisites...');
 
-  // Check if orbweaver.yaml already exists
+  // Check if spiny-orb.yaml already exists
   try {
     await deps.access(configPath);
-    errors.push(`orbweaver.yaml already exists at ${configPath}. Remove it first to re-initialize.`);
+    errors.push(`spiny-orb.yaml already exists at ${configPath}. Remove it first to re-initialize.`);
     return { success: false, errors, warnings };
   } catch (err: unknown) {
     const error = err as NodeJS.ErrnoException;
@@ -225,7 +225,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   if (foundInitFiles.length === 0) {
     errors.push(
       'SDK init file not found. Create an OTel SDK initialization file ' +
-      '(e.g., src/instrumentation.ts) and re-run orbweaver init.',
+      '(e.g., src/instrumentation.ts) and re-run spiny-orb init.',
     );
     return { success: false, errors, warnings };
   }
@@ -237,7 +237,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   if (!schemaPath) {
     errors.push(
       'Weaver schema directory not found. Create a schema directory ' +
-      '(e.g., semconv/) with your semantic convention definitions and re-run orbweaver init.',
+      '(e.g., semconv/) with your semantic convention definitions and re-run spiny-orb init.',
     );
     return { success: false, errors, warnings };
   }
@@ -272,15 +272,15 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     deps.stderr(`  dependencyStrategy: ${dependencyStrategy}`);
     deps.stderr('');
 
-    const answer = await deps.prompt('Create orbweaver.yaml with these settings? [y/N] ');
+    const answer = await deps.prompt('Create spiny-orb.yaml with these settings? [y/N] ');
     if (answer.trim().toLowerCase() !== 'y') {
       errors.push('Init cancelled by user.');
       return { success: false, errors, warnings };
     }
   }
 
-  // Write orbweaver.yaml
-  deps.stderr('Writing orbweaver.yaml...');
+  // Write spiny-orb.yaml
+  deps.stderr('Writing spiny-orb.yaml...');
   const config = {
     schemaPath,
     sdkInitFile,
@@ -292,7 +292,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     await deps.writeFile(configPath, yamlContent);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    errors.push(`Failed to write orbweaver.yaml at ${configPath}: ${message}`);
+    errors.push(`Failed to write spiny-orb.yaml at ${configPath}: ${message}`);
     return { success: false, errors, warnings };
   }
 

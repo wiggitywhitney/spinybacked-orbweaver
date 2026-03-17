@@ -117,10 +117,10 @@ function getCallbacks(deps: InstrumentDeps): CoordinatorCallbacks {
 
 describe('handleInstrument', () => {
   describe('config loading', () => {
-    it('loads config from orbweaver.yaml in the project directory', async () => {
+    it('loads config from spiny-orb.yaml in the project directory', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions(), deps);
-      expect(deps.loadConfig).toHaveBeenCalledWith('/test/project/orbweaver.yaml');
+      expect(deps.loadConfig).toHaveBeenCalledWith('/test/project/spiny-orb.yaml');
     });
 
     it('returns exit code 1 when config file is missing', async () => {
@@ -132,7 +132,7 @@ describe('handleInstrument', () => {
       });
       const result = await handleInstrument(makeOptions(), deps);
       expect(result.exitCode).toBe(1);
-      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('orbweaver init'));
+      expect(deps.stderr).toHaveBeenCalledWith(expect.stringContaining('spiny-orb init'));
     });
 
     it('returns exit code 1 when config validation fails', async () => {
@@ -363,7 +363,7 @@ describe('handleInstrument', () => {
         gitWorkflow: {
           ...makeGitWorkflowDeps(),
           validateCredentials: vi.fn().mockResolvedValue(undefined),
-          writePrSummary: vi.fn().mockResolvedValue('/test/project/orbweaver-pr-summary.md'),
+          writePrSummary: vi.fn().mockResolvedValue('/test/project/spiny-orb-pr-summary.md'),
           createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/42'),
           checkGhAvailable: vi.fn().mockResolvedValue(true),
         },
@@ -372,7 +372,7 @@ describe('handleInstrument', () => {
       const output = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
 
       expect(output).toContain('PR summary:');
-      expect(output).toContain('orbweaver-pr-summary.md');
+      expect(output).toContain('spiny-orb-pr-summary.md');
       expect(output).toContain('git diff');
     });
   });
@@ -407,7 +407,7 @@ describe('handleInstrument', () => {
   });
 
   describe('error output', () => {
-    it('reports config errors with suggestion to run orbweaver init', async () => {
+    it('reports config errors with suggestion to run spiny-orb init', async () => {
       const deps = makeDeps({
         loadConfig: vi.fn().mockResolvedValue({
           success: false,
@@ -416,7 +416,7 @@ describe('handleInstrument', () => {
       });
       await handleInstrument(makeOptions(), deps);
       const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      expect(stderrCalls.some((s: string) => s.includes('orbweaver init'))).toBe(true);
+      expect(stderrCalls.some((s: string) => s.includes('spiny-orb init'))).toBe(true);
     });
 
     it('reports coordinator abort errors to stderr', async () => {

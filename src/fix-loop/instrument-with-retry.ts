@@ -18,6 +18,7 @@ import { reassembleFunctions, ensureTracerAfterImports } from './function-reasse
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
+import { checkSyntax } from '../validation/tier1/syntax.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -618,16 +619,68 @@ async function functionLevelFallback(
     }
   }
 
-  const successful = fnResults.filter(r => r.success);
+  let successful = fnResults.filter(r => r.success);
   if (successful.length === 0) {
     return null; // All functions failed — fall through to whole-file failure
   }
 
   // Reassemble: replace instrumented functions in the original file
-  const reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
+  let reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
 
-  // Write reassembled code and run full validation (Tier 1 + Tier 2)
+  // Write reassembled code and check syntax before running full validation
   await writeFile(filePath, reassembledCode, 'utf-8');
+
+  // Whole-file syntax check catches assembly errors (corrupted imports, bad splicing)
+  let syntaxPassed: boolean;
+  try {
+    syntaxPassed = checkSyntax(filePath).passed;
+  } catch {
+    await writeFile(filePath, originalCode, 'utf-8');
+    return null;
+  }
+
+  if (!syntaxPassed) {
+    // Identify which function's instrumentation broke syntax by testing each one individually
+    for (const fn of extractedFunctions) {
+      const result = fnResults.find(r => r.name === fn.name);
+      if (!result?.success) continue;
+      const singleReassembled = reassembleFunctions(originalCode, extractedFunctions, [result]);
+      await writeFile(filePath, singleReassembled, 'utf-8');
+      try {
+        const singleCheck = checkSyntax(filePath);
+        if (!singleCheck.passed) {
+          result.success = false;
+          result.error = `Whole-file syntax error after assembly: ${singleCheck.message}`;
+        }
+      } catch {
+        result.success = false;
+        result.error = 'Whole-file syntax check threw an unexpected error';
+      }
+    }
+
+    // Retry reassembly without the culprits
+    const remaining = fnResults.filter(r => r.success);
+    if (remaining.length === 0) {
+      await writeFile(filePath, originalCode, 'utf-8');
+      return null;
+    }
+
+    reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
+    await writeFile(filePath, reassembledCode, 'utf-8');
+    try {
+      const retryCheck = checkSyntax(filePath);
+      if (!retryCheck.passed) {
+        await writeFile(filePath, originalCode, 'utf-8');
+        return null;
+      }
+    } catch {
+      await writeFile(filePath, originalCode, 'utf-8');
+      return null;
+    }
+  }
+
+  // Recompute successful after syntax check may have marked additional functions as failed
+  successful = fnResults.filter(r => r.success);
 
   const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
   const validation = await validateFileFn({
@@ -707,13 +760,10 @@ async function functionLevelFallback(
     config: validationConfig,
   });
 
-  if (!partialValidation.passed) {
-    // Even partial reassembly fails — restore original and return null
-    await writeFile(filePath, originalCode, 'utf-8');
-    return null;
-  }
-
-  // Restore original file when 0 spans added (same as executeRetryLoop)
+  // Commit the partial code regardless of whether blocking rules fire on the assembly.
+  // Coverage rules (COV-001 etc.) will flag the intentionally-uninstrumented functions,
+  // but those failures are expected for partial files and should not discard the N
+  // successfully-instrumented functions.
   if (totalSpans === 0) {
     await writeFile(filePath, originalCode, 'utf-8');
   }
@@ -780,9 +830,9 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
  */
 function supplementSchemaExtensions(extensions: string[], code: string): string[] {
   const spanNames = extractSpanNamesFromCode(code);
-  const extensionsText = extensions.join('\n');
+  const registered = new Set(extensions);
   const missing = spanNames
-    .filter(name => !extensionsText.includes(name))
+    .filter(name => !registered.has(`span.${name}`))
     .map(name => `span.${name}`);
   return missing.length > 0 ? [...extensions, ...missing] : extensions;
 }

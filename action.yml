@@ -1,4 +1,4 @@
-# ABOUTME: GitHub Action that runs the orbweaver instrumentation agent.
+# ABOUTME: GitHub Action that runs the spiny-orb instrumentation agent.
 # ABOUTME: Composite action wrapping the CLI for CI/CD usage.
 
 name: 'Spinybacked Orbweaver'
@@ -45,7 +45,7 @@ runs:
     - name: Run instrumentation
       id: instrument
       run: |
-        RESULT=$(npx orbweaver instrument --yes --output json "${{ inputs.path }}" 2>orbweaver-stderr.log) || EXIT_CODE=$?
+        RESULT=$(npx spiny-orb instrument --yes --output json "${{ inputs.path }}" 2>spiny-orb-stderr.log) || EXIT_CODE=$?
         EXIT_CODE=${EXIT_CODE:-0}
 
         # Log stderr (progress output) via GitHub Actions notices
@@ -55,7 +55,7 @@ runs:
           else
             echo "::notice::${line}"
           fi
-        done < orbweaver-stderr.log
+        done < spiny-orb-stderr.log
 
         echo "result<<RESULT_EOF" >> "$GITHUB_OUTPUT"
         echo "${RESULT}" >> "$GITHUB_OUTPUT"

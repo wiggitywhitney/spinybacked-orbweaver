@@ -119,7 +119,7 @@ function makeMcpDeps(overrides: Partial<McpDeps> = {}): McpDeps {
 }
 
 describe('Phase 6 Acceptance Gate', () => {
-  describe('orbweaver instrument invokes coordinator and produces results', () => {
+  describe('spiny-orb instrument invokes coordinator and produces results', () => {
     it('calls coordinate() with correct projectDir and config', async () => {
       const coordinateFn = vi.fn().mockResolvedValue(makeRunResult());
       const deps = makeCliDeps({ coordinate: coordinateFn });
@@ -376,7 +376,7 @@ describe('Phase 6 Acceptance Gate', () => {
       const runs = action.runs as Record<string, unknown>;
       const steps = runs.steps as Array<Record<string, unknown>>;
       const instrumentStep = steps.find(
-        s => typeof s.run === 'string' && s.run.includes('orbweaver instrument'),
+        s => typeof s.run === 'string' && s.run.includes('spiny-orb instrument'),
       );
       expect(instrumentStep).toBeDefined();
       const run = instrumentStep!.run as string;

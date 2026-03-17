@@ -18,7 +18,7 @@ interface RubricCheckResult {
  * NDS-001: Syntax validation — `node --check` exits 0.
  */
 export function checkSyntaxValid(code: string): RubricCheckResult {
-  const dir = mkdtempSync(join(tmpdir(), 'orbweaver-nds001-'));
+  const dir = mkdtempSync(join(tmpdir(), 'spiny-orb-nds001-'));
   const filePath = join(dir, 'check.js');
   try {
     writeFileSync(filePath, code, 'utf-8');

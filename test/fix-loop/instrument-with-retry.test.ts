@@ -124,7 +124,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-retry-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-retry-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -437,7 +437,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-budget-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-budget-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -598,7 +598,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-multiturn-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-multiturn-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -994,7 +994,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-freshregen-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-freshregen-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -1372,7 +1372,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-oscillation-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-oscillation-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -1685,7 +1685,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-highfix-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-highfix-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -1881,7 +1881,7 @@ describe('instrumentWithRetry — agentVersion population', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-retry-version-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-retry-version-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -2299,6 +2299,47 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(result.functionsInstrumented).toBeUndefined();
   });
 
+  it('catches syntax errors after function-level assembly and excludes culprit (#187)', async () => {
+    let fnCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (callPath, _code, _schema, _config) => {
+        if (isPerFunctionCall(callPath)) {
+          fnCallCount++;
+          if (fnCallCount === 1) {
+            // First function: return code with a corrupted module-level import (imimport)
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: `imimport { trace } from '@opentelemetry/api';\nexport async function fetchWithRetry(url) {\n  return trace.getTracer('svc').startActiveSpan('fn', async (span) => {\n    span.end();\n  });\n}`,
+                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          // Second function: valid code
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nimport { writeFile } from 'node:fs/promises';\nimport path from 'node:path';\nexport async function saveData(filePath, data) {\n  return trace.getTracer('svc').startActiveSpan('save', async (span) => {\n    const resolved = path.resolve(filePath);\n    const content = JSON.stringify(data, null, 2);\n    await writeFile(resolved, content, 'utf-8');\n    span.end();\n  });\n}`,
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        // Whole-file call fails
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+
+    // The whole-file syntax check should catch the module-level imimport corruption
+    // The result should still be partial — the valid function (saveData) is kept
+    expect(result.status).toBe('partial');
+    // The file on disk should NOT contain the corrupted import
+    const finalContent = readFileSync(filePath, 'utf-8');
+    expect(finalContent).not.toContain('imimport');
+  });
+
   it('returns whole-file failure when all per-function calls fail', async () => {
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({
@@ -2444,16 +2485,12 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    // Should still produce a partial result via the fallback-to-partial path
-    if (result.status === 'partial') {
-      expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
-    }
-    // If the fallback path didn't activate (e.g., all validations failed),
-    // at minimum the result should have a defined status
-    expect(['partial', 'failed']).toContain(result.status);
+    // Should produce a partial result via the fallback-to-partial path
+    expect(result.status).toBe('partial');
+    expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
   });
 
-  it('restores original file when even partial reassembly fails', async () => {
+  it('commits N passing functions even when partial reassembly validation fails blocking rules', async () => {
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async (path) => {
         if (isPerFunctionCall(path)) {
@@ -2461,6 +2498,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
             success: true,
             output: makeInstrumentationOutput({
               instrumentedCode: 'const x = 1;\n',
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
             }),
           };
         }
@@ -2472,17 +2510,17 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
           return makePassingValidation(input.filePath);
         }
         // All non-per-function validations fail (whole-file, full reassembly, partial reassembly)
+        // This simulates coverage rules (COV-001 etc.) firing on uninstrumented functions
         return makeFailingValidation(input.filePath);
       },
     };
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    // When both full and partial reassembly fail, fallback returns null → whole-file failure
-    expect(result.status).toBe('failed');
-    // File should be restored to original content
-    const fileContent = readFileSync(filePath, 'utf-8');
-    expect(fileContent).toBe(FALLBACK_FIXTURE);
+    // N passing functions are committed even when partial assembly validation fails
+    expect(result.status).toBe('partial');
+    expect(result.functionsInstrumented).toBeGreaterThan(0);
+    expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
   });
 
   it('sets functionsInstrumented and functionsSkipped counts correctly', async () => {
@@ -2549,7 +2587,7 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
   const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'orbweaver-refactors-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-refactors-test-'));
     testFilePath = join(testDir, 'target.js');
     writeFileSync(testFilePath, originalContent, 'utf-8');
   });
@@ -2753,5 +2791,43 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
 
     expect(result.status).toBe('failed');
     expect(result.suggestedRefactors).toHaveLength(1);
+  });
+});
+
+describe('instrumentWithRetry — supplementSchemaExtensions', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'function greet() { return "hello"; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-supplement-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('adds a span name that is a prefix of an existing extension', async () => {
+    // 'myapp.process' is a substring of 'span.myapp.process_order', which is already registered.
+    // Substring matching would incorrectly skip adding span.myapp.process — Set-based exact
+    // matching must add it because 'span.myapp.process' is not in the extensions list.
+    const output = makeInstrumentationOutput({
+      instrumentedCode: `tracer.startActiveSpan('myapp.process', (span) => { span.end(); });\n`,
+      schemaExtensions: ['span.myapp.process_order'],
+    });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.schemaExtensions).toContain('span.myapp.process_order');
+    expect(result.schemaExtensions).toContain('span.myapp.process');
   });
 });

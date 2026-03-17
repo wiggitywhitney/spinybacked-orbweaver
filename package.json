@@ -1,5 +1,5 @@
 {
-  "name": "spinybacked-orbweaver",
+  "name": "spiny-orb",
   "version": "0.1.0",
   "description": "AI-powered telemetry instrumentation agent for JavaScript applications",
   "type": "module",
@@ -7,7 +7,7 @@
     "node": ">=24.0.0"
   },
   "bin": {
-    "orbweaver": "bin/orbweaver.js"
+    "spiny-orb": "bin/spiny-orb.js"
   },
   "files": [
     "dist/",

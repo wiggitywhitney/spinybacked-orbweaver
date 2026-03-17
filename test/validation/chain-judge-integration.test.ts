@@ -95,7 +95,7 @@ describe('full pipeline with all three judge-enhanced rules', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orbweaver-judge-integration-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'spiny-orb-judge-integration-'));
   });
 
   afterEach(() => {

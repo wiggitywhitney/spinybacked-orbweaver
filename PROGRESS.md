@@ -144,7 +144,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - MCP Setup section updated to use `.mcp.json` (project-level config) with `${ANTHROPIC_API_KEY}` env var expansion instead of hardcoded keys
 - MCP `get-cost-ceiling` example updated with verified file size from real test run
-- `.mcp.json` added with orbweaver MCP server configuration for project-level Claude Code integration
+- `.mcp.json` added with spiny-orb MCP server configuration for project-level Claude Code integration
 - (2026-03-11) README examples verified against real CLI execution (issue #46): added multi-file progress output, MCP instrument response example, verbose/debug flag output, cost ceiling rejection example
 - (2026-03-11) Acceptance gate CI workflow with label-based PR trigger (`run-acceptance` label), weekly cron, and workflow_dispatch
 - (2026-03-11) GitHub Action verification workflow (`.github/workflows/verify-action.yml`): exercises action.yml commands (Weaver install, `orb instrument --yes --output json`, result parsing) against test fixtures, gated behind `run-acceptance` label
