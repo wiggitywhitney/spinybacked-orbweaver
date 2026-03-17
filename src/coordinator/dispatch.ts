@@ -299,8 +299,8 @@ export async function dispatchFiles(
       // Track whether the extension block already handled rollback
       let extensionRollbackDone = false;
 
-      // Write schema extensions per-file for successful files
-      if (registryDir && result.status === 'success' && result.schemaExtensions.length > 0) {
+      // Write schema extensions per-file for successful and partial files
+      if (registryDir && (result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
         for (const ext of result.schemaExtensions) {
           if (!seenExtensions.has(ext)) {
             seenExtensions.add(ext);

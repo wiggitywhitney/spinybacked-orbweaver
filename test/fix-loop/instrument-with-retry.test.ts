@@ -2485,16 +2485,12 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    // Should still produce a partial result via the fallback-to-partial path
-    if (result.status === 'partial') {
-      expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
-    }
-    // If the fallback path didn't activate (e.g., all validations failed),
-    // at minimum the result should have a defined status
-    expect(['partial', 'failed']).toContain(result.status);
+    // Should produce a partial result via the fallback-to-partial path
+    expect(result.status).toBe('partial');
+    expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
   });
 
-  it('restores original file when even partial reassembly fails', async () => {
+  it('commits N passing functions even when partial reassembly validation fails blocking rules', async () => {
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async (path) => {
         if (isPerFunctionCall(path)) {
@@ -2502,6 +2498,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
             success: true,
             output: makeInstrumentationOutput({
               instrumentedCode: 'const x = 1;\n',
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
             }),
           };
         }
@@ -2513,17 +2510,17 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
           return makePassingValidation(input.filePath);
         }
         // All non-per-function validations fail (whole-file, full reassembly, partial reassembly)
+        // This simulates coverage rules (COV-001 etc.) firing on uninstrumented functions
         return makeFailingValidation(input.filePath);
       },
     };
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    // When both full and partial reassembly fail, fallback returns null → whole-file failure
-    expect(result.status).toBe('failed');
-    // File should be restored to original content
-    const fileContent = readFileSync(filePath, 'utf-8');
-    expect(fileContent).toBe(FALLBACK_FIXTURE);
+    // N passing functions are committed even when partial assembly validation fails
+    expect(result.status).toBe('partial');
+    expect(result.functionsInstrumented).toBeGreaterThan(0);
+    expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
   });
 
   it('sets functionsInstrumented and functionsSkipped counts correctly', async () => {
