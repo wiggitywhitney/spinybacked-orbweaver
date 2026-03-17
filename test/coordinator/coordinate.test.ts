@@ -1198,6 +1198,51 @@ describe('coordinate', () => {
       expect(deps.writeFileForRollback).not.toHaveBeenCalled();
     });
 
+    it('warns when live-check runs against all-failed files (degraded)', async () => {
+      const deps = makeDeps({
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        dispatchFiles: vi.fn().mockImplementation(async (filePaths: string[]) => {
+          return filePaths.map(fp => makeFailedResult(fp));
+        }),
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: true,
+          complianceReport: 'All checks passed',
+          warnings: [],
+        }),
+      });
+      const config = makeConfig({ testCommand: 'npm test' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.warnings.some((w: string) => w.includes('Live-check degraded'))).toBe(true);
+      expect(result.endOfRunValidation).toContain('DEGRADED');
+    });
+
+    it('warns when live-check has partial file failures', async () => {
+      const deps = makeDeps({
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        dispatchFiles: vi.fn().mockImplementation(async (filePaths: string[]) => {
+          return [
+            makeSuccessResult(filePaths[0]),
+            makeFailedResult(filePaths[1]),
+          ];
+        }),
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: true,
+          complianceReport: 'Some checks passed',
+          warnings: [],
+        }),
+      });
+      const config = makeConfig({ testCommand: 'npm test' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.warnings.some((w: string) => w.includes('Live-check partial'))).toBe(true);
+      expect(result.warnings.some((w: string) => w.includes('b.js'))).toBe(true);
+    });
+
     it('degrades gracefully when file restore fails during rollback', async () => {
       const deps = makeRollbackDeps({
         writeFileForRollback: vi.fn().mockRejectedValue(new Error('EACCES')),

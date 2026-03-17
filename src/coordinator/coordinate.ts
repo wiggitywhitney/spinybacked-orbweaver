@@ -447,6 +447,28 @@ export async function coordinate(
       if (liveCheckResult.warnings.length > 0) {
         runResult.warnings.push(...liveCheckResult.warnings);
       }
+
+      // Detect degraded live-check: if no files succeeded, the live-check
+      // ran against uninstrumented code and its "OK" status is misleading.
+      if (!liveCheckResult.skipped && runResult.filesSucceeded === 0) {
+        runResult.warnings.push(
+          'Live-check degraded: no files were successfully instrumented. ' +
+          'Compliance report reflects uninstrumented code (no spans emitted).',
+        );
+        runResult.endOfRunValidation =
+          `DEGRADED — ${runResult.endOfRunValidation ?? 'no compliance report'}`;
+      } else if (!liveCheckResult.skipped && runResult.filesFailed > 0) {
+        // Partial degradation: some files failed, live-check may be incomplete
+        const failedPaths = fileResults
+          .filter(r => r.status === 'failed')
+          .map(r => r.path)
+          .slice(0, 5);
+        runResult.warnings.push(
+          `Live-check partial: ${runResult.filesFailed} file(s) failed instrumentation ` +
+          `(${failedPaths.join(', ')}${runResult.filesFailed > 5 ? '...' : ''}). ` +
+          `Compliance report may be incomplete — spans from failed files are missing.`,
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
