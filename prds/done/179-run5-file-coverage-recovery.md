@@ -1,7 +1,7 @@
 # PRD: Run-5 File Coverage Recovery — Port Failed Files as Test Fixtures
 
 **Issue**: [#179](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/179)
-**Status**: Active
+**Status**: Complete (CI validation pending — acceptance gate triggered, user will verify)
 **Priority**: High
 **Created**: 2026-03-17
 **Source**: Evaluation run-5 finding RUN-2
