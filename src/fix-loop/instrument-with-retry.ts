@@ -208,10 +208,32 @@ export const RETRYABLE_NULL_OUTPUT = 'null parsed_output';
 /** Substring that signals an elision detection failure (retryable). */
 export const RETRYABLE_ELISION = 'elision detected';
 
+/**
+ * Substring that signals stop_reason: max_tokens — the model hit the output token ceiling.
+ * Retrying won't help because the same file will truncate at the same limit.
+ * The token budget is shared between adaptive thinking and JSON output, so the
+ * truncation point varies per attempt, but the outcome is the same: incomplete output.
+ *
+ * Coupling: this substring originates from the null parsed_output diagnostic in
+ * instrumentFile() (src/agent/instrument-file.ts line ~207). If that format changes,
+ * this constant must be updated to match.
+ */
+export const EARLY_ABORT_MAX_TOKENS = 'stop_reason: max_tokens';
+
 export function isRetryableInstrumentError(error: string): boolean {
   if (error.includes(RETRYABLE_NULL_OUTPUT)) return true;
   if (error.includes(RETRYABLE_ELISION)) return true;
   return false;
+}
+
+/**
+ * Detect errors where retrying the same whole-file call is pointless.
+ * Currently: stop_reason: max_tokens — the model hit the output token ceiling.
+ * The correct response is to skip remaining whole-file attempts and fall back
+ * to function-level instrumentation immediately.
+ */
+export function isEarlyAbortError(error: string): boolean {
+  return error.includes(EARLY_ABORT_MAX_TOKENS);
 }
 
 /**
@@ -411,6 +433,12 @@ async function executeRetryLoop(
       errorProgression.push(instrumentResult.error);
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
+        // Early abort: stop_reason: max_tokens means the model hit the output token ceiling.
+        // Retrying the same whole-file call will truncate at the same limit. Skip remaining
+        // attempts and let the caller fall back to function-level instrumentation.
+        if (isEarlyAbortError(instrumentResult.error)) {
+          break;
+        }
         // Retryable failure — continue to next attempt
         continue;
       }

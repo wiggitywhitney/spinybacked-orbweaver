@@ -147,10 +147,10 @@ Two changes, implemented together:
 
 **TDD approach:**
 - [x] Write baseline results file from current test data (before token limit change) — see `test/commit-story-v2/baseline-results-16k-tokens.md`
-- [ ] Unit tests for early-exit detection (`stop_reason: max_tokens` triggers early abort)
-- [ ] Unit tests confirming validation errors still retry normally (not early-exited)
-- [ ] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `65_536`
-- [ ] Implement early-exit logic in `executeRetryLoop`
+- [x] Unit tests for early-exit detection (`stop_reason: max_tokens` triggers early abort)
+- [x] Unit tests confirming validation errors still retry normally (not early-exited)
+- [x] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `65_536`
+- [x] Implement early-exit logic in `executeRetryLoop`
 - [ ] Re-run all 8 fixture files with new settings
 - [ ] Write post-change results file (same format as `test/commit-story-v2/baseline-results-16k-tokens.md`)
 - [ ] Compare results against baseline (timing, spans, error progressions, pass/fail)

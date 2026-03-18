@@ -18,7 +18,7 @@ import { detectElision } from './elision.ts';
  * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
  * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
  */
-export const MAX_OUTPUT_TOKENS_PER_CALL = 16384;
+export const MAX_OUTPUT_TOKENS_PER_CALL = 65_536;
 
 /**
  * Conversation context captured from an API call for multi-turn threading.
