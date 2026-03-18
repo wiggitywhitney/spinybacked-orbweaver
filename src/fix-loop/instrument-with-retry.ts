@@ -779,6 +779,9 @@ async function functionLevelFallback(
 
   // Aggregate libraries and schema extensions from successful functions
   const librariesNeeded = aggregateLibraries(fnResults);
+  // Detect malformed extensions before aggregation normalizes them
+  const rawExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
+  const extensionWarnings = detectMalformedExtensions(rawExtensions);
   const schemaExtensions = aggregateSchemaExtensions(fnResults);
   const totalSpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
   const totalAttributes = successful.reduce((sum, r) => sum + r.attributesCreated, 0);
@@ -803,7 +806,6 @@ async function functionLevelFallback(
     if (totalSpans === 0) {
       await writeFile(filePath, originalCode, 'utf-8');
     }
-    const extensionWarnings = detectMalformedExtensions(schemaExtensions);
     return {
       path: filePath,
       // Validation passed on the reassembled code.
@@ -854,7 +856,6 @@ async function functionLevelFallback(
     await writeFile(filePath, originalCode, 'utf-8');
   }
 
-  const extensionWarnings = detectMalformedExtensions(schemaExtensions);
   return {
     path: filePath,
     status: 'partial',
