@@ -152,6 +152,7 @@ Two changes, implemented together:
 - [ ] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `65_536`
 - [ ] Implement early-exit logic in `executeRetryLoop`
 - [ ] Re-run all 8 fixture files with new settings
+- [ ] Write post-change results file (same format as `test/commit-story-v2/baseline-results-16k-tokens.md`)
 - [ ] Compare results against baseline (timing, spans, error progressions, pass/fail)
 - [ ] summary-graph.js passes (the lone holdout from Milestone 3)
 
