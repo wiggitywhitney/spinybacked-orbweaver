@@ -110,9 +110,9 @@ The push authentication failure has persisted for 3 runs. After #183 (push auth 
 
 **Deferred until after Milestone 6.** Milestone 6 (token limit + early-exit) directly unblocks Milestone 3 completion. Milestone 4 is eval-level verification that doesn't block other milestones.
 
-- [ ] `git push` succeeds from orbweaver subprocess
-- [ ] PR created with correct summary, labels, and schema extensions
-- [ ] Draft PR created when tests fail (existing feature, never tested live)
+- [~] `git push` succeeds from orbweaver subprocess — deferred to #218 (eval-level integration, not local code changes)
+- [~] PR created with correct summary, labels, and schema extensions — deferred to #218
+- [~] Draft PR created when tests fail (existing feature, never tested live) — deferred to #218
 
 ### Milestone 5: Regression Gate
 
