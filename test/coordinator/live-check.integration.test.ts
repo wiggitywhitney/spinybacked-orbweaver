@@ -173,11 +173,7 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
     expect(result.testsPassed).toBe(true);
     expect(result.complianceReport).toBeDefined();
     expect(result.complianceReport!.length).toBeGreaterThan(0);
-    // The /stop endpoint can fail on slower CI runners (Weaver may auto-stop before the
-    // HTTP request arrives). This produces a warning but the compliance report is still
-    // captured from stdout. Filter out stop-related warnings — they're informational.
-    const nonStopWarnings = result.warnings.filter(w => !w.includes('/stop'));
-    expect(nonStopWarnings, `Unexpected warnings: ${JSON.stringify(result.warnings)}`).toHaveLength(0);
+    expect(result.warnings, `Unexpected warnings: ${JSON.stringify(result.warnings)}`).toHaveLength(0);
   });
 
   it('fires callbacks during the workflow', async () => {
