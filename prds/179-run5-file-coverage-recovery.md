@@ -178,8 +178,9 @@ Replace hardcoded 32K with file-size-based budget estimation + escalation on tru
 - [ ] Unit tests for escalation: first attempt at estimated budget, escalate to 65K on truncation
 - [ ] Implement `estimateOutputBudget` in `instrument-file.ts` or `token-budget.ts`
 - [ ] Wire escalation into `executeRetryLoop` (extend early-exit to escalate instead of abort)
-- [ ] Re-run all 8 fixture files with deterministic sizing
-- [ ] Write final results file and compare against 16K, 32K, and 65K baselines
+- [ ] Re-run all 8 fixture files in parallel (8 background tasks, 30-min timeout each) with deterministic sizing
+- [ ] Write `results-deterministic-sizing.md` in same format as `baseline-results-16k-tokens.md`, `results-32k-streaming.md`, `results-65k-streaming.md`
+- [ ] Compare all 4 results files: 16K baseline vs 32K vs 65K vs deterministic — timing, tokens, spans, error progressions, pass/fail
 - [ ] All 8 files pass with deterministic sizing
 
 ## Eval Evidence
