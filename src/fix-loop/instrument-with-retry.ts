@@ -529,6 +529,7 @@ async function executeRetryLoop(
         await writeFile(filePath, originalCode, 'utf-8');
       }
 
+      const extensionWarnings = detectMalformedExtensions(output.schemaExtensions);
       return {
         path: filePath,
         status: 'success',
@@ -540,7 +541,7 @@ async function executeRetryLoop(
         validationStrategyUsed: actualStrategy,
         errorProgression,
         spanCategories: output.spanCategories,
-        notes: output.notes,
+        notes: [...output.notes, ...extensionWarnings],
         advisoryAnnotations: validation.advisoryFindings.length > 0
           ? validation.advisoryFindings
           : undefined,
@@ -778,6 +779,9 @@ async function functionLevelFallback(
 
   // Aggregate libraries and schema extensions from successful functions
   const librariesNeeded = aggregateLibraries(fnResults);
+  // Detect malformed extensions before aggregation normalizes them
+  const rawExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
+  const extensionWarnings = detectMalformedExtensions(rawExtensions);
   const schemaExtensions = aggregateSchemaExtensions(fnResults);
   const totalSpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
   const totalAttributes = successful.reduce((sum, r) => sum + r.attributesCreated, 0);
@@ -815,7 +819,7 @@ async function functionLevelFallback(
       validationAttempts: wholeFileResult.validationAttempts,
       validationStrategyUsed: wholeFileResult.validationStrategyUsed,
       errorProgression,
-      notes,
+      notes: [...notes, ...extensionWarnings],
       advisoryAnnotations: validation.advisoryFindings.length > 0
         ? validation.advisoryFindings
         : undefined,
@@ -862,7 +866,7 @@ async function functionLevelFallback(
     validationAttempts: wholeFileResult.validationAttempts,
     validationStrategyUsed: wholeFileResult.validationStrategyUsed,
     errorProgression,
-    notes: [...notes, 'Reassembly validation failed — using partial results'],
+    notes: [...notes, ...extensionWarnings, 'Reassembly validation failed — using partial results'],
     advisoryAnnotations: partialValidation.advisoryFindings.length > 0
       ? partialValidation.advisoryFindings
       : undefined,
@@ -904,6 +908,20 @@ export function normalizeSchemaExtension(ext: string): string {
     return 'span.' + ext.slice('span:'.length);
   }
   return ext;
+}
+
+/**
+ * Detect schema extensions that use colon separators instead of dots.
+ * Returns advisory warning messages for each malformed extension found.
+ * Used to surface normalization in FileResult notes without burning retries.
+ *
+ * @param extensions - Schema extensions from agent output
+ * @returns Warning messages for each `span:` extension found (empty if all well-formed)
+ */
+export function detectMalformedExtensions(extensions: string[]): string[] {
+  return extensions
+    .filter(ext => ext.startsWith('span:'))
+    .map(ext => `Schema extension "${ext}" uses colon separator — normalized to "${normalizeSchemaExtension(ext)}"`);
 }
 
 /**
