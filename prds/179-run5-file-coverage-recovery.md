@@ -72,8 +72,8 @@ The fixture format should match the existing acceptance gate pattern in `test/fi
 - `evaluation/run-5/partial-diffs/` (eval repo) — source for expected instrumentation patterns
 - `evaluation/run-5/failure-deep-dives.md` (eval repo) — failure mode documentation
 
-- [ ] 8 fixture files created with original source and expected topology
-- [ ] Each fixture documents the run-5 failure mode for regression detection
+- [x] 8 fixture files created with original source and expected topology
+- [x] Each fixture documents the run-5 failure mode for regression detection
 
 ### Milestone 2: Acceptance Tests for Each Fixture File
 

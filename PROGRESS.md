@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-03-17) Run-5 failure recovery fixture suite (PRD #179, milestone 1): 8 uninstrumented source files from commit-story-v2 main ported to `test/fixtures/commit-story-v2/` with ABOUTME headers documenting each file's run-5 failure mode (FAILED vs PARTIAL, failure reason, run-4 span count). Resolved schema from commit-story-v2's weaver registry saved as `resolved-schema.json` — notably absent commit_story.summarize.* and commit_story.commands.* attribute groups, which caused run-5 SCH-002 failures. Fixture set covers all 8 regression cases: summarize.js (SCH-002 + COV-003), index.js (SCH-002 oscillation), journal-graph.js (fallback scope limit), summary-graph.js (COV-003/NDS-005b), sensitive-filter.js (NDS-003 on pure-sync target), journal-manager.js (COV-003 filesystem catches), summary-manager.js (NDS-003 import loss + COV-003), summary-detector.js (COV-003 readdir catch)
+
 ### Fixed
 
 - (2026-03-16) Tracer init detection in function-level reassembly (PRD #156, milestone 1): `reassembleFunctions()` now detects `const tracer = trace.getTracer(...)` declarations in instrumented function code and inserts them at module scope alongside OTel imports. Deduplicates identical tracer init lines across multiple functions. Skips insertion when the original file already has a tracer init or when functions use inline `trace.getTracer().startActiveSpan()`. Fixes the root cause of all 32 `ReferenceError: tracer is not defined` failures in eval run-4. 4 new tests
