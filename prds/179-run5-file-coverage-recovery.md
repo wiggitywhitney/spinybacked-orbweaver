@@ -100,7 +100,7 @@ Run the acceptance tests once per file. Fix any failures iteratively (one file a
 
 At 32K streaming: 7/8 pass assertions, 8/8 pass instrumentation. summarize.js fails only on `span:` schema extension format (#209) — Layer 1 normalization now fixes this defensively. summary-graph.js (the original holdout) passes with 6 spans at 32K. CI validation pending (needs push + PR update).
 
-- [~] All 8 acceptance tests pass (iterative fixes applied where needed) — 7/8 pass; sensitive-filter.js is a known agent judgment failure on pure sync files (#212), not fixable by iteration
+- [x] All 8 acceptance tests pass (iterative fixes applied where needed) — 8/8 pass after Milestone 9 sync-only pre-screening (#212)
 - [x] No oscillation failures in passing runs
 - [ ] CI green on PR with `run-acceptance` label (PR #208)
 
@@ -181,7 +181,7 @@ Replace hardcoded 32K with file-size-based budget estimation + escalation on tru
 - [x] Re-run all 8 fixture files in parallel (8 background tasks, 30-min timeout each) with deterministic sizing
 - [x] Write `results-deterministic-sizing.md` in same format as `baseline-results-16k-tokens.md`, `results-32k-streaming.md`, `results-65k-streaming.md`
 - [x] Compare all 4 results files: 16K baseline vs 32K vs 65K vs deterministic — timing, tokens, spans, error progressions, pass/fail
-- [~] All 8 files pass with deterministic sizing — 7/8 pass; sensitive-filter.js known failure (pure sync, #212), not a sizing regression
+- [x] All 8 files pass with deterministic sizing — 8/8 pass after Milestone 9 sync-only pre-screening
 
 ### Milestone 9: Sync-Only Pre-Screening (#212)
 
@@ -193,11 +193,11 @@ Skip files with no async exports before calling the LLM. Same pattern as the alr
 - `test/agent/instrument-file.test.ts` — unit tests for sync-only short-circuit
 - `test/commit-story-v2/acceptance-gate.test.ts` — sensitive-filter.js validation
 
-- [ ] Write failing test: sync-only file returns success with 0 spans, no LLM call
-- [ ] Implement pre-screening in `instrumentFile` using `classifyFunctions`
-- [ ] Verify: sensitive-filter.js acceptance test passes (0 spans, success)
-- [ ] Update Milestone 3 checkbox from [~] to [x]
-- [ ] Close #212
+- [x] Write failing test: sync-only file returns success with 0 spans, no LLM call
+- [x] Implement pre-screening in `instrumentFile` using `classifyFunctions`
+- [x] Verify: sensitive-filter.js acceptance test passes (0 spans, success) — 744ms, 0 tokens
+- [x] Update Milestone 3 checkbox from [~] to [x]
+- [x] Close #212
 
 ## Eval Evidence
 

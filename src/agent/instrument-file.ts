@@ -120,10 +120,11 @@ export async function instrumentFile(
   const sourceFile = project.createSourceFile('input.js', originalCode);
   const detectionResult = detectOTelImports(sourceFile);
 
+  const functions = classifyFunctions(sourceFile);
+  const exportedFunctions = functions.filter(f => f.isExported);
+
   // If all exported functions are already instrumented, skip the LLM call entirely
   if (detectionResult.existingSpanPatterns.length > 0) {
-    const functions = classifyFunctions(sourceFile);
-    const exportedFunctions = functions.filter(f => f.isExported);
     const instrumentedFunctionNames = new Set(
       detectionResult.existingSpanPatterns
         .map(p => p.enclosingFunction)
@@ -148,6 +149,27 @@ export async function instrumentFile(
         },
       };
     }
+  }
+
+  // If the file has exported functions but none are async, skip the LLM call.
+  // Pure synchronous transforms (filters, formatters, validators) don't warrant
+  // OTel spans — there's no I/O, no latency, nothing to trace. Sending them to
+  // the LLM wastes tokens and produces spurious instrumentation attempts.
+  if (exportedFunctions.length > 0 && !exportedFunctions.some(f => f.isAsync)) {
+    const skippedNames = exportedFunctions.map(f => f.name).join(', ');
+    return {
+      success: true,
+      output: {
+        instrumentedCode: originalCode,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        attributesCreated: 0,
+        spanCategories: null,
+        notes: [`All exported functions are synchronous (${skippedNames}) — no async I/O to trace. No LLM call made.`],
+        suggestedRefactors: [],
+        tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      },
+    };
   }
 
   const systemPrompt = buildSystemPrompt(resolvedSchema);
