@@ -119,9 +119,6 @@ function setupTempProject(): string {
       express: '^4.18.0',
       pg: '^8.11.0',
     },
-    peerDependencies: {
-      '@opentelemetry/api': '^1.9.0',
-    },
   }, null, 2), 'utf-8');
 
   return tempDir;
