@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
+import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, detectMalformedExtensions, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
@@ -2317,6 +2317,32 @@ describe('normalizeSchemaExtension — normalize span: to span. (#209)', () => {
     { input: 'span:', expected: 'span.' },
   ])('normalizes "$input" → "$expected"', ({ input, expected }) => {
     expect(normalizeSchemaExtension(input)).toBe(expected);
+  });
+});
+
+describe('detectMalformedExtensions — advisory warnings for colon-separated extensions (#209)', () => {
+  it('returns warnings for span: prefixed extensions', () => {
+    const extensions = ['span:foo.bar', 'span:baz.qux'];
+    const warnings = detectMalformedExtensions(extensions);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain('span:foo.bar');
+    expect(warnings[0]).toContain('span.foo.bar');
+  });
+
+  it('returns empty array when all extensions use dot separators', () => {
+    const extensions = ['span.foo.bar', 'commit_story.cli.main'];
+    expect(detectMalformedExtensions(extensions)).toEqual([]);
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(detectMalformedExtensions([])).toEqual([]);
+  });
+
+  it('only flags colon-prefixed extensions, not well-formed ones', () => {
+    const extensions = ['span.good.name', 'span:bad.name', 'attr.key'];
+    const warnings = detectMalformedExtensions(extensions);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('span:bad.name');
   });
 });
 
