@@ -129,7 +129,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dotted identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
 
       const instrumented = readFileSync(filePath, 'utf-8');
@@ -152,7 +152,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dotted identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
 
       const instrumented = readFileSync(filePath, 'utf-8');
@@ -175,7 +175,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dotted identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
 
       const instrumented = readFileSync(filePath, 'utf-8');
@@ -198,7 +198,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dotted identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
 
       const instrumented = readFileSync(filePath, 'utf-8');
@@ -249,7 +249,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dotted identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
 
       const instrumented = readFileSync(filePath, 'utf-8');
@@ -272,7 +272,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dotted identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
 
       const instrumented = readFileSync(filePath, 'utf-8');
@@ -295,7 +295,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dotted identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
 
       const instrumented = readFileSync(filePath, 'utf-8');
