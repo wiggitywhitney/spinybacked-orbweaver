@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-03-18) Run-5 acceptance gate test fixes (PRD #179, milestone 3 prep): increased test timeouts from 300s to 600s to accommodate multi-attempt retry loops on complex files; fixed `partial` status when 0 spans committed — function-level path now returns `success` when `totalSpans === 0` (original file restored, no instrumentation added); added `test/commit-story-v2/acceptance-gate.test.ts` as `run-5-coverage` matrix entry in `.github/workflows/acceptance-gate.yml`. 85/85 fix-loop unit tests pass.
+
 - (2026-03-17) Coordinator acceptance gate test regression from PR #190 library detection: `setupTempProject()` in `test/coordinator/acceptance-gate.test.ts` was creating a fixture package.json with `@opentelemetry/api` in `peerDependencies`, causing `isLibraryProject()` to classify the fixture as a library and skip SDK init updates. Removed `peerDependencies` from the fixture so it is correctly treated as an application project and `sdkInitUpdated` is true when libraries are detected.
 
 - (2026-03-16) Tracer init detection in function-level reassembly (PRD #156, milestone 1): `reassembleFunctions()` now detects `const tracer = trace.getTracer(...)` declarations in instrumented function code and inserts them at module scope alongside OTel imports. Deduplicates identical tracer init lines across multiple functions. Skips insertion when the original file already has a tracer init or when functions use inline `trace.getTracer().startActiveSpan()`. Fixes the root cause of all 32 `ReferenceError: tracer is not defined` failures in eval run-4. 4 new tests
