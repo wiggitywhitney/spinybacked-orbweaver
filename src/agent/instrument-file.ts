@@ -18,7 +18,10 @@ import { detectElision } from './elision.ts';
  * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
  * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
  */
-export const MAX_OUTPUT_TOKENS_PER_CALL = 65_536;
+// Max non-streaming output with extended thinking enabled is 21,333 tokens.
+// Beyond this, the Anthropic API requires streaming (client.messages.stream).
+// TODO: Switch to streaming to unlock the full 65,536 token capacity of Sonnet 4.6.
+export const MAX_OUTPUT_TOKENS_PER_CALL = 21_333;
 
 /**
  * Conversation context captured from an API call for multi-turn threading.

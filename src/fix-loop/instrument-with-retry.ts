@@ -434,10 +434,13 @@ async function executeRetryLoop(
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
         // Early abort: stop_reason: max_tokens means the model hit the output token ceiling.
-        // Retrying the same whole-file call will truncate at the same limit. Skip remaining
-        // attempts and let the caller fall back to function-level instrumentation.
+        // Retrying the same whole-file call will truncate at the same limit. Return failed
+        // immediately so the caller falls back to function-level instrumentation.
         if (isEarlyAbortError(instrumentResult.error)) {
-          break;
+          return buildFailedResult(
+            filePath, instrumentResult.error, instrumentResult.error,
+            cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+          );
         }
         // Retryable failure — continue to next attempt
         continue;

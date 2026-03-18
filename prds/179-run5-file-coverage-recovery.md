@@ -149,7 +149,7 @@ Two changes, implemented together:
 - [x] Write baseline results file from current test data (before token limit change) — see `test/commit-story-v2/baseline-results-16k-tokens.md`
 - [x] Unit tests for early-exit detection (`stop_reason: max_tokens` triggers early abort)
 - [x] Unit tests confirming validation errors still retry normally (not early-exited)
-- [x] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `65_536`
+- [x] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `21_333` (max non-streaming with extended thinking; 65K requires streaming — filed as TODO)
 - [x] Implement early-exit logic in `executeRetryLoop`
 - [ ] Re-run all 8 fixture files with new settings
 - [ ] Write post-change results file (same format as `test/commit-story-v2/baseline-results-16k-tokens.md`)
