@@ -244,7 +244,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       dumpDiagnostics('journal-manager.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(3);
+      // File has 2 async entry points (saveJournalEntry, discoverReflections); 2 sync formatters don't warrant spans
+      expect(result.spansAdded).toBeGreaterThanOrEqual(2);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {

@@ -18,10 +18,9 @@ import { detectElision } from './elision.ts';
  * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
  * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
  */
-// Max non-streaming output with extended thinking enabled is 21,333 tokens.
-// Beyond this, the Anthropic API requires streaming (client.messages.stream).
-// TODO: Switch to streaming to unlock the full 65,536 token capacity of Sonnet 4.6.
-export const MAX_OUTPUT_TOKENS_PER_CALL = 21_333;
+// Full output capacity of Sonnet 4.6. Streaming is required above 21,333 tokens
+// with extended thinking enabled — instrumentFile uses client.messages.stream().
+export const MAX_OUTPUT_TOKENS_PER_CALL = 65_536;
 
 /**
  * Conversation context captured from an API call for multi-turn threading.
@@ -170,7 +169,10 @@ export async function instrumentFile(
   let tokenUsage: TokenUsage | undefined;
 
   try {
-    const response = await client.messages.parse({
+    // Streaming is required for max_tokens > 21,333 with extended thinking.
+    // stream() accepts the same params as parse(); finalMessage() returns the
+    // same response shape including parsed_output.
+    const stream = client.messages.stream({
       model: config.agentModel,
       max_tokens: MAX_OUTPUT_TOKENS_PER_CALL,
       thinking: { type: 'adaptive' },
@@ -188,6 +190,7 @@ export async function instrumentFile(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       messages: messages as any,
     });
+    const response = await stream.finalMessage();
 
     tokenUsage = extractTokenUsage(response.usage);
 
