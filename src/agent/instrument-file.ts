@@ -13,10 +13,10 @@ import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
 import { detectElision } from './elision.ts';
 
 /**
- * Per-call output token limit for the Messages API.
- * Distinct from maxTokensPerFile (the cumulative budget across all attempts).
- * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
- * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
+ * Fallback per-call output token limit for the Messages API.
+ * Used only for direct instrumentFile calls without the retry loop.
+ * In normal operation, executeRetryLoop computes a per-file budget via
+ * estimateOutputBudget(fileLines) and passes it through options.maxOutputTokens.
  */
 // 32K is the fallback default when no explicit maxOutputTokens is provided.
 // In normal operation, executeRetryLoop computes a file-size-based budget via
