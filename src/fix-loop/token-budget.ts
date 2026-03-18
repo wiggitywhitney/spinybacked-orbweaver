@@ -1,5 +1,5 @@
 // ABOUTME: Token budget tracking helpers for the fix loop.
-// ABOUTME: Provides cumulative token arithmetic and budget checking against maxTokensPerFile.
+// ABOUTME: Provides cumulative token arithmetic, budget checking, and deterministic output token sizing.
 
 import type { TokenUsage } from '../agent/schema.ts';
 
@@ -61,4 +61,34 @@ export function estimateMinTokens(sourceCodeLength: number): number {
   const inputEstimate = (sourceCodeLength * tokensPerChar) + fixedPromptOverhead;
   const outputEstimate = sourceCodeLength * tokensPerChar; // output ≈ source size
   return Math.ceil(inputEstimate + outputEstimate);
+}
+
+/**
+ * Calibration constants for deterministic output token sizing.
+ * Derived from run-5 session data: output tokens range from 7K (small files)
+ * to 26K (large files at 21K limit), roughly linear with file size.
+ */
+export const TOKENS_PER_LINE = 50;
+export const THINKING_OVERHEAD = 8_000;
+export const MIN_OUTPUT_BUDGET = 16_384;
+export const MAX_OUTPUT_BUDGET = 65_536;
+
+/**
+ * Estimate the output token budget for a file based on its line count.
+ * Replaces the hardcoded MAX_OUTPUT_TOKENS_PER_CALL with a file-size-based estimate.
+ *
+ * Formula: max(MIN_OUTPUT_BUDGET, fileLines * TOKENS_PER_LINE + THINKING_OVERHEAD),
+ * capped at MAX_OUTPUT_BUDGET (65K = Sonnet 4.6 capacity).
+ *
+ * The budget covers both adaptive thinking tokens and JSON output — these share
+ * the same ceiling in the Messages API. THINKING_OVERHEAD reserves space for
+ * the model's reasoning, and TOKENS_PER_LINE accounts for output that scales
+ * with file size.
+ *
+ * @param fileLines - Number of lines in the source file
+ * @returns Output token budget for the Messages API max_tokens parameter
+ */
+export function estimateOutputBudget(fileLines: number): number {
+  const estimated = fileLines * TOKENS_PER_LINE + THINKING_OVERHEAD;
+  return Math.min(MAX_OUTPUT_BUDGET, Math.max(MIN_OUTPUT_BUDGET, estimated));
 }

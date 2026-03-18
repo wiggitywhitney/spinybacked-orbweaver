@@ -32,7 +32,8 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
-/** Helper to build a mock Anthropic client with a parse response. */
+/** Helper to build a mock Anthropic client with a streaming response.
+ *  instrumentFile uses client.messages.stream() + finalMessage(), not parse(). */
 function makeMockClient(llmOutput: LlmOutput, usage?: {
   input_tokens?: number;
   output_tokens?: number;
@@ -67,7 +68,9 @@ function makeMockClient(llmOutput: LlmOutput, usage?: {
 
   return {
     messages: {
-      parse: vi.fn().mockResolvedValue(response),
+      stream: vi.fn().mockReturnValue({
+        finalMessage: vi.fn().mockResolvedValue(response),
+      }),
     },
   };
 }
@@ -155,7 +158,7 @@ describe('instrumentFile', () => {
         { client: client as any },
       );
 
-      const call = client.messages.parse.mock.calls[0][0];
+      const call = client.messages.stream.mock.calls[0][0];
       expect(call.model).toBe('claude-sonnet-4-6');
       expect(call.thinking).toEqual({ type: 'adaptive' });
       expect(call.output_config.effort).toBe('high');
@@ -176,7 +179,7 @@ describe('instrumentFile', () => {
         { client: client as any },
       );
 
-      const call = client.messages.parse.mock.calls[0][0];
+      const call = client.messages.stream.mock.calls[0][0];
       // System prompt should have cache_control for prompt caching
       expect(call.system).toBeDefined();
     });
@@ -255,7 +258,9 @@ describe('instrumentFile', () => {
     it('returns structured error on API failure', async () => {
       const client = {
         messages: {
-          parse: vi.fn().mockRejectedValue(new Error('API rate limit exceeded')),
+          stream: vi.fn().mockReturnValue({
+            finalMessage: vi.fn().mockRejectedValue(new Error('API rate limit exceeded')),
+          }),
         },
       };
 
@@ -295,7 +300,9 @@ describe('instrumentFile', () => {
 
       const client = {
         messages: {
-          parse: vi.fn().mockResolvedValue(response),
+          stream: vi.fn().mockReturnValue({
+            finalMessage: vi.fn().mockResolvedValue(response),
+          }),
         },
       };
 
@@ -354,7 +361,7 @@ describe('instrumentFile', () => {
         { client: client as any },
       );
 
-      const call = client.messages.parse.mock.calls[0][0];
+      const call = client.messages.stream.mock.calls[0][0];
       // Must use the per-call constant, not the cumulative budget
       expect(call.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
     });
@@ -380,8 +387,8 @@ describe('instrumentFile', () => {
         { client: client2 as any },
       );
 
-      const call1 = client1.messages.parse.mock.calls[0][0];
-      const call2 = client2.messages.parse.mock.calls[0][0];
+      const call1 = client1.messages.stream.mock.calls[0][0];
+      const call2 = client2.messages.stream.mock.calls[0][0];
       // Per-call limit should be the same constant, not derived from maxTokensPerFile
       expect(call1.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
       expect(call2.max_tokens).toBe(MAX_OUTPUT_TOKENS_PER_CALL);
@@ -452,7 +459,7 @@ export async function createUser(req, res) {
       if (!result.success) return;
 
       // Should NOT have called the LLM
-      expect(client.messages.parse).not.toHaveBeenCalled();
+      expect(client.messages.stream).not.toHaveBeenCalled();
 
       // Should return original code unchanged
       expect(result.output.instrumentedCode).toBe(FULLY_INSTRUMENTED_JS);
@@ -488,10 +495,10 @@ export async function createUser(req, res) {
       );
 
       // LLM should be called
-      expect(client.messages.parse).toHaveBeenCalledTimes(1);
+      expect(client.messages.stream).toHaveBeenCalledTimes(1);
 
       // User message should include detection context
-      const call = client.messages.parse.mock.calls[0][0];
+      const call = client.messages.stream.mock.calls[0][0];
       const userMessage = call.messages[0].content;
       expect(userMessage).toContain('Already instrumented');
       expect(userMessage).toContain('handleRequest');
@@ -510,9 +517,104 @@ export async function createUser(req, res) {
         { client: client as any },
       );
 
-      const call = client.messages.parse.mock.calls[0][0];
+      const call = client.messages.stream.mock.calls[0][0];
       const userMessage = call.messages[0].content;
       expect(userMessage).not.toContain('Already instrumented');
+    });
+  });
+
+  describe('sync-only pre-screening (#212)', () => {
+    const SYNC_ONLY_JS = `export function applySensitiveFilter(entries, config) {
+  return entries.filter(entry => {
+    const content = entry.content.toLowerCase();
+    return !config.sensitivePatterns.some(pattern => content.includes(pattern));
+  });
+}
+
+export function formatEntries(entries) {
+  return entries.map(e => ({ ...e, formatted: true }));
+}
+
+function internalHelper(x) {
+  return x * 2;
+}`;
+
+    const MIXED_ASYNC_SYNC_JS = `export async function fetchData(url) {
+  const response = await fetch(url);
+  return response.json();
+}
+
+export function formatData(data) {
+  return data.map(d => d.name);
+}`;
+
+    it('returns early without LLM call when all exported functions are synchronous', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+
+      const result = await instrumentFile(
+        '/project/src/filters/sensitive-filter.js',
+        SYNC_ONLY_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      // Should NOT have called the LLM
+      expect(client.messages.stream).not.toHaveBeenCalled();
+
+      // Should return original code unchanged
+      expect(result.output.instrumentedCode).toBe(SYNC_ONLY_JS);
+
+      // Token usage should be zero (no API call)
+      expect(result.output.tokenUsage.inputTokens).toBe(0);
+      expect(result.output.tokenUsage.outputTokens).toBe(0);
+
+      // Notes should explain why it was skipped
+      expect(result.output.notes.length).toBeGreaterThan(0);
+      expect(result.output.notes.some(n => n.toLowerCase().includes('sync'))).toBe(true);
+
+      // No spans or schema extensions
+      expect(result.output.spanCategories).toBeNull();
+      expect(result.output.schemaExtensions).toEqual([]);
+      expect(result.output.attributesCreated).toBe(0);
+    });
+
+    it('calls the LLM when at least one exported function is async', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+
+      await instrumentFile(
+        '/project/src/data.js',
+        MIXED_ASYNC_SYNC_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        { client: client as any },
+      );
+
+      // Should have called the LLM — there's an async export
+      expect(client.messages.stream).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls the LLM when file has no exported functions', async () => {
+      // Files with only internal functions should still be sent to the LLM —
+      // the agent may decide to instrument them or skip them.
+      const noExportsJs = `async function internalProcessor(data) {
+  const result = await processData(data);
+  return result;
+}`;
+      const client = makeMockClient(makeValidLlmOutput());
+
+      await instrumentFile(
+        '/project/src/internal.js',
+        noExportsJs,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        { client: client as any },
+      );
+
+      expect(client.messages.stream).toHaveBeenCalledTimes(1);
     });
   });
 });

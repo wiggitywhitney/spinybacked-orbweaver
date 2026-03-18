@@ -11,7 +11,7 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
-import { addTokenUsage, totalTokens, estimateMinTokens } from './token-budget.ts';
+import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { detectOscillation } from './oscillation.ts';
 import { extractExportedFunctions } from './function-extraction.ts';
 import { reassembleFunctions, ensureTracerAfterImports } from './function-reassembly.ts';
@@ -34,6 +34,8 @@ export interface InstrumentFileCallOptions {
   feedbackMessage?: string;
   /** Failure category hint appended to the user message (for fresh regeneration). */
   failureHint?: string;
+  /** Output token budget for this call. Overrides the default MAX_OUTPUT_TOKENS_PER_CALL. */
+  maxOutputTokens?: number;
 }
 
 /**
@@ -94,16 +96,26 @@ function calculateSpansAdded(output: InstrumentationOutput): number {
 
 /**
  * Summarize validation errors into a human-readable string for errorProgression.
+ * Includes per-rule counts so error patterns can be analyzed across runs.
  *
  * @param validation - Validation result from the chain
- * @returns Error summary string, e.g. "2 blocking errors" or "0 errors"
+ * @returns Error summary string, e.g. "6 blocking errors (NDS-005b:4, SCH-002:2)" or "0 errors"
  */
 function summarizeErrors(validation: ValidationResult): string {
   const blockingCount = validation.blockingFailures.length;
   if (blockingCount === 0) {
     return '0 errors';
   }
-  return `${blockingCount} blocking error${blockingCount === 1 ? '' : 's'}`;
+  // Count occurrences of each ruleId
+  const ruleCounts = new Map<string, number>();
+  for (const f of validation.blockingFailures) {
+    ruleCounts.set(f.ruleId, (ruleCounts.get(f.ruleId) ?? 0) + 1);
+  }
+  const breakdown = [...ruleCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([rule, count]) => `${rule}:${count}`)
+    .join(', ');
+  return `${blockingCount} blocking error${blockingCount === 1 ? '' : 's'} (${breakdown})`;
 }
 
 /**
@@ -208,10 +220,32 @@ export const RETRYABLE_NULL_OUTPUT = 'null parsed_output';
 /** Substring that signals an elision detection failure (retryable). */
 export const RETRYABLE_ELISION = 'elision detected';
 
+/**
+ * Substring that signals stop_reason: max_tokens — the model hit the output token ceiling.
+ * Retrying won't help because the same file will truncate at the same limit.
+ * The token budget is shared between adaptive thinking and JSON output, so the
+ * truncation point varies per attempt, but the outcome is the same: incomplete output.
+ *
+ * Coupling: this substring originates from the null parsed_output diagnostic in
+ * instrumentFile() (src/agent/instrument-file.ts line ~207). If that format changes,
+ * this constant must be updated to match.
+ */
+export const EARLY_ABORT_MAX_TOKENS = 'stop_reason: max_tokens';
+
 export function isRetryableInstrumentError(error: string): boolean {
   if (error.includes(RETRYABLE_NULL_OUTPUT)) return true;
   if (error.includes(RETRYABLE_ELISION)) return true;
   return false;
+}
+
+/**
+ * Detect errors where retrying the same whole-file call is pointless.
+ * Currently: stop_reason: max_tokens — the model hit the output token ceiling.
+ * The correct response is to skip remaining whole-file attempts and fall back
+ * to function-level instrumentation immediately.
+ */
+export function isEarlyAbortError(error: string): boolean {
+  return error.includes(EARLY_ABORT_MAX_TOKENS);
 }
 
 /**
@@ -351,6 +385,10 @@ async function executeRetryLoop(
   let lastStrategy: ValidationStrategy = 'initial-generation';
   let completedAttempts = 0;
 
+  // Deterministic output token sizing: budget scales with file size, escalates on truncation
+  const fileLines = originalCode.split('\n').length;
+  let outputBudget = estimateOutputBudget(fileLines);
+
   // Track NDS-003 violations and LLM refactors per validation-producing attempt
   // for persistent violation detection and refactor recommendation collection.
   const nds003ViolationsPerAttempt: import('../validation/types.ts').CheckResult[][] = [];
@@ -386,17 +424,23 @@ async function executeRetryLoop(
       callOptions = {
         conversationContext: lastConversationContext,
         feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
+        maxOutputTokens: outputBudget,
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint
       callOptions = {
         failureHint: buildFailureHint(lastValidation),
+        maxOutputTokens: outputBudget,
       };
     } else if (plannedStrategy !== 'initial-generation') {
       // No conversation context or validation available — this is a retry
       // of initial generation triggered by a retryable failure, not a real
       // multi-turn fix or fresh regeneration.
       actualStrategy = 'retry-initial';
+      callOptions = { maxOutputTokens: outputBudget };
+    } else {
+      // Initial generation
+      callOptions = { maxOutputTokens: outputBudget };
     }
     lastStrategy = actualStrategy;
 
@@ -411,6 +455,19 @@ async function executeRetryLoop(
       errorProgression.push(instrumentResult.error);
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
+        // Budget escalation: stop_reason: max_tokens means the model hit the output token ceiling.
+        // If we haven't already escalated to MAX_OUTPUT_BUDGET, escalate and retry.
+        // If already at MAX, abort — retrying at the same ceiling is pointless.
+        if (isEarlyAbortError(instrumentResult.error)) {
+          if (outputBudget < MAX_OUTPUT_BUDGET) {
+            outputBudget = MAX_OUTPUT_BUDGET;
+            continue;
+          }
+          return buildFailedResult(
+            filePath, instrumentResult.error, instrumentResult.error,
+            cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+          );
+        }
         // Retryable failure — continue to next attempt
         continue;
       }
@@ -741,16 +798,20 @@ async function functionLevelFallback(
 
   if (validation.passed) {
     // Restore original file when 0 spans added (same as executeRetryLoop)
+    // Clear metadata from transient output to prevent false schema writes or dependency updates
     if (totalSpans === 0) {
       await writeFile(filePath, originalCode, 'utf-8');
     }
     return {
       path: filePath,
-      status: 'partial',
+      // Validation passed on the reassembled code.
+      // - success: all functions instrumented (or 0 spans = file unchanged)
+      // - partial: some functions failed but the passing ones validated
+      status: (totalSpans === 0 || successful.length === extractedFunctions.length) ? 'success' : 'partial',
       spansAdded: totalSpans,
-      librariesNeeded,
-      schemaExtensions: supplementSchemaExtensions(schemaExtensions, reassembledCode),
-      attributesCreated: totalAttributes,
+      librariesNeeded: totalSpans === 0 ? [] : librariesNeeded,
+      schemaExtensions: totalSpans === 0 ? [] : supplementSchemaExtensions(schemaExtensions, reassembledCode),
+      attributesCreated: totalSpans === 0 ? 0 : totalAttributes,
       validationAttempts: wholeFileResult.validationAttempts,
       validationStrategyUsed: wholeFileResult.validationStrategyUsed,
       errorProgression,
@@ -830,14 +891,31 @@ function aggregateLibraries(results: FunctionResult[]): FileResult['librariesNee
 }
 
 /**
+ * Normalize a schema extension identifier to use dot separators only.
+ * The agent sometimes produces `span:X` (colon) instead of `span.X` (dot).
+ * Only `span.` is recognized by writeSchemaExtensions — colon variants are
+ * silently misclassified as generic attributes instead of spans.
+ *
+ * @param ext - Schema extension string from agent output
+ * @returns Normalized extension with `span:` replaced by `span.`
+ */
+export function normalizeSchemaExtension(ext: string): string {
+  if (ext.startsWith('span:')) {
+    return 'span.' + ext.slice('span:'.length);
+  }
+  return ext;
+}
+
+/**
  * Aggregate schema extensions across all successful function results, deduplicating.
+ * Normalizes `span:` → `span.` to prevent silent misclassification in writeSchemaExtensions.
  */
 function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
   const seen = new Set<string>();
   for (const r of results) {
     if (!r.success) continue;
     for (const ext of r.schemaExtensions) {
-      seen.add(ext);
+      seen.add(normalizeSchemaExtension(ext));
     }
   }
   return [...seen];
@@ -846,18 +924,20 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
 /**
  * Supplement schema extensions with span names extracted from instrumented code.
  * Adds any span names found in startActiveSpan calls that are not already registered.
+ * Normalizes all extensions to use dot separators.
  *
- * @param extensions - Agent-reported schema extensions
+ * @param extensions - Agent-reported schema extensions (may contain `span:` variants)
  * @param code - Instrumented code to scan for span names
- * @returns Deduplicated extensions including auto-detected span names
+ * @returns Deduplicated, normalized extensions including auto-detected span names
  */
 function supplementSchemaExtensions(extensions: string[], code: string): string[] {
+  const normalized = [...new Set(extensions.map(normalizeSchemaExtension))];
   const spanNames = extractSpanNamesFromCode(code);
-  const registered = new Set(extensions);
+  const registered = new Set(normalized);
   const missing = spanNames
     .filter(name => !registered.has(`span.${name}`))
     .map(name => `span.${name}`);
-  return missing.length > 0 ? [...extensions, ...missing] : extensions;
+  return missing.length > 0 ? [...normalized, ...missing] : normalized;
 }
 
 /**

@@ -13,12 +13,16 @@ import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
 import { detectElision } from './elision.ts';
 
 /**
- * Per-call output token limit for the Messages API.
- * Distinct from maxTokensPerFile (the cumulative budget across all attempts).
- * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
- * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
+ * Fallback per-call output token limit for the Messages API.
+ * Used only for direct instrumentFile calls without the retry loop.
+ * In normal operation, executeRetryLoop computes a per-file budget via
+ * estimateOutputBudget(fileLines) and passes it through options.maxOutputTokens.
  */
-export const MAX_OUTPUT_TOKENS_PER_CALL = 16384;
+// 32K is the fallback default when no explicit maxOutputTokens is provided.
+// In normal operation, executeRetryLoop computes a file-size-based budget via
+// estimateOutputBudget(fileLines) and passes it through options.maxOutputTokens.
+// This constant is only used for direct instrumentFile calls without the retry loop.
+export const MAX_OUTPUT_TOKENS_PER_CALL = 32_000;
 
 /**
  * Conversation context captured from an API call for multi-turn threading.
@@ -66,6 +70,8 @@ interface InstrumentFileOptions {
   feedbackMessage?: string;
   /** Failure category hint appended to the standard user message (for fresh regeneration). */
   failureHint?: string;
+  /** Output token budget for this call. Overrides MAX_OUTPUT_TOKENS_PER_CALL. */
+  maxOutputTokens?: number;
 }
 
 /**
@@ -114,10 +120,11 @@ export async function instrumentFile(
   const sourceFile = project.createSourceFile('input.js', originalCode);
   const detectionResult = detectOTelImports(sourceFile);
 
+  const functions = classifyFunctions(sourceFile);
+  const exportedFunctions = functions.filter(f => f.isExported);
+
   // If all exported functions are already instrumented, skip the LLM call entirely
   if (detectionResult.existingSpanPatterns.length > 0) {
-    const functions = classifyFunctions(sourceFile);
-    const exportedFunctions = functions.filter(f => f.isExported);
     const instrumentedFunctionNames = new Set(
       detectionResult.existingSpanPatterns
         .map(p => p.enclosingFunction)
@@ -144,6 +151,27 @@ export async function instrumentFile(
     }
   }
 
+  // If the file has exported functions but none are async, skip the LLM call.
+  // Pure synchronous transforms (filters, formatters, validators) don't warrant
+  // OTel spans — there's no I/O, no latency, nothing to trace. Sending them to
+  // the LLM wastes tokens and produces spurious instrumentation attempts.
+  if (exportedFunctions.length > 0 && !exportedFunctions.some(f => f.isAsync)) {
+    const skippedNames = exportedFunctions.map(f => f.name).join(', ');
+    return {
+      success: true,
+      output: {
+        instrumentedCode: originalCode,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        attributesCreated: 0,
+        spanCategories: null,
+        notes: [`All exported functions are synchronous (${skippedNames}) — no async I/O to trace. No LLM call made.`],
+        suggestedRefactors: [],
+        tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      },
+    };
+  }
+
   const systemPrompt = buildSystemPrompt(resolvedSchema);
   const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult);
 
@@ -167,9 +195,12 @@ export async function instrumentFile(
   let tokenUsage: TokenUsage | undefined;
 
   try {
-    const response = await client.messages.parse({
+    // Streaming is required for max_tokens > 21,333 with extended thinking.
+    // stream() accepts the same params as parse(); finalMessage() returns the
+    // same response shape including parsed_output.
+    const stream = client.messages.stream({
       model: config.agentModel,
-      max_tokens: MAX_OUTPUT_TOKENS_PER_CALL,
+      max_tokens: options?.maxOutputTokens ?? MAX_OUTPUT_TOKENS_PER_CALL,
       thinking: { type: 'adaptive' },
       output_config: {
         effort: config.agentEffort,
@@ -185,6 +216,7 @@ export async function instrumentFile(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       messages: messages as any,
     });
+    const response = await stream.finalMessage();
 
     tokenUsage = extractTokenUsage(response.usage);
 

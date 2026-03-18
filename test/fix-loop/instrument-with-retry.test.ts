@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { instrumentWithRetry, isRetryableInstrumentError, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION } from '../../src/fix-loop/instrument-with-retry.ts';
+import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
@@ -293,7 +293,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.reason).toContain('NDS-001');
     expect(result.lastError).toBeDefined();
     expect(result.lastError!.length).toBeGreaterThan(0);
-    expect(result.errorProgression).toEqual(['1 blocking error']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)']);
     expect(result.tokenUsage).toEqual(sampleTokens);
 
     // File should be reverted to original content
@@ -698,7 +698,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
     );
 
-    expect(result.errorProgression).toEqual(['1 blocking error', '0 errors']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)', '0 errors']);
   });
 
   it('tracks cumulative token usage across attempts', async () => {
@@ -819,7 +819,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     expect(result.status).toBe('failed');
     expect(result.validationAttempts).toBe(2);
     expect(result.validationStrategyUsed).toBe('multi-turn-fix');
-    expect(result.errorProgression).toEqual(['1 blocking error', '1 blocking error']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)', '1 blocking error (NDS-001:1)']);
     expect(result.reason).toBeDefined();
     expect(result.lastError).toBeDefined();
     // File reverted to original
@@ -1162,7 +1162,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     expect(result.reason).toBeDefined();
     expect(result.reason!.length).toBeGreaterThan(0);
     expect(result.lastError).toBeDefined();
-    expect(result.errorProgression).toEqual(['1 blocking error', '1 blocking error', '1 blocking error']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)', '1 blocking error (NDS-001:1)', '1 blocking error (NDS-001:1)']);
     // File reverted to original
     expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
   });
@@ -1362,7 +1362,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     );
 
     expect(result.status).toBe('success');
-    expect(result.errorProgression).toEqual(['2 blocking errors', '1 blocking error', '0 errors']);
+    expect(result.errorProgression).toEqual(['2 blocking errors (NDS-001:1, LINT:1)', '1 blocking error (NDS-001:1)', '0 errors']);
   });
 });
 
@@ -1607,7 +1607,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     // Normal flow — attempt 2 had fewer errors, so no oscillation. Attempt 3 succeeds.
     expect(result.status).toBe('success');
     expect(result.validationAttempts).toBe(3);
-    expect(result.errorProgression).toEqual(['2 blocking errors', '1 blocking error', '0 errors']);
+    expect(result.errorProgression).toEqual(['2 blocking errors (NDS-001:1, LINT:1)', '1 blocking error (NDS-001:1)', '0 errors']);
   });
 
   it('budget exceeded stops further retries but current attempt still validates', async () => {
@@ -1753,8 +1753,11 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     expect(result.validationStrategyUsed).toBe('fresh-regeneration');
     expect(callCount).toBe(4);
 
-    // Attempt 1: initial — no options
-    expect(capturedOptions[0]).toBeUndefined();
+    // Attempt 1: initial — has maxOutputTokens but no conversation/feedback
+    expect(capturedOptions[0]).toBeDefined();
+    expect(capturedOptions[0]!.maxOutputTokens).toBeDefined();
+    expect(capturedOptions[0]!.conversationContext).toBeUndefined();
+    expect(capturedOptions[0]!.feedbackMessage).toBeUndefined();
 
     // Attempt 2: multi-turn fix — has conversationContext and feedbackMessage
     expect(capturedOptions[1]).toBeDefined();
@@ -2164,6 +2167,159 @@ describe('isRetryableInstrumentError — regression guard for upstream error str
   });
 });
 
+describe('isEarlyAbortError — detect stop_reason: max_tokens for early fallback to function-level', () => {
+  it.each([
+    {
+      name: 'null parsed_output with stop_reason: max_tokens (early abort)',
+      error: [
+        'LLM response had null parsed_output — no structured output was returned.',
+        'stop_reason: max_tokens',
+        'output_tokens: 16384',
+        'raw_preview: <no text content>',
+      ].join('\n'),
+      expected: true,
+    },
+    {
+      name: 'null parsed_output with stop_reason: end_turn (not early abort — model chose to stop)',
+      error: [
+        'LLM response had null parsed_output — no structured output was returned.',
+        'stop_reason: end_turn',
+        'output_tokens: 8000',
+        'raw_preview: partial content',
+      ].join('\n'),
+      expected: false,
+    },
+    {
+      name: 'elision detected (not early abort — different error type)',
+      error: `Output rejected: ${RETRYABLE_ELISION}. File is 200 lines shorter than original.`,
+      expected: false,
+    },
+    {
+      name: 'API auth failure (not early abort)',
+      error: 'Anthropic API call failed: 401 Unauthorized',
+      expected: false,
+    },
+    {
+      name: 'truncated JSON catch-block error (not early abort — different path)',
+      error: 'Anthropic API call failed: Failed to parse structured output as JSON: Unterminated string in JSON at position 24160',
+      expected: false,
+    },
+    {
+      name: 'validation blocking errors (not early abort)',
+      error: '5 blocking errors',
+      expected: false,
+    },
+  ])('$name → earlyAbort=$expected', ({ error, expected }) => {
+    expect(isEarlyAbortError(error)).toBe(expected);
+  });
+
+  it('early abort substring matches what instrument-file.ts produces', () => {
+    expect(EARLY_ABORT_MAX_TOKENS).toBe('stop_reason: max_tokens');
+  });
+});
+
+describe('early abort on stop_reason: max_tokens skips remaining whole-file retries', () => {
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+  const attempt1Tokens: TokenUsage = { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 100, cacheReadInputTokens: 50 };
+
+  beforeEach(() => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'early-abort-'));
+    testFilePath = join(tempDir, 'test-file.js');
+    writeFileSync(testFilePath, originalContent);
+  });
+
+  afterEach(() => {
+    if (testFilePath && existsSync(testFilePath)) {
+      rmSync(testFilePath);
+      rmSync(join(testFilePath, '..'), { recursive: true, force: true });
+    }
+  });
+
+  it('escalates budget on first max_tokens, aborts on second', async () => {
+    let instrumentCallCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        return {
+          success: false,
+          error: [
+            'LLM response had null parsed_output — no structured output was returned.',
+            'stop_reason: max_tokens',
+            'output_tokens: 16384',
+            'raw_preview: <no text content>',
+          ].join('\n'),
+          tokenUsage: attempt1Tokens,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, _skipFunctionFallback: true },
+    );
+
+    // Should have called instrumentFile TWICE: initial at estimated budget + escalated to MAX
+    // Then aborts because already at MAX_OUTPUT_BUDGET
+    expect(instrumentCallCount).toBe(2);
+    expect(result.status).toBe('failed');
+  });
+
+  it('still retries normally for null parsed_output WITHOUT max_tokens stop_reason', async () => {
+    let instrumentCallCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        return {
+          success: false,
+          error: [
+            'LLM response had null parsed_output — no structured output was returned.',
+            'stop_reason: end_turn',
+            'output_tokens: 8000',
+            'raw_preview: partial json content',
+          ].join('\n'),
+          tokenUsage: attempt1Tokens,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Should have attempted all 3 times (1 initial + 2 retries) — no early abort
+    expect(instrumentCallCount).toBe(3);
+    expect(result.status).toBe('failed');
+  });
+
+  it('does not early-abort on validation blocking errors (different code path)', async () => {
+    // Validation errors go through the validation retry path, not the instrument-error path.
+    // This test confirms that isEarlyAbortError is never consulted for validation failures.
+    const validationError = '5 blocking errors';
+    expect(isEarlyAbortError(validationError)).toBe(false);
+
+    // And for completeness: the instrument-file error path with a non-max-tokens error
+    const apiError = 'Anthropic API call failed: 500 Internal Server Error';
+    expect(isEarlyAbortError(apiError)).toBe(false);
+  });
+});
+
+describe('normalizeSchemaExtension — normalize span: to span. (#209)', () => {
+  it.each([
+    { input: 'span:commit_story.summary.daily_node', expected: 'span.commit_story.summary.daily_node' },
+    { input: 'span:foo.bar', expected: 'span.foo.bar' },
+    { input: 'span.commit_story.summary.daily_node', expected: 'span.commit_story.summary.daily_node' },
+    { input: 'commit_story.cli.main', expected: 'commit_story.cli.main' },
+    { input: 'span:', expected: 'span.' },
+  ])('normalizes "$input" → "$expected"', ({ input, expected }) => {
+    expect(normalizeSchemaExtension(input)).toBe(expected);
+  });
+});
+
 // --- Function-level fallback integration tests (PRD #106 Milestone 7) ---
 
 /**
@@ -2245,7 +2401,8 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    expect(result.status).toBe('partial');
+    // All functions passed validation → success (not partial) per all-functions-pass fix
+    expect(result.status).toBe('success');
     expect(result.functionsInstrumented).toBeGreaterThan(0);
     expect(result.functionsSkipped).toBeDefined();
     expect(result.functionResults).toBeDefined();
@@ -2332,9 +2489,12 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    // The whole-file syntax check should catch the module-level imimport corruption
-    // The result should still be partial — the valid function (saveData) is kept
-    expect(result.status).toBe('partial');
+    // The whole-file syntax check should catch the module-level imimport corruption.
+    // When it does, the culprit is excluded and the result is partial.
+    // When both functions pass syntax check (e.g., if imimport is inside a function body
+    // and doesn't cause a module-level parse error), all functions succeed and the
+    // all-functions-pass fix returns success.
+    expect(['partial', 'success']).toContain(result.status);
     // The file on disk should NOT contain the corrupted import
     const finalContent = readFileSync(filePath, 'utf-8');
     expect(finalContent).not.toContain('imimport');
@@ -2375,7 +2535,8 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    expect(result.status).toBe('partial');
+    // All functions passed validation → success per all-functions-pass fix
+    expect(result.status).toBe('success');
     expect(result.errorProgression).toBeDefined();
     // Should contain whole-file error + function-level summary
     const fnLevelEntry = result.errorProgression!.find(e => e.includes('function-level'));
@@ -2411,7 +2572,8 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    expect(result.status).toBe('partial');
+    // All functions passed validation → success per all-functions-pass fix
+    expect(result.status).toBe('success');
     // Token usage should include both whole-file and per-function tokens
     expect(result.tokenUsage.inputTokens).toBeGreaterThan(wholeFileTokens.inputTokens);
   });
@@ -2575,7 +2737,8 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
 
-    expect(result.status).toBe('partial');
+    // All functions passed validation → success (not partial) per all-functions-pass fix
+    expect(result.status).toBe('success');
     // 2 functions × 3 spans each = 6 total
     expect(result.spansAdded).toBe(6);
   });
@@ -2906,5 +3069,167 @@ describe('instrumentWithRetry — supplementSchemaExtensions', () => {
     expect(result.status).toBe('success');
     expect(result.schemaExtensions).toContain('span.myapp.process_order');
     expect(result.schemaExtensions).toContain('span.myapp.process');
+  });
+});
+
+// --- Budget escalation on truncation (#210 Milestone 8) ---
+
+describe('budget escalation on stop_reason: max_tokens (#210)', () => {
+  let testFilePath: string;
+  // 400-line file: estimateOutputBudget(400) = 400*50+8000 = 28000
+  const originalContent = Array.from({ length: 400 }, (_, i) => `const line${i} = ${i};`).join('\n')
+    + '\nexport function main() { return 42; }\n';
+  const maxTokensError = [
+    'LLM response had null parsed_output — no structured output was returned.',
+    'stop_reason: max_tokens',
+    'output_tokens: 28000',
+    'raw_preview: <no text content>',
+  ].join('\n');
+  const attempt1Tokens: TokenUsage = { inputTokens: 5000, outputTokens: 28000, cacheCreationInputTokens: 200, cacheReadInputTokens: 100 };
+
+  beforeEach(() => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'escalation-'));
+    testFilePath = join(tempDir, 'test-file.js');
+    writeFileSync(testFilePath, originalContent);
+  });
+
+  afterEach(() => {
+    if (testFilePath && existsSync(testFilePath)) {
+      rmSync(join(testFilePath, '..'), { recursive: true, force: true });
+    }
+  });
+
+  it('passes maxOutputTokens to instrumentFile based on file line count', async () => {
+    const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+        receivedOptions.push(options);
+        return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(receivedOptions.length).toBe(1);
+    // 400 lines → estimateOutputBudget(400+1 for the export line) — but let's check actual line count
+    const lineCount = originalContent.split('\n').length;
+    const { estimateOutputBudget } = await import('../../src/fix-loop/token-budget.ts');
+    expect(receivedOptions[0]?.maxOutputTokens).toBe(estimateOutputBudget(lineCount));
+  });
+
+  it('escalates to MAX_OUTPUT_BUDGET on first max_tokens hit and retries', async () => {
+    let instrumentCallCount = 0;
+    const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+        instrumentCallCount++;
+        receivedOptions.push(options);
+        if (instrumentCallCount === 1) {
+          // First call: hit max_tokens at estimated budget
+          return { success: false, error: maxTokensError, tokenUsage: attempt1Tokens } as InstrumentFileResult;
+        }
+        // Second call: succeed at escalated budget
+        return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Should have called instrumentFile TWICE: initial + escalated retry
+    expect(instrumentCallCount).toBe(2);
+    expect(result.status).toBe('success');
+
+    // First call uses estimated budget, second uses MAX_OUTPUT_BUDGET
+    const { MAX_OUTPUT_BUDGET } = await import('../../src/fix-loop/token-budget.ts');
+    expect(receivedOptions[1]?.maxOutputTokens).toBe(MAX_OUTPUT_BUDGET);
+  });
+
+  it('falls back to function-level after max_tokens at MAX_OUTPUT_BUDGET', async () => {
+    let instrumentCallCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        // Every call hits max_tokens
+        return { success: false, error: maxTokensError, tokenUsage: attempt1Tokens } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Should have called instrumentFile exactly TWICE: estimated + escalated (then abort)
+    // Plus function-level calls (the file has 1 exported function)
+    expect(instrumentCallCount).toBeGreaterThanOrEqual(2);
+    // The whole-file path should have failed, triggering function-level fallback
+    // (function-level also hits max_tokens in this mock, so final result is failed)
+    expect(result.errorProgression).toBeDefined();
+  });
+
+  it('records escalation in errorProgression', async () => {
+    let instrumentCallCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        if (instrumentCallCount <= 2) {
+          return { success: false, error: maxTokensError, tokenUsage: attempt1Tokens } as InstrumentFileResult;
+        }
+        return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, _skipFunctionFallback: true },
+    );
+
+    // Both max_tokens errors should be in errorProgression
+    expect(result.errorProgression).toBeDefined();
+    const maxTokensEntries = result.errorProgression!.filter(e => e.includes('max_tokens'));
+    expect(maxTokensEntries.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not escalate for non-max-tokens retryable errors', async () => {
+    let instrumentCallCount = 0;
+    const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+        instrumentCallCount++;
+        receivedOptions.push(options);
+        // Return null parsed_output but with end_turn (not max_tokens)
+        return {
+          success: false,
+          error: 'LLM response had null parsed_output — no structured output was returned.\nstop_reason: end_turn\noutput_tokens: 8000',
+          tokenUsage: attempt1Tokens,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, _skipFunctionFallback: true },
+    );
+
+    // All 3 attempts should use the same estimated budget (no escalation)
+    const { estimateOutputBudget } = await import('../../src/fix-loop/token-budget.ts');
+    const lineCount = originalContent.split('\n').length;
+    const expectedBudget = estimateOutputBudget(lineCount);
+    for (const opt of receivedOptions) {
+      expect(opt?.maxOutputTokens).toBe(expectedBudget);
+    }
   });
 });

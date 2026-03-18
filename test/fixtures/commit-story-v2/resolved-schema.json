@@ -1,0 +1,738 @@
+{
+  "registry_url": "/Users/whitney.lee/Documents/Repositories/commit-story-v2/telemetry/registry",
+  "groups": [
+    {
+      "id": "registry.commit_story.ai",
+      "type": "attribute_group",
+      "brief": "Attributes for AI content generation, combining OTel GenAI and custom",
+      "attributes": [
+        {
+          "name": "commit_story.ai.section_type",
+          "type": {
+            "members": [
+              {
+                "id": "summary",
+                "value": "summary",
+                "brief": "Daily summary section generation",
+                "stability": "development"
+              },
+              {
+                "id": "dialogue",
+                "value": "dialogue",
+                "brief": "Developer dialogue extraction",
+                "stability": "development"
+              },
+              {
+                "id": "technical_decisions",
+                "value": "technical_decisions",
+                "brief": "Technical decisions analysis",
+                "stability": "development"
+              },
+              {
+                "id": "context_synthesis",
+                "value": "context_synthesis",
+                "brief": "Multi-source context synthesis",
+                "stability": "development"
+              }
+            ]
+          },
+          "brief": "The type of journal section being generated",
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.operation.name",
+          "type": {
+            "members": [
+              {
+                "id": "chat",
+                "value": "chat",
+                "brief": "Chat completion operation such as [OpenAI Chat API](https://platform.openai.com/docs/api-reference/chat)",
+                "stability": "development"
+              },
+              {
+                "id": "generate_content",
+                "value": "generate_content",
+                "brief": "Multimodal content generation operation such as [Gemini Generate Content](https://ai.google.dev/api/generate-content)",
+                "stability": "development"
+              },
+              {
+                "id": "text_completion",
+                "value": "text_completion",
+                "brief": "Text completions operation such as [OpenAI Completions API (Legacy)](https://platform.openai.com/docs/api-reference/completions)",
+                "stability": "development"
+              },
+              {
+                "id": "embeddings",
+                "value": "embeddings",
+                "brief": "Embeddings operation such as [OpenAI Create embeddings API](https://platform.openai.com/docs/api-reference/embeddings/create)",
+                "stability": "development"
+              },
+              {
+                "id": "create_agent",
+                "value": "create_agent",
+                "brief": "Create GenAI agent",
+                "stability": "development"
+              },
+              {
+                "id": "invoke_agent",
+                "value": "invoke_agent",
+                "brief": "Invoke GenAI agent",
+                "stability": "development"
+              },
+              {
+                "id": "execute_tool",
+                "value": "execute_tool",
+                "brief": "Execute a tool",
+                "stability": "development"
+              }
+            ]
+          },
+          "brief": "The name of the operation being performed.",
+          "requirement_level": "required",
+          "note": "If one of the predefined values applies, but specific system uses a different name it's RECOMMENDED to document it in the semantic conventions for specific GenAI system and use system-specific name in the instrumentation. If a different name is not documented, instrumentation libraries SHOULD use applicable predefined value.\n",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.provider.name",
+          "type": {
+            "members": [
+              {
+                "id": "openai",
+                "value": "openai",
+                "brief": "[OpenAI](https://openai.com/)",
+                "stability": "development"
+              },
+              {
+                "id": "gcp.gen_ai",
+                "value": "gcp.gen_ai",
+                "brief": "Any Google generative AI endpoint",
+                "note": "May be used when specific backend is unknown.\n",
+                "stability": "development"
+              },
+              {
+                "id": "gcp.vertex_ai",
+                "value": "gcp.vertex_ai",
+                "brief": "[Vertex AI](https://cloud.google.com/vertex-ai)",
+                "note": "Used when accessing the 'aiplatform.googleapis.com' endpoint.\n",
+                "stability": "development"
+              },
+              {
+                "id": "gcp.gemini",
+                "value": "gcp.gemini",
+                "brief": "[Gemini](https://cloud.google.com/products/gemini)",
+                "note": "Used when accessing the 'generativelanguage.googleapis.com' endpoint. Also known as the AI Studio API.\n",
+                "stability": "development"
+              },
+              {
+                "id": "anthropic",
+                "value": "anthropic",
+                "brief": "[Anthropic](https://www.anthropic.com/)",
+                "stability": "development"
+              },
+              {
+                "id": "cohere",
+                "value": "cohere",
+                "brief": "[Cohere](https://cohere.com/)",
+                "stability": "development"
+              },
+              {
+                "id": "azure.ai.inference",
+                "value": "azure.ai.inference",
+                "brief": "Azure AI Inference",
+                "stability": "development"
+              },
+              {
+                "id": "azure.ai.openai",
+                "value": "azure.ai.openai",
+                "brief": "[Azure OpenAI](https://azure.microsoft.com/products/ai-services/openai-service/)",
+                "stability": "development"
+              },
+              {
+                "id": "ibm.watsonx.ai",
+                "value": "ibm.watsonx.ai",
+                "brief": "[IBM Watsonx AI](https://www.ibm.com/products/watsonx-ai)",
+                "stability": "development"
+              },
+              {
+                "id": "aws.bedrock",
+                "value": "aws.bedrock",
+                "brief": "[AWS Bedrock](https://aws.amazon.com/bedrock)",
+                "stability": "development"
+              },
+              {
+                "id": "perplexity",
+                "value": "perplexity",
+                "brief": "[Perplexity](https://www.perplexity.ai/)",
+                "stability": "development"
+              },
+              {
+                "id": "x_ai",
+                "value": "x_ai",
+                "brief": "[xAI](https://x.ai/)",
+                "stability": "development"
+              },
+              {
+                "id": "deepseek",
+                "value": "deepseek",
+                "brief": "[DeepSeek](https://www.deepseek.com/)",
+                "stability": "development"
+              },
+              {
+                "id": "groq",
+                "value": "groq",
+                "brief": "[Groq](https://groq.com/)",
+                "stability": "development"
+              },
+              {
+                "id": "mistral_ai",
+                "value": "mistral_ai",
+                "brief": "[Mistral AI](https://mistral.ai/)",
+                "stability": "development"
+              }
+            ]
+          },
+          "brief": "The Generative AI provider as identified by the client or server instrumentation.",
+          "requirement_level": "required",
+          "note": "The attribute SHOULD be set based on the instrumentation's best\nknowledge and may differ from the actual model provider.\n\nMultiple providers, including Azure OpenAI, Gemini, and AI hosting platforms\nare accessible using the OpenAI REST API and corresponding client libraries,\nbut may proxy or host models from different providers.\n\nThe `gen_ai.request.model`, `gen_ai.response.model`, and `server.address`\nattributes may help identify the actual system in use.\n\nThe `gen_ai.provider.name` attribute acts as a discriminator that\nidentifies the GenAI telemetry format flavor specific to that provider\nwithin GenAI semantic conventions.\nIt SHOULD be set consistently with provider-specific attributes and signals.\nFor example, GenAI spans, metrics, and events related to AWS Bedrock\nshould have the `gen_ai.provider.name` set to `aws.bedrock` and include\napplicable `aws.bedrock.*` attributes and are not expected to include\n`openai.*` attributes.\n",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.request.max_tokens",
+          "type": "int",
+          "brief": "The maximum number of tokens the model generates for a request.",
+          "examples": [
+            100
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.request.model",
+          "type": "string",
+          "brief": "The name of the GenAI model a request is being made to.",
+          "examples": "gpt-4",
+          "requirement_level": "required",
+          "note": "The name of the GenAI model a request is being made to. If the model is supplied by a vendor, then the value must be the exact name of the model requested. If the model is a fine-tuned custom model, the value should have a more specific name than the base model that's been fine-tuned.\n",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.request.temperature",
+          "type": "double",
+          "brief": "The temperature setting for the GenAI request.",
+          "examples": [
+            0.0
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.response.id",
+          "type": "string",
+          "brief": "The unique identifier for the completion.",
+          "examples": [
+            "chatcmpl-123"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.response.model",
+          "type": "string",
+          "brief": "The name of the model that generated the response.",
+          "examples": [
+            "gpt-4-0613"
+          ],
+          "requirement_level": "recommended",
+          "note": "If available. The name of the GenAI model that provided the response. If the model is supplied by a vendor, then the value must be the exact name of the model actually used. If the model is a fine-tuned custom model, the value should have a more specific name than the base model that's been fine-tuned.\n",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.usage.input_tokens",
+          "type": "int",
+          "brief": "The number of tokens used in the GenAI input (prompt).",
+          "examples": [
+            100
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "gen_ai.usage.output_tokens",
+          "type": "int",
+          "brief": "The number of tokens used in the GenAI response (completion).",
+          "examples": [
+            180
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        }
+      ],
+      "lineage": {
+        "provenance": {
+          "registry_id": "commit_story",
+          "path": "/Users/whitney.lee/Documents/Repositories/commit-story-v2/telemetry/registry/attributes.yaml"
+        },
+        "attributes": {
+          "gen_ai.operation.name": {
+            "source_group": "attributes.gen_ai.common.client",
+            "inherited_fields": [
+              "brief",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.provider.name": {
+            "source_group": "metric.gen_ai.client.operation.duration",
+            "inherited_fields": [
+              "brief",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.request.max_tokens": {
+            "source_group": "attributes.gen_ai.inference.client",
+            "inherited_fields": [
+              "brief",
+              "examples",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.request.model": {
+            "source_group": "attributes.gen_ai.common.client",
+            "inherited_fields": [
+              "brief",
+              "examples",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.request.temperature": {
+            "source_group": "attributes.gen_ai.inference.client",
+            "inherited_fields": [
+              "brief",
+              "examples",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.response.id": {
+            "source_group": "attributes.gen_ai.inference.client",
+            "inherited_fields": [
+              "brief",
+              "examples",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.response.model": {
+            "source_group": "attributes.gen_ai.inference.client",
+            "inherited_fields": [
+              "brief",
+              "examples",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.usage.input_tokens": {
+            "source_group": "attributes.gen_ai.inference.client",
+            "inherited_fields": [
+              "brief",
+              "examples",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          },
+          "gen_ai.usage.output_tokens": {
+            "source_group": "attributes.gen_ai.inference.client",
+            "inherited_fields": [
+              "brief",
+              "examples",
+              "note",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "requirement_level"
+            ]
+          }
+        }
+      },
+      "display_name": "AI Generation Attributes"
+    },
+    {
+      "id": "registry.commit_story.commit",
+      "type": "attribute_group",
+      "brief": "Attributes describing git commit data collected by commit-story",
+      "attributes": [
+        {
+          "name": "commit_story.commit.author",
+          "type": "string",
+          "brief": "The commit author name",
+          "examples": [
+            "Whitney Lee"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.commit.files_changed",
+          "type": "int",
+          "brief": "Number of files changed in the commit",
+          "examples": [
+            3,
+            12
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.commit.message",
+          "type": "string",
+          "brief": "The first line of the commit message",
+          "examples": [
+            "feat: add user authentication",
+            "fix: resolve memory leak in collector"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.commit.timestamp",
+          "type": "string",
+          "brief": "The commit timestamp in ISO 8601 format",
+          "examples": [
+            "2026-02-03T10:30:00Z"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "vcs.ref.head.name",
+          "type": "string",
+          "brief": "The git branch name",
+          "examples": [
+            "my-feature-branch",
+            "tag-1-test"
+          ],
+          "requirement_level": "recommended",
+          "note": "`head` refers to where you are right now; the current reference at a\ngiven time.\n",
+          "stability": "development"
+        },
+        {
+          "name": "vcs.ref.head.revision",
+          "type": "string",
+          "brief": "The full commit SHA hash",
+          "examples": [
+            "9d59409acf479dfa0df1aa568182e43e43df8bbe28d60fcf2bc52e30068802cc",
+            "main",
+            "123",
+            "HEAD"
+          ],
+          "requirement_level": "recommended",
+          "note": "`head` refers to where you are right now; the current reference at a\ngiven time.The revision can be a full [hash value (see\nglossary)](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf),\nof the recorded change to a ref within a repository pointing to a\ncommit [commit](https://git-scm.com/docs/git-commit) object. It does\nnot necessarily have to be a hash; it can simply define a [revision\nnumber](https://svnbook.red-bean.com/en/1.7/svn.tour.revs.specifiers.html)\nwhich is an integer that is monotonically increasing. In cases where\nit is identical to the `ref.head.name`, it SHOULD still be included.\nIt is up to the implementer to decide which value to set as the\nrevision based on the VCS system and situational context.\n",
+          "stability": "development"
+        }
+      ],
+      "lineage": {
+        "provenance": {
+          "registry_id": "commit_story",
+          "path": "/Users/whitney.lee/Documents/Repositories/commit-story-v2/telemetry/registry/attributes.yaml"
+        },
+        "attributes": {
+          "vcs.ref.head.name": {
+            "source_group": "entity.vcs.ref",
+            "inherited_fields": [
+              "examples",
+              "note",
+              "requirement_level",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "brief"
+            ]
+          },
+          "vcs.ref.head.revision": {
+            "source_group": "entity.vcs.ref",
+            "inherited_fields": [
+              "examples",
+              "note",
+              "requirement_level",
+              "stability"
+            ],
+            "locally_overridden_fields": [
+              "brief"
+            ]
+          }
+        }
+      },
+      "display_name": "Commit Attributes"
+    },
+    {
+      "id": "registry.commit_story.context",
+      "type": "attribute_group",
+      "brief": "Attributes for Claude Code session and context collection",
+      "attributes": [
+        {
+          "name": "commit_story.context.messages_count",
+          "type": "int",
+          "brief": "Total number of messages collected from sessions",
+          "examples": [
+            42,
+            156
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.context.sessions_count",
+          "type": "int",
+          "brief": "Number of Claude Code sessions found and processed",
+          "examples": [
+            1,
+            3
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.context.source",
+          "type": {
+            "members": [
+              {
+                "id": "claude_code",
+                "value": "claude_code",
+                "brief": "Claude Code chat history from ~/.claude/projects/",
+                "stability": "development"
+              },
+              {
+                "id": "git",
+                "value": "git",
+                "brief": "Git commit and diff data",
+                "stability": "development"
+              },
+              {
+                "id": "mcp",
+                "value": "mcp",
+                "brief": "MCP tool context capture",
+                "stability": "development"
+              }
+            ]
+          },
+          "brief": "The source type of collected context",
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.context.time_window_end",
+          "type": "string",
+          "brief": "End of the collection time window (ISO 8601)",
+          "examples": [
+            "2026-02-03T12:00:00Z"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.context.time_window_start",
+          "type": "string",
+          "brief": "Start of the collection time window (ISO 8601)",
+          "examples": [
+            "2026-02-03T08:00:00Z"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        }
+      ],
+      "lineage": {
+        "provenance": {
+          "registry_id": "commit_story",
+          "path": "/Users/whitney.lee/Documents/Repositories/commit-story-v2/telemetry/registry/attributes.yaml"
+        }
+      },
+      "display_name": "Context Collection Attributes"
+    },
+    {
+      "id": "registry.commit_story.filter",
+      "type": "attribute_group",
+      "brief": "Attributes for context filtering operations",
+      "attributes": [
+        {
+          "name": "commit_story.filter.messages_after",
+          "type": "int",
+          "brief": "Message count after filtering",
+          "examples": [
+            42
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.filter.messages_before",
+          "type": "int",
+          "brief": "Message count before filtering",
+          "examples": [
+            156
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.filter.tokens_after",
+          "type": "int",
+          "brief": "Token count after filtering",
+          "examples": [
+            15000
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.filter.tokens_before",
+          "type": "int",
+          "brief": "Token count before filtering",
+          "examples": [
+            50000
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.filter.type",
+          "type": {
+            "members": [
+              {
+                "id": "token_budget",
+                "value": "token_budget",
+                "brief": "Filtering based on token limits",
+                "stability": "development"
+              },
+              {
+                "id": "noise_removal",
+                "value": "noise_removal",
+                "brief": "Removing tool calls and system messages",
+                "stability": "development"
+              },
+              {
+                "id": "sensitive_data",
+                "value": "sensitive_data",
+                "brief": "Redacting sensitive information",
+                "stability": "development"
+              },
+              {
+                "id": "relevance",
+                "value": "relevance",
+                "brief": "Filtering by relevance to commit",
+                "stability": "development"
+              }
+            ]
+          },
+          "brief": "The type of filtering operation applied",
+          "requirement_level": "recommended",
+          "stability": "development"
+        }
+      ],
+      "lineage": {
+        "provenance": {
+          "registry_id": "commit_story",
+          "path": "/Users/whitney.lee/Documents/Repositories/commit-story-v2/telemetry/registry/attributes.yaml"
+        }
+      },
+      "display_name": "Filter Attributes"
+    },
+    {
+      "id": "registry.commit_story.journal",
+      "type": "attribute_group",
+      "brief": "Attributes for journal entry generation and output",
+      "attributes": [
+        {
+          "name": "commit_story.journal.entry_date",
+          "type": "string",
+          "brief": "The date of the journal entry (YYYY-MM-DD)",
+          "examples": [
+            "2026-02-03"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.journal.file_path",
+          "type": "string",
+          "brief": "Output file path for the journal entry",
+          "examples": [
+            "journal/entries/2026-02/2026-02-03.md"
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.journal.quotes_count",
+          "type": "int",
+          "brief": "Number of developer quotes extracted for the entry",
+          "examples": [
+            5,
+            12
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.journal.sections",
+          "type": "string[]",
+          "brief": "List of sections generated in the journal entry",
+          "examples": [
+            [
+              "summary",
+              "dialogue",
+              "technical_decisions"
+            ]
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.journal.word_count",
+          "type": "int",
+          "brief": "Total word count of the generated journal entry",
+          "examples": [
+            450,
+            1200
+          ],
+          "requirement_level": "recommended",
+          "stability": "development"
+        }
+      ],
+      "lineage": {
+        "provenance": {
+          "registry_id": "commit_story",
+          "path": "/Users/whitney.lee/Documents/Repositories/commit-story-v2/telemetry/registry/attributes.yaml"
+        }
+      },
+      "display_name": "Journal Attributes"
+    }
+  ]
+}

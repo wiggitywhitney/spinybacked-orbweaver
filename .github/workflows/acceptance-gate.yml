@@ -34,6 +34,8 @@ jobs:
             pattern: "test/acceptance-gate.test.ts test/validation/acceptance-gate.test.ts test/fix-loop/acceptance-gate.test.ts test/interfaces/acceptance-gate.test.ts"
           - name: "coordinator"
             pattern: "test/coordinator/acceptance-gate.test.ts"
+          - name: "run-5-coverage"
+            pattern: "test/commit-story-v2/acceptance-gate.test.ts"
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

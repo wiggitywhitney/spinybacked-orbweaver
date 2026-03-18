@@ -43,7 +43,8 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   };
 }
 
-/** Helper to build a mock Anthropic client with a parse response. */
+/** Helper to build a mock Anthropic client with a streaming response.
+ *  instrumentFile uses client.messages.stream() + finalMessage(), not parse(). */
 function makeMockClient(llmOutput: LlmOutput, usage?: {
   input_tokens?: number;
   output_tokens?: number;
@@ -78,7 +79,9 @@ function makeMockClient(llmOutput: LlmOutput, usage?: {
 
   return {
     messages: {
-      parse: vi.fn().mockResolvedValue(response),
+      stream: vi.fn().mockReturnValue({
+        finalMessage: vi.fn().mockResolvedValue(response),
+      }),
     },
   };
 }
@@ -341,7 +344,9 @@ export function formatResponse(data) {
     it('wraps the original error message for debugging', async () => {
       const client = {
         messages: {
-          parse: vi.fn().mockRejectedValue(new Error('Connection timeout after 30000ms')),
+          stream: vi.fn().mockReturnValue({
+            finalMessage: vi.fn().mockRejectedValue(new Error('Connection timeout after 30000ms')),
+          }),
         },
       };
 
@@ -383,7 +388,9 @@ export function formatResponse(data) {
       };
       const client = {
         messages: {
-          parse: vi.fn().mockResolvedValue(response),
+          stream: vi.fn().mockReturnValue({
+            finalMessage: vi.fn().mockResolvedValue(response),
+          }),
         },
       };
 

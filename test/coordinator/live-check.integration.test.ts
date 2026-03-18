@@ -173,7 +173,7 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
     expect(result.testsPassed).toBe(true);
     expect(result.complianceReport).toBeDefined();
     expect(result.complianceReport!.length).toBeGreaterThan(0);
-    expect(result.warnings).toHaveLength(0);
+    expect(result.warnings, `Unexpected warnings: ${JSON.stringify(result.warnings)}`).toHaveLength(0);
   });
 
   it('fires callbacks during the workflow', async () => {
