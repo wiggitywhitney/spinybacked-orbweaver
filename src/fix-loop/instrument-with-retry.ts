@@ -36,6 +36,8 @@ export interface InstrumentFileCallOptions {
   failureHint?: string;
   /** Output token budget for this call. Overrides the default MAX_OUTPUT_TOKENS_PER_CALL. */
   maxOutputTokens?: number;
+  /** Override effort level for this call. Used to lower effort on retry attempts. */
+  effortOverride?: 'low' | 'medium' | 'high';
 }
 
 /**
@@ -181,7 +183,7 @@ function buildValidationConfig(
  * @returns Complete feedback message for the LLM
  */
 function buildFixPrompt(validationFeedback: string): string {
-  return `The instrumented file has validation errors. Fix them and return the complete corrected file.\n\n${validationFeedback}`;
+  return `The instrumented file has validation errors. Fix ONLY the failing rules listed below. Do not restructure code that is not related to a failing rule. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
 }
 
 /**
@@ -420,11 +422,13 @@ async function executeRetryLoop(
     let callOptions: InstrumentFileCallOptions | undefined;
     let actualStrategy: ValidationStrategy = plannedStrategy;
     if (plannedStrategy === 'multi-turn-fix' && lastConversationContext && lastValidation) {
-      // Multi-turn fix: grow the conversation with validation feedback
+      // Multi-turn fix: grow the conversation with validation feedback.
+      // Use low effort to constrain thinking — corrections should be targeted, not exploratory.
       callOptions = {
         conversationContext: lastConversationContext,
         feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
         maxOutputTokens: outputBudget,
+        effortOverride: 'low',
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint
