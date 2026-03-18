@@ -282,8 +282,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
   });
 
   // Run-5 PARTIAL (4 spans): getDaysWithDailySummaries failed COV-003 on expected-condition readdir catch
-  // Run-4: 5 spans (4 exported async functions)
-  describe('summary-detector.js — filesystem scanner; 4 exported async functions', () => {
+  // Run-4: 5 spans (4 exported async functions + 1 internal helper)
+  describe('summary-detector.js — filesystem scanner; 4 exported async functions + internal helpers', () => {
     it('instruments all 4 exported async functions without NDS-005b violations', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/utils/summary-detector.js');
 
