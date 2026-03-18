@@ -98,7 +98,7 @@ These tests call the real Anthropic API and are advisory (part of the acceptance
 
 Run the acceptance tests once per file. Fix any failures iteratively (one file at a time, tight loop). CI provides ongoing consistency validation — future PRs that regress file coverage are caught by the acceptance gate.
 
-7/8 files passing after `partial` → `success` bug fix. summary-graph.js is the lone holdout (genuine partial: 14/15 functions, 5 spans but needs ≥6). Blocked on Milestone 6 (token limit raise) — whole-file path at 64K may resolve the 1 failing function.
+At 32K streaming: 7/8 pass assertions, 8/8 pass instrumentation. summarize.js fails only on `span:` schema extension format (#209) — Layer 1 normalization now fixes this defensively. summary-graph.js (the original holdout) passes with 6 spans at 32K. CI validation pending (needs push + PR update).
 
 - [ ] All 8 acceptance tests pass (iterative fixes applied where needed)
 - [ ] No oscillation failures in passing runs
@@ -151,18 +151,19 @@ Two changes, implemented together:
 - [x] Unit tests confirming validation errors still retry normally (not early-exited)
 - [x] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `32_000` (streaming via `client.messages.stream()`; 65K tested but causes overthinking — see `results-65k-streaming.md`)
 - [x] Implement early-exit logic in `executeRetryLoop`
-- [ ] Re-run all 8 fixture files with new settings
-- [ ] Write post-change results file (same format as `test/commit-story-v2/baseline-results-16k-tokens.md`)
-- [ ] Compare results against baseline (timing, spans, error progressions, pass/fail)
-- [ ] summary-graph.js passes (the lone holdout from Milestone 3)
+- [x] Re-run all 8 fixture files with new settings — 32K streaming run complete, all 8 results documented
+- [x] Write post-change results file — `test/commit-story-v2/results-32k-streaming.md` and `results-65k-streaming.md`
+- [x] Compare results against baseline — detailed comparison in results files (16K vs 32K vs 65K)
+- [x] summary-graph.js passes — 6 spans, 376s, whole-file path at 32K (was FAIL at 16K)
 
 ### Milestone 7: Schema Extension Format Normalization (#209)
 
 The agent sometimes produces `span:` (colon) instead of `span.` (dot) in schema extensions. `writeSchemaExtensions` only recognizes `span.` — colon-separated IDs are silently misclassified as attributes. Defensive Layer 1 fix in `supplementSchemaExtensions`.
 
-- [ ] Normalize `span:` → `span.` in `supplementSchemaExtensions` (Layer 1 defense)
-- [ ] Unit test: colon-separated extensions are normalized to dot-separated
-- [ ] Re-run summary-graph.js to verify schema extension assertion passes
+- [x] Normalize `span:` → `span.` in `supplementSchemaExtensions` (Layer 1 defense)
+- [x] Unit test: colon-separated extensions are normalized to dot-separated — 5 tests for `normalizeSchemaExtension`
+- [x] System prompt updated: explicit dot-separated format requirement in Span Naming and Output Format sections
+- [ ] Re-run summary-graph.js to verify schema extension assertion passes with prompt fix + normalization
 
 ### Milestone 8: Deterministic Output Token Sizing (#210)
 
