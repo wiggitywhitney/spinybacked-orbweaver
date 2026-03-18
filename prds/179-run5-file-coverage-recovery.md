@@ -163,7 +163,7 @@ The agent sometimes produces `span:` (colon) instead of `span.` (dot) in schema 
 - [x] Normalize `span:` → `span.` in `supplementSchemaExtensions` (Layer 1 defense)
 - [x] Unit test: colon-separated extensions are normalized to dot-separated — 5 tests for `normalizeSchemaExtension`
 - [x] System prompt updated: explicit dot-separated format requirement in Span Naming and Output Format sections
-- [ ] Re-run summary-graph.js to verify schema extension assertion passes with prompt fix + normalization
+- [x] Re-run summary-graph.js to verify schema extension assertion passes with prompt fix + normalization — PASS 451s, 6 spans, all dot-separated. summarize.js also verified: PASS 325s, 3 spans, all dot-separated.
 
 ### Milestone 8: Deterministic Output Token Sizing (#210)
 
