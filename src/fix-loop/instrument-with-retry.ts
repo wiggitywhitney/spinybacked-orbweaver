@@ -746,9 +746,10 @@ async function functionLevelFallback(
     }
     return {
       path: filePath,
-      // When 0 spans are committed the file is unchanged — report success, not partial.
-      // Partial means some functions were instrumented but not all; 0 spans means none were.
-      status: totalSpans === 0 ? 'success' : 'partial',
+      // Validation passed on the reassembled code.
+      // - success: all functions instrumented (or 0 spans = file unchanged)
+      // - partial: some functions failed but the passing ones validated
+      status: (totalSpans === 0 || successful.length === extractedFunctions.length) ? 'success' : 'partial',
       spansAdded: totalSpans,
       librariesNeeded,
       schemaExtensions: supplementSchemaExtensions(schemaExtensions, reassembledCode),
