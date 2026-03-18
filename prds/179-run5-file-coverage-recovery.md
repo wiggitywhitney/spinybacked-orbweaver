@@ -183,6 +183,22 @@ Replace hardcoded 32K with file-size-based budget estimation + escalation on tru
 - [x] Compare all 4 results files: 16K baseline vs 32K vs 65K vs deterministic — timing, tokens, spans, error progressions, pass/fail
 - [~] All 8 files pass with deterministic sizing — 7/8 pass; sensitive-filter.js known failure (pure sync, #212), not a sizing regression
 
+### Milestone 9: Sync-Only Pre-Screening (#212)
+
+Skip files with no async exports before calling the LLM. Same pattern as the already-instrumented detection in `instrumentFile()` — AST check, short-circuit with 0 spans. Fixes sensitive-filter.js (the last failing fixture file).
+
+**Key files:**
+- `src/agent/instrument-file.ts` — add pre-screening check after already-instrumented detection
+- `src/ast/function-classification.ts` — `classifyFunctions` already provides `isAsync` on each function
+- `test/agent/instrument-file.test.ts` — unit tests for sync-only short-circuit
+- `test/commit-story-v2/acceptance-gate.test.ts` — sensitive-filter.js validation
+
+- [ ] Write failing test: sync-only file returns success with 0 spans, no LLM call
+- [ ] Implement pre-screening in `instrumentFile` using `classifyFunctions`
+- [ ] Verify: sensitive-filter.js acceptance test passes (0 spans, success)
+- [ ] Update Milestone 3 checkbox from [~] to [x]
+- [ ] Close #212
+
 ## Eval Evidence
 
 | Document | Path | Relevant Section |
