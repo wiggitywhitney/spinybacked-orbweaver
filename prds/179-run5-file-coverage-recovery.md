@@ -146,7 +146,7 @@ Two changes, implemented together:
 - `test/fix-loop/instrument-with-retry.test.ts` — unit tests for retry/early-exit logic
 
 **TDD approach:**
-- [ ] Write baseline results file from current test data (before token limit change)
+- [x] Write baseline results file from current test data (before token limit change) — see `test/commit-story-v2/baseline-results-16k-tokens.md`
 - [ ] Unit tests for early-exit detection (`stop_reason: max_tokens` triggers early abort)
 - [ ] Unit tests confirming validation errors still retry normally (not early-exited)
 - [ ] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `65_536`
