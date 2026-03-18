@@ -127,6 +127,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.status).toBe('success');
       expect(result.spansAdded).toBeGreaterThanOrEqual(3);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);
       for (const ext of result.schemaExtensions) {
         expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
@@ -150,6 +151,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
       expect(result.spansAdded).toBeGreaterThanOrEqual(2);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);
       for (const ext of result.schemaExtensions) {
         expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
@@ -173,6 +175,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
       expect(result.spansAdded).toBeGreaterThanOrEqual(4);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);
       for (const ext of result.schemaExtensions) {
         expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
@@ -196,6 +199,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
       expect(result.spansAdded).toBeGreaterThanOrEqual(6);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);
       for (const ext of result.schemaExtensions) {
         expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
@@ -247,6 +251,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       // File has 2 async entry points (saveJournalEntry, discoverReflections); 2 sync formatters don't warrant spans
       expect(result.spansAdded).toBeGreaterThanOrEqual(2);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);
       for (const ext of result.schemaExtensions) {
         expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
@@ -270,6 +275,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
       expect(result.spansAdded).toBeGreaterThanOrEqual(3);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);
       for (const ext of result.schemaExtensions) {
         expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
@@ -293,6 +299,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
       expect(result.spansAdded).toBeGreaterThanOrEqual(5);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
+      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);
       for (const ext of result.schemaExtensions) {
         expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
