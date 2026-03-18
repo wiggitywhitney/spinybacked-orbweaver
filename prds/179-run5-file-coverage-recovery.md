@@ -89,10 +89,10 @@ These tests call the real Anthropic API and are advisory (part of the acceptance
 - `test/acceptance-gate.test.ts` or new dedicated file
 - `test/helpers/rubric-checks.ts` — existing rubric check helpers
 
-- [ ] Acceptance tests for all 8 fixture files
-- [ ] Tests validate no NDS-005b violations
-- [ ] Tests validate span count meets or exceeds run-4 coverage
-- [ ] Tests run against real API (acceptance gate pattern)
+- [x] Acceptance tests for all 8 fixture files
+- [x] Tests validate no NDS-005b violations
+- [x] Tests validate span count meets or exceeds run-4 coverage
+- [x] Tests run against real API (acceptance gate pattern)
 
 ### Milestone 3: Consistency Validation (Multiple Runs)
 

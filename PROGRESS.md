@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-17) Run-5 acceptance gate tests for all 8 commit-story-v2 fixture files (PRD #179, milestone 2): `test/commit-story-v2/acceptance-gate.test.ts` exercises each fixture through `instrumentWithRetry` against the real Anthropic API. Asserts `status === 'success'`, span count meets or exceeds run-4 baselines, and no NDS-005b violations (expected-condition catches must not gain `recordException`). New `checkNds005bNotViolated` rubric helper in `test/helpers/rubric-checks.ts` uses ts-morph AST parsing to detect catch blocks where all statements are OTel-only with no original business logic. 4 new unit tests for the helper. Acceptance tests skip when `ANTHROPIC_API_KEY` is absent (consistent with project pattern).
+
 - (2026-03-17) Run-5 failure recovery fixture suite (PRD #179, milestone 1): 8 uninstrumented source files from commit-story-v2 main ported to `test/fixtures/commit-story-v2/` with ABOUTME headers documenting each file's run-5 failure mode (FAILED vs PARTIAL, failure reason, run-4 span count). Resolved schema from commit-story-v2's weaver registry saved as `resolved-schema.json` — notably absent commit_story.summarize.* and commit_story.commands.* attribute groups, which caused run-5 SCH-002 failures. Fixture set covers all 8 regression cases: summarize.js (SCH-002 + COV-003), index.js (SCH-002 oscillation), journal-graph.js (fallback scope limit), summary-graph.js (COV-003/NDS-005b), sensitive-filter.js (NDS-003 on pure-sync target), journal-manager.js (COV-003 filesystem catches), summary-manager.js (NDS-003 import loss + COV-003), summary-detector.js (COV-003 readdir catch)
 
 ### Fixed

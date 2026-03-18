@@ -13,6 +13,7 @@ import {
   checkErrorRecording,
   checkAsyncContext,
   checkAttributeSafety,
+  checkNds005bNotViolated,
 } from './rubric-checks.ts';
 
 describe('NDS-001: checkSyntaxValid', () => {
@@ -338,6 +339,70 @@ span.setAttribute('db.row_count', result.rows.length);`;
 
   it('passes with no setAttribute calls', () => {
     const result = checkAttributeSafety('function foo() { return 1; }');
+    expect(result.passed).toBe(true);
+  });
+});
+
+describe('NDS-005b: checkNds005bNotViolated', () => {
+  it('passes when catch blocks have original logic alongside error recording', () => {
+    const code = `
+async function fetchData() {
+  const tracer = trace.getTracer('service');
+  return tracer.startActiveSpan('fetch', async (span) => {
+    try {
+      return await getData();
+    } catch (err) {
+      console.error('fetch failed:', err.message);
+      span.recordException(err);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+}`;
+    const result = checkNds005bNotViolated(code);
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails when a catch block contains only OTel error recording with no original logic', () => {
+    // Originally-empty catch (expected-condition) that the agent wrongly added recordException to
+    const code = `
+async function checkExists(path) {
+  const tracer = trace.getTracer('service');
+  return tracer.startActiveSpan('check', async (span) => {
+    try {
+      await access(path);
+      return true;
+    } catch (err) {
+      span.recordException(err);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+    } finally {
+      span.end();
+    }
+  });
+}`;
+    const result = checkNds005bNotViolated(code);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('NDS-005b');
+  });
+
+  it('passes when catch blocks have no recordException', () => {
+    const code = `
+async function loadFile(path) {
+  try {
+    return await readFile(path);
+  } catch {
+    // File does not exist, return null
+    return null;
+  }
+}`;
+    const result = checkNds005bNotViolated(code);
+    expect(result.passed).toBe(true);
+  });
+
+  it('passes when no try/catch blocks exist', () => {
+    const result = checkNds005bNotViolated('function foo() { return 1; }');
     expect(result.passed).toBe(true);
   });
 });

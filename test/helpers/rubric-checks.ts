@@ -413,6 +413,58 @@ export function checkAttributeSafety(code: string): RubricCheckResult {
   return { passed: false, details: issues.join('\n') };
 }
 
+/**
+ * NDS-005b: Expected-condition catch blocks must not gain error recording.
+ * Catch blocks in the instrumented output that contain ONLY OTel statements
+ * (no original business logic) are NDS-005b violations — the agent added
+ * span.recordException() to a catch block that was originally empty or
+ * swallowed an expected condition (e.g., "file not found, proceed").
+ */
+export function checkNds005bNotViolated(instrumented: string): RubricCheckResult {
+  const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+  const sf = project.createSourceFile('nds005b-check.js', instrumented);
+
+  const violations: string[] = [];
+
+  sf.forEachDescendant((node) => {
+    if (Node.isTryStatement(node)) {
+      const catchClause = node.getCatchClause();
+      if (catchClause) {
+        const statements = catchClause.getBlock().getStatements();
+        if (statements.length === 0) return;
+
+        const hasRecordException = statements.some((s: { getText(): string }) =>
+          s.getText().includes('recordException'),
+        );
+        if (!hasRecordException) return;
+
+        // Check if ALL statements are OTel calls — no original business logic survived
+        const nonOtelStatements = statements.filter((s: { getText(): string }) => !isOTelStatement(s.getText().trim()));
+        if (nonOtelStatements.length === 0) {
+          violations.push(
+            `Catch block at line ${catchClause.getStartLineNumber()} has only OTel error recording ` +
+            `with no original business logic — likely an expected-condition catch (NDS-005b)`,
+          );
+        }
+      }
+    }
+  });
+
+  if (violations.length === 0) return { passed: true };
+  return { passed: false, details: violations.join('\n') };
+}
+
+/** Helper: check if a statement text is an OTel instrumentation call. */
+function isOTelStatement(text: string): boolean {
+  return (
+    text.includes('recordException') ||
+    text.includes('setStatus') ||
+    text.includes('SpanStatusCode') ||
+    text.startsWith('span.') ||
+    text.startsWith('otelSpan.')
+  );
+}
+
 /** Helper: check if a line is an OTel instrumentation addition. */
 function isOTelLine(line: string): boolean {
   const trimmed = line.trim();
