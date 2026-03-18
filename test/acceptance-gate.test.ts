@@ -160,24 +160,15 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
 
       const output = result.output;
 
-      // DX: fields populated
+      // Sync-only pre-screening: format-helpers.js has no async exports, so
+      // instrumentFile short-circuits before calling the LLM. The file is
+      // returned unchanged with 0 spans and 0 token cost.
       expect(output.notes.length).toBeGreaterThan(0);
-      expect(output.tokenUsage.inputTokens).toBeGreaterThan(0);
-
-      // Syntax must be valid regardless
-      const syntaxCheck = checkSyntaxValid(output.instrumentedCode);
-      expect(syntaxCheck.passed, `NDS-001: ${syntaxCheck.details}`).toBe(true);
-
-      // API-001: if any OTel imports added, must be from @opentelemetry/api only
-      const apiCheck = checkOtelImportsApiOnly(output.instrumentedCode);
-      expect(apiCheck.passed, `API-001: ${apiCheck.details}`).toBe(true);
-
-      // Public API preserved
-      const apiPreserved = checkPublicApiPreserved(original, output.instrumentedCode);
-      expect(apiPreserved.passed, `NDS-004: ${apiPreserved.details}`).toBe(true);
-
-      // These are pure utilities — notes should indicate limited instrumentation
-      // The agent should recognize these as short sync functions and skip most/all
+      expect(output.notes.some(n => n.toLowerCase().includes('sync'))).toBe(true);
+      expect(output.tokenUsage.inputTokens).toBe(0);
+      expect(output.instrumentedCode).toBe(original);
+      expect(output.schemaExtensions).toEqual([]);
+      expect(output.attributesCreated).toBe(0);
     });
   });
 
