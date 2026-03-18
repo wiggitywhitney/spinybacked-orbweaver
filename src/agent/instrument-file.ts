@@ -18,10 +18,10 @@ import { detectElision } from './elision.ts';
  * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
  * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
  */
-// 32K is the interim default: covers all observed output sizes (7K–26K at 21K limit)
-// with headroom, avoids the 65K overthinking pathology. Streaming is required above
-// 21,333 tokens with extended thinking — instrumentFile uses client.messages.stream().
-// TODO (#210): Replace with deterministic estimateOutputBudget(fileLines) + escalation.
+// 32K is the fallback default when no explicit maxOutputTokens is provided.
+// In normal operation, executeRetryLoop computes a file-size-based budget via
+// estimateOutputBudget(fileLines) and passes it through options.maxOutputTokens.
+// This constant is only used for direct instrumentFile calls without the retry loop.
 export const MAX_OUTPUT_TOKENS_PER_CALL = 32_000;
 
 /**
@@ -70,6 +70,8 @@ interface InstrumentFileOptions {
   feedbackMessage?: string;
   /** Failure category hint appended to the standard user message (for fresh regeneration). */
   failureHint?: string;
+  /** Output token budget for this call. Overrides MAX_OUTPUT_TOKENS_PER_CALL. */
+  maxOutputTokens?: number;
 }
 
 /**
@@ -176,7 +178,7 @@ export async function instrumentFile(
     // same response shape including parsed_output.
     const stream = client.messages.stream({
       model: config.agentModel,
-      max_tokens: MAX_OUTPUT_TOKENS_PER_CALL,
+      max_tokens: options?.maxOutputTokens ?? MAX_OUTPUT_TOKENS_PER_CALL,
       thinking: { type: 'adaptive' },
       output_config: {
         effort: config.agentEffort,

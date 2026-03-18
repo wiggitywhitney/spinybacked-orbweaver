@@ -11,7 +11,7 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
-import { addTokenUsage, totalTokens, estimateMinTokens } from './token-budget.ts';
+import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { detectOscillation } from './oscillation.ts';
 import { extractExportedFunctions } from './function-extraction.ts';
 import { reassembleFunctions, ensureTracerAfterImports } from './function-reassembly.ts';
@@ -34,6 +34,8 @@ export interface InstrumentFileCallOptions {
   feedbackMessage?: string;
   /** Failure category hint appended to the user message (for fresh regeneration). */
   failureHint?: string;
+  /** Output token budget for this call. Overrides the default MAX_OUTPUT_TOKENS_PER_CALL. */
+  maxOutputTokens?: number;
 }
 
 /**
@@ -383,6 +385,10 @@ async function executeRetryLoop(
   let lastStrategy: ValidationStrategy = 'initial-generation';
   let completedAttempts = 0;
 
+  // Deterministic output token sizing: budget scales with file size, escalates on truncation
+  const fileLines = originalCode.split('\n').length;
+  let outputBudget = estimateOutputBudget(fileLines);
+
   // Track NDS-003 violations and LLM refactors per validation-producing attempt
   // for persistent violation detection and refactor recommendation collection.
   const nds003ViolationsPerAttempt: import('../validation/types.ts').CheckResult[][] = [];
@@ -418,17 +424,23 @@ async function executeRetryLoop(
       callOptions = {
         conversationContext: lastConversationContext,
         feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
+        maxOutputTokens: outputBudget,
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint
       callOptions = {
         failureHint: buildFailureHint(lastValidation),
+        maxOutputTokens: outputBudget,
       };
     } else if (plannedStrategy !== 'initial-generation') {
       // No conversation context or validation available — this is a retry
       // of initial generation triggered by a retryable failure, not a real
       // multi-turn fix or fresh regeneration.
       actualStrategy = 'retry-initial';
+      callOptions = { maxOutputTokens: outputBudget };
+    } else {
+      // Initial generation
+      callOptions = { maxOutputTokens: outputBudget };
     }
     lastStrategy = actualStrategy;
 
@@ -443,10 +455,14 @@ async function executeRetryLoop(
       errorProgression.push(instrumentResult.error);
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
-        // Early abort: stop_reason: max_tokens means the model hit the output token ceiling.
-        // Retrying the same whole-file call will truncate at the same limit. Return failed
-        // immediately so the caller falls back to function-level instrumentation.
+        // Budget escalation: stop_reason: max_tokens means the model hit the output token ceiling.
+        // If we haven't already escalated to MAX_OUTPUT_BUDGET, escalate and retry.
+        // If already at MAX, abort — retrying at the same ceiling is pointless.
         if (isEarlyAbortError(instrumentResult.error)) {
+          if (outputBudget < MAX_OUTPUT_BUDGET) {
+            outputBudget = MAX_OUTPUT_BUDGET;
+            continue;
+          }
           return buildFailedResult(
             filePath, instrumentResult.error, instrumentResult.error,
             cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,

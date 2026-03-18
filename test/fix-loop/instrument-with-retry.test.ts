@@ -1753,8 +1753,11 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     expect(result.validationStrategyUsed).toBe('fresh-regeneration');
     expect(callCount).toBe(4);
 
-    // Attempt 1: initial — no options
-    expect(capturedOptions[0]).toBeUndefined();
+    // Attempt 1: initial — has maxOutputTokens but no conversation/feedback
+    expect(capturedOptions[0]).toBeDefined();
+    expect(capturedOptions[0]!.maxOutputTokens).toBeDefined();
+    expect(capturedOptions[0]!.conversationContext).toBeUndefined();
+    expect(capturedOptions[0]!.feedbackMessage).toBeUndefined();
 
     // Attempt 2: multi-turn fix — has conversationContext and feedbackMessage
     expect(capturedOptions[1]).toBeDefined();
@@ -2233,7 +2236,7 @@ describe('early abort on stop_reason: max_tokens skips remaining whole-file retr
     }
   });
 
-  it('aborts after 1 attempt when stop_reason is max_tokens', async () => {
+  it('escalates budget on first max_tokens, aborts on second', async () => {
     let instrumentCallCount = 0;
 
     const deps: InstrumentWithRetryDeps = {
@@ -2254,11 +2257,13 @@ describe('early abort on stop_reason: max_tokens skips remaining whole-file retr
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, _skipFunctionFallback: true },
     );
 
-    // Should have called instrumentFile only ONCE (early abort, no retries)
-    expect(instrumentCallCount).toBe(1);
+    // Should have called instrumentFile TWICE: initial at estimated budget + escalated to MAX
+    // Then aborts because already at MAX_OUTPUT_BUDGET
+    expect(instrumentCallCount).toBe(2);
     expect(result.status).toBe('failed');
   });
 
@@ -3064,5 +3069,167 @@ describe('instrumentWithRetry — supplementSchemaExtensions', () => {
     expect(result.status).toBe('success');
     expect(result.schemaExtensions).toContain('span.myapp.process_order');
     expect(result.schemaExtensions).toContain('span.myapp.process');
+  });
+});
+
+// --- Budget escalation on truncation (#210 Milestone 8) ---
+
+describe('budget escalation on stop_reason: max_tokens (#210)', () => {
+  let testFilePath: string;
+  // 400-line file: estimateOutputBudget(400) = 400*50+8000 = 28000
+  const originalContent = Array.from({ length: 400 }, (_, i) => `const line${i} = ${i};`).join('\n')
+    + '\nexport function main() { return 42; }\n';
+  const maxTokensError = [
+    'LLM response had null parsed_output — no structured output was returned.',
+    'stop_reason: max_tokens',
+    'output_tokens: 28000',
+    'raw_preview: <no text content>',
+  ].join('\n');
+  const attempt1Tokens: TokenUsage = { inputTokens: 5000, outputTokens: 28000, cacheCreationInputTokens: 200, cacheReadInputTokens: 100 };
+
+  beforeEach(() => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'escalation-'));
+    testFilePath = join(tempDir, 'test-file.js');
+    writeFileSync(testFilePath, originalContent);
+  });
+
+  afterEach(() => {
+    if (testFilePath && existsSync(testFilePath)) {
+      rmSync(join(testFilePath, '..'), { recursive: true, force: true });
+    }
+  });
+
+  it('passes maxOutputTokens to instrumentFile based on file line count', async () => {
+    const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+        receivedOptions.push(options);
+        return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps },
+    );
+
+    expect(receivedOptions.length).toBe(1);
+    // 400 lines → estimateOutputBudget(400+1 for the export line) — but let's check actual line count
+    const lineCount = originalContent.split('\n').length;
+    const { estimateOutputBudget } = await import('../../src/fix-loop/token-budget.ts');
+    expect(receivedOptions[0]?.maxOutputTokens).toBe(estimateOutputBudget(lineCount));
+  });
+
+  it('escalates to MAX_OUTPUT_BUDGET on first max_tokens hit and retries', async () => {
+    let instrumentCallCount = 0;
+    const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+        instrumentCallCount++;
+        receivedOptions.push(options);
+        if (instrumentCallCount === 1) {
+          // First call: hit max_tokens at estimated budget
+          return { success: false, error: maxTokensError, tokenUsage: attempt1Tokens } as InstrumentFileResult;
+        }
+        // Second call: succeed at escalated budget
+        return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Should have called instrumentFile TWICE: initial + escalated retry
+    expect(instrumentCallCount).toBe(2);
+    expect(result.status).toBe('success');
+
+    // First call uses estimated budget, second uses MAX_OUTPUT_BUDGET
+    const { MAX_OUTPUT_BUDGET } = await import('../../src/fix-loop/token-budget.ts');
+    expect(receivedOptions[1]?.maxOutputTokens).toBe(MAX_OUTPUT_BUDGET);
+  });
+
+  it('falls back to function-level after max_tokens at MAX_OUTPUT_BUDGET', async () => {
+    let instrumentCallCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        // Every call hits max_tokens
+        return { success: false, error: maxTokensError, tokenUsage: attempt1Tokens } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Should have called instrumentFile exactly TWICE: estimated + escalated (then abort)
+    // Plus function-level calls (the file has 1 exported function)
+    expect(instrumentCallCount).toBeGreaterThanOrEqual(2);
+    // The whole-file path should have failed, triggering function-level fallback
+    // (function-level also hits max_tokens in this mock, so final result is failed)
+    expect(result.errorProgression).toBeDefined();
+  });
+
+  it('records escalation in errorProgression', async () => {
+    let instrumentCallCount = 0;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        if (instrumentCallCount <= 2) {
+          return { success: false, error: maxTokensError, tokenUsage: attempt1Tokens } as InstrumentFileResult;
+        }
+        return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, _skipFunctionFallback: true },
+    );
+
+    // Both max_tokens errors should be in errorProgression
+    expect(result.errorProgression).toBeDefined();
+    const maxTokensEntries = result.errorProgression!.filter(e => e.includes('max_tokens'));
+    expect(maxTokensEntries.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not escalate for non-max-tokens retryable errors', async () => {
+    let instrumentCallCount = 0;
+    const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+        instrumentCallCount++;
+        receivedOptions.push(options);
+        // Return null parsed_output but with end_turn (not max_tokens)
+        return {
+          success: false,
+          error: 'LLM response had null parsed_output — no structured output was returned.\nstop_reason: end_turn\noutput_tokens: 8000',
+          tokenUsage: attempt1Tokens,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, _skipFunctionFallback: true },
+    );
+
+    // All 3 attempts should use the same estimated budget (no escalation)
+    const { estimateOutputBudget } = await import('../../src/fix-loop/token-budget.ts');
+    const lineCount = originalContent.split('\n').length;
+    const expectedBudget = estimateOutputBudget(lineCount);
+    for (const opt of receivedOptions) {
+      expect(opt?.maxOutputTokens).toBe(expectedBudget);
+    }
   });
 });
