@@ -94,16 +94,26 @@ function calculateSpansAdded(output: InstrumentationOutput): number {
 
 /**
  * Summarize validation errors into a human-readable string for errorProgression.
+ * Includes per-rule counts so error patterns can be analyzed across runs.
  *
  * @param validation - Validation result from the chain
- * @returns Error summary string, e.g. "2 blocking errors" or "0 errors"
+ * @returns Error summary string, e.g. "6 blocking errors (NDS-005b:4, SCH-002:2)" or "0 errors"
  */
 function summarizeErrors(validation: ValidationResult): string {
   const blockingCount = validation.blockingFailures.length;
   if (blockingCount === 0) {
     return '0 errors';
   }
-  return `${blockingCount} blocking error${blockingCount === 1 ? '' : 's'}`;
+  // Count occurrences of each ruleId
+  const ruleCounts = new Map<string, number>();
+  for (const f of validation.blockingFailures) {
+    ruleCounts.set(f.ruleId, (ruleCounts.get(f.ruleId) ?? 0) + 1);
+  }
+  const breakdown = [...ruleCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([rule, count]) => `${rule}:${count}`)
+    .join(', ');
+  return `${blockingCount} blocking error${blockingCount === 1 ? '' : 's'} (${breakdown})`;
 }
 
 /**
