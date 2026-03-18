@@ -100,8 +100,8 @@ Run the acceptance tests once per file. Fix any failures iteratively (one file a
 
 At 32K streaming: 7/8 pass assertions, 8/8 pass instrumentation. summarize.js fails only on `span:` schema extension format (#209) — Layer 1 normalization now fixes this defensively. summary-graph.js (the original holdout) passes with 6 spans at 32K. CI validation pending (needs push + PR update).
 
-- [ ] All 8 acceptance tests pass (iterative fixes applied where needed)
-- [ ] No oscillation failures in passing runs
+- [~] All 8 acceptance tests pass (iterative fixes applied where needed) — 7/8 pass; sensitive-filter.js is a known agent judgment failure on pure sync files (#212), not fixable by iteration
+- [x] No oscillation failures in passing runs
 - [ ] CI green on PR with `run-acceptance` label (PR #208)
 
 ### Milestone 4: PR Creation End-to-End
