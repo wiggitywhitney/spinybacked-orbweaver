@@ -216,8 +216,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
       dumpDiagnostics('sensitive-filter.js', result);
 
-      // The agent should succeed (or skip) — 0 spans is the correct outcome for sync utilities
-      expect(['success', 'skipped']).toContain(result.status);
+      // Sync-only pre-screening returns success with 0 spans — no LLM call needed
+      expect(result.status).toBe('success');
       expect(result.spansAdded).toBe(0);
       expect(result.schemaExtensions, 'no spans = no schema extensions').toHaveLength(0);
       expect(result.tokenUsage.inputTokens).toBeGreaterThanOrEqual(0);

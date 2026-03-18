@@ -798,6 +798,7 @@ async function functionLevelFallback(
 
   if (validation.passed) {
     // Restore original file when 0 spans added (same as executeRetryLoop)
+    // Clear metadata from transient output to prevent false schema writes or dependency updates
     if (totalSpans === 0) {
       await writeFile(filePath, originalCode, 'utf-8');
     }
@@ -808,9 +809,9 @@ async function functionLevelFallback(
       // - partial: some functions failed but the passing ones validated
       status: (totalSpans === 0 || successful.length === extractedFunctions.length) ? 'success' : 'partial',
       spansAdded: totalSpans,
-      librariesNeeded,
-      schemaExtensions: supplementSchemaExtensions(schemaExtensions, reassembledCode),
-      attributesCreated: totalAttributes,
+      librariesNeeded: totalSpans === 0 ? [] : librariesNeeded,
+      schemaExtensions: totalSpans === 0 ? [] : supplementSchemaExtensions(schemaExtensions, reassembledCode),
+      attributesCreated: totalSpans === 0 ? 0 : totalAttributes,
       validationAttempts: wholeFileResult.validationAttempts,
       validationStrategyUsed: wholeFileResult.validationStrategyUsed,
       errorProgression,
