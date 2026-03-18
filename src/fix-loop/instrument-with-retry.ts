@@ -930,7 +930,7 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
  * @returns Deduplicated, normalized extensions including auto-detected span names
  */
 function supplementSchemaExtensions(extensions: string[], code: string): string[] {
-  const normalized = extensions.map(normalizeSchemaExtension);
+  const normalized = [...new Set(extensions.map(normalizeSchemaExtension))];
   const spanNames = extractSpanNamesFromCode(code);
   const registered = new Set(normalized);
   const missing = spanNames
