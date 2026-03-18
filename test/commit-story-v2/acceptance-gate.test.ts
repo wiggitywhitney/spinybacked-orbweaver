@@ -147,7 +147,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       dumpDiagnostics('index.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(1);
+      expect(result.spansAdded).toBeGreaterThanOrEqual(2);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
@@ -243,7 +243,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       dumpDiagnostics('journal-manager.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(2);
+      expect(result.spansAdded).toBeGreaterThanOrEqual(3);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
@@ -289,7 +289,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       dumpDiagnostics('summary-detector.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(4);
+      expect(result.spansAdded).toBeGreaterThanOrEqual(5);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.schemaExtensions.length).toBeGreaterThanOrEqual(result.spansAdded);
       for (const ext of result.schemaExtensions) {
