@@ -91,7 +91,7 @@ When choosing a span name for \`tracer.startActiveSpan()\`:
 
 1. **Check the schema first.** Look at groups with \`"type": "span"\` in the schema above. Each has an \`id\` field like \`span.my_service.operation_name\`. **Strip the \`span.\` prefix** — the \`span.\` is a Weaver registry convention, not part of the runtime span name. Use just \`my_service.operation_name\` in \`tracer.startActiveSpan()\`. Schema-defined names are authoritative — a human decided what these operations should be called.
 2. **Invent a name only if no schema span matches.** All invented span names MUST start with the schema's namespace prefix (the first segment of existing span names, e.g., \`commit_story\`). Use \`<namespace>.<category>.<operation>\` format. Do NOT invent new top-level prefixes — \`context.gather\`, \`mcp.start\`, \`summary.generate\` are wrong; \`commit_story.context.gather\`, \`commit_story.mcp.start\`, \`commit_story.summary.generate\` are correct.
-3. **Report new span names in \`schemaExtensions\`.** Any span name not already in the schema is a schema extension.
+3. **Report new span names in \`schemaExtensions\`.** Any span name not already in the schema is a schema extension. Use dot-separated format: \`span.<namespace>.<category>.<name>\`. Do NOT use colons — \`span:foo.bar\` is invalid; \`span.foo.bar\` is correct.
 
 ### Auto-Instrumentation Library Detection (Path 1)
 
@@ -262,7 +262,7 @@ You are returning structured JSON via the output schema. Fill in each field:
 
 - \`instrumentedCode\`: The complete instrumented JavaScript file. Must be syntactically valid JavaScript. Must contain ALL original code plus instrumentation additions. No markdown fences, no explanations, no partial output. Files containing placeholder comments (\`// ...\`, \`// existing code\`, \`// rest of function\`, \`/* ... */\`) will be rejected by validation.
 - \`librariesNeeded\`: Array of \`{ package, importName }\` for auto-instrumentation libraries detected. Empty array if none.
-- \`schemaExtensions\`: Array of string IDs for any new schema entries created (attribute keys or span names not already in the schema). Empty array if none. Each extension MUST have a corresponding note in \`notes\` explaining why no existing key was a semantic match and what data the new key captures.
+- \`schemaExtensions\`: Array of dot-separated string IDs for any new schema entries created (attribute keys or span names not already in the schema). Empty array if none. Format: \`<namespace>.<category>.<name>\` for attributes, \`span.<namespace>.<category>.<name>\` for spans. Use dots as separators — NOT colons, hyphens, or slashes. Example: \`span.commit_story.summary.generate_daily\`, NOT \`span:commit_story.summary.generate_daily\`. Each extension MUST have a corresponding note in \`notes\` explaining why no existing key was a semantic match and what data the new key captures.
 - \`attributesCreated\`: Count of new span attributes added that were not in the existing schema. 0 if none.
 - \`spanCategories\`: Breakdown of spans added: \`{ externalCalls, schemaDefined, serviceEntryPoints, totalFunctionsInFile }\`. Set to null only if the file could not be processed at all.
 - \`suggestedRefactors\`: Array of refactors the user should apply before re-running the agent. Empty array if no blocked transforms were identified. See the Suggested Refactors section above for field details.
