@@ -18,9 +18,11 @@ import { detectElision } from './elision.ts';
  * 16384 provides ~4x headroom over the spec's worst-case single-call output (~4K tokens)
  * and stays within both Sonnet 4.6 (64K) and Opus 4.6 (128K) model limits.
  */
-// Full output capacity of Sonnet 4.6. Streaming is required above 21,333 tokens
-// with extended thinking enabled — instrumentFile uses client.messages.stream().
-export const MAX_OUTPUT_TOKENS_PER_CALL = 65_536;
+// 32K is the interim default: covers all observed output sizes (7K–26K at 21K limit)
+// with headroom, avoids the 65K overthinking pathology. Streaming is required above
+// 21,333 tokens with extended thinking — instrumentFile uses client.messages.stream().
+// TODO (#210): Replace with deterministic estimateOutputBudget(fileLines) + escalation.
+export const MAX_OUTPUT_TOKENS_PER_CALL = 32_000;
 
 /**
  * Conversation context captured from an API call for multi-turn threading.

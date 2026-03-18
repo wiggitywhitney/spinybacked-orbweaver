@@ -128,11 +128,11 @@ Add the 8-file fixture suite to the acceptance gate CI workflow so future change
 
 Two changes, implemented together:
 
-**Change 1: Raise output token limit to 65,536**
-- One-line change in `src/agent/instrument-file.ts`
-- Eliminates the artificial ceiling that forces large files into the function-level path
-- Cost increase only affects files that produce >16K tokens of output (currently failing anyway)
-- A successful 28K-token whole-file call is cheaper than 48K wasted tokens + function-level
+**Change 1: Raise output token limit to 32,000 (streaming)**
+- Switch from `client.messages.parse()` to `client.messages.stream()` + `finalMessage()` to unlock limits above 21,333 (non-streaming cap with extended thinking)
+- Set interim limit to 32K — covers observed output range (7K–26K at 21K) with headroom, avoids 65K overthinking pathology
+- 65K tested but caused regressions: sensitive-filter 3x slower (76K tokens for 0 spans), summary-manager regressed to partial, journal-graph overthought
+- Milestone 8 replaces hardcoded 32K with deterministic `estimateOutputBudget(fileLines)` + escalation
 
 **Change 2: Early-exit on `stop_reason: max_tokens`**
 - When the model hits the token ceiling, skip remaining whole-file retry attempts and go straight to function-level fallback
@@ -149,12 +149,37 @@ Two changes, implemented together:
 - [x] Write baseline results file from current test data (before token limit change) — see `test/commit-story-v2/baseline-results-16k-tokens.md`
 - [x] Unit tests for early-exit detection (`stop_reason: max_tokens` triggers early abort)
 - [x] Unit tests confirming validation errors still retry normally (not early-exited)
-- [x] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `21_333` (max non-streaming with extended thinking; 65K requires streaming — filed as TODO)
+- [x] Raise `MAX_OUTPUT_TOKENS_PER_CALL` from `16_384` to `32_000` (streaming via `client.messages.stream()`; 65K tested but causes overthinking — see `results-65k-streaming.md`)
 - [x] Implement early-exit logic in `executeRetryLoop`
 - [ ] Re-run all 8 fixture files with new settings
 - [ ] Write post-change results file (same format as `test/commit-story-v2/baseline-results-16k-tokens.md`)
 - [ ] Compare results against baseline (timing, spans, error progressions, pass/fail)
 - [ ] summary-graph.js passes (the lone holdout from Milestone 3)
+
+### Milestone 7: Schema Extension Format Normalization (#209)
+
+The agent sometimes produces `span:` (colon) instead of `span.` (dot) in schema extensions. `writeSchemaExtensions` only recognizes `span.` — colon-separated IDs are silently misclassified as attributes. Defensive Layer 1 fix in `supplementSchemaExtensions`.
+
+- [ ] Normalize `span:` → `span.` in `supplementSchemaExtensions` (Layer 1 defense)
+- [ ] Unit test: colon-separated extensions are normalized to dot-separated
+- [ ] Re-run summary-graph.js to verify schema extension assertion passes
+
+### Milestone 8: Deterministic Output Token Sizing (#210)
+
+Replace hardcoded 32K with file-size-based budget estimation + escalation on truncation. Calibration data from this session: output tokens range from 7K (small files) to 26K (large files at 21K limit), roughly linear with file size.
+
+**Implementation:**
+- `estimateOutputBudget(fileLines)` = `max(MIN_BUDGET, fileLines * TOKENS_PER_LINE + THINKING_OVERHEAD)`, capped at 65K
+- On `stop_reason: max_tokens`: escalate to 65K on next attempt (reuses early-exit detection)
+- Calibration: `TOKENS_PER_LINE ≈ 50`, `THINKING_OVERHEAD ≈ 8000`, `MIN_BUDGET = 16384`
+
+- [ ] Unit tests for `estimateOutputBudget` with calibration from session data
+- [ ] Unit tests for escalation: first attempt at estimated budget, escalate to 65K on truncation
+- [ ] Implement `estimateOutputBudget` in `instrument-file.ts` or `token-budget.ts`
+- [ ] Wire escalation into `executeRetryLoop` (extend early-exit to escalate instead of abort)
+- [ ] Re-run all 8 fixture files with deterministic sizing
+- [ ] Write final results file and compare against 16K, 32K, and 65K baselines
+- [ ] All 8 files pass with deterministic sizing
 
 ## Eval Evidence
 
@@ -220,3 +245,10 @@ Results after `partial` → `success` bug fix (all-functions-pass path). Baselin
 | 2026-03-18 | Raise token limit to 65,536 + early-exit on truncation | Combined approach: (1) raise limit to full model capacity — eliminates artificial ceiling, cheaper than current failure path. (2) Early-exit when `stop_reason === 'max_tokens'` — caps worst case at 1×64K + fn-level instead of 3×64K + fn-level. Raise alone risks 192K wasted tokens on sad path; early-exit alone is a workaround for an artificial limit. Together they optimize happy path and cap sad path. |
 | 2026-03-18 | New Milestone 6 before Milestone 4 | Milestone 6 (token limit + early-exit) directly unblocks summary-graph.js and completes Milestone 3. Milestone 4 (PR creation end-to-end) is eval-level verification that doesn't block other milestones. Execute 6 → 3 → 4. |
 | 2026-03-18 | Baseline results file before token limit change | Write current test data (timing, spans, error progressions, pass/fail across runs) to a file for before/after comparison. The 7/8 pass rate at 16K tokens is the baseline; post-64K results should show improvement in timing and summary-graph.js pass rate. |
+| 2026-03-18 | Switch to streaming (`client.messages.stream()`) | Non-streaming `parse()` caps at 21,333 tokens with extended thinking. Streaming `stream()` + `finalMessage()` supports the same `output_config` with `zodOutputFormat` and returns `parsed_output` on the final message. Near drop-in swap: same params, same response shape. Confirmed in SDK source and official examples. |
+| 2026-03-18 | 65K causes overthinking pathology — 32K is the interim default | Testing at 65K showed: sensitive-filter 3x slower (76K tokens for 0 spans), summary-manager regressed to partial (12/14 fn vs 14/14 at 16K), journal-graph better at 21K than 65K. Adaptive thinking expands to fill budget. 32K covers observed output range (7K–26K) with headroom without triggering pathology. Results at `test/commit-story-v2/results-65k-streaming.md`. |
+| 2026-03-18 | Enhanced `summarizeErrors` with per-rule breakdown | Error progression now shows rule ID counts: `"6 blocking errors (NDS-005b:4, SCH-002:2)"` instead of just `"6 blocking errors"`. Enables analysis of first-attempt error patterns to inform prompt improvements. |
+| 2026-03-18 | Milestone 7 (#209): span: normalization | Agent produces `span:` (colon) instead of `span.` (dot). Defensive Layer 1 fix in `supplementSchemaExtensions`. Filed as #209 with all 3 layers (normalize, validate, prompt). |
+| 2026-03-18 | Milestone 8 (#210): deterministic output token sizing | Replace hardcoded 32K with `estimateOutputBudget(fileLines)` + escalation on `stop_reason: max_tokens`. Calibration data from this session. Filed as #210. |
+| 2026-03-18 | Issues filed for future work | #211 (fix loop divergence), #212 (sync-only pre-screening), #213 (CLI diagnostics output). Deferred — separate workstreams from run-5 recovery. |
+| 2026-03-18 | journal-manager.js span gate reverted to >= 2 | CodeRabbit suggested >= 3 (run-4 baseline), but file has only 2 async entry points (saveJournalEntry, discoverReflections). 2 sync formatters don't warrant spans. Gate should reflect file structure, not LLM's best day. |

@@ -874,14 +874,31 @@ function aggregateLibraries(results: FunctionResult[]): FileResult['librariesNee
 }
 
 /**
+ * Normalize a schema extension identifier to use dot separators only.
+ * The agent sometimes produces `span:X` (colon) instead of `span.X` (dot).
+ * Only `span.` is recognized by writeSchemaExtensions — colon variants are
+ * silently misclassified as generic attributes instead of spans.
+ *
+ * @param ext - Schema extension string from agent output
+ * @returns Normalized extension with `span:` replaced by `span.`
+ */
+export function normalizeSchemaExtension(ext: string): string {
+  if (ext.startsWith('span:')) {
+    return 'span.' + ext.slice('span:'.length);
+  }
+  return ext;
+}
+
+/**
  * Aggregate schema extensions across all successful function results, deduplicating.
+ * Normalizes `span:` → `span.` to prevent silent misclassification in writeSchemaExtensions.
  */
 function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
   const seen = new Set<string>();
   for (const r of results) {
     if (!r.success) continue;
     for (const ext of r.schemaExtensions) {
-      seen.add(ext);
+      seen.add(normalizeSchemaExtension(ext));
     }
   }
   return [...seen];
@@ -890,18 +907,20 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
 /**
  * Supplement schema extensions with span names extracted from instrumented code.
  * Adds any span names found in startActiveSpan calls that are not already registered.
+ * Normalizes all extensions to use dot separators.
  *
- * @param extensions - Agent-reported schema extensions
+ * @param extensions - Agent-reported schema extensions (may contain `span:` variants)
  * @param code - Instrumented code to scan for span names
- * @returns Deduplicated extensions including auto-detected span names
+ * @returns Deduplicated, normalized extensions including auto-detected span names
  */
 function supplementSchemaExtensions(extensions: string[], code: string): string[] {
+  const normalized = extensions.map(normalizeSchemaExtension);
   const spanNames = extractSpanNamesFromCode(code);
-  const registered = new Set(extensions);
+  const registered = new Set(normalized);
   const missing = spanNames
     .filter(name => !registered.has(`span.${name}`))
     .map(name => `span.${name}`);
-  return missing.length > 0 ? [...extensions, ...missing] : extensions;
+  return missing.length > 0 ? [...normalized, ...missing] : normalized;
 }
 
 /**

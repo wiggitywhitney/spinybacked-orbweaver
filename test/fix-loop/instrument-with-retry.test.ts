@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
+import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
@@ -2300,6 +2300,18 @@ describe('early abort on stop_reason: max_tokens skips remaining whole-file retr
     // And for completeness: the instrument-file error path with a non-max-tokens error
     const apiError = 'Anthropic API call failed: 500 Internal Server Error';
     expect(isEarlyAbortError(apiError)).toBe(false);
+  });
+});
+
+describe('normalizeSchemaExtension — normalize span: to span. (#209)', () => {
+  it.each([
+    { input: 'span:commit_story.summary.daily_node', expected: 'span.commit_story.summary.daily_node' },
+    { input: 'span:foo.bar', expected: 'span.foo.bar' },
+    { input: 'span.commit_story.summary.daily_node', expected: 'span.commit_story.summary.daily_node' },
+    { input: 'commit_story.cli.main', expected: 'commit_story.cli.main' },
+    { input: 'span:', expected: 'span.' },
+  ])('normalizes "$input" → "$expected"', ({ input, expected }) => {
+    expect(normalizeSchemaExtension(input)).toBe(expected);
   });
 });
 
