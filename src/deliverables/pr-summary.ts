@@ -34,6 +34,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderRecommendedRefactors(runResult, display));
   sections.push(renderRolledBackFiles(runResult, display));
+  sections.push(renderCompanionPackages(runResult));
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
@@ -383,6 +384,24 @@ function renderRolledBackFiles(runResult: RunResult, display: DisplayFn): string
 
   for (const file of rolledBack) {
     lines.push(`| ${display(file.path)} | ${sanitizeCell(file.reason ?? '')} |`);
+  }
+
+  return lines.join('\n');
+}
+
+function renderCompanionPackages(runResult: RunResult): string {
+  if (!runResult.companionPackages || runResult.companionPackages.length === 0) return '';
+
+  const lines: string[] = ['## Recommended Companion Packages'];
+  lines.push('');
+  lines.push(
+    'This project was detected as a library. The following auto-instrumentation packages ' +
+    'were identified but not added as dependencies — they are SDK-level concerns that ' +
+    'deployers should add to their application\'s telemetry setup.',
+  );
+  lines.push('');
+  for (const pkg of runResult.companionPackages) {
+    lines.push(`- \`${pkg}\``);
   }
 
   return lines.join('\n');

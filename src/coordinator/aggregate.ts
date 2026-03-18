@@ -1,6 +1,8 @@
 // ABOUTME: Result aggregation for the coordinator module.
 // ABOUTME: Collects FileResult objects into a RunResult with aggregate counts, token usage, warnings, SDK init writing, and dependency installation.
 
+import { readFile as fsReadFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { LibraryRequirement } from '../agent/schema.ts';
 import type { TokenUsage } from '../agent/schema.ts';
@@ -95,6 +97,26 @@ export function collectLibraries(results: FileResult[]): LibraryRequirement[] {
  */
 export interface FinalizeDeps {
   installDeps?: InstallDeps;
+  /** Injectable package.json reader for library project detection. */
+  readPackageJson?: (path: string) => Promise<string>;
+}
+
+/**
+ * Detect whether a project is a library by checking if @opentelemetry/api
+ * is listed in peerDependencies in package.json.
+ * Returns false if package.json is missing or unreadable.
+ */
+async function isLibraryProject(
+  projectDir: string,
+  readFileFn: (path: string) => Promise<string>,
+): Promise<boolean> {
+  try {
+    const content = await readFileFn(join(projectDir, 'package.json'));
+    const pkg = JSON.parse(content);
+    return typeof pkg.peerDependencies?.['@opentelemetry/api'] === 'string';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -120,6 +142,17 @@ export async function finalizeResults(
   const libraries = collectLibraries(runResult.fileResults);
 
   if (libraries.length === 0) {
+    return;
+  }
+
+  const readPkg = deps?.readPackageJson ?? ((p: string) => fsReadFile(p, 'utf-8'));
+  const isLibrary = await isLibraryProject(projectDir, readPkg);
+
+  if (isLibrary) {
+    // Library projects: skip SDK init and dependency install.
+    // Auto-instrumentation packages are SDK-level concerns — deployers add them
+    // to their application telemetry setup, not the library's dependency tree.
+    runResult.companionPackages = libraries.map(l => l.package);
     return;
   }
 

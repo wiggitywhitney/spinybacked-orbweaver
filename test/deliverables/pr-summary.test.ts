@@ -1024,4 +1024,34 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain('Live-Check');
     });
   });
+
+  describe('companion packages section', () => {
+    it('renders companion packages section when companionPackages is populated', () => {
+      const result = _makeRunResult({
+        companionPackages: [
+          '@traceloop/instrumentation-langchain',
+          '@traceloop/instrumentation-mcp',
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Recommended Companion Packages');
+      expect(md).toContain('@traceloop/instrumentation-langchain');
+      expect(md).toContain('@traceloop/instrumentation-mcp');
+    });
+
+    it('omits companion packages section when companionPackages is absent', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('Recommended Companion Packages');
+    });
+
+    it('omits companion packages section when companionPackages is empty', () => {
+      const result = _makeRunResult({ companionPackages: [] });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('Recommended Companion Packages');
+    });
+  });
 });

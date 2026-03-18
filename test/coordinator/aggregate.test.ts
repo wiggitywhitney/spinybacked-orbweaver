@@ -463,4 +463,139 @@ startTelemetry();
     expect(runResult.sdkInitUpdated).toBe(false);
     expect(runResult.warnings.some(w => w.includes('spiny-orb-instrumentations.js'))).toBe(true);
   });
+
+  describe('library project detection', () => {
+    it('skips SDK init for library projects (peerDependencies heuristic)', async () => {
+      const sdkFile = join(testDir, 'setup.js');
+      await writeFile(sdkFile, `
+import { NodeSDK } from '@opentelemetry/sdk-node';
+const sdk = new NodeSDK({ instrumentations: [] });
+sdk.start();
+`, 'utf-8');
+
+      const results: FileResult[] = [
+        makeSuccessResult('/a.js', {
+          librariesNeeded: [
+            { package: '@traceloop/instrumentation-langchain', importName: 'LangchainInstrumentation' },
+          ],
+        }),
+      ];
+      const runResult = aggregateResults(results, makeCostCeiling({ fileCount: 1 }));
+      const execCalls: string[] = [];
+
+      await finalizeResults(runResult, testDir, sdkFile, 'peerDependencies', {
+        readPackageJson: async () => JSON.stringify({
+          peerDependencies: { '@opentelemetry/api': '^1.0.0' },
+        }),
+        installDeps: {
+          exec: async (cmd: string) => { execCalls.push(cmd); },
+          readFile: async () => '{}',
+          writeFile: async () => {},
+        },
+      });
+
+      // SDK init should be skipped for library projects
+      expect(runResult.sdkInitUpdated).toBe(false);
+      // Dep install should be skipped
+      expect(execCalls).toHaveLength(0);
+      expect(runResult.librariesInstalled).toEqual([]);
+    });
+
+    it('populates companionPackages for library projects', async () => {
+      const sdkFile = join(testDir, 'setup.js');
+      await writeFile(sdkFile, 'sdk.start();', 'utf-8');
+
+      const results: FileResult[] = [
+        makeSuccessResult('/a.js', {
+          librariesNeeded: [
+            { package: '@traceloop/instrumentation-langchain', importName: 'LangchainInstrumentation' },
+            { package: '@traceloop/instrumentation-mcp', importName: 'McpInstrumentation' },
+          ],
+        }),
+      ];
+      const runResult = aggregateResults(results, makeCostCeiling({ fileCount: 1 }));
+
+      await finalizeResults(runResult, testDir, sdkFile, 'peerDependencies', {
+        readPackageJson: async () => JSON.stringify({
+          peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+        }),
+        installDeps: {
+          exec: async () => {},
+          readFile: async () => '{}',
+          writeFile: async () => {},
+        },
+      });
+
+      expect(runResult.companionPackages).toEqual([
+        '@traceloop/instrumentation-langchain',
+        '@traceloop/instrumentation-mcp',
+      ]);
+    });
+
+    it('proceeds normally when @opentelemetry/api is not in peerDependencies', async () => {
+      const sdkFile = join(testDir, 'setup.js');
+      await writeFile(sdkFile, `
+import { NodeSDK } from '@opentelemetry/sdk-node';
+const sdk = new NodeSDK({ instrumentations: [] });
+sdk.start();
+`, 'utf-8');
+
+      const results: FileResult[] = [
+        makeSuccessResult('/a.js', {
+          librariesNeeded: [
+            { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+          ],
+        }),
+      ];
+      const runResult = aggregateResults(results, makeCostCeiling({ fileCount: 1 }));
+      const execCalls: string[] = [];
+
+      await finalizeResults(runResult, testDir, sdkFile, 'dependencies', {
+        readPackageJson: async () => JSON.stringify({
+          dependencies: { express: '^4.0.0' },
+        }),
+        installDeps: {
+          exec: async (cmd: string) => { execCalls.push(cmd); },
+          readFile: async () => '{}',
+          writeFile: async () => {},
+        },
+      });
+
+      // Application project: SDK init should be attempted, deps should install
+      expect(execCalls.length).toBeGreaterThan(0);
+      expect(runResult.companionPackages).toBeUndefined();
+    });
+
+    it('proceeds normally when package.json is missing (non-library assumption)', async () => {
+      const sdkFile = join(testDir, 'setup.js');
+      await writeFile(sdkFile, `
+import { NodeSDK } from '@opentelemetry/sdk-node';
+const sdk = new NodeSDK({ instrumentations: [] });
+sdk.start();
+`, 'utf-8');
+
+      const results: FileResult[] = [
+        makeSuccessResult('/a.js', {
+          librariesNeeded: [
+            { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' },
+          ],
+        }),
+      ];
+      const runResult = aggregateResults(results, makeCostCeiling({ fileCount: 1 }));
+      const execCalls: string[] = [];
+
+      await finalizeResults(runResult, testDir, sdkFile, 'dependencies', {
+        readPackageJson: async () => { throw new Error('ENOENT'); },
+        installDeps: {
+          exec: async (cmd: string) => { execCalls.push(cmd); },
+          readFile: async () => '{}',
+          writeFile: async () => {},
+        },
+      });
+
+      // Missing package.json → assume application project
+      expect(execCalls.length).toBeGreaterThan(0);
+      expect(runResult.companionPackages).toBeUndefined();
+    });
+  });
 });
