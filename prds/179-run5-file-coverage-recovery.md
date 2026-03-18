@@ -178,10 +178,10 @@ Replace hardcoded 32K with file-size-based budget estimation + escalation on tru
 - [x] Unit tests for escalation: first attempt at estimated budget, escalate to 65K on truncation
 - [x] Implement `estimateOutputBudget` in `instrument-file.ts` or `token-budget.ts`
 - [x] Wire escalation into `executeRetryLoop` (extend early-exit to escalate instead of abort)
-- [ ] Re-run all 8 fixture files in parallel (8 background tasks, 30-min timeout each) with deterministic sizing
-- [ ] Write `results-deterministic-sizing.md` in same format as `baseline-results-16k-tokens.md`, `results-32k-streaming.md`, `results-65k-streaming.md`
-- [ ] Compare all 4 results files: 16K baseline vs 32K vs 65K vs deterministic — timing, tokens, spans, error progressions, pass/fail
-- [ ] All 8 files pass with deterministic sizing
+- [x] Re-run all 8 fixture files in parallel (8 background tasks, 30-min timeout each) with deterministic sizing
+- [x] Write `results-deterministic-sizing.md` in same format as `baseline-results-16k-tokens.md`, `results-32k-streaming.md`, `results-65k-streaming.md`
+- [x] Compare all 4 results files: 16K baseline vs 32K vs 65K vs deterministic — timing, tokens, spans, error progressions, pass/fail
+- [~] All 8 files pass with deterministic sizing — 7/8 pass; sensitive-filter.js known failure (pure sync, #212), not a sizing regression
 
 ## Eval Evidence
 
@@ -254,3 +254,5 @@ Results after `partial` → `success` bug fix (all-functions-pass path). Baselin
 | 2026-03-18 | Milestone 8 (#210): deterministic output token sizing | Replace hardcoded 32K with `estimateOutputBudget(fileLines)` + escalation on `stop_reason: max_tokens`. Calibration data from this session. Filed as #210. |
 | 2026-03-18 | Issues filed for future work | #211 (fix loop divergence), #212 (sync-only pre-screening), #213 (CLI diagnostics output). Deferred — separate workstreams from run-5 recovery. |
 | 2026-03-18 | journal-manager.js span gate reverted to >= 2 | CodeRabbit suggested >= 3 (run-4 baseline), but file has only 2 async entry points (saveJournalEntry, discoverReflections). 2 sync formatters don't warrant spans. Gate should reflect file structure, not LLM's best day. |
+| 2026-03-18 | Deterministic sizing: 7/8 pass, sensitive-filter known #212 | summary-manager 4.1x faster (1102→269s), index.js 2.4x faster (1020→418s) — escaped fn-level fallback. journal-graph and summary-graph regressed vs 32K (larger budgets invited overthinking). TOKENS_PER_LINE=50 may be too generous — filed #217 for calibration evaluation. Escalation path not exercised (estimates generous enough). |
+| 2026-03-18 | Pre-existing test mock drift fixed | 20 tests in instrument-file.test.ts and dx-verification.test.ts used `messages.parse` mocks but code switched to `messages.stream()` in Milestone 6. Updated all mocks — full suite 1765 passed, 0 failures. |
