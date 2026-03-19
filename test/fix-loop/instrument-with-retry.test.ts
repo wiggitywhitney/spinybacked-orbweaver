@@ -766,6 +766,64 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     expect(capturedOptions!.feedbackMessage).toContain('validation errors');
   });
 
+  it('passes effortOverride "low" on multi-turn fix attempts', async () => {
+    let callCount = 0;
+    let capturedOptions: InstrumentFileCallOptions | undefined;
+    const badOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: attempt1Tokens });
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+        callCount++;
+        if (callCount === 1) {
+          return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        }
+        capturedOptions = options;
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad;\n') return makeFailingValidation(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    expect(capturedOptions).toBeDefined();
+    expect(capturedOptions!.effortOverride).toBe('low');
+  });
+
+  it('feedback prompt constrains scope to failing rules only', async () => {
+    let callCount = 0;
+    let capturedOptions: InstrumentFileCallOptions | undefined;
+    const badOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: attempt1Tokens });
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+        callCount++;
+        if (callCount === 1) {
+          return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        }
+        capturedOptions = options;
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad;\n') return makeFailingValidation(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    expect(capturedOptions!.feedbackMessage).toContain('Fix ONLY the failing rules');
+    expect(capturedOptions!.feedbackMessage).toContain('Do not restructure');
+  });
+
   it('reverts file to original between attempts', async () => {
     let callCount = 0;
     let fileContentAtAttempt2: string | undefined;

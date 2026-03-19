@@ -72,6 +72,8 @@ interface InstrumentFileOptions {
   failureHint?: string;
   /** Output token budget for this call. Overrides MAX_OUTPUT_TOKENS_PER_CALL. */
   maxOutputTokens?: number;
+  /** Override effort level for this call. Used to lower effort on retry attempts. */
+  effortOverride?: AgentConfig['agentEffort'];
 }
 
 /**
@@ -203,7 +205,7 @@ export async function instrumentFile(
       max_tokens: options?.maxOutputTokens ?? MAX_OUTPUT_TOKENS_PER_CALL,
       thinking: { type: 'adaptive' },
       output_config: {
-        effort: config.agentEffort,
+        effort: options?.effortOverride ?? config.agentEffort,
         format: zodOutputFormat(LlmOutputSchema),
       },
       system: [
