@@ -193,6 +193,33 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('not already in the schema');
   });
 
+  it('includes explicit list of valid attribute keys from schema (#214)', () => {
+    const schemaWithAttrs = makeSchema({
+      groups: [
+        {
+          id: 'registry.test_service.api',
+          type: 'attribute_group',
+          attributes: [
+            { name: 'http.request.method', type: 'string' },
+            { name: 'http.route', type: 'string' },
+          ],
+        },
+      ],
+    });
+    const prompt = buildSystemPrompt(schemaWithAttrs);
+
+    expect(prompt).toContain('Registered attribute keys');
+    expect(prompt).toContain('http.request.method');
+    expect(prompt).toContain('http.route');
+  });
+
+  it('omits attribute key list when schema has no attributes (#214)', () => {
+    const schemaNoAttrs = makeSchema({ groups: [] });
+    const prompt = buildSystemPrompt(schemaNoAttrs);
+
+    expect(prompt).not.toContain('Registered attribute keys');
+  });
+
   it('requires exhaustive registry search before inventing attribute keys', () => {
     const prompt = buildSystemPrompt(schema);
 
