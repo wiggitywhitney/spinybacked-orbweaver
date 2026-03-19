@@ -293,7 +293,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.reason).toContain('NDS-001');
     expect(result.lastError).toBeDefined();
     expect(result.lastError!.length).toBeGreaterThan(0);
-    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001 (Syntax Valid):1)']);
     expect(result.tokenUsage).toEqual(sampleTokens);
 
     // File should be reverted to original content
@@ -698,7 +698,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
     );
 
-    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)', '0 errors']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001 (Syntax Valid):1)', '0 errors']);
   });
 
   it('tracks cumulative token usage across attempts', async () => {
@@ -877,7 +877,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     expect(result.status).toBe('failed');
     expect(result.validationAttempts).toBe(2);
     expect(result.validationStrategyUsed).toBe('multi-turn-fix');
-    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)', '1 blocking error (NDS-001:1)']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001 (Syntax Valid):1)', '1 blocking error (NDS-001 (Syntax Valid):1)']);
     expect(result.reason).toBeDefined();
     expect(result.lastError).toBeDefined();
     // File reverted to original
@@ -1220,7 +1220,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     expect(result.reason).toBeDefined();
     expect(result.reason!.length).toBeGreaterThan(0);
     expect(result.lastError).toBeDefined();
-    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001:1)', '1 blocking error (NDS-001:1)', '1 blocking error (NDS-001:1)']);
+    expect(result.errorProgression).toEqual(['1 blocking error (NDS-001 (Syntax Valid):1)', '1 blocking error (NDS-001 (Syntax Valid):1)', '1 blocking error (NDS-001 (Syntax Valid):1)']);
     // File reverted to original
     expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
   });
@@ -1420,7 +1420,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     );
 
     expect(result.status).toBe('success');
-    expect(result.errorProgression).toEqual(['2 blocking errors (NDS-001:1, LINT:1)', '1 blocking error (NDS-001:1)', '0 errors']);
+    expect(result.errorProgression).toEqual(['2 blocking errors (NDS-001 (Syntax Valid):1, LINT (Lint Clean):1)', '1 blocking error (NDS-001 (Syntax Valid):1)', '0 errors']);
   });
 });
 
@@ -1665,7 +1665,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     // Normal flow — attempt 2 had fewer errors, so no oscillation. Attempt 3 succeeds.
     expect(result.status).toBe('success');
     expect(result.validationAttempts).toBe(3);
-    expect(result.errorProgression).toEqual(['2 blocking errors (NDS-001:1, LINT:1)', '1 blocking error (NDS-001:1)', '0 errors']);
+    expect(result.errorProgression).toEqual(['2 blocking errors (NDS-001 (Syntax Valid):1, LINT (Lint Clean):1)', '1 blocking error (NDS-001 (Syntax Valid):1)', '0 errors']);
   });
 
   it('budget exceeded stops further retries but current attempt still validates', async () => {
