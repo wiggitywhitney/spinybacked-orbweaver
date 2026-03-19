@@ -11,8 +11,7 @@ import { simpleGit } from 'simple-git';
 import { pushBranch, createBranch, validateCredentials } from '../../src/git/git-wrapper.ts';
 import { createPr } from '../../src/deliverables/git-workflow.ts';
 
-const API_KEY_AVAILABLE = !!process.env.ANTHROPIC_API_KEY;
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_TOKEN_AVAILABLE = !!process.env.GITHUB_TOKEN;
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
 
 /**
@@ -35,7 +34,7 @@ async function cloneTestRepo(): Promise<string> {
   return dir;
 }
 
-describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — E2E PR Creation (#218)', () => {
+describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#218)', () => {
   const cleanupBranches: string[] = [];
   const cleanupPrs: string[] = [];
   let testDir: string | undefined;

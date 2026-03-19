@@ -15,8 +15,9 @@ on:
     # The --ref flag sets which branch to check out and test
 
 permissions:
-  contents: read
+  contents: write
   checks: write
+  pull-requests: write
 
 concurrency:
   group: acceptance-gate-${{ github.ref }}
@@ -67,3 +68,4 @@ jobs:
         timeout-minutes: 75
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
