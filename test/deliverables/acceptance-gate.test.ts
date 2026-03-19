@@ -40,24 +40,36 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
   let testDir: string | undefined;
 
   afterEach(async () => {
-    // Clean up remote branches
-    for (const branch of cleanupBranches) {
-      try {
-        execFileSync('git', ['push', 'origin', '--delete', branch], {
-          cwd: REPO_ROOT,
-          timeout: 10000,
-        });
-      } catch { /* branch may not exist */ }
-    }
-    // Close test PRs
+    // Close test PRs and delete their branches via gh CLI (uses GITHUB_TOKEN from env).
+    // gh pr close --delete-branch handles both PR closing and remote branch cleanup.
     for (const prUrl of cleanupPrs) {
       try {
         const prNumber = prUrl.split('/').pop();
         execFileSync('gh', ['pr', 'close', prNumber!, '--delete-branch'], {
           cwd: REPO_ROOT,
+          timeout: 15000,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes('already closed') && !msg.includes('not found')) {
+          console.error(`Cleanup warning: failed to close PR ${prUrl}: ${msg}`);
+        }
+      }
+    }
+    // Delete any branches that weren't tied to a PR (e.g., push succeeded but PR creation failed)
+    for (const branch of cleanupBranches) {
+      try {
+        execFileSync('gh', ['api', '--method', 'DELETE',
+          `repos/{owner}/{repo}/git/refs/heads/${branch}`], {
+          cwd: REPO_ROOT,
           timeout: 10000,
         });
-      } catch { /* PR may already be closed */ }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes('Reference does not exist') && !msg.includes('422')) {
+          console.error(`Cleanup warning: failed to delete branch ${branch}: ${msg}`);
+        }
+      }
     }
     // Clean up temp directory
     if (testDir) {

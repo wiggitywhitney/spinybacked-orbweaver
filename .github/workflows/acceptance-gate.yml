@@ -6,6 +6,7 @@
 #
 # Secrets required (Settings → Secrets → Actions):
 #   - ANTHROPIC_API_KEY: Anthropic API key for LLM-calling tests
+#   - GITHUB_TOKEN: GitHub token for deliverables e2e tests (push + PR creation)
 
 name: Acceptance Gate Tests
 
@@ -14,19 +15,18 @@ on:
     # Triggered by gh workflow run from pre-pr-hook.sh
     # The --ref flag sets which branch to check out and test
 
-permissions:
-  contents: write
-  checks: write
-  pull-requests: write
-
 concurrency:
   group: acceptance-gate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # LLM-calling acceptance tests — read-only permissions
   acceptance-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    permissions:
+      contents: read
+      checks: write
     strategy:
       fail-fast: false
       matrix:
@@ -37,8 +37,6 @@ jobs:
             pattern: "test/coordinator/acceptance-gate.test.ts"
           - name: "run-5-coverage"
             pattern: "test/commit-story-v2/acceptance-gate.test.ts"
-          - name: "deliverables"
-            pattern: "test/deliverables/acceptance-gate.test.ts"
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -68,4 +66,30 @@ jobs:
         timeout-minutes: 75
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # Deliverables e2e tests — needs write permissions for push + PR creation
+  deliverables:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      checks: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run deliverables acceptance tests
+        run: npx vitest run --config vitest.acceptance.config.ts --reporter=verbose test/deliverables/acceptance-gate.test.ts
+        timeout-minutes: 25
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
