@@ -1,7 +1,6 @@
 // ABOUTME: Generates per-file markdown reasoning reports from FileResult data.
 // ABOUTME: Explains what spans were added, what was skipped, validation journey, and cost.
 
-import { basename } from 'node:path';
 import type { FileResult } from '../fix-loop/types.ts';
 
 /**
@@ -13,7 +12,6 @@ import type { FileResult } from '../fix-loop/types.ts';
  * @returns Markdown string suitable for writing to a companion .md file
  */
 export function renderReasoningReport(result: FileResult): string {
-  const fileName = basename(result.path);
   const sections: string[] = [];
 
   sections.push(`# Instrumentation Report: ${result.path}`);
