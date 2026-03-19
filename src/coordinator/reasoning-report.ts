@@ -22,8 +22,8 @@ export function renderReasoningReport(result: FileResult): string {
   sections.push(`- **Status**: ${result.status}`);
   sections.push(`- **Spans added**: ${result.spansAdded}`);
   sections.push(`- **Attempts**: ${result.validationAttempts} (${result.validationStrategyUsed})`);
-  sections.push(`- **Output tokens**: ${(result.tokenUsage.outputTokens / 1000).toFixed(1)}K`);
   sections.push(`- **Input tokens**: ${(result.tokenUsage.inputTokens / 1000).toFixed(1)}K`);
+  sections.push(`- **Output tokens**: ${(result.tokenUsage.outputTokens / 1000).toFixed(1)}K`);
   if (result.tokenUsage.cacheReadInputTokens > 0) {
     sections.push(`- **Cached tokens**: ${(result.tokenUsage.cacheReadInputTokens / 1000).toFixed(1)}K`);
   }
@@ -45,9 +45,10 @@ export function renderReasoningReport(result: FileResult): string {
     sections.push('| Function | Status | Spans |');
     sections.push('|----------|--------|-------|');
     for (const fn of result.functionResults) {
+      const esc = (s: string) => s.replace(/\|/g, '\\|');
       const status = fn.success ? 'instrumented' : 'skipped';
-      const reason = fn.success ? '' : (fn.error ? ` — ${fn.error}` : '');
-      sections.push(`| ${fn.name} | ${status}${reason} | ${fn.spansAdded} |`);
+      const reason = fn.success ? '' : (fn.error ? ` — ${esc(fn.error)}` : '');
+      sections.push(`| ${esc(fn.name)} | ${status}${reason} | ${fn.spansAdded} |`);
     }
     sections.push('');
   }

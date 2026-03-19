@@ -61,7 +61,7 @@ jobs:
       - run: npm ci
 
       - name: Run ${{ matrix.test-group.name }} acceptance tests
-        run: npx vitest run --reporter=verbose ${{ matrix.test-group.pattern }}
+        run: npx vitest run --config vitest.acceptance.config.ts --reporter=verbose ${{ matrix.test-group.pattern }}
         timeout-minutes: 75
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
