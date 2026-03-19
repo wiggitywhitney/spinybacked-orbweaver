@@ -49,10 +49,12 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
           cwd: REPO_ROOT,
           timeout: 15000,
         });
-      } catch (err) {
+      } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes('already closed') && !msg.includes('not found')) {
-          console.error(`Cleanup warning: failed to close PR ${prUrl}: ${msg}`);
+        const stderr = (err as { stderr?: Buffer })?.stderr?.toString() ?? '';
+        const combined = `${msg} ${stderr}`;
+        if (!combined.includes('already closed') && !combined.includes('not found')) {
+          console.error(`Cleanup warning: failed to close PR ${prUrl}: ${combined.trim()}`);
         }
       }
     }
@@ -64,10 +66,12 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
           cwd: REPO_ROOT,
           timeout: 10000,
         });
-      } catch (err) {
+      } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes('Reference does not exist') && !msg.includes('422')) {
-          console.error(`Cleanup warning: failed to delete branch ${branch}: ${msg}`);
+        const stderr = (err as { stderr?: Buffer })?.stderr?.toString() ?? '';
+        const combined = `${msg} ${stderr}`;
+        if (!combined.includes('Reference does not exist') && !combined.includes('422')) {
+          console.error(`Cleanup warning: failed to delete branch ${branch}: ${combined.trim()}`);
         }
       }
     }
