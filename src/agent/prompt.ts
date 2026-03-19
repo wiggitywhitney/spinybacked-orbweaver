@@ -22,9 +22,11 @@ function extractAttributeNames(schema: object): string[] {
   if (!Array.isArray(groups)) return [];
   const names = new Set<string>();
   for (const group of groups) {
+    if (group == null || typeof group !== 'object') continue;
     const attrs = (group as Record<string, unknown>).attributes;
     if (!Array.isArray(attrs)) continue;
     for (const attr of attrs) {
+      if (attr == null || typeof attr !== 'object') continue;
       const name = (attr as Record<string, unknown>).name;
       if (typeof name === 'string') names.add(name);
     }
