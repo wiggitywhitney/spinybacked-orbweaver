@@ -73,7 +73,7 @@ interface InstrumentFileOptions {
   /** Output token budget for this call. Overrides MAX_OUTPUT_TOKENS_PER_CALL. */
   maxOutputTokens?: number;
   /** Override effort level for this call. Used to lower effort on retry attempts. */
-  effortOverride?: 'low' | 'medium' | 'high';
+  effortOverride?: AgentConfig['agentEffort'];
 }
 
 /**
