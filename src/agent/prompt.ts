@@ -12,6 +12,28 @@ import type { OTelImportDetectionResult } from '../ast/import-detection.ts';
  * @param resolvedSchema - The resolved Weaver schema object (from `weaver registry resolve`)
  * @returns The complete system prompt string
  */
+/**
+ * Extract all unique attribute names from a resolved schema object.
+ * Mirrors the logic in registry-types.ts getAllAttributeNames without
+ * importing validation-layer types into the prompt module.
+ */
+function extractAttributeNames(schema: object): string[] {
+  const groups = (schema as Record<string, unknown>).groups;
+  if (!Array.isArray(groups)) return [];
+  const names = new Set<string>();
+  for (const group of groups) {
+    if (group == null || typeof group !== 'object') continue;
+    const attrs = (group as Record<string, unknown>).attributes;
+    if (!Array.isArray(attrs)) continue;
+    for (const attr of attrs) {
+      if (attr == null || typeof attr !== 'object') continue;
+      const name = (attr as Record<string, unknown>).name;
+      if (typeof name === 'string') names.add(name);
+    }
+  }
+  return [...names].sort();
+}
+
 export function buildSystemPrompt(resolvedSchema: object, projectName?: string): string {
   const schemaJson = JSON.stringify(resolvedSchema, null, 2);
   const rawNamespace = (resolvedSchema as Record<string, unknown>).namespace;
@@ -20,6 +42,7 @@ export function buildSystemPrompt(resolvedSchema: object, projectName?: string):
       ? rawNamespace
       : (projectName ?? 'unknown_service');
   const tracerNameLiteral = JSON.stringify(tracerName);
+  const attributeNames = extractAttributeNames(resolvedSchema);
 
   return `You are an instrumentation engineer. Your job is to add OpenTelemetry instrumentation to a JavaScript source file according to a Weaver schema contract.
 
@@ -123,7 +146,10 @@ When adding span attributes, you MUST exhaust registered keys before inventing n
 1. **OTel semantic conventions first**: Use a matching convention if one exists (e.g., \`http.method\`, \`db.statement\`)
 2. **Weaver schema attributes second**: Check ALL registered attribute keys in the schema for semantic equivalence — not just exact name matches. A registered key that captures the same concept under a different name is the correct choice.
 3. **Invent only as a last resort**: Create new custom attributes under the project namespace prefix ONLY when no registered key fits. In \`schemaExtensions\`, include a rationale for why no existing key matched — this helps humans review and promote useful extensions into the registry.
-
+${attributeNames.length > 0 ? `
+**Registered attribute keys from this project's schema** (prefer these — unregistered keys trigger SCH-002 rejection unless reported as a schemaExtension):
+${attributeNames.map(n => `\`${n}\``).join(', ')}
+` : ''}
 Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match.
 
 ### Schema-Uncovered Files
