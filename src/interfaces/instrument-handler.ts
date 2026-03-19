@@ -135,11 +135,16 @@ export async function handleInstrument(
     },
     onFileComplete: (result, _index, _total) => {
       let statusLabel: string;
+      const outputKTokens = (result.tokenUsage.outputTokens / 1000).toFixed(1);
+      const attempts = result.validationAttempts;
+      const attemptSuffix = attempts > 1 ? `, ${attempts} attempts` : '';
       if (result.status === 'success') {
-        statusLabel = `success (${result.spansAdded} spans)`;
+        statusLabel = `success (${result.spansAdded} spans${attemptSuffix}, ${outputKTokens}K output tokens)`;
       } else if (result.status === 'failed') {
         const detail = result.reason || result.lastError || '';
-        statusLabel = detail ? `failed (${detail})` : 'failed';
+        statusLabel = detail ? `failed (${detail}${attemptSuffix})` : `failed${attemptSuffix ? ` (${attemptSuffix.slice(2)})` : ''}`;
+      } else if (result.status === 'partial') {
+        statusLabel = `partial (${result.spansAdded} spans${attemptSuffix}, ${outputKTokens}K output tokens)`;
       } else {
         statusLabel = result.status;
       }
@@ -155,9 +160,19 @@ export async function handleInstrument(
       const failed = results.filter(r => r.status === 'failed').length;
       const partial = results.filter(r => r.status === 'partial').length;
       const skipped = results.filter(r => r.status === 'skipped').length;
+      const totalInput = results.reduce((sum, r) => sum + r.tokenUsage.inputTokens, 0);
+      const totalOutput = results.reduce((sum, r) => sum + r.tokenUsage.outputTokens, 0);
+      const totalCached = results.reduce((sum, r) => sum + r.tokenUsage.cacheReadInputTokens, 0);
       deps.stderr(
         `\nRun complete: ${succeeded} succeeded, ${failed} failed, ${partial} partial, ${skipped} skipped`,
       );
+      if (totalInput > 0 || totalOutput > 0) {
+        let tokenLine = `  Total tokens: ${(totalInput / 1000).toFixed(1)}K input, ${(totalOutput / 1000).toFixed(1)}K output`;
+        if (totalCached > 0) {
+          tokenLine += ` (${(totalCached / 1000).toFixed(1)}K cached)`;
+        }
+        deps.stderr(tokenLine);
+      }
     },
   };
 
