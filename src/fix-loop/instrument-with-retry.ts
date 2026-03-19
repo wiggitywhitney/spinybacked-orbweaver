@@ -12,6 +12,7 @@ import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
+import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
 import { extractExportedFunctions } from './function-extraction.ts';
 import { reassembleFunctions, ensureTracerAfterImports } from './function-reassembly.ts';
@@ -115,7 +116,7 @@ function summarizeErrors(validation: ValidationResult): string {
   }
   const breakdown = [...ruleCounts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([rule, count]) => `${rule}:${count}`)
+    .map(([rule, count]) => `${formatRuleId(rule)}:${count}`)
     .join(', ');
   return `${blockingCount} blocking error${blockingCount === 1 ? '' : 's'} (${breakdown})`;
 }

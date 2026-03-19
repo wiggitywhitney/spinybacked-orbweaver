@@ -1,0 +1,74 @@
+// ABOUTME: Human-readable display names for validation rule IDs.
+// ABOUTME: Used in error summaries, CLI output, PR summaries, and diagnostics.
+
+/**
+ * Map validation rule IDs to human-readable display names.
+ * Used wherever rule IDs appear in user-facing output.
+ */
+const RULE_NAMES: Record<string, string> = {
+  // Tier 1 — Structural
+  'ELISION': 'Elision Detected',
+  'NDS-001': 'Syntax Valid',
+  'LINT': 'Lint Clean',
+  'WEAVER': 'Schema Valid',
+
+  // Tier 2 — Coverage
+  'COV-001': 'Entry Point Spans',
+  'COV-002': 'Outbound Call Spans',
+  'COV-003': 'Error Recording',
+  'COV-004': 'Async Operation Spans',
+  'COV-005': 'Domain Attributes',
+  'COV-006': 'Auto-Instrumentation Preference',
+
+  // Tier 2 — Quality
+  'CDQ-001': 'Spans Closed',
+  'CDQ-006': 'isRecording Guard',
+  'CDQ-008': 'Tracer Naming',
+
+  // Tier 2 — Restraint
+  'RST-001': 'No Utility Spans',
+  'RST-002': 'No Trivial Accessor Spans',
+  'RST-003': 'No Thin Wrapper Spans',
+  'RST-004': 'No Internal Detail Spans',
+  'RST-005': 'No Double Instrumentation',
+
+  // Tier 2 — Non-destructive
+  'NDS-003': 'Code Preserved',
+  'NDS-004': 'Signatures Preserved',
+  'NDS-005': 'Control Flow Preserved',
+  'NDS-005b': 'Control Flow Preserved',
+  'NDS-006': 'Module System Match',
+
+  // Tier 2 — API
+  'API-001': 'OTel API Only',
+  'API-002': 'Dependency Placement',
+
+  // Tier 2 — Schema
+  'SCH-001': 'Span Names Match Registry',
+  'SCH-002': 'Attribute Keys Match Registry',
+  'SCH-003': 'Attribute Values Conform',
+  'SCH-004': 'No Redundant Schema Entries',
+};
+
+/**
+ * Get the human-readable name for a rule ID.
+ * Returns the rule ID unchanged if no name is registered.
+ *
+ * @param ruleId - Validation rule identifier (e.g. "SCH-002")
+ * @returns Human-readable name (e.g. "Attribute Keys Match Registry") or the original ruleId
+ */
+export function getRuleName(ruleId: string): string {
+  return RULE_NAMES[ruleId] ?? ruleId;
+}
+
+/**
+ * Format a rule ID with its human-readable name for display.
+ * Produces "SCH-002 (Attribute Keys Match Registry)" format.
+ *
+ * @param ruleId - Validation rule identifier
+ * @returns Formatted string with both code and name
+ */
+export function formatRuleId(ruleId: string): string {
+  const name = RULE_NAMES[ruleId];
+  return name ? `${ruleId} (${name})` : ruleId;
+}
