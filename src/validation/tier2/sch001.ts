@@ -154,11 +154,13 @@ function checkRegistryConformance(
     }
   }
 
-  // Also accept span names declared as schema extensions by the agent
+  // Also accept span names declared as schema extensions by the agent.
+  // Normalize span: → span. (the agent sometimes produces colon variants).
   if (declaredExtensions) {
     for (const ext of declaredExtensions) {
-      if (ext.startsWith('span.')) {
-        validOperations.add(ext.slice(5));
+      const normalized = ext.startsWith('span:') ? 'span.' + ext.slice(5) : ext;
+      if (normalized.startsWith('span.')) {
+        validOperations.add(normalized.slice(5));
       }
     }
   }

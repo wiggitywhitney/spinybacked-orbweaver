@@ -120,9 +120,12 @@ function reconcileReturnCaptures(
     if (captureIdx === undefined) continue;
 
     // Found a matching capture — now look for the bare `return <var>;`
+    // Must appear after the capture line to ensure sequential pairing
     const capture = extractCapture(addedLines[captureIdx].line)!;
+    const expectedReturn = `return ${capture.varName}`;
     const bareReturnIdx = addedLines.findIndex(
-      (a, idx) => !addedToRemove.has(idx) && a.line.match(new RegExp(`^return\\s+${capture.varName}\\s*;?\\s*$`)),
+      (a, idx) => idx > captureIdx && !addedToRemove.has(idx) &&
+        (a.line === expectedReturn || a.line === `${expectedReturn};` || a.line.replace(/;\s*$/, '') === expectedReturn),
     );
 
     if (bareReturnIdx >= 0) {

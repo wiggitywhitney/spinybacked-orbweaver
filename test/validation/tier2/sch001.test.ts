@@ -444,6 +444,28 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('normalizes span: prefix in declared extensions', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function generateSummary() {',
+        '  return tracer.startActiveSpan("myapp.summary.generate", (span) => {',
+        '    try { return {}; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Agent declared with colon variant — should still be accepted
+      const declaredExtensions = ['span:myapp.summary.generate'];
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        code, filePath, resolvedSchema, undefined, declaredExtensions,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('CheckResult structure', () => {
