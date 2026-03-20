@@ -150,7 +150,7 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
   if (zeroSpanFiles.length > 0) {
     const names = zeroSpanFiles.map(f => display(f.path)).join(', ');
     lines.push('');
-    lines.push(`**Correct skips** (${zeroSpanFiles.length} files, 0 spans — no instrumentable functions): ${names}`);
+    lines.push(`**Correct skips** (${zeroSpanFiles.length} files, 0 spans): ${names}`);
   }
 
   return lines.join('\n');
