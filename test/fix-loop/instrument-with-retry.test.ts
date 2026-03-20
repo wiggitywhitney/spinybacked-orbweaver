@@ -193,9 +193,10 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['RST-004']).toEqual({ enabled: true, blocking: false });
     expect(checks['CDQ-006']).toEqual({ enabled: true, blocking: false });
 
-    // Phase 5 checks (4)
-    expect(checks['SCH-001']).toEqual({ enabled: true, blocking: true });
-    expect(checks['SCH-002']).toEqual({ enabled: true, blocking: true });
+    // Phase 5 checks (4) — SCH-001/SCH-002 downgrade to advisory for sparse registries
+    // (empty schema has 0 span definitions, below the sparse threshold of 3)
+    expect(checks['SCH-001']).toEqual({ enabled: true, blocking: false });
+    expect(checks['SCH-002']).toEqual({ enabled: true, blocking: false });
     expect(checks['SCH-003']).toEqual({ enabled: true, blocking: true });
     expect(checks['SCH-004']).toEqual({ enabled: true, blocking: false });
 

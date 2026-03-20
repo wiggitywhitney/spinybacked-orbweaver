@@ -26,9 +26,20 @@ export function checkAttributeKeysMatchRegistry(
   code: string,
   filePath: string,
   resolvedSchema: object,
+  declaredExtensions?: string[],
 ): CheckResult[] {
   const registry = parseResolvedRegistry(resolvedSchema);
   const registryNames = getAllAttributeNames(registry);
+
+  // Accept agent-declared attribute extensions (non-span extensions).
+  // Span extensions start with "span." or "span:" — everything else is an attribute key.
+  if (declaredExtensions) {
+    for (const ext of declaredExtensions) {
+      if (!ext.startsWith('span.') && !ext.startsWith('span:')) {
+        registryNames.add(ext);
+      }
+    }
+  }
 
   if (registryNames.size === 0) {
     return [pass(filePath, 'No registry attributes to check against.')];

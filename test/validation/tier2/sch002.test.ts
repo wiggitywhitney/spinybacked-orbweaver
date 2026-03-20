@@ -178,6 +178,82 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
     });
   });
 
+  describe('declared attribute extensions', () => {
+    it('accepts attribute keys declared as schema extensions', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.custom.metric", 42);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.custom.metric'];
+
+      const results = checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still rejects attribute keys not in registry or declared extensions', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      span.setAttribute("totally.unknown.attr", "val");',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.custom.metric'];
+
+      const results = checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('totally.unknown.attr');
+    });
+
+    it('filters span. extensions from attribute matching (only attributes)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.custom.metric", 42);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Only span extensions — no attribute extensions
+      const declaredExtensions = ['span.myapp.custom.operation'];
+
+      const results = checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure for passing check', () => {
       const code = [
