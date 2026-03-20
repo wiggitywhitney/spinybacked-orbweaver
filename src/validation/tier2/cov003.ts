@@ -1,7 +1,7 @@
 // ABOUTME: COV-003 Tier 2 check — failable operations have error visibility.
 // ABOUTME: Verifies that spans around failable operations include error recording (recordException/setStatus).
 
-import { Project, Node } from 'ts-morph';
+import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../types.ts';
 
 /**
@@ -115,12 +115,18 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
           }
         }
 
-        // Case 2: try/finally without catch — failable operations have no error recording path
+        // Case 2: try/finally without catch — check if this is a span lifecycle pattern
         if (!catchClause) {
-          // Check if the try block contains failable operations
+          const finallyBlock = tryStmt.getFinallyBlock();
+          // Span lifecycle try/finally: the finally block ends the span and errors
+          // propagate to the parent span naturally. This is the standard pattern
+          // when the agent chooses not to add error recording (expected-condition operations).
+          if (finallyBlock && hasSpanEnd(finallyBlock, spanParam)) {
+            continue;
+          }
+          // Non-lifecycle try/finally with failable operations and no error recording
           const tryBlockText = tryStmt.getTryBlock().getText();
           if (containsFailableOperation(tryBlockText)) {
-            // Check if error recording exists elsewhere in the callback (e.g., outer catch)
             if (!hasErrorRecording(callbackText, spanParam)) {
               issues.push({
                 line: tryStmt.getStartLineNumber(),
@@ -195,27 +201,34 @@ function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): 
 
   const bodyText = block.getText();
 
-  // Single statement that is just `continue;`
-  if (statements.length === 1 && bodyText.includes('continue;')) {
+  // Core heuristic: a catch that doesn't rethrow is handling the error gracefully.
+  // From OTel's perspective, the operation succeeded (possibly with degraded results)
+  // — recording setStatus(ERROR) would be misleading because the caller sees success.
+  // Use AST to find real ThrowStatements — regex /\bthrow\b/ matches "throw" in strings/comments.
+  const throwStatements = block.getDescendantsOfKind(SyntaxKind.ThrowStatement)
+    .filter((t) => {
+      // Exclude throws inside nested function declarations/expressions
+      let parent: import('ts-morph').Node | undefined = t.getParent();
+      while (parent && parent !== block) {
+        if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent) || Node.isFunctionDeclaration(parent)) {
+          return false;
+        }
+        parent = parent.getParent();
+      }
+      return true;
+    });
+  const hasThrow = throwStatements.length > 0;
+  if (!hasThrow) {
     return true;
   }
 
-  // Single return statement with a default/fallback value
-  if (statements.length === 1) {
-    const stmtText = statements[0].getText().trim();
-    if (/^return\s+(null|undefined|false|\{\}|\[\]|''|"");?$/.test(stmtText)) {
-      return true;
-    }
-  }
-
-  // Error-code checks (e.g., `if (err.code === 'ENOENT')`) — but only when the
-  // catch doesn't rethrow on non-expected paths. A catch that checks ENOENT and
-  // rethrows other errors has a genuine error path that needs recording.
+  // Has throw — check if it's a mixed path with expected-condition code patterns.
+  // E.g., `if (err.code === 'ENOENT') return null; throw err;` — the ENOENT path
+  // is expected-condition, but the rethrow path is a genuine error needing recording.
+  // We conservatively flag these as NOT expected-condition so error recording is required.
   if (EXPECTED_CONDITION_PATTERNS.some((pattern) => bodyText.includes(pattern))) {
-    const hasThrow = bodyText.includes('throw ') || bodyText.includes('throw;');
-    if (!hasThrow) {
-      return true;
-    }
+    // Even though expected-condition patterns are present, the rethrow means
+    // there's a genuine error path. Return false — error recording is needed.
   }
 
   return false;
@@ -244,6 +257,30 @@ function hasErrorRecording(text: string, spanParam: string): boolean {
   return ERROR_RECORDING_PATTERNS.some((pattern) => {
     const fullPattern = `${spanParam}${pattern}`;
     return text.includes(fullPattern);
+  });
+}
+
+/**
+ * Check if a finally block contains a direct span.end() call (not nested in a closure).
+ * Uses AST to avoid false positives from text matching.
+ */
+function hasSpanEnd(finallyBlock: import('ts-morph').Block, spanParam: string): boolean {
+  const callExprs = finallyBlock.getDescendantsOfKind(SyntaxKind.CallExpression);
+  return callExprs.some((call) => {
+    const expr = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return false;
+    if (expr.getName() !== 'end') return false;
+    const receiver = expr.getExpression().getText();
+    if (receiver !== spanParam) return false;
+    // Ensure the call is not inside a nested function
+    let parent = call.getParent();
+    while (parent && parent !== finallyBlock) {
+      if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent) || Node.isFunctionDeclaration(parent)) {
+        return false;
+      }
+      parent = parent.getParent();
+    }
+    return true;
   });
 }
 

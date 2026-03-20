@@ -95,7 +95,7 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].message).toContain('error');
     });
 
-    it('flags span with try/finally but no catch for error recording', () => {
+    it('passes when span lifecycle try/finally has span.end() but no catch (errors propagate)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -113,13 +113,12 @@ describe('checkErrorVisibility (COV-003)', () => {
 
       const results = checkErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
-      expect(results[0].message).toContain('error recording');
+      expect(results[0].passed).toBe(true);
     });
   });
 
   describe('pre-existing try/catch without span error', () => {
-    it('flags operations in pre-existing try/catch without span error recording', () => {
+    it('passes when inner catch swallows error (no rethrow = graceful handling)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -138,6 +137,34 @@ describe('checkErrorVisibility (COV-003)', () => {
         '}',
       ].join('\n');
 
+      // Inner catch swallows the error (no rethrow) — this is expected-condition
+      // handling. The original code deliberately chose to suppress this error.
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags inner catch that rethrows without span error recording', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function riskyWork() {',
+        '  return tracer.startActiveSpan("riskyWork", (span) => {',
+        '    try {',
+        '      try {',
+        '        dangerousCall();',
+        '      } catch (e) {',
+        '        console.error(e);',
+        '        throw e;',
+        '      }',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Inner catch rethrows — this is a genuine error path that needs recording
       const results = checkErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
@@ -300,7 +327,52 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('still flags catch that logs but does not record on span', () => {
+    it('passes when catch logs and swallows error (no rethrow = graceful handling)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function riskyOperation() {',
+        '  return tracer.startActiveSpan("riskyOperation", (span) => {',
+        '    try {',
+        '      return dangerousCall();',
+        '    } catch (error) {',
+        '      console.error("Operation failed:", error);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when catch logs and returns default (multi-statement fallback)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function loadData() {',
+        '  return tracer.startActiveSpan("loadData", async (span) => {',
+        '    try {',
+        '      return await fetchFromApi();',
+        '    } catch (error) {',
+        '      console.error("Failed to load:", error);',
+        '      return [];',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags catch that logs AND rethrows (genuine error)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
