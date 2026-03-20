@@ -1097,4 +1097,54 @@ describe('renderPrSummary', () => {
       expect(md).toContain('instrumentation-pg');
     });
   });
+
+  describe('zero-span file compression (#242)', () => {
+    it('groups zero-span files into a summary line instead of individual rows', () => {
+      const files = [
+        _makeFileResult({ path: '/project/src/api.js', spansAdded: 3, status: 'success' }),
+        _makeFileResult({ path: '/project/src/helper1.js', spansAdded: 0, status: 'success', notes: ['No instrumentable functions'] }),
+        _makeFileResult({ path: '/project/src/helper2.js', spansAdded: 0, status: 'success', notes: ['No instrumentable functions'] }),
+        _makeFileResult({ path: '/project/src/helper3.js', spansAdded: 0, status: 'success', notes: ['No instrumentable functions'] }),
+      ];
+      const result = _makeRunResult({ fileResults: files, filesSucceeded: 4 });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // The instrumented file should be in the per-file table
+      expect(md).toContain('api.js');
+      // Zero-span files should be grouped, not individual rows
+      const tableRows = md.split('\n').filter(l => l.startsWith('|') && !l.includes('---'));
+      const zeroSpanRows = tableRows.filter(r => r.includes('helper1') || r.includes('helper2') || r.includes('helper3'));
+      expect(zeroSpanRows.length).toBeLessThanOrEqual(1); // grouped into 0 or 1 rows
+    });
+
+    it('does not list notes for zero-span files individually', () => {
+      const files = [
+        _makeFileResult({ path: '/project/src/api.js', spansAdded: 3, notes: ['Instrumented 3 functions'] }),
+        _makeFileResult({ path: '/project/src/skip1.js', spansAdded: 0, notes: ['No instrumentable functions'] }),
+        _makeFileResult({ path: '/project/src/skip2.js', spansAdded: 0, notes: ['Sync-only file, no I/O'] }),
+      ];
+      const result = _makeRunResult({ fileResults: files, filesSucceeded: 3 });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Instrumented file notes should appear
+      expect(md).toContain('Instrumented 3 functions');
+      // Zero-span file notes should NOT appear individually in Agent Notes section
+      const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
+      expect(notesSection).not.toContain('skip1.js');
+      expect(notesSection).not.toContain('skip2.js');
+    });
+
+    it('distinguishes committed vs correct-skip in summary header', () => {
+      const files = [
+        _makeFileResult({ path: '/project/src/api.js', spansAdded: 3 }),
+        _makeFileResult({ path: '/project/src/skip.js', spansAdded: 0 }),
+      ];
+      const result = _makeRunResult({ fileResults: files, filesSucceeded: 2 });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('Committed');
+      expect(md).toContain('1');
+      expect(md).toContain('Correct skips');
+    });
+  });
 });
