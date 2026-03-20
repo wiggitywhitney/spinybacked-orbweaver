@@ -120,9 +120,11 @@ export async function runGitWorkflow(
             }
           })
           .then(() => {
-            const companionPath = extname(result.path)
-              ? result.path.replace(/\.[^.]+$/, '.instrumentation.md')
-              : `${result.path}.instrumentation.md`;
+            const ext = extname(result.path);
+            const basePath = ext && ext !== '.'
+              ? result.path.slice(0, -ext.length)
+              : result.path.replace(/\.$/, '');
+            const companionPath = `${basePath}.instrumentation.md`;
             const companionContent = renderReasoningReport(result);
             return deps.commitFileResult(result, projectDir, {
               registryDir: absoluteRegistryDir,
