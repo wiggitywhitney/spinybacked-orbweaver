@@ -20,6 +20,7 @@ import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy 
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
 import { checkSyntax } from '../validation/tier1/syntax.ts';
+import { parseResolvedRegistry, getSpanDefinitions } from '../validation/tier2/registry-types.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -137,6 +138,17 @@ function buildValidationConfig(
   resolvedSchema?: object,
   anthropicClient?: Anthropic,
 ) {
+  // Detect schema-sparse registries: when the registry has very few span
+  // definitions, SCH-001/SCH-002 should be advisory rather than blocking.
+  // The agent invents correct names/attributes, but the registry doesn't
+  // have them — rejecting causes oscillation and wasted retries.
+  const SPARSE_THRESHOLD = 3;
+  let schemaSparse = false;
+  if (resolvedSchema) {
+    const registry = parseResolvedRegistry(resolvedSchema);
+    schemaSparse = getSpanDefinitions(registry).length < SPARSE_THRESHOLD;
+  }
+
   return {
     enableWeaver: false,
     projectRoot,
@@ -158,9 +170,9 @@ function buildValidationConfig(
       'RST-003': { enabled: true, blocking: false },
       'RST-004': { enabled: true, blocking: false },
       'CDQ-006': { enabled: true, blocking: false },
-      // Phase 5 checks
-      'SCH-001': { enabled: true, blocking: true },
-      'SCH-002': { enabled: true, blocking: true },
+      // Phase 5 checks — SCH-001/SCH-002 downgrade to advisory for sparse registries
+      'SCH-001': { enabled: true, blocking: !schemaSparse },
+      'SCH-002': { enabled: true, blocking: !schemaSparse },
       'SCH-003': { enabled: true, blocking: true },
       'SCH-004': { enabled: true, blocking: false },
       // PRD #135 checks (advisory for initial rollout)

@@ -279,7 +279,7 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
 
   if (config.tier2Checks['SCH-002']?.enabled && config.resolvedSchema) {
     tier2Results.push(...collectCheckResults(
-      checkAttributeKeysMatchRegistry(instrumentedCode, filePath, config.resolvedSchema),
+      checkAttributeKeysMatchRegistry(instrumentedCode, filePath, config.resolvedSchema, config.declaredSpanExtensions),
       config.tier2Checks['SCH-002'].blocking,
     ));
   }
