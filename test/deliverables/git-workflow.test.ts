@@ -330,7 +330,7 @@ describe('runGitWorkflow', () => {
         '/project',
         expect.stringContaining('Add OpenTelemetry instrumentation'),
         expect.stringContaining('Mock summary'),
-        { draft: false },
+        expect.objectContaining({ draft: false, head: expect.any(String) }),
       );
     });
 
@@ -348,7 +348,7 @@ describe('runGitWorkflow', () => {
         '/project',
         expect.stringContaining('Add OpenTelemetry instrumentation'),
         expect.stringContaining('Mock summary'),
-        { draft: true },
+        expect.objectContaining({ draft: true, head: expect.any(String) }),
       );
     });
 

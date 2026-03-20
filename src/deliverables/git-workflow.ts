@@ -52,7 +52,7 @@ export interface GitWorkflowDeps {
   pushBranch: (dir: string, branchName: string) => Promise<void>;
   renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
   writePrSummary: (projectDir: string, content: string) => Promise<string>;
-  createPr: (projectDir: string, title: string, body: string, options?: { draft?: boolean }) => Promise<string>;
+  createPr: (projectDir: string, title: string, body: string, options?: { draft?: boolean; head?: string }) => Promise<string>;
   checkGhAvailable: () => Promise<boolean | { available: boolean; warning?: string }>;
   stderr: (msg: string) => void;
 }
@@ -193,7 +193,7 @@ export async function runGitWorkflow(
       const testsFailed = typeof runResult.endOfRunValidation === 'string' &&
         runResult.endOfRunValidation.toUpperCase().startsWith('FAIL');
       try {
-        prUrl = await deps.createPr(projectDir, title, prBody, { draft: testsFailed });
+        prUrl = await deps.createPr(projectDir, title, prBody, { draft: testsFailed, head: branchName });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         deps.stderr(`PR creation failed: ${msg}`);
@@ -263,11 +263,14 @@ export async function createPr(
   projectDir: string,
   title: string,
   body: string,
-  options?: { draft?: boolean },
+  options?: { draft?: boolean; head?: string },
 ): Promise<string> {
   const args = ['pr', 'create', '--title', title, '--body', body];
   if (options?.draft) {
     args.push('--draft');
+  }
+  if (options?.head) {
+    args.push('--head', options.head);
   }
   return new Promise((fulfill, reject) => {
     execFile(
