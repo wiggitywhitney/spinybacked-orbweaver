@@ -327,7 +327,7 @@ describe('git-wrapper', () => {
       }
     });
 
-    it('succeeds for SSH remotes without GITHUB_TOKEN', async () => {
+    it('does not throw GITHUB_TOKEN error for SSH remotes', async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
         delete process.env.GITHUB_TOKEN;
@@ -347,7 +347,27 @@ describe('git-wrapper', () => {
       }
     });
 
-    it('succeeds for non-GitHub HTTPS remotes without GITHUB_TOKEN', async () => {
+    it('validates with token-authenticated URL when GITHUB_TOKEN is set for HTTPS GitHub', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      try {
+        process.env.GITHUB_TOKEN = 'ghp_test_token_for_credential_validation';
+        const git = simpleGit(repoDir);
+        await git.addRemote('origin', 'https://github.com/owner/repo.git');
+
+        // Should attempt token-authenticated validation (not the GITHUB_TOKEN-missing check)
+        // and fail with an auth error (fake token), not a GITHUB_TOKEN-missing error
+        const err = await validateCredentials(repoDir).catch((e: Error) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect((err as Error).message).not.toContain('GITHUB_TOKEN is not set');
+        expect((err as Error).message).toContain('Git credential validation failed');
+        // Token must not appear in error message
+        expect((err as Error).message).not.toContain('ghp_test_token_for_credential_validation');
+      } finally {
+        process.env.GITHUB_TOKEN = originalToken;
+      }
+    });
+
+    it('does not throw GITHUB_TOKEN error for non-GitHub HTTPS remotes', async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
         delete process.env.GITHUB_TOKEN;
