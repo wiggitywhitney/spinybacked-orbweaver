@@ -313,6 +313,56 @@ describe('git-wrapper', () => {
         await rm(bareDir, { recursive: true, force: true });
       }
     });
+
+    it('throws when remote is HTTPS GitHub and GITHUB_TOKEN is missing', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      try {
+        delete process.env.GITHUB_TOKEN;
+        const git = simpleGit(repoDir);
+        await git.addRemote('origin', 'https://github.com/owner/repo.git');
+
+        await expect(validateCredentials(repoDir)).rejects.toThrow(/GITHUB_TOKEN/);
+      } finally {
+        process.env.GITHUB_TOKEN = originalToken;
+      }
+    });
+
+    it('succeeds for SSH remotes without GITHUB_TOKEN', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      try {
+        delete process.env.GITHUB_TOKEN;
+        const git = simpleGit(repoDir);
+        await git.addRemote('origin', 'git@github.com:owner/repo.git');
+
+        // SSH remotes use key-based auth, not GITHUB_TOKEN — should not fail
+        // (ls-remote will fail because the remote doesn't exist, but that's
+        // a different error than the GITHUB_TOKEN check)
+        const err = await validateCredentials(repoDir).catch((e: Error) => e);
+        if (err instanceof Error) {
+          // Should NOT be a GITHUB_TOKEN error
+          expect(err.message).not.toContain('GITHUB_TOKEN');
+        }
+      } finally {
+        process.env.GITHUB_TOKEN = originalToken;
+      }
+    });
+
+    it('succeeds for non-GitHub HTTPS remotes without GITHUB_TOKEN', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      try {
+        delete process.env.GITHUB_TOKEN;
+        const git = simpleGit(repoDir);
+        await git.addRemote('origin', 'https://gitlab.com/owner/repo.git');
+
+        // Non-GitHub HTTPS remotes shouldn't require GITHUB_TOKEN
+        const err = await validateCredentials(repoDir).catch((e: Error) => e);
+        if (err instanceof Error) {
+          expect(err.message).not.toContain('GITHUB_TOKEN');
+        }
+      } finally {
+        process.env.GITHUB_TOKEN = originalToken;
+      }
+    });
   });
 
   describe('full workflow', () => {
