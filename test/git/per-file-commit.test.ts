@@ -230,6 +230,32 @@ describe('commitFileResult', () => {
     expect(commitHash).toBeUndefined();
   });
 
+  it('writes and commits companion .instrumentation.md file when option is set', async () => {
+    const srcDir = join(repoDir, 'src');
+    await mkdir(srcDir, { recursive: true });
+    const filePath = join(repoDir, 'src', 'api-client.js');
+    await writeFile(filePath, 'import { trace } from "@opentelemetry/api";\nconsole.log("instrumented");\n');
+
+    const result = makeFileResult({ path: filePath });
+    const companionContent = '# Instrumentation Report\n\n- **Status**: success\n';
+    const commitHash = await commitFileResult(result, repoDir, {
+      companionFiles: [{ path: join(repoDir, 'src', 'api-client.instrumentation.md'), content: companionContent }],
+    });
+
+    expect(commitHash).toMatch(/^[a-f0-9]+$/);
+
+    // Verify companion file was written
+    const content = await readFile(join(repoDir, 'src', 'api-client.instrumentation.md'), 'utf-8');
+    expect(content).toContain('Instrumentation Report');
+
+    // Verify companion file is in the commit
+    const git = simpleGit(repoDir);
+    const diff = await git.diff(['--name-only', 'HEAD~1', 'HEAD']);
+    const committedFiles = diff.trim().split('\n');
+    expect(committedFiles).toContain('src/api-client.js');
+    expect(committedFiles).toContain('src/api-client.instrumentation.md');
+  });
+
   it('skips schema extensions staging when file has no schema extensions', async () => {
     const srcDir = join(repoDir, 'src');
     const registryDir = join(repoDir, 'telemetry', 'registry');

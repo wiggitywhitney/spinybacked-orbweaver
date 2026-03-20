@@ -2,17 +2,27 @@
 // ABOUTME: Stages and commits instrumented code + schema changes for each successful file.
 
 import { relative, join, isAbsolute } from 'node:path';
-import { access } from 'node:fs/promises';
+import { access, writeFile } from 'node:fs/promises';
 import { stageFiles, commit, hasStagedChanges } from './git-wrapper.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 
 /** The filename used for agent-generated schema extensions. */
 const EXTENSIONS_FILENAME = 'agent-extensions.yaml';
 
+/** A companion file to write and stage alongside the instrumented code. */
+export interface CompanionFile {
+  /** Absolute path where the companion file should be written. */
+  path: string;
+  /** Content to write to the companion file. */
+  content: string;
+}
+
 /** Options for per-file commit. */
 export interface CommitFileResultOptions {
   /** Absolute path to the Weaver registry directory. Required to stage schema extension changes. */
   registryDir?: string;
+  /** Companion files to write and stage alongside the instrumented file. */
+  companionFiles?: CompanionFile[];
 }
 
 /**
@@ -55,6 +65,17 @@ export async function commitFileResult(
       filesToStage.push(relativeExtPath);
     } catch {
       // Extensions file doesn't exist — skip staging it
+    }
+  }
+
+  // Write and stage companion files (e.g., .instrumentation.md reasoning reports)
+  if (options?.companionFiles) {
+    for (const companion of options.companionFiles) {
+      const relCompanion = relative(projectDir, companion.path);
+      if (!relCompanion.startsWith('..') && !isAbsolute(relCompanion)) {
+        await writeFile(companion.path, companion.content, 'utf-8');
+        filesToStage.push(relCompanion);
+      }
     }
   }
 
