@@ -208,7 +208,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **RST-001**: Do NOT add spans to pure synchronous data transformations (no I/O, no async, no network/disk access) regardless of export status — especially when called from a parent that already has a span. Being exported does not make a function instrumentable.
 - **RST-002**: Do NOT add spans to trivial accessors (getters/setters, single-property returns).
 - **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
-- **RST-004**: Do NOT add spans to unexported internal functions — unless they perform I/O or external calls. **RST-004 takes precedence over COV-004**: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation.
+- **RST-004**: Do NOT add spans to unexported internal functions. **RST-004 takes precedence over COV-004**: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation. Only instrument an unexported I/O function when no exported orchestrator span covers that execution path.
 - **RST-005**: Do NOT add instrumentation to functions that already have spans (\`startActiveSpan\`, \`startSpan\`, \`tracer.\`).
 
 ### API-Only Dependency
