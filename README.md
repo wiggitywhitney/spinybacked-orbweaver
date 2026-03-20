@@ -18,6 +18,12 @@ The agent is schema-driven: your [Weaver](https://github.com/open-telemetry/weav
 
 Three interfaces: [**CLI**](#cli) for interactive use, [**MCP server**](#mcp-integration) for AI coding assistants (Claude Code, Cursor, and other MCP-compatible tools), and [**GitHub Action**](#github-action) for CI/CD pipelines.
 
+### Documentation
+
+- **[Rules Reference](docs/rules-reference.md)** — What each validation rule checks and why it matters
+- **[Architecture Overview](docs/architecture-overview.md)** — How the pipeline works, from file discovery through PR creation
+- **[Interpreting Output](docs/interpreting-output.md)** — How to read CLI output, PR summaries, and companion files
+
 ## Example: before and after
 
 Given an order processing module (`src/orders.js`):

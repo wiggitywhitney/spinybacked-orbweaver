@@ -89,6 +89,23 @@ describe('renderReasoningReport', () => {
     expect(report).not.toContain('Cached tokens');
   });
 
+  it('formats advisory finding rule IDs with human-readable labels', () => {
+    const report = renderReasoningReport(makeResult({
+      advisoryAnnotations: [
+        {
+          ruleId: 'RST-001',
+          passed: false,
+          filePath: '/project/src/order-service.js',
+          lineNumber: 42,
+          message: 'Utility function has a span',
+          tier: 2,
+          blocking: false,
+        },
+      ],
+    }));
+    expect(report).toContain('RST-001 (No Utility Spans)');
+  });
+
   it('includes agent notes', () => {
     const report = renderReasoningReport(makeResult({
       notes: ['All exported functions are synchronous — no LLM call made'],

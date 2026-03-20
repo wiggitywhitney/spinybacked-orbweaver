@@ -8,6 +8,7 @@ import type { CheckResult } from '../validation/types.ts';
 import { tokensToDollars, ceilingToDollars, formatDollars } from './cost-formatting.ts';
 import { writeFile } from 'node:fs/promises';
 import { relative, basename, join } from 'node:path';
+import { formatRuleId } from '../validation/rule-names.ts';
 
 /** A function that converts a file path to a display string. */
 type DisplayFn = (filePath: string) => string;
@@ -293,7 +294,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     lines.push('');
     for (const { file, annotation } of allAdvisory) {
       const loc = annotation.lineNumber ? `:${annotation.lineNumber}` : '';
-      lines.push(`- **${annotation.ruleId}** (${file}${loc}): ${annotation.message}`);
+      lines.push(`- **${formatRuleId(annotation.ruleId)}** (${file}${loc}): ${annotation.message}`);
     }
   }
 
@@ -385,7 +386,7 @@ function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): s
     lines.push(`### ${display(file.path)}`);
     lines.push('');
     for (const refactor of file.suggestedRefactors!) {
-      const rules = refactor.unblocksRules.map(r => `\`${r}\``).join(', ');
+      const rules = refactor.unblocksRules.map(r => `\`${formatRuleId(r)}\``).join(', ');
       const loc = refactor.location.startLine === refactor.location.endLine
         ? `L${refactor.location.startLine}`
         : `L${refactor.location.startLine}–${refactor.location.endLine}`;
