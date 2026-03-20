@@ -8,6 +8,7 @@ import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
 import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
+import { formatRuleId } from '../validation/rule-names.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
 /** Options parsed from CLI arguments for the instrument command. */
@@ -166,14 +167,10 @@ export async function handleInstrument(
         if (result.schemaExtensions.length > 0) {
           deps.stderr(`    Extensions: ${result.schemaExtensions.join(', ')}`);
         }
-        // Show agent notes (truncated to first 3)
+        // Show all agent notes in verbose mode
         if (result.notes && result.notes.length > 0) {
-          const shown = result.notes.slice(0, 3);
-          for (const note of shown) {
+          for (const note of result.notes) {
             deps.stderr(`    Note: ${note}`);
-          }
-          if (result.notes.length > 3) {
-            deps.stderr(`    ... and ${result.notes.length - 3} more notes`);
           }
         }
       }
@@ -297,7 +294,7 @@ export async function handleInstrument(
       for (const file of filesWithRefactors) {
         deps.stderr(`  ${basename(file.path)}:`);
         for (const refactor of file.suggestedRefactors!) {
-          deps.stderr(`    - ${refactor.description} [${refactor.unblocksRules.join(', ')}]`);
+          deps.stderr(`    - ${refactor.description} [${refactor.unblocksRules.map(formatRuleId).join(', ')}]`);
           if (options.verbose) {
             deps.stderr(`      Lines ${refactor.location.startLine}-${refactor.location.endLine}`);
             deps.stderr(`      Reason: ${refactor.reason}`);

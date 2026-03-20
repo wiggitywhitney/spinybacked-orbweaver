@@ -544,6 +544,54 @@ describe('handleInstrument', () => {
     });
   });
 
+  describe('verbose output', () => {
+    it('shows all notes without truncation in verbose mode', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const notes = Array.from({ length: 7 }, (_, i) => `Note ${i + 1}`);
+      const result = makeFileResult({ notes });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // All 7 notes should be shown, not just 3
+      expect(stderrCalls.filter((s: string) => s.includes('Note:'))).toHaveLength(7);
+      // No truncation message
+      expect(stderrCalls.some((s: string) => s.includes('more notes'))).toBe(false);
+    });
+
+    it('formats rule codes with human-readable labels in refactor output', async () => {
+      const fileResult = makeFileResult({
+        suggestedRefactors: [
+          {
+            description: 'Extract expression',
+            diff: '- old\n+ new',
+            reason: 'reason',
+            unblocksRules: ['NDS-003'],
+            location: { filePath: '/test/project/src/app.js', startLine: 10, endLine: 12 },
+          },
+        ],
+      });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockResolvedValue(
+          makeRunResult({
+            filesProcessed: 1,
+            filesSucceeded: 1,
+            fileResults: [fileResult],
+          }),
+        ),
+      });
+      await handleInstrument(makeOptions({ verbose: false }), deps);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const refactorLine = stderrCalls.find((s: string) => s.includes('Extract expression'));
+      expect(refactorLine).toBeDefined();
+      expect(refactorLine).toContain('NDS-003 (Code Preserved)');
+    });
+  });
+
   describe('cost ceiling confirmation', () => {
     it('wires onCostCeilingReady that prints ceiling info to stderr', async () => {
       const deps = makeDeps();

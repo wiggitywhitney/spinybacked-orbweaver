@@ -431,6 +431,30 @@ describe('renderPrSummary', () => {
       expect(md).toContain('camelCase');
     });
 
+    it('formats advisory rule IDs with human-readable labels', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'CDQ-001',
+                passed: false,
+                filePath: '/project/src/api-client.js',
+                lineNumber: 42,
+                message: 'Span name uses camelCase',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Rule ID should include human-readable label
+      expect(md).toContain('CDQ-001 (Spans Closed)');
+    });
+
     it('suppresses COV-004 advisories for functions deliberately skipped in notes', () => {
       const result = _makeRunResult({
         fileResults: [
@@ -687,7 +711,7 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('CDQ-008');
+      expect(md).toContain('CDQ-008 (Tracer Naming)');
       expect(md).toContain('Inconsistent tracer names');
     });
   });
@@ -875,6 +899,32 @@ describe('renderPrSummary', () => {
       // Multiple rules shown
       expect(md).toContain('NDS-003');
       expect(md).toContain('COV-003');
+    });
+
+    it('formats unblocksRules with human-readable labels', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/file.js',
+            status: 'failed',
+            spansAdded: 0,
+            suggestedRefactors: [
+              {
+                description: 'Extract expression',
+                diff: 'diff',
+                reason: 'reason',
+                unblocksRules: ['NDS-003'],
+                location: { filePath: '/project/src/file.js', startLine: 10, endLine: 12 },
+              },
+            ],
+          }),
+        ],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('NDS-003 (Code Preserved)');
     });
 
     it('shows reason for each recommendation', () => {
