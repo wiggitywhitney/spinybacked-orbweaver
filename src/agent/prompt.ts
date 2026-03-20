@@ -161,13 +161,14 @@ ${attributeNames.map(n => `\`${n}\``).join(', ')}
 ` : ''}
 Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match.
 
-### Schema-Uncovered Files
+### Schema-Uncovered Files (COV-005)
 
-When a file has NO registry-defined attributes for its spans, you MUST still add contextual attributes. Derive 1-2 domain-relevant attributes per span from:
-- **Function parameters**: Input values that identify the operation (IDs, paths, names, counts)
-- **Return values**: Output characteristics that aid debugging (result counts, status indicators, sizes)
+When a file has NO registry-defined attributes for its spans, you MUST still add contextual attributes. **A span with zero attributes is a COV-005 violation** — it provides no diagnostic value beyond existence. Derive 1-2 domain-relevant attributes per span from:
+- **Function parameters**: Input values that identify the operation (IDs, paths, names, counts). Example: \`span.setAttribute('config.path', path)\` for a config-loading function.
+- **Return values**: Output characteristics that aid debugging (result counts, status indicators, sizes). Example: \`span.setAttribute('result.count', items.length)\`.
+- **Service metadata**: For server/entry-point spans, include \`service.name\` or transport type.
 
-A span with zero attributes provides minimal diagnostic value. Even without registry guidance, function signatures reveal what data matters.
+Every span MUST have at least one \`setAttribute\` call. Even without registry guidance, function signatures reveal what data matters.
 
 ### Attribute Type Safety
 
@@ -207,7 +208,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **RST-001**: Do NOT add spans to pure synchronous data transformations (no I/O, no async, no network/disk access) regardless of export status — especially when called from a parent that already has a span. Being exported does not make a function instrumentable.
 - **RST-002**: Do NOT add spans to trivial accessors (getters/setters, single-property returns).
 - **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
-- **RST-004**: Do NOT add spans to unexported internal functions — unless they perform I/O or external calls.
+- **RST-004**: Do NOT add spans to unexported internal functions — unless they perform I/O or external calls. **RST-004 takes precedence over COV-004**: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation.
 - **RST-005**: Do NOT add instrumentation to functions that already have spans (\`startActiveSpan\`, \`startSpan\`, \`tracer.\`).
 
 ### API-Only Dependency
