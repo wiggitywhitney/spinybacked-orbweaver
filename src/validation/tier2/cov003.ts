@@ -1,7 +1,7 @@
 // ABOUTME: COV-003 Tier 2 check — failable operations have error visibility.
 // ABOUTME: Verifies that spans around failable operations include error recording (recordException/setStatus).
 
-import { Project, Node } from 'ts-morph';
+import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../types.ts';
 
 /**
@@ -121,7 +121,7 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
           // Span lifecycle try/finally: the finally block ends the span and errors
           // propagate to the parent span naturally. This is the standard pattern
           // when the agent chooses not to add error recording (expected-condition operations).
-          if (finallyBlock && hasSpanEnd(finallyBlock.getText(), spanParam)) {
+          if (finallyBlock && hasSpanEnd(finallyBlock, spanParam)) {
             continue;
           }
           // Non-lifecycle try/finally with failable operations and no error recording
@@ -204,7 +204,20 @@ function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): 
   // Core heuristic: a catch that doesn't rethrow is handling the error gracefully.
   // From OTel's perspective, the operation succeeded (possibly with degraded results)
   // — recording setStatus(ERROR) would be misleading because the caller sees success.
-  const hasThrow = /\bthrow\b/.test(bodyText);
+  // Use AST to find real ThrowStatements — regex /\bthrow\b/ matches "throw" in strings/comments.
+  const throwStatements = block.getDescendantsOfKind(SyntaxKind.ThrowStatement)
+    .filter((t) => {
+      // Exclude throws inside nested function declarations/expressions
+      let parent: import('ts-morph').Node | undefined = t.getParent();
+      while (parent && parent !== block) {
+        if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent) || Node.isFunctionDeclaration(parent)) {
+          return false;
+        }
+        parent = parent.getParent();
+      }
+      return true;
+    });
+  const hasThrow = throwStatements.length > 0;
   if (!hasThrow) {
     return true;
   }
@@ -248,10 +261,27 @@ function hasErrorRecording(text: string, spanParam: string): boolean {
 }
 
 /**
- * Check if text contains span.end() for the given span parameter.
+ * Check if a finally block contains a direct span.end() call (not nested in a closure).
+ * Uses AST to avoid false positives from text matching.
  */
-function hasSpanEnd(text: string, spanParam: string): boolean {
-  return text.includes(`${spanParam}.end(`);
+function hasSpanEnd(finallyBlock: import('ts-morph').Block, spanParam: string): boolean {
+  const callExprs = finallyBlock.getDescendantsOfKind(SyntaxKind.CallExpression);
+  return callExprs.some((call) => {
+    const expr = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return false;
+    if (expr.getName() !== 'end') return false;
+    const receiver = expr.getExpression().getText();
+    if (receiver !== spanParam) return false;
+    // Ensure the call is not inside a nested function
+    let parent = call.getParent();
+    while (parent && parent !== finallyBlock) {
+      if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent) || Node.isFunctionDeclaration(parent)) {
+        return false;
+      }
+      parent = parent.getParent();
+    }
+    return true;
+  });
 }
 
 /**
