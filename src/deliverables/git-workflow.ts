@@ -2,7 +2,7 @@
 // ABOUTME: Creates feature branch, wires per-file commits, aggregate commit, PR summary, and PR creation via gh CLI.
 
 import { execFile } from 'node:child_process';
-import { resolve } from 'node:path';
+import { extname, resolve } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import type { FileResult } from '../fix-loop/types.ts';
@@ -120,7 +120,9 @@ export async function runGitWorkflow(
             }
           })
           .then(() => {
-            const companionPath = result.path.replace(/\.[^.]+$/, '.instrumentation.md');
+            const companionPath = extname(result.path)
+              ? result.path.replace(/\.[^.]+$/, '.instrumentation.md')
+              : `${result.path}.instrumentation.md`;
             const companionContent = renderReasoningReport(result);
             return deps.commitFileResult(result, projectDir, {
               registryDir: absoluteRegistryDir,
