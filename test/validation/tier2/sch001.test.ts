@@ -375,6 +375,77 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
     });
   });
 
+  describe('declared schema extensions', () => {
+    it('accepts span names declared as schema extensions', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function generateSummary() {',
+        '  return tracer.startActiveSpan("myapp.summary.generate", (span) => {',
+        '    try { return {}; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['span.myapp.summary.generate'];
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        code, filePath, resolvedSchema, undefined, declaredExtensions,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still rejects span names not in registry or declared extensions', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function mystery() {',
+        '  return tracer.startActiveSpan("totally.unknown.span", (span) => {',
+        '    try { return null; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['span.myapp.summary.generate'];
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        code, filePath, resolvedSchema, undefined, declaredExtensions,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('totally.unknown.span');
+    });
+
+    it('accepts mix of registry names and declared extensions', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getUsers() {',
+        '  return tracer.startActiveSpan("myapp.user.get_users", (span) => {',
+        '    try { return []; } finally { span.end(); }',
+        '  });',
+        '}',
+        'function generateSummary() {',
+        '  return tracer.startActiveSpan("myapp.summary.generate", (span) => {',
+        '    try { return {}; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['span.myapp.summary.generate'];
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        code, filePath, resolvedSchema, undefined, declaredExtensions,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure for passing check', async () => {
       const code = [

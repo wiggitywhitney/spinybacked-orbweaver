@@ -266,6 +266,7 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
       filePath,
       config.resolvedSchema,
       judgeDeps,
+      config.declaredSpanExtensions,
     );
     tier2Results.push(...collectCheckResults(
       sch001.results,

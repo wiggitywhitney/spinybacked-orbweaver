@@ -58,6 +58,7 @@ export async function checkSpanNamesMatchRegistry(
   filePath: string,
   resolvedSchema: object,
   judgeDeps?: Sch001JudgeDeps,
+  declaredExtensions?: string[],
 ): Promise<Sch001Result> {
   const registry = parseResolvedRegistry(resolvedSchema);
   const spanDefs = getSpanDefinitions(registry);
@@ -110,7 +111,7 @@ export async function checkSpanNamesMatchRegistry(
 
   // Registry conformance mode: span definitions exist — no judge needed
   if (spanDefs.length > 0) {
-    const conformanceResults = checkRegistryConformance(spanNames, spanDefs, filePath);
+    const conformanceResults = checkRegistryConformance(spanNames, spanDefs, filePath, declaredExtensions);
     // Only include pass results when there are no problem results
     const filtered = problemResults.length > 0
       ? conformanceResults.filter(r => !r.passed)
@@ -143,12 +144,22 @@ function checkRegistryConformance(
   spanNames: SpanNameEntry[],
   spanDefs: { id: string }[],
   filePath: string,
+  declaredExtensions?: string[],
 ): CheckResult[] {
   // Build set of valid operation names (span group IDs without "span." prefix)
   const validOperations = new Set<string>();
   for (const def of spanDefs) {
     if (def.id.startsWith('span.')) {
       validOperations.add(def.id.slice(5));
+    }
+  }
+
+  // Also accept span names declared as schema extensions by the agent
+  if (declaredExtensions) {
+    for (const ext of declaredExtensions) {
+      if (ext.startsWith('span.')) {
+        validOperations.add(ext.slice(5));
+      }
     }
   }
 

@@ -56,6 +56,15 @@ export function buildSystemPrompt(resolvedSchema: object, projectName?: string):
 - Do not add comments explaining the instrumentation. The code speaks for itself.
 - Do not add, modify, or duplicate JSDoc comments. Preserve existing JSDoc exactly as-is. If a function has a JSDoc block, keep it unchanged — do not regenerate or rewrite it.
 - Do not add null/undefined checks around \`span.setAttribute()\` calls. Pass attribute values directly — the OpenTelemetry API handles null and undefined safely. Adding guards is a non-instrumentation change that will be rejected.
+- **Return-value capture is allowed.** When you need to call \`setAttribute\` on a return value, you may extract the expression to a \`const\`:
+  \`\`\`javascript
+  // Original: return computeResult();
+  // Allowed:
+  const result = computeResult();
+  span.setAttribute('result.count', result.length);
+  return result;
+  \`\`\`
+  This is the ONLY non-instrumentation code change the validator permits. Use it only for capturing values needed by \`setAttribute\` or \`addEvent\`.
 
 ## Schema Contract
 
