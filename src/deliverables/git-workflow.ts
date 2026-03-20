@@ -2,13 +2,14 @@
 // ABOUTME: Creates feature branch, wires per-file commits, aggregate commit, PR summary, and PR creation via gh CLI.
 
 import { execFile } from 'node:child_process';
-import { resolve } from 'node:path';
+import { extname, resolve } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CommitFileResultOptions } from '../git/per-file-commit.ts';
 import type { AggregateCommitInput } from '../git/aggregate-commit.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
+import { renderReasoningReport } from '../coordinator/reasoning-report.ts';
 
 /** Options for the git workflow. */
 export interface GitWorkflowOptions {
@@ -118,7 +119,18 @@ export async function runGitWorkflow(
               branchCreated = true;
             }
           })
-          .then(() => deps.commitFileResult(result, projectDir, { registryDir: absoluteRegistryDir }))
+          .then(() => {
+            const ext = extname(result.path);
+            const basePath = ext && ext !== '.'
+              ? result.path.slice(0, -ext.length)
+              : result.path.replace(/\.$/, '');
+            const companionPath = `${basePath}.instrumentation.md`;
+            const companionContent = renderReasoningReport(result);
+            return deps.commitFileResult(result, projectDir, {
+              registryDir: absoluteRegistryDir,
+              companionFiles: [{ path: companionPath, content: companionContent }],
+            });
+          })
           .then(() => undefined)
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);

@@ -154,6 +154,29 @@ export async function handleInstrument(
         statusLabel += ` — ${refactorCount} recommended ${noun}`;
       }
       deps.stderr(`  ${result.path}: ${statusLabel}`);
+      if (options.verbose && result.status !== 'skipped') {
+        // Show function-level details when available
+        if (result.functionResults && result.functionResults.length > 0) {
+          for (const fn of result.functionResults) {
+            const fnStatus = fn.success ? `instrumented (${fn.spansAdded} spans)` : `skipped — ${fn.error ?? 'unknown'}`;
+            deps.stderr(`    ${fn.name}: ${fnStatus}`);
+          }
+        }
+        // Show schema extensions
+        if (result.schemaExtensions.length > 0) {
+          deps.stderr(`    Extensions: ${result.schemaExtensions.join(', ')}`);
+        }
+        // Show agent notes (truncated to first 3)
+        if (result.notes && result.notes.length > 0) {
+          const shown = result.notes.slice(0, 3);
+          for (const note of shown) {
+            deps.stderr(`    Note: ${note}`);
+          }
+          if (result.notes.length > 3) {
+            deps.stderr(`    ... and ${result.notes.length - 3} more notes`);
+          }
+        }
+      }
     },
     onRunComplete: (results) => {
       const succeeded = results.filter(r => r.status === 'success').length;

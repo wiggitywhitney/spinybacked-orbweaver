@@ -195,8 +195,13 @@ describe('runGitWorkflow', () => {
       expect(deps.commitFileResult).toHaveBeenCalledWith(
         successFile,
         '/project',
-        { registryDir: '/project/semconv' },
+        expect.objectContaining({ registryDir: '/project/semconv' }),
       );
+      // Verify companion file is included
+      const callArgs = (deps.commitFileResult as ReturnType<typeof vi.fn>).mock.calls[0][2];
+      expect(callArgs.companionFiles).toHaveLength(1);
+      expect(callArgs.companionFiles[0].path).toBe('/project/src/app.instrumentation.md');
+      expect(callArgs.companionFiles[0].content).toContain('Instrumentation Report');
     });
 
     it('does not commit failed files', async () => {
