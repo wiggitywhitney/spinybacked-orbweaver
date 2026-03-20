@@ -118,8 +118,13 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
     } else {
       statusText = 'skipped';
     }
-    const libs = file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—';
-    const exts = file.schemaExtensions.length > 0
+    // For failed files, libraries and extensions are from rejected agent output —
+    // showing them misleads reviewers into thinking they're in the committed code.
+    const isCommitted = file.status === 'success' || file.status === 'partial';
+    const libs = isCommitted
+      ? (file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—')
+      : '—';
+    const exts = isCommitted && file.schemaExtensions.length > 0
       ? file.schemaExtensions.map(e => `\`${sanitizeCell(e)}\``).join(', ')
       : '—';
     let costStr = '—';
@@ -144,9 +149,11 @@ function sanitizeCell(value: string): string {
 }
 
 function renderSpanCategoryBreakdown(runResult: RunResult, display: DisplayFn): string {
+  // Only show span categories for committed files — failed files carry
+  // spanCategories from rejected agent output which doesn't reflect the branch.
   const filesWithCategories = runResult.fileResults.filter(
     (f): f is FileResult & { spanCategories: NonNullable<FileResult['spanCategories']> } =>
-      f.spanCategories != null,
+      f.spanCategories != null && (f.status === 'success' || f.status === 'partial'),
   );
 
   if (filesWithCategories.length === 0) return '';
@@ -282,7 +289,7 @@ function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig, d
   const warnings: string[] = [];
   const filesWithCategories = runResult.fileResults.filter(
     (f): f is FileResult & { spanCategories: NonNullable<FileResult['spanCategories']> } =>
-      f.spanCategories != null,
+      f.spanCategories != null && (f.status === 'success' || f.status === 'partial'),
   );
 
   if (filesWithCategories.length === 0) return warnings;

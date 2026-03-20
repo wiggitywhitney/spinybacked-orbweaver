@@ -1054,4 +1054,47 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain('Recommended Companion Packages');
     });
   });
+
+  describe('failed file metadata scrubbing', () => {
+    it('does not show schema extensions for failed files in per-file table', () => {
+      const failedFile = _makeFileResult({
+        path: '/project/src/broken.js',
+        status: 'failed',
+        spansAdded: 0,
+        schemaExtensions: ['span.myapp.rejected.operation', 'myapp.rejected.attribute'],
+        librariesNeeded: [{ package: '@traceloop/instrumentation-langchain', importName: 'LangChainInstrumentation' }],
+        reason: 'Validation failed',
+      });
+      const result = _makeRunResult({
+        fileResults: [failedFile],
+        filesSucceeded: 0,
+        filesFailed: 1,
+      });
+
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Failed file's rejected extensions and libraries should not appear
+      expect(md).not.toContain('myapp.rejected.operation');
+      expect(md).not.toContain('myapp.rejected.attribute');
+      expect(md).not.toContain('instrumentation-langchain');
+    });
+
+    it('shows schema extensions for success files in per-file table', () => {
+      const successFile = _makeFileResult({
+        path: '/project/src/good.js',
+        status: 'success',
+        spansAdded: 3,
+        schemaExtensions: ['span.myapp.committed.operation'],
+        librariesNeeded: [{ package: '@opentelemetry/instrumentation-pg', importName: 'PgInstrumentation' }],
+      });
+      const result = _makeRunResult({
+        fileResults: [successFile],
+      });
+
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('myapp.committed.operation');
+      expect(md).toContain('instrumentation-pg');
+    });
+  });
 });
