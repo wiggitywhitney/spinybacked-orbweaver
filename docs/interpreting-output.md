@@ -25,7 +25,7 @@ Processing file 1 of 4: src/api-client.js
 Processing file 2 of 4: src/format-helpers.js
   src/format-helpers.js: success (0 spans, 1.1K output tokens)
 Processing file 3 of 4: src/order-service.js
-  src/order-service.js: failed (NDS-003 after 3 attempts)
+  src/order-service.js: failed (NDS-003 (Code Preserved) after 3 attempts)
 Processing file 4 of 4: src/payment.js
   src/payment.js: partial (2 spans, 2 attempts, 4.8K output tokens) — 1 recommended refactor
 
