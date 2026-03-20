@@ -75,10 +75,15 @@ function displayPath(filePath: string, projectDir?: string): string {
 }
 
 function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string {
+  const committed = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
+  const correctSkips = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded === 0).length;
   const lines: string[] = ['## Summary'];
   lines.push('');
   lines.push(`- **Files processed**: ${runResult.filesProcessed}`);
-  lines.push(`- **Succeeded**: ${runResult.filesSucceeded}`);
+  lines.push(`- **Committed**: ${committed}`);
+  if (correctSkips > 0) {
+    lines.push(`- **Correct skips**: ${correctSkips}`);
+  }
   if (runResult.filesFailed > 0) {
     lines.push(`- **Failed**: ${runResult.filesFailed}`);
   }
@@ -101,12 +106,16 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
 }
 
 function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
+  // Separate zero-span success files (correct skips) from files with spans
+  const zeroSpanFiles = runResult.fileResults.filter(f => f.status === 'success' && f.spansAdded === 0);
+  const actionableFiles = runResult.fileResults.filter(f => !(f.status === 'success' && f.spansAdded === 0));
+
   const lines: string[] = ['## Per-File Results'];
   lines.push('');
   lines.push('| File | Status | Spans | Attempts | Cost | Libraries | Schema Extensions |');
   lines.push('|------|--------|-------|----------|------|-----------|-------------------|');
 
-  for (const file of runResult.fileResults) {
+  for (const file of actionableFiles) {
     const name = display(file.path);
     let statusText: string;
     if (file.status === 'success') {
@@ -135,6 +144,13 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
     }
 
     lines.push(`| ${name} | ${statusText} | ${file.spansAdded} | ${file.validationAttempts} | ${costStr} | ${libs} | ${exts} |`);
+  }
+
+  // Group zero-span files into a compact summary instead of individual rows
+  if (zeroSpanFiles.length > 0) {
+    const names = zeroSpanFiles.map(f => display(f.path)).join(', ');
+    lines.push('');
+    lines.push(`**Correct skips** (${zeroSpanFiles.length} files, 0 spans — no instrumentable functions): ${names}`);
   }
 
   return lines.join('\n');
@@ -324,8 +340,10 @@ function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig, d
 }
 
 function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
+  // Exclude zero-span success files — their notes are repetitive ("No instrumentable functions")
+  // and already summarized in the per-file table's "Correct skips" line.
   const filesWithNotes = runResult.fileResults.filter(
-    f => f.notes && f.notes.length > 0,
+    f => f.notes && f.notes.length > 0 && !(f.status === 'success' && f.spansAdded === 0),
   );
 
   if (filesWithNotes.length === 0) return '';

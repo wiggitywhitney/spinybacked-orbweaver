@@ -490,9 +490,33 @@ describe('handleInstrument', () => {
 
       const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
       const summaryLine = stderrCalls.find((s: string) =>
-        s.includes('2') && s.includes('succeeded'),
+        s.includes('2') && s.includes('committed'),
       );
       expect(summaryLine).toBeDefined();
+    });
+
+    it('onRunComplete distinguishes committed vs correct-skip in tally (#242)', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions(), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const results = [
+        makeFileResult({ status: 'success', spansAdded: 3 }),
+        makeFileResult({ status: 'success', spansAdded: 0 }),  // correct skip
+        makeFileResult({ status: 'success', spansAdded: 0 }),  // correct skip
+        makeFileResult({ status: 'partial', spansAdded: 2 }),
+        makeFileResult({ status: 'failed' }),
+      ];
+      callbacks.onRunComplete!(results);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const summaryLine = stderrCalls.find((s: string) => s.includes('Run complete'));
+      expect(summaryLine).toBeDefined();
+      // Should say "1 committed" not "3 succeeded"
+      expect(summaryLine).toContain('1 committed');
+      expect(summaryLine).toContain('2 correct skips');
     });
 
     it('onRunComplete includes partial count in summary (#188)', async () => {

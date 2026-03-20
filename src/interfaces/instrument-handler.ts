@@ -179,7 +179,8 @@ export async function handleInstrument(
       }
     },
     onRunComplete: (results) => {
-      const succeeded = results.filter(r => r.status === 'success').length;
+      const committed = results.filter(r => r.status === 'success' && r.spansAdded > 0).length;
+      const correctSkips = results.filter(r => r.status === 'success' && r.spansAdded === 0).length;
       const failed = results.filter(r => r.status === 'failed').length;
       const partial = results.filter(r => r.status === 'partial').length;
       const skipped = results.filter(r => r.status === 'skipped').length;
@@ -187,7 +188,7 @@ export async function handleInstrument(
       const totalOutput = results.reduce((sum, r) => sum + r.tokenUsage.outputTokens, 0);
       const totalCached = results.reduce((sum, r) => sum + r.tokenUsage.cacheReadInputTokens, 0);
       deps.stderr(
-        `\nRun complete: ${succeeded} succeeded, ${failed} failed, ${partial} partial, ${skipped} skipped`,
+        `\nRun complete: ${committed} committed, ${failed} failed, ${partial} partial, ${correctSkips} correct skips, ${skipped} skipped`,
       );
       if (totalInput > 0 || totalOutput > 0) {
         let tokenLine = `  Total tokens: ${(totalInput / 1000).toFixed(1)}K input, ${(totalOutput / 1000).toFixed(1)}K output`;
@@ -279,10 +280,12 @@ export async function handleInstrument(
   if (options.output === 'json') {
     deps.stdout(JSON.stringify(runResult, null, 2));
   } else {
+    const committedCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
+    const correctSkipCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded === 0).length;
     deps.stderr(
       `${runResult.filesProcessed} files processed: ` +
-      `${runResult.filesSucceeded} succeeded, ${runResult.filesFailed} failed, ` +
-      `${runResult.filesPartial} partial, ${runResult.filesSkipped} skipped`,
+      `${committedCount} committed, ${runResult.filesFailed} failed, ` +
+      `${runResult.filesPartial} partial, ${correctSkipCount} correct skips, ${runResult.filesSkipped} skipped`,
     );
     // Show recommended refactors summary for files that have them
     const filesWithRefactors = runResult.fileResults.filter(
