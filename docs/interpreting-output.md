@@ -20,16 +20,16 @@ Every file gets one of four statuses:
 In default (non-verbose) mode, the CLI shows one line per file plus a run summary:
 
 ```text
-Processing file 1 of 5: src/api-client.js
+Processing file 1 of 4: src/api-client.js
   src/api-client.js: success (3 spans, 5.2K output tokens)
-Processing file 2 of 5: src/format-helpers.js
+Processing file 2 of 4: src/format-helpers.js
   src/format-helpers.js: success (0 spans, 1.1K output tokens)
-Processing file 3 of 5: src/order-service.js
+Processing file 3 of 4: src/order-service.js
   src/order-service.js: failed (NDS-003 after 3 attempts)
-Processing file 4 of 5: src/payment.js
+Processing file 4 of 4: src/payment.js
   src/payment.js: partial (2 spans, 2 attempts, 4.8K output tokens) — 1 recommended refactor
 
-Run complete: 2 committed, 1 failed, 0 partial, 1 correct skips, 0 skipped
+Run complete: 1 committed, 1 failed, 1 partial, 1 correct skips, 0 skipped
 ```
 
 The status line for each file shows:

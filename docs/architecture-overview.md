@@ -101,7 +101,7 @@ Every `schemaCheckpointInterval` files (default: 5), the agent runs `weaver regi
 After all files are processed:
 - **Dependency installation**: Libraries the agent identified (e.g., `@opentelemetry/instrumentation-http`) are installed via `npm install`
 - **SDK init update**: The SDK setup file is updated to register new instrumentation libraries
-- **End-of-run test**: If `testCommand` is configured, the test suite runs against the fully instrumented codebase. Test failures trigger rollback of committed files
+- **End-of-run test**: If `testCommand` is configured, the test suite runs against the fully instrumented codebase. Test failures trigger rollback of all files committed during the current run
 
 ## Stage 4: Deliverables
 
