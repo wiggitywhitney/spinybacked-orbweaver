@@ -45,14 +45,19 @@ function makeConfig(overrides?: Partial<AgentConfig>): AgentConfig {
 }
 
 /**
- * Original code: simple function with inline return expression.
+ * Original code: function with inline argument expression.
  * Uses single quotes so both original and instrumented are non-Prettier-compliant
  * (Prettier defaults to double quotes), ensuring the lint check passes via
  * the "original non-compliant + output non-compliant → PASS" decision matrix.
+ *
+ * NDS-003 allows return-value capture (extracting `return <expr>` to
+ * `const r = <expr>; return r;`) but does NOT allow argument extraction
+ * (rewriting `fn(expr())` to `const r = expr(); fn(r);`). This fixture
+ * uses argument extraction to trigger NDS-003.
  */
 const originalCode = [
   'function greet(name) {',
-  "  return 'Hello, ' + name;",
+  "  sendMessage('Hello, ' + name);",
   '}',
   '',
   'module.exports = { greet };',
@@ -61,11 +66,13 @@ const originalCode = [
 
 /**
  * Instrumented code: agent wrapped function in OTel span and extracted
- * the return expression to a const for setAttribute capture.
+ * the argument expression to a const for setAttribute capture.
  *
  * NDS-003 triggers because:
- * - Forward: original "return 'Hello, ' + name;" is missing (extracted to const + return greeting)
- * - Reverse: "const greeting = 'Hello, ' + name;" and "return greeting;" are new non-OTel lines
+ * - Forward: original "sendMessage('Hello, ' + name);" is missing (rewritten with extracted arg)
+ * - Reverse: "const greeting = 'Hello, ' + name;" and "sendMessage(greeting);" are new non-OTel lines
+ *
+ * This is NOT a return-value capture (which NDS-003 now allows), so NDS-003 still rejects it.
  */
 const instrumentedCode = [
   "const { trace } = require('@opentelemetry/api');",
@@ -76,7 +83,7 @@ const instrumentedCode = [
   '    try {',
   "      const greeting = 'Hello, ' + name;",
   "      span.setAttribute('greeting.value', greeting);",
-  '      return greeting;',
+  '      sendMessage(greeting);',
   '    } catch (error) {',
   '      span.recordException(error);',
   '      throw error;',
@@ -91,7 +98,7 @@ const instrumentedCode = [
 ].join('\n');
 
 /**
- * Actionable diff showing the const-extraction refactor the user should make.
+ * Actionable diff showing the argument-extraction refactor the user should make.
  * This is what a developer would see in CLI --verbose output.
  */
 const actionableDiff = [
@@ -99,20 +106,20 @@ const actionableDiff = [
   '+++ b/greet.js',
   '@@ -1,3 +1,4 @@',
   ' function greet(name) {',
-  "-  return 'Hello, ' + name;",
+  "-  sendMessage('Hello, ' + name);",
   "+  const greeting = 'Hello, ' + name;",
-  '+  return greeting;',
+  '+  sendMessage(greeting);',
   ' }',
 ].join('\n');
 
 /**
- * The LLM suggestedRefactor matching the const-extraction pattern.
+ * The LLM suggestedRefactor matching the argument-extraction pattern.
  * startLine/endLine refer to the original file's line numbers.
  */
 const llmRefactor = {
-  description: 'Extract return expression to const for span attribute capture',
+  description: 'Extract argument expression to const for span attribute capture',
   diff: actionableDiff,
-  reason: 'span.setAttribute requires a variable reference. The return expression must be extracted to a const so its value can be captured as a span attribute before the function returns.',
+  reason: 'span.setAttribute requires a variable reference. The argument expression must be extracted to a const so its value can be captured as a span attribute.',
   unblocksRules: ['NDS-003'],
   startLine: 2,
   endLine: 2,
@@ -172,14 +179,14 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
     const refactor = result.suggestedRefactors![0];
 
     // Verify all fields are present and actionable
-    expect(refactor.description).toBe('Extract return expression to const for span attribute capture');
+    expect(refactor.description).toBe('Extract argument expression to const for span attribute capture');
     expect(refactor.reason).toContain('span.setAttribute requires a variable reference');
     expect(refactor.unblocksRules).toEqual(['NDS-003']);
 
     // Verify the diff is actionable — shows what to change
-    expect(refactor.diff).toContain("-  return 'Hello, ' + name;");
+    expect(refactor.diff).toContain("-  sendMessage('Hello, ' + name);");
     expect(refactor.diff).toContain("+  const greeting = 'Hello, ' + name;");
-    expect(refactor.diff).toContain('+  return greeting;');
+    expect(refactor.diff).toContain('+  sendMessage(greeting);');
 
     // Verify location points to the correct line in the source file
     expect(refactor.location.filePath).toBe(testFilePath);
@@ -187,9 +194,10 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
     expect(refactor.location.endLine).toBe(2);
   });
 
-  it('NDS-003 is detected by real validation chain on the const-extraction pattern', async () => {
+  it('NDS-003 is detected by real validation chain on the argument-extraction pattern', async () => {
     // Sanity check: verify the real validateFile actually detects NDS-003
-    // when the instrumentedCode has the const-extraction modification.
+    // when the instrumentedCode has the argument-extraction modification.
+    // (NDS-003 allows return-value capture but NOT argument extraction.)
     writeFileSync(testFilePath, instrumentedCode, 'utf-8');
 
     const validation = await validateFile({
@@ -209,15 +217,15 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
     const nds003Failures = validation.blockingFailures.filter(f => f.ruleId === 'NDS-003');
     expect(nds003Failures.length).toBeGreaterThanOrEqual(1);
 
-    // Verify the forward check caught the missing original return line
+    // Verify the forward check caught the missing original sendMessage line
     const missingLine = nds003Failures.find(f =>
-      f.message.includes('missing/modified') && f.message.includes("return 'Hello, ' + name"),
+      f.message.includes('missing/modified') && f.message.includes("sendMessage('Hello, ' + name)"),
     );
     expect(missingLine).toBeDefined();
 
     // Verify the reverse check caught non-instrumentation additions
     const addedLine = nds003Failures.find(f =>
-      f.message.includes('non-instrumentation line added') && f.message.includes('const greeting'),
+      f.message.includes('non-instrumentation line added') && f.message.includes('sendMessage(greeting)'),
     );
     expect(addedLine).toBeDefined();
   });
@@ -232,7 +240,7 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
       'function greet(name) {',
       "  return tracer.startActiveSpan('greet', (span) => {",
       '    try {',
-      "      return 'Hello, ' + name;",
+      "      sendMessage('Hello, ' + name);",
       '    } catch (error) {',
       '      span.recordException(error);',
       '      throw error;',

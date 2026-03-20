@@ -508,12 +508,15 @@ async function executeRetryLoop(
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
 
-    // Run validation chain
+    // Run validation chain — pass agent-declared schema extensions so SCH-001
+    // accepts span names the agent declared as new (avoids chicken-and-egg rejection)
     const validation = await validateFileFn({
       originalCode,
       instrumentedCode: output.instrumentedCode,
       filePath,
-      config: validationConfig,
+      config: output.schemaExtensions.length > 0
+        ? { ...validationConfig, declaredSpanExtensions: output.schemaExtensions }
+        : validationConfig,
     });
 
     lastValidation = validation;

@@ -85,6 +85,9 @@ export interface ValidationConfig {
   projectRoot?: string;
   /** Anthropic client for LLM judge calls. When provided, semi-automatable rules use judge for semantic evaluation. */
   anthropicClient?: Anthropic;
+  /** Agent-declared schema extensions for the current file. SCH-001 accepts span names
+   *  matching these extensions in addition to registry definitions. Format: `span.<namespace>.<operation>`. */
+  declaredSpanExtensions?: string[];
 }
 
 /**

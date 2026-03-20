@@ -61,6 +61,91 @@ function isInstrumentationLine(line: string): boolean {
 }
 
 /**
+ * Extract the expression from a return statement line (trimmed).
+ * Returns the expression text or null if the line is not a return statement.
+ * Handles: `return <expr>`, `return <expr>;`, `return await <expr>`, etc.
+ */
+function extractReturnExpr(line: string): string | null {
+  const m = line.match(/^return\s+(.+?);\s*$/);
+  if (m) return m[1];
+  // Handle return without trailing semicolon (multi-line return)
+  const m2 = line.match(/^return\s+(.+)$/);
+  return m2 ? m2[1] : null;
+}
+
+/**
+ * Extract the variable name and expression from a variable capture line (trimmed).
+ * Matches: `const <var> = <expr>;`, `let <var> = <expr>;`, `var <var> = <expr>;`
+ */
+function extractCapture(line: string): { varName: string; expr: string } | null {
+  const m = line.match(/^(?:const|let|var)\s+(\w+)\s*=\s*(.+?);\s*$/);
+  if (m) return { varName: m[1], expr: m[2] };
+  const m2 = line.match(/^(?:const|let|var)\s+(\w+)\s*=\s*(.+)$/);
+  return m2 ? { varName: m2[1], expr: m2[2] } : null;
+}
+
+/**
+ * Reconcile return-value captures between missing and added line lists.
+ *
+ * When the agent extracts `return <expr>` to `const <var> = <expr>; ... return <var>;`
+ * for setAttribute, three entries appear:
+ * - missingLines: the original `return <expr>`
+ * - addedLines: `const <var> = <expr>` and `return <var>`
+ *
+ * This function removes matched triples from both lists in place,
+ * similar to catch-variable binding normalization.
+ */
+function reconcileReturnCaptures(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  // Index added lines by their capture expressions
+  const capturesByExpr = new Map<string, number>(); // expr → index in addedLines
+  for (let i = 0; i < addedLines.length; i++) {
+    const capture = extractCapture(addedLines[i].line);
+    if (capture) {
+      capturesByExpr.set(capture.expr, i);
+    }
+  }
+
+  // Track indices to remove (in reverse order to avoid shifting)
+  const missingToRemove: number[] = [];
+  const addedToRemove = new Set<number>();
+
+  for (let mi = 0; mi < missingLines.length; mi++) {
+    const returnExpr = extractReturnExpr(missingLines[mi].line);
+    if (!returnExpr) continue;
+
+    const captureIdx = capturesByExpr.get(returnExpr);
+    if (captureIdx === undefined) continue;
+
+    // Found a matching capture — now look for the bare `return <var>;`
+    // Must appear after the capture line to ensure sequential pairing
+    const capture = extractCapture(addedLines[captureIdx].line)!;
+    const expectedReturn = `return ${capture.varName}`;
+    const bareReturnIdx = addedLines.findIndex(
+      (a, idx) => idx > captureIdx && !addedToRemove.has(idx) &&
+        (a.line === expectedReturn || a.line === `${expectedReturn};` || a.line.replace(/;\s*$/, '') === expectedReturn),
+    );
+
+    if (bareReturnIdx >= 0) {
+      // All three matched — mark for removal
+      missingToRemove.push(mi);
+      addedToRemove.add(captureIdx);
+      addedToRemove.add(bareReturnIdx);
+    }
+  }
+
+  // Remove in reverse order to maintain indices
+  for (const idx of missingToRemove.sort((a, b) => b - a)) {
+    missingLines.splice(idx, 1);
+  }
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
  * NDS-003: Verify that non-instrumentation lines are unchanged.
  *
  * Two-directional check:
@@ -135,6 +220,12 @@ export function checkNonInstrumentationDiff(
       addedLines.push({ line: trimmed, instrumentedLineNum: i + 1 });
     }
   }
+
+  // Reconcile return-value captures: when the agent extracts a return expression
+  // to a variable for setAttribute, NDS-003 sees the original `return <expr>`
+  // as missing and the `const <var> = <expr>` + `return <var>` as added.
+  // This is a safe instrumentation-motivated transformation (like catch-variable binding).
+  reconcileReturnCaptures(missingLines, addedLines);
 
   if (missingLines.length === 0 && addedLines.length === 0) {
     return [{

@@ -312,6 +312,145 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
 
+    it('allows return-value capture for setAttribute', () => {
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      const result = computeResult();',
+        '      span.setAttribute("result.count", result.length);',
+        '      return result;',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows return-value capture with await', () => {
+      const original = [
+        'async function fetchData(url) {',
+        '  return await fetch(url);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'async function fetchData(url) {',
+        '  return tracer.startActiveSpan("fetchData", async (span) => {',
+        '    try {',
+        '      const result = await fetch(url);',
+        '      span.setAttribute("response.ok", result.ok);',
+        '      return result;',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows multiple return-value captures in the same file', () => {
+      const original = [
+        'function getA() {',
+        '  return fetchA();',
+        '}',
+        'function getB() {',
+        '  return fetchB();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function getA() {',
+        '  return tracer.startActiveSpan("getA", (span) => {',
+        '    try {',
+        '      const result = fetchA();',
+        '      span.setAttribute("a.size", result.length);',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+        'function getB() {',
+        '  return tracer.startActiveSpan("getB", (span) => {',
+        '    try {',
+        '      const result = fetchB();',
+        '      span.setAttribute("b.size", result.length);',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('rejects variable capture that does not match a return expression', () => {
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  const debug = true;',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+      expect(failures[0].message).toContain('const debug = true');
+    });
+
+    it('rejects capture when expression does not match original return', () => {
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  const result = somethingElse();',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+
     it('still catches genuine business logic additions', () => {
       const original = [
         'function doWork() {',
