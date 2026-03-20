@@ -22,7 +22,7 @@ export function checkSyntaxValid(code: string): RubricCheckResult {
   const filePath = join(dir, 'check.js');
   try {
     writeFileSync(filePath, code, 'utf-8');
-    execFileSync('node', ['--check', filePath], { timeout: 10000 });
+    execFileSync('node', ['--check', filePath], { timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] });
     return { passed: true };
   } catch (error) {
     const message = error instanceof Error ? (error as any).stderr?.toString() ?? error.message : String(error);
