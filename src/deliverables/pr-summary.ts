@@ -204,12 +204,23 @@ function renderSchemaChanges(runResult: RunResult): string {
 }
 
 /**
- * Filter advisory annotations to remove COV-004 findings for functions
+ * Coverage and quality rule IDs that should be suppressed when the agent
+ * deliberately skipped a function per restraint rules (RST-001 through RST-005).
+ * Advisories for these rules on skipped functions are contradictions —
+ * the agent can't satisfy both "skip this" and "cover this."
+ */
+const SUPPRESSIBLE_ADVISORY_RULES = new Set([
+  'COV-001', 'COV-002', 'COV-004', 'COV-005',
+  'CDQ-003', 'NDS-005',
+]);
+
+/**
+ * Filter advisory annotations to remove coverage/quality findings for functions
  * the agent deliberately chose not to instrument.
  *
- * A COV-004 finding is suppressed when the file's notes mention the function
- * name in a skip-decision context (containing "skip" or a restraint rule ID
- * like RST-001 through RST-005).
+ * A finding is suppressed when its rule is in the suppressible set AND the file's
+ * notes mention the function name in a skip-decision context (containing "skip"
+ * or a restraint rule ID like RST-001 through RST-005).
  */
 function filterContradictingAdvisories(
   annotations: CheckResult[],
@@ -217,12 +228,9 @@ function filterContradictingAdvisories(
 ): CheckResult[] {
   if (!notes || notes.length === 0) return annotations;
 
-  const cov004 = annotations.filter(a => a.ruleId === 'COV-004');
-  if (cov004.length === 0) return annotations;
+  return annotations.filter(ann => {
+    if (!SUPPRESSIBLE_ADVISORY_RULES.has(ann.ruleId)) return true;
 
-  const other = annotations.filter(a => a.ruleId !== 'COV-004');
-
-  const filteredCov004 = cov004.filter(ann => {
     // Extract function name from message: "functionName" (reason) at line N...
     const match = ann.message.match(/^"([^"]+)"/);
     if (!match) return true;
@@ -238,8 +246,6 @@ function filterContradictingAdvisories(
     );
     return !isSkipped;
   });
-
-  return [...other, ...filteredCov004];
 }
 
 function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
