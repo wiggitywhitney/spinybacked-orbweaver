@@ -199,8 +199,12 @@ function buildValidationConfig(
  * @param validationFeedback - Formatted validation errors from formatFeedbackForAgent
  * @returns Complete feedback message for the LLM
  */
-function buildFixPrompt(validationFeedback: string): string {
-  return `The instrumented file has validation errors. Fix ONLY the failing rules listed below. Do not restructure code that is not related to a failing rule. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
+function buildFixPrompt(validationFeedback: string, existingSpanNames?: string[]): string {
+  let prompt = `The instrumented file has validation errors. Fix ONLY the failing rules listed below. Do not restructure code that is not related to a failing rule. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
+  if (existingSpanNames && existingSpanNames.length > 0) {
+    prompt += `\n\nReminder: these span names are already in use by other files — do not reuse them: ${existingSpanNames.join(', ')}`;
+  }
+  return prompt;
 }
 
 /**
@@ -445,7 +449,7 @@ async function executeRetryLoop(
       // Use low effort to constrain thinking — corrections should be targeted, not exploratory.
       callOptions = {
         conversationContext: lastConversationContext,
-        feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
+        feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation), existingSpanNames),
         maxOutputTokens: outputBudget,
         effortOverride: 'low',
         existingSpanNames,
