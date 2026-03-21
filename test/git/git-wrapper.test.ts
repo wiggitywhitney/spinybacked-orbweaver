@@ -258,6 +258,26 @@ describe('git-wrapper', () => {
       expect(branches.all).toContain('spiny-orb/test-push');
     });
 
+    // This exercises the non-token path (local bare repo, no GITHUB_TOKEN).
+    // The token path (HTTPS + GITHUB_TOKEN) sets the same config values
+    // via git addConfig and is tested by the deliverables acceptance gate
+    // (test/deliverables/acceptance-gate.test.ts) which pushes to real GitHub.
+    it('sets upstream tracking after push so gh pr create can detect the branch', async () => {
+      await createBranch(repoDir, 'spiny-orb/test-tracking');
+      await writeFile(join(repoDir, 'tracking-test.js'), 'const x = 1;\n');
+      await stageFiles(repoDir, ['tracking-test.js']);
+      await commit(repoDir, 'test upstream tracking');
+
+      await pushBranch(repoDir, 'spiny-orb/test-tracking');
+
+      // Verify upstream tracking config is set — gh pr create checks this
+      const git = simpleGit(repoDir);
+      const remote = await git.raw(['config', 'branch.spiny-orb/test-tracking.remote']);
+      const merge = await git.raw(['config', 'branch.spiny-orb/test-tracking.merge']);
+      expect(remote.trim()).toBe('origin');
+      expect(merge.trim()).toBe('refs/heads/spiny-orb/test-tracking');
+    });
+
     // This test hits real github.com — the assertion on error text depends on
     // GitHub's response wording. If it breaks, update the regex to match the
     // new wording while still confirming credentials were sent.

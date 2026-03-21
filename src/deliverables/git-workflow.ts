@@ -1,7 +1,7 @@
 // ABOUTME: End-to-end git workflow orchestration for the instrument command.
 // ABOUTME: Creates feature branch, wires per-file commits, aggregate commit, PR summary, and PR creation via gh CLI.
 
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { extname, resolve } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
@@ -269,8 +269,19 @@ export async function createPr(
   if (options?.draft) {
     args.push('--draft');
   }
-  if (options?.head) {
-    args.push('--head', options.head);
+  // Always pass --head so gh doesn't need upstream tracking.
+  // Pushing to an authenticated URL (token path) doesn't create
+  // remote-tracking refs, which causes gh to fail without --head.
+  let head = options?.head;
+  if (!head) {
+    try {
+      head = execFileSync('git', ['branch', '--show-current'], { cwd: projectDir }).toString().trim();
+    } catch {
+      // Fall through — gh pr create will attempt without --head
+    }
+  }
+  if (head) {
+    args.push('--head', head);
   }
   return new Promise((fulfill, reject) => {
     execFile(
