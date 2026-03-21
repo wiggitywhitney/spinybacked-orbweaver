@@ -389,6 +389,21 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('suggestedRefactors');
   });
 
+  it('includes count attribute type guidance in SCH-003', () => {
+    const prompt = buildSystemPrompt(makeSchema());
+    expect(prompt).toContain('Count attributes');
+    expect(prompt).toContain('type: int');
+    expect(prompt).toContain('String()');
+  });
+
+  it('includes notes brevity guidance', () => {
+    const prompt = buildSystemPrompt(makeSchema());
+    expect(prompt).toContain('3-5 judgment call');
+    expect(prompt).toContain('non-obvious');
+    expect(prompt).toContain('empty array if there are no non-obvious');
+    expect(prompt).not.toContain('Never return an empty array');
+  });
+
   describe('suggested refactors guidance', () => {
     it('instructs LLM to report transforms blocked by NDS-003', () => {
       const prompt = buildSystemPrompt(schema);
@@ -668,11 +683,3 @@ describe('buildUserMessage', () => {
   });
 });
 
-describe('buildSystemPrompt', () => {
-  it('includes count attribute type guidance in SCH-003', () => {
-    const prompt = buildSystemPrompt(makeSchema());
-    expect(prompt).toContain('Count attributes');
-    expect(prompt).toContain('type: int');
-    expect(prompt).toContain('String()');
-  });
-});
