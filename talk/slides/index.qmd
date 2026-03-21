@@ -1,0 +1,16 @@
+---
+title: "From 'Oh Hell No' to 'Worth It'"
+subtitle: "An AI Agent for Code-Level Telemetry Instrumentation"
+author: "Whitney Lee"
+format: revealjs
+---
+
+## {background-color="#00897B"}
+
+::: {.r-fit-text}
+Placeholder slides — see `talk/demo-flow.md` for the talk structure
+:::
+
+::: {.notes}
+Slides will be built section by section following the demo flow.
+:::
