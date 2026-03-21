@@ -675,4 +675,10 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('type: int');
     expect(prompt).toContain('String()');
   });
+
+  it('includes notes brevity guidance', () => {
+    const prompt = buildSystemPrompt(makeSchema());
+    expect(prompt).toContain('3-5 judgment call');
+    expect(prompt).toContain('non-obvious');
+  });
 });
