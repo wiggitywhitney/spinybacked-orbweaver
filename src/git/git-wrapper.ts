@@ -165,23 +165,34 @@ export async function validateCredentials(dir: string): Promise<void> {
     return;
   }
 
+  const remoteUrl = (await git.remote(['get-url', 'origin']))?.trim();
+  const token = process.env.GITHUB_TOKEN;
+  const isHttpsGitHub = remoteUrl?.startsWith('https://github.com');
+
   // When GITHUB_TOKEN is available and the remote is HTTPS, validate with the
   // token-authenticated URL so the check matches what pushBranch will actually do.
-  const token = process.env.GITHUB_TOKEN;
-  if (token) {
-    const remoteUrl = (await git.remote(['get-url', 'origin']))?.trim();
-    if (remoteUrl) {
-      const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
-      if (authUrl !== remoteUrl) {
-        try {
-          await git.listRemote([authUrl, '--heads']);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          throw new Error(`Git credential validation failed: ${sanitizeTokenFromError(msg)}`);
-        }
-        return;
+  if (token && remoteUrl) {
+    const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
+    if (authUrl !== remoteUrl) {
+      try {
+        await git.listRemote([authUrl, '--heads']);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Git credential validation failed: ${sanitizeTokenFromError(msg)}`);
       }
+      return;
     }
+  }
+
+  // HTTPS GitHub remotes require GITHUB_TOKEN for push — fail fast before
+  // spending tokens on file processing. Read-only ls-remote succeeds on
+  // public repos without auth, masking the problem until push time.
+  if (isHttpsGitHub && !token) {
+    throw new Error(
+      'GITHUB_TOKEN is not set but the remote is HTTPS GitHub. ' +
+      'Push will fail without a token. Set GITHUB_TOKEN in your environment, ' +
+      'use SSH remote, or pass --no-pr to skip push.',
+    );
   }
 
   try {
