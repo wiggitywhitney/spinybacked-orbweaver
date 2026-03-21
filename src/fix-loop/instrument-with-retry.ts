@@ -810,11 +810,16 @@ async function functionLevelFallback(
   successful = fnResults.filter(r => r.success);
 
   const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
+  // Collect schema extensions from successful functions so SCH-001 accepts
+  // span names the agent declared as extensions (not just base registry names).
+  const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
   const validation = await validateFileFn({
     originalCode,
     instrumentedCode: reassembledCode,
     filePath,
-    config: validationConfig,
+    config: fnExtensions.length > 0
+      ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
+      : validationConfig,
   });
 
   // Calculate cumulative token usage (whole-file attempts + function-level)
