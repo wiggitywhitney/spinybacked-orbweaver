@@ -177,6 +177,12 @@ function isExpensiveValue(valueNode: import('ts-morph').Node, valueText: string)
       for (const arg of args) {
         if (isExpensiveValue(arg, arg.getText())) return true;
       }
+      // Check the receiver for expensive chains (e.g., items.map(...).toString())
+      const callee = valueNode.getExpression();
+      if (Node.isPropertyAccessExpression(callee)) {
+        const receiver = callee.getExpression();
+        if (isExpensiveValue(receiver, receiver.getText())) return true;
+      }
       return false;
     }
     return true;

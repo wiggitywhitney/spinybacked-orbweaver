@@ -221,6 +221,34 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('does not flag .valueOf() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("timestamp", date.valueOf());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags expensive receiver chain through trivial method', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("ids", items.map(i => i.id).toString());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('expanded receiver matching', () => {
