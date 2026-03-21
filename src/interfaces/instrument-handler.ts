@@ -8,7 +8,7 @@ import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
 import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
-import { formatRuleId } from '../validation/rule-names.ts';
+import { formatRuleId, expandRuleCodesInText } from '../validation/rule-names.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
 /** Options parsed from CLI arguments for the instrument command. */
@@ -167,12 +167,13 @@ export async function handleInstrument(
         if (result.schemaExtensions.length > 0) {
           deps.stderr(`    Extensions: ${result.schemaExtensions.join(', ')}`);
         }
-        // Show all agent notes in verbose mode
+        // Show all agent notes in verbose mode with rule codes expanded
         if (result.notes && result.notes.length > 0) {
           for (const note of result.notes) {
-            deps.stderr(`    Note: ${note}`);
+            deps.stderr(`    Note: ${expandRuleCodesInText(note)}`);
           }
         }
+        deps.stderr('');
       }
     },
     onRunComplete: (results) => {

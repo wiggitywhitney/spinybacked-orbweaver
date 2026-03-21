@@ -634,6 +634,19 @@ describe('renderPrSummary', () => {
       expect(notesSection).toContain('7 more');
     });
 
+    it('expands rule codes in notes to include labels', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({ notes: ['skipped per RST-001, RST-003'] }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
+      expect(notesSection).toContain('RST-001 (No Utility Spans)');
+      expect(notesSection).toContain('RST-003 (No Thin Wrapper Spans)');
+    });
+
     it('skips notes section when no files have notes', () => {
       const result = _makeRunResult({
         fileResults: [

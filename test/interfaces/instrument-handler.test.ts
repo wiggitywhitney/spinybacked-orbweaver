@@ -563,6 +563,39 @@ describe('handleInstrument', () => {
       expect(stderrCalls.some((s: string) => s.includes('more notes'))).toBe(false);
     });
 
+    it('expands rule codes in agent notes to include labels', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        notes: ['skipped per RST-001, RST-003'],
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const noteLine = stderrCalls.find((s: string) => s.includes('Note:'));
+      expect(noteLine).toContain('RST-001 (No Utility Spans)');
+      expect(noteLine).toContain('RST-003 (No Thin Wrapper Spans)');
+    });
+
+    it('prints blank line after file output for visual separation', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ notes: ['a note'] });
+      callbacks.onFileComplete!(result, 0, 2);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // Last call should be an empty string (blank line separator)
+      expect(stderrCalls[stderrCalls.length - 1]).toBe('');
+    });
+
     it('formats rule codes with human-readable labels in refactor output', async () => {
       const fileResult = makeFileResult({
         suggestedRefactors: [

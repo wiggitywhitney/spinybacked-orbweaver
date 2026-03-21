@@ -8,7 +8,7 @@ import type { CheckResult } from '../validation/types.ts';
 import { tokensToDollars, ceilingToDollars, formatDollars } from './cost-formatting.ts';
 import { writeFile } from 'node:fs/promises';
 import { relative, basename, join } from 'node:path';
-import { formatRuleId } from '../validation/rule-names.ts';
+import { formatRuleId, expandRuleCodesInText } from '../validation/rule-names.ts';
 
 /** A function that converts a file path to a display string. */
 type DisplayFn = (filePath: string) => string;
@@ -390,7 +390,7 @@ function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
     lines.push(`**${display(file.path)}**:`);
     const shown = file.notes!.slice(0, MAX_NOTES_PER_FILE);
     for (const note of shown) {
-      lines.push(`- ${note}`);
+      lines.push(`- ${expandRuleCodesInText(note)}`);
     }
     if (file.notes!.length > MAX_NOTES_PER_FILE) {
       lines.push(`- *... ${file.notes!.length - MAX_NOTES_PER_FILE} more notes in reasoning report*`);
