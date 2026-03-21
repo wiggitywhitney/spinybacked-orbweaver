@@ -252,13 +252,15 @@ function filterContradictingAdvisories(
 function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
   const lines: string[] = [];
 
-  // Collect advisory annotations from all files, filtering contradictions
-  const allAdvisory: Array<{ file: string; annotation: CheckResult }> = [];
+  // Collect advisory annotations from all files, filtering contradictions.
+  // Track both canonical path (for deduplication) and display path (for rendering)
+  // to avoid undercounting when different directories share basenames.
+  const allAdvisory: Array<{ filePath: string; fileDisplay: string; annotation: CheckResult }> = [];
   for (const file of runResult.fileResults) {
     if (file.advisoryAnnotations) {
       const filtered = filterContradictingAdvisories(file.advisoryAnnotations, file.notes);
       for (const ann of filtered) {
-        allAdvisory.push({ file: display(file.path), annotation: ann });
+        allAdvisory.push({ filePath: file.path, fileDisplay: display(file.path), annotation: ann });
       }
     }
   }
@@ -266,7 +268,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
   // Run-level advisory findings
   if (runResult.runLevelAdvisory.length > 0) {
     for (const ann of runResult.runLevelAdvisory) {
-      allAdvisory.push({ file: '(run-level)', annotation: ann });
+      allAdvisory.push({ filePath: '(run-level)', fileDisplay: '(run-level)', annotation: ann });
     }
   }
 
@@ -293,25 +295,32 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     lines.push('### Advisory Findings');
     lines.push('');
 
-    // Group by ruleId + message to collapse repeated findings (dedupe files with Set)
-    const groups = new Map<string, { ruleId: string; message: string; files: Set<string> }>();
-    for (const { file, annotation } of allAdvisory) {
+    // Group by ruleId + message to collapse repeated findings.
+    // Use canonical filePath for deduplication, display path for rendering.
+    const groups = new Map<string, { ruleId: string; message: string; filePathSet: Set<string>; fileDisplayMap: Map<string, string> }>();
+    for (const { filePath, fileDisplay, annotation } of allAdvisory) {
       const key = `${annotation.ruleId}|${annotation.message}`;
       const existing = groups.get(key);
       if (existing) {
-        existing.files.add(file);
+        existing.filePathSet.add(filePath);
+        existing.fileDisplayMap.set(filePath, fileDisplay);
       } else {
-        groups.set(key, { ruleId: annotation.ruleId, message: annotation.message, files: new Set([file]) });
+        groups.set(key, {
+          ruleId: annotation.ruleId,
+          message: annotation.message,
+          filePathSet: new Set([filePath]),
+          fileDisplayMap: new Map([[filePath, fileDisplay]]),
+        });
       }
     }
 
-    for (const { ruleId, message, files: fileSet } of groups.values()) {
-      const files = [...fileSet];
-      if (files.length === 1) {
-        lines.push(`- **${formatRuleId(ruleId)}** (${files[0]}): ${message}`);
+    for (const { ruleId, message, filePathSet, fileDisplayMap } of groups.values()) {
+      const displayNames = [...filePathSet].map(p => fileDisplayMap.get(p) ?? p);
+      if (displayNames.length === 1) {
+        lines.push(`- **${formatRuleId(ruleId)}** (${displayNames[0]}): ${message}`);
       } else {
-        lines.push(`- **${formatRuleId(ruleId)}** (${files.length} files): ${message}`);
-        lines.push(`  Files: ${files.join(', ')}`);
+        lines.push(`- **${formatRuleId(ruleId)}** (${displayNames.length} files): ${message}`);
+        lines.push(`  Files: ${displayNames.join(', ')}`);
       }
     }
   }

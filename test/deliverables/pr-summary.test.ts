@@ -579,11 +579,15 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // Should group identical advisories, not list 3 separate bullet points
+      // Should group identical advisories into exactly 1 entry, not 3 separate lines
       const advisorySection = md.split('### Advisory Findings')[1]?.split('##')[0] ?? '';
-      const cdq006Lines = advisorySection.split('\n').filter(l => l.includes('CDQ-006'));
-      expect(cdq006Lines.length).toBeLessThanOrEqual(2); // grouped, not 3 separate lines
-      expect(advisorySection).toMatch(/3 files/); // mentions file count
+      const cdq006Bullets = advisorySection.split('\n').filter(l => l.startsWith('- ') && l.includes('CDQ-006'));
+      expect(cdq006Bullets).toHaveLength(1); // exactly 1 grouped entry
+      expect(advisorySection).toContain('3 files'); // mentions file count
+      // All three files appear in the grouped output
+      expect(advisorySection).toContain('a.js');
+      expect(advisorySection).toContain('b.js');
+      expect(advisorySection).toContain('c.js');
     });
 
   describe('agent notes section', () => {
@@ -619,11 +623,15 @@ describe('renderPrSummary', () => {
       const md = renderPrSummary(result, _makeConfig());
 
       const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
-      // Should show at most 3 notes per file, not all 10
+      // Should show exactly 3 notes, not all 10
       const noteLines = notesSection.split('\n').filter(l => l.startsWith('- Note'));
-      expect(noteLines.length).toBeLessThanOrEqual(3);
-      // Should indicate more notes exist
-      expect(notesSection).toMatch(/\d+ more/);
+      expect(noteLines).toHaveLength(3);
+      // First 3 notes present, 4th absent
+      expect(notesSection).toContain('Note 1');
+      expect(notesSection).toContain('Note 3');
+      expect(notesSection).not.toContain('Note 4 about');
+      // Should indicate 7 more notes exist
+      expect(notesSection).toContain('7 more');
     });
 
     it('skips notes section when no files have notes', () => {
