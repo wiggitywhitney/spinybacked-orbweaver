@@ -72,10 +72,48 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
       expect(results[0].message).toContain('getData');
     });
 
-    it('flags function with I/O library calls without span', () => {
+    it('does not flag sync function with sync I/O calls', () => {
       const code = [
         'function readConfig(path) {',
         '  return fs.readFileSync(path, "utf-8");',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag sync factory functions', () => {
+      const code = [
+        'function buildGraph() {',
+        '  const graph = new StateGraph({ channels: {} });',
+        '  graph.addNode("collect", collectNode);',
+        '  return graph.compile();',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag sync string builder functions', () => {
+      const code = [
+        'function dailySummaryPrompt(data) {',
+        '  return `Generate a summary for ${data.date}`;',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags async function with I/O calls without span', () => {
+      const code = [
+        'async function readConfig(path) {',
+        '  return await fs.readFile(path, "utf-8");',
         '}',
       ].join('\n');
 

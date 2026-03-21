@@ -49,12 +49,13 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
 
     if (hasSpanCall(bodyText)) continue;
 
+    // Only flag async functions or functions containing await.
+    // Pure sync functions should not be flagged even if they call I/O-looking
+    // patterns — the function declaration tells us it's synchronous.
     if (fn.isAsync()) {
       flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function' });
     } else if (/\bawait\b/.test(bodyText)) {
       flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await' });
-    } else if (hasIOCalls(bodyText)) {
-      flagged.push({ name, line: fn.getStartLineNumber(), reason: 'I/O library calls' });
     }
   }
 
@@ -77,8 +78,6 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
         flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function' });
       } else if (/\bawait\b/.test(bodyText)) {
         flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await' });
-      } else if (hasIOCalls(bodyText)) {
-        flagged.push({ name, line: fn.getStartLineNumber(), reason: 'I/O library calls' });
       }
     }
   }
@@ -96,8 +95,6 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
       flagged.push({ name, line: node.getStartLineNumber(), reason: 'async class method' });
     } else if (/\bawait\b/.test(bodyText)) {
       flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method contains await' });
-    } else if (hasIOCalls(bodyText)) {
-      flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method with I/O calls' });
     }
   });
 
