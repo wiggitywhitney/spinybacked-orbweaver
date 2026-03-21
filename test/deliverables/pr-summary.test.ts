@@ -560,6 +560,36 @@ describe('renderPrSummary', () => {
     });
   });
 
+    it('groups repeated advisories by rule ID with file count', () => {
+      const makeAdvisory = (file: string) => ({
+        ruleId: 'CDQ-006',
+        passed: false,
+        filePath: `/project/src/${file}`,
+        lineNumber: null,
+        message: 'setAttribute with computed value lacks isRecording() guard',
+        tier: 2 as const,
+        blocking: false,
+      });
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({ path: '/project/src/a.js', advisoryAnnotations: [makeAdvisory('a.js')] }),
+          _makeFileResult({ path: '/project/src/b.js', advisoryAnnotations: [makeAdvisory('b.js')] }),
+          _makeFileResult({ path: '/project/src/c.js', advisoryAnnotations: [makeAdvisory('c.js')] }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Should group identical advisories into exactly 1 entry, not 3 separate lines
+      const advisorySection = md.split('### Advisory Findings')[1]?.split('##')[0] ?? '';
+      const cdq006Bullets = advisorySection.split('\n').filter(l => l.startsWith('- ') && l.includes('CDQ-006'));
+      expect(cdq006Bullets).toHaveLength(1); // exactly 1 grouped entry
+      expect(advisorySection).toContain('3 files'); // mentions file count
+      // All three files appear in the grouped output
+      expect(advisorySection).toContain('a.js');
+      expect(advisorySection).toContain('b.js');
+      expect(advisorySection).toContain('c.js');
+    });
+
   describe('agent notes section', () => {
     it('includes notes from each file', () => {
       const result = _makeRunResult({
@@ -578,6 +608,30 @@ describe('renderPrSummary', () => {
 
       expect(md).toContain('context propagation');
       expect(md).toContain('600 lines');
+    });
+
+    it('truncates notes to first 3 per file in PR summary', () => {
+      const notes = Array.from({ length: 10 }, (_, i) => `Note ${i + 1} about instrumentation decisions`);
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/api-client.js',
+            notes,
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
+      // Should show exactly 3 notes, not all 10
+      const noteLines = notesSection.split('\n').filter(l => l.startsWith('- Note'));
+      expect(noteLines).toHaveLength(3);
+      // First 3 notes present, 4th absent
+      expect(notesSection).toContain('Note 1');
+      expect(notesSection).toContain('Note 3');
+      expect(notesSection).not.toContain('Note 4 about');
+      // Should indicate 7 more notes exist
+      expect(notesSection).toContain('7 more');
     });
 
     it('skips notes section when no files have notes', () => {

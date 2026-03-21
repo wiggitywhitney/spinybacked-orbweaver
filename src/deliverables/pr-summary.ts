@@ -252,13 +252,15 @@ function filterContradictingAdvisories(
 function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
   const lines: string[] = [];
 
-  // Collect advisory annotations from all files, filtering contradictions
-  const allAdvisory: Array<{ file: string; annotation: CheckResult }> = [];
+  // Collect advisory annotations from all files, filtering contradictions.
+  // Track both canonical path (for deduplication) and display path (for rendering)
+  // to avoid undercounting when different directories share basenames.
+  const allAdvisory: Array<{ filePath: string; fileDisplay: string; annotation: CheckResult }> = [];
   for (const file of runResult.fileResults) {
     if (file.advisoryAnnotations) {
       const filtered = filterContradictingAdvisories(file.advisoryAnnotations, file.notes);
       for (const ann of filtered) {
-        allAdvisory.push({ file: display(file.path), annotation: ann });
+        allAdvisory.push({ filePath: file.path, fileDisplay: display(file.path), annotation: ann });
       }
     }
   }
@@ -266,7 +268,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
   // Run-level advisory findings
   if (runResult.runLevelAdvisory.length > 0) {
     for (const ann of runResult.runLevelAdvisory) {
-      allAdvisory.push({ file: '(run-level)', annotation: ann });
+      allAdvisory.push({ filePath: '(run-level)', fileDisplay: '(run-level)', annotation: ann });
     }
   }
 
@@ -282,7 +284,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     }
   }
 
-  // Advisory annotations section
+  // Advisory annotations section — group identical advisories by rule + message
   if (allAdvisory.length > 0) {
     if (lines.length === 0) {
       lines.push('## Review Attention');
@@ -292,9 +294,34 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     }
     lines.push('### Advisory Findings');
     lines.push('');
-    for (const { file, annotation } of allAdvisory) {
-      const loc = annotation.lineNumber ? `:${annotation.lineNumber}` : '';
-      lines.push(`- **${formatRuleId(annotation.ruleId)}** (${file}${loc}): ${annotation.message}`);
+
+    // Group by ruleId + message to collapse repeated findings.
+    // Use canonical filePath for deduplication, display path for rendering.
+    const groups = new Map<string, { ruleId: string; message: string; filePathSet: Set<string>; fileDisplayMap: Map<string, string> }>();
+    for (const { filePath, fileDisplay, annotation } of allAdvisory) {
+      const key = `${annotation.ruleId}|${annotation.message}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.filePathSet.add(filePath);
+        existing.fileDisplayMap.set(filePath, fileDisplay);
+      } else {
+        groups.set(key, {
+          ruleId: annotation.ruleId,
+          message: annotation.message,
+          filePathSet: new Set([filePath]),
+          fileDisplayMap: new Map([[filePath, fileDisplay]]),
+        });
+      }
+    }
+
+    for (const { ruleId, message, filePathSet, fileDisplayMap } of groups.values()) {
+      const displayNames = [...filePathSet].map(p => fileDisplayMap.get(p) ?? p);
+      if (displayNames.length === 1) {
+        lines.push(`- **${formatRuleId(ruleId)}** (${displayNames[0]}): ${message}`);
+      } else {
+        lines.push(`- **${formatRuleId(ruleId)}** (${displayNames.length} files): ${message}`);
+        lines.push(`  Files: ${displayNames.join(', ')}`);
+      }
     }
   }
 
@@ -358,10 +385,15 @@ function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
   const lines: string[] = ['## Agent Notes'];
   lines.push('');
 
+  const MAX_NOTES_PER_FILE = 3;
   for (const file of filesWithNotes) {
     lines.push(`**${display(file.path)}**:`);
-    for (const note of file.notes!) {
+    const shown = file.notes!.slice(0, MAX_NOTES_PER_FILE);
+    for (const note of shown) {
       lines.push(`- ${note}`);
+    }
+    if (file.notes!.length > MAX_NOTES_PER_FILE) {
+      lines.push(`- *... ${file.notes!.length - MAX_NOTES_PER_FILE} more notes in reasoning report*`);
     }
     lines.push('');
   }
