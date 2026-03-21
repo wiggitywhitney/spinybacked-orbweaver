@@ -1,13 +1,13 @@
-/*-- scss:defaults --*/
+/* -- scss:defaults -- */
 $link-color: #00897B;
 
-/*-- scss:rules --*/
+/* -- scss:rules -- */
 .reveal .slide-number {
   font-size: 0.6em;
 }
 
 .reveal .r-fit-text {
-  color: #00897B;
+  color: $link-color;
 }
 
 .spaced {
