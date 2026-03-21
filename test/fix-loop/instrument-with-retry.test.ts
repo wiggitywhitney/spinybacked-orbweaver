@@ -158,7 +158,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.errorProgression).toEqual(['0 errors']);
   });
 
-  it('passes all 25 Tier 2 checks to validateFile with correct blocking flags', async () => {
+  it('passes all 26 Tier 2 checks to validateFile with correct blocking flags', async () => {
     const output = makeInstrumentationOutput();
     let capturedConfig: ValidateFileInput['config'] | undefined;
     const deps: InstrumentWithRetryDeps = {
