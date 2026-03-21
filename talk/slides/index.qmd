@@ -1,6 +1,6 @@
 ---
-title: "From 'Oh Hell No' to 'Worth It'"
-subtitle: "An AI Agent for Code-Level Telemetry Instrumentation"
+title: "When the Codebase Starts Instrumenting Itself"
+subtitle: "CNCF Co-located Events Europe 2026"
 author: "Whitney Lee"
 format: revealjs
 ---

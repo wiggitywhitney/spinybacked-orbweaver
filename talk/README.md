@@ -1,6 +1,10 @@
-# Spinybacked Orbweaver — Talk Materials
+# When the Codebase Starts Instrumenting Itself — Talk Materials
 
-Conference talk: "From 'Oh Hell No' to 'Worth It'" — an AI agent for code-level telemetry instrumentation.
+**Speaker:** Whitney Lee, Senior Technical Advocate at Datadog
+**Event:** CNCF-hosted Co-located Events Europe 2026
+**Date:** Monday, March 23, 2026, 16:30–16:55 CET
+**Location:** E103-105 (1st Floor), RAI Amsterdam
+**Schedule:** [sched.com link](https://colocatedeventseu2026.sched.com/event/2DY8i/when-the-codebase-starts-instrumenting-itself-whitney-lee-datadog)
 
 ## Contents
 
