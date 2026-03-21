@@ -810,11 +810,16 @@ async function functionLevelFallback(
   successful = fnResults.filter(r => r.success);
 
   const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
+  // Collect schema extensions from successful functions so SCH-001 accepts
+  // span names the agent declared as extensions (not just base registry names).
+  const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
   const validation = await validateFileFn({
     originalCode,
     instrumentedCode: reassembledCode,
     filePath,
-    config: validationConfig,
+    config: fnExtensions.length > 0
+      ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
+      : validationConfig,
   });
 
   // Calculate cumulative token usage (whole-file attempts + function-level)
@@ -825,9 +830,8 @@ async function functionLevelFallback(
 
   // Aggregate libraries and schema extensions from successful functions
   const librariesNeeded = aggregateLibraries(fnResults);
-  // Detect malformed extensions before aggregation normalizes them
-  const rawExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
-  const extensionWarnings = detectMalformedExtensions(rawExtensions);
+  // Reuse fnExtensions (computed above for validation) for malformed extension detection
+  const extensionWarnings = detectMalformedExtensions(fnExtensions);
   const schemaExtensions = aggregateSchemaExtensions(fnResults);
   const totalSpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
   const totalAttributes = successful.reduce((sum, r) => sum + r.attributesCreated, 0);
@@ -901,7 +905,9 @@ async function functionLevelFallback(
     originalCode,
     instrumentedCode: partialCode,
     filePath,
-    config: validationConfig,
+    config: fnExtensions.length > 0
+      ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
+      : validationConfig,
   });
 
   // Commit the partial code regardless of whether blocking rules fire on the assembly.
