@@ -440,6 +440,21 @@ async function executeRetryLoop(
         );
       }
     }
+    // Check output token budget before each retry attempt to prevent
+    // one partial file from consuming a disproportionate share of run cost.
+    const MAX_OUTPUT_TOKENS_PER_FILE = 50_000;
+    if (attempt > 1 && cumulativeTokens.outputTokens > MAX_OUTPUT_TOKENS_PER_FILE) {
+      const reason = `Output token budget exceeded (${cumulativeTokens.outputTokens} > ${MAX_OUTPUT_TOKENS_PER_FILE}). ` +
+        `Aborting retries to limit per-file cost.`;
+      const persistentKeys = detectPersistentViolations(nds003ViolationsPerAttempt);
+      const refactors = collectSuggestedRefactors(llmRefactorsPerAttempt, persistentKeys, filePath);
+      return buildFailedResult(
+        filePath, reason, reason, cumulativeTokens,
+        attempt - 1, lastStrategy, errorProgression, lastOutput,
+        undefined,
+        refactors.length > 0 ? refactors : undefined,
+      );
+    }
     const plannedStrategy = strategyForAttempt(attempt, maxAttempts);
 
     // Build call options for retry attempts based on strategy

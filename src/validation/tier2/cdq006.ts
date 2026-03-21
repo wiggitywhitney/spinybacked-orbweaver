@@ -134,15 +134,53 @@ function isSpanReceiver(receiverText: string): boolean {
 }
 
 /**
+ * Trivial conversions that are too cheap to warrant an isRecording() guard.
+ * These are simple type coercions, not data transformations.
+ */
+const TRIVIAL_CALL_PATTERNS = [
+  /^String$/,
+  /^Number$/,
+  /^Boolean$/,
+];
+
+const TRIVIAL_METHOD_PATTERNS = [
+  /\.toISOString$/,
+  /\.toString$/,
+  /\.valueOf$/,
+];
+
+/**
+ * Check if a call expression is a trivial conversion (cheap, no guard needed).
+ */
+function isTrivialCall(callNode: import('ts-morph').CallExpression): boolean {
+  const calleeText = callNode.getExpression().getText();
+  if (TRIVIAL_CALL_PATTERNS.some(p => p.test(calleeText))) return true;
+  if (TRIVIAL_METHOD_PATTERNS.some(p => p.test(calleeText))) return true;
+  return false;
+}
+
+/**
  * Check if a value expression is "expensive" — contains function calls,
  * method chains, or JSON.stringify.
+ * Trivial conversions (.toISOString(), String(), Number(), Boolean(), .toString())
+ * are exempt unless they wrap expensive inner expressions.
  */
 function isExpensiveValue(valueNode: import('ts-morph').Node, valueText: string): boolean {
   // Check for known expensive patterns
   if (EXPENSIVE_PATTERNS.some((p) => p.test(valueText))) return true;
 
   // Check if the value node itself is a call expression
-  if (Node.isCallExpression(valueNode)) return true;
+  if (Node.isCallExpression(valueNode)) {
+    if (isTrivialCall(valueNode)) {
+      // Trivial call — check if its arguments contain expensive expressions
+      const args = valueNode.getArguments();
+      for (const arg of args) {
+        if (isExpensiveValue(arg, arg.getText())) return true;
+      }
+      return false;
+    }
+    return true;
+  }
 
   // Check for function calls nested in the value
   let hasCall = false;
