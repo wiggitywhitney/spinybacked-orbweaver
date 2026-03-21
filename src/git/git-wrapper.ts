@@ -123,19 +123,33 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
     if (remoteUrl) {
       const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
       if (authUrl !== remoteUrl) {
-        // Temporarily swap the remote URL to include the token, push using
+        // Temporarily swap the remote push URL to include the token, push using
         // the remote name (not a bare URL). This ensures --set-upstream works
         // correctly and avoids issues with how simple-git handles URL arguments.
+        // Uses --push flag to only modify the push URL, preserving separate fetch URLs.
+        let pushError: Error | undefined;
         try {
-          await git.remote(['set-url', remote, authUrl]);
+          await git.remote(['set-url', '--push', remote, authUrl]);
           await git.push(remote, branchName, ['--set-upstream']);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          throw new Error(sanitizeTokenFromError(msg));
+          pushError = new Error(sanitizeTokenFromError(msg));
         } finally {
-          // Restore the original URL to avoid persisting the token in git config
-          try { await git.remote(['set-url', remote, remoteUrl]); } catch { /* best effort */ }
+          // Restore the original push URL to avoid persisting the token in git config
+          try {
+            await git.remote(['set-url', '--push', remote, remoteUrl]);
+          } catch (restoreErr) {
+            const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+            // Token may be persisted in git config — surface this to the caller
+            const warning = `Failed to restore remote push URL after push: ${restoreMsg}`;
+            if (pushError) {
+              pushError = new Error(`${pushError.message}\n${warning}`);
+            } else {
+              pushError = new Error(warning);
+            }
+          }
         }
+        if (pushError) throw pushError;
         return;
       }
     }
