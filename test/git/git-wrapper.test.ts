@@ -306,6 +306,18 @@ describe('git-wrapper', () => {
         // references the bare URL — but "Invalid username or token" confirms
         // credentials were actually sent (vs "Password authentication is not supported")
         expect((err as Error).message).toMatch(/Authentication failed|Invalid username/);
+
+        // Verify remote fetch URL is unchanged
+        const restoredUrl = (await git.remote(['get-url', 'origin']))?.trim();
+        expect(restoredUrl).toBe('https://github.com/owner/repo.git');
+        expect(restoredUrl).not.toContain('ghp_test_token');
+
+        // Verify no pushurl config entry was left behind
+        let pushUrlConfig: string | undefined;
+        try {
+          pushUrlConfig = await git.raw(['config', '--get', 'remote.origin.pushurl']);
+        } catch { /* config --get exits non-zero when key doesn't exist */ }
+        expect(pushUrlConfig?.trim() ?? '').toBe('');
       } finally {
         process.env.GITHUB_TOKEN = originalToken;
       }

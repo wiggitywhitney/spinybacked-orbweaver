@@ -123,17 +123,48 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
     if (remoteUrl) {
       const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
       if (authUrl !== remoteUrl) {
+        // Check if a dedicated push URL already exists (vs inheriting from fetch URL).
+        // We need to know this to clean up correctly after push.
+        let hadPushUrl = false;
         try {
-          await git.push(authUrl, branchName, ['--set-upstream']);
+          const pushUrlConfig = await git.raw(['config', '--get', `remote.${remote}.pushurl`]);
+          hadPushUrl = pushUrlConfig.trim().length > 0;
+        } catch {
+          // config --get exits non-zero when key doesn't exist — no push URL configured
+        }
+
+        // Temporarily set the remote push URL to include the token, push using
+        // the remote name (not a bare URL). This ensures --set-upstream works
+        // correctly and avoids issues with how simple-git handles URL arguments.
+        let pushError: Error | undefined;
+        try {
+          await git.remote(['set-url', '--push', remote, authUrl]);
+          await git.push(remote, branchName, ['--set-upstream']);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          throw new Error(sanitizeTokenFromError(msg));
+          pushError = new Error(sanitizeTokenFromError(msg));
+        } finally {
+          // Clean up: remove the token-bearing push URL from git config.
+          // If a push URL existed before, restore it; otherwise remove the
+          // pushurl entry entirely to avoid leaving config artifacts.
+          try {
+            if (hadPushUrl) {
+              const originalPushUrl = resolveAuthenticatedUrl(remoteUrl, undefined);
+              await git.remote(['set-url', '--push', remote, originalPushUrl]);
+            } else {
+              await git.raw(['config', '--unset-all', `remote.${remote}.pushurl`]);
+            }
+          } catch (restoreErr) {
+            const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+            const warning = `Failed to restore remote push URL after push: ${restoreMsg}`;
+            if (pushError) {
+              pushError = new Error(`${pushError.message}\n${warning}`);
+            } else {
+              pushError = new Error(warning);
+            }
+          }
         }
-        // Pushing to a URL (not a named remote) doesn't create remote-tracking
-        // refs, so --set-upstream has no effect. Set tracking config directly
-        // so gh pr create can detect the branch.
-        await git.addConfig(`branch.${branchName}.remote`, remote);
-        await git.addConfig(`branch.${branchName}.merge`, `refs/heads/${branchName}`);
+        if (pushError) throw pushError;
         return;
       }
     }
