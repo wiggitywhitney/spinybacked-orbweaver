@@ -110,6 +110,82 @@ export function checkOtelApiDependencyPlacement(
   )];
 }
 
+/**
+ * API-004 advisory: detect SDK packages in library project dependencies.
+ *
+ * Libraries should depend only on @opentelemetry/api — SDK packages like
+ * @opentelemetry/sdk-node are deployer concerns. This check flags any
+ * @opentelemetry/sdk-* package found in dependencies or peerDependencies
+ * for library projects. Advisory only — never blocks.
+ *
+ * @param filePath - Path to the file being validated (for CheckResult)
+ * @param projectRoot - Absolute path to the project root directory
+ * @returns CheckResult[] — one advisory per SDK package found, or a single pass
+ */
+export function checkSdkPackagePlacement(
+  filePath: string,
+  projectRoot: string,
+): CheckResult[] {
+  const packagePath = join(projectRoot, 'package.json');
+
+  let pkg: Record<string, unknown>;
+  try {
+    const raw = readFileSync(packagePath, 'utf-8');
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return [pass004(filePath, 'Skipped: package.json is not a JSON object.')];
+    }
+    pkg = parsed as Record<string, unknown>;
+  } catch {
+    return [pass004(filePath, 'Skipped: package.json could not be read.')];
+  }
+
+  // Only flag for library projects — apps legitimately depend on SDK packages
+  if (!isLibrary(pkg)) {
+    return [pass004(filePath, 'App project — SDK packages in dependencies are expected.')];
+  }
+
+  const sdkPattern = /^@opentelemetry\/sdk-/;
+  const results: CheckResult[] = [];
+  const deps = pkg.dependencies as Record<string, string> | undefined;
+  const peerDeps = pkg.peerDependencies as Record<string, string> | undefined;
+
+  for (const [depSection, depObj] of [['dependencies', deps], ['peerDependencies', peerDeps]] as const) {
+    if (depObj && typeof depObj === 'object') {
+      for (const pkgName of Object.keys(depObj)) {
+        if (sdkPattern.test(pkgName)) {
+          results.push({
+            ruleId: 'API-004',
+            passed: false,
+            filePath,
+            lineNumber: null,
+            message: `API-004: ${pkgName} found in ${depSection}. Library projects should not depend on SDK packages — deployers choose the SDK. Remove it or move instrumentation setup to a separate app package.`,
+            tier: 2,
+            blocking: false,
+          });
+        }
+      }
+    }
+  }
+
+  if (results.length === 0) {
+    return [pass004(filePath, 'No SDK packages found in library project dependencies.')];
+  }
+  return results;
+}
+
+function pass004(filePath: string, message: string): CheckResult {
+  return {
+    ruleId: 'API-004',
+    passed: true,
+    filePath,
+    lineNumber: null,
+    message,
+    tier: 2,
+    blocking: false,
+  };
+}
+
 function pass(filePath: string, message: string): CheckResult {
   return {
     ruleId: 'API-002',

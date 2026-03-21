@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkOtelApiDependencyPlacement } from '../../../src/validation/tier2/api002.ts';
+import { checkOtelApiDependencyPlacement, checkSdkPackagePlacement } from '../../../src/validation/tier2/api002.ts';
 
 describe('checkOtelApiDependencyPlacement (API-002)', () => {
   const filePath = '/tmp/test-file.js';
@@ -220,6 +220,93 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
       expect(results[0].passed).toBe(true);
       expect(results[0].message).toContain('package.json');
     });
+  });
+});
+
+describe('checkSdkPackagePlacement (API-004)', () => {
+  const filePath = '/tmp/test-file.js';
+  let projectRoot: string;
+
+  beforeEach(() => {
+    projectRoot = mkdtempSync(join(tmpdir(), 'api004-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  function writePackageJson(content: Record<string, unknown>) {
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify(content, null, 2));
+  }
+
+  it('flags @opentelemetry/sdk-node in dependencies for library projects', () => {
+    writePackageJson({
+      name: 'my-lib',
+      main: 'dist/index.js',
+      peerDependencies: { '@opentelemetry/api': '^1.0.0' },
+      dependencies: { '@opentelemetry/sdk-node': '^1.0.0' },
+    });
+
+    const results = checkSdkPackagePlacement(filePath, projectRoot);
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0].ruleId).toBe('API-004');
+    expect(failures[0].message).toContain('sdk-node');
+  });
+
+  it('flags @opentelemetry/sdk-trace-base in peerDependencies for library projects', () => {
+    writePackageJson({
+      name: 'my-lib',
+      main: 'dist/index.js',
+      peerDependencies: {
+        '@opentelemetry/api': '^1.0.0',
+        '@opentelemetry/sdk-trace-base': '^1.0.0',
+      },
+    });
+
+    const results = checkSdkPackagePlacement(filePath, projectRoot);
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0].message).toContain('sdk-trace-base');
+  });
+
+  it('passes for library projects with no SDK packages', () => {
+    writePackageJson({
+      name: 'my-lib',
+      main: 'dist/index.js',
+      peerDependencies: { '@opentelemetry/api': '^1.0.0' },
+    });
+
+    const results = checkSdkPackagePlacement(filePath, projectRoot);
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('passes for app projects even with SDK packages', () => {
+    writePackageJson({
+      name: 'my-app',
+      private: true,
+      dependencies: {
+        '@opentelemetry/api': '^1.0.0',
+        '@opentelemetry/sdk-node': '^1.0.0',
+      },
+    });
+
+    const results = checkSdkPackagePlacement(filePath, projectRoot);
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('is advisory (non-blocking)', () => {
+    writePackageJson({
+      name: 'my-lib',
+      main: 'dist/index.js',
+      peerDependencies: { '@opentelemetry/api': '^1.0.0' },
+      dependencies: { '@opentelemetry/sdk-node': '^1.0.0' },
+    });
+
+    const results = checkSdkPackagePlacement(filePath, projectRoot);
+    expect(results.every(r => !r.blocking)).toBe(true);
   });
 
   describe('CheckResult structure', () => {
