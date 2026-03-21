@@ -881,8 +881,18 @@ async function functionLevelFallback(
     };
   }
 
-  // Reassembly validation failed — fall back to partial results:
-  // keep only the functions that passed individual validation
+  // Reassembly validation failed — log which rules failed for diagnostics.
+  // Without this, "Reassembly validation failed" is opaque and undebuggable.
+  const failedRules = validation.blockingFailures
+    .filter(r => !r.passed)
+    .map(r => `${r.ruleId}: ${r.message.split('\n')[0]}`);
+
+  // Record failing rules in error progression for structured diagnostics
+  if (failedRules.length > 0) {
+    errorProgression.push(`reassembly: ${failedRules.join('; ')}`);
+  }
+
+  // Fall back to partial results: keep only the functions that passed individual validation
   await writeFile(filePath, originalCode, 'utf-8');
 
   const partialResults = fnResults.map(r =>
@@ -916,7 +926,11 @@ async function functionLevelFallback(
     validationAttempts: wholeFileResult.validationAttempts,
     validationStrategyUsed: wholeFileResult.validationStrategyUsed,
     errorProgression,
-    notes: [...notes, ...extensionWarnings, 'Reassembly validation failed — using partial results'],
+    notes: [
+      ...notes,
+      ...extensionWarnings,
+      `Reassembly validation failed — using partial results. Failing rules: ${failedRules.length > 0 ? failedRules.join('; ') : 'unknown'}`,
+    ],
     advisoryAnnotations: partialValidation.advisoryFindings.length > 0
       ? partialValidation.advisoryFindings
       : undefined,

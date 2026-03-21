@@ -124,11 +124,13 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
       const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
       if (authUrl !== remoteUrl) {
         // Check if a dedicated push URL already exists (vs inheriting from fetch URL).
-        // We need to know this to clean up correctly after push.
-        let hadPushUrl = false;
+        // Preserve the actual value so we can restore it exactly after push.
+        let originalPushUrl: string | undefined;
         try {
           const pushUrlConfig = await git.raw(['config', '--get', `remote.${remote}.pushurl`]);
-          hadPushUrl = pushUrlConfig.trim().length > 0;
+          if (pushUrlConfig.trim().length > 0) {
+            originalPushUrl = pushUrlConfig.trim();
+          }
         } catch {
           // config --get exits non-zero when key doesn't exist — no push URL configured
         }
@@ -148,8 +150,7 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
           // If a push URL existed before, restore it; otherwise remove the
           // pushurl entry entirely to avoid leaving config artifacts.
           try {
-            if (hadPushUrl) {
-              const originalPushUrl = resolveAuthenticatedUrl(remoteUrl, undefined);
+            if (originalPushUrl) {
               await git.remote(['set-url', '--push', remote, originalPushUrl]);
             } else {
               await git.raw(['config', '--unset-all', `remote.${remote}.pushurl`]);
