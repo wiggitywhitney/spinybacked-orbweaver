@@ -297,6 +297,25 @@ describe('checkSdkPackagePlacement (API-004)', () => {
     expect(results.every(r => r.passed)).toBe(true);
   });
 
+  it('flags multiple SDK packages with one finding each', () => {
+    writePackageJson({
+      name: 'my-lib',
+      main: 'dist/index.js',
+      peerDependencies: {
+        '@opentelemetry/api': '^1.0.0',
+        '@opentelemetry/sdk-trace-base': '^1.0.0',
+      },
+      dependencies: { '@opentelemetry/sdk-node': '^1.0.0' },
+    });
+
+    const results = checkSdkPackagePlacement(filePath, projectRoot);
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures).toHaveLength(2);
+    expect(failures.map(f => f.message).join()).toContain('sdk-node');
+    expect(failures.map(f => f.message).join()).toContain('sdk-trace-base');
+  });
+
   it('is advisory (non-blocking)', () => {
     writePackageJson({
       name: 'my-lib',
