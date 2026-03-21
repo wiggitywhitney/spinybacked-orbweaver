@@ -1,0 +1,16 @@
+---
+title: "When the Codebase Starts Instrumenting Itself"
+subtitle: "CNCF Co-located Events Europe 2026"
+author: "Whitney Lee"
+format: revealjs
+---
+
+## {background-color="#00897B"}
+
+::: {.r-fit-text}
+Placeholder slides — see `talk/demo-flow.md` for the talk structure
+:::
+
+::: {.notes}
+Slides will be built section by section following the demo flow.
+:::

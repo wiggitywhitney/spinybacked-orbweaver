@@ -43,6 +43,8 @@ const RULE_NAMES: Record<string, string> = {
   // Tier 2 — API
   'API-001': 'OTel API Only',
   'API-002': 'Dependency Placement',
+  'API-003': 'No Vendor SDKs',
+  'API-004': 'SDK Package Placement',
 
   // Tier 2 — Schema
   'SCH-001': 'Span Names Match Registry',

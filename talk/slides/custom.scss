@@ -1,0 +1,15 @@
+/* -- scss:defaults -- */
+$link-color: #00897B;
+
+/* -- scss:rules -- */
+.reveal .slide-number {
+  font-size: 0.6em;
+}
+
+.reveal .r-fit-text {
+  color: $link-color;
+}
+
+.spaced {
+  line-height: 1.8;
+}
