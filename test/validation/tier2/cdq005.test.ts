@@ -7,7 +7,7 @@ import { checkCountAttributeTypes } from '../../../src/validation/tier2/cdq005.t
 const filePath = '/test/app.js';
 
 describe('checkCountAttributeTypes (CDQ-005)', () => {
-  it('flags String() wrapping on _count attributes', () => {
+  it('flags String() wrapping on .count attributes', () => {
     const code = `
       span.setAttribute('request.count', String(result.length));
     `;
@@ -18,6 +18,17 @@ describe('checkCountAttributeTypes (CDQ-005)', () => {
     expect(failures[0].ruleId).toBe('CDQ-005');
     expect(failures[0].message).toContain('request.count');
     expect(failures[0].message).toContain('String()');
+  });
+
+  it('flags String() wrapping on _count attributes', () => {
+    const code = `
+      span.setAttribute('retry_count', String(retries));
+    `;
+    const results = checkCountAttributeTypes(code, filePath);
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0].message).toContain('retry_count');
   });
 
   it('flags multiple String()-wrapped count attributes', () => {

@@ -85,7 +85,7 @@ function findStringWrappedCounts(code: string): CountViolation[] {
     if (methodName !== 'setAttribute') return;
 
     const receiverText = expr.getExpression().getText();
-    if (!receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return;
+    if (!receiverText.match(/\b(span|activeSpan|parentSpan|rootSpan|childSpan)\b/i)) return;
 
     const args = node.getArguments();
     if (args.length < 2) return;
