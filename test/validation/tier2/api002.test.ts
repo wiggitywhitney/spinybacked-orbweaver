@@ -308,44 +308,59 @@ describe('checkSdkPackagePlacement (API-004)', () => {
     const results = checkSdkPackagePlacement(filePath, projectRoot);
     expect(results.every(r => !r.blocking)).toBe(true);
   });
+});
 
-  describe('CheckResult structure', () => {
-    it('returns correct structure for passing result', () => {
-      writePackageJson({
-        name: 'my-app',
-        private: true,
-        dependencies: { '@opentelemetry/api': '^1.0.0' },
-      });
+describe('CheckResult structure', () => {
+  const filePath = '/tmp/test-file.js';
+  let projectRoot: string;
 
-      const results = checkOtelApiDependencyPlacement(filePath, projectRoot);
+  beforeEach(() => {
+    projectRoot = mkdtempSync(join(tmpdir(), 'api002-structure-'));
+  });
 
-      expect(results).toHaveLength(1);
-      expect(results[0]).toEqual({
-        ruleId: 'API-002',
-        passed: true,
-        filePath,
-        lineNumber: null,
-        message: expect.any(String),
-        tier: 2,
-        blocking: false,
-      });
+  afterEach(() => {
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  function writePackageJson(content: Record<string, unknown>) {
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify(content, null, 2));
+  }
+
+  it('returns correct structure for passing result', () => {
+    writePackageJson({
+      name: 'my-app',
+      private: true,
+      dependencies: { '@opentelemetry/api': '^1.0.0' },
     });
 
-    it('returns correct structure for failing result', () => {
-      writePackageJson({
-        name: 'my-lib',
-        main: 'dist/index.js',
-        dependencies: { '@opentelemetry/api': '^1.0.0' },
-      });
+    const results = checkOtelApiDependencyPlacement(filePath, projectRoot);
 
-      const results = checkOtelApiDependencyPlacement(filePath, projectRoot);
-      const failure = results.find(r => !r.passed);
-
-      expect(failure).toBeDefined();
-      expect(failure!.ruleId).toBe('API-002');
-      expect(failure!.tier).toBe(2);
-      expect(failure!.blocking).toBe(false);
-      expect(failure!.lineNumber).toBeNull();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      ruleId: 'API-002',
+      passed: true,
+      filePath,
+      lineNumber: null,
+      message: expect.any(String),
+      tier: 2,
+      blocking: false,
     });
+  });
+
+  it('returns correct structure for failing result', () => {
+    writePackageJson({
+      name: 'my-lib',
+      main: 'dist/index.js',
+      dependencies: { '@opentelemetry/api': '^1.0.0' },
+    });
+
+    const results = checkOtelApiDependencyPlacement(filePath, projectRoot);
+    const failure = results.find(r => !r.passed);
+
+    expect(failure).toBeDefined();
+    expect(failure!.ruleId).toBe('API-002');
+    expect(failure!.tier).toBe(2);
+    expect(failure!.blocking).toBe(false);
+    expect(failure!.lineNumber).toBeNull();
   });
 });

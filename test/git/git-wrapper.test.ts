@@ -380,9 +380,8 @@ describe('git-wrapper', () => {
         // The ls-remote will fail (connection refused), but it should NOT
         // be a GITHUB_TOKEN error — that check only fires for github.com.
         const err = await validateCredentials(repoDir).catch((e: Error) => e);
-        if (err instanceof Error) {
-          expect(err.message).not.toContain('GITHUB_TOKEN');
-        }
+        expect(err).toBeInstanceOf(Error);
+        expect((err as Error).message).not.toContain('GITHUB_TOKEN');
       } finally {
         process.env.GITHUB_TOKEN = originalToken;
       }
