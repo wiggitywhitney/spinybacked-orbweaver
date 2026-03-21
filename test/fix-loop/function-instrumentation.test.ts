@@ -287,7 +287,7 @@ describe('instrumentFunctions', () => {
     }
   });
 
-  it('reports spansAdded from span categories', async () => {
+  it('reports spansAdded from startActiveSpan calls in code', async () => {
     const functions = [makeExtractedFunction('spanFn')];
 
     const deps: FunctionInstrumentationDeps = {
