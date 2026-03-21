@@ -71,7 +71,7 @@ Checked by the coordinator at checkpoints during the run, not by the per-file va
 
 All 32 rules are evaluated during evaluation runs (the commit-story-v2-eval process). The eval rubric checks rules that spiny-orb may or may not enforce internally. This is the independent quality assessment layer — it catches things the agent missed.
 
-The eval process has caught prompt-only violations that spiny-orb didn't: CDQ-005 count attribute types (SCH-003 in the rubric) persisted for 2 runs despite prompt guidance before being caught by the evaluator.
+The eval process has caught prompt-only violations that spiny-orb didn't: attribute-type conformance issues (SCH-003 in the rubric) persisted for 2 runs despite prompt guidance before being caught by the evaluator.
 
 ### Level 5: Out of Scope (runtime/operational)
 
@@ -162,4 +162,4 @@ The rubric cites its sources per-dimension:
 - ~~"Adapted from the IS spec for static analysis"~~ — implies the rules are IS rules translated, not original work
 - ~~"Based on community standards"~~ — too vague, sounds like borrowed work
 
-**Note on CDQ-005:** The rubric defines CDQ-005 as "Async Context Maintained." Spiny-orb previously had an internal validator also named CDQ-005 but for "Count Attribute Types" — a different concern. Issue #283 removes the spiny-orb CDQ-005 validator to resolve this naming conflict. The count attribute type concern is correctly covered by SCH-003 (attribute values conform to registry types).
+**Note on CDQ-005:** The rubric defines CDQ-005 as "Async Context Maintained." Spiny-orb previously had an internal validator also named CDQ-005 but for "Count Attribute Types" — a different concern. PR #286 removed the spiny-orb CDQ-005 validator to resolve this naming conflict. The count attribute type concern is correctly covered by SCH-003 (attribute values conform to registry types).
