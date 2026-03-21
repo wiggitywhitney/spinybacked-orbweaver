@@ -171,11 +171,8 @@ export async function writeSchemaExtensions(
     // Correct count attribute types: *_count and *.count should be int, not string.
     // The first file may declare these as string, propagating the wrong type to
     // all subsequent files via the schema accumulator.
-    if (!isSpan && typeof attr.id === 'string') {
-      const attrId = attr.id;
-      if ((attrId.endsWith('_count') || attrId.endsWith('.count')) && attr.type === 'string') {
-        attr.type = 'int';
-      }
+    if (!isSpan && (id.endsWith('_count') || id.endsWith('.count')) && attr.type === 'string') {
+      attr.type = 'int';
     }
 
     if (isSpan) {
