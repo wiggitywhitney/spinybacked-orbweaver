@@ -72,3 +72,19 @@ export function formatRuleId(ruleId: string): string {
   const name = RULE_NAMES[ruleId];
   return name ? `${ruleId} (${name})` : ruleId;
 }
+
+/**
+ * Expand bare rule codes in free text to include human-readable labels.
+ * Transforms "skipped per RST-001" to "skipped per RST-001 (No Utility Spans)".
+ * Skips codes that are already expanded (followed by " (").
+ *
+ * @param text - Free text that may contain bare rule codes
+ * @returns Text with known rule codes expanded to include labels
+ */
+export function expandRuleCodesInText(text: string): string {
+  // Match rule codes (e.g., RST-001, NDS-005b) NOT already followed by " ("
+  return text.replace(/\b([A-Z]{2,4}-\d{3}[a-z]?)\b(?! \()/g, (match) => {
+    const name = RULE_NAMES[match];
+    return name ? `${match} (${name})` : match;
+  });
+}
