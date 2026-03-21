@@ -80,13 +80,14 @@ function buildTier1OnlyValidationConfig() {
 }
 
 /**
- * Calculate spans added from span categories, matching the fix loop's logic.
+ * Count startActiveSpan calls in instrumented code.
+ * Authoritative span count based on actual code, not LLM self-report.
  */
-function calculateSpansAdded(output: { spanCategories?: { externalCalls: number; schemaDefined: number; serviceEntryPoints: number } | null; attributesCreated: number }): number {
-  if (output.spanCategories) {
-    return output.spanCategories.externalCalls + output.spanCategories.schemaDefined + output.spanCategories.serviceEntryPoints;
-  }
-  return output.attributesCreated;
+function countSpansInCode(instrumentedCode: string): number {
+  const pattern = /\.startActiveSpan\s*\(/g;
+  let count = 0;
+  while (pattern.exec(instrumentedCode)) count++;
+  return count;
 }
 
 /**
@@ -203,7 +204,7 @@ async function instrumentSingleFunction(
       name: fn.name,
       success: true,
       instrumentedCode: output.instrumentedCode,
-      spansAdded: calculateSpansAdded(output),
+      spansAdded: countSpansInCode(output.instrumentedCode),
       librariesNeeded: output.librariesNeeded,
       schemaExtensions: output.schemaExtensions,
       attributesCreated: output.attributesCreated,

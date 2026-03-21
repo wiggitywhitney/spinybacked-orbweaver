@@ -1,33 +1,20 @@
-// ABOUTME: COV-004 Tier 2 check — async/long-running operations have spans.
-// ABOUTME: Flags async functions, await expressions, and I/O library calls without enclosing spans.
+// ABOUTME: COV-004 Tier 2 check — async operations have spans.
+// ABOUTME: Flags async functions and functions containing await without enclosing spans.
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../types.ts';
 
 /**
- * Known I/O library call patterns that indicate an operation worth tracing.
- */
-const IO_PATTERNS = [
-  'fetch', 'axios',
-  'fs.', 'readFile', 'writeFile', 'readFileSync', 'writeFileSync',
-  'readdir', 'stat', 'mkdir', 'unlink',
-  'http.', 'https.',
-  'child_process', 'exec', 'spawn', 'execSync',
-  'net.', 'dgram.', 'stream.',
-  '.query(', '.execute(',
-  'redis.',
-  'database', 'mongoose', 'sequelize', 'knex', 'prisma',
-];
-
-/**
- * COV-004: Flag async/long-running operations without spans.
+ * COV-004: Flag async operations without spans.
  *
  * Detects:
- * - async functions (async keyword or containing await)
- * - Functions calling known I/O libraries (fs, net, http, database clients)
+ * - async functions (async keyword)
+ * - Functions containing await expressions
  *
- * These operations benefit from spans for latency and error tracking.
- * This is an advisory check — heuristic may flag CPU-bound computation.
+ * Pure sync functions are not flagged — even if they call I/O-looking
+ * patterns, the function declaration tells us it's synchronous.
+ *
+ * This is an advisory check.
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
@@ -49,12 +36,13 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
 
     if (hasSpanCall(bodyText)) continue;
 
+    // Only flag async functions or functions containing await.
+    // Pure sync functions should not be flagged even if they call I/O-looking
+    // patterns — the function declaration tells us it's synchronous.
     if (fn.isAsync()) {
       flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function' });
     } else if (/\bawait\b/.test(bodyText)) {
       flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await' });
-    } else if (hasIOCalls(bodyText)) {
-      flagged.push({ name, line: fn.getStartLineNumber(), reason: 'I/O library calls' });
     }
   }
 
@@ -77,8 +65,6 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
         flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function' });
       } else if (/\bawait\b/.test(bodyText)) {
         flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await' });
-      } else if (hasIOCalls(bodyText)) {
-        flagged.push({ name, line: fn.getStartLineNumber(), reason: 'I/O library calls' });
       }
     }
   }
@@ -96,8 +82,6 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
       flagged.push({ name, line: node.getStartLineNumber(), reason: 'async class method' });
     } else if (/\bawait\b/.test(bodyText)) {
       flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method contains await' });
-    } else if (hasIOCalls(bodyText)) {
-      flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method with I/O calls' });
     }
   });
 
@@ -107,7 +91,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
       passed: true,
       filePath,
       lineNumber: null,
-      message: 'All async/long-running operations have spans.',
+      message: 'All async operations have spans.',
       tier: 2,
       blocking: false,
     }];
@@ -120,7 +104,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     lineNumber: f.line,
     message:
       `"${f.name}" (${f.reason}) at line ${f.line} has no span. ` +
-      `Async functions, await expressions, and I/O library calls benefit from spans ` +
+      `Async functions and await expressions benefit from spans ` +
       `for latency tracking and error visibility. Consider adding a span.`,
     tier: 2,
     blocking: false,
@@ -134,9 +118,3 @@ function hasSpanCall(text: string): boolean {
   return text.includes('.startActiveSpan') || text.includes('.startSpan');
 }
 
-/**
- * Check if function body text contains known I/O call patterns.
- */
-function hasIOCalls(bodyText: string): boolean {
-  return IO_PATTERNS.some((pattern) => bodyText.includes(pattern));
-}

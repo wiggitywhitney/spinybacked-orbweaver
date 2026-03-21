@@ -148,7 +148,9 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.path).toBe(testFilePath);
     expect(result.validationAttempts).toBe(1);
     expect(result.validationStrategyUsed).toBe('initial-generation');
-    expect(result.spansAdded).toBe(2);
+    // countSpansInCode counts startActiveSpan calls in the instrumented code
+    // (default fixture has none, so 0)
+    expect(result.spansAdded).toBe(0);
     expect(result.librariesNeeded).toEqual(output.librariesNeeded);
     expect(result.schemaExtensions).toEqual(output.schemaExtensions);
     expect(result.attributesCreated).toBe(2);
@@ -384,7 +386,8 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
   });
 
   it('leaves instrumented content on disk after success', async () => {
-    const output = makeInstrumentationOutput();
+    const codeWithSpan = 'const t = trace.getTracer("x");\nt.startActiveSpan("op", (s) => { s.end(); });\n';
+    const output = makeInstrumentationOutput({ instrumentedCode: codeWithSpan });
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
       validateFile: async () => makePassingValidation(testFilePath),
@@ -394,12 +397,13 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
       testFilePath, originalContent, {}, makeConfig(), { deps },
     );
 
-    expect(readFileSync(testFilePath, 'utf-8')).toBe(output.instrumentedCode);
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(codeWithSpan);
   });
 
-  it('populates spansAdded from spanCategories when available', async () => {
+  it('counts spans from startActiveSpan calls in code, not LLM self-report', async () => {
     const output = makeInstrumentationOutput({
-      spanCategories: { externalCalls: 3, schemaDefined: 2, serviceEntryPoints: 1, totalFunctionsInFile: 10 },
+      instrumentedCode: 'tracer.startActiveSpan("a", (s) => { s.end(); });\ntracer.startActiveSpan("b", (s) => { s.end(); });\ntracer.startActiveSpan("c", (s) => { s.end(); });\n',
+      spanCategories: { externalCalls: 10, schemaDefined: 10, serviceEntryPoints: 10, totalFunctionsInFile: 30 },
     });
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
@@ -410,14 +414,14 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
       testFilePath, originalContent, {}, makeConfig(), { deps },
     );
 
-    // spansAdded = externalCalls + schemaDefined + serviceEntryPoints
-    expect(result.spansAdded).toBe(6);
+    // 3 startActiveSpan calls in code, not 30 from spanCategories
+    expect(result.spansAdded).toBe(3);
   });
 
-  it('sets spansAdded to attributesCreated when spanCategories is null', async () => {
+  it('returns 0 spans when code has no startActiveSpan calls', async () => {
     const output = makeInstrumentationOutput({
-      spanCategories: null,
-      attributesCreated: 5,
+      instrumentedCode: 'const x = 1;\n',
+      spanCategories: { externalCalls: 5, schemaDefined: 5, serviceEntryPoints: 5, totalFunctionsInFile: 15 },
     });
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
@@ -428,7 +432,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
       testFilePath, originalContent, {}, makeConfig(), { deps },
     );
 
-    expect(result.spansAdded).toBe(5);
+    expect(result.spansAdded).toBe(0);
   });
 });
 
@@ -521,7 +525,8 @@ describe('instrumentWithRetry — token budget tracking', () => {
       cacheCreationInputTokens: 1000,
       cacheReadInputTokens: 500,
     };
-    const output = makeInstrumentationOutput({ tokenUsage: highTokens });
+    const codeWithSpan = 'const t = trace.getTracer("x");\nt.startActiveSpan("op", (s) => { s.end(); });\n';
+    const output = makeInstrumentationOutput({ tokenUsage: highTokens, instrumentedCode: codeWithSpan });
 
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
@@ -535,7 +540,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
 
     // Budget exceeded but validation passed — result is used, file has instrumented code
     expect(result.status).toBe('success');
-    expect(readFileSync(testFilePath, 'utf-8')).toBe(output.instrumentedCode);
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(codeWithSpan);
   });
 
   it('runs validation even when budget exceeded — uses result if it passes', async () => {
@@ -1040,7 +1045,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     );
 
     expect(result.status).toBe('success');
-    expect(result.spansAdded).toBe(6); // 3 + 2 + 1
+    expect(result.spansAdded).toBe(0); // countSpansInCode: no startActiveSpan in fixture
     expect(result.librariesNeeded).toEqual(goodOutput.librariesNeeded);
     expect(result.schemaExtensions).toEqual(goodOutput.schemaExtensions);
     expect(result.notes).toEqual(goodOutput.notes);
@@ -1288,7 +1293,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     );
 
     expect(result.status).toBe('success');
-    expect(result.spansAdded).toBe(9); // 4 + 3 + 2
+    expect(result.spansAdded).toBe(0); // countSpansInCode: no startActiveSpan in fixture
     expect(result.librariesNeeded).toEqual(goodOutput.librariesNeeded);
     expect(result.schemaExtensions).toEqual(goodOutput.schemaExtensions);
     expect(result.notes).toEqual(goodOutput.notes);
@@ -2674,8 +2679,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
             return {
               success: true,
               output: makeInstrumentationOutput({
-                instrumentedCode: 'const x = 1;\n',
-                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+                instrumentedCode: 'tracer.startActiveSpan("fn1", (s) => { s.end(); });\n',
               }),
             };
           }
@@ -2781,8 +2785,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
             return {
               success: true,
               output: makeInstrumentationOutput({
-                instrumentedCode: 'const x = 1;\n',
-                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+                instrumentedCode: 'tracer.startActiveSpan("fn1", (s) => { s.end(); });\n',
               }),
             };
           }
@@ -2824,8 +2827,8 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
 
     // All functions passed validation → success (not partial) per all-functions-pass fix
     expect(result.status).toBe('success');
-    // 2 functions × 3 spans each = 6 total
-    expect(result.spansAdded).toBe(6);
+    // countSpansInCode: no startActiveSpan in fixture code
+    expect(result.spansAdded).toBe(0);
   });
 });
 
