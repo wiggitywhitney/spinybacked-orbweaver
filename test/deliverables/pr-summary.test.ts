@@ -560,6 +560,32 @@ describe('renderPrSummary', () => {
     });
   });
 
+    it('groups repeated advisories by rule ID with file count', () => {
+      const makeAdvisory = (file: string) => ({
+        ruleId: 'CDQ-006',
+        passed: false,
+        filePath: `/project/src/${file}`,
+        lineNumber: null,
+        message: 'setAttribute with computed value lacks isRecording() guard',
+        tier: 2 as const,
+        blocking: false,
+      });
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({ path: '/project/src/a.js', advisoryAnnotations: [makeAdvisory('a.js')] }),
+          _makeFileResult({ path: '/project/src/b.js', advisoryAnnotations: [makeAdvisory('b.js')] }),
+          _makeFileResult({ path: '/project/src/c.js', advisoryAnnotations: [makeAdvisory('c.js')] }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Should group identical advisories, not list 3 separate bullet points
+      const advisorySection = md.split('### Advisory Findings')[1]?.split('##')[0] ?? '';
+      const cdq006Lines = advisorySection.split('\n').filter(l => l.includes('CDQ-006'));
+      expect(cdq006Lines.length).toBeLessThanOrEqual(2); // grouped, not 3 separate lines
+      expect(advisorySection).toMatch(/3 files/); // mentions file count
+    });
+
   describe('agent notes section', () => {
     it('includes notes from each file', () => {
       const result = _makeRunResult({
@@ -578,6 +604,26 @@ describe('renderPrSummary', () => {
 
       expect(md).toContain('context propagation');
       expect(md).toContain('600 lines');
+    });
+
+    it('truncates notes to first 3 per file in PR summary', () => {
+      const notes = Array.from({ length: 10 }, (_, i) => `Note ${i + 1} about instrumentation decisions`);
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/api-client.js',
+            notes,
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
+      // Should show at most 3 notes per file, not all 10
+      const noteLines = notesSection.split('\n').filter(l => l.startsWith('- Note'));
+      expect(noteLines.length).toBeLessThanOrEqual(3);
+      // Should indicate more notes exist
+      expect(notesSection).toMatch(/\d+ more/);
     });
 
     it('skips notes section when no files have notes', () => {

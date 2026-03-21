@@ -282,7 +282,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     }
   }
 
-  // Advisory annotations section
+  // Advisory annotations section — group identical advisories by rule + message
   if (allAdvisory.length > 0) {
     if (lines.length === 0) {
       lines.push('## Review Attention');
@@ -292,9 +292,26 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     }
     lines.push('### Advisory Findings');
     lines.push('');
+
+    // Group by ruleId + message to collapse repeated findings
+    const groups = new Map<string, { ruleId: string; message: string; files: string[] }>();
     for (const { file, annotation } of allAdvisory) {
-      const loc = annotation.lineNumber ? `:${annotation.lineNumber}` : '';
-      lines.push(`- **${formatRuleId(annotation.ruleId)}** (${file}${loc}): ${annotation.message}`);
+      const key = `${annotation.ruleId}|${annotation.message}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.files.push(file);
+      } else {
+        groups.set(key, { ruleId: annotation.ruleId, message: annotation.message, files: [file] });
+      }
+    }
+
+    for (const { ruleId, message, files } of groups.values()) {
+      if (files.length === 1) {
+        lines.push(`- **${formatRuleId(ruleId)}** (${files[0]}): ${message}`);
+      } else {
+        lines.push(`- **${formatRuleId(ruleId)}** (${files.length} files): ${message}`);
+        lines.push(`  Files: ${files.join(', ')}`);
+      }
     }
   }
 
@@ -358,10 +375,15 @@ function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
   const lines: string[] = ['## Agent Notes'];
   lines.push('');
 
+  const MAX_NOTES_PER_FILE = 3;
   for (const file of filesWithNotes) {
     lines.push(`**${display(file.path)}**:`);
-    for (const note of file.notes!) {
+    const shown = file.notes!.slice(0, MAX_NOTES_PER_FILE);
+    for (const note of shown) {
       lines.push(`- ${note}`);
+    }
+    if (file.notes!.length > MAX_NOTES_PER_FILE) {
+      lines.push(`- *... ${file.notes!.length - MAX_NOTES_PER_FILE} more notes in reasoning report*`);
     }
     lines.push('');
   }
