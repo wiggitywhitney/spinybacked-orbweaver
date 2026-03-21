@@ -164,7 +164,6 @@ function buildValidationConfig(
     tier2Checks: {
       // Phase 2 checks
       'CDQ-001': { enabled: true, blocking: true },
-      'CDQ-005': { enabled: true, blocking: false },
       'NDS-003': { enabled: true, blocking: true },
       'COV-002': { enabled: true, blocking: true },
       'RST-001': { enabled: true, blocking: false },

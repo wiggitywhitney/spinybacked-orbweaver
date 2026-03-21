@@ -6,7 +6,6 @@ import { checkSyntax } from './tier1/syntax.ts';
 import { checkLint } from './tier1/lint.ts';
 import { checkWeaver } from './tier1/weaver.ts';
 import { checkSpansClosed } from './tier2/cdq001.ts';
-import { checkCountAttributeTypes } from './tier2/cdq005.ts';
 import { checkNonInstrumentationDiff } from './tier2/nds003.ts';
 import { checkOutboundCallSpans } from './tier2/cov002.ts';
 import { checkUtilityFunctionSpans } from './tier2/rst001.ts';
@@ -89,13 +88,6 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     tier2Results.push(...collectCheckResults(
       checkSpansClosed(instrumentedCode, filePath),
       config.tier2Checks['CDQ-001'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['CDQ-005']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkCountAttributeTypes(instrumentedCode, filePath),
-      config.tier2Checks['CDQ-005'].blocking,
     ));
   }
 
