@@ -2,6 +2,7 @@
 // ABOUTME: Re-exports all Tier 2 checkers for coverage, restraint, and quality dimensions.
 
 export { checkSpansClosed } from './cdq001.ts';
+export { checkCountAttributeTypes } from './cdq005.ts';
 export { checkNonInstrumentationDiff } from './nds003.ts';
 export { checkOutboundCallSpans } from './cov002.ts';
 export { checkUtilityFunctionSpans } from './rst001.ts';
