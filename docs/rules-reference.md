@@ -90,7 +90,7 @@ These rules verify that the instrumentation code follows OTel best practices and
 | Rule | Name | What it checks |
 |------|------|----------------|
 | CDQ-001 | Spans Closed | Every span is closed in all code paths — via `span.end()` in a `finally` block or via `startActiveSpan` callback. Unclosed spans leak resources. |
-| CDQ-005 | Async Context Maintained | For `startActiveSpan()` callback pattern, context is automatically managed. For `startSpan()` manual pattern, `context.with()` must wrap async operations within the span's scope. *(Prompt-enforced — all files pass because the agent uses `startActiveSpan` exclusively.)* |
+| CDQ-005 | Count Attribute Types | Count attributes (`*_count`) pass raw numeric values to `setAttribute`, not `String()`-wrapped values. Count attributes are semantically numeric even if the schema declares them as strings. |
 | CDQ-006 | isRecording Guard | Expensive attribute computations (serialization, array operations) are guarded with `span.isRecording()`. When a span is sampled out, the guard skips the computation. |
 | CDQ-008 | Tracer Naming | All `trace.getTracer()` calls across the codebase use a consistent naming convention. Inconsistent tracer names fragment trace analysis. |
 
