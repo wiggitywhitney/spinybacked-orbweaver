@@ -51,6 +51,7 @@ function buildTier1OnlyValidationConfig() {
     enableWeaver: false,
     tier2Checks: {
       'CDQ-001': { enabled: false, blocking: false },
+      'CDQ-005': { enabled: false, blocking: false },
       'NDS-003': { enabled: false, blocking: false },
       'COV-002': { enabled: false, blocking: false },
       'RST-001': { enabled: false, blocking: false },
