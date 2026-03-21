@@ -375,6 +375,58 @@ describe('writeSchemaExtensions', () => {
     const attr = parsed.groups[0].attributes[0];
     expect(attr.type).toHaveProperty('members');
   });
+
+  it('corrects _count attributes from type: string to type: int', async () => {
+    const extensions = [
+      '- id: myapp.request.dates_count\n  type: string\n  stability: development\n  brief: Number of dates',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string; type: string }> }> };
+    const attr = parsed.groups[0].attributes[0];
+    expect(attr.type).toBe('int');
+  });
+
+  it('corrects .count attributes from type: string to type: int', async () => {
+    const extensions = [
+      '- id: myapp.sessions.count\n  type: string\n  stability: development\n  brief: Session count',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string; type: string }> }> };
+    const attr = parsed.groups[0].attributes[0];
+    expect(attr.type).toBe('int');
+  });
+
+  it('does not change count attributes that already have type: int', async () => {
+    const extensions = [
+      '- id: myapp.request.retry_count\n  type: int\n  stability: development\n  brief: Retry count',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string; type: string }> }> };
+    const attr = parsed.groups[0].attributes[0];
+    expect(attr.type).toBe('int');
+  });
+
+  it('does not change non-count attributes with type: string', async () => {
+    const extensions = [
+      '- id: myapp.request.method\n  type: string\n  stability: development\n  brief: HTTP method',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string; type: string }> }> };
+    const attr = parsed.groups[0].attributes[0];
+    expect(attr.type).toBe('string');
+  });
 });
 
 describe('snapshotExtensionsFile', () => {
