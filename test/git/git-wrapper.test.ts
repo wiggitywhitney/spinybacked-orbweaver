@@ -372,7 +372,8 @@ describe('git-wrapper', () => {
       try {
         delete process.env.GITHUB_TOKEN;
         const git = simpleGit(repoDir);
-        await git.addRemote('origin', 'https://gitlab.com/owner/repo.git');
+        // Use localhost to avoid real network calls — connection refused is fast
+        await git.addRemote('origin', 'https://localhost:1/owner/repo.git');
 
         // Non-GitHub HTTPS remotes shouldn't require GITHUB_TOKEN
         const err = await validateCredentials(repoDir).catch((e: Error) => e);
