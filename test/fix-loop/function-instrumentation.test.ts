@@ -294,7 +294,7 @@ describe('instrumentFunctions', () => {
       instrumentFile: async () => ({
         success: true,
         output: {
-          instrumentedCode: 'const x = 1;',
+          instrumentedCode: 'tracer.startActiveSpan("a", (s) => { s.end(); });\ntracer.startActiveSpan("b", (s) => { s.end(); });\ntracer.startActiveSpan("c", (s) => { s.end(); });\n',
           librariesNeeded: [],
           schemaExtensions: ['app.metric'],
           attributesCreated: 3,

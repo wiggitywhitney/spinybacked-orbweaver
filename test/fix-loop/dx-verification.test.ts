@@ -164,7 +164,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.status).toBe('success');
 
       // Numeric fields reflect actual output
-      expect(result.spansAdded).toBe(2); // externalCalls(1) + schemaDefined(1) + serviceEntryPoints(0)
+      expect(result.spansAdded).toBe(0); // countSpansInCode: no startActiveSpan in default fixture
       expect(result.attributesCreated).toBe(2);
       expect(result.validationAttempts).toBe(1);
       expect(result.validationStrategyUsed).toBe('initial-generation');
@@ -404,7 +404,10 @@ describe('DX verification — FileResult field content for all exit paths', () =
         cacheCreationInputTokens: 1000,
         cacheReadInputTokens: 500,
       };
-      const output = makeOutput({ tokenUsage: expensiveTokens });
+      const output = makeOutput({
+        tokenUsage: expensiveTokens,
+        instrumentedCode: 'tracer.startActiveSpan("op", (s) => { s.end(); });\n',
+      });
 
       const deps: InstrumentWithRetryDeps = {
         instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
@@ -426,11 +429,11 @@ describe('DX verification — FileResult field content for all exit paths', () =
 
       // Metadata from the instrumentation output is preserved
       expect(result.librariesNeeded).toEqual(output.librariesNeeded);
-      expect(result.schemaExtensions).toEqual(output.schemaExtensions);
+      expect(result.schemaExtensions).toContain('app.user.id');
       expect(result.spanCategories).toEqual(output.spanCategories);
       expect(result.notes).toEqual(output.notes);
 
-      // File has instrumented code (not reverted)
+      // File has instrumented code (not reverted — has startActiveSpan so spansAdded > 0)
       expect(readFileSync(testFilePath, 'utf-8')).toBe(output.instrumentedCode);
     });
 
