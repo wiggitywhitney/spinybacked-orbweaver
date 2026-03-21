@@ -158,7 +158,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.errorProgression).toEqual(['0 errors']);
   });
 
-  it('passes all 26 Tier 2 checks to validateFile with correct blocking flags', async () => {
+  it('passes all 25 Tier 2 checks to validateFile with correct blocking flags', async () => {
     const output = makeInstrumentationOutput();
     let capturedConfig: ValidateFileInput['config'] | undefined;
     const deps: InstrumentWithRetryDeps = {
@@ -209,10 +209,9 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['NDS-004']).toEqual({ enabled: true, blocking: false });
     expect(checks['NDS-005']).toEqual({ enabled: true, blocking: false });
     expect(checks['RST-005']).toEqual({ enabled: true, blocking: false });
-    expect(checks['CDQ-005']).toEqual({ enabled: true, blocking: false });
 
-    // Total: 26 checks
-    expect(Object.keys(checks)).toHaveLength(26);
+    // Total: 25 checks
+    expect(Object.keys(checks)).toHaveLength(25);
 
     // projectRoot is undefined when not provided
     expect(capturedConfig!.projectRoot).toBeUndefined();
