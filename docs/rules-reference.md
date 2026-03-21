@@ -1,6 +1,6 @@
 # Validation Rules Reference
 
-Spinybacked Orbweaver validates every instrumented file against a two-tier rubric of 32+ rules. This document explains what each rule checks and why it matters.
+Spinybacked Orbweaver validates every instrumented file against a two-tier rubric of 35+ rules. This document explains what each rule checks and why it matters.
 
 ## How rules work
 
@@ -69,6 +69,8 @@ These rules verify that instrumented code depends only on `@opentelemetry/api`, 
 |------|------|----------------|
 | API-001 | OTel API Only | All `@opentelemetry/*` imports resolve to `@opentelemetry/api` only. The SDK is the deployer's choice, not the library's. |
 | API-002 | Dependency Placement | `@opentelemetry/api` is declared as a `peerDependency` (for libraries) or `dependency` (for services) in `package.json`. |
+| API-003 | No Vendor SDKs | The agent didn't import vendor-specific tracing SDKs (Datadog, New Relic, Splunk, Dynatrace, Elastic). Instrumentation should use the vendor-neutral `@opentelemetry/api`. |
+| API-004 | SDK Package Placement | Library projects don't depend on `@opentelemetry/sdk-*` packages. SDK packages are deployer concerns — libraries depend only on `@opentelemetry/api`. Also flags imports of OTel SDK internal packages like `@opentelemetry/core`. |
 
 ### Schema Fidelity (SCH)
 
@@ -88,6 +90,7 @@ These rules verify that the instrumentation code follows OTel best practices and
 | Rule | Name | What it checks |
 |------|------|----------------|
 | CDQ-001 | Spans Closed | Every span is closed in all code paths — via `span.end()` in a `finally` block or via `startActiveSpan` callback. Unclosed spans leak resources. |
+| CDQ-005 | Count Attribute Types | Count attributes (`*_count`) pass raw numeric values to `setAttribute`, not `String()`-wrapped values. Count attributes are semantically numeric even if the schema declares them as strings. |
 | CDQ-006 | isRecording Guard | Expensive attribute computations (serialization, array operations) are guarded with `span.isRecording()`. When a span is sampled out, the guard skips the computation. |
 | CDQ-008 | Tracer Naming | All `trace.getTracer()` calls across the codebase use a consistent naming convention. Inconsistent tracer names fragment trace analysis. |
 
