@@ -680,5 +680,7 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(makeSchema());
     expect(prompt).toContain('3-5 judgment call');
     expect(prompt).toContain('non-obvious');
+    expect(prompt).toContain('empty array if there are no non-obvious');
+    expect(prompt).not.toContain('Never return an empty array');
   });
 });

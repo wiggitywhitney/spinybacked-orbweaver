@@ -302,7 +302,7 @@ You are returning structured JSON via the output schema. Fill in each field:
 - \`attributesCreated\`: Count of new span attributes added that were not in the existing schema. 0 if none.
 - \`spanCategories\`: Breakdown of spans added: \`{ externalCalls, schemaDefined, serviceEntryPoints, totalFunctionsInFile }\`. Set to null only if the file could not be processed at all.
 - \`suggestedRefactors\`: Array of refactors the user should apply before re-running the agent. Empty array if no blocked transforms were identified. See the Suggested Refactors section above for field details.
-- \`notes\`: Array of 3-5 judgment call explanations focusing on non-obvious decisions. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Standard patterns (span wrapping, error recording, import additions) do not need notes — only explain what is surprising or requires judgment. Never return an empty array.`;
+- \`notes\`: Array of 3-5 judgment call explanations focusing on non-obvious decisions. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Standard patterns (span wrapping, error recording, import additions) do not need notes — only explain what is surprising or requires judgment. Return an empty array if there are no non-obvious decisions to document.`;
 }
 
 /**
