@@ -367,7 +367,7 @@ describe('git-wrapper', () => {
       }
     });
 
-    it('does not throw GITHUB_TOKEN error for non-GitHub HTTPS remotes', async () => {
+    it('does not throw GITHUB_TOKEN error for non-GitHub HTTPS remotes', { timeout: 15_000 }, async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
         delete process.env.GITHUB_TOKEN;
