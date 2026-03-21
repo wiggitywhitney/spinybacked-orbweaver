@@ -350,7 +350,7 @@ describe('dispatchFiles', () => {
 
       expect(instrumentWithRetry).toHaveBeenCalledWith(
         file1, content, expect.any(Object), config,
-        { projectRoot: tmpDir },
+        expect.objectContaining({ projectRoot: tmpDir }),
       );
     });
 
@@ -367,6 +367,27 @@ describe('dispatchFiles', () => {
       await dispatchFiles([file1], tmpDir, config, undefined, { deps });
 
       expect(instrumentWithRetry.mock.calls[0][3]).toBe(config);
+    });
+
+    it('passes accumulated span names to subsequent files', async () => {
+      const file1 = await createFile('first.js', 'async function first() {}');
+      const file2 = await createFile('second.js', 'async function second() {}');
+
+      const instrumentWithRetry = vi.fn()
+        .mockImplementation(async (filePath: string) => {
+          if (filePath.includes('first.js')) {
+            return makeSuccessResult(filePath, { schemaExtensions: ['span.myapp.first.op'] });
+          }
+          return makeSuccessResult(filePath);
+        });
+
+      const deps = makeDeps({ instrumentWithRetry });
+      await dispatchFiles([file1, file2], tmpDir, makeConfig(), undefined, { deps });
+
+      // Second file should receive accumulated span names from first file
+      const secondCallOptions = instrumentWithRetry.mock.calls[1]?.[4];
+      expect(secondCallOptions).toBeDefined();
+      expect(secondCallOptions.existingSpanNames).toContain('myapp.first.op');
     });
   });
 

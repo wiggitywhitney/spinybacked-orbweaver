@@ -289,8 +289,11 @@ export async function dispatchFiles(
       }
       const schemaHash = computeSchemaHash(schema as object);
 
-      // Dispatch to fix loop
-      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir });
+      // Dispatch to fix loop — pass accumulated span names to prevent cross-file collisions
+      const existingSpanNames = accumulatedExtensions
+        .filter(ext => ext.startsWith('span.'))
+        .map(ext => ext.slice(5));
+      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames });
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);
@@ -299,14 +302,18 @@ export async function dispatchFiles(
       // Track whether the extension block already handled rollback
       let extensionRollbackDone = false;
 
-      // Write schema extensions per-file for successful and partial files
-      if (registryDir && (result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
+      // Track schema extensions for cross-file span name collision prevention
+      if ((result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
         for (const ext of result.schemaExtensions) {
           if (!seenExtensions.has(ext)) {
             seenExtensions.add(ext);
             accumulatedExtensions.push(ext);
           }
         }
+      }
+
+      // Write schema extensions per-file for successful and partial files
+      if (registryDir && (result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
         try {
           const writeResult = await writeExtFn(registryDir, [...accumulatedExtensions]);
           if (writeResult.rejected.length > 0) {

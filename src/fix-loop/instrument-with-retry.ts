@@ -40,6 +40,8 @@ export interface InstrumentFileCallOptions {
   maxOutputTokens?: number;
   /** Override effort level for this call. Used to lower effort on retry attempts. */
   effortOverride?: AgentConfig['agentEffort'];
+  /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
+  existingSpanNames?: string[];
 }
 
 /**
@@ -71,6 +73,8 @@ interface InstrumentWithRetryOptions {
   projectRoot?: string;
   /** Anthropic client for LLM judge calls during validation. When omitted, a new client is created. */
   anthropicClient?: Anthropic;
+  /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
+  existingSpanNames?: string[];
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -322,6 +326,7 @@ export async function instrumentWithRetry(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
       options?.projectRoot, anthropicClient, options?.clock,
+      options?.existingSpanNames,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -370,6 +375,7 @@ async function executeRetryLoop(
   projectRoot?: string,
   anthropicClient?: Anthropic,
   clock?: () => number,
+  existingSpanNames?: string[],
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -442,22 +448,24 @@ async function executeRetryLoop(
         feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation)),
         maxOutputTokens: outputBudget,
         effortOverride: 'low',
+        existingSpanNames,
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint
       callOptions = {
         failureHint: buildFailureHint(lastValidation),
         maxOutputTokens: outputBudget,
+        existingSpanNames,
       };
     } else if (plannedStrategy !== 'initial-generation') {
       // No conversation context or validation available — this is a retry
       // of initial generation triggered by a retryable failure, not a real
       // multi-turn fix or fresh regeneration.
       actualStrategy = 'retry-initial';
-      callOptions = { maxOutputTokens: outputBudget };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames };
     } else {
       // Initial generation
-      callOptions = { maxOutputTokens: outputBudget };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames };
     }
     lastStrategy = actualStrategy;
 
