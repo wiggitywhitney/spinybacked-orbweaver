@@ -74,6 +74,8 @@ interface InstrumentFileOptions {
   maxOutputTokens?: number;
   /** Override effort level for this call. Used to lower effort on retry attempts. */
   effortOverride?: AgentConfig['agentEffort'];
+  /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
+  existingSpanNames?: string[];
 }
 
 /**
@@ -175,7 +177,7 @@ export async function instrumentFile(
   }
 
   const systemPrompt = buildSystemPrompt(resolvedSchema);
-  const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult);
+  const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult, options?.existingSpanNames);
 
   // Build messages: multi-turn (with prior conversation) or standard (initial generation)
   // feedbackMessage replaces the user message (multi-turn fix);

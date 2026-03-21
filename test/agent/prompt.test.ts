@@ -636,4 +636,43 @@ describe('buildUserMessage', () => {
       expect(lower).not.toContain('try your best');
     });
   });
+
+  describe('existing span names', () => {
+    it('includes existing span names section when provided', () => {
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        undefined,
+        ['commit_story.journal.generate_summary', 'commit_story.graph.build'],
+      );
+      expect(message).toContain('Span names already in use');
+      expect(message).toContain('commit_story.journal.generate_summary');
+      expect(message).toContain('commit_story.graph.build');
+      expect(message).toContain('Do NOT reuse');
+    });
+
+    it('omits existing span names section when empty', () => {
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        undefined,
+        [],
+      );
+      expect(message).not.toContain('Span names already in use');
+    });
+
+    it('omits existing span names section when undefined', () => {
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+      );
+      expect(message).not.toContain('Span names already in use');
+    });
+  });
+});
+
+describe('buildSystemPrompt', () => {
+  it('includes count attribute type guidance in SCH-003', () => {
+    const prompt = buildSystemPrompt(makeSchema());
+    expect(prompt).toContain('Count attributes');
+    expect(prompt).toContain('type: int');
+    expect(prompt).toContain('String()');
+  });
 });

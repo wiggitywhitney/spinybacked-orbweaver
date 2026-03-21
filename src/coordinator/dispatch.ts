@@ -220,6 +220,8 @@ export async function dispatchFiles(
   const accumulatedExtensions: string[] = [];
   const seenExtensions = new Set<string>();
   const rejectedExtensionIds = new Set<string>();
+  // Track which file first declared each span name — detects cross-file collisions
+  const spanNameOrigins = new Map<string, string>();
   const abortTracker = new EarlyAbortTracker();
 
   // Read project name from package.json for tracer naming fallback
@@ -289,8 +291,11 @@ export async function dispatchFiles(
       }
       const schemaHash = computeSchemaHash(schema as object);
 
-      // Dispatch to fix loop
-      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir });
+      // Dispatch to fix loop — pass accumulated span names to prevent cross-file collisions
+      const existingSpanNames = accumulatedExtensions
+        .filter(ext => ext.startsWith('span.'))
+        .map(ext => ext.slice(5));
+      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames });
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);
@@ -299,14 +304,30 @@ export async function dispatchFiles(
       // Track whether the extension block already handled rollback
       let extensionRollbackDone = false;
 
-      // Write schema extensions per-file for successful and partial files
-      if (registryDir && (result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
+      // Track schema extensions for cross-file span name collision prevention
+      if ((result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
         for (const ext of result.schemaExtensions) {
+          // Record span name provenance before deduplication
+          if (ext.startsWith('span.')) {
+            const spanName = ext.slice(5);
+            const existingOrigin = spanNameOrigins.get(spanName);
+            if (existingOrigin && existingOrigin !== filePath) {
+              // Cross-file collision detected — add warning to result
+              const warning = `Span name "${spanName}" collision: declared by both ${existingOrigin} and ${filePath}`;
+              extWarnings?.push(warning);
+            } else if (!existingOrigin) {
+              spanNameOrigins.set(spanName, filePath);
+            }
+          }
           if (!seenExtensions.has(ext)) {
             seenExtensions.add(ext);
             accumulatedExtensions.push(ext);
           }
         }
+      }
+
+      // Write schema extensions per-file for successful and partial files
+      if (registryDir && (result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
         try {
           const writeResult = await writeExtFn(registryDir, [...accumulatedExtensions]);
           if (writeResult.rejected.length > 0) {

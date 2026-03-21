@@ -221,7 +221,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **SCH-001**: Use registry-defined span names when they match the operation. Do NOT invent names when the registry already defines one.
 - **SCH-002**: Use registry-defined attribute keys. Check for semantic equivalence, not just exact name matches.
-- **SCH-003**: Attribute values must conform to registry-defined types and constraints.
+- **SCH-003**: Attribute values must conform to registry-defined types and constraints. Count attributes (\`*_count\`) MUST use \`type: int\` in schema extensions and pass raw numbers to \`setAttribute\` — never wrap numeric values in \`String()\`.
 - **SCH-004**: Do NOT create attributes that duplicate existing registry entries under a different name.
 
 ### Code Quality
@@ -322,6 +322,7 @@ export function buildUserMessage(
   originalCode: string,
   config: AgentConfig,
   detectionResult?: OTelImportDetectionResult,
+  existingSpanNames?: string[],
 ): string {
   const lineCount = originalCode.split('\n').length;
   const isLargeFile = lineCount > config.largeFileThresholdLines;
@@ -345,6 +346,13 @@ export function buildUserMessage(
 
 **Already instrumented**: The following span patterns were detected in this file. Do not add duplicate instrumentation to these functions. Report them in \`notes\` as skipped.
 ${patternDescriptions.join('\n')}`;
+  }
+
+  if (existingSpanNames && existingSpanNames.length > 0) {
+    message += `
+
+**Span names already in use**: The following span names were declared by earlier files in this run. Do NOT reuse these names for different operations — invent unique names instead.
+${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
   }
 
   message += `
