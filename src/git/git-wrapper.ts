@@ -123,17 +123,19 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
     if (remoteUrl) {
       const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
       if (authUrl !== remoteUrl) {
+        // Temporarily swap the remote URL to include the token, push using
+        // the remote name (not a bare URL). This ensures --set-upstream works
+        // correctly and avoids issues with how simple-git handles URL arguments.
         try {
-          await git.push(authUrl, branchName, ['--set-upstream']);
+          await git.remote(['set-url', remote, authUrl]);
+          await git.push(remote, branchName, ['--set-upstream']);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           throw new Error(sanitizeTokenFromError(msg));
+        } finally {
+          // Restore the original URL to avoid persisting the token in git config
+          try { await git.remote(['set-url', remote, remoteUrl]); } catch { /* best effort */ }
         }
-        // Pushing to a URL (not a named remote) doesn't create remote-tracking
-        // refs, so --set-upstream has no effect. Set tracking config directly
-        // so gh pr create can detect the branch.
-        await git.addConfig(`branch.${branchName}.remote`, remote);
-        await git.addConfig(`branch.${branchName}.merge`, `refs/heads/${branchName}`);
         return;
       }
     }
