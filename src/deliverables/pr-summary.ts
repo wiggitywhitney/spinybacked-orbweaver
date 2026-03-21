@@ -293,19 +293,20 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     lines.push('### Advisory Findings');
     lines.push('');
 
-    // Group by ruleId + message to collapse repeated findings
-    const groups = new Map<string, { ruleId: string; message: string; files: string[] }>();
+    // Group by ruleId + message to collapse repeated findings (dedupe files with Set)
+    const groups = new Map<string, { ruleId: string; message: string; files: Set<string> }>();
     for (const { file, annotation } of allAdvisory) {
       const key = `${annotation.ruleId}|${annotation.message}`;
       const existing = groups.get(key);
       if (existing) {
-        existing.files.push(file);
+        existing.files.add(file);
       } else {
-        groups.set(key, { ruleId: annotation.ruleId, message: annotation.message, files: [file] });
+        groups.set(key, { ruleId: annotation.ruleId, message: annotation.message, files: new Set([file]) });
       }
     }
 
-    for (const { ruleId, message, files } of groups.values()) {
+    for (const { ruleId, message, files: fileSet } of groups.values()) {
+      const files = [...fileSet];
       if (files.length === 1) {
         lines.push(`- **${formatRuleId(ruleId)}** (${files[0]}): ${message}`);
       } else {
