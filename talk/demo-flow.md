@@ -15,11 +15,11 @@ The arc: "Organizations need business logic visibility → auto-instrumentation 
 
 ## Pre-Talk Setup
 
-- Run spiny-orb against commit-story-v2 to completion before the talk starts
+- Ensure spiny-orb has been run against commit-story-v2 to completion (see Open Items)
 - Keep a terminal tab open with the full agent logs for walkthrough
 - Have the agent's PR ready on GitHub
 - Start the Datadog Agent container (`scripts/setup-dd-agent.sh`) so OTLP ingestion is live
-- Switch commit-story-v2 to the instrument branch so the npm-linked CLI runs instrumented code
+- Switch commit-story-v2 to the instrumented branch so the npm-linked CLI runs instrumented code
 - Verify traces flow: make a test commit, confirm spans appear in Datadog APM
 - Be ready to show: terminal logs, GitHub PR, Datadog APM, and a code diff
 
