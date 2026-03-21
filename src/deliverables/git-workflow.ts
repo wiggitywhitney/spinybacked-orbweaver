@@ -92,6 +92,8 @@ export async function runGitWorkflow(
   // Step 0: Validate git credentials before spending time/tokens on file processing.
   // Skip when output won't be pushed (dry-run or --no-pr).
   if (!dryRun && !noPr) {
+    // Diagnostic: log token presence at validation time to compare with push time
+    deps.stderr(`validateCredentials: GITHUB_TOKEN present=${!!process.env.GITHUB_TOKEN}`);
     await deps.validateCredentials(projectDir);
   }
 
