@@ -117,6 +117,9 @@ export function resolveAuthenticatedUrl(remoteUrl: string, token: string | undef
 export async function pushBranch(dir: string, branchName: string, remote = 'origin'): Promise<void> {
   const git = simpleGit(dir);
   const token = process.env.GITHUB_TOKEN;
+  // Diagnostic: disambiguate token-missing vs URL-swap-failed in push errors
+  const remoteUrlForLog = (await git.remote(['get-url', remote]))?.trim();
+  process.stderr.write(`pushBranch: GITHUB_TOKEN present=${!!token}, remote=${remoteUrlForLog?.replace(/\/\/[^@]+@/, '//<redacted>@')}\n`);
 
   if (token) {
     const remoteUrl = (await git.remote(['get-url', remote]))?.trim();
