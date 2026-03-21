@@ -129,6 +129,11 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
           const msg = err instanceof Error ? err.message : String(err);
           throw new Error(sanitizeTokenFromError(msg));
         }
+        // Pushing to a URL (not a named remote) doesn't create remote-tracking
+        // refs, so --set-upstream has no effect. Set tracking config directly
+        // so gh pr create can detect the branch.
+        await git.addConfig(`branch.${branchName}.remote`, remote);
+        await git.addConfig(`branch.${branchName}.merge`, `refs/heads/${branchName}`);
         return;
       }
     }
