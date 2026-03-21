@@ -3120,6 +3120,54 @@ describe('instrumentWithRetry — time budget', () => {
   });
 });
 
+describe('instrumentWithRetry — output token budget', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-retry-cost-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('aborts retries when cumulative output tokens exceed 50K', async () => {
+    const expensiveTokens: TokenUsage = {
+      inputTokens: 5000,
+      outputTokens: 55_000,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    };
+    const failingOutput = makeInstrumentationOutput({
+      instrumentedCode: 'bad;\n',
+      tokenUsage: expensiveTokens,
+    });
+
+    let callCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        return { success: true, output: failingOutput } as InstrumentFileResult;
+      },
+      validateFile: async () => makeFailingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {},
+      makeConfig({ maxFixAttempts: 2 }),
+      { deps },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toMatch(/output token budget/i);
+    expect(callCount).toBe(1);
+  });
+});
+
 describe('instrumentWithRetry — supplementSchemaExtensions', () => {
   let testDir: string;
   let testFilePath: string;

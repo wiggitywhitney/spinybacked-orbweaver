@@ -137,6 +137,120 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
     });
   });
 
+  describe('trivial conversion exemptions', () => {
+    it('does not flag .toISOString() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("start_time", date.toISOString());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag String() wrapper as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("count", String(value));',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag Number() wrapper as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("size", Number(input));',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag Boolean() wrapper as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("active", Boolean(flag));',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag .toString() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("id", value.toString());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags expensive calls nested inside trivial wrappers', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("data", String(items.map(i => i.id).join(",")));',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('does not flag .valueOf() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("timestamp", date.valueOf());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags expensive receiver chain through trivial method', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("ids", items.map(i => i.id).toString());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('expanded receiver matching', () => {
     it('flags otelSpan.setAttribute with expensive value', () => {
       const code = [
