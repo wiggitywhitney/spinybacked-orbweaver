@@ -367,14 +367,18 @@ describe('git-wrapper', () => {
       }
     });
 
-    it('does not throw GITHUB_TOKEN error for non-GitHub HTTPS remotes', { timeout: 15_000 }, async () => {
+    it('does not throw GITHUB_TOKEN error for non-GitHub HTTPS remotes', async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
         delete process.env.GITHUB_TOKEN;
         const git = simpleGit(repoDir);
-        await git.addRemote('origin', 'https://gitlab.com/owner/repo.git');
+        // Use localhost to avoid real network calls — connection refused is fast
+        // and sufficient to verify the GITHUB_TOKEN check doesn't trigger.
+        await git.addRemote('origin', 'https://localhost:1/owner/repo.git');
 
-        // Non-GitHub HTTPS remotes shouldn't require GITHUB_TOKEN
+        // Non-GitHub HTTPS remotes shouldn't require GITHUB_TOKEN.
+        // The ls-remote will fail (connection refused), but it should NOT
+        // be a GITHUB_TOKEN error — that check only fires for github.com.
         const err = await validateCredentials(repoDir).catch((e: Error) => e);
         if (err instanceof Error) {
           expect(err.message).not.toContain('GITHUB_TOKEN');
