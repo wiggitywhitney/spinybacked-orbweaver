@@ -272,8 +272,14 @@ export async function createPr(
   // Always pass --head so gh doesn't need upstream tracking.
   // Pushing to an authenticated URL (token path) doesn't create
   // remote-tracking refs, which causes gh to fail without --head.
-  const head = options?.head
-    ?? execFileSync('git', ['branch', '--show-current'], { cwd: projectDir }).toString().trim();
+  let head = options?.head;
+  if (!head) {
+    try {
+      head = execFileSync('git', ['branch', '--show-current'], { cwd: projectDir }).toString().trim();
+    } catch {
+      // Fall through — gh pr create will attempt without --head
+    }
+  }
   if (head) {
     args.push('--head', head);
   }
