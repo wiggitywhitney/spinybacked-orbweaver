@@ -123,10 +123,19 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
     if (remoteUrl) {
       const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
       if (authUrl !== remoteUrl) {
-        // Temporarily swap the remote push URL to include the token, push using
+        // Check if a dedicated push URL already exists (vs inheriting from fetch URL).
+        // We need to know this to clean up correctly after push.
+        let hadPushUrl = false;
+        try {
+          const pushUrlConfig = await git.raw(['config', '--get', `remote.${remote}.pushurl`]);
+          hadPushUrl = pushUrlConfig.trim().length > 0;
+        } catch {
+          // config --get exits non-zero when key doesn't exist — no push URL configured
+        }
+
+        // Temporarily set the remote push URL to include the token, push using
         // the remote name (not a bare URL). This ensures --set-upstream works
         // correctly and avoids issues with how simple-git handles URL arguments.
-        // Uses --push flag to only modify the push URL, preserving separate fetch URLs.
         let pushError: Error | undefined;
         try {
           await git.remote(['set-url', '--push', remote, authUrl]);
@@ -135,12 +144,18 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
           const msg = err instanceof Error ? err.message : String(err);
           pushError = new Error(sanitizeTokenFromError(msg));
         } finally {
-          // Restore the original push URL to avoid persisting the token in git config
+          // Clean up: remove the token-bearing push URL from git config.
+          // If a push URL existed before, restore it; otherwise remove the
+          // pushurl entry entirely to avoid leaving config artifacts.
           try {
-            await git.remote(['set-url', '--push', remote, remoteUrl]);
+            if (hadPushUrl) {
+              const originalPushUrl = resolveAuthenticatedUrl(remoteUrl, undefined);
+              await git.remote(['set-url', '--push', remote, originalPushUrl]);
+            } else {
+              await git.raw(['config', '--unset-all', `remote.${remote}.pushurl`]);
+            }
           } catch (restoreErr) {
             const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
-            // Token may be persisted in git config — surface this to the caller
             const warning = `Failed to restore remote push URL after push: ${restoreMsg}`;
             if (pushError) {
               pushError = new Error(`${pushError.message}\n${warning}`);
