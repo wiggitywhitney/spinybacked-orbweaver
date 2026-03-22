@@ -33,20 +33,17 @@ The result: a user instruments their CLI app with spiny-orb, runs it, and sees z
 
 ## Solution
 
-Add a `targetType: cli | service` config field that threads through template generation, PR summary guidance, and companion package recommendations.
+Add a `targetType` config field that threads through template generation, PR summary guidance, and companion package recommendations.
 
-### Config Schema Change
-
-Add to `src/config/schema.ts`:
+### Config Schema Change (as implemented)
 
 ```typescript
-targetType: z.enum(['cli', 'service']).default('service').describe(
-  'Whether the target application is a short-lived CLI process or a long-running service. '
-  + 'Affects span processor selection, process.exit handling, and setup guidance.'
-)
+const TargetType = z.enum(['short-lived', 'long-lived']);
+// ...
+targetType: TargetType.default('long-lived'),
 ```
 
-Default to `service` (existing behavior, non-breaking).
+Default to `long-lived` (existing behavior, non-breaking). Renamed from `cli | service` during implementation — see decision log.
 
 ### What Changes Per Target Type
 

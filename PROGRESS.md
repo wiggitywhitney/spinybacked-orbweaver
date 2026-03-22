@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- (2026-03-22) CLI vs service target type awareness (PRD #309, M1-M4). Config schema adds `targetType: cli | service` with `service` default. Removed unused `instrumentationMode`. PR summary includes CLI Setup Guidance section (SimpleSpanProcessor, process.exit interception, traceloop --import warning) when `targetType: cli`. Companion packages section warns CLI targets about ESM hook conflicts.
+- (2026-03-22) Short-lived vs long-lived target type awareness (PRD #309, M1-M5). Config schema adds `targetType: short-lived | long-lived` (default `long-lived`). Removed unused `instrumentationMode`. PR summary includes Short-Lived Process Setup Guidance section (SimpleSpanProcessor, process.exit interception, auto-instrumentation --import warning) when `targetType: short-lived`. Companion packages section warns short-lived targets about ESM hook conflicts. New `docs/short-lived-setup.md` guide with full prerequisites, code examples, and verification steps. Documents the dual `import-in-the-middle` gotcha as a general problem affecting any third-party auto-instrumentation package, not just traceloop.
 
 - (2026-03-18) Sync-only pre-screening skips pure sync files before LLM call (PRD #179, milestone 9): `instrumentFile()` checks if all exported functions are synchronous — if so, returns success with 0 spans immediately. No API call, no token cost. sensitive-filter.js: 338s FAIL → 744ms PASS (454x faster). 3 new unit tests. Closes #212.
 
