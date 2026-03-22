@@ -1,7 +1,7 @@
 # PRD: CLI vs Service Target Type Awareness
 
 **Issue**: [#309](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/309)
-**Status**: Draft
+**Status**: Complete
 **Priority**: High
 **Created**: 2026-03-22
 **Origin**: Eval run-9 finding RUN9-6 — live telemetry validation against commit-story-v2
@@ -33,28 +33,25 @@ The result: a user instruments their CLI app with spiny-orb, runs it, and sees z
 
 ## Solution
 
-Add a `targetType: cli | service` config field that threads through template generation, PR summary guidance, and companion package recommendations.
+Add a `targetType` config field that threads through template generation, PR summary guidance, and companion package recommendations.
 
-### Config Schema Change
-
-Add to `src/config/schema.ts`:
+### Config Schema Change (as implemented)
 
 ```typescript
-targetType: z.enum(['cli', 'service']).default('service').describe(
-  'Whether the target application is a short-lived CLI process or a long-running service. '
-  + 'Affects span processor selection, process.exit handling, and setup guidance.'
-)
+const TargetType = z.enum(['short-lived', 'long-lived']);
+// ...
+targetType: TargetType.default('long-lived'),
 ```
 
-Default to `service` (existing behavior, non-breaking).
+Default to `long-lived` (existing behavior, non-breaking). Renamed from `cli | service` during implementation — see decision log.
 
 ### What Changes Per Target Type
 
-| Concern | `cli` | `service` |
-|---------|-------|-----------|
+| Concern | `short-lived` | `long-lived` |
+|---------|---------------|--------------|
 | Span processor | `SimpleSpanProcessor` (immediate export) | `BatchSpanProcessor` (default, efficient) |
 | `process.exit` | Interception required — flush spans before exit | Not needed |
-| Traceloop packages | Must initialize **in-app**, not via `--import` | Either `--import` or in-app works |
+| Auto-instrumentation | Must initialize **in-app**, not via `--import` | Either `--import` or in-app works |
 | SDK shutdown | Explicit `sdk.shutdown()` before exit | Handled by process signals |
 
 ### Verified Working Pattern (from live validation)
@@ -110,24 +107,25 @@ When `@traceloop/instrumentation-*` packages are loaded via `--import`, they bri
 
 ## Milestones
 
-- [ ] **M1: Config schema** — Add `targetType: cli | service` field with `service` default. Config validation and type propagation to coordinator.
-- [ ] **M2: PR summary setup guidance** — When `targetType: cli`, the PR summary includes CLI-specific setup section: SimpleSpanProcessor, process.exit interception pattern, and warning that traceloop must be initialized in-app (not via `--import`). When `service`, existing guidance unchanged.
-- [ ] **M3: Companion packages section** — Companion packages recommendations distinguish CLI vs service setup. CLI targets get explicit warning about `--import` + traceloop ESM hook conflict.
-- [ ] **M4: Tests** — Unit tests for config validation, PR summary conditional rendering, and companion package guidance per target type.
-- [ ] **M5: Documentation** — Document the dual `import-in-the-middle` gotcha, the verified CLI bootstrap pattern, and the `targetType` config field in user-facing docs.
+- [x] **M1: Config schema** — Add `targetType: short-lived | long-lived` field with `long-lived` default. Config validation and type propagation to coordinator.
+- [x] **M2: PR summary setup guidance** — When `targetType: short-lived`, the PR summary includes setup section: SimpleSpanProcessor, process.exit interception pattern, and warning that auto-instrumentation must be initialized in-app (not via `--import`). When `long-lived`, existing guidance unchanged.
+- [x] **M3: Companion packages section** — Companion packages recommendations distinguish short-lived vs long-lived setup. Short-lived targets get explicit warning about `--import` + ESM hook conflict.
+- [x] **M4: Tests** — Unit tests for config validation, PR summary conditional rendering, and companion package guidance per target type.
+- [x] **M5: Documentation** — Document the dual `import-in-the-middle` gotcha, the verified short-lived bootstrap pattern, and the `targetType` config field in user-facing docs.
 
 ## Decision Log
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-03-22 | Default to `service` not `cli` | Non-breaking — existing users see no change. CLI users opt in. |
+| 2026-03-22 | Default to `long-lived` | Non-breaking — existing users see no change. Short-lived users opt in. |
 | 2026-03-22 | Explicit config, not auto-detection | Auto-detection heuristics are fragile. Start with explicit, add heuristics later if needed. |
 | 2026-03-22 | Guidance in PR summary, not automated SDK modification | The agent already modifies SDK init for instrumentation entries. Processor/exit changes are deployment decisions the user should make deliberately. |
+| 2026-03-22 | Rename `cli \| service` to `short-lived \| long-lived` | "CLI" is too narrow — Lambda functions, scripts, and batch jobs have the same problem. The distinction is process lifecycle, not interface type. |
 
 ## Success Criteria
 
-1. `targetType: cli` in config → PR summary includes CLI-specific setup section
-2. CLI setup section includes SimpleSpanProcessor + process.exit interception pattern
-3. CLI setup section warns that traceloop must be initialized in-app
-4. `targetType: service` (or default) → existing behavior unchanged
-5. Traces from a CLI app instrumented with spiny-orb reach the backend (validated against commit-story-v2)
+1. `targetType: short-lived` in config → PR summary includes setup guidance section
+2. Setup section includes SimpleSpanProcessor + process.exit interception pattern
+3. Setup section warns that third-party auto-instrumentation must be initialized in-app
+4. `targetType: long-lived` (or default) → existing behavior unchanged
+5. Traces from a short-lived app instrumented with spiny-orb reach the backend (validated against commit-story-v2)
