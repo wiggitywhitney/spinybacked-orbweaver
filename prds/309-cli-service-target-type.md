@@ -1,7 +1,7 @@
 # PRD: CLI vs Service Target Type Awareness
 
 **Issue**: [#309](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/309)
-**Status**: Draft
+**Status**: Complete
 **Priority**: High
 **Created**: 2026-03-22
 **Origin**: Eval run-9 finding RUN9-6 — live telemetry validation against commit-story-v2
@@ -114,7 +114,7 @@ When `@traceloop/instrumentation-*` packages are loaded via `--import`, they bri
 - [x] **M2: PR summary setup guidance** — When `targetType: cli`, the PR summary includes CLI-specific setup section: SimpleSpanProcessor, process.exit interception pattern, and warning that traceloop must be initialized in-app (not via `--import`). When `service`, existing guidance unchanged.
 - [x] **M3: Companion packages section** — Companion packages recommendations distinguish CLI vs service setup. CLI targets get explicit warning about `--import` + traceloop ESM hook conflict.
 - [x] **M4: Tests** — Unit tests for config validation, PR summary conditional rendering, and companion package guidance per target type.
-- [ ] **M5: Documentation** — Document the dual `import-in-the-middle` gotcha, the verified CLI bootstrap pattern, and the `targetType` config field in user-facing docs.
+- [x] **M5: Documentation** — Document the dual `import-in-the-middle` gotcha, the verified CLI bootstrap pattern, and the `targetType` config field in user-facing docs.
 
 ## Decision Log
 

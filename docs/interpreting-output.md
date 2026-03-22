@@ -111,6 +111,18 @@ Files that failed because of code patterns blocking safe instrumentation. Each r
 ### Rolled Back Files
 Files that were committed but rolled back due to end-of-run test failures or schema checkpoint failures.
 
+### Recommended Companion Packages
+Auto-instrumentation packages identified for library projects. These are listed but not installed — deployers add them to their application's telemetry setup. When `targetType: cli` is set in the config, this section includes a warning not to load these packages via `--import` (see [CLI Setup Guidance](#cli-setup-guidance) below).
+
+### CLI Setup Guidance
+Only appears when the config has `targetType: cli`. Contains three subsections:
+
+- **Span Processor**: Use `SimpleSpanProcessor` instead of `BatchSpanProcessor`. Batch processing delays export by up to 5 seconds — a CLI that finishes faster than that loses all spans silently.
+- **process.exit Interception**: A code pattern to intercept `process.exit()` and flush spans before the process terminates. Without this, the OTLP exporter's async HTTP request never completes.
+- **Auto-Instrumentation Warning**: `@traceloop` packages must not be loaded via `--import` for CLI targets. They bring a different version of `@opentelemetry/instrumentation` which installs a separate `import-in-the-middle` with its own ESM hook registry, causing silent span loss. Initialize traceloop inside application code instead.
+
+This section does not appear when `targetType` is `service` (the default).
+
 ### Token Usage
 A table comparing the cost ceiling (pre-run estimate) to actual usage, with dollar amounts and token counts.
 
@@ -147,3 +159,27 @@ Token usage appears in multiple places:
 - **Token Usage table**: In the PR summary, comparing ceiling to actual with dollar amounts
 
 Cached tokens represent prompt content that was reused across files (the schema, guidelines, etc.). Higher cache rates mean lower cost per file.
+
+## Configuration: targetType
+
+The `targetType` field in `spiny-orb.yaml` tells the agent whether the target application is a short-lived CLI process or a long-running service. This affects the PR summary output — specifically, whether the CLI Setup Guidance section appears.
+
+```yaml
+# spiny-orb.yaml
+targetType: cli    # or 'service' (default)
+```
+
+| Value | When to use | What changes |
+|-------|-------------|--------------|
+| `service` (default) | Web servers, workers, long-running daemons | Standard PR summary. No special setup guidance. |
+| `cli` | CLI tools, build scripts, one-shot processes | PR summary includes CLI Setup Guidance section with `SimpleSpanProcessor`, `process.exit` interception, and traceloop `--import` warning. Companion packages section warns about ESM hook conflicts. |
+
+This is independent of `dependencyStrategy` (which controls library vs app dependency installation). A CLI app uses `targetType: cli` with `dependencyStrategy: dependencies`. A library published to npm uses `dependencyStrategy: peerDependencies` with either target type.
+
+### The dual `import-in-the-middle` problem
+
+When `@traceloop` auto-instrumentation packages are loaded via Node's `--import` flag alongside `@opentelemetry/sdk-node`, npm may install two copies of `@opentelemetry/instrumentation` (e.g., `^0.203.0` from traceloop and `0.213.0` from the SDK). In pre-1.0 semver, `^0.203.0` does not satisfy `0.213.0`, so both are installed.
+
+Each copy brings its own version of `import-in-the-middle` (v1.x and v3.x), each maintaining a separate ESM hook registry. This corrupts the module loading pipeline: the OTLP exporter reports `code=0` (success) for every span, but nothing reaches the backend. There are no errors, no warnings — just silence.
+
+The workaround is to initialize traceloop **inside the application code** (not in the `--import` bootstrap file). This avoids the competing ESM hook registries. The CLI Setup Guidance section in the PR summary explains this when `targetType: cli` is configured.
