@@ -474,7 +474,7 @@ function renderCompanionPackages(runResult: RunResult, config: AgentConfig): str
     lines.push(
       '> **Short-lived process warning**: Do not load these packages via `--import`. ' +
       'Initialize them in-app instead to avoid ESM hook conflicts that cause silent span loss. ' +
-      'See the Short-Lived Process Setup Guidance section above for details.',
+      'See the Short-Lived Process Setup Guidance section below for details.',
     );
   }
 

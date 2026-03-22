@@ -107,11 +107,11 @@ When `@traceloop/instrumentation-*` packages are loaded via `--import`, they bri
 
 ## Milestones
 
-- [x] **M1: Config schema** — Add `targetType: cli | service` field with `service` default. Config validation and type propagation to coordinator.
-- [x] **M2: PR summary setup guidance** — When `targetType: cli`, the PR summary includes CLI-specific setup section: SimpleSpanProcessor, process.exit interception pattern, and warning that traceloop must be initialized in-app (not via `--import`). When `service`, existing guidance unchanged.
-- [x] **M3: Companion packages section** — Companion packages recommendations distinguish CLI vs service setup. CLI targets get explicit warning about `--import` + traceloop ESM hook conflict.
+- [x] **M1: Config schema** — Add `targetType: short-lived | long-lived` field with `long-lived` default. Config validation and type propagation to coordinator.
+- [x] **M2: PR summary setup guidance** — When `targetType: short-lived`, the PR summary includes setup section: SimpleSpanProcessor, process.exit interception pattern, and warning that auto-instrumentation must be initialized in-app (not via `--import`). When `long-lived`, existing guidance unchanged.
+- [x] **M3: Companion packages section** — Companion packages recommendations distinguish short-lived vs long-lived setup. Short-lived targets get explicit warning about `--import` + ESM hook conflict.
 - [x] **M4: Tests** — Unit tests for config validation, PR summary conditional rendering, and companion package guidance per target type.
-- [x] **M5: Documentation** — Document the dual `import-in-the-middle` gotcha, the verified CLI bootstrap pattern, and the `targetType` config field in user-facing docs.
+- [x] **M5: Documentation** — Document the dual `import-in-the-middle` gotcha, the verified short-lived bootstrap pattern, and the `targetType` config field in user-facing docs.
 
 ## Decision Log
 
