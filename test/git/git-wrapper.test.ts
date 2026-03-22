@@ -244,6 +244,66 @@ describe('git-wrapper', () => {
       await rm(bareDir, { recursive: true, force: true });
     });
 
+    it('logs path=bare-push when no GITHUB_TOKEN is set', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      const stderrChunks: string[] = [];
+      const originalWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = ((chunk: string | Uint8Array) => {
+        stderrChunks.push(String(chunk));
+        return originalWrite(chunk);
+      }) as typeof process.stderr.write;
+
+      try {
+        delete process.env.GITHUB_TOKEN;
+
+        await createBranch(repoDir, 'spiny-orb/test-diag-bare');
+        await writeFile(join(repoDir, 'diag-test.js'), 'const x = 1;\n');
+        await stageFiles(repoDir, ['diag-test.js']);
+        await commit(repoDir, 'test diagnostic bare push');
+
+        await pushBranch(repoDir, 'spiny-orb/test-diag-bare');
+
+        const diagnosticOutput = stderrChunks.join('');
+        expect(diagnosticOutput).toContain('path=bare-push');
+      } finally {
+        process.env.GITHUB_TOKEN = originalToken;
+        process.stderr.write = originalWrite;
+      }
+    });
+
+    it('logs path=token-swap when GITHUB_TOKEN is set and URL is HTTPS', async () => {
+      const originalToken = process.env.GITHUB_TOKEN;
+      const stderrChunks: string[] = [];
+      const originalWrite = process.stderr.write.bind(process.stderr);
+      process.stderr.write = ((chunk: string | Uint8Array) => {
+        stderrChunks.push(String(chunk));
+        return originalWrite(chunk);
+      }) as typeof process.stderr.write;
+
+      try {
+        process.env.GITHUB_TOKEN = 'ghp_test_token_for_diagnostic_test';
+
+        const git = simpleGit(repoDir);
+        await git.removeRemote('origin');
+        await git.addRemote('origin', 'https://github.com/owner/repo.git');
+
+        await createBranch(repoDir, 'spiny-orb/test-diag-token');
+        await writeFile(join(repoDir, 'diag-token-test.js'), 'const x = 1;\n');
+        await stageFiles(repoDir, ['diag-token-test.js']);
+        await commit(repoDir, 'test diagnostic token push');
+
+        // Push will fail (fake token), but we only care about diagnostic output
+        await pushBranch(repoDir, 'spiny-orb/test-diag-token').catch(() => {});
+
+        const diagnosticOutput = stderrChunks.join('');
+        expect(diagnosticOutput).toContain('path=token-swap');
+        expect(diagnosticOutput).toContain('urlChanged=true');
+      } finally {
+        process.env.GITHUB_TOKEN = originalToken;
+        process.stderr.write = originalWrite;
+      }
+    });
+
     it('pushes successfully to a local remote without token', async () => {
       await createBranch(repoDir, 'spiny-orb/test-push');
       await writeFile(join(repoDir, 'push-test.js'), 'const x = 1;\n');
