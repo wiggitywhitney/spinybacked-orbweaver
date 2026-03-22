@@ -25,6 +25,10 @@ describe('companionPath', () => {
     expect(companionPath('file.')).toBe('file.instrumentation.md');
   });
 
+  it('handles double extensions by replacing only the final extension', () => {
+    expect(companionPath('src/api.test.js')).toBe('src/api.test.instrumentation.md');
+  });
+
   it('handles deeply nested paths', () => {
     expect(companionPath('/a/b/c/d/e.js')).toBe('/a/b/c/d/e.instrumentation.md');
   });
