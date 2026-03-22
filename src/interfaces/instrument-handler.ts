@@ -9,6 +9,7 @@ import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
 import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
 import { formatRuleId, expandRuleCodesInText } from '../validation/rule-names.ts';
+import { companionPath } from '../deliverables/companion-path.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
 /** Options parsed from CLI arguments for the instrument command. */
@@ -154,7 +155,13 @@ export async function handleInstrument(
         const noun = refactorCount === 1 ? 'refactor' : 'refactors';
         statusLabel += ` — ${refactorCount} recommended ${noun}`;
       }
-      deps.stderr(`  ${result.path}: ${statusLabel}`);
+      // Show companion file path for files that produce one (success/partial)
+      const hasCompanion = result.status === 'success' || result.status === 'partial';
+      if (hasCompanion && !options.verbose) {
+        deps.stderr(`  ${result.path}: ${statusLabel} → ${companionPath(result.path)}`);
+      } else {
+        deps.stderr(`  ${result.path}: ${statusLabel}`);
+      }
       if (options.verbose && result.status !== 'skipped') {
         // Show function-level details when available
         if (result.functionResults && result.functionResults.length > 0) {
@@ -172,6 +179,10 @@ export async function handleInstrument(
           for (const note of result.notes) {
             deps.stderr(`    Note: ${expandRuleCodesInText(note)}`);
           }
+        }
+        // Show companion file path in verbose mode
+        if (hasCompanion) {
+          deps.stderr(`    Report: ${companionPath(result.path)}`);
         }
         deps.stderr('');
       }
@@ -316,10 +327,9 @@ export async function handleInstrument(
     for (const warning of runResult.warnings) {
       deps.stderr(`Warning: ${warning}`);
     }
-    // Artifact locations summary
+    // Artifact locations summary — use box-drawing characters for visibility
     if (branchName || prSummaryPath || prUrl) {
-      deps.stderr('');
-      deps.stderr('Artifacts:');
+      const lines: string[] = [];
       if (branchName) {
         let defaultBranch = 'main';
         try {
@@ -333,15 +343,24 @@ export async function handleInstrument(
         } catch {
           // Fallback to 'main' if detection fails
         }
-        deps.stderr(`  Branch: ${branchName}`);
-        deps.stderr(`  Diff: git diff ${defaultBranch}...${branchName}`);
+        lines.push(`  Branch: ${branchName}`);
+        lines.push(`  Diff:   git diff ${defaultBranch}...${branchName}`);
       }
       if (prSummaryPath) {
-        deps.stderr(`  PR summary: ${prSummaryPath}`);
+        lines.push(`  PR summary: ${prSummaryPath}`);
       }
       if (prUrl) {
-        deps.stderr(`  PR: ${prUrl}`);
+        lines.push(`  PR: ${prUrl}`);
       }
+      // Compute box width from longest content line
+      const maxLen = Math.max(...lines.map(l => l.length));
+      const hr = '═'.repeat(maxLen + 2);
+      deps.stderr('');
+      deps.stderr(`╔${hr}╗`);
+      for (const line of lines) {
+        deps.stderr(`║ ${line.padEnd(maxLen)} ║`);
+      }
+      deps.stderr(`╚${hr}╝`);
     }
   }
 
