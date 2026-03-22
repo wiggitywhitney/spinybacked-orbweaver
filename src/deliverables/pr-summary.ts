@@ -36,7 +36,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderRecommendedRefactors(runResult, display));
   sections.push(renderRolledBackFiles(runResult, display));
   sections.push(renderCompanionPackages(runResult, config));
-  sections.push(renderCliSetupGuidance(config));
+  sections.push(renderShortLivedSetupGuidance(config));
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
@@ -481,7 +481,7 @@ function renderCompanionPackages(runResult: RunResult, config: AgentConfig): str
   return lines.join('\n');
 }
 
-function renderCliSetupGuidance(config: AgentConfig): string {
+function renderShortLivedSetupGuidance(config: AgentConfig): string {
   if (config.targetType !== 'short-lived') return '';
 
   const lines: string[] = ['## Short-Lived Process Setup Guidance'];

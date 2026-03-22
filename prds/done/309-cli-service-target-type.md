@@ -47,11 +47,11 @@ Default to `long-lived` (existing behavior, non-breaking). Renamed from `cli | s
 
 ### What Changes Per Target Type
 
-| Concern | `cli` | `service` |
-|---------|-------|-----------|
+| Concern | `short-lived` | `long-lived` |
+|---------|---------------|--------------|
 | Span processor | `SimpleSpanProcessor` (immediate export) | `BatchSpanProcessor` (default, efficient) |
 | `process.exit` | Interception required — flush spans before exit | Not needed |
-| Traceloop packages | Must initialize **in-app**, not via `--import` | Either `--import` or in-app works |
+| Auto-instrumentation | Must initialize **in-app**, not via `--import` | Either `--import` or in-app works |
 | SDK shutdown | Explicit `sdk.shutdown()` before exit | Handled by process signals |
 
 ### Verified Working Pattern (from live validation)
@@ -126,6 +126,6 @@ When `@traceloop/instrumentation-*` packages are loaded via `--import`, they bri
 
 1. `targetType: short-lived` in config → PR summary includes setup guidance section
 2. Setup section includes SimpleSpanProcessor + process.exit interception pattern
-3. Setup section warns that traceloop must be initialized in-app
+3. Setup section warns that third-party auto-instrumentation must be initialized in-app
 4. `targetType: long-lived` (or default) → existing behavior unchanged
 5. Traces from a short-lived app instrumented with spiny-orb reach the backend (validated against commit-story-v2)

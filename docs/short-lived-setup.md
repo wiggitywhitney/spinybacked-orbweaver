@@ -59,7 +59,7 @@ process.exit = (code) => {
 };
 ```
 
-The 1-second delay after `sdk.shutdown()` ensures the final HTTP response from the collector is fully received before the process terminates.
+The 1-second delay after `sdk.shutdown()` helps ensure the final HTTP response from the collector is received before the process terminates.
 
 If your application does not call `process.exit()` (it just falls off the end of `main()`), you still need to call `sdk.shutdown()` before the process exits naturally, or pending spans may be lost.
 
