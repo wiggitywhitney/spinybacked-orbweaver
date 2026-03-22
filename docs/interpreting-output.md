@@ -115,13 +115,7 @@ Files that were committed but rolled back due to end-of-run test failures or sch
 Auto-instrumentation packages identified for library projects. These are listed but not installed — deployers add them to their application's telemetry setup. When `targetType: short-lived` is set in the config, this section includes a warning not to load these packages via `--import` (see [Short-Lived Process Setup Guidance](#short-lived-process-setup-guidance) below).
 
 ### Short-Lived Process Setup Guidance
-Only appears when the config has `targetType: short-lived`. Contains three subsections:
-
-- **Span Processor**: Use `SimpleSpanProcessor` instead of `BatchSpanProcessor`. Batch processing delays export by up to 5 seconds — a process that exits faster than that loses all spans silently.
-- **process.exit Interception**: A code pattern to intercept `process.exit()` and flush spans before the process terminates. Without this, the OTLP exporter's async HTTP request never completes.
-- **Auto-Instrumentation Warning**: `@traceloop` packages must not be loaded via `--import` for short-lived targets. They bring a different version of `@opentelemetry/instrumentation` which installs a separate `import-in-the-middle` with its own ESM hook registry, causing silent span loss. Initialize traceloop inside application code instead.
-
-This section does not appear when `targetType` is `long-lived` (the default).
+Only appears when the config has `targetType: short-lived`. Covers `SimpleSpanProcessor`, `process.exit` interception, and auto-instrumentation warnings. Does not appear when `targetType` is `long-lived` (the default). See [Setup for Short-Lived Processes](short-lived-setup.md) for the full guide with code examples and prerequisites.
 
 ### Token Usage
 A table comparing the cost ceiling (pre-run estimate) to actual usage, with dollar amounts and token counts.
@@ -176,10 +170,4 @@ targetType: short-lived    # or 'long-lived' (default)
 
 This is independent of `dependencyStrategy` (which controls library vs app dependency installation). A CLI uses `targetType: short-lived` with `dependencyStrategy: dependencies`. A library published to npm uses `dependencyStrategy: peerDependencies` with either target type.
 
-### The dual `import-in-the-middle` problem
-
-When `@traceloop` auto-instrumentation packages are loaded via Node's `--import` flag alongside `@opentelemetry/sdk-node`, npm may install two copies of `@opentelemetry/instrumentation` (e.g., `^0.203.0` from traceloop and `0.213.0` from the SDK). In pre-1.0 semver, `^0.203.0` does not satisfy `0.213.0`, so both are installed.
-
-Each copy brings its own version of `import-in-the-middle` (v1.x and v3.x), each maintaining a separate ESM hook registry. This corrupts the module loading pipeline: the OTLP exporter reports `code=0` (success) for every span, but nothing reaches the backend. There are no errors, no warnings — just silence.
-
-The workaround is to initialize traceloop **inside the application code** (not in the `--import` bootstrap file). This avoids the competing ESM hook registries. The Short-Lived Process Setup Guidance section in the PR summary explains this when `targetType: short-lived` is configured.
+For full setup prerequisites, code examples, and the dual `import-in-the-middle` problem explained, see [Setup for Short-Lived Processes](short-lived-setup.md).
