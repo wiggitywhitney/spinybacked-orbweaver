@@ -35,7 +35,8 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderRecommendedRefactors(runResult, display));
   sections.push(renderRolledBackFiles(runResult, display));
-  sections.push(renderCompanionPackages(runResult));
+  sections.push(renderCompanionPackages(runResult, config));
+  sections.push(renderCliSetupGuidance(config));
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
@@ -453,7 +454,7 @@ function renderRolledBackFiles(runResult: RunResult, display: DisplayFn): string
   return lines.join('\n');
 }
 
-function renderCompanionPackages(runResult: RunResult): string {
+function renderCompanionPackages(runResult: RunResult, config: AgentConfig): string {
   if (!runResult.companionPackages || runResult.companionPackages.length === 0) return '';
 
   const lines: string[] = ['## Recommended Companion Packages'];
@@ -467,6 +468,79 @@ function renderCompanionPackages(runResult: RunResult): string {
   for (const pkg of runResult.companionPackages) {
     lines.push(`- \`${pkg}\``);
   }
+
+  if (config.targetType === 'cli') {
+    lines.push('');
+    lines.push(
+      '> **CLI target warning**: Do not load these packages via `--import`. ' +
+      'Initialize them in-app instead to avoid ESM hook conflicts that cause silent span loss. ' +
+      'See the CLI Setup Guidance section above for details.',
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function renderCliSetupGuidance(config: AgentConfig): string {
+  if (config.targetType !== 'cli') return '';
+
+  const lines: string[] = ['## CLI Setup Guidance'];
+  lines.push('');
+  lines.push(
+    'This project is configured as a CLI application (`targetType: cli`). ' +
+    'Short-lived processes need special telemetry setup to ensure spans are exported before the process exits.',
+  );
+  lines.push('');
+  lines.push('### Span Processor');
+  lines.push('');
+  lines.push(
+    'Use `SimpleSpanProcessor` instead of the default `BatchSpanProcessor`. ' +
+    'Batch processing delays export by up to 5 seconds — a CLI that finishes in under 5 seconds ' +
+    'will exit before the batch timer fires, losing all spans silently.',
+  );
+  lines.push('');
+  lines.push('```javascript');
+  lines.push("import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';");
+  lines.push("import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';");
+  lines.push('');
+  lines.push('spanProcessors: [new SimpleSpanProcessor(new OTLPTraceExporter({');
+  lines.push("  url: 'http://localhost:4318/v1/traces',");
+  lines.push('}))]');
+  lines.push('```');
+  lines.push('');
+  lines.push('### process.exit Interception');
+  lines.push('');
+  lines.push(
+    'If your application calls `process.exit()`, intercept it to flush spans before terminating:',
+  );
+  lines.push('');
+  lines.push('```javascript');
+  lines.push('let isShuttingDown = false;');
+  lines.push('const originalExit = process.exit;');
+  lines.push('process.exit = (code) => {');
+  lines.push('  if (isShuttingDown) return originalExit.call(process, code);');
+  lines.push('  isShuttingDown = true;');
+  lines.push('  process.exitCode = code ?? 0;');
+  lines.push('  sdk.shutdown()');
+  lines.push("    .catch((err) => console.error('OTel SDK shutdown error:', err))");
+  lines.push('    .then(() => new Promise(resolve => setTimeout(resolve, 1000)))');
+  lines.push('    .finally(() => originalExit.call(process, process.exitCode));');
+  lines.push('};');
+  lines.push('```');
+  lines.push('');
+  lines.push('### Auto-Instrumentation Warning');
+  lines.push('');
+  lines.push(
+    '**Do not load `@traceloop` auto-instrumentation packages via `--import`.** ' +
+    'Traceloop packages bring a different version of `@opentelemetry/instrumentation` which installs ' +
+    'a separate `import-in-the-middle` with its own ESM hook registry. This causes silent span loss — ' +
+    'the exporter reports success but spans never reach the backend.',
+  );
+  lines.push('');
+  lines.push(
+    'Instead, initialize traceloop **inside your application code** (not in the `--import` bootstrap). ' +
+    'This avoids the competing ESM hook registries.',
+  );
 
   return lines.join('\n');
 }

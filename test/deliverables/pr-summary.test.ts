@@ -1171,6 +1171,27 @@ describe('renderPrSummary', () => {
 
       expect(md).not.toContain('Recommended Companion Packages');
     });
+
+    it('includes --import warning for CLI targets with companion packages', () => {
+      const result = _makeRunResult({
+        companionPackages: ['@traceloop/instrumentation-langchain'],
+      });
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+
+      expect(md).toContain('Recommended Companion Packages');
+      expect(md).toContain('--import');
+      expect(md).toContain('in-app');
+    });
+
+    it('does not include --import warning for service targets with companion packages', () => {
+      const result = _makeRunResult({
+        companionPackages: ['@traceloop/instrumentation-langchain'],
+      });
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'service' }));
+      const companionSection = md.split('## Recommended Companion Packages')[1]?.split('##')[0] ?? '';
+
+      expect(companionSection).not.toContain('--import');
+    });
   });
 
   describe('failed file metadata scrubbing', () => {
@@ -1263,6 +1284,51 @@ describe('renderPrSummary', () => {
       expect(md).toContain('Committed');
       expect(md).toContain('1');
       expect(md).toContain('Correct skips');
+    });
+  });
+
+  describe('CLI setup guidance section', () => {
+    it('includes CLI setup section when targetType is cli', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+
+      expect(md).toContain('## CLI Setup Guidance');
+    });
+
+    it('does not include CLI setup section when targetType is service', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'service' }));
+
+      expect(md).not.toContain('## CLI Setup Guidance');
+    });
+
+    it('does not include CLI setup section when targetType is default (service)', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('## CLI Setup Guidance');
+    });
+
+    it('mentions SimpleSpanProcessor for CLI targets', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+
+      expect(md).toContain('SimpleSpanProcessor');
+    });
+
+    it('mentions process.exit interception for CLI targets', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+
+      expect(md).toContain('process.exit');
+    });
+
+    it('warns about traceloop --import conflict for CLI targets', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+
+      expect(md).toContain('traceloop');
+      expect(md).toContain('--import');
     });
   });
 });
