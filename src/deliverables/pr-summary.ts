@@ -532,14 +532,14 @@ function renderCliSetupGuidance(config: AgentConfig): string {
   lines.push('### Auto-Instrumentation Warning');
   lines.push('');
   lines.push(
-    '**Do not load `@traceloop` auto-instrumentation packages via `--import`.** ' +
-    'Traceloop packages bring a different version of `@opentelemetry/instrumentation` which installs ' +
+    '**Do not load third-party auto-instrumentation packages via `--import`.** ' +
+    'They may bring a different version of `@opentelemetry/instrumentation` which installs ' +
     'a separate `import-in-the-middle` with its own ESM hook registry. This causes silent span loss — ' +
     'the exporter reports success but spans never reach the backend.',
   );
   lines.push('');
   lines.push(
-    'Instead, initialize traceloop **inside your application code** (not in the `--import` bootstrap). ' +
+    'Instead, initialize auto-instrumentation **inside your application code** (not in the `--import` bootstrap). ' +
     'This avoids the competing ESM hook registries.',
   );
 

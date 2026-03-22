@@ -1323,11 +1323,11 @@ describe('renderPrSummary', () => {
       expect(md).toContain('process.exit');
     });
 
-    it('warns about traceloop --import conflict for short-lived targets', () => {
+    it('warns about auto-instrumentation --import conflict for short-lived targets', () => {
       const result = _makeRunResult();
       const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
 
-      expect(md).toContain('traceloop');
+      expect(md).toContain('auto-instrumentation');
       expect(md).toContain('--import');
     });
   });

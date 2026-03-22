@@ -166,7 +166,7 @@ targetType: short-lived    # or 'long-lived' (default)
 | Value | When to use | What changes |
 |-------|-------------|--------------|
 | `long-lived` (default) | Web servers, workers, daemons | Standard PR summary. No special setup guidance. |
-| `short-lived` | CLIs, scripts, Lambda functions, batch jobs | PR summary includes Short-Lived Process Setup Guidance section with `SimpleSpanProcessor`, `process.exit` interception, and traceloop `--import` warning. Companion packages section warns about ESM hook conflicts. |
+| `short-lived` | CLIs, scripts, Lambda functions, batch jobs | PR summary includes Short-Lived Process Setup Guidance section with `SimpleSpanProcessor`, `process.exit` interception, and auto-instrumentation `--import` warning. Companion packages section warns about ESM hook conflicts. |
 
 This is independent of `dependencyStrategy` (which controls library vs app dependency installation). A CLI uses `targetType: short-lived` with `dependencyStrategy: dependencies`. A library published to npm uses `dependencyStrategy: peerDependencies` with either target type.
 

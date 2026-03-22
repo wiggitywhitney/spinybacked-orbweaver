@@ -10,7 +10,7 @@ OpenTelemetry's default configuration assumes long-running processes. Three thin
 
 2. **`process.exit()` kills pending exports.** The OTLP HTTP exporter sends spans asynchronously. If the application calls `process.exit()`, the Node.js event loop terminates immediately — the HTTP request never completes. The exporter may even report `code=0` (success) because it queued the request, but the response is never received.
 
-3. **Auto-instrumentation via `--import` can cause silent span loss.** Third-party auto-instrumentation packages (e.g., `@traceloop/instrumentation-*`) may depend on a different minor version of `@opentelemetry/instrumentation` than the SDK. In pre-1.0 semver, `^0.203.0` does not satisfy `0.213.0`, so npm installs both. Each copy brings its own `import-in-the-middle` module with a separate ESM hook registry. When two registries compete via `--import`, the module loading pipeline breaks — spans are created but silently dropped during export.
+3. **Auto-instrumentation via `--import` can cause silent span loss.** Third-party auto-instrumentation packages may depend on a different minor version of `@opentelemetry/instrumentation` than the SDK. In pre-1.0 semver, `^0.203.0` does not satisfy `0.213.0`, so npm installs both. Each copy brings its own `import-in-the-middle` module with a separate ESM hook registry. When two registries compete via `--import`, the module loading pipeline breaks — spans are created but silently dropped during export.
 
 In all three cases there are no errors and no warnings. Spans appear to be created (you can verify with `ConsoleSpanExporter`), but nothing reaches the backend.
 
@@ -65,10 +65,11 @@ If your application does not call `process.exit()` (it just falls off the end of
 
 ### 3. Initialize auto-instrumentation in-app
 
-If you use auto-instrumentation packages (traceloop, or any third-party `@opentelemetry/instrumentation-*`), initialize them **inside your application code** — not in a `--import` bootstrap file.
+If you use third-party auto-instrumentation packages, initialize them **inside your application code** — not in a `--import` bootstrap file.
 
 ```javascript
 // GOOD: in your application's entry point (e.g., index.js)
+// Example using @traceloop/node-server-sdk:
 import { traceloop } from '@traceloop/node-server-sdk';
 traceloop.initialize({ disableBatch: true });
 
@@ -78,7 +79,7 @@ traceloop.initialize({ disableBatch: true });
 
 The `--import` bootstrap file should only contain the `NodeSDK` setup, `SimpleSpanProcessor`, and `process.exit` interception. Keep it minimal.
 
-This applies to any third-party auto-instrumentation package, not just traceloop. The root cause — duplicate `import-in-the-middle` versions from mismatched `@opentelemetry/instrumentation` dependencies — can affect any package that lags behind the SDK's version.
+The root cause is duplicate `import-in-the-middle` versions from mismatched `@opentelemetry/instrumentation` dependencies. Any third-party auto-instrumentation package that lags behind the SDK's version can trigger this.
 
 ## Verifying your setup
 
