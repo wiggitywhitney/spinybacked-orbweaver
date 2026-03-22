@@ -127,7 +127,11 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
     const remoteUrl = (await git.remote(['get-url', remote]))?.trim();
     if (remoteUrl) {
       const authUrl = resolveAuthenticatedUrl(remoteUrl, token);
-      if (authUrl !== remoteUrl) {
+      const urlChanged = authUrl !== remoteUrl;
+      try {
+        process.stderr.write(`pushBranch: urlChanged=${urlChanged}, path=${urlChanged ? 'token-swap' : 'bare-push'}\n`);
+      } catch { /* diagnostic only — never block push */ }
+      if (urlChanged) {
         // Check if a dedicated push URL already exists (vs inheriting from fetch URL).
         // Preserve the actual value so we can restore it exactly after push.
         let originalPushUrl: string | undefined;
@@ -176,6 +180,9 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
     }
   }
 
+  try {
+    process.stderr.write(`pushBranch: path=bare-push, reason=${token ? 'url-unchanged' : 'no-token'}\n`);
+  } catch { /* diagnostic only — never block push */ }
   await git.push(remote, branchName, ['--set-upstream']);
 }
 
