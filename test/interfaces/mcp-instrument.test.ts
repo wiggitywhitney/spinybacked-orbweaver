@@ -298,6 +298,15 @@ describe('MCP instrument tool', () => {
       });
     });
 
+    it('includes companionFile path in per-file results', async () => {
+      const result = await handleInstrumentTool({ projectDir: '/project' }, deps, logFn);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.files[0].companionFile).toBe('/project/src/api.instrumentation.md');
+      expect(parsed.files[1].companionFile).toBe('/project/src/utils.instrumentation.md');
+      expect(parsed.files[2].companionFile).toBe('/project/src/handler.instrumentation.md');
+    });
+
     it('returns error when config loading fails', async () => {
       deps.loadConfig = vi.fn().mockResolvedValue({
         success: false,

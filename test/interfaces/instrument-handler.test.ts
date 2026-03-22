@@ -625,6 +625,99 @@ describe('handleInstrument', () => {
     });
   });
 
+  describe('companion file paths in output', () => {
+    it('shows companion path in non-verbose mode for successful files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions(), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ path: '/test/project/src/app.js', status: 'success', spansAdded: 3 });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const companionLine = stderrCalls.find((s: string) => s.includes('app.instrumentation.md'));
+      expect(companionLine).toBeDefined();
+    });
+
+    it('shows companion path in non-verbose mode for partial files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions(), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ path: '/test/project/src/app.js', status: 'partial', spansAdded: 1 });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const companionLine = stderrCalls.find((s: string) => s.includes('app.instrumentation.md'));
+      expect(companionLine).toBeDefined();
+    });
+
+    it('does not show companion path for skipped files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions(), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ path: '/test/project/src/app.js', status: 'skipped', spansAdded: 0 });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const companionLine = stderrCalls.find((s: string) => s.includes('instrumentation.md'));
+      expect(companionLine).toBeUndefined();
+    });
+
+    it('shows companion path in verbose mode after notes', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ path: '/test/project/src/app.js', notes: ['a note'] });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const reportLine = stderrCalls.find((s: string) => s.includes('Report:') && s.includes('app.instrumentation.md'));
+      expect(reportLine).toBeDefined();
+    });
+  });
+
+  describe('prominent PR summary display', () => {
+    it('uses box-drawing characters around artifact paths', async () => {
+      const fileResult = makeFileResult({ status: 'success' });
+      const runResult = makeRunResult({ filesProcessed: 1, filesSucceeded: 1, fileResults: [fileResult] });
+      const coordinateMock = vi.fn().mockImplementation(
+        async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
+          callbacks?.onFileComplete?.(fileResult, 0, 1);
+          return runResult;
+        },
+      );
+      const deps = makeDeps({
+        coordinate: coordinateMock,
+        gitWorkflow: {
+          ...makeGitWorkflowDeps(),
+          validateCredentials: vi.fn().mockResolvedValue(undefined),
+          writePrSummary: vi.fn().mockResolvedValue('/test/project/spiny-orb-pr-summary.md'),
+          createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/42'),
+          checkGhAvailable: vi.fn().mockResolvedValue(true),
+        },
+      });
+      await handleInstrument(makeOptions({ noPr: false }), deps);
+      const output = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+
+      // Should have box-drawing characters
+      expect(output).toContain('╔');
+      expect(output).toContain('╚');
+      expect(output).toContain('PR summary:');
+      expect(output).toContain('spiny-orb-pr-summary.md');
+    });
+  });
+
   describe('cost ceiling confirmation', () => {
     it('wires onCostCeilingReady that prints ceiling info to stderr', async () => {
       const deps = makeDeps();

@@ -17,6 +17,7 @@ import type { FileResult } from '../fix-loop/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
+import { companionPath } from '../deliverables/companion-path.ts';
 
 /**
  * Injectable dependencies for the MCP server.
@@ -187,6 +188,7 @@ function formatRunResultForMcp(result: RunResult): object {
     },
     files: result.fileResults.map((f: FileResult) => ({
       path: f.path,
+      companionFile: companionPath(f.path),
       status: f.status,
       spansAdded: f.spansAdded,
       attributesCreated: f.attributesCreated,
