@@ -21,6 +21,7 @@ function makeFullConfig() {
     agentEffort: 'medium',
     autoApproveLibraries: true,
     testCommand: 'npm test',
+    targetType: 'service',
     dependencyStrategy: 'dependencies',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
@@ -77,6 +78,7 @@ describe('AgentConfigSchema', () => {
       expect(config.dryRun).toBe(false);
       expect(config.confirmEstimate).toBe(true);
       expect(config.exclude).toEqual([]);
+      expect(config.targetType).toBe('service');
     });
   });
 
@@ -295,21 +297,53 @@ describe('AgentConfigSchema', () => {
     });
   });
 
-  describe('reserved fields', () => {
-    it('accepts instrumentationMode without error', () => {
+  describe('targetType', () => {
+    it('defaults to service when omitted', () => {
+      const result = AgentConfigSchema.safeParse(makeMinimalConfig());
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.targetType).toBe('service');
+      }
+    });
+
+    it('accepts cli', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        targetType: 'cli',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.targetType).toBe('cli');
+      }
+    });
+
+    it('accepts service', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        targetType: 'service',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.targetType).toBe('service');
+      }
+    });
+
+    it('rejects invalid targetType value', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        targetType: 'daemon',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('removed reserved fields', () => {
+    it('rejects instrumentationMode as unknown field', () => {
       const result = AgentConfigSchema.safeParse({
         ...makeMinimalConfig(),
         instrumentationMode: 'balanced',
       });
-      expect(result.success).toBe(true);
-    });
-
-    it('does not include instrumentationMode in parsed output when omitted', () => {
-      const result = AgentConfigSchema.safeParse(makeMinimalConfig());
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data).not.toHaveProperty('instrumentationMode');
-      }
+      expect(result.success).toBe(false);
     });
   });
 

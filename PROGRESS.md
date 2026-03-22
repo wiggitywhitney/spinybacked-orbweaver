@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-03-22) Config schema: `targetType: cli | service` field (PRD #309, M1). Default `service` preserves existing behavior. Removed unused `instrumentationMode` reserved field. Type propagates to coordinator and PR summary via existing `AgentConfig` flow.
+
 - (2026-03-18) Sync-only pre-screening skips pure sync files before LLM call (PRD #179, milestone 9): `instrumentFile()` checks if all exported functions are synchronous — if so, returns success with 0 spans immediately. No API call, no token cost. sensitive-filter.js: 338s FAIL → 744ms PASS (454x faster). 3 new unit tests. Closes #212.
 
 - (2026-03-18) Deterministic output token sizing (PRD #179, milestone 8): `estimateOutputBudget(fileLines)` replaces hardcoded 32K with file-size-based budget (`max(16384, fileLines * 50 + 8000)`, capped at 65536). On `stop_reason: max_tokens`, budget escalates to 65K and retries instead of immediately aborting. 7/8 fixture files pass; summary-manager 4.1x faster (escaped fn-level), index.js 2.4x faster. Larger budgets invited overthinking on big files (journal-graph, summary-graph regressed vs 32K) — filed #217 for calibration evaluation. 15 new tests. Results at `test/commit-story-v2/results-deterministic-sizing.md` with 4-way comparison. Also fixed 20 pre-existing test failures (parse→stream mock drift) and schema extension dedup (CodeRabbit finding).

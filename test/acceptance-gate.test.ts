@@ -43,6 +43,7 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
+    targetType: 'service',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 16000,
