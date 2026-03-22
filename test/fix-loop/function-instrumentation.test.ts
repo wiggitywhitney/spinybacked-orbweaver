@@ -31,7 +31,7 @@ const baseConfig = {
   autoApproveLibraries: true,
   testCommand: 'npm test',
   dependencyStrategy: 'dependencies' as const,
-    targetType: 'service' as const,
+    targetType: 'long-lived' as const,
   maxFilesPerRun: 10,
   maxFixAttempts: 2,
   maxTokensPerFile: 50000,

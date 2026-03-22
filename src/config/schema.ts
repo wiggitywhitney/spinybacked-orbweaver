@@ -16,11 +16,13 @@ const AgentEffort = z.enum(['low', 'medium', 'high']);
 const DependencyStrategy = z.enum(['dependencies', 'peerDependencies']);
 
 /**
- * Target application type — controls span processor selection and setup guidance.
- * cli: short-lived process (needs SimpleSpanProcessor + process.exit interception).
- * service: long-running process (default BatchSpanProcessor, no exit interception needed).
+ * Target application lifecycle — controls span processor selection and setup guidance.
+ * short-lived: process exits after doing work (CLIs, scripts, Lambda, batch jobs).
+ *   Needs SimpleSpanProcessor + process.exit interception.
+ * long-lived: process runs until stopped (web servers, workers, daemons).
+ *   Default BatchSpanProcessor, no exit interception needed.
  */
-const TargetType = z.enum(['cli', 'service']);
+const TargetType = z.enum(['short-lived', 'long-lived']);
 
 /**
  * PR annotation strictness level.
@@ -48,8 +50,8 @@ export const AgentConfigSchema = z.strictObject({
   autoApproveLibraries: z.boolean().default(true),
   testCommand: z.string().default('npm test'),
 
-  // Target application type
-  targetType: TargetType.default('service'),
+  // Target application lifecycle
+  targetType: TargetType.default('long-lived'),
 
   // Dependency strategy
   dependencyStrategy: DependencyStrategy.default('dependencies'),

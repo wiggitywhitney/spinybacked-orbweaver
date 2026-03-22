@@ -72,7 +72,7 @@ function _makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
-    targetType: 'service',
+    targetType: 'long-lived',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 80000,
@@ -1172,22 +1172,22 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain('Recommended Companion Packages');
     });
 
-    it('includes --import warning for CLI targets with companion packages', () => {
+    it('includes --import warning for short-lived targets with companion packages', () => {
       const result = _makeRunResult({
         companionPackages: ['@traceloop/instrumentation-langchain'],
       });
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
 
       expect(md).toContain('Recommended Companion Packages');
       expect(md).toContain('--import');
       expect(md).toContain('in-app');
     });
 
-    it('does not include --import warning for service targets with companion packages', () => {
+    it('does not include --import warning for long-lived targets with companion packages', () => {
       const result = _makeRunResult({
         companionPackages: ['@traceloop/instrumentation-langchain'],
       });
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'service' }));
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'long-lived' }));
       const companionSection = md.split('## Recommended Companion Packages')[1]?.split('##')[0] ?? '';
 
       expect(companionSection).not.toContain('--import');
@@ -1287,45 +1287,45 @@ describe('renderPrSummary', () => {
     });
   });
 
-  describe('CLI setup guidance section', () => {
-    it('includes CLI setup section when targetType is cli', () => {
+  describe('short-lived setup guidance section', () => {
+    it('includes setup guidance section when targetType is short-lived', () => {
       const result = _makeRunResult();
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
 
-      expect(md).toContain('## CLI Setup Guidance');
+      expect(md).toContain('## Short-Lived Process Setup Guidance');
     });
 
-    it('does not include CLI setup section when targetType is service', () => {
+    it('does not include setup guidance when targetType is long-lived', () => {
       const result = _makeRunResult();
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'service' }));
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'long-lived' }));
 
-      expect(md).not.toContain('## CLI Setup Guidance');
+      expect(md).not.toContain('## Short-Lived Process Setup Guidance');
     });
 
-    it('does not include CLI setup section when targetType is default (service)', () => {
+    it('does not include setup guidance when targetType is default (long-lived)', () => {
       const result = _makeRunResult();
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).not.toContain('## CLI Setup Guidance');
+      expect(md).not.toContain('## Short-Lived Process Setup Guidance');
     });
 
-    it('mentions SimpleSpanProcessor for CLI targets', () => {
+    it('mentions SimpleSpanProcessor for short-lived targets', () => {
       const result = _makeRunResult();
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
 
       expect(md).toContain('SimpleSpanProcessor');
     });
 
-    it('mentions process.exit interception for CLI targets', () => {
+    it('mentions process.exit interception for short-lived targets', () => {
       const result = _makeRunResult();
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
 
       expect(md).toContain('process.exit');
     });
 
-    it('warns about traceloop --import conflict for CLI targets', () => {
+    it('warns about traceloop --import conflict for short-lived targets', () => {
       const result = _makeRunResult();
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'cli' }));
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
 
       expect(md).toContain('traceloop');
       expect(md).toContain('--import');

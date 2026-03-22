@@ -112,16 +112,16 @@ Files that failed because of code patterns blocking safe instrumentation. Each r
 Files that were committed but rolled back due to end-of-run test failures or schema checkpoint failures.
 
 ### Recommended Companion Packages
-Auto-instrumentation packages identified for library projects. These are listed but not installed — deployers add them to their application's telemetry setup. When `targetType: cli` is set in the config, this section includes a warning not to load these packages via `--import` (see [CLI Setup Guidance](#cli-setup-guidance) below).
+Auto-instrumentation packages identified for library projects. These are listed but not installed — deployers add them to their application's telemetry setup. When `targetType: short-lived` is set in the config, this section includes a warning not to load these packages via `--import` (see [Short-Lived Process Setup Guidance](#short-lived-process-setup-guidance) below).
 
-### CLI Setup Guidance
-Only appears when the config has `targetType: cli`. Contains three subsections:
+### Short-Lived Process Setup Guidance
+Only appears when the config has `targetType: short-lived`. Contains three subsections:
 
-- **Span Processor**: Use `SimpleSpanProcessor` instead of `BatchSpanProcessor`. Batch processing delays export by up to 5 seconds — a CLI that finishes faster than that loses all spans silently.
+- **Span Processor**: Use `SimpleSpanProcessor` instead of `BatchSpanProcessor`. Batch processing delays export by up to 5 seconds — a process that exits faster than that loses all spans silently.
 - **process.exit Interception**: A code pattern to intercept `process.exit()` and flush spans before the process terminates. Without this, the OTLP exporter's async HTTP request never completes.
-- **Auto-Instrumentation Warning**: `@traceloop` packages must not be loaded via `--import` for CLI targets. They bring a different version of `@opentelemetry/instrumentation` which installs a separate `import-in-the-middle` with its own ESM hook registry, causing silent span loss. Initialize traceloop inside application code instead.
+- **Auto-Instrumentation Warning**: `@traceloop` packages must not be loaded via `--import` for short-lived targets. They bring a different version of `@opentelemetry/instrumentation` which installs a separate `import-in-the-middle` with its own ESM hook registry, causing silent span loss. Initialize traceloop inside application code instead.
 
-This section does not appear when `targetType` is `service` (the default).
+This section does not appear when `targetType` is `long-lived` (the default).
 
 ### Token Usage
 A table comparing the cost ceiling (pre-run estimate) to actual usage, with dollar amounts and token counts.
@@ -162,19 +162,19 @@ Cached tokens represent prompt content that was reused across files (the schema,
 
 ## Configuration: targetType
 
-The `targetType` field in `spiny-orb.yaml` tells the agent whether the target application is a short-lived CLI process or a long-running service. This affects the PR summary output — specifically, whether the CLI Setup Guidance section appears.
+The `targetType` field in `spiny-orb.yaml` tells the agent whether the target application is a short-lived process or a long-running one. This affects the PR summary output — specifically, whether the Short-Lived Process Setup Guidance section appears.
 
 ```yaml
 # spiny-orb.yaml
-targetType: cli    # or 'service' (default)
+targetType: short-lived    # or 'long-lived' (default)
 ```
 
 | Value | When to use | What changes |
 |-------|-------------|--------------|
-| `service` (default) | Web servers, workers, long-running daemons | Standard PR summary. No special setup guidance. |
-| `cli` | CLI tools, build scripts, one-shot processes | PR summary includes CLI Setup Guidance section with `SimpleSpanProcessor`, `process.exit` interception, and traceloop `--import` warning. Companion packages section warns about ESM hook conflicts. |
+| `long-lived` (default) | Web servers, workers, daemons | Standard PR summary. No special setup guidance. |
+| `short-lived` | CLIs, scripts, Lambda functions, batch jobs | PR summary includes Short-Lived Process Setup Guidance section with `SimpleSpanProcessor`, `process.exit` interception, and traceloop `--import` warning. Companion packages section warns about ESM hook conflicts. |
 
-This is independent of `dependencyStrategy` (which controls library vs app dependency installation). A CLI app uses `targetType: cli` with `dependencyStrategy: dependencies`. A library published to npm uses `dependencyStrategy: peerDependencies` with either target type.
+This is independent of `dependencyStrategy` (which controls library vs app dependency installation). A CLI uses `targetType: short-lived` with `dependencyStrategy: dependencies`. A library published to npm uses `dependencyStrategy: peerDependencies` with either target type.
 
 ### The dual `import-in-the-middle` problem
 
@@ -182,4 +182,4 @@ When `@traceloop` auto-instrumentation packages are loaded via Node's `--import`
 
 Each copy brings its own version of `import-in-the-middle` (v1.x and v3.x), each maintaining a separate ESM hook registry. This corrupts the module loading pipeline: the OTLP exporter reports `code=0` (success) for every span, but nothing reaches the backend. There are no errors, no warnings — just silence.
 
-The workaround is to initialize traceloop **inside the application code** (not in the `--import` bootstrap file). This avoids the competing ESM hook registries. The CLI Setup Guidance section in the PR summary explains this when `targetType: cli` is configured.
+The workaround is to initialize traceloop **inside the application code** (not in the `--import` bootstrap file). This avoids the competing ESM hook registries. The Short-Lived Process Setup Guidance section in the PR summary explains this when `targetType: short-lived` is configured.

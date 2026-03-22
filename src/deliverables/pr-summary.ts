@@ -469,12 +469,12 @@ function renderCompanionPackages(runResult: RunResult, config: AgentConfig): str
     lines.push(`- \`${pkg}\``);
   }
 
-  if (config.targetType === 'cli') {
+  if (config.targetType === 'short-lived') {
     lines.push('');
     lines.push(
-      '> **CLI target warning**: Do not load these packages via `--import`. ' +
+      '> **Short-lived process warning**: Do not load these packages via `--import`. ' +
       'Initialize them in-app instead to avoid ESM hook conflicts that cause silent span loss. ' +
-      'See the CLI Setup Guidance section above for details.',
+      'See the Short-Lived Process Setup Guidance section above for details.',
     );
   }
 
@@ -482,13 +482,14 @@ function renderCompanionPackages(runResult: RunResult, config: AgentConfig): str
 }
 
 function renderCliSetupGuidance(config: AgentConfig): string {
-  if (config.targetType !== 'cli') return '';
+  if (config.targetType !== 'short-lived') return '';
 
-  const lines: string[] = ['## CLI Setup Guidance'];
+  const lines: string[] = ['## Short-Lived Process Setup Guidance'];
   lines.push('');
   lines.push(
-    'This project is configured as a CLI application (`targetType: cli`). ' +
-    'Short-lived processes need special telemetry setup to ensure spans are exported before the process exits.',
+    'This project is configured as a short-lived process (`targetType: short-lived`). ' +
+    'CLIs, scripts, Lambda functions, and batch jobs need special telemetry setup ' +
+    'to ensure spans are exported before the process exits.',
   );
   lines.push('');
   lines.push('### Span Processor');

@@ -45,7 +45,7 @@ function makeConfig(): AgentConfig {
     autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
-    targetType: 'service',
+    targetType: 'long-lived',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 80000,

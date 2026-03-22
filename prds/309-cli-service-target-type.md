@@ -120,14 +120,15 @@ When `@traceloop/instrumentation-*` packages are loaded via `--import`, they bri
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-03-22 | Default to `service` not `cli` | Non-breaking — existing users see no change. CLI users opt in. |
+| 2026-03-22 | Default to `long-lived` | Non-breaking — existing users see no change. Short-lived users opt in. |
 | 2026-03-22 | Explicit config, not auto-detection | Auto-detection heuristics are fragile. Start with explicit, add heuristics later if needed. |
 | 2026-03-22 | Guidance in PR summary, not automated SDK modification | The agent already modifies SDK init for instrumentation entries. Processor/exit changes are deployment decisions the user should make deliberately. |
+| 2026-03-22 | Rename `cli \| service` to `short-lived \| long-lived` | "CLI" is too narrow — Lambda functions, scripts, and batch jobs have the same problem. The distinction is process lifecycle, not interface type. |
 
 ## Success Criteria
 
-1. `targetType: cli` in config → PR summary includes CLI-specific setup section
-2. CLI setup section includes SimpleSpanProcessor + process.exit interception pattern
-3. CLI setup section warns that traceloop must be initialized in-app
-4. `targetType: service` (or default) → existing behavior unchanged
-5. Traces from a CLI app instrumented with spiny-orb reach the backend (validated against commit-story-v2)
+1. `targetType: short-lived` in config → PR summary includes setup guidance section
+2. Setup section includes SimpleSpanProcessor + process.exit interception pattern
+3. Setup section warns that traceloop must be initialized in-app
+4. `targetType: long-lived` (or default) → existing behavior unchanged
+5. Traces from a short-lived app instrumented with spiny-orb reach the backend (validated against commit-story-v2)

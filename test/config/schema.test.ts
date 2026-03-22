@@ -21,7 +21,7 @@ function makeFullConfig() {
     agentEffort: 'medium',
     autoApproveLibraries: true,
     testCommand: 'npm test',
-    targetType: 'service',
+    targetType: 'long-lived',
     dependencyStrategy: 'dependencies',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
@@ -78,7 +78,7 @@ describe('AgentConfigSchema', () => {
       expect(config.dryRun).toBe(false);
       expect(config.confirmEstimate).toBe(true);
       expect(config.exclude).toEqual([]);
-      expect(config.targetType).toBe('service');
+      expect(config.targetType).toBe('long-lived');
     });
   });
 
@@ -298,33 +298,33 @@ describe('AgentConfigSchema', () => {
   });
 
   describe('targetType', () => {
-    it('defaults to service when omitted', () => {
+    it('defaults to long-lived when omitted', () => {
       const result = AgentConfigSchema.safeParse(makeMinimalConfig());
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.targetType).toBe('service');
+        expect(result.data.targetType).toBe('long-lived');
       }
     });
 
-    it('accepts cli', () => {
+    it('accepts short-lived', () => {
       const result = AgentConfigSchema.safeParse({
         ...makeMinimalConfig(),
-        targetType: 'cli',
+        targetType: 'short-lived',
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.targetType).toBe('cli');
+        expect(result.data.targetType).toBe('short-lived');
       }
     });
 
-    it('accepts service', () => {
+    it('accepts long-lived', () => {
       const result = AgentConfigSchema.safeParse({
         ...makeMinimalConfig(),
-        targetType: 'service',
+        targetType: 'long-lived',
       });
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.targetType).toBe('service');
+        expect(result.data.targetType).toBe('long-lived');
       }
     });
 
