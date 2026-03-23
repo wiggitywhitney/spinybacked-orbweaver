@@ -876,7 +876,7 @@ Some of these rules are gating — if it fails, the instrumentation fails after 
 Instrumentation Score
 :::
 
-[github.com/instrumentation-score/spec](https://github.com/instrumentation-score/spec){style="font-size: 0.7em;"}
+[instrumentation-score.com](https://instrumentation-score.com/){style="font-size: 0.7em;"}
 
 ::: {.notes}
 A quick shout-out to the Instrumentation Score — a community-driven project that scores live telemetry data. My evaluation framework is modeled on it. I borrowed their binary pass/fail rules, their rule ID syntax, their impact levels, and their scoring model. The Instrumentation Score evaluates runtime OTLP telemetry — my rubric evaluates the static instrumented code. If you don't know that project, I recommend you check it out.
