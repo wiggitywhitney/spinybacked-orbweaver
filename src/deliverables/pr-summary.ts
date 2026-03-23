@@ -35,7 +35,8 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderRecommendedRefactors(runResult, display));
   sections.push(renderRolledBackFiles(runResult, display));
-  sections.push(renderCompanionPackages(runResult));
+  sections.push(renderCompanionPackages(runResult, config));
+  sections.push(renderShortLivedSetupGuidance(config));
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
@@ -201,7 +202,43 @@ function renderSchemaChanges(runResult: RunResult): string {
     lines.push('No schema changes detected.');
   }
 
+  // Supplement with span extension listing from committed files.
+  // The weaver registry diff may not include individual span entries prominently,
+  // so we list them explicitly from the FileResult schema extensions.
+  const spanExtensions = collectSpanExtensionIds(runResult);
+  if (spanExtensions.length > 0) {
+    lines.push('');
+    lines.push(`### Span Extensions (${spanExtensions.length})`);
+    lines.push('');
+    for (const spanId of spanExtensions) {
+      lines.push(`- \`${spanId}\``);
+    }
+  }
+
   return lines.join('\n');
+}
+
+/**
+ * Collect deduplicated span extension IDs from committed file results.
+ * Span extensions have IDs starting with "span." or type "span".
+ */
+function collectSpanExtensionIds(runResult: RunResult): string[] {
+  const seen = new Set<string>();
+  for (const file of runResult.fileResults) {
+    if (file.status !== 'success' && file.status !== 'partial') continue;
+    for (const ext of file.schemaExtensions) {
+      // Parse the YAML-like extension string for id and type
+      const idMatch = ext.match(/id:\s*(\S+)/);
+      const typeMatch = ext.match(/type:\s*(\S+)/);
+      if (!idMatch) continue;
+      const id = idMatch[1];
+      const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
+      if (isSpan && !seen.has(id)) {
+        seen.add(id);
+      }
+    }
+  }
+  return [...seen].sort();
 }
 
 /**
@@ -453,7 +490,7 @@ function renderRolledBackFiles(runResult: RunResult, display: DisplayFn): string
   return lines.join('\n');
 }
 
-function renderCompanionPackages(runResult: RunResult): string {
+function renderCompanionPackages(runResult: RunResult, config: AgentConfig): string {
   if (!runResult.companionPackages || runResult.companionPackages.length === 0) return '';
 
   const lines: string[] = ['## Recommended Companion Packages'];
@@ -467,6 +504,80 @@ function renderCompanionPackages(runResult: RunResult): string {
   for (const pkg of runResult.companionPackages) {
     lines.push(`- \`${pkg}\``);
   }
+
+  if (config.targetType === 'short-lived') {
+    lines.push('');
+    lines.push(
+      '> **Short-lived process warning**: Do not load these packages via `--import`. ' +
+      'Initialize them in-app instead to avoid ESM hook conflicts that cause silent span loss. ' +
+      'See the Short-Lived Process Setup Guidance section below for details.',
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function renderShortLivedSetupGuidance(config: AgentConfig): string {
+  if (config.targetType !== 'short-lived') return '';
+
+  const lines: string[] = ['## Short-Lived Process Setup Guidance'];
+  lines.push('');
+  lines.push(
+    'This project is configured as a short-lived process (`targetType: short-lived`). ' +
+    'CLIs, scripts, Lambda functions, and batch jobs need special telemetry setup ' +
+    'to ensure spans are exported before the process exits.',
+  );
+  lines.push('');
+  lines.push('### Span Processor');
+  lines.push('');
+  lines.push(
+    'Use `SimpleSpanProcessor` instead of the default `BatchSpanProcessor`. ' +
+    'Batch processing delays export by up to 5 seconds — a CLI that finishes in under 5 seconds ' +
+    'will exit before the batch timer fires, losing all spans silently.',
+  );
+  lines.push('');
+  lines.push('```javascript');
+  lines.push("import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';");
+  lines.push("import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';");
+  lines.push('');
+  lines.push('spanProcessors: [new SimpleSpanProcessor(new OTLPTraceExporter({');
+  lines.push("  url: 'http://localhost:4318/v1/traces',");
+  lines.push('}))]');
+  lines.push('```');
+  lines.push('');
+  lines.push('### process.exit Interception');
+  lines.push('');
+  lines.push(
+    'If your application calls `process.exit()`, intercept it to flush spans before terminating:',
+  );
+  lines.push('');
+  lines.push('```javascript');
+  lines.push('let isShuttingDown = false;');
+  lines.push('const originalExit = process.exit;');
+  lines.push('process.exit = (code) => {');
+  lines.push('  if (isShuttingDown) return originalExit.call(process, code);');
+  lines.push('  isShuttingDown = true;');
+  lines.push('  process.exitCode = code ?? 0;');
+  lines.push('  sdk.shutdown()');
+  lines.push("    .catch((err) => console.error('OTel SDK shutdown error:', err))");
+  lines.push('    .then(() => new Promise(resolve => setTimeout(resolve, 1000)))');
+  lines.push('    .finally(() => originalExit.call(process, process.exitCode));');
+  lines.push('};');
+  lines.push('```');
+  lines.push('');
+  lines.push('### Auto-Instrumentation Warning');
+  lines.push('');
+  lines.push(
+    '**Do not load third-party auto-instrumentation packages via `--import`.** ' +
+    'They may bring a different version of `@opentelemetry/instrumentation` which installs ' +
+    'a separate `import-in-the-middle` with its own ESM hook registry. This causes silent span loss — ' +
+    'the exporter reports success but spans never reach the backend.',
+  );
+  lines.push('');
+  lines.push(
+    'Instead, initialize auto-instrumentation **inside your application code** (not in the `--import` bootstrap). ' +
+    'This avoids the competing ESM hook registries.',
+  );
 
   return lines.join('\n');
 }

@@ -111,6 +111,12 @@ Files that failed because of code patterns blocking safe instrumentation. Each r
 ### Rolled Back Files
 Files that were committed but rolled back due to end-of-run test failures or schema checkpoint failures.
 
+### Recommended Companion Packages
+Auto-instrumentation packages identified for library projects. These are listed but not installed — deployers add them to their application's telemetry setup. When `targetType: short-lived` is set in the config, this section includes a warning not to load these packages via `--import` (see [Short-Lived Process Setup Guidance](#short-lived-process-setup-guidance) below).
+
+### Short-Lived Process Setup Guidance
+Only appears when the config has `targetType: short-lived`. Covers `SimpleSpanProcessor`, `process.exit` interception, and auto-instrumentation warnings. Does not appear when `targetType` is `long-lived` (the default). See [Setup for Short-Lived Processes](short-lived-setup.md) for the full guide with code examples and prerequisites.
+
 ### Token Usage
 A table comparing the cost ceiling (pre-run estimate) to actual usage, with dollar amounts and token counts.
 
@@ -147,3 +153,21 @@ Token usage appears in multiple places:
 - **Token Usage table**: In the PR summary, comparing ceiling to actual with dollar amounts
 
 Cached tokens represent prompt content that was reused across files (the schema, guidelines, etc.). Higher cache rates mean lower cost per file.
+
+## Configuration: targetType
+
+The `targetType` field in `spiny-orb.yaml` tells the agent whether the target application is a short-lived process or a long-running one. This affects the PR summary output — specifically, whether the Short-Lived Process Setup Guidance section appears.
+
+```yaml
+# spiny-orb.yaml
+targetType: short-lived    # or 'long-lived' (default)
+```
+
+| Value | When to use | What changes |
+|-------|-------------|--------------|
+| `long-lived` (default) | Web servers, workers, daemons | Standard PR summary. No special setup guidance. |
+| `short-lived` | CLIs, scripts, Lambda functions, batch jobs | PR summary includes Short-Lived Process Setup Guidance section with `SimpleSpanProcessor`, `process.exit` interception, and auto-instrumentation `--import` warning. Companion packages section warns about ESM hook conflicts. |
+
+This is independent of `dependencyStrategy` (which controls library vs app dependency installation). A CLI uses `targetType: short-lived` with `dependencyStrategy: dependencies`. A library published to npm uses `dependencyStrategy: peerDependencies` with either target type.
+
+For full setup prerequisites, code examples, and the dual `import-in-the-middle` problem explained, see [Setup for Short-Lived Processes](short-lived-setup.md).

@@ -20,6 +20,7 @@ function makeConfig(overrides?: Partial<AgentConfig>): AgentConfig {
     autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
+    targetType: 'long-lived',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 80000,
@@ -77,6 +78,7 @@ function makeGitWorkflowDeps(): Partial<GitWorkflowDeps> {
     commitAggregateChanges: vi.fn().mockResolvedValue('def456'),
     pushBranch: vi.fn().mockResolvedValue(undefined),
     renderPrSummary: vi.fn().mockReturnValue('# PR Summary'),
+    commitPrSummary: vi.fn().mockResolvedValue(undefined),
     createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
     checkGhAvailable: vi.fn().mockResolvedValue(false),
   };

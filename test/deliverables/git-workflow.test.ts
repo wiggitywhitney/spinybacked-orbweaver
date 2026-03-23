@@ -23,6 +23,7 @@ function makeConfig(overrides?: Partial<AgentConfig>): AgentConfig {
     autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
+    targetType: 'long-lived',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 80000,
@@ -95,6 +96,7 @@ function makeDeps(overrides?: Partial<GitWorkflowDeps>): GitWorkflowDeps {
     pushBranch: vi.fn().mockResolvedValue(undefined),
     renderPrSummary: vi.fn().mockReturnValue('# PR Summary\n\nMock summary'),
     writePrSummary: vi.fn().mockResolvedValue('/project/spiny-orb-pr-summary.md'),
+    commitPrSummary: vi.fn().mockResolvedValue(undefined),
     createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
     stderr: vi.fn(),
@@ -539,12 +541,15 @@ describe('runGitWorkflow', () => {
   });
 
   describe('PR summary persistence', () => {
-    it('writes PR summary to a local file before push', async () => {
+    it('writes PR summary, commits it to branch, then pushes', async () => {
       const callOrder: string[] = [];
       const deps = makeDeps({
         writePrSummary: vi.fn().mockImplementation(async () => {
           callOrder.push('writePrSummary');
           return '/project/spiny-orb-pr-summary.md';
+        }),
+        commitPrSummary: vi.fn().mockImplementation(async () => {
+          callOrder.push('commitPrSummary');
         }),
         pushBranch: vi.fn().mockImplementation(async () => {
           callOrder.push('pushBranch');
@@ -553,7 +558,17 @@ describe('runGitWorkflow', () => {
 
       await runGitWorkflow(makeOptions(), deps);
 
-      expect(callOrder).toEqual(['writePrSummary', 'pushBranch']);
+      expect(callOrder).toEqual(['writePrSummary', 'commitPrSummary', 'pushBranch']);
+    });
+
+    it('commits PR summary with the summary file path', async () => {
+      const deps = makeDeps({
+        writePrSummary: vi.fn().mockResolvedValue('/project/spiny-orb-pr-summary.md'),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.commitPrSummary).toHaveBeenCalledWith('/project', '/project/spiny-orb-pr-summary.md');
     });
 
     it('returns prSummaryPath in the result', async () => {
