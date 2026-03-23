@@ -222,11 +222,21 @@ function findBestMatch(
   // Fallback: match by catch clause content when body anchor fails.
   // This handles instrumentation that wraps the try body in an OTel span call,
   // changing the body anchor but preserving the catch clause.
-  if (original.hasCatch && original.catchThrows.length > 0) {
+  if (original.hasCatch) {
     for (let i = 0; i < candidates.length; i++) {
       if (usedIndices.has(i)) continue;
       if (!candidates[i].hasCatch) continue;
+      // Both must have the same catch parameter structure (named vs unnamed)
+      if (Boolean(candidates[i].catchParamName) !== Boolean(original.catchParamName)) continue;
       if (candidates[i].catchThrows.length !== original.catchThrows.length) continue;
+      // For non-throwing catches, require an additional signal to avoid
+      // false matches between unrelated catch blocks with no throws.
+      if (original.catchThrows.length === 0 && candidates[i].catchThrows.length === 0) {
+        // Accept only when the candidate's body anchor is empty (OTel-wrapped body)
+        // or matches the original. This prevents matching two unrelated non-throwing
+        // catches that happen to both have different body anchors.
+        if (candidates[i].bodyAnchor && candidates[i].bodyAnchor !== original.bodyAnchor) continue;
+      }
       if (original.catchThrows.every((t, idx) => candidates[i].catchThrows[idx] === t)) {
         return i;
       }

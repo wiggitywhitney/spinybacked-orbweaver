@@ -547,6 +547,40 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
       const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
       expect(results.every(r => r.passed)).toBe(true);
     });
+
+    it('passes when non-throwing catch is preserved with wrapped body', async () => {
+      const original = [
+        'async function main() {',
+        '  try {',
+        '    await runPipeline();',
+        '  } catch (err) {',
+        '    console.error(err);',
+        '    return null;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'async function main() {',
+        '  try {',
+        '    await tracer.startActiveSpan("main", async (span) => {',
+        '      try {',
+        '        await runPipeline();',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    });',
+        '  } catch (err) {',
+        '    span.recordException(err);',
+        '    console.error(err);',
+        '    return null;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.every(r => r.passed)).toBe(true);
+    });
   });
 
   describe('CheckResult structure', () => {
