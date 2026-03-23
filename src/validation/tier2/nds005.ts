@@ -196,22 +196,43 @@ function extractInstrumentedTryBlocks(sourceFile: SourceFile): TryBlockFingerpri
 /**
  * Find the best match for an original try block among instrumented try blocks.
  *
- * Matches by body anchor content. Returns the index of the best match, or -1
- * if no match is found.
+ * Primary match: body anchor content (first meaningful statement in try body).
+ * Fallback match: catch clause content (same throws, same param structure).
+ * The fallback handles cases where instrumentation wraps the try body in a
+ * startActiveSpan call, making the body anchor empty or different, but the
+ * catch clause is preserved identically.
+ *
+ * Returns the index of the best match, or -1 if no match is found.
  */
 function findBestMatch(
   original: TryBlockFingerprint,
   candidates: TryBlockFingerprint[],
   usedIndices: Set<number>,
 ): number {
-  if (!original.bodyAnchor) return -1;
-
-  for (let i = 0; i < candidates.length; i++) {
-    if (usedIndices.has(i)) continue;
-    if (candidates[i].bodyAnchor === original.bodyAnchor) {
-      return i;
+  // Primary: match by body anchor
+  if (original.bodyAnchor) {
+    for (let i = 0; i < candidates.length; i++) {
+      if (usedIndices.has(i)) continue;
+      if (candidates[i].bodyAnchor === original.bodyAnchor) {
+        return i;
+      }
     }
   }
+
+  // Fallback: match by catch clause content when body anchor fails.
+  // This handles instrumentation that wraps the try body in an OTel span call,
+  // changing the body anchor but preserving the catch clause.
+  if (original.hasCatch && original.catchThrows.length > 0) {
+    for (let i = 0; i < candidates.length; i++) {
+      if (usedIndices.has(i)) continue;
+      if (!candidates[i].hasCatch) continue;
+      if (candidates[i].catchThrows.length !== original.catchThrows.length) continue;
+      if (original.catchThrows.every((t, idx) => candidates[i].catchThrows[idx] === t)) {
+        return i;
+      }
+    }
+  }
+
   return -1;
 }
 
