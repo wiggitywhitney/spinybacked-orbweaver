@@ -74,6 +74,8 @@ export async function commitPrSummary(dir: string, summaryPath: string): Promise
   const { relative } = await import('node:path');
   const relPath = relative(dir, summaryPath).split('\\').join('/');
   await git.add(relPath);
+  const status = await git.status();
+  if (status.staged.length === 0) return;
   await git.commit('docs: add PR summary to instrument branch');
 }
 
