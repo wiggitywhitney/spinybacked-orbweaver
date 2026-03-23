@@ -70,7 +70,10 @@ export async function hasStagedChanges(dir: string): Promise<boolean> {
  */
 export async function commitPrSummary(dir: string, summaryPath: string): Promise<void> {
   const git = simpleGit(dir);
-  await git.add(summaryPath);
+  // Convert to repo-relative path for portable git pathspec handling
+  const { relative } = await import('node:path');
+  const relPath = relative(dir, summaryPath).split('\\').join('/');
+  await git.add(relPath);
   await git.commit('docs: add PR summary to instrument branch');
 }
 
