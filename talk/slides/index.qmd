@@ -907,7 +907,7 @@ A quick shout-out to the Instrumentation Score — a community-driven project th
 
 ## {.center data-transition="slide"}
 
-::: {.r-fit-text}
+::: {.big-text}
 Let's look at the code
 :::
 
