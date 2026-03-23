@@ -783,6 +783,8 @@ Validation
 
 ::: {.notes}
 Let's talk a little more about this validation step.
+
+We want to make sure all of our instrumented code is...
 :::
 
 ## {.center}
@@ -792,7 +794,7 @@ Let's talk a little more about this validation step.
 :::
 
 ::: {.notes}
-We want to make sure all of our instrumented code is not destructive — it doesn't hurt the original code that's there.
+Not destructive — it doesn't hurt the original code that's there.
 :::
 
 ## {.center}
@@ -884,7 +886,11 @@ Some rules are gating. Some are advisory.
 :::
 
 ::: {.notes}
-Some of these rules are gating — if it fails, the instrumentation fails after all retries. Some are non-gating — they're suggested as fixes during the retry loop, but if they're not fixed, the file will still pass. In the reports, the agent often cites these rules in its reasoning.
+Some of these rules are gating — if it fails, the instrumentation fails after all retries.
+
+Some are non-gating — they're suggested as fixes during the retry loop, but if they're not fixed, the file will still pass.
+
+In the reports, the agent often cites these rules in its reasoning.
 :::
 
 ## {.center data-transition="slide"}
@@ -904,6 +910,8 @@ A quick shout-out to the Instrumentation Score — a community-driven project th
 ::: {.r-fit-text}
 Let's look at the code
 :::
+
+[github.com/wiggitywhitney/commit-story-v2](https://github.com/wiggitywhitney/commit-story-v2){style="font-size: 0.7em;"}
 
 ::: {.notes}
 The instrumentation process takes about 30-40 minutes. I ran it against Commit Story. Let me show you what it produced.
