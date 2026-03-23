@@ -231,6 +231,7 @@ export async function handleInstrument(
       pushBranch: deps.gitWorkflow?.pushBranch ?? gitWrapperMod.pushBranch,
       renderPrSummary: deps.gitWorkflow?.renderPrSummary ?? prSummaryMod.renderPrSummary,
       writePrSummary: deps.gitWorkflow?.writePrSummary ?? prSummaryMod.writePrSummary,
+      commitPrSummary: deps.gitWorkflow?.commitPrSummary ?? gitWrapperMod.commitPrSummary,
       createPr: deps.gitWorkflow?.createPr ?? gitWorkflowMod.createPr,
       checkGhAvailable: deps.gitWorkflow?.checkGhAvailable ?? gitWorkflowMod.checkGhAvailable,
       stderr: deps.stderr,

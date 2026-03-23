@@ -53,6 +53,7 @@ export interface GitWorkflowDeps {
   pushBranch: (dir: string, branchName: string) => Promise<void>;
   renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
   writePrSummary: (projectDir: string, content: string) => Promise<string>;
+  commitPrSummary: (projectDir: string, summaryPath: string) => Promise<void>;
   createPr: (projectDir: string, title: string, body: string, options?: { draft?: boolean; head?: string }) => Promise<string>;
   checkGhAvailable: () => Promise<boolean | { available: boolean; warning?: string }>;
   stderr: (msg: string) => void;
@@ -165,6 +166,9 @@ export async function runGitWorkflow(
 
     prSummaryPath = await deps.writePrSummary(projectDir, prBody);
     deps.stderr(`PR summary saved to ${prSummaryPath}`);
+
+    // Commit the PR summary on the instrument branch so it survives push failures.
+    await deps.commitPrSummary(projectDir, prSummaryPath);
 
     const ghResult = await deps.checkGhAvailable();
     // Support both old boolean return and new object return
