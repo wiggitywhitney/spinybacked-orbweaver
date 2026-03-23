@@ -325,6 +325,95 @@ describe('renderPrSummary', () => {
 
       expect(md).toMatch(/no schema changes/i);
     });
+
+    it('lists span extensions from committed files', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added Attributes\n- `http.method`',
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: [
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: span.myapp.process_order\ntype: span',
+              'id: myapp.request.method\ntype: string',
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('Span Extensions');
+      expect(md).toContain('span.myapp.fetch_data');
+      expect(md).toContain('span.myapp.process_order');
+    });
+
+    it('does not show span extensions section when no spans are present', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added Attributes\n- `http.method`',
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: ['id: myapp.request.method\ntype: string'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('Span Extensions');
+    });
+
+    it('deduplicates span extensions across multiple files', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added',
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/a.js',
+            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span'],
+          }),
+          _makeFileResult({
+            path: '/project/src/b.js',
+            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span', 'id: span.myapp.save\ntype: span'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // fetch_data appears in both files but should render once
+      const matches = md.match(/span\.myapp\.fetch_data/g);
+      // One in per-file table extensions column + one in Span Extensions list
+      const spanSection = md.split('### Span Extensions')[1]?.split('##')[0] ?? '';
+      expect(spanSection.match(/span\.myapp\.fetch_data/g)).toHaveLength(1);
+      expect(spanSection).toContain('span.myapp.save');
+    });
+
+    it('includes span extensions from partial-status files', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added',
+        fileResults: [
+          _makeFileResult({
+            status: 'partial',
+            schemaExtensions: ['id: span.myapp.partial_span\ntype: span'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('Span Extensions');
+      expect(md).toContain('span.myapp.partial_span');
+    });
+
+    it('identifies spans by type field when id lacks span. prefix', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added',
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: ['id: myapp.custom_operation\ntype: span'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('Span Extensions');
+      expect(md).toContain('myapp.custom_operation');
+    });
   });
 
   describe('review sensitivity annotations', () => {

@@ -127,7 +127,7 @@ export async function checkNoRedundantSchemaEntries(
         {
           ruleId: 'SCH-004',
           context: `Novel attribute key "${entry.key}" at line ${entry.line} is not in the registry and has no high token-similarity match.`,
-          question: `Is attribute "${entry.key}" semantically distinct from all registered attribute keys? Answer true if it captures a unique concept not already represented in the registry. Answer false if it is a semantic duplicate of an existing key — and if so, which registered key should be used instead?`,
+          question: `Is attribute "${entry.key}" semantically distinct from all registered attribute keys? Answer true if it captures a unique concept not already represented in the registry. Answer false if it is a semantic duplicate of an existing key — and if so, which registered key should be used instead? Important: respect domain boundaries. Application-domain attributes (e.g., generated_count, section_count) are NOT duplicates of OTel semantic convention fields (e.g., gen_ai.usage.output_tokens) even if they share similar words. Only flag as duplicates when the keys measure the same thing in the same domain.`,
           candidates: registryNameList,
         },
         judgeDeps.client,
