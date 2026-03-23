@@ -26,7 +26,7 @@ Every commit → a journal entry
 :::
 
 ::: {.notes}
-Every time you make a commit, you get an engineering journal entry.
+Every time you make a commit, the software collects your git diff and git commit message, as well as your chat messages between you and your AI assistant, and it spawns an engineering journal entry.
 :::
 
 ## Commit Story {.center}
@@ -53,6 +53,8 @@ Rolled up into summaries
 
 ::: {.notes}
 A Harvard Business School study found that workers who spent 15 minutes a day reflecting instead of working performed 23% better.
+
+What does this have to do with telemetry?
 :::
 
 ## {.center data-transition="slide"}
@@ -72,7 +74,7 @@ It worked, but...
 :::
 
 ::: {.notes}
-It worked as an experiment and I stand by it. But...
+It worked as an experiment and I stand by it. But... Honestly, looking back at that codebase, I made it all into a bit of a mess. 
 :::
 
 ## {.center}
@@ -82,7 +84,7 @@ It worked as an experiment and I stand by it. But...
 :::
 
 ::: {.notes}
-Honestly, looking back at that codebase, I made it all into a bit of a mess. Ad hoc telemetry standards...
+Ad hoc telemetry standards...
 :::
 
 ## {.center}
@@ -130,11 +132,11 @@ I didn't yet understand auto-instrumentation libraries. Everything was manual sp
 ## {.center data-transition="slide"}
 
 ::: {.big-text}
-The OpenTelemetry community has probably provided an auto-instrumentation library for your framework
+I wasn't alone.
 :::
 
 ::: {.notes}
-There are lots of auto-instrumentation libraries. When you're using any framework with any substantial number of users, the methods built into that framework can probably be instrumented with an auto-instrumentation library.
+As I learn more about observability as part of my new job at Datadog, it dawned on me that my experience of instrumenting my app code mirrors the experience that a lot of companies have. Instrumenting application logic is hard. It is a hassle, and it can easily become a big mess. 
 :::
 
 ## {.center}
@@ -144,65 +146,45 @@ Business logic remains uninstrumented.
 :::
 
 ::: {.notes}
-The thing that has eluded us is getting the application-specific code instrumented.
-:::
+That's why I completely understand when companies still don't have observability at that level. It is a pain. But also, it is arguably the most important thing you can possibly instrument.
 
-## {.center}
-
-::: {.big-text}
-Business logic remains uninstrumented.
-
-Business logic — the code that makes your company yours
-:::
-
-::: {.notes}
-The actual business logic that differentiates your company from other companies — that code remains uninstrumented.
+It is the actual business logic that differentiates your company from other companies
 :::
 
 ## {.center data-transition="slide"}
 
 ::: {.big-text}
-Operations people get a lot of value from instrumented code — but we need developers to do it
+Operations people are hungry for this
 :::
 
 ::: {.notes}
-The value prop for systems people is huge. That's why we're motivated to make it easy for developers to instrument their code, and instrument it well.
+Operations people are hungry for this, with good code-level instrumentation we could...
 :::
 
 ## {.center}
 
 ::: {.big-text .spaced}
-[Understand what's happening inside your business logic]{.rainbow-5}
-:::
-
-::: {.notes}
-Platform engineers, SREs, operators — we would all greatly benefit from having code-level telemetry data.
-:::
-
-## {.center}
-
-::: {.big-text .spaced}
-[Understand what's happening inside your business logic]{.rainbow-5}
-
 [Go from alert to root cause in minutes, not hours]{.rainbow-1}
 :::
 
 ::: {.notes}
-It helps you troubleshoot problems. One study found a 40% reduction in mean time to recovery with proper instrumentation.
+Go from alert to root cause in minutes, not hours
+
+Splunk Research cites up to 54% reduction in mean time to recovery with proper observability. (https://www.splunk.com/en_us/blog/devops/using-observability-to-reduce-mttr.html)
 :::
 
 ## {.center}
 
 ::: {.big-text .spaced}
-[Understand what's happening inside your business logic]{.rainbow-5}
-
 [Go from alert to root cause in minutes, not hours]{.rainbow-1}
 
-[Prove your platform is making a difference — code quality, user experience, development time]{.rainbow-6}
+[Prove your platform is making a difference]{.rainbow-6}
 :::
 
 ::: {.notes}
-As a platform engineer, you can prove that the capabilities you're providing to developers are actually making a difference. 41% of platform teams can't demonstrate measurable value in year one — because they can't measure what they can't see.
+As a platform engineer, you can prove that the capabilities you're providing to developers are actually affecting your company's code quality, security, and development time.
+
+40.9% of platform initiatives can't demonstrate measurable value within their first year. Nearly 30% of platform teams don't measure success at all. (2025 State of Platform Engineering Report, Volume 4, cited in The Register: https://www.theregister.com/2026/02/11/metrics_that_matter_platform/)
 :::
 
 ## {.center data-transition="slide"}
@@ -212,7 +194,11 @@ How can GenAI be used to reliably instrument code well?
 :::
 
 ::: {.notes}
-Reliably instrumenting code is a problem the industry's been working on since the early days of distributed tracing. I started to become interested in how GenAI specifically can be used to solve it.
+How can GenAI be used to reliably instrument code well? After making a mess of my instrumentation in Commit Story, I became interested in how GenAI specifically can be used to solve this problem.
+
+And I'm not special here. Reliably instrumenting code is a problem the industry's been working on since the early days of distributed tracing.
+
+But still, I gave it a go. Let me introduce you to...
 :::
 
 ## {background-color="#00897B" data-transition="slide"}
@@ -220,7 +206,7 @@ Reliably instrumenting code is a problem the industry's been working on since th
 [Spinybacked Orbweaver]{style="font-size: 2.5em; font-weight: bold; color: #fff;"}
 
 ::: {.notes}
-Let me introduce you to Spinybacked Orbweaver.
+Spinybacked Orbweaver.
 :::
 
 ## {background-color="#00897B"}
@@ -230,7 +216,7 @@ Let me introduce you to Spinybacked Orbweaver.
 An AI agent that automatically instruments code with OpenTelemetry
 
 ::: {.notes}
-An AI agent that automatically instruments code with OpenTelemetry.
+Spinybacked Orbweaver is an AI agent that automatically instruments code with OpenTelemetry.
 :::
 
 <!--- SECTION 2: USER EXPERIENCE --->
