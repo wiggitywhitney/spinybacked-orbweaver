@@ -135,6 +135,46 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
     });
   });
 
+  describe('async callbacks passed as arguments', () => {
+    it('does not flag async arrow function passed as argument to a call', () => {
+      const code = [
+        'server.registerTool("analyze", schema, async (args) => {',
+        '  const result = await runAnalysis(args.input);',
+        '  return { content: [{ type: "text", text: result }] };',
+        '});',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag async function expression passed as argument', () => {
+      const code = [
+        'app.get("/api/data", async function handler(req, res) {',
+        '  const data = await fetchData();',
+        '  res.json(data);',
+        '});',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags top-level async arrow function assigned to a variable', () => {
+      const code = [
+        'const handler = async (args) => {',
+        '  return await process(args);',
+        '};',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
