@@ -185,6 +185,8 @@ Splunk Research cites up to 54% reduction in mean time to recovery with proper o
 As a platform engineer, you can prove that the capabilities you're providing to developers are actually affecting your company's code quality, security, and development time.
 
 40.9% of platform initiatives can't demonstrate measurable value within their first year. Nearly 30% of platform teams don't measure success at all. (2025 State of Platform Engineering Report, Volume 4, cited in The Register: https://www.theregister.com/2026/02/11/metrics_that_matter_platform/)
+
+But now we have GenAI on the scene.
 :::
 
 ## {.center data-transition="slide"}
@@ -194,7 +196,7 @@ How can GenAI be used to reliably instrument code well?
 :::
 
 ::: {.notes}
-How can GenAI be used to reliably instrument code well? After making a mess of my instrumentation in Commit Story, I became interested in how GenAI specifically can be used to solve this problem.
+After making a mess of my instrumentation in Commit Story, I became interested in how GenAI specifically can be used to solve this problem.
 
 And I'm not special here. Reliably instrumenting code is a problem the industry's been working on since the early days of distributed tracing.
 
@@ -228,6 +230,8 @@ The user experience
 :::
 
 ::: {.notes}
+To show you what I'm up to...
+
 First, I'm going to walk you through the user experience at a high level.
 :::
 
@@ -264,7 +268,9 @@ JavaScript only (for now)
 :::
 
 ::: {.notes}
-I built this project to specifically instrument my JavaScript app, the automated engineering journal I told you about earlier. Right now it can only instrument JavaScript.
+I built this project to specifically instrument my JavaScript "Commit Story" app, the automated engineering journal I told you about earlier. Right now it can only instrument JavaScript.
+
+(And btw I think at this point I've spent exponentially more hours on the instrumentation agent than I ever spent on the engineering journal application haha)
 :::
 
 ## {.center data-transition="slide"}
@@ -274,7 +280,7 @@ OpenTelemetry Weaver
 :::
 
 ::: {.notes}
-Before I get into the prerequisites, I want to make sure you know about OpenTelemetry Weaver. It has a CLI and an experimental MCP server. I chose to use the CLI for my project.
+Before I get into the prerequisites, I want to make sure you know about OpenTelemetry Weaver. I use the CLI for my project.
 :::
 
 ## {.center}
@@ -284,7 +290,7 @@ Before I get into the prerequisites, I want to make sure you know about OpenTele
 :::
 
 ::: {.notes}
-With Weaver, you can create a registry where you define your signals, attributes, and groups. You can import existing conventions like the OTel semantic conventions — standardized naming rules for common telemetry concepts — and define your own on top.
+With Weaver, you can create a registry where you define your signals, attributes, and groups. You can also import existing Weaver registries like the OTel semantic conventions (standardized naming rules for common telemetry concepts).
 :::
 
 ## {.center}
@@ -296,7 +302,9 @@ With Weaver, you can create a registry where you define your signals, attributes
 :::
 
 ::: {.notes}
-You can validate your registry for correctness and consistency — naming conventions, attribute types, stability rules.
+You can validate your registry for correctness and consistency.
+
+Weaver provides an automated way to check naming conventions, attribute types, and stability rules.
 :::
 
 ## {.center}
@@ -310,7 +318,7 @@ You can validate your registry for correctness and consistency — naming conven
 :::
 
 ::: {.notes}
-And you can evolve them over time. Teams can share conventions by importing each other's registries as dependencies. This is exactly one of the problems I ran into when I was instrumenting Commit Story — inconsistent conventions with no way to share or enforce them.
+And you can evolve them over time. Teams can share conventions by importing each other's registries as dependencies. This is exactly one of the problems I ran into back when I was instrumenting Commit Story — inconsistent conventions with no way to share or enforce them.
 :::
 
 ## {.center}
@@ -326,7 +334,9 @@ And you can evolve them over time. Teams can share conventions by importing each
 :::
 
 ::: {.notes}
-You can even live-check your actual telemetry against your registry — it starts an OTLP listener and validates that the telemetry your app produces conforms to what you've defined. It was presented at KubeCon 2025 as "unit testing for your telemetry."
+With Weaver you can even live-check your actual, generated telemetry against your registry.
+
+It starts an OTLP listener and validates that the telemetry your app produces conforms to what you've defined. 
 :::
 
 ## {.center}
@@ -336,7 +346,9 @@ The registry as contract
 :::
 
 ::: {.notes}
-Consistent, validated, automated telemetry. This is what makes the agent work — the registry is the contract that the agent reads, follows, and extends.
+With Weaver, your telemetry can be consistent, validated, and automated.
+
+This is at the core of what makes the agent work. The registry is the contract that the agent reads, follows, and extends.
 :::
 
 ## {.center data-transition="slide"}
@@ -356,7 +368,7 @@ Here's what you need to get started.
 :::
 
 ::: {.notes}
-Install OpenTelemetry Weaver — you just learned about this.
+Install Weaver
 :::
 
 ## {.center}
@@ -382,7 +394,7 @@ Create a Weaver registry — a place where you define your telemetry conventions
 :::
 
 ::: {.notes}
-You need an Anthropic API key — this is an AI agent under the hood.
+You need an Anthropic API key. Cause the AI has gotsta get paid
 :::
 
 ## {.center}
@@ -398,7 +410,10 @@ You need an Anthropic API key — this is an AI agent under the hood.
 :::
 
 ::: {.notes}
-An init file that initializes the OpenTelemetry SDK — the SDK is the implementation layer that actually collects and exports your telemetry data. The init file also registers instrumentations, which are plugins that automatically patch framework libraries to create spans. For example, a LangChain instrumentation patches every model.invoke() call to produce a span with token counts. spiny-orb init auto-detects common file names like src/instrumentation.js.
+An init file that initializes the OpenTelemetry SDK. There are instructions for how to do this in the OpenTelemetry documentation.
+
+
+(Note to self: the SDK is the implementation layer that actually collects and exports your telemetry data. The init file also registers instrumentations, which are plugins that automatically patch framework libraries to create spans. For example, a LangChain instrumentation patches every model.invoke() call to produce a span with token counts. spiny-orb init auto-detects common file names like src/instrumentation.js.)
 :::
 
 ## {.center}
@@ -416,7 +431,11 @@ An init file that initializes the OpenTelemetry SDK — the SDK is the implement
 :::
 
 ::: {.notes}
-The OpenTelemetry API as a peer dependency in your project. The API is a lightweight no-op contract — your code calls it, and if an SDK is configured, telemetry flows. If not, the calls do nothing. Zero overhead.
+You also need the OpenTelemetry API as a peer dependency in your project.
+
+The API is a lightweight no-op contract — your code calls it, and if an SDK is configured, telemetry flows. If not, the calls do nothing. Zero overhead.
+
+Then you run the magic command...
 :::
 
 ## {.center data-transition="slide"}
@@ -486,7 +505,9 @@ And then it updates your Weaver registry so those new conventions are available 
 :::
 
 ::: {.notes}
-It's designed to be auto-instrumentation first — when it finds a framework call that has an auto-instrumentation library available, it recommends the library instead of adding manual spans.
+The agent is also designed to be auto-instrumentation first. When it finds a framework call that has an auto-instrumentation library available, it recommends the library instead of adding manual spans.
+
+When you run `spiny-orb instrument` you get...
 :::
 
 ## {.center data-transition="slide"}
@@ -496,7 +517,7 @@ It's designed to be auto-instrumentation first — when it finds a framework cal
 :::
 
 ::: {.notes}
-When you run spiny-orb instrument, you get a new branch in your repo containing your instrumented files.
+... a new branch in your repo containing your instrumented files.
 :::
 
 ## {.center}
@@ -504,7 +525,7 @@ When you run spiny-orb instrument, you get a new branch in your repo containing 
 ::: {.big-text .spaced}
 [New branch with instrumented files]{.rainbow-5}
 
-[Companion files — what and why]{.rainbow-1}
+[Companion files]{.rainbow-1}
 :::
 
 ::: {.notes}
@@ -538,7 +559,17 @@ If your Weaver registry was extended with new conventions, you get the updated c
 :::
 
 ::: {.notes}
-You also get an overview file meant to be your pull request text. It includes per-file status with span counts and cost per file, a span category breakdown, schema changes, review attention items and advisory findings, agent reasoning notes, recommended refactors, recommended auto-instrumentation libraries, and a full cost breakdown showing the ceiling estimate versus actual spend.
+You also get an overview file meant to be your pull request text.
+
+It includes (deep breath):
+-per-file status with span counts and cost per file
+-a span category breakdown
+-schema changes
+-review attention items and advisory findings
+-agent reasoning notes
+-recommended refactors
+-recommended auto-instrumentation libraries
+-a full cost breakdown showing the ceiling estimate versus actual spend
 :::
 
 ## {.center data-transition="slide"}
@@ -596,11 +627,11 @@ You have clear reasoning from the agent for why it chose to instrument how it di
 
 [Clear reasoning for every decision]{.rainbow-3}
 
-[Cost transparency — ceiling $67.86, actual $3.97]{.rainbow-4}
+[Cost transparency]{.rainbow-4}
 :::
 
 ::: {.notes}
-Before the run starts, you get a cost ceiling — the worst case if every file needed every possible retry. For my 29-file codebase, the ceiling was $67.86 and the actual cost was $3.97.
+Before the run starts, you get a cost ceiling — the worst case if every file needed every possible retry. For my 30-file codebase, on one of the runs, the ceiling was $67.86 and the actual cost was $3.97.
 :::
 
 <!--- SECTION 3: HOW IT WORKS --->
@@ -612,7 +643,7 @@ How it works
 :::
 
 ::: {.notes}
-The instrumentation process can take a while. For my codebase, it took about 30 minutes, and it cost about $4.
+Let's talk about how it works under the hood.
 :::
 
 ## {.center}
@@ -866,4 +897,14 @@ Instrumentation Score
 
 ::: {.notes}
 A quick shout-out to the Instrumentation Score — a community-driven project that scores live telemetry data. My evaluation framework is modeled on it. I borrowed their binary pass/fail rules, their rule ID syntax, their impact levels, and their scoring model. The Instrumentation Score evaluates runtime OTLP telemetry — my rubric evaluates the static instrumented code. If you don't know that project, I recommend you check it out.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+Let's look at the code
+:::
+
+::: {.notes}
+The instrumentation process takes about 30-40 minutes. I ran it against Commit Story. Let me show you what it produced.
 :::
