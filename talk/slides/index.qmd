@@ -5,12 +5,614 @@ author: "Whitney Lee"
 format: revealjs
 ---
 
-## {background-color="#00897B"}
+## Whitney Lee {.center}
 
-::: {.r-fit-text}
-Placeholder slides — see `talk/demo-flow.md` for the talk structure
+Senior Technical Advocate, Datadog
+
+[whitneylee.com](https://whitneylee.com/)
+
+## Commit Story {.center data-transition="slide"}
+
+An automated engineering journal
+
+::: {.notes}
+About six months ago, I did some keynote talks here in Europe. Those talks were centered around an application I made with Claude Code called Commit Story — an automated engineering journal.
+:::
+
+## Commit Story {.center}
+
+::: {.big-text}
+Every commit → a journal entry
 :::
 
 ::: {.notes}
-Slides will be built section by section following the demo flow.
+Every time you make a commit, you get an engineering journal entry.
+:::
+
+## Commit Story {.center}
+
+::: {.big-text}
+Every commit → a journal entry
+
+Rolled up into summaries
+:::
+
+::: {.notes}
+Those get rolled up into summaries. It's helpful for reflecting on your work, for check-ins, for self-progress reports.
+:::
+
+## Commit Story {.center}
+
+::: {.big-text}
+Every commit → a journal entry
+
+Rolled up into summaries
+
+**Workers who reflect perform 23% better** (Harvard Business School)
+:::
+
+::: {.notes}
+A Harvard Business School study found that workers who spent 15 minutes a day reflecting instead of working performed 23% better.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+I tried to instrument my code
+:::
+
+::: {.notes}
+As a systems person turned app developer, I tried to instrument my code. I learned firsthand what a pain in the ass it is, and then I tried to automate that with a skill in Claude Code.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+It worked, but...
+:::
+
+::: {.notes}
+It worked as an experiment and I stand by it. But...
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Ad hoc telemetry standards]{.rainbow-1}
+:::
+
+::: {.notes}
+Honestly, looking back at that codebase, I made it all into a bit of a mess. Ad hoc telemetry standards...
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Ad hoc telemetry standards]{.rainbow-1}
+
+[No enforcement mechanism]{.rainbow-2}
+:::
+
+::: {.notes}
+...with no enforcement mechanism.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Ad hoc telemetry standards]{.rainbow-1}
+
+[No enforcement mechanism]{.rainbow-2}
+
+[Instrumenting every little thing]{.rainbow-3}
+:::
+
+::: {.notes}
+I was instrumenting every little thing, which isn't best practice.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Ad hoc telemetry standards]{.rainbow-1}
+
+[No enforcement mechanism]{.rainbow-2}
+
+[Instrumenting every little thing]{.rainbow-3}
+
+[Everything was manual spans]{.rainbow-4}
+:::
+
+::: {.notes}
+I didn't yet understand auto-instrumentation libraries. Everything was manual spans.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.big-text}
+The OpenTelemetry community has probably provided an auto-instrumentation library for your framework
+:::
+
+::: {.notes}
+There are lots of auto-instrumentation libraries. When you're using any framework with any substantial number of users, the methods built into that framework can probably be instrumented with an auto-instrumentation library.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+Business logic remains uninstrumented.
+:::
+
+::: {.notes}
+The thing that has eluded us is getting the application-specific code instrumented.
+:::
+
+## {.center}
+
+::: {.big-text}
+Business logic remains uninstrumented.
+
+Business logic — the code that makes your company yours
+:::
+
+::: {.notes}
+The actual business logic that differentiates your company from other companies — that code remains uninstrumented.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.big-text}
+Operations people get a lot of value from instrumented code — but we need developers to do it
+:::
+
+::: {.notes}
+The value prop for systems people is huge. That's why we're motivated to make it easy for developers to instrument their code, and instrument it well.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Understand what's happening inside your business logic]{.rainbow-5}
+:::
+
+::: {.notes}
+Platform engineers, SREs, operators — we would all greatly benefit from having code-level telemetry data.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Understand what's happening inside your business logic]{.rainbow-5}
+
+[Go from alert to root cause in minutes, not hours]{.rainbow-1}
+:::
+
+::: {.notes}
+It helps you troubleshoot problems. One study found a 40% reduction in mean time to recovery with proper instrumentation.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Understand what's happening inside your business logic]{.rainbow-5}
+
+[Go from alert to root cause in minutes, not hours]{.rainbow-1}
+
+[Prove your platform is making a difference — code quality, user experience, development time]{.rainbow-6}
+:::
+
+::: {.notes}
+As a platform engineer, you can prove that the capabilities you're providing to developers are actually making a difference. 41% of platform teams can't demonstrate measurable value in year one — because they can't measure what they can't see.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+How can GenAI be used to reliably instrument code well?
+:::
+
+::: {.notes}
+Reliably instrumenting code is a problem the industry's been working on since the early days of distributed tracing. I started to become interested in how GenAI specifically can be used to solve it.
+:::
+
+## {background-color="#00897B" data-transition="slide"}
+
+[Spinybacked Orbweaver]{style="font-size: 2.5em; font-weight: bold; color: #fff;"}
+
+::: {.notes}
+Let me introduce you to Spinybacked Orbweaver.
+:::
+
+## {background-color="#00897B"}
+
+[Spinybacked Orbweaver]{style="font-size: 2.5em; font-weight: bold; color: #fff;"}
+
+An AI agent that automatically instruments code with OpenTelemetry
+
+::: {.notes}
+An AI agent that automatically instruments code with OpenTelemetry.
+:::
+
+<!--- SECTION 2: USER EXPERIENCE --->
+
+## {.center data-transition="slide"}
+
+::: {.big-text .spaced}
+The user experience
+:::
+
+::: {.notes}
+First, I'm going to walk you through the user experience at a high level.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+The user experience
+
+How it works
+:::
+
+::: {.notes}
+Then I'm going to talk about how it works.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+The user experience
+
+How it works
+
+The deliverables
+:::
+
+::: {.notes}
+And then we're going to dig in and actually look at the deliverables, what the software actually gives to the user.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.big-text}
+JavaScript only (for now)
+:::
+
+::: {.notes}
+I built this project to specifically instrument my JavaScript app, the automated engineering journal I told you about earlier. Right now it can only instrument JavaScript.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+OpenTelemetry Weaver
+:::
+
+::: {.notes}
+Before I get into the prerequisites, I want to make sure you know about OpenTelemetry Weaver. It has a CLI and an experimental MCP server. I chose to use the CLI for my project.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+:::
+
+::: {.notes}
+With Weaver, you can create a registry where you define your signals, attributes, and groups. You can import existing conventions like the OTel semantic conventions — standardized naming rules for common telemetry concepts — and define your own on top.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+
+[Validate them]{.rainbow-2}
+:::
+
+::: {.notes}
+You can validate your registry for correctness and consistency — naming conventions, attribute types, stability rules.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+
+[Validate them]{.rainbow-2}
+
+[Evolve them — import registries as dependencies across teams]{.rainbow-3}
+:::
+
+::: {.notes}
+And you can evolve them over time. Teams can share conventions by importing each other's registries as dependencies. This is exactly one of the problems I ran into when I was instrumenting Commit Story — inconsistent conventions with no way to share or enforce them.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+
+[Validate them]{.rainbow-2}
+
+[Evolve them — import registries as dependencies across teams]{.rainbow-3}
+
+[Live-check your telemetry against your registry]{.rainbow-4}
+:::
+
+::: {.notes}
+You can even live-check your actual telemetry against your registry — it starts an OTLP listener and validates that the telemetry your app produces conforms to what you've defined. It was presented at KubeCon 2025 as "unit testing for your telemetry."
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+The registry as contract
+:::
+
+::: {.notes}
+Consistent, validated, automated telemetry. This is what makes the agent work — the registry is the contract that the agent reads, follows, and extends.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+Prerequisites
+:::
+
+::: {.notes}
+Here's what you need to get started.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Install Weaver]{.rainbow-1}
+:::
+
+::: {.notes}
+Install OpenTelemetry Weaver — you just learned about this.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Install Weaver]{.rainbow-1}
+
+[Create a Weaver registry]{.rainbow-2}
+:::
+
+::: {.notes}
+Create a Weaver registry — a place where you define your telemetry conventions.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Install Weaver]{.rainbow-1}
+
+[Create a Weaver registry]{.rainbow-2}
+
+[Anthropic API key]{.rainbow-3}
+:::
+
+::: {.notes}
+You need an Anthropic API key — this is an AI agent under the hood.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Install Weaver]{.rainbow-1}
+
+[Create a Weaver registry]{.rainbow-2}
+
+[Anthropic API key]{.rainbow-3}
+
+[OTel SDK init file]{.rainbow-4}
+:::
+
+::: {.notes}
+An init file that initializes the OpenTelemetry SDK — the SDK is the implementation layer that actually collects and exports your telemetry data. The init file also registers instrumentations, which are plugins that automatically patch framework libraries to create spans. For example, a LangChain instrumentation patches every model.invoke() call to produce a span with token counts. spiny-orb init auto-detects common file names like src/instrumentation.js.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Install Weaver]{.rainbow-1}
+
+[Create a Weaver registry]{.rainbow-2}
+
+[Anthropic API key]{.rainbow-3}
+
+[OTel SDK init file]{.rainbow-4}
+
+[`@opentelemetry/api` as a peerDependency]{.rainbow-5}
+:::
+
+::: {.notes}
+The OpenTelemetry API as a peer dependency in your project. The API is a lightweight no-op contract — your code calls it, and if an SDK is configured, telemetry flows. If not, the calls do nothing. Zero overhead.
+:::
+
+## {.center data-transition="slide"}
+
+`spiny-orb instrument src/`{style="font-size: 1.8em;"}
+
+::: {.notes}
+OK, so you're a JavaScript developer, you have your prerequisites done. All you do next is run spiny-orb instrument and point it at your target directory or file.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+And that's it! It instruments your code!
+:::
+
+::: {.notes}
+That's it. Bing bing boom. It instruments your code.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.big-text .spaced}
+[Uses your conventions]{.rainbow-1}
+:::
+
+::: {.notes}
+It will use the conventions you've defined in your Weaver registry.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Uses your conventions]{.rainbow-1}
+
+[Invents reasonable ones when missing]{.rainbow-2}
+:::
+
+::: {.notes}
+When it hits something that doesn't have a convention, it makes up something reasonable for that trace.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Uses your conventions]{.rainbow-1}
+
+[Invents reasonable ones when missing]{.rainbow-2}
+
+[Updates your registry]{.rainbow-3}
+:::
+
+::: {.notes}
+And then it updates your Weaver registry so those new conventions are available to every file that comes after.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Uses your conventions]{.rainbow-1}
+
+[Invents reasonable ones when missing]{.rainbow-2}
+
+[Updates your registry]{.rainbow-3}
+
+[Recommends auto-instrumentation libraries]{.rainbow-4}
+:::
+
+::: {.notes}
+It's designed to be auto-instrumentation first — when it finds a framework call that has an auto-instrumentation library available, it recommends the library instead of adding manual spans.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.big-text .spaced}
+[New branch with instrumented files]{.rainbow-5}
+:::
+
+::: {.notes}
+When you run spiny-orb instrument, you get a new branch in your repo containing your instrumented files.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[New branch with instrumented files]{.rainbow-5}
+
+[Companion files — what and why]{.rainbow-1}
+:::
+
+::: {.notes}
+Each instrumented file has a companion file that explains what was instrumented and why.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[New branch with instrumented files]{.rainbow-5}
+
+[Companion files — what and why]{.rainbow-1}
+
+[Extended Weaver registry]{.rainbow-2}
+:::
+
+::: {.notes}
+If your Weaver registry was extended with new conventions, you get the updated copy.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[New branch with instrumented files]{.rainbow-5}
+
+[Companion files — what and why]{.rainbow-1}
+
+[Extended Weaver registry]{.rainbow-2}
+
+[PR-ready overview]{.rainbow-3}
+:::
+
+::: {.notes}
+You also get an overview file meant to be your pull request text. It includes per-file status with span counts and cost per file, a span category breakdown, schema changes, review attention items and advisory findings, agent reasoning notes, recommended refactors, recommended auto-instrumentation libraries, and a full cost breakdown showing the ceiling estimate versus actual spend.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+Peace of mind
+:::
+
+::: {.notes}
+Here's what the agent promises you.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Changes require your approval]{.rainbow-1}
+:::
+
+::: {.notes}
+Everything happens on a branch. You review each file before accepting the instrumentation.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Changes require your approval]{.rainbow-1}
+
+[Business logic is never modified]{.rainbow-2}
+:::
+
+::: {.notes}
+Your business logic is never modified. The agent adds instrumentation around your code, not inside it.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Changes require your approval]{.rainbow-1}
+
+[Business logic is never modified]{.rainbow-2}
+
+[Clear reasoning for every decision]{.rainbow-3}
+:::
+
+::: {.notes}
+You have clear reasoning from the agent for why it chose to instrument how it did — in the companion files and the overview.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Changes require your approval]{.rainbow-1}
+
+[Business logic is never modified]{.rainbow-2}
+
+[Clear reasoning for every decision]{.rainbow-3}
+
+[Cost transparency — ceiling $67.86, actual $3.97]{.rainbow-4}
+:::
+
+::: {.notes}
+Before the run starts, you get a cost ceiling — the worst case if every file needed every possible retry. For my 29-file codebase, the ceiling was $67.86 and the actual cost was $3.97.
 :::
