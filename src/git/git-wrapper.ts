@@ -61,6 +61,25 @@ export async function hasStagedChanges(dir: string): Promise<boolean> {
 }
 
 /**
+ * Commit the PR summary file on the instrument branch.
+ * Stages the file and creates a dedicated commit so the summary
+ * survives push failures and travels with the branch.
+ *
+ * @param dir - The git repository directory.
+ * @param summaryPath - Absolute path to the PR summary file.
+ */
+export async function commitPrSummary(dir: string, summaryPath: string): Promise<void> {
+  const git = simpleGit(dir);
+  // Convert to repo-relative path for portable git pathspec handling
+  const { relative } = await import('node:path');
+  const relPath = relative(dir, summaryPath).split('\\').join('/');
+  await git.add(relPath);
+  const status = await git.status();
+  if (status.staged.length === 0) return;
+  await git.commit('docs: add PR summary to instrument branch');
+}
+
+/**
  * Get the commit log for the current branch.
  * @param dir - The git repository directory.
  * @param options - Optional log options.
