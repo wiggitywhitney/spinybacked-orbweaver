@@ -616,3 +616,268 @@ You have clear reasoning from the agent for why it chose to instrument how it di
 ::: {.notes}
 Before the run starts, you get a cost ceiling — the worst case if every file needed every possible retry. For my 29-file codebase, the ceiling was $67.86 and the actual cost was $3.97.
 :::
+
+<!--- SECTION 3: HOW IT WORKS --->
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+How it works
+:::
+
+::: {.notes}
+The instrumentation process can take a while. For my codebase, it took about 30 minutes, and it cost about $4.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+The orchestrator
+:::
+
+::: {.notes}
+Spinybacked Orbweaver has an orchestrator. That orchestrator coordinates the whole run.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+```
+
+::: {.notes}
+The orchestrator loads the resolved schema and loads the file that's going to be instrumented.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh Agent"]
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+```
+
+::: {.notes}
+It sends that plus instructions to a brand new agent. Those instructions include rules about what makes good instrumentation — inspired by community best practices.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh Agent"]
+  A -->|"instruments"| V["Validator"]
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+  style V fill:#e8f5f3,stroke:#FF9800,stroke-width:2px
+```
+
+::: {.notes}
+The agent instruments the code, and there's a validator that checks the output.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh Agent"]
+  A -->|"instruments"| V["Validator"]
+  V -->|"feedback"| A
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+  style V fill:#e8f5f3,stroke:#FF9800,stroke-width:2px
+```
+
+::: {.notes}
+If it fails, the agent gets a chance to try again — it's told what exactly failed. If it fails a second time, it gets a fresh, whole new agent with the same instructions plus advice about how not to fail in those specific ways. If the whole-file approach fails after all retries, it falls back to instrumenting function by function.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh Agent"]
+  A -->|"instruments"| V["Validator"]
+  V -->|"feedback"| A
+  V -->|"passes"| R["Results"]
+  R -->|"code + notes + schema"| O
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+  style V fill:#e8f5f3,stroke:#FF9800,stroke-width:2px
+  style R fill:none,stroke:#4CAF50
+```
+
+::: {.notes}
+Once the agent instruments the code in a way that passes the validator, the results go back to the orchestrator — the instrumented code, the notes, schema extensions, and any recommended auto-instrumentation libraries. The orchestrator saves them, creates the companion file, and updates the Weaver registry so the next file gets the updated schema.
+:::
+
+## {.center}
+
+::: {.big-text}
+Files are instrumented one at a time — the schema evolves
+:::
+
+::: {.notes}
+That's why all these files cannot be instrumented in parallel. We're building one source of truth that they're all working from. If one agent makes up a convention for my journal summary functions, we want every agent that comes after to use that exact same convention.
+:::
+
+## {.center}
+
+::: {.big-text}
+Every 5 files: Weaver check + test suite
+:::
+
+::: {.notes}
+Every five files there's a checkpoint. It runs Weaver's validation on the registry and makes sure all the tests in the codebase still pass — from a "we didn't break any code" perspective. Non-destructiveness is also validated on every single file.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.r-fit-text}
+Validation
+:::
+
+::: {.notes}
+Let's talk a little more about this validation step.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Non-destructiveness]{.rainbow-1}
+:::
+
+::: {.notes}
+We want to make sure all of our instrumented code is not destructive — it doesn't hurt the original code that's there.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Non-destructiveness]{.rainbow-1}
+
+[API-only dependency]{.rainbow-2}
+:::
+
+::: {.notes}
+We want to make sure our instrumented code only depends on OpenTelemetry API imports and nothing more. We don't want to add any heavy dependencies.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Non-destructiveness]{.rainbow-1}
+
+[API-only dependency]{.rainbow-2}
+
+[Coverage]{.rainbow-3}
+:::
+
+::: {.notes}
+We want to make sure we have good coverage — that we're instrumenting all the important functions.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Non-destructiveness]{.rainbow-1}
+
+[API-only dependency]{.rainbow-2}
+
+[Coverage]{.rainbow-3}
+
+[Restraint]{.rainbow-4}
+:::
+
+::: {.notes}
+And on the flip side, we want to show restraint — we're not instrumenting silly little helpers. Coverage and restraint are two sides of the same coin.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Non-destructiveness]{.rainbow-1}
+
+[API-only dependency]{.rainbow-2}
+
+[Coverage]{.rainbow-3}
+
+[Restraint]{.rainbow-4}
+
+[Schema fidelity]{.rainbow-5}
+:::
+
+::: {.notes}
+We have rules around schema fidelity to make sure we're honoring the Weaver registry and extending it in smart ways.
+:::
+
+## {.center}
+
+::: {.big-text .spaced}
+[Non-destructiveness]{.rainbow-1}
+
+[API-only dependency]{.rainbow-2}
+
+[Coverage]{.rainbow-3}
+
+[Restraint]{.rainbow-4}
+
+[Schema fidelity]{.rainbow-5}
+
+[Code quality]{.rainbow-6}
+:::
+
+[rules-reference](https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md){style="font-size: 0.6em;"}
+
+::: {.notes}
+And code quality — things like if we open a span, we close the span. Consistent tracer naming. The quality of the instrumentation syntax.
+:::
+
+## {.center}
+
+::: {.big-text}
+Some rules are gating. Some are advisory.
+:::
+
+::: {.notes}
+Some of these rules are gating — if it fails, the instrumentation fails after all retries. Some are non-gating — they're suggested as fixes during the retry loop, but if they're not fixed, the file will still pass. In the reports, the agent often cites these rules in its reasoning.
+:::
+
+## {.center data-transition="slide"}
+
+::: {.big-text}
+Instrumentation Score
+:::
+
+[github.com/instrumentation-score/spec](https://github.com/instrumentation-score/spec){style="font-size: 0.7em;"}
+
+::: {.notes}
+A quick shout-out to the Instrumentation Score — a community-driven project that scores live telemetry data. My evaluation framework is modeled on it. I borrowed their binary pass/fail rules, their rule ID syntax, their impact levels, and their scoring model. The Instrumentation Score evaluates runtime OTLP telemetry — my rubric evaluates the static instrumented code. If you don't know that project, I recommend you check it out.
+:::
