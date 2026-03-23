@@ -202,7 +202,43 @@ function renderSchemaChanges(runResult: RunResult): string {
     lines.push('No schema changes detected.');
   }
 
+  // Supplement with span extension listing from committed files.
+  // The weaver registry diff may not include individual span entries prominently,
+  // so we list them explicitly from the FileResult schema extensions.
+  const spanExtensions = collectSpanExtensionIds(runResult);
+  if (spanExtensions.length > 0) {
+    lines.push('');
+    lines.push(`### Span Extensions (${spanExtensions.length})`);
+    lines.push('');
+    for (const spanId of spanExtensions) {
+      lines.push(`- \`${spanId}\``);
+    }
+  }
+
   return lines.join('\n');
+}
+
+/**
+ * Collect deduplicated span extension IDs from committed file results.
+ * Span extensions have IDs starting with "span." or type "span".
+ */
+function collectSpanExtensionIds(runResult: RunResult): string[] {
+  const seen = new Set<string>();
+  for (const file of runResult.fileResults) {
+    if (file.status !== 'success' && file.status !== 'partial') continue;
+    for (const ext of file.schemaExtensions) {
+      // Parse the YAML-like extension string for id and type
+      const idMatch = ext.match(/id:\s*(\S+)/);
+      const typeMatch = ext.match(/type:\s*(\S+)/);
+      if (!idMatch) continue;
+      const id = idMatch[1];
+      const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
+      if (isSpan && !seen.has(id)) {
+        seen.add(id);
+      }
+    }
+  }
+  return [...seen].sort();
 }
 
 /**

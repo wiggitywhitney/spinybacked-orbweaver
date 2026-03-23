@@ -325,6 +325,40 @@ describe('renderPrSummary', () => {
 
       expect(md).toMatch(/no schema changes/i);
     });
+
+    it('lists span extensions from committed files', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added Attributes\n- `http.method`',
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: [
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: span.myapp.process_order\ntype: span',
+              'id: myapp.request.method\ntype: string',
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('Span Extensions');
+      expect(md).toContain('span.myapp.fetch_data');
+      expect(md).toContain('span.myapp.process_order');
+    });
+
+    it('does not show span extensions section when no spans are present', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added Attributes\n- `http.method`',
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: ['id: myapp.request.method\ntype: string'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('Span Extensions');
+    });
   });
 
   describe('review sensitivity annotations', () => {
