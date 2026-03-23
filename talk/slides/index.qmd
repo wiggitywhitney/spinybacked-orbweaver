@@ -653,7 +653,7 @@ The orchestrator
 :::
 
 ::: {.notes}
-Spinybacked Orbweaver has an orchestrator. That orchestrator coordinates the whole run.
+Spinybacked Orbweaver has a deterministic orchestrator. That orchestrator coordinates the whole run.
 :::
 
 ## {.center}
@@ -758,7 +758,7 @@ Once the agent instruments the code in a way that passes the validator, the resu
 ## {.center}
 
 ::: {.big-text}
-Files are instrumented one at a time — the schema evolves
+Files are instrumented one at a time. The schema evolves!
 :::
 
 ::: {.notes}
@@ -772,7 +772,7 @@ Every 5 files: Weaver check + test suite
 :::
 
 ::: {.notes}
-Every five files there's a checkpoint. It runs Weaver's validation on the registry and makes sure all the tests in the codebase still pass — from a "we didn't break any code" perspective. Non-destructiveness is also validated on every single file.
+Every five files there's a checkpoint. Weaver checks that the telemetry the code generates conforms to the registry. And the full test suite runs to make sure nothing regressed.
 :::
 
 ## {.center data-transition="slide"}
