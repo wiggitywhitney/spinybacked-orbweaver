@@ -537,7 +537,7 @@ Each instrumented file has a companion file that explains what was instrumented 
 ::: {.big-text .spaced}
 [New branch with instrumented files]{.rainbow-5}
 
-[Companion files — what and why]{.rainbow-1}
+[Companion files]{.rainbow-1}
 
 [Extended Weaver registry]{.rainbow-2}
 :::
@@ -551,7 +551,7 @@ If your Weaver registry was extended with new conventions, you get the updated c
 ::: {.big-text .spaced}
 [New branch with instrumented files]{.rainbow-5}
 
-[Companion files — what and why]{.rainbow-1}
+[Companion files]{.rainbow-1}
 
 [Extended Weaver registry]{.rainbow-2}
 
@@ -643,7 +643,7 @@ How it works
 :::
 
 ::: {.notes}
-Let's talk about how it works under the hood.
+Let's talk about how it works.
 :::
 
 ## {.center}
