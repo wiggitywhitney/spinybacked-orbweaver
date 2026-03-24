@@ -782,7 +782,7 @@ Validation
 :::
 
 ::: {.notes}
-Let's talk a little more about this validation step.
+Let's talk a little more about this validation step. This is almost entirely deterministic — no AI involved. 23 of 27 rule checks are pure code analysis: AST parsing, diff comparison, registry lookups. Only 3 rules optionally use an LLM judge for semantic edge cases, and they fall back to script-only mode if the judge isn't available.
 
 We want to make sure all of our instrumented code is...
 :::
@@ -889,6 +889,8 @@ Some rules are gating. Some are advisory.
 Some of these rules are gating — if it fails, the instrumentation fails after all retries.
 
 Some are non-gating — they're suggested as fixes during the retry loop, but if they're not fixed, the file will still pass.
+
+Rule enforcement is almost completely deterministic. The AI does the creative work — deciding what to instrument. The quality gate is deterministic code checks.
 
 In the reports, the agent often cites these rules in its reasoning.
 :::
