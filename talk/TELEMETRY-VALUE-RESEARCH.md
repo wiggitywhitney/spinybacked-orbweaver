@@ -55,7 +55,8 @@ Three categories of value, with citable evidence for each.
 - "40% MTTR reduction with proper instrumentation" (widely cited)
 
 ### Prove value
-- "41% of platform teams can't demonstrate value in year one — because they can't measure what they can't see"
+- "41% of platform teams can't demonstrate value in year one" (2025 State of Platform Engineering Report)
+- Nearly 30% of platform teams don't measure success at all — you can't prove value if you can't see what's happening
 - "SLOs like '99% of checkouts complete in 2 seconds' — that's how you prove your platform works"
 
 ---

@@ -48,7 +48,7 @@ The source is **"Learning by Thinking: How Reflection Aids Performance"** by Gia
 - "But none of this gives us insight into the business logic, which is an important piece of the puzzle."
 - "The parts of our business that are unique to our business alone need to be handled manually."
 
-**Industry consensus in 2026:** The hybrid approach (auto + manual) is the recommended pattern. 48.5% of organizations are using OpenTelemetry. Auto-instrumentation provides baseline coverage; manual instrumentation fills the business logic gap.
+**Industry consensus in 2026:** The hybrid approach (auto + manual) is the recommended pattern. Auto-instrumentation provides baseline coverage; manual instrumentation fills the business logic gap.
 
 ### Sources
 - [OpenTelemetry — Instrumentation Concepts](https://opentelemetry.io/docs/concepts/instrumentation/)

@@ -128,7 +128,6 @@
 | MTTR reduction with observability | ~40% | Multiple sources (Splunk, Armovera) |
 | Platform teams can't demo value in Y1 | 41% | 2025 State of Platform Engineering Report |
 | Platform teams don't measure at all | 30% | Same report |
-| OTel adoption | ~48.5% | ByteIota (unverified primary source) |
 | Orbweaver cost (29 files) | $3.97 actual / $67.86 ceiling | commit-story-v2 PR summary |
 | Orbweaver run time (29 files) | ~30 minutes | commit-story-v2 runs |
 | Validation rules | 32 total (28 automated + 3 prompt + 1 run-level) | Codebase |

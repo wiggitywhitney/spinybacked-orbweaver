@@ -314,7 +314,7 @@ Weaver provides an automated way to check naming conventions, attribute types, a
 
 [Validate them]{.rainbow-2}
 
-[Evolve them — import registries as dependencies across teams]{.rainbow-3}
+[Evolve them — import registries as dependencies]{.rainbow-3}
 :::
 
 ::: {.notes}
@@ -328,7 +328,7 @@ And you can evolve them over time. Teams can share conventions by importing each
 
 [Validate them]{.rainbow-2}
 
-[Evolve them — import registries as dependencies across teams]{.rainbow-3}
+[Evolve them — import registries as dependencies]{.rainbow-3}
 
 [Live-check your telemetry against your registry]{.rainbow-4}
 :::
@@ -782,7 +782,7 @@ Validation
 :::
 
 ::: {.notes}
-Let's talk a little more about this validation step. This is almost entirely deterministic — no AI involved. 23 of 27 rule checks are pure code analysis: AST parsing, diff comparison, registry lookups. Only 3 rules optionally use an LLM judge for semantic edge cases, and they fall back to script-only mode if the judge isn't available.
+Let's talk a little more about this validation step. This is almost entirely deterministic — no AI involved. 24 of 27 rule checks are pure code analysis: AST parsing, diff comparison, registry lookups. Only 3 rules optionally use an LLM judge for semantic edge cases, and they fall back to script-only mode if the judge isn't available.
 
 We want to make sure all of our instrumented code is...
 :::
