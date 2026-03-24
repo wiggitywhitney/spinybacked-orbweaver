@@ -5,6 +5,15 @@ journal/
 *.local
 .commit-story/
 .vals.yaml
-.claude/CLAUDE.md
-.claude/design-decisions.md
 evaluation-output/
+
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.lock
+.claude/skills/
+
+# Talk prep (internal notes, not public-facing)
+talk/FACT-CHECK.md
+talk/SECTION*-FACT-CHECK.md
+talk/TELEMETRY-VALUE-RESEARCH.md
+talk/SPEAKER-NOTES.md
+talk/DEMO-WALKTHROUGH.md
