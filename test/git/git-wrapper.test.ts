@@ -225,6 +225,9 @@ describe('git-wrapper', () => {
     });
   });
 
+  // Tests that hit real github.com need longer timeouts for slow/unstable connections
+  const NETWORK_TEST_TIMEOUT = 30_000;
+
   describe('pushBranch with GITHUB_TOKEN', () => {
     let bareDir: string;
 
@@ -341,7 +344,7 @@ describe('git-wrapper', () => {
     // This test hits real github.com — the assertion on error text depends on
     // GitHub's response wording. If it breaks, update the regex to match the
     // new wording while still confirming credentials were sent.
-    it('attempts token-authenticated URL for HTTPS remotes', async () => {
+    it('attempts token-authenticated URL for HTTPS remotes', { timeout: NETWORK_TEST_TIMEOUT }, async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
         process.env.GITHUB_TOKEN = 'ghp_test_token_for_unit_test';
@@ -419,7 +422,7 @@ describe('git-wrapper', () => {
       }
     });
 
-    it('does not throw GITHUB_TOKEN error for SSH remotes', async () => {
+    it('does not throw GITHUB_TOKEN error for SSH remotes', { timeout: NETWORK_TEST_TIMEOUT }, async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
         delete process.env.GITHUB_TOKEN;
@@ -439,7 +442,7 @@ describe('git-wrapper', () => {
       }
     });
 
-    it('validates with token-authenticated URL when GITHUB_TOKEN is set for HTTPS GitHub', async () => {
+    it('validates with token-authenticated URL when GITHUB_TOKEN is set for HTTPS GitHub', { timeout: NETWORK_TEST_TIMEOUT }, async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       try {
         process.env.GITHUB_TOKEN = 'ghp_test_token_for_credential_validation';
