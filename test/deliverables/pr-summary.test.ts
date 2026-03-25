@@ -414,6 +414,29 @@ describe('renderPrSummary', () => {
       expect(md).toContain('Span Extensions');
       expect(md).toContain('myapp.custom_operation');
     });
+
+    it('lists bare string span extensions (produced by supplementSchemaExtensions)', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added',
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: [
+              'span.myapp.cli.main',
+              'span.myapp.context.gather',
+              'myapp.request.method',
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('Span Extensions');
+      expect(md).toContain('span.myapp.cli.main');
+      expect(md).toContain('span.myapp.context.gather');
+      // Non-span bare string should not appear in the Span Extensions section
+      const spanSection = md.split('### Span Extensions')[1]?.split('##')[0] ?? '';
+      expect(spanSection).not.toContain('myapp.request.method');
+    });
   });
 
   describe('review sensitivity annotations', () => {

@@ -29,23 +29,29 @@ import {
 export async function validateRegistryCheck(
   registryDir: string,
 ): Promise<{ passed: boolean; error?: string }> {
-  return new Promise((resolve) => {
-    execFile(
-      'weaver',
-      ['registry', 'check', '-r', registryDir],
-      { timeout: 30000 },
-      (error, stdout, stderr) => {
-        if (error) {
-          const stdoutStr = stdout?.trim() ?? '';
-          const stderrStr = stderr?.trim() ?? '';
-          const cliOutput = [stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message;
-          resolve({ passed: false, error: cliOutput });
-          return;
-        }
-        resolve({ passed: true });
-      },
-    );
-  });
+  const attempt = (): Promise<{ passed: boolean; error?: string }> =>
+    new Promise((resolve) => {
+      execFile(
+        'weaver',
+        ['registry', 'check', '-r', registryDir],
+        { timeout: 30000 },
+        (error, stdout, stderr) => {
+          if (error) {
+            const stdoutStr = stdout?.trim() ?? '';
+            const stderrStr = stderr?.trim() ?? '';
+            const cliOutput = [stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message;
+            resolve({ passed: false, error: cliOutput });
+            return;
+          }
+          resolve({ passed: true });
+        },
+      );
+    });
+
+  const first = await attempt();
+  if (first.passed) return first;
+  // Retry once — Weaver CLI can fail transiently on large accumulated registries
+  return attempt();
 }
 
 /**

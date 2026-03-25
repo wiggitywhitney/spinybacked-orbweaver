@@ -227,14 +227,24 @@ function collectSpanExtensionIds(runResult: RunResult): string[] {
   for (const file of runResult.fileResults) {
     if (file.status !== 'success' && file.status !== 'partial') continue;
     for (const ext of file.schemaExtensions) {
-      // Parse the YAML-like extension string for id and type
+      // Extensions come in two formats:
+      // 1. YAML-like: "id: span.myapp.op\ntype: span"
+      // 2. Bare string: "span.myapp.op" (from supplementSchemaExtensions)
       const idMatch = ext.match(/id:\s*(\S+)/);
       const typeMatch = ext.match(/type:\s*(\S+)/);
-      if (!idMatch) continue;
-      const id = idMatch[1];
-      const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
-      if (isSpan && !seen.has(id)) {
-        seen.add(id);
+
+      if (idMatch) {
+        const id = idMatch[1];
+        const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
+        if (isSpan && !seen.has(id)) {
+          seen.add(id);
+        }
+      } else {
+        // Bare string — check if it's a span extension directly
+        const trimmed = ext.trim();
+        if (trimmed.startsWith('span.') && !seen.has(trimmed)) {
+          seen.add(trimmed);
+        }
       }
     }
   }
