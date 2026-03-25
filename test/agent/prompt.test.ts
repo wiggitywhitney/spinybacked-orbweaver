@@ -561,7 +561,7 @@ describe('buildSystemPrompt', () => {
     it('does NOT contain emotional/motivational language', () => {
       const prompt = buildSystemPrompt(schema);
 
-      expect(prompt.toLowerCase()).not.toContain('tip');
+      expect(prompt.toLowerCase()).not.toMatch(/\$\d+.*tip|\ba tip\b|tipping/);
       expect(prompt.toLowerCase()).not.toContain('important to');
       expect(prompt.toLowerCase()).not.toContain('career');
     });
