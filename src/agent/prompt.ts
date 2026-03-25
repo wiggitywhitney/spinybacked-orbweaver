@@ -55,7 +55,16 @@ export function buildSystemPrompt(resolvedSchema: object, projectName?: string):
 - The \`instrumentedCode\` field must contain the complete file — not a diff, not a partial file. Files containing placeholder comments (\`// ...\`, \`// existing code\`, \`// rest of function\`, \`/* ... */\`) will be rejected by validation.
 - Do not add comments explaining the instrumentation. The code speaks for itself.
 - Do not add, modify, or duplicate JSDoc comments. Preserve existing JSDoc exactly as-is. If a function has a JSDoc block, keep it unchanged — do not regenerate or rewrite it.
-- Do not add null/undefined checks around \`span.setAttribute()\` calls. Pass attribute values directly — the OpenTelemetry API handles null and undefined safely. Adding guards is a non-instrumentation change that will be rejected.
+- Do not add null/undefined checks around \`span.setAttribute()\` calls for values that are always defined. However, when accessing optional properties with \`?.\` (optional chaining), the result may be \`undefined\` — guard these with an \`if\` check before \`setAttribute\`:
+  \`\`\`javascript
+  // WRONG — entries?.length may be undefined
+  span.setAttribute('result.count', entries?.length);
+
+  // CORRECT — guard optional values
+  if (entries !== undefined) {
+    span.setAttribute('result.count', entries.length);
+  }
+  \`\`\`
 - **Return-value capture is allowed.** When you need to call \`setAttribute\` on a return value, you may extract the expression to a \`const\`:
   \`\`\`javascript
   // Original: return computeResult();
@@ -231,7 +240,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
 - **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`.
-- **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields (\`email\`, \`password\`, \`ssn\`), or undefined values.
+- **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields (\`email\`, \`password\`, \`ssn\`), or undefined values. Watch for optional chaining (\`?.\`) in \`setAttribute\` value arguments — these can produce \`undefined\`. Guard with an \`if\` check.
 - **CDQ-008**: Use the same tracer naming convention across all files. Do NOT vary the pattern.
 
 ## Auto-Instrumentation Library Allowlist
