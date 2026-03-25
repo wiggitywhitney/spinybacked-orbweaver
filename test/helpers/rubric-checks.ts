@@ -407,6 +407,12 @@ export function checkAttributeSafety(code: string): RubricCheckResult {
     }
   }
 
+  // Check for optional chaining in setAttribute value arguments
+  const optionalChainRegex = /\.setAttribute\s*\([^,]+,\s*[^)]*\?\./g;
+  if (optionalChainRegex.test(code)) {
+    issues.push('setAttribute uses optional chaining (?.) — value may be undefined');
+  }
+
   if (issues.length === 0) {
     return { passed: true };
   }

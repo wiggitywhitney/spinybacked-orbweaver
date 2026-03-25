@@ -341,6 +341,21 @@ span.setAttribute('db.row_count', result.rows.length);`;
     const result = checkAttributeSafety('function foo() { return 1; }');
     expect(result.passed).toBe(true);
   });
+
+  it('fails with optional chaining in setAttribute value', () => {
+    const code = `span.setAttribute('result.count', entries?.length);`;
+    const result = checkAttributeSafety(code);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('optional chaining');
+  });
+
+  it('passes with guarded optional chaining before setAttribute', () => {
+    const code = `if (entries !== undefined) {
+  span.setAttribute('result.count', entries.length);
+}`;
+    const result = checkAttributeSafety(code);
+    expect(result.passed).toBe(true);
+  });
 });
 
 describe('NDS-005b: checkNds005bNotViolated', () => {
