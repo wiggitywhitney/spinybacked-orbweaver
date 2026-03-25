@@ -175,6 +175,16 @@ export async function writeSchemaExtensions(
       attr.type = 'int';
     }
 
+    // Correct boolean attribute types: names containing is_, has_, should_, or
+    // ending with .force indicate boolean semantics. The schema accumulator
+    // defaults these to string, but they should be boolean.
+    if (!isSpan && attr.type === 'string') {
+      const lastSegment = id.split('.').pop() ?? '';
+      if (/^(is|has|should)_/.test(lastSegment) || lastSegment === 'force') {
+        attr.type = 'boolean';
+      }
+    }
+
     if (isSpan) {
       validSpans.push(attr);
     } else {

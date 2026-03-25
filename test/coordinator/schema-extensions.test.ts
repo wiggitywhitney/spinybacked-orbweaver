@@ -427,6 +427,51 @@ describe('writeSchemaExtensions', () => {
     const attr = parsed.groups[0].attributes[0];
     expect(attr.type).toBe('string');
   });
+
+  it('corrects boolean attributes from type: string to type: boolean', async () => {
+    const extensions = [
+      '- id: myapp.commit.is_merge\n  type: string\n  stability: development\n  brief: Whether commit is a merge',
+      '- id: myapp.summarize.force\n  type: string\n  stability: development\n  brief: Force override flag',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string; type: string }> }> };
+    const isMerge = parsed.groups[0].attributes.find((a) => a.id === 'myapp.commit.is_merge');
+    const force = parsed.groups[0].attributes.find((a) => a.id === 'myapp.summarize.force');
+    expect(isMerge?.type).toBe('boolean');
+    expect(force?.type).toBe('boolean');
+  });
+
+  it('corrects has_ and should_ prefixed attributes to type: boolean', async () => {
+    const extensions = [
+      '- id: myapp.request.has_auth\n  type: string\n  stability: development\n  brief: Whether request has auth',
+      '- id: myapp.request.should_retry\n  type: string\n  stability: development\n  brief: Whether to retry',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string; type: string }> }> };
+    const hasAuth = parsed.groups[0].attributes.find((a) => a.id === 'myapp.request.has_auth');
+    const shouldRetry = parsed.groups[0].attributes.find((a) => a.id === 'myapp.request.should_retry');
+    expect(hasAuth?.type).toBe('boolean');
+    expect(shouldRetry?.type).toBe('boolean');
+  });
+
+  it('does not change boolean attributes that already have type: boolean', async () => {
+    const extensions = [
+      '- id: myapp.commit.is_merge\n  type: boolean\n  stability: development\n  brief: Whether commit is a merge',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string; type: string }> }> };
+    const attr = parsed.groups[0].attributes[0];
+    expect(attr.type).toBe('boolean');
+  });
 });
 
 describe('snapshotExtensionsFile', () => {
