@@ -274,7 +274,7 @@ describe('git-wrapper', () => {
       }
     });
 
-    it('logs path=token-swap when GITHUB_TOKEN is set and URL is HTTPS', async () => {
+    it('logs path=token-swap when GITHUB_TOKEN is set and URL is HTTPS', { timeout: NETWORK_TEST_TIMEOUT }, async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       const stderrChunks: string[] = [];
       const originalWrite = process.stderr.write.bind(process.stderr);
