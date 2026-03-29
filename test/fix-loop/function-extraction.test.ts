@@ -347,7 +347,8 @@ export { summaryNode, technicalNode };
       const context = summaryFn.buildContext(sourceFile);
 
       // The LLM must know this function is exported so it doesn't apply RST-004
-      expect(context).toContain('exported');
+      expect(summaryFn.isExported).toBe(true);
+      expect(context).toContain('// This function is exported (via re-export block)');
     });
   });
 

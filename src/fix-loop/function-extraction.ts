@@ -103,9 +103,9 @@ export function extractExportedFunctions(
 
   // Process variable-assigned arrow/function expressions
   for (const varStatement of sourceFile.getVariableStatements()) {
-    const varDeclName = varStatement.getDeclarations()[0]?.getName();
-    const isReExported = varDeclName ? reExportedNames.has(varDeclName) : false;
-    if (!includeNonExported && !varStatement.isExported() && !isReExported) continue;
+    // Check re-export status per declaration (not just first) for multi-declarator statements
+    const anyDeclReExported = varStatement.getDeclarations().some(d => reExportedNames.has(d.getName()));
+    if (!includeNonExported && !varStatement.isExported() && !anyDeclReExported) continue;
 
     for (const decl of varStatement.getDeclarations()) {
       const initializer = decl.getInitializer();
@@ -140,7 +140,8 @@ export function extractExportedFunctions(
         ? varJsDocs[0].getStartLineNumber()
         : varStatement.getStartLineNumber();
 
-      const varIsExported = varStatement.isExported() || isReExported;
+      const declIsReExported = reExportedNames.has(decl.getName());
+      const varIsExported = varStatement.isExported() || declIsReExported;
       results.push(buildExtractedFunction(
         decl.getName(),
         funcNode.isAsync(),
