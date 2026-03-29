@@ -21,6 +21,8 @@ export interface ExtractedFunction {
   name: string;
   /** Whether the function is async. */
   isAsync: boolean;
+  /** Whether the function is exported (directly or via re-export block). */
+  isExported: boolean;
   /** Full source text of the function (including export keyword and JSDoc). */
   sourceText: string;
   /** JSDoc comment text, if present. */
@@ -86,9 +88,11 @@ export function extractExportedFunctions(
       ? jsDocs[0].getStartLineNumber()
       : fn.getStartLineNumber();
 
+    const fnIsExported = fn.isExported() || (fnName != null && reExportedNames.has(fnName));
     results.push(buildExtractedFunction(
       fn.getName() ?? '<anonymous>',
       fn.isAsync(),
+      fnIsExported,
       fullText,
       jsDoc,
       referenced,
@@ -99,9 +103,9 @@ export function extractExportedFunctions(
 
   // Process variable-assigned arrow/function expressions
   for (const varStatement of sourceFile.getVariableStatements()) {
-    const varDeclName = varStatement.getDeclarations()[0]?.getName();
-    const isReExported = varDeclName ? reExportedNames.has(varDeclName) : false;
-    if (!includeNonExported && !varStatement.isExported() && !isReExported) continue;
+    // Check re-export status per declaration (not just first) for multi-declarator statements
+    const anyDeclReExported = varStatement.getDeclarations().some(d => reExportedNames.has(d.getName()));
+    if (!includeNonExported && !varStatement.isExported() && !anyDeclReExported) continue;
 
     for (const decl of varStatement.getDeclarations()) {
       const initializer = decl.getInitializer();
@@ -136,9 +140,12 @@ export function extractExportedFunctions(
         ? varJsDocs[0].getStartLineNumber()
         : varStatement.getStartLineNumber();
 
+      const declIsReExported = reExportedNames.has(decl.getName());
+      const varIsExported = varStatement.isExported() || declIsReExported;
       results.push(buildExtractedFunction(
         decl.getName(),
         funcNode.isAsync(),
+        varIsExported,
         fullText,
         jsDoc,
         referenced,
@@ -154,6 +161,7 @@ export function extractExportedFunctions(
 function buildExtractedFunction(
   name: string,
   isAsync: boolean,
+  isExported: boolean,
   sourceText: string,
   jsDoc: string | null,
   referenced: { constants: string[]; imports: string[] },
@@ -163,6 +171,7 @@ function buildExtractedFunction(
   return {
     name,
     isAsync,
+    isExported,
     sourceText,
     jsDoc,
     referencedConstants: referenced.constants,
@@ -188,6 +197,13 @@ function buildExtractedFunction(
           if (constText) sections.push(constText);
         }
         sections.push('');
+      }
+
+      // Tell the LLM this function is exported so it applies COV rules, not RST-004.
+      // Without this, re-exported functions (export { name }) appear unexported in
+      // the isolated context and the LLM skips them.
+      if (isExported && !sourceText.startsWith('export ')) {
+        sections.push(`// This function is exported (via re-export block)`);
       }
 
       // Add JSDoc if present

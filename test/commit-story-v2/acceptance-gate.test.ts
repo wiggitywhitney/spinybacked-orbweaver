@@ -167,7 +167,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
 
   // Run-5 PARTIAL (1 span): fallback only covered exported function, skipped 3 internal nodes
   // Run-4: 4 spans (exported function + 3 internal node functions)
-  // Run-10/CI: 3 spans — function-level fallback sometimes misses one sibling node
+  // Root cause of flakiness: buildContext didn't include re-export info, so LLM applied RST-004
   describe('journal-graph.js — LangGraph pipeline; 1 exported + 3 internal nodes', () => {
     it('instruments exported function and internal nodes', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/generators/journal-graph.js');
@@ -176,7 +176,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       dumpDiagnostics('journal-graph.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(3);
+      expect(result.spansAdded).toBeGreaterThanOrEqual(4);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       expect(result.schemaExtensions.length).toBeGreaterThan(0);

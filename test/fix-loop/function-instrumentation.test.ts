@@ -107,6 +107,7 @@ function makeExtractedFunction(name: string, overrides?: Partial<ExtractedFuncti
   return {
     name,
     isAsync: true,
+    isExported: true,
     sourceText,
     jsDoc: null,
     referencedConstants: [],
