@@ -13,6 +13,7 @@ import type { ExtractedFunction } from '../../src/fix-loop/function-extraction.t
 function makeExtractedFunction(overrides: Partial<ExtractedFunction> & { name: string; startLine: number; endLine: number; sourceText: string }): ExtractedFunction {
   return {
     isAsync: false,
+    isExported: true,
     jsDoc: null,
     referencedConstants: [],
     referencedImports: [],

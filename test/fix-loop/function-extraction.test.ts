@@ -318,6 +318,37 @@ export { reExported };
       expect(names).toContain('reExported');
       expect(result.length).toBe(2);
     });
+
+    it('buildContext includes export annotation for re-exported functions', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('reexport-context.js', `
+import { ChatAnthropic } from '@langchain/anthropic';
+
+async function summaryNode(state) {
+  const model = new ChatAnthropic();
+  const result = await model.invoke(state);
+  return { summary: result.content };
+}
+
+async function technicalNode(state) {
+  const model = new ChatAnthropic();
+  const result = await model.invoke(state);
+  return { technical: result.content };
+}
+
+export { summaryNode, technicalNode };
+      `);
+      const result = extractExportedFunctions(sourceFile, { includeNonExported: true });
+
+      const summaryFn = result.find(f => f.name === 'summaryNode')!;
+      const context = summaryFn.buildContext(sourceFile);
+
+      // The LLM must know this function is exported so it doesn't apply RST-004
+      expect(context).toContain('exported');
+    });
   });
 
   describe('edge cases', () => {
