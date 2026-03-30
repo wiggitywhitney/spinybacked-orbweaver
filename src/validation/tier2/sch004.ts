@@ -142,8 +142,8 @@ export async function checkNoRedundantSchemaEntries(
           continue;
         }
 
-        if (!result.verdict.answer) {
-          // Judge says this IS a semantic duplicate
+        if (!result.verdict.answer && result.verdict.confidence >= 0.7) {
+          // Judge says this IS a semantic duplicate (with sufficient confidence)
           const suggestion = result.verdict.suggestion ?? 'Use the matching registry key.';
           judgeResults.push({
             ruleId: 'SCH-004',

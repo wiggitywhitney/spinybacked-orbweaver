@@ -296,6 +296,87 @@ describe('SCH-004 judge integration', () => {
     });
   });
 
+  describe('low-confidence judge verdicts ignored', () => {
+    it('does not flag a key when judge confidence is below threshold', async () => {
+      const client = makeMockClient({
+        verdict: {
+          answer: false, // Judge says duplicate, but with low confidence
+          suggestion: 'Use "gen_ai.request.max_tokens" instead of "summarize.force".',
+          confidence: 0.4,
+        },
+        tokenUsage: judgeTokenUsage,
+      });
+
+      // summarize.force is a boolean flag — completely unrelated to gen_ai.request.max_tokens
+      const codeWithCrossDomainKey = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      span.setAttribute("summarize.force", true);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkNoRedundantSchemaEntries(
+        codeWithCrossDomainKey,
+        filePath,
+        resolvedSchema,
+        { client: client as any },
+      );
+
+      // Low-confidence hallucination should be discarded
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags when judge confidence meets the threshold', async () => {
+      const client = makeMockClient({
+        verdict: {
+          answer: false,
+          suggestion: 'Use "http.request.duration" instead of "request.latency".',
+          confidence: 0.8,
+        },
+        tokenUsage: judgeTokenUsage,
+      });
+
+      const { results } = await checkNoRedundantSchemaEntries(
+        codeWithSemanticDuplicate,
+        filePath,
+        resolvedSchema,
+        { client: client as any },
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags when judge confidence is exactly at the threshold boundary', async () => {
+      const client = makeMockClient({
+        verdict: {
+          answer: false,
+          suggestion: 'Use "http.request.duration" instead of "request.latency".',
+          confidence: 0.7,
+        },
+        tokenUsage: judgeTokenUsage,
+      });
+
+      const { results } = await checkNoRedundantSchemaEntries(
+        codeWithSemanticDuplicate,
+        filePath,
+        resolvedSchema,
+        { client: client as any },
+      );
+
+      // Confidence 0.7 meets the >= 0.7 threshold — should flag
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('backward compatibility', () => {
     it('existing script-only results are unchanged when no client provided', async () => {
       // Keys that have high Jaccard similarity — these should still be flagged

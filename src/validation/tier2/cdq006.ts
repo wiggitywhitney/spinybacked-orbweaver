@@ -141,11 +141,11 @@ const TRIVIAL_CALL_PATTERNS = [
   /^String$/,
   /^Number$/,
   /^Boolean$/,
+  /^get\w*String$/, // Simple string-returning getters (getDateString, getTimeString, etc.)
 ];
 
 const TRIVIAL_METHOD_PATTERNS = [
-  /\.toISOString$/,
-  /\.toString$/,
+  /\.to(?:\w*String|JSON|Fixed|Precision)$/, // Date/Number conversion methods
   /\.valueOf$/,
 ];
 
