@@ -582,6 +582,35 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('known limitations', () => {
+    it('guard wrapping business logic is not detected (accepted trade-off)', () => {
+      // This documents a known limitation: if the agent wrapped existing business
+      // logic in a defined-value guard (not instrumentation), NDS-003 would not
+      // catch it because the if-line matches the guard pattern. In practice this
+      // doesn't happen — the agent only generates guards around span.setAttribute().
+      const original = [
+        'function processMessage(messages) {',
+        '  doWork(messages);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function processMessage(messages) {',
+        '  if (messages !== undefined) {',
+        '    doWork(messages);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      // This PASSES (not detected) — the guard pattern matches the if-line,
+      // and the standalone } is also filtered. This is the same trade-off as
+      // standalone } filtering for try/catch/finally wrapping.
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty original', () => {
       const results = checkNonInstrumentationDiff('', 'const x = 1;\n', filePath);
