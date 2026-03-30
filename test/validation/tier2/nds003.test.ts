@@ -451,6 +451,116 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures.length).toBeGreaterThan(0);
     });
 
+    it('allows defined-value guard block around setAttribute', () => {
+      const original = [
+        'function processMessage(messages) {',
+        '  doWork(messages);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'function processMessage(messages) {',
+        '  return tracer.startActiveSpan("processMessage", (span) => {',
+        '    try {',
+        '      if (messages !== undefined) {',
+        '        span.setAttribute("messages_count", messages.length);',
+        '      }',
+        '      doWork(messages);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows defined-value guard with != null (loose null check)', () => {
+      const original = [
+        'function getCount(data) {',
+        '  return data.length;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function getCount(data) {',
+        '  return tracer.startActiveSpan("getCount", (span) => {',
+        '    try {',
+        '      if (data != null) {',
+        '        span.setAttribute("data.size", data.length);',
+        '      }',
+        '      return data.length;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows typeof guard for setAttribute', () => {
+      const original = [
+        'function process(input) {',
+        '  transform(input);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function process(input) {',
+        '  return tracer.startActiveSpan("process", (span) => {',
+        '    try {',
+        '      if (typeof input !== "undefined") {',
+        '        span.setAttribute("input.type", typeof input);',
+        '      }',
+        '      transform(input);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows defined-value guard on nested property access', () => {
+      const original = [
+        'function summarize(result) {',
+        '  return result.summary;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function summarize(result) {',
+        '  return tracer.startActiveSpan("summarize", (span) => {',
+        '    try {',
+        '      if (result.usage !== undefined) {',
+        '        span.setAttribute("gen_ai.usage.input_tokens", result.usage.inputTokens);',
+        '      }',
+        '      return result.summary;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
     it('still catches genuine business logic additions', () => {
       const original = [
         'function doWork() {',
