@@ -353,6 +353,28 @@ describe('SCH-004 judge integration', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('flags when judge confidence is exactly at the threshold boundary', async () => {
+      const client = makeMockClient({
+        verdict: {
+          answer: false,
+          suggestion: 'Use "http.request.duration" instead of "request.latency".',
+          confidence: 0.7,
+        },
+        tokenUsage: judgeTokenUsage,
+      });
+
+      const { results } = await checkNoRedundantSchemaEntries(
+        codeWithSemanticDuplicate,
+        filePath,
+        resolvedSchema,
+        { client: client as any },
+      );
+
+      // Confidence 0.7 meets the >= 0.7 threshold — should flag
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('backward compatibility', () => {
