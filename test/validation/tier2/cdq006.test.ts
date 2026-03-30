@@ -208,6 +208,62 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('does not flag .toLocaleDateString() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("created_date", date.toLocaleDateString());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag .toJSON() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("timestamp", date.toJSON());',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag getDateString() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("date_label", getDateString(entry.createdAt));',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag .toFixed() as expensive', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("price_display", amount.toFixed(2));',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('still flags expensive calls nested inside trivial wrappers', () => {
       const code = [
         'tracer.startActiveSpan("work", (span) => {',
