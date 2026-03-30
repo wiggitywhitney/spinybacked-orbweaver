@@ -31,6 +31,13 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   /^\s*\}\s*$/,                 // standalone closing brace
   /^\s*\);?\s*$/,               // standalone closing paren with optional semicolon
   /^\s*\}\);?\s*$/,             // standalone closing brace+paren (end of callback)
+  // Defined-value guards wrapping setAttribute calls (CDQ-007 compliance).
+  // Matches: if (x !== undefined) {, if (x != null) {, if (typeof x !== 'undefined') {
+  // Trade-off: this also filters guards wrapping business logic, which is a known
+  // limitation. The agent only generates these guards around span.setAttribute() calls,
+  // so false negatives from guard-wrapped business logic don't arise in practice.
+  // The same trade-off exists for standalone `}` (line 31) — accepted since v1.
+  /^\s*if\s*\(\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*\)\s*\{?\s*$/,
   // Re-throw of caught exception (after recording exception on span)
   /^\s*throw\s+(?:err|error|e|ex|exception)\s*;/,
   // Return with span wrapper

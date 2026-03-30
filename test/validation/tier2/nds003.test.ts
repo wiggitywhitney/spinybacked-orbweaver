@@ -451,6 +451,116 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures.length).toBeGreaterThan(0);
     });
 
+    it('allows defined-value guard block around setAttribute', () => {
+      const original = [
+        'function processMessage(messages) {',
+        '  doWork(messages);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'function processMessage(messages) {',
+        '  return tracer.startActiveSpan("processMessage", (span) => {',
+        '    try {',
+        '      if (messages !== undefined) {',
+        '        span.setAttribute("messages_count", messages.length);',
+        '      }',
+        '      doWork(messages);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows defined-value guard with != null (loose null check)', () => {
+      const original = [
+        'function getCount(data) {',
+        '  return data.length;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function getCount(data) {',
+        '  return tracer.startActiveSpan("getCount", (span) => {',
+        '    try {',
+        '      if (data != null) {',
+        '        span.setAttribute("data.size", data.length);',
+        '      }',
+        '      return data.length;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows typeof guard for setAttribute', () => {
+      const original = [
+        'function process(input) {',
+        '  transform(input);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function process(input) {',
+        '  return tracer.startActiveSpan("process", (span) => {',
+        '    try {',
+        '      if (typeof input !== "undefined") {',
+        '        span.setAttribute("input.type", typeof input);',
+        '      }',
+        '      transform(input);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows defined-value guard on nested property access', () => {
+      const original = [
+        'function summarize(result) {',
+        '  return result.summary;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function summarize(result) {',
+        '  return tracer.startActiveSpan("summarize", (span) => {',
+        '    try {',
+        '      if (result.usage !== undefined) {',
+        '        span.setAttribute("gen_ai.usage.input_tokens", result.usage.inputTokens);',
+        '      }',
+        '      return result.summary;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
     it('still catches genuine business logic additions', () => {
       const original = [
         'function doWork() {',
@@ -469,6 +579,35 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       const failures = results.filter((r) => !r.passed);
       expect(failures.length).toBeGreaterThan(0);
       expect(failures[0].message).toContain('console.log');
+    });
+  });
+
+  describe('known limitations', () => {
+    it('guard wrapping business logic is not detected (accepted trade-off)', () => {
+      // This documents a known limitation: if the agent wrapped existing business
+      // logic in a defined-value guard (not instrumentation), NDS-003 would not
+      // catch it because the if-line matches the guard pattern. In practice this
+      // doesn't happen — the agent only generates guards around span.setAttribute().
+      const original = [
+        'function processMessage(messages) {',
+        '  doWork(messages);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function processMessage(messages) {',
+        '  if (messages !== undefined) {',
+        '    doWork(messages);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      // This PASSES (not detected) — the guard pattern matches the if-line,
+      // and the standalone } is also filtered. This is the same trade-off as
+      // standalone } filtering for try/catch/finally wrapping.
+      expect(failures).toHaveLength(0);
     });
   });
 
