@@ -145,7 +145,7 @@ All three interfaces share the same `spiny-orb.yaml` configuration and produce t
 - **`gh` CLI** — for automatic PR creation. If `gh auth login` credentials aren't available to subprocesses, set `GITHUB_TOKEN` in your `.env` file. Without gh auth, the agent still creates the feature branch and commits. Use `--no-pr` to suppress the warning.
 - **An existing test suite** — if `testCommand` is configured in `spiny-orb.yaml`, the agent runs it as an end-of-run validation gate. If not configured, it skips the check with a note in the results.
 
-> **Note:** The spiny-orb CLI itself requires Node.js >= 24 (native type stripping, `fs.glob`). Your target project can use any Node.js version.
+> **Node.js version:** spiny-orb requires Node.js >= 24 ([nodejs.org](https://nodejs.org/)). If you run it on an older version, it exits immediately with a clear message rather than crashing. Your *target project* (the code you're instrumenting) can use any Node.js version.
 
 ## Project Setup
 
@@ -209,14 +209,35 @@ Create an `spiny-orb.yaml` file first if you don't have one — see [Project Set
 
 ### Installation
 
+**Global install** — installs the `spiny-orb` command permanently:
+
 ```bash
-git clone https://github.com/wiggitywhitney/spinybacked-orbweaver.git
-cd spinybacked-orbweaver
-npm install
-npm link
+npm install --global spiny-orb
 ```
 
-After linking, the `spiny-orb` command is available globally.
+**Zero-install trial** — runs without installing, always fetches the latest version:
+
+```bash
+npx spiny-orb@latest --help
+```
+
+> **Why `@latest`?** Running `npx spiny-orb` (without `@latest`) serves a cached version from npx's local cache. The `@latest` tag forces npx to fetch the newest version from the registry on every invocation, so you always get current behavior and bug fixes.
+
+**Requirements**: Node.js >= 24 ([nodejs.org](https://nodejs.org/)). If you run spiny-orb on an older Node version, it exits immediately with a clear message:
+
+```text
+spiny-orb requires Node.js >= 24. You are running v22.x.x.
+```
+
+**Upgrading** — if you installed globally:
+
+```bash
+npm update --global spiny-orb
+```
+
+If you use `npx`, running `npx spiny-orb@latest` always fetches the newest version — no explicit upgrade step needed.
+
+After installing, the `spiny-orb` command is available globally.
 
 ### Instrument
 
@@ -351,8 +372,8 @@ Add to your project's `.mcp.json` (or your MCP client's global configuration):
 {
   "mcpServers": {
     "spiny-orb": {
-      "command": "node",
-      "args": ["/path/to/spinybacked-orbweaver/src/interfaces/mcp.ts"],
+      "command": "npx",
+      "args": ["spiny-orb@latest", "mcp"],
       "env": {
         "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}"
       }
@@ -502,6 +523,10 @@ Run complete: 1 succeeded, 0 failed, 0 skipped
 Dry-run mode runs the full analysis pipeline (LLM calls, validation, schema extensions) but reverts all file changes afterward. It skips branch creation, commits, PR creation, dependency installation, and end-of-run live-check. The schema diff is captured before reverting, so the summary shows what schema changes would have been made.
 
 Dry-run still costs tokens — the agent analyzes every file with real LLM calls. Use `get-cost-ceiling` (MCP) or the cost ceiling prompt (CLI, without `--yes`) to understand the cost before running.
+
+## Language Provider API
+
+Support for languages beyond JavaScript will be added via language provider packages that implement the `LanguageProvider` interface. Providers declare `spiny-orb` as a peer dependency and import their interface types from `"spiny-orb/plugin"`. This architecture is planned for a future release.
 
 ## License
 

@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- (2026-04-05) npm packaging preparation — build pipeline, package.json publication fields, Node version guard, OIDC publish workflow (PRD #358, M1-M4). Fixed `prepare` script fs bug; moved build to `prepublishOnly` with `npm test` gate. Added `exports` field with `./plugin` subpath for future language provider architecture; created `src/languages/plugin-api.ts` stub. Added Node >=24 runtime version check to `bin/spiny-orb.js`. Created `.github/workflows/publish.yml` using OIDC trusted publishing (Classic Tokens deprecated Dec 2025). Version bumped to 1.0.0.
+- (2026-04-05) npm packaging preparation — build pipeline, package.json publication fields, Node version guard, OIDC publish workflow, README (PRD #358, M1-M5). Fixed `prepare` script fs bug; moved build to `prepublishOnly` with `npm test` gate. Added `exports` field with `./plugin` subpath for future language provider architecture; created `src/languages/plugin-api.ts` stub. Added Node >=24 runtime version check to `bin/spiny-orb.js`. Created `.github/workflows/publish.yml` using OIDC trusted publishing (Classic Tokens deprecated Dec 2025). Version bumped to 1.0.0.
+
+  **HUMAN ACTION REQUIRED before first release**: Configure a trusted publisher on npmjs.com for the `spiny-orb` package. Go to `npmjs.com/package/spiny-orb/access` → "Publishing access" → "Add a trusted publisher". Link to repository `wiggitywhitney/spinybacked-orbweaver` and workflow file `publish.yml`. This cannot be scripted — must be done by a human with npm account access before creating the first GitHub release (`v1.0.0`).
 
 - (2026-04-05) Fixed pre-existing test failures: git commit tests failing due to `dd-gitsign` SSH agent requirement in temporary repos (added `commit.gpgsign=false` to all `initTestRepo()` helpers); weaver integration tests failing with `ENOENT` when PATH stripped under `vals exec` (added `test/global-setup.ts` vitest globalSetup that patches `~/.cargo/bin` into PATH).
 

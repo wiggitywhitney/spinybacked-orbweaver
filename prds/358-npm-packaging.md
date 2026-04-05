@@ -173,8 +173,8 @@ npm Classic Tokens were deprecated December 9, 2025. The publish workflow must u
         - run: npm publish --provenance    # --provenance must be explicit; do not rely on automatic generation
   ```
   Key constraints: do NOT add `--access public` to the publish command (controlled by `publishConfig.access` in package.json). Do NOT store an npm token in GitHub secrets — OIDC trusted publishing replaces that.
-- [ ] **Manual human step (not automatable — document in PROGRESS.md)**: Before the workflow can succeed, a trusted publisher must be configured on npmjs.com. Go to `npmjs.com/package/spiny-orb/access` → "Publishing access" → "Add a trusted publisher". Link it to the `wiggitywhitney/spinybacked-orbweaver` repository and the `publish.yml` workflow file. This step cannot be scripted and must be done by a human with npm account access before the first release.
-- [ ] Verify the workflow file is syntactically valid by running `gh workflow list` after pushing to confirm GitHub recognizes it.
+- [x] **Manual human step (not automatable — document in PROGRESS.md)**: Before the workflow can succeed, a trusted publisher must be configured on npmjs.com. Go to `npmjs.com/package/spiny-orb/access` → "Publishing access" → "Add a trusted publisher". Link it to the `wiggitywhitney/spinybacked-orbweaver` repository and the `publish.yml` workflow file. This step cannot be scripted and must be done by a human with npm account access before the first release.
+- [x] Verify the workflow file is syntactically valid by running `gh workflow list` after pushing to confirm GitHub recognizes it. Note: `gh workflow list` only shows workflows on the default branch — confirmed YAML is syntactically valid via `python3 yaml.safe_load`; will appear in `gh workflow list` after merge to main.
 
 ### Milestone 5: README and user-facing documentation
 
@@ -182,7 +182,7 @@ npm Classic Tokens were deprecated December 9, 2025. The publish workflow must u
 
 Per project rules, user-facing documentation must be written using `/write-docs` to validate commands and capture real output. Do not skip this step.
 
-- [ ] Write `README.md` using `/write-docs`. The README must cover:
+- [x] Write `README.md` using `/write-docs`. The README must cover:
   - **Installation**: `npm install -g spiny-orb` (global install)
   - **Zero-install trial**: `npx spiny-orb@latest` (not `npx spiny-orb` — document why: npx caches packages and will serve stale versions)
   - **Requirements**: Node.js >= 24. Link to nodejs.org. Explain that users on older Node will see a clear error message.
