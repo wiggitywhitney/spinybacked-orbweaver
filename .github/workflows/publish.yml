@@ -1,0 +1,21 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Required for OIDC trusted publishing
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install -g npm@latest   # Ensure npm >= 11.5.1
+      - run: npm ci
+      - run: npm publish --provenance    # --provenance must be explicit; do not rely on automatic generation

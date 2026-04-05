@@ -1,10 +1,20 @@
 {
   "name": "spiny-orb",
-  "version": "0.1.0",
-  "description": "AI-powered telemetry instrumentation agent for JavaScript applications",
+  "version": "1.0.0",
+  "description": "AI-powered OpenTelemetry instrumentation agent for JavaScript applications",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/interfaces/cli.js",
+      "types": "./dist/interfaces/cli.d.ts"
+    },
+    "./plugin": {
+      "import": "./dist/languages/plugin-api.js",
+      "types": "./dist/languages/plugin-api.d.ts"
+    }
   },
   "bin": {
     "spiny-orb": "bin/spiny-orb.js"
@@ -13,8 +23,11 @@
     "dist/",
     "bin/"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "prepare": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm test && node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "lint": "tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run",

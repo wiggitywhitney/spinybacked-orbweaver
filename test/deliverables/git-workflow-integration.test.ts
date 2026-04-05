@@ -25,6 +25,7 @@ async function initTestRepo(): Promise<string> {
   await git.init();
   await git.addConfig('user.email', 'test@example.com');
   await git.addConfig('user.name', 'Test');
+  await git.addConfig('commit.gpgsign', 'false');
   // Create initial files
   await writeFile(join(dir, 'README.md'), '# Test\n');
   await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'test', version: '1.0.0' }, null, 2));

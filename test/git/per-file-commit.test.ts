@@ -18,6 +18,7 @@ async function initTestRepo(): Promise<string> {
   await git.init();
   await git.addConfig('user.email', 'test@example.com');
   await git.addConfig('user.name', 'Test');
+  await git.addConfig('commit.gpgsign', 'false');
   const readmePath = join(dir, 'README.md');
   await writeFile(readmePath, '# Test Repo\n');
   await git.add('README.md');

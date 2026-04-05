@@ -1,6 +1,6 @@
 # PRD #358: npm Packaging and Distribution
 
-**Status**: Not Started  
+**Status**: In Progress  
 **Priority**: High  
 **GitHub Issue**: [#358](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/358)
 
@@ -63,17 +63,17 @@ These decisions were made during the packaging research phase and must not be re
 
 **Before starting**: Read `docs/research/packaging.md` and `/Users/whitney.lee/Documents/Journal/spiny-orb-multi-language-expansion.md` to understand the full context.
 
-- [ ] Fix the broken `prepare` script — `fs.rmSync(...)` references `fs` without `require('fs')`. `fs` is not a Node.js global. The current script silently fails to clean `dist/` before building. Correct fix: `node -e "require('fs').rmSync('dist',{recursive:true,force:true})"` (node `-e` runs as CJS even in ESM projects, so `require` is available).
-- [ ] Move the build from `prepare` to `prepublishOnly`. `prepare` runs on every `npm install`; `prepublishOnly` only runs before `npm publish`. Since `typescript` is a devDependency, `prepare` would fail for downstream users who `npm install` the package from the registry.
-- [ ] Add tests to the pre-publish gate: `prepublishOnly` should run `npm test` before building. Final `prepublishOnly` should be: `"npm test && node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json"`.
-- [ ] After updating the scripts, run `npm run prepublishOnly` manually (or invoke the commands directly) and confirm `dist/` is populated. Specifically confirm `dist/interfaces/cli.js` and `dist/interfaces/cli.d.ts` exist — these are the files `bin/spiny-orb.js` imports.
-- [ ] Run `node bin/spiny-orb.js --help` (with `dist/` populated) to confirm the bin entry point executes without errors.
+- [x] Fix the broken `prepare` script — `fs.rmSync(...)` references `fs` without `require('fs')`. `fs` is not a Node.js global. The current script silently fails to clean `dist/` before building. Correct fix: `node -e "require('fs').rmSync('dist',{recursive:true,force:true})"` (node `-e` runs as CJS even in ESM projects, so `require` is available).
+- [x] Move the build from `prepare` to `prepublishOnly`. `prepare` runs on every `npm install`; `prepublishOnly` only runs before `npm publish`. Since `typescript` is a devDependency, `prepare` would fail for downstream users who `npm install` the package from the registry.
+- [x] Add tests to the pre-publish gate: `prepublishOnly` should run `npm test` before building. Final `prepublishOnly` should be: `"npm test && node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json"`.
+- [x] After updating the scripts, run `npm run prepublishOnly` manually (or invoke the commands directly) and confirm `dist/` is populated. Specifically confirm `dist/interfaces/cli.js` and `dist/interfaces/cli.d.ts` exist — these are the files `bin/spiny-orb.js` imports.
+- [x] Run `node bin/spiny-orb.js --help` (with `dist/` populated) to confirm the bin entry point executes without errors.
 
 ### Milestone 2: Update package.json for publication
 
 **Before starting**: Read `docs/research/packaging.md` and `/Users/whitney.lee/Documents/Journal/spiny-orb-multi-language-expansion.md`.
 
-- [ ] Add the `exports` field. The `.` entry is the CLI entry point; the `./plugin` entry establishes the architecture for future language providers. The `./plugin` entry will initially point at a minimal types file created in this milestone (see below):
+- [x] Add the `exports` field. The `.` entry is the CLI entry point; the `./plugin` entry establishes the architecture for future language providers. The `./plugin` entry will initially point at a minimal types file created in this milestone (see below):
   ```json
   "exports": {
     ".": {
@@ -86,7 +86,7 @@ These decisions were made during the packaging research phase and must not be re
     }
   }
   ```
-- [ ] Create `src/languages/plugin-api.ts` — a minimal types-only file. This is the source of truth for what external language providers import from `"spiny-orb/plugin"`. Add an ABOUTME header. The file must:
+- [x] Create `src/languages/plugin-api.ts` — a minimal types-only file. This is the source of truth for what external language providers import from `"spiny-orb/plugin"`. Add an ABOUTME header. The file must:
   - Re-export `CheckResult` and `ValidationResult` from `../validation/types.ts`
   - Declare a stub `LanguageProvider` interface with a comment that it will be expanded in the multi-language PRD. The stub needs only enough shape to be importable — at minimum:
     ```typescript
@@ -108,10 +108,10 @@ These decisions were made during the packaging research phase and must not be re
     }
     ```
   - This file will not yet be used by any internal code — it exists to establish the subpath export contract.
-- [ ] Update `description` in package.json to reflect the tool's purpose accurately (current: "AI-powered telemetry instrumentation agent for JavaScript applications" — will become multi-language, but the description should be honest about current state).
-- [ ] Bump version to `1.0.0`. The tool is working, tested, and ready for first publish.
-- [ ] Add `"publishConfig": { "access": "public" }` to ensure the package publishes as public (important if the npm account has private packages as default).
-- [ ] Verify `files: ["dist/", "bin/"]` still covers everything needed.
+- [x] Update `description` in package.json to reflect the tool's purpose accurately (current: "AI-powered telemetry instrumentation agent for JavaScript applications" — will become multi-language, but the description should be honest about current state).
+- [x] Bump version to `1.0.0`. The tool is working, tested, and ready for first publish.
+- [x] Add `"publishConfig": { "access": "public" }` to ensure the package publishes as public (important if the npm account has private packages as default).
+- [x] Verify `files: ["dist/", "bin/"]` still covers everything needed.
 
 ### Milestone 3: Node version runtime check
 
@@ -121,7 +121,7 @@ The `engines` field in package.json is advisory — npm and npx warn on mismatch
 
 **ESM hoisting note**: In ESM, static `import` declarations are hoisted before any synchronous code runs. You cannot place a version check *before* `import { run } from '../dist/interfaces/cli.js'`. However, you do not need to — `dist/interfaces/cli.js` is compiled plain JavaScript that doesn't use Node 24-specific APIs at import time. It imports cleanly on older Node versions. The version check placed *after* the import statement and *before* calling `run()` will catch users on unsupported Node before any business logic executes, which is the goal.
 
-- [ ] Update `bin/spiny-orb.js` to place the version check between the import and the `run()` call:
+- [x] Update `bin/spiny-orb.js` to place the version check between the import and the `run()` call:
   ```js
   #!/usr/bin/env node
   // ABOUTME: Thin JS wrapper for the spiny-orb CLI entry point.
@@ -140,7 +140,7 @@ The `engines` field in package.json is advisory — npm and npx warn on mismatch
     process.exit(1);
   });
   ```
-- [ ] Verify the check works: temporarily set `major < 99` in a local test and confirm the error message prints and exits with code 1. Restore to `major < 24` after confirming.
+- [x] Verify the check works: temporarily set `major < 99` in a local test and confirm the error message prints and exits with code 1. Restore to `major < 24` after confirming.
 
 ### Milestone 4: GitHub Actions OIDC trusted publishing workflow
 
@@ -148,7 +148,7 @@ The `engines` field in package.json is advisory — npm and npx warn on mismatch
 
 npm Classic Tokens were deprecated December 9, 2025. The publish workflow must use OIDC trusted publishing. Classic tokens will no longer work.
 
-- [ ] Create `.github/workflows/publish.yml` with the following structure. Read the npm trusted publishing docs at https://docs.npmjs.com/trusted-publishers/ before writing this file to verify the exact YAML syntax is current. The `philna.sh` guide cited in `docs/research/packaging.md` is a reliable secondary reference for gotchas.
+- [x] Create `.github/workflows/publish.yml` with the following structure. Read the npm trusted publishing docs at https://docs.npmjs.com/trusted-publishers/ before writing this file to verify the exact YAML syntax is current. The `philna.sh` guide cited in `docs/research/packaging.md` is a reliable secondary reference for gotchas.
   ```yaml
   name: Publish to npm
 
