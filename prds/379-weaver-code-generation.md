@@ -123,7 +123,7 @@ The rollback path (if `validateRegistryCheck` fails) already restores `agent-ext
 3. Does `weaver registry generate` work against a partial/incremental registry (just `agent-extensions.yaml` with a dependency on the base OTel registry), or does it require a fully resolved registry?
 4. What is the output structure — one file per namespace, one file total, configurable per template?
 5. **Time `weaver registry generate python` against a registry with 5–10 custom attributes.** Use `test/fixtures/` — create a temporary registry directory with 5–10 fake custom attributes and an `agent-extensions.yaml`. Report wall time averaged over 3 runs. This is the critical input to OD-1.
-6. Does spiny-orb's pinned Weaver version (v0.21.2, per `.claude/verify.json` or `package.json`) support `registry generate`, or does it require an upgrade?
+6. Does spiny-orb's pinned Weaver version (v0.21.2, pinned in CI via the installer script in `.github/workflows/`) support `registry generate`, or does it require an upgrade? Check `.github/workflows/verify-action.yml` for the version string.
 
 After completing the research:
 - [ ] Record findings in PROGRESS.md
@@ -138,7 +138,7 @@ After completing the research:
 
 **Before starting:** Read `src/coordinator/dispatch.ts` in full. The injection point is in the `else` branch after `validateFn` passes (currently around line 401 — "Re-resolve schema after writing extensions to compute meaningful schemaHashAfter"). The new call goes between the validation success and the re-resolve.
 
-- [ ] Create `src/coordinator/code-generation.ts` (new file, not in dispatch.ts — keeps dispatch.ts from growing further). Export `generateConstants(registryDir: string, target: string, templatesDir: string, outputPath: string): Promise<{ generated: boolean; outputPath: string; error?: string }>`. The function wraps `weaver registry generate <target> -r <registryDir> --templates <templatesDir> -o <outputPath>` with a 30-second timeout (same as `validateRegistryCheck`). Returns `{ generated: false }` on failure — never throws.
+- [ ] Create `src/coordinator/code-generation.ts` (new file, not in dispatch.ts — keeps dispatch.ts from growing further). Export `generateConstants(registryDir: string, target: string, templatesDir: string, outputPath: string): Promise<{ generated: boolean; outputPath: string | null; error?: string }>`. The function wraps `weaver registry generate <target> -r <registryDir> --templates <templatesDir> -o <outputPath>` with a 30-second timeout (same as `validateRegistryCheck`). When `generated: true`, `outputPath` contains the path to the generated file. When `generated: false` (failure or null target), `outputPath` is `null`. Never throws.
 - [ ] In `src/coordinator/dispatch.ts`, import and call `generateConstants()` at the confirmed injection point — in the `else` branch after `validateFn` passes (currently around line 401), before the re-`resolveSchema()` call. **Do NOT modify `instrumentWithRetry`, `writeSchemaExtensions`, `validateRegistryCheck`, or their existing call sites.**
 - [ ] Gate behind config flag `generateConstants: boolean` in `AgentConfig` (default: `false`) — when `false`, the function is never called and behavior is completely unchanged
 - [ ] Derive the Weaver target from `provider.id` using a convention map: `{ python: 'python', go: 'go', javascript: null, typescript: null }`. When target is `null`, skip silently.
@@ -187,7 +187,7 @@ After completing the research:
 
 - [ ] Create `test/fixtures/languages/python/multi-file-constants/` with at least two Python files: `file1.py` (a function that introduces a new custom attribute) and `file2.py` (a function that uses the same attribute domain). Write a test in `test/coordinator/code-generation.test.ts` that runs `dispatchFiles` against this fixture with `generateConstants: true`.
 - [ ] Assert that after file 1 processes (and before file 2 starts), the constants file exists at the expected output path — use `fs.existsSync(outputPath)` between calls
-- [ ] Assert that file 2's prompt string (captured via mock on the prompt builder) includes the constants file path or its contents
+- [ ] Assert that file 2's prompt string (captured via mock on the prompt builder) references the constants — either the file path or the contents, depending on what M5's implementation decides. **Write this assertion to match M5's actual implementation** — the test spec cannot be finalized until M5 is complete. If M5 embeds the file contents, assert that the contents appear in the prompt; if M5 references the path, assert the path appears.
 - [ ] Assert that both files succeed (`status === 'success'`) and the registry passes `weaver registry check`
 - [ ] Assert that when `generateConstants: false` (default), the output path does not exist and the prompt is unchanged — run the same fixture with the flag off and assert no side effects
 - [ ] All existing tests pass
