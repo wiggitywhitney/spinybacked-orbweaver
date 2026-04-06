@@ -171,6 +171,20 @@ Decision needed: Set `cov006` to `applicableTo('go') = false` initially?
 
 **Recommendation (to be confirmed):** Yes — mark COV-006 as not applicable to Go in the initial implementation. Document the reason (SIG still maturing). Revisit when the SIG stabilizes.
 
+### OD-8: Weaver-generated semconv constants in Go instrumented output
+
+Go's `go.opentelemetry.io/otel/semconv` package contains Weaver-generated typed attribute constants (e.g., `semconv.HTTPRequestMethodKey.String(method)`). Good Go OTel code uses these instead of raw `attribute.String("http.request.method", method)` calls. The Go semconv package uses versioned import paths — `semconv/v1.24.0`, `semconv/v1.26.0`, etc. coexist as separate import paths.
+
+Three sub-decisions:
+
+**OD-8a:** Should the LLM prompt instruct the agent to use semconv constants? Recommendation: Yes — this is idiomatic Go OTel code. Resolve after the research spike.
+
+**OD-8b:** Which semconv version should the agent target? Recommendation: Detect the existing semconv import in the target project using `findImports()` and extract the version from the import path; default to latest stable if none found. Record the chosen version in the reasoning report.
+
+**OD-8c:** Should a checker validate semconv constant usage? Recommendation: Defer — same reasoning as Python OD-8c.
+
+**This decision requires a research spike — see pre-implementation gate.**
+
 ---
 
 ## Decision Log
@@ -186,26 +200,13 @@ Decision needed: Set `cov006` to `applicableTo('go') = false` initially?
 | OD-5 | (pending) | | |
 | OD-6 | (pending) | | |
 | OD-7 | (pending) | | |
+| OD-8 | (pending) | | |
 
 ---
 
 ## Milestones
 
 These follow the Part 8 checklist from the research doc. All items are unchecked — this PRD is a skeleton. Refine milestones after PRD #373 is merged and OD-1 and OD-2 are resolved (including any interface revision).
-
-### OD-8: Weaver-generated semconv constants in Go instrumented output
-
-Go's `go.opentelemetry.io/otel/semconv` package contains Weaver-generated typed attribute constants (e.g., `semconv.HTTPRequestMethodKey.String(method)`). Good Go OTel code uses these instead of raw `attribute.String("http.request.method", method)` calls. The Go semconv package uses versioned import paths — `semconv/v1.24.0`, `semconv/v1.26.0`, etc. coexist as separate import paths.
-
-Three sub-decisions:
-
-**OD-8a:** Should the LLM prompt instruct the agent to use semconv constants? Recommendation: Yes — this is idiomatic Go OTel code. Resolve after the research spike.
-
-**OD-8b:** Which semconv version should the agent target? Recommendation: Detect the existing semconv import in the target project using `findImports()` and extract the version from the import path; default to latest stable if none found. Record the chosen version in the reasoning report.
-
-**OD-8c:** Should a checker validate semconv constant usage? Recommendation: Defer — same reasoning as Python OD-8c.
-
-**This decision requires a research spike — see pre-implementation gate.**
 
 ### Pre-implementation gate
 

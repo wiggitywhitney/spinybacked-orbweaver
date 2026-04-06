@@ -19,7 +19,7 @@ Python is the **interface stress test**: it is intentionally the most different 
 
 ## Solution
 
-Implement `PythonProvider` in `src/languages/python/` following the same `LanguageProvider` interface. Handle Python's fundamentally different OTel API, `def`/`async def` syntax, `try/except` error handling, indentation-significant syntax, and pip-based package management.
+Implement `PythonProvider` in `src/languages/python/` following the full `LanguageProvider` interface defined in PRD #370 (`src/languages/types.ts`). The current `plugin-api.ts` stub only has `id` and `fileExtensions` — by the time this PRD executes, PRD #370 and #371 will already be merged and the full interface will be live. All `LanguageProvider` methods (`formatCode`, `lintCheck`, `checkSyntax`, `findFunctions`, etc.) are available as the implementation contract.
 
 **This PRD must not begin implementation until PRD #372 is merged** — and until the TypeScript canary test confirms the interface did not require redesign. If the canary fired (>20% of interface methods changed for TypeScript), the interface must be revised first.
 
@@ -74,7 +74,7 @@ tracer.startActiveSpan('name', (span) => {
 Before writing any Python provider code:
 
 1. Confirm PRD #372 is merged and the TypeScript canary passed (≤20% interface touch rate).
-2. If tree-sitter-python will be used (per OD-1), and tree-sitter is not yet in the codebase: invoke `/research tree-sitter` before adding any dependency.
+2. If tree-sitter-python will be used (per OD-1), and tree-sitter is not yet in the codebase: invoke `/research tree-sitter-python` before adding any dependency.
 3. Resolve all OD items below and record decisions.
 
 ---
@@ -159,7 +159,7 @@ COV-004 checks that async operations have spans. In Python, `async def` is the a
 
 Decision needed: Does COV-004 instrument `asyncio.create_task()` call sites, or only `async def` functions?
 
-**Recommendation (to be confirmed):** Only `async def` functions. Instrumenting `asyncio.create_task()` call sites would require understanding what task is being created, which requires type analysis (OD-4 pattern). The `async def` boundary is the correct instrumentation point — that is where the span should live, not at the goroutine launcher.
+**Recommendation (to be confirmed):** Only `async def` functions. Instrumenting `asyncio.create_task()` call sites would require understanding what task is being created, which requires type analysis beyond what the provider's structural parsing supports (see OD-1). The `async def` boundary is the correct instrumentation point — that is where the span should live, not at the task creation call site.
 
 ---
 
