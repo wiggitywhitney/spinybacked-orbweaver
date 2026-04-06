@@ -144,6 +144,7 @@ After completing the research:
 - [ ] Derive the Weaver target from `provider.id` using a convention map: `{ python: 'python', go: 'go', javascript: null, typescript: null }`. When target is `null`, skip silently.
 - [ ] Output path: follow OD-2 resolution. If Option B (committed file), output to `{projectDir}/otel-constants.{ext}` where ext is `py` or `go`. Pass the output path to the prompt builder via a new optional field on the `InstrumentWithRetryOptions` type (or equivalent — follow the existing pattern for how other cross-file context is passed).
 - [ ] All existing tests pass — if any test breaks, the scope exceeded what was allowed. **Do NOT add new behavior to any code path that runs when `generateConstants: false`.**
+- [ ] **M2 tests verify the no-op path only.** The JavaScript provider returns `null` for the generate target, so `generateConstants()` is never called during M2. Write tests that: (a) confirm that with `generateConstants: false`, nothing happens; (b) confirm that with `generateConstants: true` and a JS provider, the call is silently skipped (target is `null`). **The end-to-end test (M6) — where a non-null target actually generates a constants file — cannot run until at least PRD #373 (Python) is merged and a Python provider exists.**
 - [ ] `npm run typecheck` passes
 
 ### Milestone M3: Python Jinja2 template
