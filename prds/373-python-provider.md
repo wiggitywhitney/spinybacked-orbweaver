@@ -210,7 +210,7 @@ Following Part 8 checklist, Step 2:
   - Function with outbound HTTP call (using `requests` or `httpx`)
   - Nested function with span context propagation
 
-### Milestone D3: Python Tier 2 checker implementations
+### Milestone D3: Python Tier 2 checker implementations and cross-language consistency
 
 Following Part 8 checklist, Step 3:
 
@@ -227,6 +227,7 @@ Following Part 8 checklist, Step 3:
   - All other rules: evaluate applicability; document which rules reuse JS logic vs. need Python-specific versions
 - [ ] `PythonProvider.hasImplementation()` returns correct values for all 26 rule IDs
 - [ ] Feature parity assertion test passes for Python
+- [ ] Add Python cases to `test/validation/cross-language-consistency.test.ts` (created in PRD #372 C4): for each shared-concept rule with a Python implementation, add a test that the same violation caught by the JS checker is also caught by the Python checker (e.g., COV-001 catches missing span on Flask route the same way it catches missing span on Express handler)
 
 ### Milestone D4: Golden file tests
 
@@ -277,8 +278,8 @@ Following Part 8 checklist, Steps 5 and 6:
   - Mitigation: `checkSyntax()` (`python3 -c "compile(...)"`) catches this. The Ruff/Black formatter will also flag indentation issues. Both run before the instrumented code is committed.
 
 - **Risk: Neither Ruff nor Black is installed on the target machine**
-  - Impact: `formatCode()` returns an error; the pipeline degrades or halts
-  - Mitigation: Per OD-2, return a clear `CheckResult` with `passed: false` and installation instructions. This is a user-facing error — the message must be actionable.
+  - Impact: `formatCode()` returns the unformatted original; `lintCheck()` flags it — but the pipeline sees "formatted output" (actually unformatted) and then a lint failure, which may look like a confusing cascade
+  - Mitigation: This is the correct behavior, not a bug. If `formatCode()` returns unformatted source because no formatter is installed, `lintCheck()` will correctly flag the missing formatter. The error message from `lintCheck()` must be "Python formatter not found. Install ruff or black." — not a generic lint failure message. The implementing AI must ensure these two methods produce coherent diagnostic output together.
 
 - **Risk: Python `pasta` library used by mistake for structural analysis**
   - Impact: `pasta` is for format-preserving rewrites, not structural analysis; using it for parsing is over-engineering

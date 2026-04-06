@@ -267,6 +267,7 @@ Following Part 8 checklist, Step 3:
   - **Shared-concept rules requiring Go-specific implementation:** all remaining rules (`cov001`, `cov002`, `cov003`, `rst001`–`rst005`, `nds003`, `nds004`, `nds005`, `cdq001`, `cdq006`, `api001`, `api002`) — implement each per the Go-specific patterns described above
 - [ ] `GoProvider.hasImplementation()` returns correct values for all 26 rule IDs
 - [ ] Feature parity assertion test passes for Go
+- [ ] Add Go cases to `test/validation/cross-language-consistency.test.ts` (created in PRD #372 C4): for each shared-concept rule with a Go implementation, add a test verifying the same semantic violation is caught as in JS/TS/Python
 
 ### Milestone E4: Golden file tests
 
@@ -316,6 +317,7 @@ At the end of this PRD, evaluate whether the `LanguageProvider` interface surviv
 - Did NDS-004 require a new interface method (OD-2)?
 - Did Go's lack of `async` require extending `FunctionInfo`?
 - Did any other Go-specific requirement trigger interface changes?
+- **Note on `isAsync: boolean`:** This field is always `false` for Go (no `async` keyword) and always `false` for synchronous Python functions. It carries its weight only for JS/TS where the distinction drives COV-004. This is acceptable dead weight — the field is free to populate and the interface shouldn't be split over it. If a future language (Java, C#) has async/await, the field has value there too. No action needed; just note it here.
 
 If the interface survived with only additive changes (new optional methods or new `FunctionInfo` fields), the architecture is correct. If it required removing or changing existing methods, document the lessons learned for future language additions.
 

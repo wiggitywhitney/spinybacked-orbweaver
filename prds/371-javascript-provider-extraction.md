@@ -227,8 +227,7 @@ At the end of B2:
   - Tier 1 validation now calls `provider.checkSyntax()` and `provider.lintCheck()` instead of direct imports from `validation/tier1/`
   - Note: Tier 2 checker wiring via `ValidationRule` happens in B3, not B2
 
-- [ ] Delete the re-export stubs created in B1 (old locations in `src/ast/`, `src/validation/tier1/`, `src/fix-loop/`) since consumers now go through the provider
-  - Exception: keep stubs that are still imported by code not yet migrated; remove progressively
+- [ ] Delete re-export stubs from B1 where the consumer has been migrated in B2. Stubs for code that B3 will migrate (tier2 checkers) stay in place until B3 completes — do not delete them here. **"Progressively" means: delete a stub in the same commit that migrates its last consumer, not as a separate cleanup pass.**
 
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes — all existing tests green
@@ -330,6 +329,7 @@ At the end of B3:
   - Exception: `registry-types.ts` — grep for its imports before deleting; if used outside tier2, move shared types to `src/validation/types.ts` instead of deleting
   - Portable rule files (`sch001.ts`, `sch002.ts`, `sch003.ts`, `sch004.ts`, `cdq008.ts`) stay in `src/validation/tier2/` — they are shared implementations, not JS-specific ones
 
+- [ ] **Final stub cleanup:** After all tier2 checkers are migrated, confirm zero re-export stubs remain in `src/ast/`, `src/validation/tier1/`, and `src/fix-loop/`. Run `grep -rn "from.*languages/javascript" src/ast/ src/validation/tier1/ src/fix-loop/ --include="*.ts"` — expect zero results.
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes — all 1,850+ tests green including the new parity test
 
@@ -376,7 +376,7 @@ Pass rate calculation: `(passing golden tests) / (total golden tests)`. Skip vs.
 - All 26 Tier 2 checkers implement `ValidationRule`
 - Feature parity assertion test runs and passes
 - All 1,850+ existing tests pass
-- No old stubs remain in `src/ast/`, `src/validation/tier1/` (these modules are replaced, not re-exported from new locations)
+- No re-export stubs remain in `src/ast/`, `src/validation/tier1/`, or `src/fix-loop/` after B3 completes (stubs exist temporarily during B1 and B2; the B3 final cleanup step confirms they are all gone)
 - One golden file integration test passes
 - `npm run typecheck` clean
 

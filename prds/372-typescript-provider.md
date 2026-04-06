@@ -162,7 +162,34 @@ Following Part 8 checklist, Step 3:
 - [ ] `TypeScriptProvider.hasImplementation()` returns `true` for all applicable rules
 - [ ] Feature parity assertion test passes for TypeScript
 
-### Milestone C4: Golden file tests
+### Milestone C4: Cross-language rule consistency tests
+
+The feature parity assertion in PRD #371 B3 verifies that *implementations exist*. This milestone verifies that the *same semantic violation is caught the same way* across languages — these are different guarantees. A provider can pass parity while its checker misses violations the JavaScript checker catches.
+
+The natural home is PRD C (TypeScript, the second provider) because TypeScript shares enough with JavaScript that the consistency test is practically verifiable. Deferring to Python (third provider) would mean the consistency testing pattern itself isn't validated until much later.
+
+Create `test/validation/cross-language-consistency.test.ts`:
+
+```typescript
+describe('COV-001: Entry points have spans', () => {
+  it('catches missing span on JS Express handler', ...);
+  it('catches missing span on TS NestJS controller', ...);
+  // Python and Go cases added when those providers merge
+});
+
+describe('NDS-004: Signatures preserved', () => {
+  it('flags signature change on JS function', ...);
+  it('flags signature change on TS function with type annotations', ...);
+});
+```
+
+- [ ] For each shared-concept rule with both a JavaScript and TypeScript implementation, write at least one test that verifies the same violation is caught by both
+- [ ] Test file lives in `test/validation/cross-language-consistency.test.ts`
+- [ ] Tests use the fixture files from `test/fixtures/languages/javascript/` and `test/fixtures/languages/typescript/`
+- [ ] Each subsequent provider PRD (Python, Go) adds cases to this test file in its Milestone D3/E3
+- [ ] All consistency tests pass
+
+### Milestone C5: Golden file tests
 
 Following Part 8 checklist, Step 4:
 
@@ -173,7 +200,7 @@ Following Part 8 checklist, Step 4:
 - [ ] Write `test/languages/typescript/golden.test.ts` — full pipeline against each fixture
 - [ ] All golden tests pass
 
-### Milestone C5: Canary test evaluation
+### Milestone C6: Canary test evaluation
 
 - [ ] Count how many `LanguageProvider` interface methods were added, removed, or changed during TypeScript implementation
 - [ ] Calculate percentage: `(changed methods) / (total interface methods)` from PRD #370
@@ -181,7 +208,7 @@ Following Part 8 checklist, Step 4:
 - [ ] **If ≤20%:** Record the canary result in PROGRESS.md (e.g., "TypeScript provider required 2/18 = 11% interface changes — canary passed"). Update this PRD as complete. Proceed to PRD #373.
 - [ ] **If 0%:** Also record this — it means the interface generalized perfectly to TypeScript, which is the ideal outcome.
 
-### Milestone C6: Real-world evaluation
+### Milestone C7: Real-world evaluation
 
 Following Part 8 checklist, Steps 5 and 6:
 
@@ -203,7 +230,7 @@ Following Part 8 checklist, Steps 5 and 6:
 - All existing JavaScript tests continue to pass
 - TypeScript golden tests pass
 - Feature parity matrix passes for TypeScript
-- Canary result documented: ≤20% interface touch rate (or interface redesign filed)
+- Canary result documented (Milestone C6): ≤20% interface touch rate (or interface redesign filed)
 - Real-world eval: ≥90% pass rate on golden tests, zero syntax errors
 
 ---

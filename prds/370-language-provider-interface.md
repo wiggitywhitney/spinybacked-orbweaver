@@ -161,11 +161,13 @@ assert(
 
 The `LanguageProvider` interface must include `hasImplementation(ruleId: string): boolean`. This is for the automated parity check — not for the validation chain itself.
 
-### Decision 10: All externally-callable `LanguageProvider` methods are async
+### Decision 10: AST analysis methods are synchronous; external-process methods are async
 
 `checkSyntax()`, `formatCode()`, and `lintCheck()` spawn external processes (`node --check`, Prettier, `go build`, `python3 -c ...`). Methods that shell out must be `Promise<T>`. Methods that are pure in-memory operations (`findFunctions()`, `findImports()`, etc.) are synchronous — they receive source text, return parsed data, no I/O.
 
 **Why:** Consistency matters less than correctness. Making everything `Promise<T>` would add unnecessary overhead to the hot path (function extraction runs per function during the fix loop). Only methods that need it get `Promise<T>`.
+
+**Caveat — tree-sitter-wasm:** Native tree-sitter bindings (used by current providers) are synchronous. If a future provider uses tree-sitter-wasm (browser or worker-thread context), parsing becomes async. If that situation arises, revisit this decision and make `findFunctions()`, `findImports()`, `findExports()` return `Promise<T[]>`. Do not preemptively make them async — do it if and when a wasm provider is needed.
 
 ### Decision 11: tree-sitter is an implementation detail, not an interface concern
 
@@ -230,7 +232,7 @@ Write the new file. The file must:
 - [ ] Define `FunctionInfo` (language-agnostic): `name: string`, `startLine: number`, `endLine: number`, `isExported: boolean`, `isAsync: boolean`, `lineCount: number`
 - [ ] Define `ImportInfo` (language-agnostic): `moduleSpecifier: string`, `importedNames: string[]`, `alias: string | undefined`, `lineNumber: number`
 - [ ] Define `ExportInfo`: `name: string`, `lineNumber: number`, `isDefault: boolean`
-- [ ] Define `ExtractedFunction` (language-agnostic): `name: string`, `isAsync: boolean`, `isExported: boolean`, `sourceText: string`, `jsDoc: string | null`, `referencedImports: string[]`, `contextHeader: string`, `startLine: number`, `endLine: number`
+- [ ] Define `ExtractedFunction` (language-agnostic): `name: string`, `isAsync: boolean`, `isExported: boolean`, `sourceText: string`, `docComment: string | null` (not `jsDoc` — Python has docstrings, Go has `//` comment blocks above declarations; `docComment` is the language-agnostic name), `referencedImports: string[]`, `contextHeader: string`, `startLine: number`, `endLine: number`
 - [ ] Define `LanguagePromptSections`: `constraints: string`, `otelPatterns: string`, `tracerAcquisition: string`, `spanCreation: string`, `errorHandling: string`, `libraryInstallation: string`
 - [ ] Define `Example`: `description: string`, `before: string`, `after: string`
 - [ ] Define `RuleInput`: extends `ValidateFileInput` fields, adds `language: string`, `provider: LanguageProvider`
