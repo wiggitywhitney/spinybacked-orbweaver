@@ -234,9 +234,10 @@ At the end of B2:
   - **Do NOT remove the try/catch** — the provider implementation should throw on parse errors but return `undefined` if the file doesn't exist.
 
 - [ ] Wire `src/fix-loop/instrument-with-retry.ts` temp file extension:
+  - **Before modifying, read `src/fix-loop/instrument-with-retry.ts` in full** to understand `InstrumentWithRetryOptions` — that's the existing options type for injectable deps.
   - Line 699 hardcodes `.js` in the temp file path: `` `fn-${fn.name}-${Date.now()}.js` ``
   - Replace with `provider.fileExtensions[0]` (already on the interface — e.g., `.js` for JS, `.py` for Python, `.go` for Go).
-  - This file is in the fix loop, not the coordinator — pass the provider through from `dispatchFiles` → `instrumentWithRetry` → the function-level fallback code path. Follow the existing pattern for how other deps are injected.
+  - Add `provider: LanguageProvider` to `InstrumentWithRetryOptions` (the existing injectable deps type). Pass it from `dispatchFiles` → `instrumentWithRetry`. **Do NOT add a new injection mechanism** — extend `InstrumentWithRetryOptions`.
 
 - [ ] Delete re-export stubs from B1 where the consumer has been migrated in B2. Stubs for code that B3 will migrate (tier2 checkers) stay in place until B3 completes — do not delete them here. **"Progressively" means: delete a stub in the same commit that migrates its last consumer, not as a separate cleanup pass.**
 
@@ -260,8 +261,13 @@ At the end of B3:
 **SCH-001–004 are NOT portable** — verified by reading the source. Each SCH checker uses ts-morph (`new Project()`, `createSourceFile('check.js', code)`) to extract span names or attribute keys from the instrumented code before validating them against the Weaver registry. The extraction half is JS-specific. The validation half (comparing extracted names/keys against the Weaver registry) is language-agnostic.
 
 **The correct split for SCH-001–004:**
-- `src/languages/javascript/rules/schNNN.ts` — the **extractor**: uses ts-morph to find `startActiveSpan()` calls, `setAttribute()` calls, etc. Returns the extracted names/keys.
-- `src/validation/tier2/schNNN.ts` — the **validator**: takes extracted names/keys (from any language's extractor), validates against the Weaver registry. Language-agnostic.
+
+The `ValidationRule` interface has a single `check(input: RuleInput): CheckResult` method. The split is implemented by keeping a shared validator helper in `src/validation/tier2/` and having the JS rule's `check()` call it:
+
+- `src/validation/tier2/schNNN.ts` — becomes a **shared validator helper**: a pure function that takes extracted names/keys (plain strings, not source code) and validates them against the Weaver registry. Signature like `validateSpanNamesAgainstRegistry(names: string[], registry: object, filePath: string): CheckResult[]`. Language-agnostic — no ts-morph, no source code parsing.
+- `src/languages/javascript/rules/schNNN.ts` — a `ValidationRule` implementation whose `check()` does two things: (1) extract names/keys from `input.instrumentedCode` using ts-morph (the JS-specific part), (2) call the shared validator helper from `src/validation/tier2/schNNN.ts` with the extracted results.
+
+When Python and Go providers add their SCH checkers, their `check()` will use their own parser for step (1) and call the same shared validator helper for step (2). **The shared helper is a function, not a `ValidationRule` — it is called by language-specific rules, not registered directly.**
 
 **NDS-003** is already in the JS-specific bucket but needs the same conceptual split: the diff logic is language-agnostic, but the `INSTRUMENTATION_PATTERNS` regex array (`@opentelemetry/api`, `.startActiveSpan(`, etc.) is JS-specific. The JS implementation provides its own pattern set; Python and Go providers will provide theirs.
 
