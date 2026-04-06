@@ -1,6 +1,6 @@
 # PRD #362: Installed-artifact CI test for published npm releases
 
-**Status**: Not Started  
+**Status**: Complete — 2026-04-06  
 **Priority**: Medium  
 **GitHub Issue**: [#362](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/362)
 
@@ -72,11 +72,11 @@ The right fixture is `test/fixtures/project/src/order-service.js` — it is alre
 
 **Before starting**: Confirm the workflow file syntax is valid (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/npm-release-test.yml'))"`) and that the `spiny-orb@latest` on npm is the version you expect.
 
-- [ ] Push the workflow to the feature branch and create a PR with the `run-acceptance` label to trigger the PR path.
-- [ ] Verify the workflow runs to completion: the install step fetches from the registry (not from source), the instrumentation step runs with a real API call, and the assertion step passes.
-- [ ] Note: `gh workflow list` only shows workflows on the default branch — the workflow will appear there after the PR merges, not during PR testing. During PR testing, validate YAML syntax with `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/npm-release-test.yml'))"` instead.
+- [x] Push the workflow to the feature branch and create a PR with the `run-acceptance` label to trigger the PR path.
+- [x] Verify the workflow runs to completion: the install step fetches from the registry (not from source), the instrumentation step runs with a real API call, and the assertion step passes. Note: `id-token: read` is not a valid GitHub Actions permission value (only `write`/`none`) — this was discovered during M3 and fixed.
+- [x] Note: `gh workflow list` only shows workflows on the default branch — the workflow will appear there after the PR merges, not during PR testing. During PR testing, validate YAML syntax with `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/npm-release-test.yml'))"` instead.
 - [x] Update `.claude/CLAUDE.md` to document that any new GitHub release must pass the `npm-release-test.yml` workflow. The note should explain what it tests (installed artifact from registry, not source) and how to trigger it manually (create a PR with the `run-acceptance` label).
-- [ ] Add a note to `PROGRESS.md` documenting that release-triggered npm artifact validation is in place.
+- [x] Add a note to `PROGRESS.md` documenting that release-triggered npm artifact validation is in place.
 
 ---
 
