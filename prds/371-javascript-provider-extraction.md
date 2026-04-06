@@ -197,7 +197,7 @@ At the end of B2:
   - `otelImportPattern`, `spanCreationPattern`, `otelApiPackage`, `tracerAcquisitionPattern` — JS/OTel-specific values
   - `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — the official JS/TS semconv constants package. **Do NOT update the LLM prompt to use typed constants in this PRD** — PRD B is a pure extraction refactor; the prompt currently uses raw strings and must remain unchanged. The naming convention migration (`SEMATTRS_*` → `ATTR_*` at v1.26.0) requires a research spike (see issue #378) before any prompt change is safe.
   - `packageManager: 'npm'`, `installCommand()`, `dependencyFile: 'package.json'`
-  - `hasImplementation()` — returns `true` for all 26 rule IDs (initially); NDS-006 is JS-only and returns `true` for JS
+  - `hasImplementation()` — temporary placeholder: returns `true` for all 26 rule IDs so the parity matrix doesn't break during B2. **B3 replaces this placeholder with a real check against the registered rule list** — do not leave `return true` in place after B3 completes.
 
 - [ ] Create `src/languages/registry.ts` — provider registry:
   - `registerProvider(provider: LanguageProvider): void`

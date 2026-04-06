@@ -158,7 +158,7 @@ Following Part 8 checklist, Step 3:
   - `cov003.ts` — error recording: `try/catch` with TypeScript `unknown` catch type (`catch (err: unknown)`)
   - `nds004.ts` — signature preservation: must preserve type annotations, generics, access modifiers
   - `nds006.ts` — module system match: same as JavaScript (ESM/CJS concern applies to TypeScript too)
-  - All other rules: evaluate whether the JS implementation applies unchanged; document which rules reuse JS implementations vs. have TS-specific versions
+  - **All remaining shared-concept rules (`cov002`, `cov004`, `cov005`, `cov006`, `rst001`–`rst005`, `nds003`, `nds005`, `cdq001`, `cdq006`, `api001`, `api002`):** Start with the JS implementation and extend only if TypeScript introduces a new pattern. Document in PROGRESS.md which rules reused JS implementations and which needed TS-specific versions — do not leave this undocumented.
 - [ ] Register TypeScript rules in `TypeScriptProvider`
 - [ ] `TypeScriptProvider.hasImplementation()` returns `true` for all applicable rules
 - [ ] Feature parity assertion test passes for TypeScript
@@ -186,7 +186,7 @@ describe('NDS-004: Signatures preserved', () => {
 
 - [ ] For each shared-concept rule with both a JavaScript and TypeScript implementation, write at least one test that verifies the same violation is caught by both
 - [ ] Test file lives in `test/validation/cross-language-consistency.test.ts`
-- [ ] Tests use the fixture files from `test/fixtures/languages/javascript/` and `test/fixtures/languages/typescript/`
+- [ ] Tests use the fixture files from `test/fixtures/languages/javascript/` (created in PRD #371 B3). **TypeScript fixture files do not exist yet** — C4 tests can only cover JS vs TS for rules where a TypeScript example can be embedded inline in the test (not as a fixture file). Create `test/fixtures/languages/typescript/` in Milestone C5 (Golden file tests) and add fixture-based consistency tests as a follow-up checklist item in C5.
 - [ ] Each subsequent provider PRD (Python, Go) adds cases to this test file in its Milestone D3/E3
 - [ ] All consistency tests pass
 

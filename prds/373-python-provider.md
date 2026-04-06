@@ -139,6 +139,14 @@ Decision needed: Which frameworks are in scope for the initial Python provider?
 
 **Fallback for unrecognized decorators:** When a function has a decorator that is not a recognized framework route decorator, COV-001 abstains (reports unknown) rather than flagging a false positive. Do not report "missing span" when the framework is unrecognized — flag as "entry point classification unknown due to unrecognized decorator." This is consistent with TypeScript OD-4's heuristic abstention approach.
 
+### OD-7: `asyncio` scope for COV-004
+
+COV-004 checks that async operations have spans. In Python, `async def` is the async function marker. But `asyncio.create_task()` and `asyncio.gather()` also launch concurrent work.
+
+Decision needed: Does COV-004 instrument `asyncio.create_task()` call sites, or only `async def` functions?
+
+**Recommendation (to be confirmed):** Only `async def` functions. Instrumenting `asyncio.create_task()` call sites would require understanding what task is being created, which requires type analysis beyond what the provider's structural parsing supports (see OD-1). The `async def` boundary is the correct instrumentation point — that is where the span should live, not at the task creation call site.
+
 ### OD-8: Weaver-generated semconv constants in Python instrumented output
 
 Python's `opentelemetry-semconv` package contains Weaver-generated typed attribute constants (e.g., `from opentelemetry.semconv.trace import SpanAttributes`, then `span.set_attribute(SpanAttributes.HTTP_METHOD, method)`). Good Python OTel code uses these constants instead of raw strings like `"http.request.method"`.
@@ -152,14 +160,6 @@ Three sub-decisions:
 **OD-8c:** Should a checker validate that semconv constants are used instead of raw strings for known standard attributes? Recommendation: Defer. The current SCH-001/SCH-002 checkers validate correctness regardless of constant vs. string. A "prefer constants" advisory check is a future enhancement.
 
 **This decision requires a research spike — see pre-implementation gate.**
-
-### OD-7: `asyncio` scope for COV-004
-
-COV-004 checks that async operations have spans. In Python, `async def` is the async function marker. But `asyncio.create_task()` and `asyncio.gather()` also launch concurrent work.
-
-Decision needed: Does COV-004 instrument `asyncio.create_task()` call sites, or only `async def` functions?
-
-**Recommendation (to be confirmed):** Only `async def` functions. Instrumenting `asyncio.create_task()` call sites would require understanding what task is being created, which requires type analysis beyond what the provider's structural parsing supports (see OD-1). The `async def` boundary is the correct instrumentation point — that is where the span should live, not at the task creation call site.
 
 ---
 
@@ -184,7 +184,7 @@ Following Part 8 checklist, Step 1:
 **Before writing any Python provider code:** Read `src/languages/javascript/index.ts` (the JavaScript provider) in full — this is the reference implementation. Read `src/languages/typescript/index.ts` (the TypeScript provider) as a second reference. **Implement Python provider methods in the same structural pattern as these existing providers.**
 
 **Resolve outstanding decisions before touching any source file:**
-- [ ] **OD-1 (parser choice):** The recommendation is tree-sitter-python. Run `/research tree-sitter-python` to verify current API and installation approach. Record the decision in the Decision Log: `| [date] | OD-1: tree-sitter-python | [rationale] | [impact] |`. If you choose stdlib `ast` instead, document why tree-sitter was rejected.
+- [ ] **OD-1 (parser choice):** The recommendation is tree-sitter-python. Run `/research tree-sitter-python` to verify current API and installation approach. Record the decision in the Decision Log using the table column order (ID | Decision | Rationale | Date): `| OD-1 | tree-sitter-python | [one-sentence rationale] | [date] |`. If you choose stdlib `ast` instead, document why tree-sitter was rejected.
 - [ ] **OD-2 (formatter):** Adopt the recommendation: `formatCode()` returns `Promise<string>` (formatted source, or original if no formatter found). `lintCheck()` returns `CheckResult` with `passed: false` and install instructions when neither Ruff nor Black is found. Record in Decision Log.
 - [ ] **OD-3 (dependency file):** Adopt the recommendation: look for `pyproject.toml` first; fall back to `requirements.txt`. Record in Decision Log.
 - [ ] **OD-4 through OD-7:** Record each in the Decision Log before coding begins.

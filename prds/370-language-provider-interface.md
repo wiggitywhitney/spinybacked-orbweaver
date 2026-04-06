@@ -169,7 +169,7 @@ The `LanguageProvider` interface must include `hasImplementation(ruleId: string)
 
 **Caveat — tree-sitter-wasm:** Native tree-sitter bindings (used by current providers) are synchronous. If a future provider uses tree-sitter-wasm (browser or worker-thread context), parsing becomes async. If that situation arises, revisit this decision and make `findFunctions()`, `findImports()`, `findExports()` return `Promise<T[]>`. Do not preemptively make them async — do it if and when a wasm provider is needed.
 
-### Decision 12: `otelSemconvPackage` — all four target languages have typed semconv constant packages
+### Decision 11 (updated): `otelSemconvPackage` — all four target languages have typed semconv constant packages
 
 Weaver generates typed semantic convention constant libraries for Python (`opentelemetry-semconv`), Go (`go.opentelemetry.io/otel/semconv`), and other languages. JavaScript and TypeScript also have an official package: `@opentelemetry/semantic-conventions` (npm). All four target languages have this capability — the original assumption that JS/TS "use raw strings" was incorrect.
 
@@ -177,7 +177,7 @@ Weaver generates typed semantic convention constant libraries for Python (`opent
 
 Whether to actually instruct the LLM to use typed constants (vs. raw strings) is a per-provider prompt decision deferred to each provider PRD — this property provides the package name for that decision, not the instruction itself. JavaScript and TypeScript have an additional complication: the naming convention migrated at v1.26.0 (`SEMATTRS_*` → `ATTR_*`). See issue #378 for the JS/TS research spike that must precede any prompt update to use constants.
 
-### Decision 11: tree-sitter is an implementation detail, not an interface concern
+### Decision 12: tree-sitter is an implementation detail, not an interface concern
 
 The `LanguageProvider` interface defines *what* methods return, not *how* implementations produce those returns. Whether a provider uses tree-sitter, ts-morph, stdlib parsers, or regex is a provider implementation choice. The interface types (`FunctionInfo`, `ImportInfo`) express semantic information (line numbers, names, booleans) — not parser-specific node types.
 
