@@ -52,15 +52,23 @@ What will break (ESLint's documented failures applied to spiny-orb):
 
 These are open questions captured here at skeleton time. Do not make implementation decisions without resolving these and recording them in the Decision Log below.
 
-### OD-1: tree-sitter-typescript vs. tree-sitter-javascript
+### OD-1: tree-sitter-typescript vs. tree-sitter-javascript — and `web-tree-sitter` vs. native npm
 
-The JavaScript provider uses ts-morph (which uses the TypeScript compiler under the hood) for AST analysis. TypeScript files could use ts-morph directly (it handles TS natively) rather than requiring a separate tree-sitter grammar. Decision needed:
+The JavaScript provider uses ts-morph for AST analysis. TypeScript could use ts-morph directly (it handles TS natively) or tree-sitter. Decision needed:
 
-**Option A — ts-morph for TypeScript too.** ts-morph already understands TypeScript. The TypeScript provider's `findFunctions()` and `findImports()` could reuse ts-morph almost unchanged from the JavaScript provider. Low implementation cost. Downside: ts-morph is not a general solution (Python and Go cannot use it).
+**Option A — ts-morph for TypeScript too.** Low implementation cost. ts-morph handles TypeScript natively. Downside: not a general solution (Python and Go cannot use it).
 
-**Option B — tree-sitter-typescript.** Consistent with the long-term vision (tree-sitter as the universal parser). Requires adding `tree-sitter-typescript` as a dependency and writing tree-sitter query files (`.scm`). Higher implementation cost but validates the tree-sitter path before Python.
+**Option B — tree-sitter-typescript.** Consistent with the long-term vision. Required decision nested inside Option B:
 
-**Recommendation (to be confirmed):** Option A for the initial TypeScript provider. Document the debt. Migrate to tree-sitter in a later PRD if the interface proves stable. The goal right now is to validate the interface, not to validate tree-sitter.
+**Critical sub-decision: which tree-sitter npm binding?**
+
+The native `tree-sitter` npm package (v0.25.0 as of June 2025, 10+ months stale) has an open issue (#5334): v0.26 requires **Node 24** for native bindings. Spiny-orb's users are not required to run Node 24 — this would be a breaking constraint.
+
+`web-tree-sitter` (WASM-based, v0.25.0 February 2026) works on any Node.js version and avoids the Node 24 requirement entirely. The API is slightly different (async initialization, WASM loading) but the query interface is the same. Tools converging on tree-sitter for multi-language analysis (Codebase-Memory, CodeWeaver) are using `web-tree-sitter`.
+
+**If Option B is chosen, use `web-tree-sitter`, not the native `tree-sitter` npm package.** This decision propagates to Python (PRD #373) and Go (PRD #374) — whichever binding is chosen here sets the pattern for all subsequent providers.
+
+**Recommendation (to be confirmed):** Option A for the initial TypeScript provider — validate the interface with low cost. When moving to Python (PRD #373) where tree-sitter is necessary, adopt `web-tree-sitter` at that point. Document the ts-morph debt in PROGRESS.md.
 
 ### OD-2: TSX handling
 
