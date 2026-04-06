@@ -32,7 +32,7 @@ The right fixture is `test/fixtures/project/src/order-service.js` — it is alre
 
 - **Separate workflow file, not acceptance-gate.yml.** This workflow has a different trigger (release events) and a different purpose (artifact validation vs. code quality). Keeping it separate avoids entangling release gating with PR acceptance gating.
 
-- **Single fixture file, not the full eval suite.** The full commit-story-v2 suite takes ~27 minutes. One well-chosen fixture (a few hundred lines, mid-complexity, known to succeed) is enough to validate the installed artifact. Use `test/fixtures/commit-story-v2/summarize.js` or similar — not the largest or most pathological files.
+- **Single fixture file, not the full eval suite.** One well-chosen fixture is enough to validate the installed artifact. Use `test/fixtures/project/src/order-service.js` — already proven by `verify-action.yml`, completes in under 30 seconds.
 
 - **Assert status=success and spansAdded>0.** The installed-artifact test does not need to validate every quality rule — that's what the acceptance gate handles. The bar here is: did the CLI run, did it instrument something, did it exit 0?
 
