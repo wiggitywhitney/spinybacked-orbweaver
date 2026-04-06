@@ -111,10 +111,10 @@ Following the Part 8 checklist, Step 1:
 **Before writing any TypeScript provider code:** Read `src/languages/javascript/index.ts` (the JavaScript provider) in full — this is the reference implementation that defines what all `LanguageProvider` methods look like in practice. **Do not implement TypeScript provider methods without first understanding the corresponding JavaScript implementation.**
 
 **Resolve outstanding decisions before touching any source file:**
-- [ ] **OD-1 (ts-morph vs. tree-sitter-typescript):** The recommendation is ts-morph for the initial implementation (it already handles TypeScript natively). If you have a strong reason to use tree-sitter-typescript instead, run `/research tree-sitter-typescript` first. Record the decision in the Decision Log using the format: `| [today's date] | OD-1: [chosen approach] | [one-sentence rationale] | [impact on interface] |`. Do not start coding until this is recorded.
-- [ ] **OD-2 (TSX handling):** If using ts-morph (OD-1 recommendation), include `.tsx` from day one — ts-morph handles it natively. If using tree-sitter, defer `.tsx`. Record in Decision Log.
-- [ ] **OD-3 (module resolution):** Adopt the recommendation: return raw specifiers from `findImports()`, no `tsconfig.json` resolution, no path alias lookup. Record in Decision Log.
-- [ ] **OD-4 (type-aware analysis):** Adopt the recommendation: use name-based heuristics; abstain (return `'unknown'`) when heuristics are insufficient rather than guessing. Record in Decision Log.
+- [ ] **OD-1 (ts-morph vs. tree-sitter-typescript):** The recommendation is ts-morph for the initial implementation (it already handles TypeScript natively). If you have a strong reason to use tree-sitter-typescript instead, run `/research tree-sitter-typescript` first. Record the decision in the Decision Log using the format: `| OD-1 | [chosen approach] | [one-sentence rationale] | [today's date] |` — column order is ID, Decision, Rationale, Date to match the table header. Do not start coding until this is recorded.
+- [ ] **OD-2 (TSX handling):** If using ts-morph (OD-1 recommendation), include `.tsx` from day one — ts-morph handles it natively. If using tree-sitter, defer `.tsx`. Record in Decision Log using format: `| OD-X | [decision] | [rationale] | [date] |`.
+- [ ] **OD-3 (module resolution):** Adopt the recommendation: return raw specifiers from `findImports()`, no `tsconfig.json` resolution, no path alias lookup. Record in Decision Log using format: `| OD-X | [decision] | [rationale] | [date] |`.
+- [ ] **OD-4 (type-aware analysis):** Adopt the recommendation: use name-based heuristics; abstain (return `'unknown'`) when heuristics are insufficient rather than guessing. Record in Decision Log using format: `| OD-X | [decision] | [rationale] | [date] |`.
 - [ ] Create `src/languages/typescript/` directory
 - [ ] Create `src/languages/typescript/ast.ts` — function finding, import detection, export detection, function classification, existing instrumentation detection using resolved parser approach
 - [ ] `findFunctions()` returns language-agnostic `FunctionInfo` (from `src/languages/types.ts`)
@@ -126,6 +126,7 @@ Following the Part 8 checklist, Step 1:
 - [ ] `formatCode()` — Prettier (already handles TypeScript)
 - [ ] `lintCheck()` — Prettier diff (same as JavaScript)
 - [ ] File discovery: `globPattern: '**/*.{ts,tsx}'` (or `'**/*.ts'` if OD-2 defers TSX), `defaultExclude` includes `*.d.ts`, generated files, `*.test.ts`
+- [ ] `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — same package as JavaScript. **Do NOT update the prompt to use typed constants in this PRD** — the naming convention migration (`SEMATTRS_*` → `ATTR_*` at v1.26.0) requires a research spike before any prompt change is safe (see issue #378).
 - [ ] Register `TypeScriptProvider` in `src/languages/registry.ts` for `.ts` (and `.tsx` if OD-2 resolves to include it)
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes

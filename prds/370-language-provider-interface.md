@@ -169,6 +169,14 @@ The `LanguageProvider` interface must include `hasImplementation(ruleId: string)
 
 **Caveat — tree-sitter-wasm:** Native tree-sitter bindings (used by current providers) are synchronous. If a future provider uses tree-sitter-wasm (browser or worker-thread context), parsing becomes async. If that situation arises, revisit this decision and make `findFunctions()`, `findImports()`, `findExports()` return `Promise<T[]>`. Do not preemptively make them async — do it if and when a wasm provider is needed.
 
+### Decision 12: `otelSemconvPackage` — all four target languages have typed semconv constant packages
+
+Weaver generates typed semantic convention constant libraries for Python (`opentelemetry-semconv`), Go (`go.opentelemetry.io/otel/semconv`), and other languages. JavaScript and TypeScript also have an official package: `@opentelemetry/semantic-conventions` (npm). All four target languages have this capability — the original assumption that JS/TS "use raw strings" was incorrect.
+
+`otelSemconvPackage: string | null` expresses which package a provider's LLM prompt should instruct the agent to import for typed attribute constants. `null` would mean "no semconv constants package exists for this language." In practice, all current target languages return a non-null value.
+
+Whether to actually instruct the LLM to use typed constants (vs. raw strings) is a per-provider prompt decision deferred to each provider PRD — this property provides the package name for that decision, not the instruction itself. JavaScript and TypeScript have an additional complication: the naming convention migrated at v1.26.0 (`SEMATTRS_*` → `ATTR_*`). See issue #378 for the JS/TS research spike that must precede any prompt update to use constants.
+
 ### Decision 11: tree-sitter is an implementation detail, not an interface concern
 
 The `LanguageProvider` interface defines *what* methods return, not *how* implementations produce those returns. Whether a provider uses tree-sitter, ts-morph, stdlib parsers, or regex is a provider implementation choice. The interface types (`FunctionInfo`, `ImportInfo`) express semantic information (line numbers, names, booleans) — not parser-specific node types.
@@ -246,12 +254,12 @@ Write the new file. The file must:
   - AST analysis: `findFunctions(source: string): FunctionInfo[]`, `findImports(source: string): ImportInfo[]`, `findExports(source: string): ExportInfo[]`, `classifyFunction(fn: FunctionInfo): FunctionClassification`, `detectExistingInstrumentation(source: string): boolean`
   - Function-level fallback: `extractFunctions(source: string): ExtractedFunction[]`, `reassembleFunctions(original: string, extracted: ExtractedFunction[], results: FunctionResult[]): string`
   - LLM prompt context: `getSystemPromptSections(): LanguagePromptSections`, `getInstrumentationExamples(): Example[]`
-  - OTel specifics: `otelImportPattern: RegExp`, `otelApiPackage: string`, `tracerAcquisitionPattern: string` (display string for LLM prompt, e.g. `"trace.getTracer()"`), `spanCreationPattern: RegExp`
+  - OTel specifics: `otelImportPattern: RegExp`, `otelApiPackage: string`, `otelSemconvPackage: string | null`, `tracerAcquisitionPattern: string` (display string for LLM prompt, e.g. `"trace.getTracer()"`), `spanCreationPattern: RegExp`
   - Package management: `packageManager: string`, `installCommand(packages: string[]): string`, `dependencyFile: string`
   - Parity check: `hasImplementation(ruleId: string): boolean`
 - [ ] All async methods use `Promise<T>` return types (syntax checking and formatting call external processes)
 - [ ] All types have JSDoc comments explaining the field's purpose and cross-language semantics where non-obvious
-- [ ] `import type { CheckResult, ValidationConfig } from '../validation/types.ts'` — import only what's needed; **do NOT redefine `CheckResult` or `ValidationResult` — they already exist in validation/types.ts**
+- [ ] `import type { CheckResult, ValidateFileInput } from '../validation/types.ts'` — `ValidateFileInput` is needed because `RuleInput` extends it; `ValidationConfig` is used transitively via `ValidateFileInput.config` so do not import it separately; **do NOT redefine `CheckResult` or `ValidationResult` — they already exist in validation/types.ts**
 - [ ] `import type { FunctionResult } from '../fix-loop/types.ts'` — **do NOT redefine `FunctionResult` — it already exists and is language-agnostic; only import it**
 - [ ] Run `npm run typecheck` — must pass with zero errors
 
@@ -317,4 +325,4 @@ The parity test is written in PRD #371 B3 but applies to every subsequent langua
 
 ## Progress Log
 
-_Updated by `/prd-update-progress` as milestones complete._
+*Updated by `/prd-update-progress` as milestones complete.*

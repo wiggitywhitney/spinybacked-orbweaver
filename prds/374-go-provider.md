@@ -193,6 +193,20 @@ Decision needed: Set `cov006` to `applicableTo('go') = false` initially?
 
 These follow the Part 8 checklist from the research doc. All items are unchecked — this PRD is a skeleton. Refine milestones after PRD #373 is merged and OD-1 and OD-2 are resolved (including any interface revision).
 
+### OD-8: Weaver-generated semconv constants in Go instrumented output
+
+Go's `go.opentelemetry.io/otel/semconv` package contains Weaver-generated typed attribute constants (e.g., `semconv.HTTPRequestMethodKey.String(method)`). Good Go OTel code uses these instead of raw `attribute.String("http.request.method", method)` calls. The Go semconv package uses versioned import paths — `semconv/v1.24.0`, `semconv/v1.26.0`, etc. coexist as separate import paths.
+
+Three sub-decisions:
+
+**OD-8a:** Should the LLM prompt instruct the agent to use semconv constants? Recommendation: Yes — this is idiomatic Go OTel code. Resolve after the research spike.
+
+**OD-8b:** Which semconv version should the agent target? Recommendation: Detect the existing semconv import in the target project using `findImports()` and extract the version from the import path; default to latest stable if none found. Record the chosen version in the reasoning report.
+
+**OD-8c:** Should a checker validate semconv constant usage? Recommendation: Defer — same reasoning as Python OD-8c.
+
+**This decision requires a research spike — see pre-implementation gate.**
+
 ### Pre-implementation gate
 
 **All items below must be complete before writing any Go provider code. Record each decision in the Decision Log before proceeding.**
@@ -204,6 +218,8 @@ These follow the Part 8 checklist from the research doc. All items are unchecked
 - [ ] **OD-5 (COV-006):** Set `applicableTo('go') = false` for COV-006. Record in Decision Log.
 - [ ] **OD-6 (goroutines):** Set `isAsync: false` for all Go functions — Go has no `async` keyword; goroutines are not `async def` equivalents. COV-004 returns `applicableTo('go') = false` for goroutines in the initial implementation. Record in Decision Log.
 - [ ] **OD-7 (monorepo/go.work):** Adopt the recommendation: detect `go.work` at init; emit a warning and scope to the `go.mod` directory. Record in Decision Log.
+- [ ] **Research spike — Go semconv constants:** Run `/research go-opentelemetry-semconv` to answer: (1) current GA semconv version for Go (e.g., `v1.26.0`, `v1.27.0`); (2) current naming convention — is it `semconv.HTTPRequestMethodKey` or has it changed since the HTTP migration?; (3) how versioned import paths coexist in one project; (4) which attributes that spiny-orb's checkers care about have stable constants; (5) how `go get` handles versioned semconv submodules. Record findings in PROGRESS.md before resolving OD-8.
+- [ ] **OD-8 (Go semconv constants):** Resolve sub-decisions OD-8a, OD-8b, OD-8c based on research spike findings. Record each in Decision Log.
 - [ ] **Read reference implementations** before coding: `src/languages/javascript/index.ts` and both other provider implementations for the injection pattern and method contract.
 
 ### Milestone E1: Implement GoProvider
@@ -226,7 +242,8 @@ Following Part 8 checklist, Step 1:
 - [ ] `formatCode()` — `gofmt` (mandatory; no configuration, no alternatives)
 - [ ] `lintCheck()` — run `gofmt -l`, flag any output (means file is not gofmt-clean)
 - [ ] File discovery: `globPattern: '**/*.go'`, `defaultExclude` includes `*_test.go`, `vendor/`, generated files (`.pb.go`, `_gen.go`)
-- [ ] `packageManager: 'go'`, `installCommand(['go.opentelemetry.io/otel'])` returns `'go get go.opentelemetry.io/otel'`, `dependencyFile: 'go.mod'`
+- [ ] `otelSemconvPackage: 'go.opentelemetry.io/otel/semconv'` — per OD-8 resolution (exact versioned import path, e.g., `go.opentelemetry.io/otel/semconv/v1.26.0`, determined by research spike)
+- [ ] `packageManager: 'go'`, `installCommand(['go.opentelemetry.io/otel', 'go.opentelemetry.io/otel/semconv/vX.Y.Z'])` returns the `go get` command (version per OD-8b resolution), `dependencyFile: 'go.mod'`
 - [ ] Register `GoProvider` in `src/languages/registry.ts` for `.go`
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes
@@ -237,7 +254,7 @@ Following Part 8 checklist, Step 2:
 
 - [ ] Create `src/languages/go/prompt.ts`
 - [ ] Constraints section: Go-specific — preserve receiver types, do not change exported/unexported status (capitalization), `defer span.End()` is required (not optional), `gofmt` will be run on output, handle NDS-004 policy (per OD-1: skip functions without `ctx context.Context` parameter, or explain signature change requirement)
-- [ ] OTel SDK patterns: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/trace`
+- [ ] OTel SDK patterns: `go.opentelemetry.io/otel`, `go.opentelemetry.io/otel/trace`. If OD-8a resolves to yes (use typed constants): add `go.opentelemetry.io/otel/semconv/vX.Y.Z` (version from research spike) and instruct the LLM to use typed constants (e.g., `semconv.HTTPRequestMethodKey`) for standard attributes instead of raw `attribute.String(...)` calls.
 - [ ] Tracer acquisition: `otel.Tracer("service-name")` or via `trace.NewTracerProvider()`
 - [ ] Span creation idioms: `ctx, span := tracer.Start(ctx, "operation-name"); defer span.End()`
 - [ ] Error handling: `if err != nil { span.RecordError(err); span.SetStatus(codes.Error, err.Error()); return ..., err }`
@@ -247,6 +264,7 @@ Following Part 8 checklist, Step 2:
   - Function with `if err != nil` error propagation
   - Method on a struct receiver
   - gRPC service method (if in scope)
+  - If OD-8a resolves to yes: HTTP handler using semconv constants for standard attributes (demonstrating `semconv.HTTPRequestMethodKey` vs raw `attribute.String("http.request.method", method)`)
 
 ### Milestone E3: Go Tier 2 checker implementations
 
@@ -257,7 +275,7 @@ Following Part 8 checklist, Step 3:
   - `cov001.ts` — entry points: `http.HandleFunc`, `http.Handler` implementations, Gin/Echo route handlers, gRPC service methods
   - `cov002.ts` — outbound calls: `http.Client.Get/Post/Do`, gRPC client calls, database calls
   - `cov003.ts` — error recording: `if err != nil` blocks that return without `span.RecordError(err)`
-  - `cov004.ts` — async operations: Go goroutines (`go func()`) — decide whether spiny-orb instruments goroutine entry points or defers this; document the decision
+  - `cov004.ts` — async operations: per OD-6 (resolved in pre-implementation gate), `applicableTo('go') = false` for goroutines in the initial implementation; `isAsync` is always `false` for Go functions
   - `cov006.ts` — per OD-5: `applicableTo('go') = false` initially
   - `cdq001.ts` — spans closed: `defer span.End()` is the correct pattern; flag `tracer.Start()` calls without a corresponding `defer span.End()` in the same function
   - `nds004.ts` — signature preservation: apply NDS-004 policy from OD-1; if Option B (skip functions without ctx), this checker must not flag functions that were correctly skipped

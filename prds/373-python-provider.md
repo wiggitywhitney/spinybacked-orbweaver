@@ -139,6 +139,20 @@ Decision needed: Which frameworks are in scope for the initial Python provider?
 
 **Fallback for unrecognized decorators:** When a function has a decorator that is not a recognized framework route decorator, COV-001 abstains (reports unknown) rather than flagging a false positive. Do not report "missing span" when the framework is unrecognized — flag as "entry point classification unknown due to unrecognized decorator." This is consistent with TypeScript OD-4's heuristic abstention approach.
 
+### OD-8: Weaver-generated semconv constants in Python instrumented output
+
+Python's `opentelemetry-semconv` package contains Weaver-generated typed attribute constants (e.g., `from opentelemetry.semconv.trace import SpanAttributes`, then `span.set_attribute(SpanAttributes.HTTP_METHOD, method)`). Good Python OTel code uses these constants instead of raw strings like `"http.request.method"`.
+
+Three sub-decisions:
+
+**OD-8a:** Should the LLM prompt instruct the agent to use `opentelemetry-semconv` constants instead of raw attribute key strings? Recommendation: Yes — this is idiomatic Python OTel code. Resolve after the research spike (see pre-implementation gate).
+
+**OD-8b:** Should `installCommand()` include `opentelemetry-semconv` in addition to `opentelemetry-api`? Recommendation: Yes — if the LLM uses semconv constants, the package must be installed.
+
+**OD-8c:** Should a checker validate that semconv constants are used instead of raw strings for known standard attributes? Recommendation: Defer. The current SCH-001/SCH-002 checkers validate correctness regardless of constant vs. string. A "prefer constants" advisory check is a future enhancement.
+
+**This decision requires a research spike — see pre-implementation gate.**
+
 ### OD-7: `asyncio` scope for COV-004
 
 COV-004 checks that async operations have spans. In Python, `async def` is the async function marker. But `asyncio.create_task()` and `asyncio.gather()` also launch concurrent work.
@@ -175,6 +189,7 @@ Following Part 8 checklist, Step 1:
 - [ ] **OD-3 (dependency file):** Adopt the recommendation: look for `pyproject.toml` first; fall back to `requirements.txt`. Record in Decision Log.
 - [ ] **OD-4 through OD-7:** Record each in the Decision Log before coding begins.
 
+- [ ] **Research spike — Python semconv constants:** Run `/research opentelemetry-semconv-python` to answer: (1) current GA version of `opentelemetry-semconv`; (2) current import path — is it still `from opentelemetry.semconv.trace import SpanAttributes` or has it changed?; (3) stable vs. incubating attribute split (`opentelemetry.semconv._incubating`); (4) which attributes that spiny-orb's checkers care about (HTTP method, status code, URL path, DB system) have stable constants; (5) version pinning constraints relative to `opentelemetry-api`. Record findings in PROGRESS.md before resolving OD-8.
 - [ ] If tree-sitter-python is used and tree-sitter is NOT already in the codebase (check `package.json` dependencies): **stop here and run `/research tree-sitter-python`** before adding any new dependency
 - [ ] Create `src/languages/python/` directory
 - [ ] Create `src/languages/python/ast.ts` — function finding, import detection, export detection (Python has no explicit exports; use naming convention — public functions are those not prefixed with `_`), function classification, existing instrumentation detection
@@ -188,7 +203,8 @@ Following Part 8 checklist, Step 1:
 - [ ] `formatCode()` — Ruff or Black per OD-2 resolution
 - [ ] `lintCheck()` — run formatter, diff output vs. input
 - [ ] File discovery: `globPattern: '**/*.py'`, `defaultExclude` includes `__pycache__`, `.venv`, `venv`, `*.pyc`, `migrations/`, `test_*.py`, `*_test.py` (configurable)
-- [ ] `packageManager: 'pip'`, `installCommand(['opentelemetry-api'])` returns `'pip install opentelemetry-api'`, `dependencyFile` per OD-3 resolution
+- [ ] `otelSemconvPackage: 'opentelemetry-semconv'` — per OD-8 resolution
+- [ ] `packageManager: 'pip'`, `installCommand(['opentelemetry-api', 'opentelemetry-semconv'])` returns `'pip install opentelemetry-api opentelemetry-semconv'` (if OD-8b resolves to yes), `dependencyFile` per OD-3 resolution
 - [ ] Register `PythonProvider` in `src/languages/registry.ts` for `.py`
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes
@@ -199,7 +215,7 @@ Following Part 8 checklist, Step 2:
 
 - [ ] Create `src/languages/python/prompt.ts`
 - [ ] Constraints section: Python-specific — preserve indentation (it is syntax), do not change `async def` to `def`, preserve decorators, do not use JavaScript OTel API
-- [ ] OTel SDK patterns: `from opentelemetry import trace`, `opentelemetry-api` package name
+- [ ] OTel SDK patterns: `from opentelemetry import trace`, `opentelemetry-api` package name. If OD-8a resolves to yes (use typed constants): add semconv import using the current import path from the research spike findings, and instruct the LLM to use typed constants (e.g., `SpanAttributes.HTTP_METHOD`) for standard attributes instead of raw strings.
 - [ ] Tracer acquisition: `trace.get_tracer("service-name")` (snake_case)
 - [ ] Span creation idioms: `with tracer.start_as_current_span("name") as span:` — the `with` block is the span scope; no explicit `span.end()` needed
 - [ ] Error handling: `try/except Exception as e: span.record_exception(e); span.set_status(Status(StatusCode.ERROR, str(e)))`
@@ -209,6 +225,7 @@ Following Part 8 checklist, Step 2:
   - Function with `try/except` error recording
   - Function with outbound HTTP call (using `requests` or `httpx`)
   - Nested function with span context propagation
+  - If OD-8a resolves to yes: function using semconv constants for standard HTTP attributes (demonstrating typed constant vs. raw string)
 
 ### Milestone D3: Python Tier 2 checker implementations and cross-language consistency
 

@@ -195,6 +195,7 @@ At the end of B2:
   - `reassembleFunctions()` delegates to `reassembleFunctions()` from `reassembly.ts`
   - `getSystemPromptSections()` and `getInstrumentationExamples()` delegate to `prompt.ts`
   - `otelImportPattern`, `spanCreationPattern`, `otelApiPackage`, `tracerAcquisitionPattern` — JS/OTel-specific values
+  - `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — the official JS/TS semconv constants package. **Do NOT update the LLM prompt to use typed constants in this PRD** — PRD B is a pure extraction refactor; the prompt currently uses raw strings and must remain unchanged. The naming convention migration (`SEMATTRS_*` → `ATTR_*` at v1.26.0) requires a research spike (see issue #378) before any prompt change is safe.
   - `packageManager: 'npm'`, `installCommand()`, `dependencyFile: 'package.json'`
   - `hasImplementation()` — returns `true` for all 26 rule IDs (initially); NDS-006 is JS-only and returns `true` for JS
 
@@ -308,7 +309,7 @@ At the end of B3:
       for (const rule of getAllRules()) {
         if (rule.applicableTo('javascript')) {
           assert(
-            getProvider('javascript')!.hasImplementation(rule.ruleId),
+            getProviderByLanguage('javascript')!.hasImplementation(rule.ruleId),
             `JavaScript provider missing implementation for ${rule.ruleId}`
           );
         }
