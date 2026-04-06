@@ -1,7 +1,7 @@
 # PRD: Configurable Auto-Instrumentation Allowlist
 
 **Issue**: [#99](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/99)
-**Status**: Draft
+**Status**: Closed — 2026-04-06
 **Priority**: Medium
 **Created**: 2026-03-14
 
