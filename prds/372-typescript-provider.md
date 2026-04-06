@@ -122,7 +122,7 @@ Following the Part 8 checklist, Step 1:
 - [ ] `classifyFunction()` handles TypeScript-specific patterns: decorators (`@Injectable`, `@Controller`, `@Route`), class methods, arrow function properties, overloaded signatures
 - [ ] `detectExistingInstrumentation()` pattern covers TypeScript OTel import syntax
 - [ ] `extractFunctions()` and `reassembleFunctions()` handle TypeScript syntax (type annotations, decorators, generics)
-- [ ] `checkSyntax()` — implement using `tsc --noEmit` or `node --check` with Node's native type stripping
+- [ ] `checkSyntax()` — implement using `tsc --noEmit`. **Do NOT use `node --check`** — Node's native type stripping only validates JavaScript syntax, not TypeScript types. TypeScript's value for instrumentation validation is catching type errors introduced by the agent (e.g., wrong argument type to `span.setAttribute()`). `tsc --noEmit` is required.
 - [ ] `formatCode()` — Prettier (already handles TypeScript)
 - [ ] `lintCheck()` — Prettier diff (same as JavaScript)
 - [ ] File discovery: `globPattern: '**/*.{ts,tsx}'` (or `'**/*.ts'` if OD-2 defers TSX), `defaultExclude` includes `*.d.ts`, generated files, `*.test.ts`

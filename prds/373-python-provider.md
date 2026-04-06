@@ -296,7 +296,7 @@ Following Part 8 checklist, Steps 5 and 6:
 
 - **Risk: Neither Ruff nor Black is installed on the target machine**
   - Impact: `formatCode()` returns the unformatted original; `lintCheck()` flags it — but the pipeline sees "formatted output" (actually unformatted) and then a lint failure, which may look like a confusing cascade
-  - Mitigation: This is the correct behavior, not a bug. If `formatCode()` returns unformatted source because no formatter is installed, `lintCheck()` will correctly flag the missing formatter. The error message from `lintCheck()` must be "Python formatter not found. Install ruff or black." — not a generic lint failure message. The implementing AI must ensure these two methods produce coherent diagnostic output together.
+  - Mitigation: This is the correct behavior, not a bug. If `formatCode()` returns unformatted source because no formatter is installed, `lintCheck()` will correctly flag the missing formatter. The error message from `lintCheck()` must be exactly `'Python formatter not found. Install ruff (pip install ruff) or black (pip install black).'` — matching the canonical message specified in OD-2. The implementing AI must ensure these two methods produce coherent diagnostic output together.
 
 - **Risk: Python `pasta` library used by mistake for structural analysis**
   - Impact: `pasta` is for format-preserving rewrites, not structural analysis; using it for parsing is over-engineering
