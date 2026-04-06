@@ -175,7 +175,7 @@ Decision needed: Set `cov006` to `applicableTo('go') = false` initially?
 
 ## Decision Log
 
-_Populate as decisions are made during implementation._
+*Populate as decisions are made during implementation.*
 
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|

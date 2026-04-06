@@ -286,7 +286,7 @@ At the end of B3:
   - `getAllRules(): ValidationRule[]`
   - `getRuleById(ruleId: string): ValidationRule | undefined`
 
-- [ ] For each of the 26 checker files in `src/languages/javascript/rules/` (created in B1):
+- [ ] For each of the 21 non-portable checker files in `src/languages/javascript/rules/` (created in B1 — excludes the 5 portable rules that remain in `src/validation/tier2/`):
   - Export a class or object implementing `ValidationRule`
   - `ruleId` matches the existing rule ID (e.g., `'COV-001'`)
   - `dimension` matches the existing dimension grouping
