@@ -111,20 +111,24 @@ The existing `ExtractedFunction` in `src/fix-loop/function-extraction.ts` has `b
 
 **Why:** A Go provider has no ts-morph `SourceFile`. A function reference in an interface type would force all providers to manufacture a fake source file object. Pre-building `contextHeader` at extraction time is simpler and equivalent in practice — extraction always happens before context building anyway.
 
-### Decision 4: `otelImportPattern` and `spanCreationPattern` are kept as `RegExp`
+### Decision 4: `otelImportPattern` and `spanCreationPattern` are `RegExp`; `tracerAcquisitionPattern` is `string`
 
-The handoff flags these as "JS-flavored" and asks for alternatives. Evaluation: `RegExp` is language-agnostic as a type — it's just a pattern to test against source text. Every language has OTel imports that can be regex-matched:
+The handoff flags `otelImportPattern` and `spanCreationPattern` as "JS-flavored" and asks for alternatives. Evaluation: `RegExp` is language-agnostic as a type — it's just a pattern to test against source text. Every language has OTel imports that can be regex-matched:
 - JS: `/from ['"]@opentelemetry\/api['"]/`
 - Python: `/from opentelemetry import/`
 - Go: `/go\.opentelemetry\.io\/otel/`
 
 These patterns are different per language but the *type* `RegExp` is fine. Each provider supplies its own values.
 
-**Why `RegExp` over `string`:** The shared validation chain may need to do a fast pre-check ("is OTel even imported?") without calling into the provider. A `RegExp` lets the shared code do `provider.otelImportPattern.test(source)` without a full parse.
+**Why `RegExp` over `string` for import/span patterns:** The shared validation chain may need a fast pre-check ("is OTel even imported?") without calling into the provider. A `RegExp` lets shared code do `provider.otelImportPattern.test(source)` without a full parse.
 
-### Decision 5: `tracerAcquisitionPattern` and `spanCreationPattern` are `RegExp`, not `string`
+`tracerAcquisitionPattern` is **`string`**, not `RegExp`. It is a human-readable display value (e.g., `"trace.getTracer()"`, `"trace.get_tracer()"`, `"otel.Tracer()"`) used in LLM prompt context — it shows the LLM what the tracer acquisition pattern looks like in the target language. It is not used for source text detection. Using `RegExp` here would be incorrect.
 
-Same reasoning as Decision 4. Each provider knows what its patterns look like; the type is generic.
+### Decision 5: `FunctionClassification` includes `'unknown'` for abstention
+
+Tier 2 checkers that use `classifyFunction()` may encounter patterns they cannot classify confidently (e.g., a function parameter named `req` could be `express.Request` or a custom type). Rather than forcing a guess, `classifyFunction()` may return `'unknown'`. A checker that receives `'unknown'` abstains — it neither flags the function as a violation nor marks it as compliant. Abstention is the correct behavior when the evidence is insufficient.
+
+The full `FunctionClassification` union: `'entry-point' | 'outbound-call' | 'thin-wrapper' | 'utility' | 'internal-detail' | 'unknown'`.
 
 ### Decision 6: `RuleInput` extends `ValidateFileInput` with language context
 
@@ -222,7 +226,7 @@ This tag is the recovery baseline. If the multi-language refactor proves too dis
 
 Write the new file. The file must:
 
-- [ ] Define `FunctionClassification` as a union type: `'entry-point' | 'outbound-call' | 'thin-wrapper' | 'utility' | 'internal-detail'`
+- [ ] Define `FunctionClassification` as a union type: `'entry-point' | 'outbound-call' | 'thin-wrapper' | 'utility' | 'internal-detail' | 'unknown'` — the `'unknown'` variant enables checkers to abstain when classification evidence is insufficient (per Decision 5)
 - [ ] Define `FunctionInfo` (language-agnostic): `name: string`, `startLine: number`, `endLine: number`, `isExported: boolean`, `isAsync: boolean`, `lineCount: number`
 - [ ] Define `ImportInfo` (language-agnostic): `moduleSpecifier: string`, `importedNames: string[]`, `alias: string | undefined`, `lineNumber: number`
 - [ ] Define `ExportInfo`: `name: string`, `lineNumber: number`, `isDefault: boolean`
@@ -240,7 +244,7 @@ Write the new file. The file must:
   - AST analysis: `findFunctions(source: string): FunctionInfo[]`, `findImports(source: string): ImportInfo[]`, `findExports(source: string): ExportInfo[]`, `classifyFunction(fn: FunctionInfo): FunctionClassification`, `detectExistingInstrumentation(source: string): boolean`
   - Function-level fallback: `extractFunctions(source: string): ExtractedFunction[]`, `reassembleFunctions(original: string, extracted: ExtractedFunction[], results: FunctionResult[]): string`
   - LLM prompt context: `getSystemPromptSections(): LanguagePromptSections`, `getInstrumentationExamples(): Example[]`
-  - OTel specifics: `otelImportPattern: RegExp`, `otelApiPackage: string`, `tracerAcquisitionPattern: string`, `spanCreationPattern: RegExp`
+  - OTel specifics: `otelImportPattern: RegExp`, `otelApiPackage: string`, `tracerAcquisitionPattern: string` (display string for LLM prompt, e.g. `"trace.getTracer()"`), `spanCreationPattern: RegExp`
   - Package management: `packageManager: string`, `installCommand(packages: string[]): string`, `dependencyFile: string`
   - Parity check: `hasImplementation(ruleId: string): boolean`
 - [ ] All async methods use `Promise<T>` return types (syntax checking and formatting call external processes)

@@ -114,7 +114,7 @@ Move the files listed above. At the end of B1, the following must be true:
   - `src/languages/javascript/extraction.ts` — function-extraction
   - `src/languages/javascript/reassembly.ts` — function-reassembly
   - `src/languages/javascript/prompt.ts` — JS-specific prompt sections extracted from agent/prompt.ts
-  - `src/languages/javascript/rules/` — one file per Tier 2 checker (26 files, see Tier 2 checkers section below)
+  - `src/languages/javascript/rules/` — one file per **non-portable** Tier 2 checker (21 files — the 5 portable rules `sch001`, `sch002`, `sch003`, `sch004`, `cdq008` stay in `src/validation/tier2/` and are NOT duplicated here)
 
 - [ ] `src/languages/javascript/ast.ts`:
   - **"Merge" means: create a single new `.ts` file that contains all the function bodies, types, and interfaces from `function-classification.ts`, `import-detection.ts`, and `variable-shadowing.ts`. Copy content verbatim — do not refactor during the move.** The result is one file with all three files' content combined.
@@ -404,4 +404,4 @@ Pass rate calculation: `(passing golden tests) / (total golden tests)`. Skip vs.
 
 ## Progress Log
 
-_Updated by `/prd-update-progress` as milestones complete._
+*Updated by `/prd-update-progress` as milestones complete.*

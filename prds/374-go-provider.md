@@ -184,6 +184,8 @@ _Populate as decisions are made during implementation._
 | OD-3 | (pending) | | |
 | OD-4 | (pending) | | |
 | OD-5 | (pending) | | |
+| OD-6 | (pending) | | |
+| OD-7 | (pending) | | |
 
 ---
 
@@ -341,4 +343,4 @@ If the interface survived with only additive changes (new optional methods or ne
 
 ## Progress Log
 
-_Updated by `/prd-update-progress` as milestones complete._
+*Updated by `/prd-update-progress` as milestones complete.*

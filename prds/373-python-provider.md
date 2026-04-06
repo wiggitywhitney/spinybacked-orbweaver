@@ -101,7 +101,7 @@ Both Black and Ruff format Python code. Ruff is faster and is increasingly repla
 
 Decision needed: Which formatter does `PythonProvider.formatCode()` use?
 
-**Recommendation (to be confirmed):** Detect both at runtime — try Ruff first (`ruff format`), fall back to Black (`black`). If neither is installed, return a `CheckResult` with `passed: false` and a clear message explaining how to install one (`pip install ruff` or `pip install black`). This avoids forcing a specific formatter on projects that already have one.
+**Recommendation (to be confirmed):** Detect both at runtime — try Ruff first (`ruff format`), fall back to Black (`black`). `formatCode()` must always return `Promise<string>` per the `LanguageProvider` interface — return either the formatted source or the original source unchanged if no formatter is available. Formatter availability is reported through `lintCheck()`: if neither Ruff nor Black is installed, `lintCheck()` returns `CheckResult` with `passed: false, message: 'Python formatter not found. Install ruff (pip install ruff) or black (pip install black).'` This keeps `formatCode()` interface-compliant while still surfacing the error.
 
 Record the final decision in this PRD's Decision Log — this must be a documented design decision, not an implementation detail discovered mid-milestone.
 
@@ -171,7 +171,7 @@ Following Part 8 checklist, Step 1:
 
 **Resolve outstanding decisions before touching any source file:**
 - [ ] **OD-1 (parser choice):** The recommendation is tree-sitter-python. Run `/research tree-sitter-python` to verify current API and installation approach. Record the decision in the Decision Log: `| [date] | OD-1: tree-sitter-python | [rationale] | [impact] |`. If you choose stdlib `ast` instead, document why tree-sitter was rejected.
-- [ ] **OD-2 (formatter):** Adopt the recommendation: detect Ruff first (`ruff format --check`), fall back to Black (`black --check`). If neither found, return `CheckResult` with `passed: false, message: 'Python formatter not found. Install ruff (pip install ruff) or black (pip install black).'` Record in Decision Log.
+- [ ] **OD-2 (formatter):** Adopt the recommendation: `formatCode()` returns `Promise<string>` (formatted source, or original if no formatter found). `lintCheck()` returns `CheckResult` with `passed: false` and install instructions when neither Ruff nor Black is found. Record in Decision Log.
 - [ ] **OD-3 (dependency file):** Adopt the recommendation: look for `pyproject.toml` first; fall back to `requirements.txt`. Record in Decision Log.
 - [ ] **OD-4 through OD-7:** Record each in the Decision Log before coding begins.
 
