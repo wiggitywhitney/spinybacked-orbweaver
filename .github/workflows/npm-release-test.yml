@@ -1,0 +1,142 @@
+# Test npm release — installs spiny-orb from the npm registry and runs it
+# against a fixture to verify the published artifact works end-to-end.
+#
+# This is distinct from verify-action.yml, which runs the CLI from source.
+# Here we test the published package: exercises the files field, bin entry,
+# exports field, and runtime dependency closure.
+#
+# Triggered automatically on every GitHub release publication.
+# Also triggerable on PRs via the run-acceptance label for pre-publish validation.
+#
+# Secrets required: ANTHROPIC_API_KEY
+
+name: Test npm Release
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+
+  pull_request:
+    types: [labeled, opened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  npm-release-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      github.event_name == 'release' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'run-acceptance'))
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Install Weaver — required for spiny-orb schema validation
+      - name: Install Weaver CLI
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh | sh
+          weaver --version
+
+      # Set up a test project with all prerequisites
+      # File contents mirror verify-action.yml exactly — proven working setup
+      - name: Create test project
+        run: |
+          TEST_DIR="${RUNNER_TEMP}/test-project"
+          mkdir -p "$TEST_DIR/src" "$TEST_DIR/semconv"
+
+          cp test/fixtures/project/src/order-service.js "$TEST_DIR/src/"
+          cp test/fixtures/weaver-registry/valid/* "$TEST_DIR/semconv/"
+
+          cat > "$TEST_DIR/package.json" << 'PKGJSON'
+          {
+            "name": "action-test-project",
+            "version": "1.0.0",
+            "peerDependencies": {
+              "@opentelemetry/api": "^1.9.0"
+            }
+          }
+          PKGJSON
+
+          cat > "$TEST_DIR/src/instrumentation.js" << 'INITJS'
+          const { NodeSDK } = require('@opentelemetry/sdk-node');
+          const sdk = new NodeSDK({});
+          sdk.start();
+          INITJS
+
+          cat > "$TEST_DIR/spiny-orb.yaml" << 'ORBYAML'
+          schemaPath: semconv
+          sdkInitFile: src/instrumentation.js
+          ORBYAML
+
+          cd "$TEST_DIR"
+          git init
+          git config user.email "test@example.com"
+          git config user.name "Test"
+          git add -A
+          git commit -m "initial"
+
+          echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+
+      # Install spiny-orb from the npm registry — NOT from source
+      - name: Run instrumentation (from npm registry)
+        id: instrument
+        working-directory: ${{ env.TEST_DIR }}
+        run: |
+          RESULT=$(npx -y spiny-orb@latest instrument --yes --output json src/order-service.js 2>spiny-orb-stderr.log) || EXIT_CODE=$?
+          EXIT_CODE=${EXIT_CODE:-0}
+
+          echo "--- stderr output ---"
+          cat spiny-orb-stderr.log
+
+          echo "result<<RESULT_EOF" >> "$GITHUB_OUTPUT"
+          echo "${RESULT}" >> "$GITHUB_OUTPUT"
+          echo "RESULT_EOF" >> "$GITHUB_OUTPUT"
+
+          exit ${EXIT_CODE}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # Assert: status=success and spansAdded>0
+      - name: Verify installed artifact instrumented successfully
+        if: always() && steps.instrument.outputs.result != ''
+        env:
+          RESULT: ${{ steps.instrument.outputs.result }}
+        run: |
+          echo "${RESULT}" | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            if (!d.fileResults || !Array.isArray(d.fileResults)) {
+              console.error("Missing or invalid fileResults array");
+              process.exit(1);
+            }
+            if (d.fileResults.length !== 1) {
+              console.error("Expected 1 file result, got", d.fileResults.length);
+              process.exit(1);
+            }
+            const f = d.fileResults[0];
+            console.log("File:", f.path);
+            console.log("Status:", f.status);
+            console.log("Spans added:", f.spansAdded);
+            if (f.status !== "success") {
+              console.error("Expected status=success, got", f.status);
+              process.exit(1);
+            }
+            if (!f.spansAdded || f.spansAdded < 1) {
+              console.error("Expected spansAdded > 0, got", f.spansAdded);
+              process.exit(1);
+            }
+            console.log("Installed artifact passed: status=success, spansAdded=" + f.spansAdded);
+          '
