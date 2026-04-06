@@ -51,22 +51,22 @@ The right fixture is `test/fixtures/project/src/order-service.js` — it is alre
 - Has a known-good instrumentation outcome (look at the ABOUTME header in each fixture for the run-4/run-5 outcome history)
 - Will complete within ~3 minutes on a GitHub Actions runner
 
-- [ ] Use `test/fixtures/project/src/order-service.js` as the test input — the same fixture already used by `verify-action.yml`. It has async functions that reliably produce spans and completes in under 30 seconds.
-- [ ] Read `verify-action.yml`'s "Create test project" step in full. Copy its `package.json`, SDK init file, and `spiny-orb.yaml` contents exactly — this is a proven working setup for this exact fixture.
-- [ ] Document the expected outcome in this PRD: `status === "success"` and `spansAdded > 0`.
+- [x] Use `test/fixtures/project/src/order-service.js` as the test input — the same fixture already used by `verify-action.yml`. It has async functions that reliably produce spans and completes in under 30 seconds.
+- [x] Read `verify-action.yml`'s "Create test project" step in full. Copy its `package.json`, SDK init file, and `spiny-orb.yaml` contents exactly — this is a proven working setup for this exact fixture.
+- [x] Document the expected outcome in this PRD: `status === "success"` and `spansAdded > 0`. The test project setup (copied from `verify-action.yml`) uses `order-service.js` with a minimal `package.json` (peerDependencies: `@opentelemetry/api`), an SDK init file (`instrumentation.js`), and `spiny-orb.yaml` pointing `schemaPath: semconv` and `sdkInitFile: src/instrumentation.js`. PR label trigger: `verify-action.yml` pattern — `contains(github.event.pull_request.labels.*.name, 'run-acceptance')`.
 
 ### Milestone 2: Write the GitHub Actions workflow
 
 **Before starting**: Read `verify-action.yml` in full — it is the closest structural analog. The new workflow follows the same pattern but swaps the "run from source" step for "install from npm."
 
-- [ ] Before writing the workflow: read `.github/workflows/acceptance-gate.yml` and `.github/workflows/verify-action.yml` in full — copy the PR label trigger block from `acceptance-gate.yml` exactly (`contains(github.event.pull_request.labels.*.name, 'run-acceptance')` syntax), and use `verify-action.yml` as the structural model.
-- [ ] Create `.github/workflows/npm-release-test.yml` with the following structure:
+- [x] Before writing the workflow: read `.github/workflows/acceptance-gate.yml` and `.github/workflows/verify-action.yml` in full — copy the PR label trigger block from `acceptance-gate.yml` exactly (`contains(github.event.pull_request.labels.*.name, 'run-acceptance')` syntax), and use `verify-action.yml` as the structural model.
+- [x] Create `.github/workflows/npm-release-test.yml` with the following structure:
   - Triggers: `release: [published]` and `pull_request: [labeled, synchronize]` (gated on `run-acceptance` label — use the exact label-checking syntax from `acceptance-gate.yml`)
   - Runs on `ubuntu-latest`, timeout 20 minutes
   - Steps: checkout → setup-node (Node 24) → `npm ci` (for weaver PATH setup) → install Weaver CLI (same method as `verify-action.yml`) → create test project directory using the same `package.json`, SDK init file, and `spiny-orb.yaml` as `verify-action.yml`'s "Create test project" step (copy those exact file contents) → **`npx spiny-orb@latest instrument --yes --output json src/order-service.js`** → parse and assert result
-- [ ] The assertion step must verify: exit code 0, `fileResults[0].status === "success"`, `fileResults[0].spansAdded > 0`. Fail with a clear error message if any condition is not met.
-- [ ] Wire up `ANTHROPIC_API_KEY` from secrets (same pattern as `verify-action.yml`).
-- [ ] Add a `permissions: id-token: read, contents: read` block (standard for release-triggered workflows).
+- [x] The assertion step must verify: exit code 0, `fileResults[0].status === "success"`, `fileResults[0].spansAdded > 0`. Fail with a clear error message if any condition is not met.
+- [x] Wire up `ANTHROPIC_API_KEY` from secrets (same pattern as `verify-action.yml`).
+- [x] Add a `permissions: id-token: read, contents: read` block (standard for release-triggered workflows).
 
 ### Milestone 3: Test the workflow end-to-end
 
@@ -75,6 +75,7 @@ The right fixture is `test/fixtures/project/src/order-service.js` — it is alre
 - [ ] Push the workflow to the feature branch and create a PR with the `run-acceptance` label to trigger the PR path.
 - [ ] Verify the workflow runs to completion: the install step fetches from the registry (not from source), the instrumentation step runs with a real API call, and the assertion step passes.
 - [ ] Note: `gh workflow list` only shows workflows on the default branch — the workflow will appear there after the PR merges, not during PR testing. During PR testing, validate YAML syntax with `python3 -c "import yaml; yaml.safe_load(open('.github/workflows/npm-release-test.yml'))"` instead.
+- [x] Update `.claude/CLAUDE.md` to document that any new GitHub release must pass the `npm-release-test.yml` workflow. The note should explain what it tests (installed artifact from registry, not source) and how to trigger it manually (create a PR with the `run-acceptance` label).
 - [ ] Add a note to `PROGRESS.md` documenting that release-triggered npm artifact validation is in place.
 
 ---

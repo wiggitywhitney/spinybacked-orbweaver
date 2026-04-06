@@ -105,6 +105,17 @@ Do not invent tasks outside the PRD structure. When a PRD exists, follow it. Do 
 
 **Never dismiss acceptance gate test failures.** When the acceptance gate suite reports failures — whether during a hook, a manual run, or a `/prd-next` loop — treat every failure as a real signal that must be investigated. Do not rationalize failures as "unrelated to the current task" or "pre-existing." If the tests fail, something is wrong, and the current work cannot proceed until the failures are understood and resolved (or triaged into a dedicated PRD).
 
+## npm Release Workflow
+
+When creating a new GitHub release (`v1.x.x`):
+
+1. The `publish.yml` workflow fires automatically and publishes to npm via OIDC trusted publishing.
+2. The `npm-release-test.yml` workflow fires automatically and tests the **installed artifact** — it installs `spiny-orb@latest` from the npm registry (not from source) and runs `spiny-orb instrument` against a fixture, asserting `status=success` and `spansAdded>0`.
+
+If `npm-release-test.yml` fails after a release, the package was published but the artifact is broken. Investigate and publish a patch release.
+
+To trigger `npm-release-test.yml` manually before a release (e.g., to validate packaging changes), create a PR with the `run-acceptance` label.
+
 ## Testing: Weaver CLI
 
 **Never mock the Weaver CLI.** Weaver is installed locally and runs fast (<1s per command except live-check). All tests that exercise Weaver behavior must run against the real binary. Mocking Weaver has hidden real bugs (wrong output format assumptions, deprecated commands, missing flags). Use real registry fixtures instead of fabricating Weaver output.
