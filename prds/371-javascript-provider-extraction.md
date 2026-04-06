@@ -339,7 +339,7 @@ This is a significant refactor of `chain.ts` itself — not just the checkers. I
   - `ruleId` matches the existing rule ID (e.g., `'COV-001'`)
   - `dimension` matches the existing dimension grouping
   - `blocking` matches the existing blocking status
-  - `applicableTo(language: string)` returns `true` for `'javascript'` and `'typescript'`; for `nds006`, also returns `false` for `'python'` and `'go'`; portable rules (`sch-*`, `cdq008`) return `true` for all languages
+  - `applicableTo(language: string)` returns `true` for `'javascript'` and `'typescript'`; for `nds006`, also returns `false` for `'python'` and `'go'`; `sch001`–`sch004` and `cdq008` return `true` for all languages (the *rule concept* applies universally — every language needs span names and attribute keys validated against the registry — even though SCH-001–004 have language-specific *extractor implementations*)
   - `check(input: RuleInput)` contains the implementation from the existing checker file
 
 - [ ] Register all 25 JS rule implementations in `src/languages/javascript/index.ts` (the provider registers its rules on construction). CDQ-008 self-registers from `src/validation/tier2/` since it's the shared implementation.
