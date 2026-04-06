@@ -444,9 +444,9 @@ Pass rate calculation: `(passing golden tests) / (total golden tests)`. Skip vs.
   - Impact: Build failure; TypeScript type errors
   - Mitigation: The one-at-a-time deletion with grep + typecheck between each deletion (per B3 milestone) catches this before it accumulates.
 
-- **Risk: Portable rules end up duplicated — once in `src/validation/tier2/` and once in `src/languages/javascript/rules/`**
+- **Risk: Shared validator helpers and language-specific extractors get mixed or duplicated**
   - Impact: Two implementations diverge; one doesn't stay up to date
-  - Mitigation: Portable rules (`sch001`, `sch002`, `sch003`, `sch004`, `cdq008`) stay ONLY in `src/validation/tier2/`. Do not copy them to `src/languages/javascript/rules/`. The JavaScript provider's `hasImplementation()` returns `true` for them because the shared implementation counts.
+  - Mitigation: Shared validators (the pure registry-comparison functions in `src/validation/tier2/`) stay there and are imported by language-specific rules. Language-specific extractors (ts-morph for JS) live in `src/languages/javascript/rules/`. CDQ-008 is the only rule that stays entirely in `src/validation/tier2/` with no language-specific partner. SCH-001–004 have JS extractor halves in `src/languages/javascript/rules/` calling the shared validator helper.
 
 ---
 
