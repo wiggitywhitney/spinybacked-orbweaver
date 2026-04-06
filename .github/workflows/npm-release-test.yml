@@ -23,7 +23,6 @@ on:
 
 permissions:
   contents: read
-  id-token: read
 
 concurrency:
   group: npm-release-test-${{ github.ref }}
