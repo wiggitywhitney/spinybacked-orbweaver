@@ -4,13 +4,11 @@
 **Session:** d5ecc2af-00a6-43d1-83c1-40c3e79229af
 **Compaction trigger:** auto
 
-Good, I have everything I need. Here's the document:
-
 ---
 
 ## CURRENT APPROACH
 
-**Re-export detection in `buildContext`** (`src/fix-loop/function-extraction.ts`):
+**Re-export detection in `buildContext`** (`src/languages/javascript/extraction.ts`, formerly `src/fix-loop/function-extraction.ts` which is now a re-export stub):
 
 When extracting functions for function-level instrumentation, the agent tracks whether each function is exported — either directly (`export async function foo()`) or via a re-export block at the bottom of the file (`export { foo, bar }`). This `isExported` boolean is stored on `ExtractedFunction` and passed into `buildExtractedFunction`. In `buildContext`, when a function is exported but its source text does NOT start with `export ` (i.e., it's a re-exported function), a comment `// This function is exported (via re-export block)` is prepended to the LLM context. This tells the LLM to apply COV rules rather than RST-004 ("do not instrument unexported internals").
 
@@ -69,7 +67,7 @@ When extracting functions for function-level instrumentation, the agent tracks w
 ## CURRENT STATE
 
 **Built and merged (PR #347 → main):**
-- `src/fix-loop/function-extraction.ts`: `isExported` on `ExtractedFunction`; `buildExtractedFunction` accepts `isExported`; `buildContext` injects export annotation; per-declaration re-export check in variable statement loop; `collectReExportedNames` helper
+- `src/languages/javascript/extraction.ts` (moved from `src/fix-loop/function-extraction.ts` in PRD #371 B1 — old path is now a re-export stub): `isExported` on `ExtractedFunction`; `buildExtractedFunction` accepts `isExported`; `buildContext` injects export annotation; per-declaration re-export check in variable statement loop; `collectReExportedNames` helper
 - Acceptance gate threshold for journal-graph.js restored to `>= 4`
 - Unit tests: `buildContext` export annotation test; per-declaration multi-declarator coverage; tighter test assertions per CodeRabbit
 
