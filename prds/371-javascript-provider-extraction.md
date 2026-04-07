@@ -114,7 +114,7 @@ Move the files listed above. At the end of B1, the following must be true:
   - `src/languages/javascript/extraction.ts` — function-extraction
   - `src/languages/javascript/reassembly.ts` — function-reassembly
   - `src/languages/javascript/prompt.ts` — JS-specific prompt sections extracted from agent/prompt.ts
-  - `src/languages/javascript/rules/` — one file per **non-portable** Tier 2 checker (21 files — the 5 portable rules `sch001`, `sch002`, `sch003`, `sch004`, `cdq008` stay in `src/validation/tier2/` and are NOT duplicated here)
+  - `src/languages/javascript/rules/` — one file per non-portable Tier 2 checker **(25 files — only CDQ-008 is truly portable and stays in `src/validation/tier2/`; SCH-001–004 extractor halves, NDS-003 patterns, and API-002 are all JS-specific; see B3 for the full breakdown)**
 
 - [ ] `src/languages/javascript/ast.ts`:
   - **"Merge" means: create a single new `.ts` file that contains all the function bodies, types, and interfaces from `function-classification.ts`, `import-detection.ts`, and `variable-shadowing.ts`. Copy content verbatim — do not refactor during the move.** The result is one file with all three files' content combined.
@@ -228,6 +228,19 @@ At the end of B2:
   - Tier 1 validation now calls `provider.checkSyntax()` and `provider.lintCheck()` instead of direct imports from `validation/tier1/`
   - Note: Tier 2 checker wiring via `ValidationRule` happens in B3, not B2
 
+- [ ] Wire `src/coordinator/dispatch.ts` project name read:
+  - The current code at line ~236 reads `package.json` directly (`readFile(join(projectDir, 'package.json'), 'utf-8')`). This silently fails for Python and Go projects that have no `package.json`.
+  - Replace with `provider.readProjectName(projectDir)` — the method will be defined on the `LanguageProvider` interface by PRD #370 (a blocker for this PRD) and reads the language-appropriate manifest.
+  - **Error handling is two-tier:**
+    - `undefined` return (manifest file doesn't exist) → non-fatal; `projectName` stays `undefined` and the tracer name falls back to the default. Keep this path inside try/catch, same as today.
+    - Thrown error (manifest exists but fails to parse) → propagate the error; do NOT swallow it. A corrupt `package.json` is a real problem the user should know about, not a silent fallback.
+
+- [ ] Wire `src/fix-loop/instrument-with-retry.ts` temp file extension:
+  - **Before modifying, read `src/fix-loop/instrument-with-retry.ts` in full** to understand `InstrumentWithRetryOptions` — that's the existing options type for injectable deps.
+  - Line 699 hardcodes `.js` in the temp file path: `` `fn-${fn.name}-${Date.now()}.js` ``
+  - Replace with `provider.fileExtensions[0]` (already on the interface — e.g., `.js` for JS, `.py` for Python, `.go` for Go).
+  - Add `provider: LanguageProvider` to `InstrumentWithRetryOptions` (the existing injectable deps type). Pass it from `dispatchFiles` → `instrumentWithRetry`. **Do NOT add a new injection mechanism** — extend `InstrumentWithRetryOptions`.
+
 - [ ] Delete re-export stubs from B1 where the consumer has been migrated in B2. Stubs for code that B3 will migrate (tier2 checkers) stay in place until B3 completes — do not delete them here. **"Progressively" means: delete a stub in the same commit that migrates its last consumer, not as a separate cleanup pass.**
 
 - [ ] `npm run typecheck` passes
@@ -245,16 +258,45 @@ At the end of B3:
 3. The feature parity assertion (Part 7.4 of research doc) can be run
 4. All tests pass
 
-**Portable rules architecture:** The 5 portable rules (`sch001`, `sch002`, `sch003`, `sch004`, `cdq008`) check schema strings and span names — concerns that have no language-specific implementation. These rules implement `ValidationRule` but do NOT live in `src/languages/javascript/rules/`. They stay in `src/validation/tier2/` because they apply to all languages with the same implementation. Their `check()` method is shared across all providers; `applicableTo()` returns `true` for all languages. The `JavaScriptProvider.hasImplementation()` method returns `true` for these rules because the shared implementations count as valid implementations.
+**Portable rules architecture (corrected):** Only **1 rule is truly portable: CDQ-008** (`checkTracerNamingConsistency`). It uses regex on raw code strings — no AST, no ts-morph, no language-specific patterns. It stays in `src/validation/tier2/` as a shared implementation.
+
+**SCH-001–004 are NOT portable** — verified by reading the source. Each SCH checker uses ts-morph (`new Project()`, `createSourceFile('check.js', code)`) to extract span names or attribute keys from the instrumented code before validating them against the Weaver registry. The extraction half is JS-specific. The validation half (comparing extracted names/keys against the Weaver registry) is language-agnostic.
+
+**The correct split for SCH-001–004:**
+
+The `ValidationRule` interface has a single `check(input: RuleInput): CheckResult` method. The split is implemented by keeping a shared validator helper in `src/validation/tier2/` and having the JS rule's `check()` call it:
+
+- `src/validation/tier2/schNNN.ts` — becomes a **shared validator helper**: a pure function that takes extracted names/keys (plain strings, not source code) and validates them against the Weaver registry. Signature like `validateSpanNamesAgainstRegistry(names: string[], registry: object, filePath: string): CheckResult[]`. Language-agnostic — no ts-morph, no source code parsing.
+- `src/languages/javascript/rules/schNNN.ts` — a `ValidationRule` implementation whose `check()` does two things: (1) extract names/keys from `input.instrumentedCode` using ts-morph (the JS-specific part), (2) call the shared validator helper from `src/validation/tier2/schNNN.ts` with the extracted results.
+
+When Python and Go providers add their SCH checkers, their `check()` will use their own parser for step (1) and call the same shared validator helper for step (2). **The shared helper is a function, not a `ValidationRule` — it is called by language-specific rules, not registered directly.**
+
+**NDS-003** is already in the JS-specific bucket but needs the same conceptual split: the diff logic is language-agnostic, but the `INSTRUMENTATION_PATTERNS` regex array (`@opentelemetry/api`, `.startActiveSpan(`, etc.) is JS-specific. The JS implementation provides its own pattern set; Python and Go providers will provide theirs.
+
+**API-002** reads `package.json` directly — it is language-specific. The concept (correct dependency declaration) is portable, but the implementation needs a per-language version (`requirements.txt`/`pyproject.toml` for Python, `go.mod` for Go).
+
+**Corrected counts:**
+- Truly portable (shared implementation, stay in `src/validation/tier2/`): **1** (CDQ-008)
+- Non-portable checkers needing JS-specific implementations in `src/languages/javascript/rules/`: **25** (the original 21 + SCH-001, SCH-002, SCH-003, SCH-004 extraction halves)
+
+**`chain.ts` must be explicitly refactored in B3.** The current `src/validation/chain.ts` has 23 direct tier2 checker function imports at the top and calls each inline with `if (config.tier2Checks['COV-001']?.enabled)` guards. There is no language dispatch, no rule registry, no concept of "which checkers apply to this language." After B3, this must change. The chain needs to:
+1. Drop all 23 direct tier2 checker imports
+2. Accept `LanguageProvider` as a parameter (passed via `ValidationConfig` or directly)
+3. Call `getRulesForLanguage(language)` to get the applicable rule set
+4. Dispatch to `rule.check(input)` for each applicable rule
+
+This is a significant refactor of `chain.ts` itself — not just the checkers. It is a first-class B3 deliverable, not an implicit consequence of moving checkers around.
 
 **Tier 2 checker classification** (from Part 6 of research doc):
 
-*Portable — schema/string checks, same implementation for all languages:*
-- `sch001.ts` — span names match registry
-- `sch002.ts` — attribute keys match registry
-- `sch003.ts` — attribute values conform to types
-- `sch004.ts` — no redundant schema entries
-- `cdq008.ts` — tracer naming consistency
+*Truly portable — regex on raw strings, no language-specific logic:*
+- `cdq008.ts` — tracer naming consistency (stays in `src/validation/tier2/` as shared impl)
+
+*Split: extraction half is JS-specific, validation half is portable:*
+- `sch001.ts` — span names match registry (extractor uses ts-morph → `src/languages/javascript/rules/`; validator compares against Weaver registry → stays in `src/validation/tier2/`)
+- `sch002.ts` — attribute keys match registry (same split)
+- `sch003.ts` — attribute values conform to types (same split)
+- `sch004.ts` — no redundant schema entries (same split)
 
 *Shared-concept — same rule semantics, JS-specific implementation:*
 - `cov001.ts` — entry points have spans
@@ -287,15 +329,22 @@ At the end of B3:
   - `getAllRules(): ValidationRule[]`
   - `getRuleById(ruleId: string): ValidationRule | undefined`
 
-- [ ] For each of the 21 non-portable checker files in `src/languages/javascript/rules/` (created in B1 — excludes the 5 portable rules that remain in `src/validation/tier2/`):
+- [ ] **Refactor `src/validation/chain.ts`** — this is the first B3 deliverable, before touching any checker files:
+  - Remove all 23 direct tier2 checker function imports from the top of the file
+  - Add `LanguageProvider` as a parameter to the validation chain entry point
+  - Replace inline checker dispatch with `getRulesForLanguage(language)` + `rule.check(input)` loop
+  - Verify the chain still calls tier1 checks first (elision, syntax, lint, weaver) before tier2
+  - All existing tests must pass after this refactor — if any test breaks, stop and fix before proceeding to individual checker migrations
+
+- [ ] For each of the 25 checkers needing JS-specific implementations in `src/languages/javascript/rules/` (created in B1):
   - Export a class or object implementing `ValidationRule`
   - `ruleId` matches the existing rule ID (e.g., `'COV-001'`)
   - `dimension` matches the existing dimension grouping
   - `blocking` matches the existing blocking status
-  - `applicableTo(language: string)` returns `true` for `'javascript'` and `'typescript'`; for `nds006`, also returns `false` for `'python'` and `'go'`; portable rules (`sch-*`, `cdq008`) return `true` for all languages
+  - `applicableTo(language: string)` returns `true` for `'javascript'` and `'typescript'`; for `nds006`, also returns `false` for `'python'` and `'go'`; `sch001`–`sch004` and `cdq008` return `true` for all languages (the *rule concept* applies universally — every language needs span names and attribute keys validated against the registry — even though SCH-001–004 have language-specific *extractor implementations*)
   - `check(input: RuleInput)` contains the implementation from the existing checker file
 
-- [ ] Register all 26 JS rules in `src/languages/javascript/index.ts` (the provider registers its rules on construction)
+- [ ] Register all 25 JS rule implementations in `src/languages/javascript/index.ts` (the provider registers its rules on construction). CDQ-008 self-registers from `src/validation/tier2/` since it's the shared implementation.
 
 - [ ] Update `src/validation/chain.ts`:
   - Replace direct checker imports with `getRulesForLanguage(language)` calls
@@ -397,9 +446,9 @@ Pass rate calculation: `(passing golden tests) / (total golden tests)`. Skip vs.
   - Impact: Build failure; TypeScript type errors
   - Mitigation: The one-at-a-time deletion with grep + typecheck between each deletion (per B3 milestone) catches this before it accumulates.
 
-- **Risk: Portable rules end up duplicated — once in `src/validation/tier2/` and once in `src/languages/javascript/rules/`**
+- **Risk: Shared validator helpers and language-specific extractors get mixed or duplicated**
   - Impact: Two implementations diverge; one doesn't stay up to date
-  - Mitigation: Portable rules (`sch001`, `sch002`, `sch003`, `sch004`, `cdq008`) stay ONLY in `src/validation/tier2/`. Do not copy them to `src/languages/javascript/rules/`. The JavaScript provider's `hasImplementation()` returns `true` for them because the shared implementation counts.
+  - Mitigation: Shared validators (the pure registry-comparison functions in `src/validation/tier2/`) stay there and are imported by language-specific rules. Language-specific extractors (ts-morph for JS) live in `src/languages/javascript/rules/`. CDQ-008 is the only rule that stays entirely in `src/validation/tier2/` with no language-specific partner. SCH-001–004 have JS extractor halves in `src/languages/javascript/rules/` calling the shared validator helper.
 
 ---
 

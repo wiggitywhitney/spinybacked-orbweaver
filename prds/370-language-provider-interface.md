@@ -185,9 +185,13 @@ When tree-sitter is adopted by a provider (Python provider, Go provider), it wil
 
 ---
 
-## Pre-Work: Tag the rollback point
+## Pre-Work: Bump Weaver and tag the rollback point
 
-Before any code in this PRD is written, tag the current state of `main` as the JavaScript-only rollback point:
+Before any code in this PRD is written:
+
+1. **Bump Weaver to v0.22.1** across all four CI workflows (`ci.yml`, `acceptance-gate.yml`, `verify-action.yml`, `npm-release-test.yml`). The current pin is v0.21.2; the latest is v0.22.1 (March 13, 2026). One minor version of drift is acceptable; carrying two versions of drift into a major refactor creates debugging confusion.
+
+2. **Tag the rollback point:**
 
 ```bash
 git tag v1.0.0-javascript-only && git push origin v1.0.0-javascript-only
@@ -256,6 +260,7 @@ Write the new file. The file must:
   - LLM prompt context: `getSystemPromptSections(): LanguagePromptSections`, `getInstrumentationExamples(): Example[]`
   - OTel specifics: `otelImportPattern: RegExp`, `otelApiPackage: string`, `otelSemconvPackage: string | null`, `tracerAcquisitionPattern: string` (display string for LLM prompt, e.g. `"trace.getTracer()"`), `spanCreationPattern: RegExp`
   - Package management: `packageManager: string`, `installCommand(packages: string[]): string`, `dependencyFile: string`
+  - Project metadata: `readProjectName(projectDir: string): Promise<string | undefined>` — reads the project name from the language-appropriate manifest (`package.json` for JS/TS, `pyproject.toml` for Python, `go.mod` module path for Go). Returns `undefined` if the manifest file does not exist. Throws if the file exists but cannot be parsed (parse errors are bugs, not expected absences). Used by the coordinator to set the tracer naming fallback.
   - Parity check: `hasImplementation(ruleId: string): boolean`
 - [ ] All async methods use `Promise<T>` return types (syntax checking and formatting call external processes)
 - [ ] All types have JSDoc comments explaining the field's purpose and cross-language semantics where non-obvious
