@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-07) JavaScript language provider file extraction (PRD #371, B1). Created `src/languages/javascript/` with ast.ts, validation.ts, extraction.ts, reassembly.ts, prompt.ts, and rules/ (23 checker files). Replaced original source files with re-export stubs. Moved all JS-specific tests to `test/languages/javascript/`. All 1,874 tests pass.
+
 - (2026-04-07) Language provider interface types (PRD #370, M1-M3). Created `src/languages/types.ts` with the full `LanguageProvider` interface and 9 supporting types: `FunctionClassification`, `FunctionInfo`, `ImportInfo`, `ExportInfo`, `ExtractedFunction`, `LanguagePromptSections`, `Example`, `RuleInput`, `ValidationRule`. Expanded `src/languages/plugin-api.ts` to re-export the public subset. Types only — no behavior changes; all existing tests pass.
 
 - (2026-04-07) Bumped Weaver CI pin from v0.21.2 to v0.22.1 across all four CI workflows (PRD #370 pre-work). Tagged `v1.0.0-javascript-only` on main as rollback baseline before the multi-language refactor begins.
