@@ -70,6 +70,8 @@ The native `tree-sitter` npm package (v0.25.0 as of June 2025, 10+ months stale)
 
 **Recommendation (to be confirmed):** Option A for the initial TypeScript provider — validate the interface with low cost. When moving to Python (PRD #373) where tree-sitter is necessary, adopt `web-tree-sitter` at that point. Document the ts-morph debt in PROGRESS.md.
 
+**Cross-PRD dependency note:** This recommendation defers tree-sitter adoption to PRD #373 (Python). PRD #374 (Go) assumes `web-tree-sitter` is already in `package.json` from PRD #373 ("Check `package.json` — is `web-tree-sitter` already a dependency (added in PRD #373)?"). This assumption holds only if PRD #373 OD-1 resolves to `tree-sitter-python` (not stdlib `ast`). If PRD #373 chooses stdlib `ast` instead, PRD #374 hits its fallback case and must run `/research tree-sitter-go` independently — that is handled in PRD #374, but it means web-tree-sitter adoption happens at Go rather than Python.
+
 ### OD-2: TSX handling
 
 `.tsx` files use JSX syntax with TypeScript type annotations. The ambiguity between `<T>` as a generic type parameter and `<T>` as JSX requires context. tree-sitter-tsx exists as a separate grammar. Decision needed:
