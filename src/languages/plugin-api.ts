@@ -2,15 +2,19 @@
 // ABOUTME: External language provider packages import types from "spiny-orb/plugin".
 
 export type { CheckResult, ValidationResult } from '../validation/types.ts';
+export type { FunctionResult } from '../fix-loop/types.ts';
 
-/**
- * Interface that language provider packages must implement.
- * Expanded in the multi-language architecture PRD.
- * External providers: import this type from "spiny-orb/plugin".
- */
-export interface LanguageProvider {
-  /** Language identifier, e.g. 'javascript', 'typescript', 'python' */
-  id: string;
-  /** File extensions this provider handles, e.g. ['.js', '.jsx'] */
-  fileExtensions: string[];
-}
+export type {
+  LanguageProvider,
+  FunctionInfo,
+  ImportInfo,
+  ExportInfo,
+  ExtractedFunction,
+  FunctionClassification,
+  LanguagePromptSections,
+  Example,
+} from './types.ts';
+
+// ValidationRule and RuleInput are intentionally NOT re-exported.
+// They are internal types used by the shared validation chain,
+// not part of the public API surface for plugin authors.
