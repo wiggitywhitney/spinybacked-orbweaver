@@ -231,7 +231,9 @@ At the end of B2:
 - [ ] Wire `src/coordinator/dispatch.ts` project name read:
   - The current code at line ~236 reads `package.json` directly (`readFile(join(projectDir, 'package.json'), 'utf-8')`). This silently fails for Python and Go projects that have no `package.json`.
   - Replace with `provider.readProjectName(projectDir)` — the method will be defined on the `LanguageProvider` interface by PRD #370 (a blocker for this PRD) and reads the language-appropriate manifest.
-  - **Do NOT remove the try/catch** — the provider implementation should throw on parse errors but return `undefined` if the file doesn't exist.
+  - **Error handling is two-tier:**
+    - `undefined` return (manifest file doesn't exist) → non-fatal; `projectName` stays `undefined` and the tracer name falls back to the default. Keep this path inside try/catch, same as today.
+    - Thrown error (manifest exists but fails to parse) → propagate the error; do NOT swallow it. A corrupt `package.json` is a real problem the user should know about, not a silent fallback.
 
 - [ ] Wire `src/fix-loop/instrument-with-retry.ts` temp file extension:
   - **Before modifying, read `src/fix-loop/instrument-with-retry.ts` in full** to understand `InstrumentWithRetryOptions` — that's the existing options type for injectable deps.
