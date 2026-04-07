@@ -1,10 +1,11 @@
 # PRD #370: Language provider interface
 
-**Status**: Active  
+**Status**: Complete  
 **Priority**: High  
 **GitHub Issue**: [#370](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/370)  
 **Blocks**: PRD #371 (JavaScript extraction), #372 (TypeScript), #373 (Python), #374 (Go)  
-**Created**: 2026-04-06
+**Created**: 2026-04-06  
+**Completed**: 2026-04-07
 
 ---
 
