@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-07) Language provider interface types (PRD #370, M1-M3). Created `src/languages/types.ts` with the full `LanguageProvider` interface and 9 supporting types: `FunctionClassification`, `FunctionInfo`, `ImportInfo`, `ExportInfo`, `ExtractedFunction`, `LanguagePromptSections`, `Example`, `RuleInput`, `ValidationRule`. Expanded `src/languages/plugin-api.ts` to re-export the public subset. Types only — no behavior changes; all existing tests pass.
+
+- (2026-04-07) Bumped Weaver CI pin from v0.21.2 to v0.22.1 across all four CI workflows (PRD #370 pre-work). Tagged `v1.0.0-javascript-only` on main as rollback baseline before the multi-language refactor begins.
+
 - (2026-04-06) npm release installed-artifact test workflow (PRD #362, M1-M2). Created `.github/workflows/npm-release-test.yml` — triggers on GitHub release publication and `run-acceptance` PR label; installs `spiny-orb@latest` from the npm registry (not from source), runs against `order-service.js` fixture, asserts `status=success` and `spansAdded>0`. Documented release workflow expectations in `.claude/CLAUDE.md`.
 
 - (2026-04-05) npm packaging preparation — build pipeline, package.json publication fields, Node version guard, OIDC publish workflow, README (PRD #358, M1-M5). Fixed `prepare` script fs bug; moved build to `prepublishOnly` with `npm test` gate. Added `exports` field with `./plugin` subpath for future language provider architecture; created `src/languages/plugin-api.ts` stub. Added Node >=24 runtime version check to `bin/spiny-orb.js`. Created `.github/workflows/publish.yml` using OIDC trusted publishing (Classic Tokens deprecated Dec 2025). Version bumped to 1.0.0.

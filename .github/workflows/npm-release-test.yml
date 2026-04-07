@@ -48,7 +48,7 @@ jobs:
       # Install Weaver — required for spiny-orb schema validation
       - name: Install Weaver CLI
         run: |
-          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh | sh
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.22.1/weaver-installer.sh | sh
           weaver --version
 
       # Set up a test project with all prerequisites

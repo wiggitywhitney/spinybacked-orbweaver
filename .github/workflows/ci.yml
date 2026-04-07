@@ -17,8 +17,8 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      - name: Install Weaver v0.21.2
-        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.21.2/weaver-installer.sh | sh
+      - name: Install Weaver v0.22.1
+        run: curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.22.1/weaver-installer.sh | sh
 
       - name: Verify Weaver binary attestation
         run: gh attestation verify "$(which weaver)" --repo open-telemetry/weaver

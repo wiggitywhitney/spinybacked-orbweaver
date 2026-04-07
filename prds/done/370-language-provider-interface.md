@@ -1,10 +1,11 @@
 # PRD #370: Language provider interface
 
-**Status**: Active  
+**Status**: Complete  
 **Priority**: High  
 **GitHub Issue**: [#370](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/370)  
 **Blocks**: PRD #371 (JavaScript extraction), #372 (TypeScript), #373 (Python), #374 (Go)  
-**Created**: 2026-04-06
+**Created**: 2026-04-06  
+**Completed**: 2026-04-07
 
 ---
 
@@ -216,11 +217,11 @@ This tag is the recovery baseline. If the multi-language refactor proves too dis
 
 **Scope check:** Run `grep -r "interface FunctionInfo\|interface ImportInfo\|interface ExportInfo\|FunctionClassification" src/ --include="*.ts"` to confirm no additional definitions exist outside `src/ast/` and `src/fix-loop/`. If any appear, record the location and do NOT create a duplicate — import from the existing location instead.
 
-- [ ] Read each file above and confirm fields match the inventory (or document specific discrepancies with file path + line number)
-- [ ] Confirm `src/languages/` contains only `plugin-api.ts` (`ls src/languages/`)
-- [ ] Confirm `ExportInfo` does not exist anywhere in the codebase — it must be created new
-- [ ] Record in PROGRESS.md: any inventory discrepancies found; confirm "no ExportInfo found" if that's the case
-- [ ] **Do NOT modify any file during this milestone** — read only
+- [x] Read each file above and confirm fields match the inventory (or document specific discrepancies with file path + line number)
+- [x] Confirm `src/languages/` contains only `plugin-api.ts` (`ls src/languages/`)
+- [x] Confirm `ExportInfo` does not exist anywhere in the codebase — it must be created new
+- [x] Record in PROGRESS.md: any inventory discrepancies found; confirm "no ExportInfo found" if that's the case
+- [x] **Do NOT modify any file during this milestone** — read only
 
 ### Milestone 2: Create `src/languages/types.ts`
 
@@ -240,16 +241,16 @@ This tag is the recovery baseline. If the multi-language refactor proves too dis
 
 Write the new file. The file must:
 
-- [ ] Define `FunctionClassification` as a union type: `'entry-point' | 'outbound-call' | 'thin-wrapper' | 'utility' | 'internal-detail' | 'unknown'` — the `'unknown'` variant enables checkers to abstain when classification evidence is insufficient (per Decision 5)
-- [ ] Define `FunctionInfo` (language-agnostic): `name: string`, `startLine: number`, `endLine: number`, `isExported: boolean`, `isAsync: boolean`, `lineCount: number`
-- [ ] Define `ImportInfo` (language-agnostic): `moduleSpecifier: string`, `importedNames: string[]`, `alias: string | undefined`, `lineNumber: number`
-- [ ] Define `ExportInfo`: `name: string`, `lineNumber: number`, `isDefault: boolean`
-- [ ] Define `ExtractedFunction` (language-agnostic): `name: string`, `isAsync: boolean`, `isExported: boolean`, `sourceText: string`, `docComment: string | null` (not `jsDoc` — Python has docstrings, Go has `//` comment blocks above declarations; `docComment` is the language-agnostic name), `referencedImports: string[]`, `contextHeader: string`, `startLine: number`, `endLine: number`
-- [ ] Define `LanguagePromptSections`: `constraints: string`, `otelPatterns: string`, `tracerAcquisition: string`, `spanCreation: string`, `errorHandling: string`, `libraryInstallation: string`
-- [ ] Define `Example`: `description: string`, `before: string`, `after: string`
-- [ ] Define `RuleInput`: extends `ValidateFileInput` fields, adds `language: string`, `provider: LanguageProvider`
-- [ ] Define `ValidationRule`: `ruleId: string`, `dimension: string`, `blocking: boolean`, `applicableTo(language: string): boolean`, `check(input: RuleInput): CheckResult | Promise<CheckResult>`
-- [ ] Define `LanguageProvider` interface with all fields from Section 3.6 of the research doc, incorporating decisions above:
+- [x] Define `FunctionClassification` as a union type: `'entry-point' | 'outbound-call' | 'thin-wrapper' | 'utility' | 'internal-detail' | 'unknown'` — the `'unknown'` variant enables checkers to abstain when classification evidence is insufficient (per Decision 5)
+- [x] Define `FunctionInfo` (language-agnostic): `name: string`, `startLine: number`, `endLine: number`, `isExported: boolean`, `isAsync: boolean`, `lineCount: number`
+- [x] Define `ImportInfo` (language-agnostic): `moduleSpecifier: string`, `importedNames: string[]`, `alias: string | undefined`, `lineNumber: number`
+- [x] Define `ExportInfo`: `name: string`, `lineNumber: number`, `isDefault: boolean`
+- [x] Define `ExtractedFunction` (language-agnostic): `name: string`, `isAsync: boolean`, `isExported: boolean`, `sourceText: string`, `docComment: string | null` (not `jsDoc` — Python has docstrings, Go has `//` comment blocks above declarations; `docComment` is the language-agnostic name), `referencedImports: string[]`, `contextHeader: string`, `startLine: number`, `endLine: number`
+- [x] Define `LanguagePromptSections`: `constraints: string`, `otelPatterns: string`, `tracerAcquisition: string`, `spanCreation: string`, `errorHandling: string`, `libraryInstallation: string`
+- [x] Define `Example`: `description: string`, `before: string`, `after: string`
+- [x] Define `RuleInput`: extends `ValidateFileInput` fields, adds `language: string`, `provider: LanguageProvider`
+- [x] Define `ValidationRule`: `ruleId: string`, `dimension: string`, `blocking: boolean`, `applicableTo(language: string): boolean`, `check(input: RuleInput): CheckResult | Promise<CheckResult>`
+- [x] Define `LanguageProvider` interface with all fields from Section 3.6 of the research doc, incorporating decisions above:
   - Identity: `id`, `displayName`, `fileExtensions`
   - File discovery: `globPattern`, `defaultExclude`
   - Syntax validation: `checkSyntax(filePath: string): Promise<CheckResult>`
@@ -262,11 +263,11 @@ Write the new file. The file must:
   - Package management: `packageManager: string`, `installCommand(packages: string[]): string`, `dependencyFile: string`
   - Project metadata: `readProjectName(projectDir: string): Promise<string | undefined>` — reads the project name from the language-appropriate manifest (`package.json` for JS/TS, `pyproject.toml` for Python, `go.mod` module path for Go). Returns `undefined` if the manifest file does not exist. Throws if the file exists but cannot be parsed (parse errors are bugs, not expected absences). Used by the coordinator to set the tracer naming fallback.
   - Parity check: `hasImplementation(ruleId: string): boolean`
-- [ ] All async methods use `Promise<T>` return types (syntax checking and formatting call external processes)
-- [ ] All types have JSDoc comments explaining the field's purpose and cross-language semantics where non-obvious
-- [ ] `import type { CheckResult, ValidateFileInput } from '../validation/types.ts'` — `ValidateFileInput` is needed because `RuleInput` extends it; `ValidationConfig` is used transitively via `ValidateFileInput.config` so do not import it separately; **do NOT redefine `CheckResult` or `ValidationResult` — they already exist in validation/types.ts**
-- [ ] `import type { FunctionResult } from '../fix-loop/types.ts'` — **do NOT redefine `FunctionResult` — it already exists and is language-agnostic; only import it**
-- [ ] Run `npm run typecheck` — must pass with zero errors
+- [x] All async methods use `Promise<T>` return types (syntax checking and formatting call external processes)
+- [x] All types have JSDoc comments explaining the field's purpose and cross-language semantics where non-obvious
+- [x] `import type { CheckResult, ValidateFileInput } from '../validation/types.ts'` — `ValidateFileInput` is needed because `RuleInput` extends it; `ValidationConfig` is used transitively via `ValidateFileInput.config` so do not import it separately; **do NOT redefine `CheckResult` or `ValidationResult` — they already exist in validation/types.ts**
+- [x] `import type { FunctionResult } from '../fix-loop/types.ts'` — **do NOT redefine `FunctionResult` — it already exists and is language-agnostic; only import it**
+- [x] Run `npm run typecheck` — must pass with zero errors
 
 ### Milestone 3: Expand `src/languages/plugin-api.ts`
 
@@ -275,12 +276,12 @@ Update the existing stub to re-export the public-facing subset of `types.ts`.
 **Public = any type that appears in a `LanguageProvider` method signature or return type.**  
 **Internal = types used by the validation chain that plugin authors don't need.**
 
-- [ ] Keep the existing `export type { CheckResult, ValidationResult } from '../validation/types.ts'` — do not break this re-export
-- [ ] Add `export type { FunctionResult } from '../fix-loop/types.ts'` — appears in `reassembleFunctions` return type
-- [ ] Re-export from `./types.ts`: `LanguageProvider`, `FunctionInfo`, `ImportInfo`, `ExportInfo`, `ExtractedFunction`, `FunctionClassification`, `LanguagePromptSections`, `Example`
-- [ ] Do NOT re-export: `ValidationRule`, `RuleInput` — **these are internal types used by the shared validation chain, not by plugin authors; re-exporting them would leak internal implementation details into the public API surface**
-- [ ] Run `npm run typecheck` — must pass with zero errors
-- [ ] Run `npm test` — all tests must pass (nothing changed behaviorally)
+- [x] Keep the existing `export type { CheckResult, ValidationResult } from '../validation/types.ts'` — do not break this re-export
+- [x] Add `export type { FunctionResult } from '../fix-loop/types.ts'` — appears in `reassembleFunctions` return type
+- [x] Re-export from `./types.ts`: `LanguageProvider`, `FunctionInfo`, `ImportInfo`, `ExportInfo`, `ExtractedFunction`, `FunctionClassification`, `LanguagePromptSections`, `Example`
+- [x] Do NOT re-export: `ValidationRule`, `RuleInput` — **these are internal types used by the shared validation chain, not by plugin authors; re-exporting them would leak internal implementation details into the public API surface**
+- [x] Run `npm run typecheck` — must pass with zero errors
+- [x] Run `npm test` — all tests must pass (nothing changed behaviorally)
 
 ---
 
@@ -330,4 +331,14 @@ The parity test is written in PRD #371 B3 but applies to every subsequent langua
 
 ## Progress Log
 
-*Updated by `/prd-update-progress` as milestones complete.*
+### 2026-04-07 — All milestones complete
+
+**M1 (Inventory verification):** Read all 5 type files. Inventory confirmed accurate with two notable findings:
+- `src/fix-loop/function-extraction.ts`: `ExtractedFunction` uses `jsDoc` (not `docComment`) and has `referencedConstants` — both JS-specific; new language-agnostic version correctly redesigns these.
+- `src/languages/plugin-api.ts`: Had an inline stub `LanguageProvider` with only `id` and `fileExtensions` — replaced in M3.
+- `ExportInfo` and `FunctionClassification` confirmed absent from codebase.
+- Findings documented in `prds/PROGRESS-370.md`.
+
+**M2 (Create `src/languages/types.ts`):** Created with all 10 types in forward-reference-safe order. `LanguageProvider` defined before `RuleInput` (PRD ordering note: "define as forward reference or move after `LanguageProvider`"). `npm run typecheck` passes with zero errors.
+
+**M3 (Expand `src/languages/plugin-api.ts`):** Re-exports `CheckResult`, `ValidationResult`, `FunctionResult`, and 8 public types from `./types.ts`. `ValidationRule` and `RuleInput` intentionally excluded (internal types). `npm test` — 1874 passed, 3 pre-existing skips, 0 failed.

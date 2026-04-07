@@ -2,7 +2,6 @@
 
 ## Short-term
 
-- Language provider interface — types-only contract before refactoring begins (PRD #370)
 - JavaScript language provider extraction — JS becomes the first named `LanguageProvider` (PRD #371)
 
 ## Medium-term
