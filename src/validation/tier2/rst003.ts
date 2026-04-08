@@ -136,30 +136,25 @@ function extractTryBlockStatements(
     // Find the callback argument
     for (const arg of args) {
       if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg)) {
-        // Find try statements in the callback body
-        const tryStatements: import('ts-morph').TryStatement[] = [];
-        arg.forEachDescendant((node) => {
-          if (Node.isTryStatement(node)) {
-            tryStatements.push(node);
+        // Only check direct children of callback body — not descendants of nested functions
+        const body = arg.getBody();
+        if (Node.isBlock(body)) {
+          const tryStmt = body.getStatements().find((s) => Node.isTryStatement(s));
+          if (tryStmt && Node.isTryStatement(tryStmt)) {
+            return tryStmt.getTryBlock().getStatements();
           }
-        });
-
-        if (tryStatements.length > 0) {
-          return tryStatements[0].getTryBlock().getStatements();
         }
       }
     }
   }
 
-  // For startSpan (non-callback style), find try block in the function body directly
-  const tryStatements: import('ts-morph').TryStatement[] = [];
-  fn.forEachDescendant((node) => {
-    if (Node.isTryStatement(node)) {
-      tryStatements.push(node);
+  // For startSpan (non-callback style), find try block as a direct statement in the function body
+  const fnBody = fn.getBody ? fn.getBody() : null;
+  if (fnBody && Node.isBlock(fnBody)) {
+    const tryStmt = fnBody.getStatements().find((s) => Node.isTryStatement(s));
+    if (tryStmt && Node.isTryStatement(tryStmt)) {
+      return tryStmt.getTryBlock().getStatements();
     }
-  });
-  if (tryStatements.length > 0) {
-    return tryStatements[0].getTryBlock().getStatements();
   }
 
   return null;

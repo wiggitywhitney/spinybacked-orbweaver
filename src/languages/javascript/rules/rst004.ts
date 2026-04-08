@@ -179,6 +179,13 @@ function collectExportedNames(code: string): Set<string> {
     names.add(singleMatch[1]);
   }
 
+  // ESM: export default name (identifier re-export, not inline function expression)
+  const defaultExportPattern = /export\s+default\s+(\w+)\s*(?:[;\n]|$)/;
+  const defaultMatch = defaultExportPattern.exec(code);
+  if (defaultMatch) {
+    names.add(defaultMatch[1]);
+  }
+
   return names;
 }
 

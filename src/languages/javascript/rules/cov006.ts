@@ -119,7 +119,9 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
  * Patterns for span lifecycle boilerplate that don't count as business logic.
  * These are standard OTel span management calls, not application behavior.
  */
-const SPAN_BOILERPLATE = /\bspan\s*\.\s*(end|recordException|setStatus)\s*\(/;
+// Match any identifier (not just "span") before span lifecycle methods — callbacks
+// often use shorter names like s, activeSpan, or otelSpan.
+const SPAN_BOILERPLATE = /\b\w+\s*\.\s*(end|recordException|setStatus)\s*\(/;
 
 /**
  * Check if a span callback contains multiple meaningful statements,

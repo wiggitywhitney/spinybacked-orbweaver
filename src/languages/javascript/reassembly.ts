@@ -182,10 +182,12 @@ function extractFunctionFromInstrumentedCode(
   const lines = instrumentedCode.split('\n');
 
   // Patterns to find the function declaration start
-  // Handles exported and non-exported: [export] [async] function name, [export] const name =
+  // Handles exported and non-exported: [export] [async] function name, [export] const/let/var name =
   const functionStartPatterns = [
     new RegExp(`^\\s*(export\\s+)?(async\\s+)?function\\s+${escapeRegex(functionName)}\\s*\\(`),
     new RegExp(`^\\s*(export\\s+)?const\\s+${escapeRegex(functionName)}\\s*=`),
+    new RegExp(`^\\s*(export\\s+)?let\\s+${escapeRegex(functionName)}\\s*=`),
+    new RegExp(`^\\s*(export\\s+)?var\\s+${escapeRegex(functionName)}\\s*=`),
   ];
 
   // Also look for JSDoc preceding the function

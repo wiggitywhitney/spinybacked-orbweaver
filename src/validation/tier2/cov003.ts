@@ -66,8 +66,11 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
               container = container.getParent();
             }
             if (container && (Node.isBlock(container) || Node.isSourceFile(container))) {
-              const blockText = container.getText();
-              if (blockText.includes('try') && blockText.includes('catch')) {
+              // Use AST to find try/catch — avoids false positives from "try"/"catch" in strings or identifiers
+              const hasTryCatch = container.getDescendantsOfKind(SyntaxKind.TryStatement)
+                .some((t) => t.getCatchClause() !== undefined);
+              if (hasTryCatch) {
+                const blockText = container.getText();
                 if (!hasErrorRecording(blockText, spanVarName)) {
                   issues.push({
                     line: node.getStartLineNumber(),

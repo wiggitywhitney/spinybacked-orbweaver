@@ -217,7 +217,7 @@ function hasIsRecordingGuard(setAttrCall: CallExpression): boolean {
       const condition = current.getExpression().getText();
       if (condition.includes('.isRecording()') || condition.includes('isRecording()')) {
         // Detect negated conditions like if (!span.isRecording())
-        const isNegated = /!\s*(?:\w+\.)+isRecording\(\)/.test(condition);
+        const isNegated = /!\s*(?:(?:\w+\.)+)?isRecording\(\)/.test(condition);
         const thenStatement = current.getThenStatement();
         const elseStatement = current.getElseStatement();
 
@@ -267,7 +267,7 @@ function hasEarlyReturnGuard(setAttrCall: CallExpression): boolean {
   // Check preceding statements for: if (!span.isRecording()) return;
   for (let i = stmtIndex - 1; i >= 0; i--) {
     const prevText = statements[i].getText();
-    if (/if\s*\(\s*!\s*(?:\w+\.)+isRecording\(\)\s*\)\s*(?:(return|break|continue)|\{\s*(return|break|continue)[;\s]*\})/.test(prevText)) {
+    if (/if\s*\(\s*!\s*(?:(?:\w+\.)+)?isRecording\(\)\s*\)\s*(?:(return|break|continue)|\{\s*(return|break|continue)[;\s]*\})/.test(prevText)) {
       return true;
     }
   }

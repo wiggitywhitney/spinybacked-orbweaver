@@ -236,12 +236,15 @@ function collectModuleLevelConstants(sourceFile: SourceFile): string[] {
   return constants;
 }
 
-/** Collect all imported identifier names (both named and default). */
+/** Collect all imported identifier names (default, named, and namespace). */
 function collectImportedIdentifiers(sourceFile: SourceFile): string[] {
   const identifiers: string[] = [];
   for (const importDecl of sourceFile.getImportDeclarations()) {
     const defaultImport = importDecl.getDefaultImport();
     if (defaultImport) identifiers.push(defaultImport.getText());
+
+    const namespaceImport = importDecl.getNamespaceImport();
+    if (namespaceImport) identifiers.push(namespaceImport.getText());
 
     for (const named of importDecl.getNamedImports()) {
       const alias = named.getAliasNode();

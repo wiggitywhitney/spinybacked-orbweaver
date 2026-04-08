@@ -192,6 +192,24 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
     }
   });
 
+  // ESM: export default () => {} or export default function() {} (ExportAssignment)
+  for (const ea of sourceFile.getExportAssignments()) {
+    if (ea.isExportEquals()) continue; // skip module.exports = ... handled above
+    const expr = ea.getExpression();
+    let params: string[] | undefined;
+    if (Node.isArrowFunction(expr) || Node.isFunctionExpression(expr)) {
+      params = expr.getParameters().map(p => p.getName());
+    }
+    if (params !== undefined && !seen.has('default')) {
+      seen.add('default');
+      signatures.push({
+        name: 'default',
+        params,
+        lineNumber: expr.getStartLineNumber(),
+      });
+    }
+  }
+
   return signatures;
 }
 
