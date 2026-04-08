@@ -35,14 +35,6 @@ ${formatted}
 }
 
 /**
- * Build the system prompt for the Instrumentation Agent.
- * This prompt is cacheable — it stays constant across files in a single run.
- * The resolved Weaver schema is the only dynamic input.
- *
- * @param resolvedSchema - The resolved Weaver schema object (from `weaver registry resolve`)
- * @returns The complete system prompt string
- */
-/**
  * Extract all unique attribute names from a resolved schema object.
  * Mirrors the logic in registry-types.ts getAllAttributeNames without
  * importing validation-layer types into the prompt module.
@@ -64,6 +56,18 @@ function extractAttributeNames(schema: object): string[] {
   return [...names].sort();
 }
 
+/**
+ * Build the system prompt for the Instrumentation Agent.
+ *
+ * This prompt is cacheable — it stays constant across files in a single run.
+ * The resolved Weaver schema and language provider are the only dynamic inputs.
+ *
+ * @param resolvedSchema - The resolved Weaver schema object (from `weaver registry resolve`)
+ * @param projectName - Optional project name used as tracer name fallback when schema namespace is absent
+ * @param provider - Language provider supplying language-specific prompt sections and examples.
+ *   Defaults to JavaScript. Pass the active provider when instrumenting non-JS files.
+ * @returns The complete system prompt string
+ */
 export function buildSystemPrompt(
   resolvedSchema: object,
   projectName?: string,
@@ -82,7 +86,7 @@ export function buildSystemPrompt(
   const tracerNameLiteral = JSON.stringify(tracerName);
   const attributeNames = extractAttributeNames(resolvedSchema);
 
-  return `You are an instrumentation engineer. Your job is to add OpenTelemetry instrumentation to a JavaScript source file according to a Weaver schema contract.
+  return `You are an instrumentation engineer. Your job is to add OpenTelemetry instrumentation to a ${activeProvider.displayName} source file according to a Weaver schema contract.
 
 ## Constraints
 
