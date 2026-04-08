@@ -229,6 +229,7 @@ function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): 
   if (EXPECTED_CONDITION_PATTERNS.some((pattern) => bodyText.includes(pattern))) {
     // Even though expected-condition patterns are present, the rethrow means
     // there's a genuine error path. Return false — error recording is needed.
+    return false;
   }
 
   return false;

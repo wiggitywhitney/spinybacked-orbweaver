@@ -106,12 +106,17 @@ function reconcileReturnCaptures(
   missingLines: Array<{ line: string; originalLineNum: number }>,
   addedLines: Array<{ line: string; instrumentedLineNum: number }>,
 ): void {
-  // Index added lines by their capture expressions
-  const capturesByExpr = new Map<string, number>(); // expr → index in addedLines
+  // Index added lines by their capture expressions (array to handle duplicates in order)
+  const capturesByExpr = new Map<string, number[]>(); // expr → indices in addedLines
   for (let i = 0; i < addedLines.length; i++) {
     const capture = extractCapture(addedLines[i].line);
     if (capture) {
-      capturesByExpr.set(capture.expr, i);
+      const existing = capturesByExpr.get(capture.expr);
+      if (existing) {
+        existing.push(i);
+      } else {
+        capturesByExpr.set(capture.expr, [i]);
+      }
     }
   }
 
@@ -123,8 +128,11 @@ function reconcileReturnCaptures(
     const returnExpr = extractReturnExpr(missingLines[mi].line);
     if (!returnExpr) continue;
 
-    const captureIdx = capturesByExpr.get(returnExpr);
-    if (captureIdx === undefined) continue;
+    const captureIndices = capturesByExpr.get(returnExpr);
+    if (!captureIndices || captureIndices.length === 0) continue;
+
+    // Consume the first available index (sequential pairing for duplicate expressions)
+    const captureIdx = captureIndices.shift()!;
 
     // Found a matching capture — now look for the bare `return <var>;`
     // Must appear after the capture line to ensure sequential pairing

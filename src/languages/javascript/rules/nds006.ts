@@ -114,7 +114,11 @@ function findNewCjsPatterns(
     if (Node.isCallExpression(node)) {
       const expr = node.getExpression();
       if (Node.isIdentifier(expr) && expr.getText() === 'require') {
-        originalRequireLines.add(node.getText());
+        // Only count require() with a string literal arg — consistent with detectModuleSignals
+        const args = node.getArguments();
+        if (args.length > 0 && Node.isStringLiteral(args[0])) {
+          originalRequireLines.add(node.getText());
+        }
       }
     }
 

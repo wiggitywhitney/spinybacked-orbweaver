@@ -21,7 +21,8 @@ export function checkSpansClosed(code: string, filePath: string): CheckResult[] 
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const ext = filePath.endsWith('.ts') || filePath.endsWith('.tsx') ? '.ts' : '.js';
+  const sourceFile = project.createSourceFile(`check${ext}`, code);
 
   // Find all span creation calls
   const unclosedSpans: Array<{ line: number; name: string }> = [];

@@ -88,7 +88,7 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
     const propName = left.getName();
     if (receiver.getText() === 'exports' && propName !== 'default') {
       exportName = propName;
-    } else if (leftText.startsWith('module.exports.')) {
+    } else if (receiver.getText() === 'module.exports') {
       exportName = propName;
     }
 

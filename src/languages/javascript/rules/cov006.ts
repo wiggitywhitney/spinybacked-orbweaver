@@ -63,7 +63,8 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
 
     const expr = node.getExpression();
     const text = expr.getText();
-    if (!text.endsWith('.startActiveSpan') && !text.endsWith('.startSpan')) return;
+    if (!/\??\.startActiveSpan$/.test(text) && !/\??\.startSpan$/.test(text)) return;
+
 
     // Only check the span's own content — ancestor context causes false positives
     // (e.g., a span inside app.get() doesn't mean it wraps the route handling)
@@ -165,8 +166,9 @@ function collectMeaningfulStatements(
     // Skip span lifecycle boilerplate
     if (SPAN_BOILERPLATE.test(text)) continue;
 
-    // Skip bare throw/rethrow in catch blocks
-    if (Node.isThrowStatement(stmt)) continue;
+    // Skip bare rethrows (throw err;) — these are control flow, not business logic.
+    // Complex throws (throw new Error(...)) contain business logic and are kept.
+    if (Node.isThrowStatement(stmt) && Node.isIdentifier(stmt.getExpression())) continue;
 
     results.push(stmt);
   }
@@ -214,7 +216,7 @@ function getSpanContent(spanCall: CallExpression): string | null {
   }
   const spanEndPattern = spanVarName
     ? new RegExp(`\\b${spanVarName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.end\\s*\\(`)
-    : /\bspan\b.*\.end\s*\(/;
+    : /\bspan\.end\s*\(/;
 
   let current: import('ts-morph').Node | undefined = spanCall;
   while (current) {

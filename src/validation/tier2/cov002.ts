@@ -173,7 +173,8 @@ function isInsideSpanScope(node: CallExpression): boolean {
                   const spanVar = spanVarMatch[1];
                   const tryStatementText = parent.getText();
                   // Use word boundary to avoid matching substrings like "responseSpan." when spanVar="span"
-                  const spanUsagePattern = new RegExp(`\\b${spanVar}\\.`);
+                  const escapedSpanVar = spanVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                  const spanUsagePattern = new RegExp(`\\b${escapedSpanVar}\\.`);
                   if (spanUsagePattern.test(tryStatementText)) {
                     return true;
                   }

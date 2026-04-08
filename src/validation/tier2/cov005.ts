@@ -202,16 +202,34 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
       const declIndex = statements.findIndex(s => s === ancestorStatement);
       if (declIndex >= 0) {
         for (let i = declIndex + 1; i < statements.length; i++) {
-          // Stop collecting when we reach the span's own .end() call
-          if (spanEndPattern && spanEndPattern.test(statements[i].getText())) {
-            break;
-          }
+          // Collect attributes first so a combined setAttribute+end() statement is not missed
           statements[i].forEachDescendant((desc) => {
             if (Node.isCallExpression(desc)) {
               const attrName = extractSetAttributeName(desc);
               if (attrName) attributes.add(attrName);
             }
           });
+
+          // Stop after this statement if it contains spanVar.end() — use AST to avoid
+          // false matches inside string literals or comments.
+          let containsSpanEnd = false;
+          if (spanVarName) {
+            statements[i].forEachDescendant((desc) => {
+              if (Node.isCallExpression(desc)) {
+                const expr = desc.getExpression();
+                if (
+                  Node.isPropertyAccessExpression(expr) &&
+                  expr.getName() === 'end' &&
+                  expr.getExpression().getText() === spanVarName
+                ) {
+                  containsSpanEnd = true;
+                }
+              }
+            });
+          } else if (spanEndPattern) {
+            containsSpanEnd = spanEndPattern.test(statements[i].getText());
+          }
+          if (containsSpanEnd) break;
         }
       }
     }
