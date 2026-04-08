@@ -180,7 +180,7 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
       spanVarName = spanCallParent.getName();
     }
     const spanEndPattern = spanVarName
-      ? new RegExp(`\\b${spanVarName}\\.end\\s*\\(`)
+      ? new RegExp(`\\b${escapeForRegExp(spanVarName)}\\.end\\s*\\(`)
       : null;
 
     // Walk up to the nearest containing block or source file
@@ -241,4 +241,9 @@ function extractSetAttributeName(callExpr: CallExpression): string | null {
     return firstArg.getLiteralValue();
   }
   return null;
+}
+
+/** Escape special regex metacharacters in a string for use in new RegExp(...). */
+function escapeForRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

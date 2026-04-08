@@ -83,10 +83,13 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
     let exportName: string | undefined;
 
     // exports.foo = ... or module.exports.foo = ...
-    if (leftText.startsWith('exports.') && !leftText.startsWith('exports.default')) {
-      exportName = leftText.slice('exports.'.length);
+    // Use AST property name to avoid misparse of nested paths like exports.foo.bar
+    const receiver = left.getExpression();
+    const propName = left.getName();
+    if (receiver.getText() === 'exports' && propName !== 'default') {
+      exportName = propName;
     } else if (leftText.startsWith('module.exports.')) {
-      exportName = leftText.slice('module.exports.'.length);
+      exportName = propName;
     }
 
     if (!exportName || seen.has(exportName)) return;

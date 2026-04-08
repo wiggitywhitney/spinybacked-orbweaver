@@ -278,10 +278,7 @@ function findImportInsertPosition(lines: string[]): number {
     if (IMPORT_PATTERN.test(lines[i].trim())) {
       lastImportIdx = i;
     }
-    // Stop scanning after we've passed the import section (hit non-import, non-blank code)
-    if (lastImportIdx >= 0 && lines[i].trim() !== '' && !IMPORT_PATTERN.test(lines[i].trim())) {
-      break;
-    }
+    // Scan the entire file — imports may be separated by blank lines or comments
   }
   return lastImportIdx >= 0 ? lastImportIdx + 1 : 0;
 }

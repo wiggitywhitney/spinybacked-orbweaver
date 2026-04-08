@@ -135,7 +135,7 @@ const KNOWN_FRAMEWORK_PACKAGES = new Set([
   // GraphQL
   'graphql', '@apollo/server',
   // ORM
-  'knex', 'sequelize', 'typeorm', 'prisma',
+  'knex', 'sequelize', 'typeorm', '@prisma/client',
 ]);
 
 /**

@@ -129,23 +129,25 @@ function extractTryBlockStatements(
 
   if (spanCalls.length === 0) return null;
 
-  const spanCall = spanCalls[0];
-  const args = spanCall.getArguments();
+  // Inspect all span calls (not just the first) to find one with a callback try block.
+  for (const spanCall of spanCalls) {
+    const args = spanCall.getArguments();
 
-  // Find the callback argument
-  for (const arg of args) {
-    if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg)) {
-      // Find try statements in the callback body
-      const tryStatements: import('ts-morph').TryStatement[] = [];
-      arg.forEachDescendant((node) => {
-        if (Node.isTryStatement(node)) {
-          tryStatements.push(node);
+    // Find the callback argument
+    for (const arg of args) {
+      if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg)) {
+        // Find try statements in the callback body
+        const tryStatements: import('ts-morph').TryStatement[] = [];
+        arg.forEachDescendant((node) => {
+          if (Node.isTryStatement(node)) {
+            tryStatements.push(node);
+          }
+        });
+
+        if (tryStatements.length > 0) {
+          return tryStatements[0].getTryBlock().getStatements();
         }
-      });
-
-      if (tryStatements.length === 0) return null;
-
-      return tryStatements[0].getTryBlock().getStatements();
+      }
     }
   }
 

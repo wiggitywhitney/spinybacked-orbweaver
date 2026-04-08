@@ -63,7 +63,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
 
       if (fn.isAsync()) {
         flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function' });
-      } else if (/\bawait\b/.test(bodyText)) {
+      } else if (hasDirectAwait(fn)) {
         flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await' });
       }
     }
@@ -80,7 +80,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
 
     if (node.isAsync()) {
       flagged.push({ name, line: node.getStartLineNumber(), reason: 'async class method' });
-    } else if (/\bawait\b/.test(bodyText)) {
+    } else if (hasDirectAwait(node)) {
       flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method contains await' });
     }
   });
@@ -116,5 +116,30 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
  */
 function hasSpanCall(text: string): boolean {
   return text.includes('.startActiveSpan') || text.includes('.startSpan');
+}
+
+/**
+ * Check if a function node has a direct await expression at its own scope level.
+ * Stops descending into nested function scopes so that async callbacks inside a
+ * sync outer function do not cause the outer function to be incorrectly flagged.
+ */
+function hasDirectAwait(fn: import('ts-morph').Node): boolean {
+  let found = false;
+  fn.forEachDescendant((node, traversal) => {
+    if (
+      Node.isArrowFunction(node) ||
+      Node.isFunctionDeclaration(node) ||
+      Node.isFunctionExpression(node) ||
+      Node.isMethodDeclaration(node)
+    ) {
+      traversal.skip();
+      return;
+    }
+    if (Node.isAwaitExpression(node)) {
+      found = true;
+      traversal.stop();
+    }
+  });
+  return found;
 }
 

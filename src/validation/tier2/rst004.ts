@@ -173,7 +173,7 @@ function collectExportedNames(code: string): Set<string> {
   }
 
   // CJS: module.exports = singleFunctionName
-  const singleExportPattern = /module\.exports\s*=\s*(\w+)\s*[;\n]/;
+  const singleExportPattern = /module\.exports\s*=\s*(\w+)\s*(?:[;\n]|$)/;
   const singleMatch = singleExportPattern.exec(code);
   if (singleMatch) {
     names.add(singleMatch[1]);

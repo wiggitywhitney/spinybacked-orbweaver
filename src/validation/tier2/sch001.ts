@@ -332,8 +332,9 @@ const HTTP_STATUS_CODE_PATTERN = /^[1-5]\d{2}$/;
 function hasUnboundedCardinality(name: string): boolean {
   // Contains long numeric sequences (4+ digits — IDs, timestamps, not status codes)
   if (/\d{4,}/.test(name)) return true;
-  // Contains UUID-like patterns
-  if (/[0-9a-f]{8,}/i.test(name)) return true;
+  // Contains UUID-like hex patterns (require at least one digit AND one letter to avoid
+  // matching common words like "database" that are purely hex-valid)
+  if (/[0-9a-f]{8,}/i.test(name) && /\d/.test(name) && /[a-f]/i.test(name)) return true;
   // Contains segments that are purely numeric (excluding HTTP status codes)
   const segments = name.split(/[.\-_/]/);
   if (segments.some((s) => s.length > 0 && /^\d+$/.test(s) && !HTTP_STATUS_CODE_PATTERN.test(s))) return true;

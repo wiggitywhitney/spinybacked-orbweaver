@@ -204,6 +204,18 @@ function getSpanContent(spanCall: CallExpression): string | null {
   // Upper bound: stop after 10 statements to avoid walking the entire function body
   // when span.end() is missing (CDQ-001 catches that separately).
   const MAX_SPAN_WALK_STATEMENTS = 10;
+
+  // Extract the span variable name (e.g. `const span = tracer.startSpan(...)` → "span")
+  // so we can stop at the right span.end() call and avoid false termination on other .end() calls.
+  let spanVarName: string | null = null;
+  const spanParent = spanCall.getParent();
+  if (spanParent && Node.isVariableDeclaration(spanParent)) {
+    spanVarName = spanParent.getName();
+  }
+  const spanEndPattern = spanVarName
+    ? new RegExp(`\\b${spanVarName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.end\\s*\\(`)
+    : /\bspan\b.*\.end\s*\(/;
+
   let current: import('ts-morph').Node | undefined = spanCall;
   while (current) {
     const parent = current.getParent();
@@ -217,7 +229,7 @@ function getSpanContent(spanCall: CallExpression): string | null {
         for (let i = startIdx; i < endIdx; i++) {
           const stmtText = statements[i].getText();
           parts.push(stmtText);
-          if (stmtText.includes('.end()')) break;
+          if (spanEndPattern.test(stmtText)) break;
         }
         return parts.join('\n');
       }
