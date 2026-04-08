@@ -705,7 +705,8 @@ async function functionLevelFallback(
 
   for (const fn of extractedFunctions) {
     const functionContext = fn.contextHeader;
-    const tmpFilePath = join(tmpBase, `fn-${fn.name}-${Date.now()}${fnProvider.fileExtensions[0]}`);
+    const fnExt = fnProvider.fileExtensions[0] ?? '.js';
+    const tmpFilePath = join(tmpBase, `fn-${fn.name}-${Date.now()}${fnExt}`);
 
     try {
       // Write function context to temp file for instrumentWithRetry

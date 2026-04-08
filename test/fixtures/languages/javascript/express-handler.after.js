@@ -17,7 +17,6 @@ router.post('/orders', async (req, res) => {
       const user = await fetchUserById(userId);
       if (!user) {
         span.setStatus({ code: SpanStatusCode.ERROR, message: 'User not found' });
-        span.end();
         return res.status(404).json({ error: 'User not found' });
       }
 

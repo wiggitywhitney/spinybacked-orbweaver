@@ -15,9 +15,13 @@ const DEFAULT_PROVIDER: LanguageProvider = new JavaScriptProvider();
  * @param examples - Examples from provider.getInstrumentationExamples()
  * @returns Formatted `## Examples` section string
  */
+function escapeXmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function formatExamplesSection(examples: Example[]): string {
   const formatted = examples.map((ex, i) =>
-    `<example id="${i + 1}" title="${ex.description}">
+    `<example id="${i + 1}" title="${escapeXmlAttr(ex.description)}">
 <before>
 ${ex.before}
 </before>
