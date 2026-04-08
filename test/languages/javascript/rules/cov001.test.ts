@@ -411,4 +411,32 @@ describe('checkEntryPointSpans (COV-001)', () => {
       });
     });
   });
+
+  describe('ESM exported async arrow functions', () => {
+    it('flags export const handler = async (req, res) => {} without span', () => {
+      const code = [
+        'export const getUsers = async (req, res) => {',
+        '  res.json([]);',
+        '};',
+      ].join('\n');
+      const results = checkEntryPointSpans(code, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+      expect(failures[0].message).toContain('getUsers');
+    });
+
+    it('passes when export const handler = async (req, res) => {} has a span', () => {
+      const code = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export const getUsers = async (req, res) => {',
+        '  return tracer.startActiveSpan("get_users", async (span) => {',
+        '    try { res.json([]); } finally { span.end(); }',
+        '  });',
+        '};',
+      ].join('\n');
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+  });
 });

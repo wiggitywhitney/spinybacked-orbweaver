@@ -217,7 +217,7 @@ function hasIsRecordingGuard(setAttrCall: CallExpression): boolean {
       const condition = current.getExpression().getText();
       if (condition.includes('.isRecording()') || condition.includes('isRecording()')) {
         // Detect negated conditions like if (!span.isRecording())
-        const isNegated = /!\s*\w+\.?isRecording\(\)/.test(condition);
+        const isNegated = /!\s*\w+\.isRecording\(\)/.test(condition);
         const thenStatement = current.getThenStatement();
         const elseStatement = current.getElseStatement();
 

@@ -297,4 +297,18 @@ describe('checkAttributeValuesConformToTypes (SCH-003)', () => {
       });
     });
   });
+
+  describe('receiver word boundary check', () => {
+    it('does not flag setAttribute on a receiver whose name contains "span" as a substring', () => {
+      // timeSpanCalculator contains "span" but is not an OTel span — no word boundary
+      // means the old regex /span|.../ would match it as a false positive
+      const code = [
+        'const timeSpanCalculator = getCalculator();',
+        'timeSpanCalculator.setAttribute("http.response.status_code", "not-an-int");',
+      ].join('\n');
+      const results = checkAttributeValuesConformToTypes(code, filePath, resolvedSchema);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
 });

@@ -160,9 +160,19 @@ function hasSpanEndInFinally(callExpr: import('ts-morph').CallExpression): boole
         }
       }
 
-      // Fallback: walk up ancestors looking for an enclosing try/finally
+      // Fallback: walk up ancestors looking for an enclosing try/finally.
+      // Stop at function boundaries — a try/finally in an outer function cannot
+      // close a span that was created inside a nested inner function.
       let current = callExpr.getParent();
       while (current) {
+        if (
+          Node.isArrowFunction(current) ||
+          Node.isFunctionDeclaration(current) ||
+          Node.isFunctionExpression(current) ||
+          Node.isMethodDeclaration(current)
+        ) {
+          break;
+        }
         if (Node.isTryStatement(current)) {
           const finallyBlock = current.getFinallyBlock();
           if (finallyBlock && endPattern.test(finallyBlock.getText())) {

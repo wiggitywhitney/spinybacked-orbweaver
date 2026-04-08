@@ -265,4 +265,32 @@ describe('checkSpansClosed (CDQ-001)', () => {
       });
     });
   });
+
+  describe('ancestor walk does not cross function boundaries', () => {
+    it('flags an inner function span not closed by its own finally', () => {
+      // inner's startSpan has no try/finally of its own.
+      // The ancestor walk must not claim outer's finally (which closes outer's "span")
+      // as the closing point for inner's "span" — even though both are named "span".
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function outer() {',
+        '  const span = tracer.startSpan("outer");',
+        '  try {',
+        '    function inner() {',
+        '      const span = tracer.startSpan("inner");',
+        '      doWork();',
+        '    }',
+        '    inner();',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '}',
+      ].join('\n');
+      const results = checkSpansClosed(code, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+      expect(failures.some((r) => r.message?.includes('inner'))).toBe(true);
+    });
+  });
 });

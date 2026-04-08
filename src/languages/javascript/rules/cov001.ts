@@ -187,7 +187,7 @@ function checkExportedAsyncFunctions(
     }
   });
 
-  // Also check ESM-style exports
+  // ESM-style function declarations: export async function foo() {}
   for (const fn of sourceFile.getFunctions()) {
     if (fn.isExported() && fn.isAsync()) {
       const name = fn.getName() ?? '<anonymous>';
@@ -200,6 +200,28 @@ function checkExportedAsyncFunctions(
           line: fn.getStartLineNumber(),
           description: `exported async function: ${name}`,
         });
+      }
+    }
+  }
+
+  // ESM-style exported arrow/function expression assignments: export const foo = async () => {}
+  for (const varStatement of sourceFile.getVariableStatements()) {
+    if (!varStatement.isExported()) continue;
+    for (const decl of varStatement.getDeclarations()) {
+      const init = decl.getInitializer();
+      if (!init) continue;
+      if ((Node.isArrowFunction(init) || Node.isFunctionExpression(init)) && init.isAsync()) {
+        const name = decl.getName();
+        const paramNames = init.getParameters().map((p) => p.getName());
+        if (!isServiceEntryPoint(paramNames, filePath)) continue;
+
+        const bodyText = init.getText();
+        if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
+          unspanned.push({
+            line: varStatement.getStartLineNumber(),
+            description: `exported async function: ${name}`,
+          });
+        }
       }
     }
   }

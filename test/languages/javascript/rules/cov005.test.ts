@@ -213,4 +213,37 @@ describe('checkDomainAttributes (COV-005)', () => {
       });
     });
   });
+
+  describe('startSpan attribute scope does not leak across spans', () => {
+    it('does not count attributes from a later span as satisfying an earlier span', () => {
+      // span1 ("op1") never sets "op1.attr" — only span2 does after span1.end().
+      // The bug: attribute collection for span1 does not stop at span1.end(), so
+      // span2's setAttribute("op1.attr") is incorrectly counted for span1.
+      const registry: RegistrySpanDefinition[] = [
+        {
+          spanName: 'op1',
+          requiredAttributes: ['op1.attr'],
+          recommendedAttributes: [],
+        },
+      ];
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  const span1 = tracer.startSpan("op1");',
+        '  span1.end();',
+        '',
+        '  const span2 = tracer.startSpan("op2");',
+        '  span2.setAttribute("op1.attr", "val");',
+        '  span2.end();',
+        '}',
+      ].join('\n');
+
+      const results = checkDomainAttributes(code, filePath, registry);
+      const op1Result = results.find((r) => r.message?.includes('op1'));
+      // span1 must fail because it never sets op1.attr before span1.end()
+      expect(op1Result?.passed).toBe(false);
+    });
+  });
 });

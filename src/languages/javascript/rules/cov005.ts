@@ -172,6 +172,17 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
       }
     }
   } else if (exprText.endsWith('.startSpan')) {
+    // Determine the variable name bound to this span (e.g. `const span = tracer.startSpan(...)`)
+    // so we can stop collecting when we encounter spanVar.end().
+    let spanVarName: string | null = null;
+    const spanCallParent = spanCall.getParent();
+    if (spanCallParent && Node.isVariableDeclaration(spanCallParent)) {
+      spanVarName = spanCallParent.getName();
+    }
+    const spanEndPattern = spanVarName
+      ? new RegExp(`\\b${spanVarName}\\.end\\s*\\(`)
+      : null;
+
     // Walk up to the nearest containing block or source file
     let containingBlock: Node | undefined;
     let ancestorStatement: Node | undefined;
@@ -191,6 +202,10 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
       const declIndex = statements.findIndex(s => s === ancestorStatement);
       if (declIndex >= 0) {
         for (let i = declIndex + 1; i < statements.length; i++) {
+          // Stop collecting when we reach the span's own .end() call
+          if (spanEndPattern && spanEndPattern.test(statements[i].getText())) {
+            break;
+          }
           statements[i].forEachDescendant((desc) => {
             if (Node.isCallExpression(desc)) {
               const attrName = extractSetAttributeName(desc);

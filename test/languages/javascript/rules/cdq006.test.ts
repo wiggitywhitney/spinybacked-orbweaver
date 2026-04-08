@@ -353,4 +353,48 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
       });
     });
   });
+
+  describe('negated isRecording guard (dot required)', () => {
+    it('correctly treats !span.isRecording() as a negated guard in else branch', () => {
+      // else branch of negated guard should be considered guarded
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    if (!span.isRecording()) {',
+        '      return;',
+        '    } else {',
+        '      span.setAttribute("key", JSON.stringify(data));',
+        '    }',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '});',
+      ].join('\n');
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+
+    it('does not treat a no-dot isRecording-substring function call as a guard', () => {
+      // spanisRecording() (no dot) — the dot is required for a valid isRecording() guard.
+      // With \.? the dot is optional, so the else branch was incorrectly treated as guarded.
+      const code = [
+        'function spanisRecording() { return false; }',
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    if (!spanisRecording()) {',
+        '    } else {',
+        '      span.setAttribute("key", JSON.stringify(data));',
+        '    }',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '});',
+      ].join('\n');
+      const results = checkIsRecordingGuard(code, filePath);
+      const flagged = results.filter((r) => !r.passed);
+      expect(flagged.length).toBeGreaterThan(0);
+    });
+  });
 });
