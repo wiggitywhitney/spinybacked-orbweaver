@@ -162,6 +162,8 @@ function extractFromSetAttributes(
         if (key !== null) {
           entries.push({ key, line: prop.getStartLineNumber() });
         }
+      } else if (Node.isShorthandPropertyAssignment(prop)) {
+        entries.push({ key: prop.getName(), line: prop.getStartLineNumber() });
       }
     }
   }

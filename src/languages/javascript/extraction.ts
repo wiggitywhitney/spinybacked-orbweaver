@@ -12,7 +12,7 @@ const OTEL_SPAN_PATTERNS = [
   /startActiveSpan\s*\(/,
   /startSpan\s*\(/,
   /tracer\.\w+Span\s*\(/,
-  /\.end\s*\(\s*\)/,
+  /\b\w*[Ss]pan\w*\.end\s*\(\s*\)/,
 ];
 
 /** Result of extracting a single function from a source file. */
@@ -202,7 +202,7 @@ function buildExtractedFunction(
       // Tell the LLM this function is exported so it applies COV rules, not RST-004.
       // Without this, re-exported functions (export { name }) appear unexported in
       // the isolated context and the LLM skips them.
-      if (isExported && !sourceText.startsWith('export ')) {
+      if (isExported && !/^\s*export\s/.test(sourceText)) {
         sections.push(`// This function is exported (via re-export block)`);
       }
 

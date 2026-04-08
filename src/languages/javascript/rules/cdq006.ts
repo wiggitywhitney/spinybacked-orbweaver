@@ -226,14 +226,16 @@ function hasIsRecordingGuard(setAttrCall: CallExpression): boolean {
           if (elseStatement && isDescendantOf(setAttrCall, elseStatement)) {
             return true;
           }
-          return false;
+          // Not in the guarded branch of this if — continue checking outer scopes
+          current = current.getParent();
+          continue;
         }
 
         // Non-negated: then-branch is the guarded path
         if (thenStatement && isDescendantOf(setAttrCall, thenStatement)) {
           return true;
         }
-        return false;
+        // Not in the guarded branch of this if — continue checking outer scopes
       }
     }
     current = current.getParent();
@@ -267,7 +269,7 @@ function hasEarlyReturnGuard(setAttrCall: CallExpression): boolean {
   // Check preceding statements for: if (!span.isRecording()) return;
   for (let i = stmtIndex - 1; i >= 0; i--) {
     const prevText = statements[i].getText();
-    if (/if\s*\(\s*!\s*(?:(?:\w+\.)+)?isRecording\(\)\s*\)\s*(?:(return|break|continue)|\{\s*(return|break|continue)[;\s]*\})/.test(prevText)) {
+    if (/if\s*\(\s*!\s*(?:(?:\w+\.)+)?isRecording\(\)\s*\)\s*(?:(return|break|continue|throw)\b|\{\s*(return|break|continue|throw)\b[^}]*\})/.test(prevText)) {
       return true;
     }
   }

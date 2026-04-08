@@ -268,12 +268,17 @@ export class JavaScriptProvider implements LanguageProvider {
     extracted: ExtractedFunction[],
     results: FunctionResult[],
   ): string {
-    // Runtime-safe cast: reassembleFunctionsImpl only reads name, startLine,
-    // endLine from each extracted function — all present in the language-agnostic
-    // ExtractedFunction. The type mismatch is structural only (JS version has
-    // additional fields: jsDoc, referencedConstants, buildContext).
+    // Extract only the fields reassembleFunctionsImpl uses (name, startLine, endLine).
+    // This makes the dependency on the JS-specific type explicit: if the implementation
+    // ever reads additional fields, the type error surfaces here rather than at runtime.
     type JsExtracted = Parameters<typeof reassembleFunctionsImpl>[1];
-    return reassembleFunctionsImpl(original, extracted as unknown as JsExtracted, results);
+    const adapted = extracted.map(fn => ({
+      name: fn.name,
+      startLine: fn.startLine,
+      endLine: fn.endLine,
+      sourceText: fn.sourceText,
+    })) as unknown as JsExtracted;
+    return reassembleFunctionsImpl(original, adapted, results);
   }
 
   // ── LLM prompt context ────────────────────────────────────────────────────

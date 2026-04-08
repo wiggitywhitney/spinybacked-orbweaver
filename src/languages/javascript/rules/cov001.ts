@@ -160,28 +160,53 @@ function checkExportedAsyncFunctions(
   filePath: string,
 ): void {
   // Check if exported functions are async and lack spans
-  // Pattern: module.exports.name = async function ... or module.exports.name = async () => ...
+  // Pattern 1: module.exports.name = async function ... or module.exports.name = async () => ...
+  // Pattern 2: module.exports = { name: async () => {} }
   sourceFile.forEachDescendant((node) => {
     if (!Node.isBinaryExpression(node)) return;
 
     const left = node.getLeft().getText();
-    const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
-    if (!nameMatch) return;
-
-    const name = nameMatch[1];
     const right = node.getRight();
 
-    if (Node.isFunctionExpression(right) || Node.isArrowFunction(right)) {
-      if (right.isAsync()) {
-        const paramNames = right.getParameters().map((p) => p.getName());
-        if (!isServiceEntryPoint(paramNames, filePath)) return;
+    // Pattern 1: module.exports.foo = async () => {}
+    const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
+    if (nameMatch) {
+      const name = nameMatch[1];
+      if (Node.isFunctionExpression(right) || Node.isArrowFunction(right)) {
+        if (right.isAsync()) {
+          const paramNames = right.getParameters().map((p) => p.getName());
+          if (!isServiceEntryPoint(paramNames, filePath)) return;
 
-        const bodyText = right.getText();
-        if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
-          unspanned.push({
-            line: node.getStartLineNumber(),
-            description: `exported async function: ${name}`,
-          });
+          const bodyText = right.getText();
+          if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
+            unspanned.push({
+              line: node.getStartLineNumber(),
+              description: `exported async function: ${name}`,
+            });
+          }
+        }
+      }
+      return;
+    }
+
+    // Pattern 2: module.exports = { foo: async () => {} }
+    if (left === 'module.exports' && Node.isObjectLiteralExpression(right)) {
+      for (const prop of right.getProperties()) {
+        if (!Node.isPropertyAssignment(prop)) continue;
+        const init = prop.getInitializer();
+        if (!init) continue;
+        if ((Node.isArrowFunction(init) || Node.isFunctionExpression(init)) && init.isAsync()) {
+          const name = prop.getNameNode().getText();
+          const paramNames = init.getParameters().map((p) => p.getName());
+          if (!isServiceEntryPoint(paramNames, filePath)) continue;
+
+          const bodyText = init.getText();
+          if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
+            unspanned.push({
+              line: prop.getStartLineNumber(),
+              description: `exported async function: ${name}`,
+            });
+          }
         }
       }
     }

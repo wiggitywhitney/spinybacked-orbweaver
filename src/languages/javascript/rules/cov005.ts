@@ -226,8 +226,6 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
                 }
               }
             });
-          } else if (spanEndPattern) {
-            containsSpanEnd = spanEndPattern.test(statements[i].getText());
           }
           if (containsSpanEnd) break;
         }

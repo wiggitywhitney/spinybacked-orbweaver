@@ -21,7 +21,10 @@ export function checkSpansClosed(code: string, filePath: string): CheckResult[] 
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const ext = filePath.endsWith('.ts') || filePath.endsWith('.tsx') ? '.ts' : '.js';
+  const ext = filePath.endsWith('.tsx') ? '.tsx'
+    : filePath.endsWith('.ts') || filePath.endsWith('.mts') || filePath.endsWith('.cts') ? '.ts'
+    : filePath.endsWith('.jsx') ? '.jsx'
+    : '.js';
   const sourceFile = project.createSourceFile(`check${ext}`, code);
 
   // Find all span creation calls

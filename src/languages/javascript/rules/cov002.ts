@@ -105,7 +105,6 @@ export function checkOutboundCallSpans(code: string, filePath: string): CheckRes
  */
 function matchOutboundPattern(callExpr: CallExpression): string | null {
   const expr = callExpr.getExpression();
-  const text = expr.getText();
 
   // Check standalone function calls (e.g., fetch())
   if (Node.isIdentifier(expr)) {
