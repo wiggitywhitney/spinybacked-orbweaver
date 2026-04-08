@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Determine whether a package.json represents a library or an application.
@@ -209,3 +210,27 @@ function fail(filePath: string, message: string): CheckResult {
     blocking: false,
   };
 }
+
+/** API-002 ValidationRule — @opentelemetry/api must be in the correct dependency bucket. */
+export const api002Rule: ValidationRule = {
+  ruleId: 'API-002',
+  dimension: 'API usage',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    if (!input.config.projectRoot) {
+      return {
+        ruleId: 'API-002',
+        passed: true,
+        filePath: input.filePath,
+        lineNumber: null,
+        message: 'API-002: Skipped — projectRoot not configured, cannot read package.json.',
+        tier: 2,
+        blocking: false,
+      };
+    }
+    return checkOtelApiDependencyPlacement(input.filePath, input.config.projectRoot);
+  },
+};

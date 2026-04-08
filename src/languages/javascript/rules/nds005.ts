@@ -5,6 +5,7 @@ import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { SourceFile, TryStatement } from 'ts-morph';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 import type { TokenUsage } from '../../../agent/schema.ts';
 import { callJudge } from '../../../validation/judge.ts';
 import type { JudgeOptions } from '../../../validation/judge.ts';
@@ -475,3 +476,21 @@ function passingResult(filePath: string): CheckResult {
     blocking: false,
   };
 }
+
+/** NDS-005 ValidationRule — control flow must be preserved after instrumentation. */
+export const nds005Rule: ValidationRule = {
+  ruleId: 'NDS-005',
+  dimension: 'Non-destructive',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    const judgeDeps = input.config.anthropicClient
+      ? { client: input.config.anthropicClient }
+      : undefined;
+    return checkControlFlowPreservation(
+      input.originalCode, input.instrumentedCode, input.filePath, judgeDeps,
+    );
+  },
+};

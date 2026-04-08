@@ -2,6 +2,7 @@
 // ABOUTME: Diff-based analysis filtering instrumentation additions to detect business logic changes.
 
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Patterns that identify OTel instrumentation lines.
@@ -285,3 +286,16 @@ export function checkNonInstrumentationDiff(
 
   return results;
 }
+
+/** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */
+export const nds003Rule: ValidationRule = {
+  ruleId: 'NDS-003',
+  dimension: 'Non-destructive',
+  blocking: true,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkNonInstrumentationDiff(input.originalCode, input.instrumentedCode, input.filePath);
+  },
+};

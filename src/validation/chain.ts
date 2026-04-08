@@ -4,34 +4,13 @@
 import { checkElision } from './tier1/elision.ts';
 import { checkWeaver } from './tier1/weaver.ts';
 import { JavaScriptProvider } from '../languages/javascript/index.ts';
+import { getRulesForLanguage } from './rule-registry.ts';
+import type { RuleInput, RuleCheckResult } from '../languages/types.ts';
+import type { TokenUsage } from '../agent/schema.ts';
+import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /** Default provider used when no provider is passed in ValidateFileInput. */
 const DEFAULT_PROVIDER = new JavaScriptProvider();
-import { checkSpansClosed } from './tier2/cdq001.ts';
-import { checkNonInstrumentationDiff } from './tier2/nds003.ts';
-import { checkOutboundCallSpans } from './tier2/cov002.ts';
-import { checkUtilityFunctionSpans } from './tier2/rst001.ts';
-import { checkDomainAttributes } from './tier2/cov005.ts';
-import type { RegistrySpanDefinition } from './tier2/cov005.ts';
-import { checkEntryPointSpans } from './tier2/cov001.ts';
-import { checkErrorVisibility } from './tier2/cov003.ts';
-import { checkAsyncOperationSpans } from './tier2/cov004.ts';
-import { checkAutoInstrumentationPreference } from './tier2/cov006.ts';
-import { checkTrivialAccessorSpans } from './tier2/rst002.ts';
-import { checkThinWrapperSpans } from './tier2/rst003.ts';
-import { checkInternalDetailSpans } from './tier2/rst004.ts';
-import { checkIsRecordingGuard } from './tier2/cdq006.ts';
-import { checkSpanNamesMatchRegistry } from './tier2/sch001.ts';
-import { checkAttributeKeysMatchRegistry } from './tier2/sch002.ts';
-import { checkAttributeValuesConformToTypes } from './tier2/sch003.ts';
-import { checkNoRedundantSchemaEntries } from './tier2/sch004.ts';
-import { checkForbiddenImports } from './tier2/api001.ts';
-import { checkOtelApiDependencyPlacement } from './tier2/api002.ts';
-import { checkModuleSystemMatch } from './tier2/nds006.ts';
-import { checkExportedSignaturePreservation } from './tier2/nds004.ts';
-import { checkControlFlowPreservation } from './tier2/nds005.ts';
-import { checkDoubleInstrumentation } from './tier2/rst005.ts';
-import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
 
 /**
  * Run the full validation chain (Tier 1 + Tier 2) on instrumented output.
@@ -51,7 +30,7 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   const provider = input.provider ?? DEFAULT_PROVIDER;
   const tier1Results: CheckResult[] = [];
   const tier2Results: CheckResult[] = [];
-  const judgeTokenUsage: import('../agent/schema.ts').TokenUsage[] = [];
+  const judgeTokenUsage: TokenUsage[] = [];
 
   // --- Tier 1: Structural checks (short-circuit on first failure) ---
 
@@ -86,234 +65,50 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   }
 
   // --- Tier 2: Semantic checks (all Tier 1 passed) ---
+  // Rules are dispatched through the rule registry. JavaScriptProvider registers
+  // all JS rules on construction (DEFAULT_PROVIDER above). Each rule's check()
+  // method receives a RuleInput that extends ValidateFileInput with language context.
 
-  if (config.tier2Checks['CDQ-001']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkSpansClosed(instrumentedCode, filePath),
-      config.tier2Checks['CDQ-001'].blocking,
-    ));
-  }
+  const ruleInput: RuleInput = { ...input, language: provider.id, provider };
+  const applicableRules = getRulesForLanguage(provider.id);
 
-  if (config.tier2Checks['NDS-003']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkNonInstrumentationDiff(originalCode, instrumentedCode, filePath),
-      config.tier2Checks['NDS-003'].blocking,
-    ));
-  }
+  for (const rule of applicableRules) {
+    const ruleConfig = config.tier2Checks[rule.ruleId];
+    if (!ruleConfig?.enabled) continue;
 
-  if (config.tier2Checks['COV-002']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkOutboundCallSpans(instrumentedCode, filePath),
-      config.tier2Checks['COV-002'].blocking,
-    ));
-  }
+    const rawResult = await rule.check(ruleInput);
+    const { results, judgeTokenUsage: ruleJudgeUsage } = unpackRuleResult(rawResult);
 
-  if (config.tier2Checks['RST-001']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkUtilityFunctionSpans(instrumentedCode, filePath),
-      config.tier2Checks['RST-001'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['COV-005']?.enabled) {
-    const registry: RegistrySpanDefinition[] = config.registryDefinitions ?? [];
-    tier2Results.push(...collectCheckResults(
-      checkDomainAttributes(instrumentedCode, filePath, registry),
-      config.tier2Checks['COV-005'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['COV-001']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkEntryPointSpans(instrumentedCode, filePath),
-      config.tier2Checks['COV-001'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['COV-003']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkErrorVisibility(instrumentedCode, filePath),
-      config.tier2Checks['COV-003'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['COV-004']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkAsyncOperationSpans(instrumentedCode, filePath),
-      config.tier2Checks['COV-004'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['COV-006']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkAutoInstrumentationPreference(instrumentedCode, filePath),
-      config.tier2Checks['COV-006'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['RST-002']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkTrivialAccessorSpans(instrumentedCode, filePath),
-      config.tier2Checks['RST-002'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['RST-003']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkThinWrapperSpans(instrumentedCode, filePath),
-      config.tier2Checks['RST-003'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['RST-004']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkInternalDetailSpans(instrumentedCode, filePath),
-      config.tier2Checks['RST-004'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['CDQ-006']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkIsRecordingGuard(instrumentedCode, filePath),
-      config.tier2Checks['CDQ-006'].blocking,
-    ));
-  }
-
-  // API-001/003/004: Forbidden import detection (combined check)
-  // A single scan covers all three rules. Results are tagged with the
-  // specific ruleId. Per-rule config lookup ensures each can be toggled independently.
-  const apiImportChecksEnabled =
-    config.tier2Checks['API-001']?.enabled ||
-    config.tier2Checks['API-003']?.enabled ||
-    config.tier2Checks['API-004']?.enabled;
-
-  if (apiImportChecksEnabled) {
-    for (const result of checkForbiddenImports(instrumentedCode, filePath)) {
-      const ruleConfig = config.tier2Checks[result.ruleId];
-      if (!ruleConfig?.enabled) continue;
-      tier2Results.push(...collectCheckResults([result], ruleConfig.blocking));
-    }
-  }
-
-  // API-002: Verify @opentelemetry/api dependency placement (library vs app).
-  // Requires projectRoot to read package.json.
-  if (config.tier2Checks['API-002']?.enabled) {
-    if (config.projectRoot) {
-      tier2Results.push(...collectCheckResults(
-        checkOtelApiDependencyPlacement(filePath, config.projectRoot),
-        config.tier2Checks['API-002'].blocking,
-      ));
-    } else {
-      tier2Results.push({
-        ruleId: 'API-002',
-        passed: true,
-        filePath,
-        lineNumber: null,
-        message: 'API-002: Skipped — projectRoot not configured, cannot read package.json.',
-        tier: 2,
-        blocking: false,
-      });
-    }
-  }
-
-  // NDS-006: Verify instrumented code uses the same module system as the original.
-  if (config.tier2Checks['NDS-006']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkModuleSystemMatch(originalCode, instrumentedCode, filePath),
-      config.tier2Checks['NDS-006'].blocking,
-    ));
-  }
-
-  // NDS-004: Verify exported function signatures are preserved after instrumentation.
-  if (config.tier2Checks['NDS-004']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkExportedSignaturePreservation(originalCode, instrumentedCode, filePath),
-      config.tier2Checks['NDS-004'].blocking,
-    ));
-  }
-
-  // NDS-005: Verify existing try/catch/finally structure is preserved after instrumentation.
-  if (config.tier2Checks['NDS-005']?.enabled) {
-    const judgeDeps = config.anthropicClient
-      ? { client: config.anthropicClient }
-      : undefined;
-    const nds005 = await checkControlFlowPreservation(
-      originalCode,
-      instrumentedCode,
-      filePath,
-      judgeDeps,
-    );
-    tier2Results.push(...collectCheckResults(
-      nds005.results,
-      config.tier2Checks['NDS-005'].blocking,
-    ));
-    if (nds005.judgeTokenUsage.length > 0) {
-      judgeTokenUsage.push(...nds005.judgeTokenUsage);
-    }
-  }
-
-  // RST-005: Detect double-instrumentation — spans added to already-instrumented functions.
-  if (config.tier2Checks['RST-005']?.enabled) {
-    tier2Results.push(...collectCheckResults(
-      checkDoubleInstrumentation(originalCode, instrumentedCode, filePath),
-      config.tier2Checks['RST-005'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['SCH-001']?.enabled && config.resolvedSchema) {
-    const judgeDeps = config.anthropicClient
-      ? { client: config.anthropicClient }
-      : undefined;
-    const sch001 = await checkSpanNamesMatchRegistry(
-      instrumentedCode,
-      filePath,
-      config.resolvedSchema,
-      judgeDeps,
-      config.declaredSpanExtensions,
-    );
-    tier2Results.push(...collectCheckResults(
-      sch001.results,
-      config.tier2Checks['SCH-001'].blocking,
-    ));
-    if (sch001.judgeTokenUsage.length > 0) {
-      judgeTokenUsage.push(...sch001.judgeTokenUsage);
-    }
-  }
-
-  if (config.tier2Checks['SCH-002']?.enabled && config.resolvedSchema) {
-    tier2Results.push(...collectCheckResults(
-      checkAttributeKeysMatchRegistry(instrumentedCode, filePath, config.resolvedSchema, config.declaredSpanExtensions),
-      config.tier2Checks['SCH-002'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['SCH-003']?.enabled && config.resolvedSchema) {
-    tier2Results.push(...collectCheckResults(
-      checkAttributeValuesConformToTypes(instrumentedCode, filePath, config.resolvedSchema),
-      config.tier2Checks['SCH-003'].blocking,
-    ));
-  }
-
-  if (config.tier2Checks['SCH-004']?.enabled && config.resolvedSchema) {
-    const judgeDeps = config.anthropicClient
-      ? { client: config.anthropicClient }
-      : undefined;
-    const sch004 = await checkNoRedundantSchemaEntries(
-      instrumentedCode,
-      filePath,
-      config.resolvedSchema,
-      judgeDeps,
-    );
-    tier2Results.push(...collectCheckResults(
-      sch004.results,
-      config.tier2Checks['SCH-004'].blocking,
-    ));
-    if (sch004.judgeTokenUsage.length > 0) {
-      judgeTokenUsage.push(...sch004.judgeTokenUsage);
+    tier2Results.push(...collectCheckResults(results, ruleConfig.blocking));
+    if (ruleJudgeUsage.length > 0) {
+      judgeTokenUsage.push(...ruleJudgeUsage);
     }
   }
 
   return buildResult(tier1Results, tier2Results, judgeTokenUsage);
+}
+
+/**
+ * Normalize a RuleCheckResult (single, array, or judge-result object) into
+ * a flat results array plus any judge token usage for cost tracking.
+ *
+ * Three forms supported (see RuleCheckResult in src/languages/types.ts):
+ * - CheckResult[]: returned as-is
+ * - CheckResult: wrapped in an array
+ * - { results, judgeTokenUsage? }: extracted with optional token usage
+ */
+function unpackRuleResult(raw: RuleCheckResult): {
+  results: CheckResult[];
+  judgeTokenUsage: TokenUsage[];
+} {
+  if (Array.isArray(raw)) {
+    return { results: raw, judgeTokenUsage: [] };
+  }
+  if ('results' in raw) {
+    const results = Array.isArray(raw.results) ? raw.results : [raw.results];
+    return { results, judgeTokenUsage: raw.judgeTokenUsage ?? [] };
+  }
+  return { results: [raw], judgeTokenUsage: [] };
 }
 
 /**
@@ -341,7 +136,7 @@ export function collectCheckResults(
 function buildResult(
   tier1Results: CheckResult[],
   tier2Results: CheckResult[],
-  judgeTokenUsage?: import('../agent/schema.ts').TokenUsage[],
+  judgeTokenUsage?: TokenUsage[],
 ): ValidationResult {
   const allResults = [...tier1Results, ...tier2Results];
   const blockingFailures = allResults.filter((r) => !r.passed && r.blocking);

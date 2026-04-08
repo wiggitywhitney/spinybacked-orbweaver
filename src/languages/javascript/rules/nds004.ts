@@ -4,6 +4,7 @@
 import { Project, Node } from 'ts-morph';
 import type { SourceFile, FunctionDeclaration, VariableStatement } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Signature info extracted from an exported function.
@@ -320,3 +321,16 @@ function passingResult(filePath: string): CheckResult {
     blocking: false,
   };
 }
+
+/** NDS-004 ValidationRule — exported function signatures must be preserved. */
+export const nds004Rule: ValidationRule = {
+  ruleId: 'NDS-004',
+  dimension: 'Non-destructive',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkExportedSignaturePreservation(input.originalCode, input.instrumentedCode, input.filePath);
+  },
+};

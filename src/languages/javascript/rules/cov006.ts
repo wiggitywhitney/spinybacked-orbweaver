@@ -4,6 +4,7 @@
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Operations covered by known OTel auto-instrumentation libraries.
@@ -255,3 +256,16 @@ function getSpanName(callExpr: CallExpression): string {
   }
   return '<unknown>';
 }
+
+/** COV-006 ValidationRule — auto-instrumentation must be preferred over manual spans. */
+export const cov006Rule: ValidationRule = {
+  ruleId: 'COV-006',
+  dimension: 'Coverage',
+  blocking: true,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkAutoInstrumentationPreference(input.instrumentedCode, input.filePath);
+  },
+};

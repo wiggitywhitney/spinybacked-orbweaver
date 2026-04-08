@@ -4,6 +4,7 @@
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
  * Known outbound call patterns grouped by category.
@@ -190,3 +191,16 @@ function isInsideSpanScope(node: CallExpression): boolean {
 
   return false;
 }
+
+/** COV-002 ValidationRule — outbound calls must have spans. */
+export const cov002Rule: ValidationRule = {
+  ruleId: 'COV-002',
+  dimension: 'Coverage',
+  blocking: true,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input: RuleInput): CheckResult[] {
+    return checkOutboundCallSpans(input.instrumentedCode, input.filePath);
+  },
+};

@@ -18,6 +18,7 @@ export type {
   LanguagePromptSections,
   Example,
   RuleInput,
+  RuleCheckResult,
   ValidationRule,
 } from './types.ts';
 

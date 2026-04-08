@@ -3,6 +3,7 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
  * COV-004: Flag async operations without spans.
@@ -142,4 +143,17 @@ function hasDirectAwait(fn: import('ts-morph').Node): boolean {
   });
   return found;
 }
+
+/** COV-004 ValidationRule — async operations must have spans. */
+export const cov004Rule: ValidationRule = {
+  ruleId: 'COV-004',
+  dimension: 'Coverage',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input: RuleInput): CheckResult[] {
+    return checkAsyncOperationSpans(input.instrumentedCode, input.filePath);
+  },
+};
 

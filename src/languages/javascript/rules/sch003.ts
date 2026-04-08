@@ -6,6 +6,7 @@ import type { CallExpression } from 'ts-morph';
 import type { Expression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import { parseResolvedRegistry, getAttributeDefinitions, isEnumType } from '../../../validation/tier2/registry-types.ts';
+import type { ValidationRule } from '../../types.ts';
 import type { ResolvedRegistryAttribute } from '../../../validation/tier2/registry-types.ts';
 
 interface TypeViolation {
@@ -265,3 +266,34 @@ function pass(filePath: string, message: string): CheckResult {
     blocking: true,
   };
 }
+
+/**
+ * SCH-003 ValidationRule — attribute values must conform to registry type constraints.
+ * Applies to all languages (every language needs attribute values validated against the registry).
+ */
+export const sch003Rule: ValidationRule = {
+  ruleId: 'SCH-003',
+  dimension: 'Schema',
+  blocking: true,
+  applicableTo(_language: string): boolean {
+    return true;
+  },
+  check(input) {
+    if (!input.config.resolvedSchema) {
+      return [{
+        ruleId: 'SCH-003',
+        passed: true,
+        filePath: input.filePath,
+        lineNumber: null,
+        message: 'SCH-003: Skipped — no resolved schema available.',
+        tier: 2,
+        blocking: false,
+      }];
+    }
+    return checkAttributeValuesConformToTypes(
+      input.instrumentedCode,
+      input.filePath,
+      input.config.resolvedSchema,
+    );
+  },
+};

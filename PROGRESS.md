@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-08) ValidationRule registry and checker split (PRD #371, B3). Created `src/validation/rule-registry.ts`. Added `ValidationRule` exports to all 23 JS checker files plus CDQ-008. `chain.ts` now dispatches Tier 2 via `getRulesForLanguage()` loop — 23 direct tier2 imports dropped. Deleted 19 non-portable `src/validation/tier2/` files; moved `RegistrySpanDefinition` to `src/validation/types.ts`. Deleted re-export stubs from `src/ast/` and `src/fix-loop/`. Feature parity test (6 tests) and golden file test (4 tests) added. 1,947 tests green.
+
 - (2026-04-07) JavaScript language provider file extraction (PRD #371, B1). Created `src/languages/javascript/` with ast.ts, validation.ts, extraction.ts, reassembly.ts, prompt.ts, and rules/ (23 checker files). Replaced original source files with re-export stubs. Moved all JS-specific tests to `test/languages/javascript/`. All 1,874 tests pass.
 
 - (2026-04-07) Language provider interface types (PRD #370, M1-M3). Created `src/languages/types.ts` with the full `LanguageProvider` interface and 9 supporting types: `FunctionClassification`, `FunctionInfo`, `ImportInfo`, `ExportInfo`, `ExtractedFunction`, `LanguagePromptSections`, `Example`, `RuleInput`, `ValidationRule`. Expanded `src/languages/plugin-api.ts` to re-export the public subset. Types only — no behavior changes; all existing tests pass.

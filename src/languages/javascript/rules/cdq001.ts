@@ -3,6 +3,7 @@
 
 import { Project, Node } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * CDQ-001: Verify that every span opened with startActiveSpan or startSpan
@@ -204,3 +205,16 @@ function getStartSpanVariable(
   }
   return null;
 }
+
+/** CDQ-001 ValidationRule — every span must be closed in all code paths. */
+export const cdq001Rule: ValidationRule = {
+  ruleId: 'CDQ-001',
+  dimension: 'Code Quality',
+  blocking: true,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkSpansClosed(input.instrumentedCode, input.filePath);
+  },
+};

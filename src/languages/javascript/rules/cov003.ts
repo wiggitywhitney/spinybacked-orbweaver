@@ -3,6 +3,7 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
  * Error recording patterns that satisfy COV-003.
@@ -304,3 +305,16 @@ function containsFailableOperation(text: string): boolean {
     text.includes('writeFile')
   );
 }
+
+/** COV-003 ValidationRule — failable operations must have error visibility. */
+export const cov003Rule: ValidationRule = {
+  ruleId: 'COV-003',
+  dimension: 'Coverage',
+  blocking: true,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input: RuleInput): CheckResult[] {
+    return checkErrorVisibility(input.instrumentedCode, input.filePath);
+  },
+};

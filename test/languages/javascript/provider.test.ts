@@ -104,20 +104,27 @@ describe('JavaScriptProvider', () => {
   // ─── Feature parity ─────────────────────────────────────────────────────
 
   describe('hasImplementation', () => {
-    const ALL_RULE_IDS = [
+    // B3: hasImplementation() checks the registered ValidationRule list.
+    // NDS-001 (syntax) and LINT are Tier 1 provider methods, not ValidationRules.
+    const RULE_IDS = [
       'COV-001', 'COV-002', 'COV-003', 'COV-004', 'COV-005', 'COV-006',
       'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005',
-      'NDS-001', 'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006',
+      'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006',
       'CDQ-001', 'CDQ-006', 'CDQ-008',
-      'API-001', 'API-002',
+      'API-001', 'API-002', 'API-003', 'API-004',
       'SCH-001', 'SCH-002', 'SCH-003', 'SCH-004',
-      'LINT',
     ];
 
-    it('returns true for all 26 rule IDs (B2 placeholder)', () => {
-      for (const ruleId of ALL_RULE_IDS) {
+    it('returns true for all ValidationRule IDs registered by this provider', () => {
+      for (const ruleId of RULE_IDS) {
         expect(provider.hasImplementation(ruleId), `Expected hasImplementation('${ruleId}') to be true`).toBe(true);
       }
+    });
+
+    it('returns false for Tier 1 checks that are provider methods, not ValidationRules', () => {
+      // NDS-001 (syntax) and LINT are dispatched via provider.checkSyntax()/lintCheck()
+      expect(provider.hasImplementation('NDS-001')).toBe(false);
+      expect(provider.hasImplementation('LINT')).toBe(false);
     });
 
     it('returns false for unknown rule IDs', () => {

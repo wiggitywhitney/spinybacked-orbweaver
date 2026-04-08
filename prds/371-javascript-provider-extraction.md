@@ -323,20 +323,20 @@ This is a significant refactor of `chain.ts` itself — not just the checkers. I
 
 **Milestone B3 checklist:**
 
-- [ ] Create `src/validation/rule-registry.ts`:
+- [x] Create `src/validation/rule-registry.ts`:
   - `registerRule(rule: ValidationRule): void`
   - `getRulesForLanguage(language: string): ValidationRule[]`
   - `getAllRules(): ValidationRule[]`
   - `getRuleById(ruleId: string): ValidationRule | undefined`
 
-- [ ] **Refactor `src/validation/chain.ts`** — this is the first B3 deliverable, before touching any checker files:
+- [x] **Refactor `src/validation/chain.ts`** — this is the first B3 deliverable, before touching any checker files:
   - Remove all 23 direct tier2 checker function imports from the top of the file
   - Add `LanguageProvider` as a parameter to the validation chain entry point
   - Replace inline checker dispatch with `getRulesForLanguage(language)` + `rule.check(input)` loop
   - Verify the chain still calls tier1 checks first (elision, syntax, lint, weaver) before tier2
   - All existing tests must pass after this refactor — if any test breaks, stop and fix before proceeding to individual checker migrations
 
-- [ ] For each of the 25 checkers needing JS-specific implementations in `src/languages/javascript/rules/` (created in B1):
+- [x] For each of the 25 checkers needing JS-specific implementations in `src/languages/javascript/rules/` (created in B1):
   - Export a class or object implementing `ValidationRule`
   - `ruleId` matches the existing rule ID (e.g., `'COV-001'`)
   - `dimension` matches the existing dimension grouping
@@ -344,44 +344,28 @@ This is a significant refactor of `chain.ts` itself — not just the checkers. I
   - `applicableTo(language: string)` returns `true` for `'javascript'` and `'typescript'`; for `nds006`, also returns `false` for `'python'` and `'go'`; `sch001`–`sch004` and `cdq008` return `true` for all languages (the *rule concept* applies universally — every language needs span names and attribute keys validated against the registry — even though SCH-001–004 have language-specific *extractor implementations*)
   - `check(input: RuleInput)` contains the implementation from the existing checker file
 
-- [ ] Register all 25 JS rule implementations in `src/languages/javascript/index.ts` (the provider registers its rules on construction). CDQ-008 self-registers from `src/validation/tier2/` since it's the shared implementation.
+- [x] Register all 25 JS rule implementations in `src/languages/javascript/index.ts` (the provider registers its rules on construction). CDQ-008 registered by JS provider constructor since it's the only registered provider; self-registration deferred until a second provider is added.
 
-- [ ] Update `src/validation/chain.ts`:
+- [x] Update `src/validation/chain.ts`:
   - Replace direct checker imports with `getRulesForLanguage(language)` calls
   - Pass `RuleInput` (including `provider`) to each `rule.check()`
   - Existing test behavior is unchanged — same rules run, same results
 
-- [ ] Write the feature parity assertion test in `test/validation/parity.test.ts`:
-  ```typescript
-  describe('feature parity matrix', () => {
-    it('every applicable rule has a JS implementation', () => {
-      for (const rule of getAllRules()) {
-        if (rule.applicableTo('javascript')) {
-          assert(
-            getProviderByLanguage('javascript')!.hasImplementation(rule.ruleId),
-            `JavaScript provider missing implementation for ${rule.ruleId}`
-          );
-        }
-      }
-    });
-  });
-  ```
+- [x] Write the feature parity assertion test in `test/validation/parity.test.ts`:
+  - 6 tests covering: all applicable rules have JS implementations, JS/TS language applicability, SCH rules apply to all languages, NDS-006 is JS/TS only, CDQ-008 applies to all languages, 26 expected rules are registered
 
-- [ ] Update `JavaScriptProvider.hasImplementation()` to check against the registered rule list
+- [x] Update `JavaScriptProvider.hasImplementation()` to check against the registered rule list
 
-- [ ] Delete old `src/validation/tier2/` direct checker imports from `src/validation/chain.ts` (they now go through the registry)
+- [x] Delete old `src/validation/tier2/` direct checker imports from `src/validation/chain.ts` (they now go through the registry)
 
-- [ ] Delete the old `src/validation/tier2/` files **one at a time, in this order:**
-  1. For each checker file: run `grep -r "from.*validation/tier2/[filename]" src/ --include="*.ts"` — only delete if zero results
-  2. Delete the file
-  3. Run `npm run typecheck` — must pass before deleting the next file
-  - **Do NOT batch-delete** — one wrong deletion breaks the build and makes the cause hard to diagnose
-  - Exception: `registry-types.ts` — grep for its imports before deleting; if used outside tier2, move shared types to `src/validation/types.ts` instead of deleting
-  - Portable rule files (`sch001.ts`, `sch002.ts`, `sch003.ts`, `sch004.ts`, `cdq008.ts`) stay in `src/validation/tier2/` — they are shared implementations, not JS-specific ones
+- [x] Delete the old `src/validation/tier2/` files **one at a time, in this order:**
+  - Deleted 18 non-portable files (cdq001, cdq006, cov001-004, cov006, nds003-006, rst001-005, api001-002) — all had zero imports after chain.ts refactor
+  - `cov005.ts` deleted after moving `RegistrySpanDefinition` to `src/validation/types.ts`
+  - Portable files remain: `cdq008.ts`, `sch001-004.ts`, `registry-types.ts`
 
-- [ ] **Final stub cleanup:** After all tier2 checkers are migrated, confirm zero re-export stubs remain in `src/ast/`, `src/validation/tier1/`, and `src/fix-loop/`. Run `grep -rn "from.*languages/javascript" src/ast/ src/validation/tier1/ src/fix-loop/ --include="*.ts"` — expect zero results.
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes — all 1,850+ tests green including the new parity test
+- [x] **Final stub cleanup:** Zero re-export stubs remain in `src/ast/`, `src/validation/tier1/`, and `src/fix-loop/`. Consumers updated to import directly from `src/languages/javascript/ast.ts` and `src/languages/javascript/extraction.ts`.
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes — 1,947 tests green (3 skipped: infrastructure-dependent), including 6 parity tests and 4 golden tests
 - [ ] **Eval gate: run full eval against the commit-story-v2 eval repo and confirm JavaScript quality is maintained before proceeding to PRD #372 (TypeScript).** B2 and B3 together change how the JS pipeline executes (coordinator dispatch + validation chain). The eval is the meaningful regression check — acceptance gates alone are too noisy. Command: run the eval repo against the current branch and confirm pass rate ≥ 90% on the commit-story-v2 fixture suite. Do not start TypeScript until this passes.
 
 ---
@@ -399,9 +383,9 @@ test/fixtures/languages/javascript/
 
 Minimum: one real-world Express handler fixture with known-correct instrumentation. More is better. The acceptance gate test must run the full pipeline against this fixture and assert `status === 'success'` and `spansAdded > 0`.
 
-- [ ] Add golden file fixture(s) to `test/fixtures/languages/javascript/`
-- [ ] Write `test/languages/javascript/golden.test.ts` that runs the full pipeline against the fixture(s)
-- [ ] Golden test passes
+- [x] Add golden file fixture(s) to `test/fixtures/languages/javascript/`
+- [x] Write `test/languages/javascript/golden.test.ts` that runs the full pipeline against the fixture(s)
+- [x] Golden test passes
 
 ---
 
@@ -502,3 +486,18 @@ These gaps were identified during `/write-prompt` review of `agent/prompt.ts`. T
 1. **"### Import Addition" section in `buildSystemPrompt` is hardcoded JS-specific.** The line `Add \`import { trace, SpanStatusCode } from '@opentelemetry/api';\`` is valid for JS/TS but wrong for Python or Go. This section must be moved into the provider (new field on `LanguageProvider.getSystemPromptSections()`, e.g. `importAddition: string`) and injected via `sections.importAddition` instead of being hardcoded in the shared template. The `"Instrument the following JavaScript file."` line in `buildUserMessage` (around line 289) has the same issue.
 
 2. **`formatExamplesSection()` drops example `<notes>` elements.** The original `EXAMPLES_SECTION` had `<notes>` per example explaining non-obvious decisions (e.g., why auto-instrumentation was used, why a function was skipped). The new `Example` interface only has `{ description, before, after }`. Notes teach the LLM *why* patterns are correct — this is a mild quality regression. Fix: add `notes?: string` to the `Example` interface in `src/languages/types.ts`, update `getInstrumentationExamples()` in `src/languages/javascript/prompt.ts` to include the notes, and update `formatExamplesSection()` to include `<notes>` when present.
+
+**B3 complete (2026-04-08)**
+
+Checker split milestone complete. All B3 checklist items done:
+
+- `src/validation/rule-registry.ts` created — `registerRule`, `getRulesForLanguage`, `getAllRules`, `getRuleById`, `_resetForTest`.
+- `RuleCheckResult` type added to `src/languages/types.ts` — supports `CheckResult`, `CheckResult[]`, and `{ results, judgeTokenUsage }` forms. `ValidationRule.check()` updated to return `RuleCheckResult | Promise<RuleCheckResult>`.
+- 23 JS checker files in `src/languages/javascript/rules/` each received a `ValidationRule` export. `api001.ts` exports three rules (API-001, API-003, API-004). `src/validation/tier2/cdq008.ts` received a per-file no-op `ValidationRule` (real cross-file check stays in coordinator).
+- `JavaScriptProvider` constructor registers all 26 rules via `registerRule()`. `hasImplementation()` updated to check `JS_RULES` array directly — no longer a placeholder.
+- `chain.ts` refactored: 23 direct tier2 imports dropped; Tier 2 now dispatches via `getRulesForLanguage(provider.id)` loop with `unpackRuleResult()` helper normalizing array/single/judge-result forms.
+- 19 non-portable `src/validation/tier2/` files deleted (cdq001, cov001-006, rst001-005, nds003-006, api001-002). `RegistrySpanDefinition` moved to `src/validation/types.ts` before deleting `cov005.ts`. Portable files remain: cdq008, sch001-004, registry-types.
+- Re-export stubs in `src/ast/` and `src/fix-loop/function-extraction.ts` deleted. Consumers updated to import directly from `src/languages/javascript/ast.ts` and `src/languages/javascript/extraction.ts`.
+- Feature parity test in `test/validation/parity.test.ts` — 6 tests, all pass.
+- Golden file test in `test/languages/javascript/golden.test.ts` with Express handler fixtures — 4 tests, all pass.
+- 1,947 tests green total (3 skipped: infrastructure-dependent).

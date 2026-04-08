@@ -5,6 +5,7 @@ import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import { parseResolvedRegistry, getAllAttributeNames } from '../../../validation/tier2/registry-types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 interface AttributeKeyIssue {
   key: string;
@@ -180,3 +181,35 @@ function pass(filePath: string, message: string): CheckResult {
     blocking: true,
   };
 }
+
+/**
+ * SCH-002 ValidationRule — attribute keys must match names in the Weaver registry.
+ * Applies to all languages (every language needs attribute keys validated against the registry).
+ */
+export const sch002Rule: ValidationRule = {
+  ruleId: 'SCH-002',
+  dimension: 'Schema',
+  blocking: true,
+  applicableTo(_language: string): boolean {
+    return true;
+  },
+  check(input) {
+    if (!input.config.resolvedSchema) {
+      return [{
+        ruleId: 'SCH-002',
+        passed: true,
+        filePath: input.filePath,
+        lineNumber: null,
+        message: 'SCH-002: Skipped — no resolved schema available.',
+        tier: 2,
+        blocking: false,
+      }];
+    }
+    return checkAttributeKeysMatchRegistry(
+      input.instrumentedCode,
+      input.filePath,
+      input.config.resolvedSchema,
+      input.config.declaredSpanExtensions,
+    );
+  },
+};

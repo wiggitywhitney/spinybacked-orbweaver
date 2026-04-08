@@ -4,6 +4,7 @@
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { FunctionDeclaration, ArrowFunction, FunctionExpression, SourceFile } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Known I/O call patterns. If a function body contains any of these,
@@ -166,3 +167,16 @@ function isUtilityWithSpan(
 function hasIOCalls(bodyText: string): boolean {
   return IO_PATTERNS.some((pattern) => bodyText.includes(pattern));
 }
+
+/** RST-001 ValidationRule — utility functions must not have spans. */
+export const rst001Rule: ValidationRule = {
+  ruleId: 'RST-001',
+  dimension: 'Restraint',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkUtilityFunctionSpans(input.instrumentedCode, input.filePath);
+  },
+};

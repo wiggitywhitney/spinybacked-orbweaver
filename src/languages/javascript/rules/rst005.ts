@@ -3,7 +3,8 @@
 
 import { Project } from 'ts-morph';
 import type { SourceFile } from 'ts-morph';
-import { detectOTelImports } from '../../../ast/import-detection.ts';
+import { detectOTelImports } from '../ast.ts';
+import type { ValidationRule } from '../../types.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 
 /**
@@ -108,3 +109,16 @@ function passingResult(filePath: string): CheckResult {
     blocking: false,
   };
 }
+
+/** RST-005 ValidationRule — no double-instrumentation. */
+export const rst005Rule: ValidationRule = {
+  ruleId: 'RST-005',
+  dimension: 'Restraint',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkDoubleInstrumentation(input.originalCode, input.instrumentedCode, input.filePath);
+  },
+};

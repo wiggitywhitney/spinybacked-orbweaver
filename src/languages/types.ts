@@ -3,6 +3,7 @@
 
 import type { CheckResult, ValidateFileInput } from '../validation/types.ts';
 import type { FunctionResult } from '../fix-loop/types.ts';
+import type { TokenUsage } from '../agent/schema.ts';
 
 // Re-export FunctionResult so LanguageProvider method signatures can reference it
 // without callers needing to import from fix-loop directly.
@@ -519,6 +520,21 @@ export interface RuleInput extends ValidateFileInput {
 }
 
 /**
+ * Result returned by a `ValidationRule.check()` call.
+ *
+ * Supports three forms to match the range of existing checker return types:
+ * - Single `CheckResult`: simple checkers with one finding or a single passing result
+ * - `CheckResult[]`: checkers that produce multiple findings (one per issue)
+ * - `{ results, judgeTokenUsage }`: checkers that call an LLM judge (NDS-005, SCH-001, SCH-004)
+ *
+ * The validation chain normalizes all three forms via `unpackRuleResult()`.
+ */
+export type RuleCheckResult =
+  | CheckResult
+  | CheckResult[]
+  | { results: CheckResult | CheckResult[]; judgeTokenUsage?: TokenUsage[] };
+
+/**
  * A single validation rule in the shared validation chain.
  *
  * Rules are registered with the validation chain and keyed by `ruleId`.
@@ -548,10 +564,10 @@ export interface ValidationRule {
   /**
    * Run the check and return the result.
    *
-   * May be async if the check requires I/O (e.g. calling a provider's
-   * external-process method). Synchronous checks may return `CheckResult` directly.
+   * May return a single result, an array of results, or an object that includes
+   * LLM judge token usage for cost tracking. The chain normalizes all forms.
    *
    * @param input - File content, config, and language context
    */
-  check(input: RuleInput): CheckResult | Promise<CheckResult>;
+  check(input: RuleInput): RuleCheckResult | Promise<RuleCheckResult>;
 }

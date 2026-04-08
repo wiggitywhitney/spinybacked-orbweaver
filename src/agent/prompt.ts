@@ -2,7 +2,7 @@
 // ABOUTME: Follows the spec's 7-section structure with Claude 4.x prompt hygiene.
 
 import type { AgentConfig } from '../config/schema.ts';
-import type { OTelImportDetectionResult } from '../ast/import-detection.ts';
+import type { OTelImportDetectionResult } from '../languages/javascript/ast.ts';
 import type { LanguageProvider, Example } from '../languages/types.ts';
 import { JavaScriptProvider } from '../languages/javascript/index.ts';
 

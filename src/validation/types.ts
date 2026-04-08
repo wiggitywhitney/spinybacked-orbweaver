@@ -59,6 +59,16 @@ export interface ValidationResult {
 }
 
 /**
+ * Registry definition for a single span — what attributes it should have.
+ * Populated from the Weaver telemetry registry for COV-005 domain attribute checks.
+ */
+export interface RegistrySpanDefinition {
+  spanName: string;
+  requiredAttributes: string[];
+  recommendedAttributes: string[];
+}
+
+/**
  * Controls which checks run and their blocking/advisory classification.
  * Phase 2 defines the shape; Phase 4+ extends with additional Tier 2 rules.
  */
@@ -77,7 +87,7 @@ export interface ValidationConfig {
   /** Weaver registry directory. Required if enableWeaver is true. */
   registryPath?: string;
   /** Registry span definitions for COV-005 domain attribute checks. */
-  registryDefinitions?: import('./tier2/cov005.ts').RegistrySpanDefinition[];
+  registryDefinitions?: RegistrySpanDefinition[];
   /** Resolved Weaver registry (from `weaver registry resolve -f json`).
    *  Used by SCH-001 through SCH-004 Tier 2 checks. */
   resolvedSchema?: object;

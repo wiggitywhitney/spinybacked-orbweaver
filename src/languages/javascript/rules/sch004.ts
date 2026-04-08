@@ -9,6 +9,7 @@ import type { TokenUsage } from '../../../agent/schema.ts';
 import { callJudge } from '../../../validation/judge.ts';
 import type { JudgeOptions } from '../../../validation/judge.ts';
 import { parseResolvedRegistry, getAllAttributeNames } from '../../../validation/tier2/registry-types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 interface RedundancyFlag {
   key: string;
@@ -268,3 +269,38 @@ function pass(filePath: string, message: string): CheckResult {
     blocking: false,
   };
 }
+
+/**
+ * SCH-004 ValidationRule — no redundant schema entries in the instrumented output.
+ * Applies to all languages (every language needs redundant entries checked against the registry).
+ */
+export const sch004Rule: ValidationRule = {
+  ruleId: 'SCH-004',
+  dimension: 'Schema',
+  blocking: false,
+  applicableTo(_language: string): boolean {
+    return true;
+  },
+  check(input) {
+    if (!input.config.resolvedSchema) {
+      return [{
+        ruleId: 'SCH-004',
+        passed: true,
+        filePath: input.filePath,
+        lineNumber: null,
+        message: 'SCH-004: Skipped — no resolved schema available.',
+        tier: 2,
+        blocking: false,
+      }];
+    }
+    const judgeDeps = input.config.anthropicClient
+      ? { client: input.config.anthropicClient }
+      : undefined;
+    return checkNoRedundantSchemaEntries(
+      input.instrumentedCode,
+      input.filePath,
+      input.config.resolvedSchema,
+      judgeDeps,
+    );
+  },
+};

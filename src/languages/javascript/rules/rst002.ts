@@ -3,6 +3,7 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Trivial accessor method name patterns.
@@ -192,3 +193,16 @@ function extractInnerStatementsFromSpanWrapper(
 
   return null;
 }
+
+/** RST-002 ValidationRule — trivial accessor functions must not have spans. */
+export const rst002Rule: ValidationRule = {
+  ruleId: 'RST-002',
+  dimension: 'Restraint',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkTrivialAccessorSpans(input.instrumentedCode, input.filePath);
+  },
+};

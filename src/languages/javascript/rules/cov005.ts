@@ -3,17 +3,10 @@
 
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
-import type { CheckResult } from '../../../validation/types.ts';
+import type { CheckResult, RegistrySpanDefinition } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
-/**
- * Registry definition for a single span — what attributes it should have.
- * Populated from the Weaver telemetry registry (Phase 5 provides the resolver).
- */
-export interface RegistrySpanDefinition {
-  spanName: string;
-  requiredAttributes: string[];
-  recommendedAttributes: string[];
-}
+export type { RegistrySpanDefinition };
 
 interface SpanAttributeGap {
   spanName: string;
@@ -263,3 +256,17 @@ function extractSetAttributeName(callExpr: CallExpression): string | null {
 function escapeForRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+/** COV-005 ValidationRule — spans must have domain-specific attributes from the registry. */
+export const cov005Rule: ValidationRule = {
+  ruleId: 'COV-005',
+  dimension: 'Coverage',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    const registry = input.config.registryDefinitions ?? [];
+    return checkDomainAttributes(input.instrumentedCode, input.filePath, registry);
+  },
+};

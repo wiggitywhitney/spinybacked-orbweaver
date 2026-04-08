@@ -9,6 +9,7 @@ import type { TokenUsage } from '../../../agent/schema.ts';
 import { callJudge } from '../../../validation/judge.ts';
 import type { JudgeOptions } from '../../../validation/judge.ts';
 import { parseResolvedRegistry, getSpanDefinitions } from '../../../validation/tier2/registry-types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 interface SpanNameIssue {
   spanName: string;
@@ -405,3 +406,39 @@ function pass(filePath: string, message: string): CheckResult {
     blocking: true,
   };
 }
+
+/**
+ * SCH-001 ValidationRule — span names must match operations in the Weaver registry.
+ * Applies to all languages (every language needs span names validated against the registry).
+ */
+export const sch001Rule: ValidationRule = {
+  ruleId: 'SCH-001',
+  dimension: 'Schema',
+  blocking: true,
+  applicableTo(_language: string): boolean {
+    return true;
+  },
+  check(input) {
+    if (!input.config.resolvedSchema) {
+      return [{
+        ruleId: 'SCH-001',
+        passed: true,
+        filePath: input.filePath,
+        lineNumber: null,
+        message: 'SCH-001: Skipped — no resolved schema available.',
+        tier: 2,
+        blocking: false,
+      }];
+    }
+    const judgeDeps = input.config.anthropicClient
+      ? { client: input.config.anthropicClient }
+      : undefined;
+    return checkSpanNamesMatchRegistry(
+      input.instrumentedCode,
+      input.filePath,
+      input.config.resolvedSchema,
+      judgeDeps,
+      input.config.declaredSpanExtensions,
+    );
+  },
+};

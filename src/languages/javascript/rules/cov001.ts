@@ -4,6 +4,7 @@
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
  * Patterns matching entry point registrations (framework route handlers,
@@ -251,3 +252,16 @@ function checkExportedAsyncFunctions(
     }
   }
 }
+
+/** COV-001 ValidationRule — entry points must have spans. */
+export const cov001Rule: ValidationRule = {
+  ruleId: 'COV-001',
+  dimension: 'Coverage',
+  blocking: true,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input: RuleInput): CheckResult[] {
+    return checkEntryPointSpans(input.instrumentedCode, input.filePath);
+  },
+};

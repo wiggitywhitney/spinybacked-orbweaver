@@ -13,7 +13,7 @@ import type { TokenUsage } from '../../src/agent/schema.ts';
 import type { InstrumentFileResult } from '../../src/agent/instrument-file.ts';
 import type { ValidationResult, ValidateFileInput } from '../../src/validation/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
-import type { ExtractedFunction } from '../../src/fix-loop/function-extraction.ts';
+import type { ExtractedFunction } from '../../src/languages/javascript/extraction.ts';
 import type { FunctionInstrumentationDeps } from '../../src/fix-loop/function-instrumentation.ts';
 
 const sampleTokens: TokenUsage = {

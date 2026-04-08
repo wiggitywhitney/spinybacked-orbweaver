@@ -4,6 +4,7 @@
 import { Project, Node } from 'ts-morph';
 import type { SourceFile } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Module system signals detected in a source file.
@@ -342,3 +343,17 @@ function passingResult(filePath: string): CheckResult {
     blocking: false,
   };
 }
+
+/** NDS-006 ValidationRule — instrumented code must use the same module system (CJS/ESM) as the original. */
+export const nds006Rule: ValidationRule = {
+  ruleId: 'NDS-006',
+  dimension: 'Non-destructive',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    // Module system distinction is only meaningful for JavaScript and TypeScript.
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkModuleSystemMatch(input.originalCode, input.instrumentedCode, input.filePath);
+  },
+};

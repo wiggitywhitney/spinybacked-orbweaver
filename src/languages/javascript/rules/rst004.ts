@@ -3,6 +3,7 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * I/O patterns that exempt an unexported function from RST-004.
@@ -211,3 +212,16 @@ function hasIOCalls(bodyText: string): boolean {
 function isAsyncFunction(isAsync: boolean, bodyText: string): boolean {
   return isAsync || /\bawait[\s(]/.test(bodyText);
 }
+
+/** RST-004 ValidationRule — internal detail functions must not have spans. */
+export const rst004Rule: ValidationRule = {
+  ruleId: 'RST-004',
+  dimension: 'Restraint',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkInternalDetailSpans(input.instrumentedCode, input.filePath);
+  },
+};

@@ -9,6 +9,5 @@ export type {
 } from './types.ts';
 
 export { checkElision, checkWeaver } from './tier1/index.ts';
-export { checkSpansClosed, checkNonInstrumentationDiff } from './tier2/index.ts';
 export { validateFile } from './chain.ts';
 export { formatFeedbackForAgent } from './feedback.ts';

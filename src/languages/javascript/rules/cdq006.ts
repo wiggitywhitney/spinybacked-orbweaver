@@ -4,6 +4,7 @@
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Patterns that indicate an expensive computation in a setAttribute value.
@@ -287,3 +288,16 @@ function isDescendantOf(node: import('ts-morph').Node, potentialParent: import('
   }
   return false;
 }
+
+/** CDQ-006 ValidationRule — expensive attribute computation must be guarded by isRecording(). */
+export const cdq006Rule: ValidationRule = {
+  ruleId: 'CDQ-006',
+  dimension: 'Code Quality',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkIsRecordingGuard(input.instrumentedCode, input.filePath);
+  },
+};

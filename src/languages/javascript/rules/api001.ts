@@ -3,6 +3,7 @@
 
 import { Project, Node } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * Forbidden import patterns. Each entry maps a regex (tested against the full
@@ -193,3 +194,66 @@ function matchForbiddenPackage(
   }
   return null;
 }
+
+/**
+ * Filter the combined forbidden-import scan to a single rule ID.
+ * Returns a passing result when there are no violations for that rule.
+ */
+function filterForbiddenImports(
+  code: string,
+  filePath: string,
+  ruleId: 'API-001' | 'API-003' | 'API-004',
+): CheckResult[] {
+  const violations = checkForbiddenImports(code, filePath).filter(r => r.ruleId === ruleId);
+  if (violations.length === 0) {
+    return [{
+      ruleId,
+      passed: true,
+      filePath,
+      lineNumber: null,
+      message: `${ruleId}: No forbidden imports found.`,
+      tier: 2,
+      blocking: false,
+    }];
+  }
+  return violations;
+}
+
+/** API-001 ValidationRule — only @opentelemetry/api may be imported (no SDK packages). */
+export const api001Rule: ValidationRule = {
+  ruleId: 'API-001',
+  dimension: 'API usage',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return filterForbiddenImports(input.instrumentedCode, input.filePath, 'API-001');
+  },
+};
+
+/** API-003 ValidationRule — no vendor-specific tracing SDK imports. */
+export const api003Rule: ValidationRule = {
+  ruleId: 'API-003',
+  dimension: 'API usage',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return filterForbiddenImports(input.instrumentedCode, input.filePath, 'API-003');
+  },
+};
+
+/** API-004 ValidationRule — no OTel SDK internal package imports. */
+export const api004Rule: ValidationRule = {
+  ruleId: 'API-004',
+  dimension: 'API usage',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return filterForbiddenImports(input.instrumentedCode, input.filePath, 'API-004');
+  },
+};

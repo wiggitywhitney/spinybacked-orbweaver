@@ -21,29 +21,49 @@ import { checkSyntax, checkLint, formatCode } from './validation.ts';
 import { extractExportedFunctions } from './extraction.ts';
 import { reassembleFunctions as reassembleFunctionsImpl } from './reassembly.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
+import { registerRule } from '../../validation/rule-registry.ts';
+import { cov001Rule } from './rules/cov001.ts';
+import { cov002Rule } from './rules/cov002.ts';
+import { cov003Rule } from './rules/cov003.ts';
+import { cov004Rule } from './rules/cov004.ts';
+import { cov005Rule } from './rules/cov005.ts';
+import { cov006Rule } from './rules/cov006.ts';
+import { rst001Rule } from './rules/rst001.ts';
+import { rst002Rule } from './rules/rst002.ts';
+import { rst003Rule } from './rules/rst003.ts';
+import { rst004Rule } from './rules/rst004.ts';
+import { rst005Rule } from './rules/rst005.ts';
+import { nds003Rule } from './rules/nds003.ts';
+import { nds004Rule } from './rules/nds004.ts';
+import { nds005Rule } from './rules/nds005.ts';
+import { nds006Rule } from './rules/nds006.ts';
+import { cdq001Rule } from './rules/cdq001.ts';
+import { cdq006Rule } from './rules/cdq006.ts';
+import { api001Rule, api003Rule, api004Rule } from './rules/api001.ts';
+import { api002Rule } from './rules/api002.ts';
+import { sch001Rule } from './rules/sch001.ts';
+import { sch002Rule } from './rules/sch002.ts';
+import { sch003Rule } from './rules/sch003.ts';
+import { sch004Rule } from './rules/sch004.ts';
+import { cdq008Rule } from '../../validation/tier2/cdq008.ts';
 
 /**
- * All 26 rule IDs this provider handles.
- * Covers 23 Tier 2 checkers + CDQ-008 (shared) + NDS-001 (syntax) + LINT.
- * B2 placeholder: hasImplementation() returns true for all of these.
- * B3 replaces this with a check against the registered rule list.
+ * All ValidationRule instances this provider registers.
+ * Covers 25 per-file Tier 2 rules (including API-003/API-004 from api001.ts)
+ * plus CDQ-008 (shared cross-file rule registered here for parity tracking).
+ *
+ * NDS-001 (syntax) and LINT are not ValidationRule objects — they are
+ * dispatched directly through provider.checkSyntax() and provider.lintCheck()
+ * in the validation chain's Tier 1 section.
  */
-const ALL_RULE_IDS = new Set([
-  // Coverage
-  'COV-001', 'COV-002', 'COV-003', 'COV-004', 'COV-005', 'COV-006',
-  // Restraint
-  'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005',
-  // Non-destructive (includes NDS-001 for syntax checking)
-  'NDS-001', 'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006',
-  // Code quality
-  'CDQ-001', 'CDQ-006', 'CDQ-008',
-  // API usage
-  'API-001', 'API-002',
-  // Schema
-  'SCH-001', 'SCH-002', 'SCH-003', 'SCH-004',
-  // Tier 1 lint (provider owns the lintCheck implementation)
-  'LINT',
-]);
+const JS_RULES = [
+  cov001Rule, cov002Rule, cov003Rule, cov004Rule, cov005Rule, cov006Rule,
+  rst001Rule, rst002Rule, rst003Rule, rst004Rule, rst005Rule,
+  nds003Rule, nds004Rule, nds005Rule, nds006Rule,
+  cdq001Rule, cdq006Rule, cdq008Rule,
+  api001Rule, api002Rule, api003Rule, api004Rule,
+  sch001Rule, sch002Rule, sch003Rule, sch004Rule,
+] as const;
 
 /**
  * JavaScript language provider.
@@ -57,6 +77,15 @@ const ALL_RULE_IDS = new Set([
  * - prompt.ts: JS-specific LLM prompt sections and examples
  */
 export class JavaScriptProvider implements LanguageProvider {
+  constructor() {
+    // Register all JS ValidationRules with the shared rule registry.
+    // This populates the registry so the validation chain can dispatch
+    // through getRulesForLanguage('javascript') instead of direct imports.
+    for (const rule of JS_RULES) {
+      registerRule(rule);
+    }
+  }
+
   // ── Identity ──────────────────────────────────────────────────────────────
 
   readonly id = 'javascript';
@@ -318,9 +347,8 @@ export class JavaScriptProvider implements LanguageProvider {
   // ── Feature parity check ──────────────────────────────────────────────────
 
   hasImplementation(ruleId: string): boolean {
-    // B2 placeholder: returns true for all 26 rule IDs so the parity matrix
-    // doesn't break during B2. B3 replaces this with a check against the
-    // registered ValidationRule list after all checkers are migrated.
-    return ALL_RULE_IDS.has(ruleId);
+    // Check whether this provider has registered a ValidationRule for the given ID.
+    // The constructor registers all JS rules; this query reflects actual coverage.
+    return JS_RULES.some(rule => rule.ruleId === ruleId);
   }
 }

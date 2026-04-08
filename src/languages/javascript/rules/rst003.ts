@@ -3,6 +3,7 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ValidationRule } from '../../types.ts';
 
 /**
  * RST-003: Flag spans on thin wrapper functions.
@@ -159,3 +160,16 @@ function extractTryBlockStatements(
 
   return null;
 }
+
+/** RST-003 ValidationRule — thin wrapper functions must not have spans. */
+export const rst003Rule: ValidationRule = {
+  ruleId: 'RST-003',
+  dimension: 'Restraint',
+  blocking: false,
+  applicableTo(language: string): boolean {
+    return language === 'javascript' || language === 'typescript';
+  },
+  check(input) {
+    return checkThinWrapperSpans(input.instrumentedCode, input.filePath);
+  },
+};

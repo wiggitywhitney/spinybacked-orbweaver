@@ -2,6 +2,7 @@
 // ABOUTME: Cross-file check that collects trace.getTracer() names and flags inconsistent patterns.
 
 import type { CheckResult } from '../types.ts';
+import type { ValidationRule } from '../../languages/types.ts';
 
 /**
  * Input for cross-file tracer naming consistency check.
@@ -132,3 +133,37 @@ function classifyPattern(name: string): NamingPattern {
   }
   return 'other';
 }
+
+/**
+ * CDQ-008 per-file ValidationRule.
+ *
+ * CDQ-008 is inherently a cross-file check — it verifies naming consistency
+ * across all files in a run, not within a single file. The actual check runs
+ * at coordinator level via `checkTracerNamingConsistency(files)`.
+ *
+ * This per-file rule always passes. It exists so CDQ-008 appears in the
+ * rule registry and the feature parity matrix can verify the provider
+ * has an implementation of this rule concept.
+ *
+ * Applies to all languages (tracer naming consistency is a universal concern).
+ */
+export const cdq008Rule: ValidationRule = {
+  ruleId: 'CDQ-008',
+  dimension: 'Code Quality',
+  blocking: false,
+  applicableTo(_language: string): boolean {
+    return true;
+  },
+  check(input) {
+    // Per-file: always passes. The real cross-file check runs in coordinate.ts.
+    return {
+      ruleId: 'CDQ-008',
+      passed: true,
+      filePath: input.filePath,
+      lineNumber: null,
+      message: 'CDQ-008: Cross-file tracer naming check runs at coordinator level.',
+      tier: 2,
+      blocking: false,
+    };
+  },
+};
