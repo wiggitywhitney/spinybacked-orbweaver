@@ -135,7 +135,10 @@ function isBroaderBusinessSpan(spanCall: CallExpression): boolean {
   if (!callback) return false;
 
   const body = callback.getBody();
-  const statements = Node.isBlock(body) ? body.getStatements() : [];
+  // Expression-bodied arrow functions (e.g. `(span) => operation().finally(() => span.end())`)
+  // represent a single non-trivial operation and should not be flagged as trivial wrappers.
+  if (!Node.isBlock(body)) return true;
+  const statements = body.getStatements();
 
   const meaningful = collectMeaningfulStatements(statements);
   return meaningful.length > 1;

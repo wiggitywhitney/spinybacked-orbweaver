@@ -180,7 +180,7 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
       spanVarName = spanCallParent.getName();
     }
     const spanEndPattern = spanVarName
-      ? new RegExp(`\b${spanVarName}\.end\s*\(`)
+      ? new RegExp(`\\b${spanVarName}\\.end\\s*\\(`)
       : null;
 
     // Walk up to the nearest containing block or source file

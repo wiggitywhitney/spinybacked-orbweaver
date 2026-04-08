@@ -126,7 +126,7 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
         const name = prop.getName();
         if (seen.has(name)) continue;
 
-        // Find the corresponding function declaration in the file
+        // Find the corresponding function declaration or variable-assigned function
         const fn = sourceFile.getFunction(name);
         if (fn) {
           seen.add(name);
@@ -135,6 +135,19 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
             params: fn.getParameters().map(p => p.getName()),
             lineNumber: fn.getStartLineNumber(),
           });
+        } else {
+          const varDecl = sourceFile.getVariableDeclaration(name);
+          if (varDecl) {
+            const varInit = varDecl.getInitializer();
+            if (varInit && (Node.isArrowFunction(varInit) || Node.isFunctionExpression(varInit))) {
+              seen.add(name);
+              signatures.push({
+                name,
+                params: varInit.getParameters().map(p => p.getName()),
+                lineNumber: varDecl.getStartLineNumber(),
+              });
+            }
+          }
         }
       } else if (Node.isPropertyAssignment(prop)) {
         const name = prop.getName();
@@ -149,10 +162,18 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
         } else if (Node.isArrowFunction(init)) {
           params = init.getParameters().map(p => p.getName());
         } else if (Node.isIdentifier(init)) {
-          // module.exports = { foo: foo } — resolve to function declaration
+          // module.exports = { foo: foo } — resolve to function declaration or variable-assigned function
           const fn = sourceFile.getFunction(init.getText());
           if (fn) {
             params = fn.getParameters().map(p => p.getName());
+          } else {
+            const varDecl = sourceFile.getVariableDeclaration(init.getText());
+            if (varDecl) {
+              const varInit = varDecl.getInitializer();
+              if (varInit && (Node.isArrowFunction(varInit) || Node.isFunctionExpression(varInit))) {
+                params = varInit.getParameters().map(p => p.getName());
+              }
+            }
           }
         }
 

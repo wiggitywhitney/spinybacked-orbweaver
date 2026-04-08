@@ -142,12 +142,11 @@ describe('classifyFunctions', () => {
     });
   });
 
-  describe('totalFunctionsInFile count', () => {
-    it('counts all functions for ratio-based backstop', () => {
+  describe('function count', () => {
+    it('returns all top-level functions in the file', () => {
       const sourceFile = getSourceFile('mixed-functions.js');
       const result = classifyFunctions(sourceFile);
 
-      // totalFunctionsInFile on each entry should match total count
       expect(result.length).toBe(7);
     });
   });
