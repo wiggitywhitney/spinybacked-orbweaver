@@ -382,6 +382,7 @@ This is a significant refactor of `chain.ts` itself — not just the checkers. I
 - [ ] **Final stub cleanup:** After all tier2 checkers are migrated, confirm zero re-export stubs remain in `src/ast/`, `src/validation/tier1/`, and `src/fix-loop/`. Run `grep -rn "from.*languages/javascript" src/ast/ src/validation/tier1/ src/fix-loop/ --include="*.ts"` — expect zero results.
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes — all 1,850+ tests green including the new parity test
+- [ ] **Eval gate: run full eval against the commit-story-v2 eval repo and confirm JavaScript quality is maintained before proceeding to PRD #372 (TypeScript).** B2 and B3 together change how the JS pipeline executes (coordinator dispatch + validation chain). The eval is the meaningful regression check — acceptance gates alone are too noisy. Command: run the eval repo against the current branch and confirm pass rate ≥ 90% on the commit-story-v2 fixture suite. Do not start TypeScript until this passes.
 
 ---
 
@@ -440,7 +441,7 @@ Pass rate calculation: `(passing golden tests) / (total golden tests)`. Skip vs.
 
 - **Risk: B2 wiring changes coordinator behavior for existing JS files**
   - Impact: Regressions in acceptance gate tests even though unit tests pass
-  - Mitigation: After B2 is complete, run the full acceptance gate suite (`vals exec -f .vals.yaml -- npx vitest run test/acceptance-gate.test.ts`). The coordinator should produce identical results for JS files before and after B2.
+  - Mitigation: After B2 is complete, run the full acceptance gate suite as a smoke check. The definitive quality gate is the eval run after B3 (see B3 checklist — eval gate required before proceeding to TypeScript). Acceptance gates alone are too sensitive to Anthropic API overload to be the final gate.
 
 - **Risk: B3 deletes a tier2 checker file that still has an import somewhere**
   - Impact: Build failure; TypeScript type errors
@@ -449,6 +450,31 @@ Pass rate calculation: `(passing golden tests) / (total golden tests)`. Skip vs.
 - **Risk: Shared validator helpers and language-specific extractors get mixed or duplicated**
   - Impact: Two implementations diverge; one doesn't stay up to date
   - Mitigation: Shared validators (the pure registry-comparison functions in `src/validation/tier2/`) stay there and are imported by language-specific rules. Language-specific extractors (ts-morph for JS) live in `src/languages/javascript/rules/`. CDQ-008 is the only rule that stays entirely in `src/validation/tier2/` with no language-specific partner. SCH-001–004 have JS extractor halves in `src/languages/javascript/rules/` calling the shared validator helper.
+
+---
+
+## Implementation Notes
+
+**B1 — Pre-existing checker bugs fixed during extraction (2026-04-08)**
+
+Four rounds of CodeRabbit CLI review during B1 surfaced 30 pre-existing bugs in the `src/validation/tier2/` checker files. All fixes were applied to both `src/languages/javascript/rules/` (the new copies) and `src/validation/tier2/` (the originals still used at runtime until B3). Key fixes include:
+
+- `cov001`: ESM exported async arrow functions (`export const foo = async () => {}`) were not detected as entry points
+- `cov004`: `await` detection used a text regex that matched nested async callbacks, causing false positives on sync outer functions
+- `cov005`: `startSpan` attribute scan did not stop at `span.end()`, causing attributes from later spans to be incorrectly counted
+- `cdq001`: Ancestor walk crossed function boundaries, causing inner function spans to be incorrectly considered closed by outer try/finally
+- `sch003`, `sch004`: Receiver regex lacked word boundaries, causing false positives on names containing "span" as a substring
+- `nds004`: Export name extraction used string slicing instead of AST property name, causing `module.exports.foo.bar` to extract `foo.bar` instead of `bar`
+
+B2 and B3 implementers are working with improved checker code relative to what existed before the extraction.
+
+**B1 — Acceptance gates confirmed non-regressive (2026-04-08)**
+
+Two acceptance gate runs were performed after B1 completion. All test failures were traced to Anthropic API `overloaded_error` responses during LLM calls — not code regressions. Files that failed on first run passed when API load reduced. B1 is clean.
+
+**Decision: Eval gate required before TypeScript (2026-04-08)**
+
+After B3 completes, run a full eval against the commit-story-v2 eval repo (pass rate ≥ 90%) before starting PRD #372. Acceptance gates are too noisy (API overload) for a reliable quality signal. B2 and B3 together change how the JS pipeline executes for the first time; the eval is the authoritative regression check. This is captured in the B3 checklist.
 
 ---
 
