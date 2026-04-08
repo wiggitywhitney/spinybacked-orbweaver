@@ -5,21 +5,23 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { Project } from 'ts-morph';
 import Anthropic from '@anthropic-ai/sdk';
 import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
+import type { LanguageProvider } from '../languages/types.ts';
+import { JavaScriptProvider } from '../languages/javascript/index.ts';
+
+/** Default provider used when no provider is passed in InstrumentWithRetryOptions. */
+const DEFAULT_PROVIDER: LanguageProvider = new JavaScriptProvider();
 import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
-import { extractExportedFunctions } from './function-extraction.ts';
-import { reassembleFunctions, ensureTracerAfterImports } from './function-reassembly.ts';
+import { ensureTracerAfterImports } from '../languages/javascript/reassembly.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
-import { checkSyntax } from '../validation/tier1/syntax.ts';
 import { parseResolvedRegistry, getSpanDefinitions } from '../validation/tier2/registry-types.ts';
 
 const require = createRequire(import.meta.url);
@@ -75,6 +77,13 @@ interface InstrumentWithRetryOptions {
   anthropicClient?: Anthropic;
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
+  /**
+   * Language provider for the file being instrumented.
+   * Passed to the validation chain (checkSyntax, lintCheck) and used to determine
+   * the temp file extension for function-level fallback.
+   * Defaults to the JavaScript provider when not specified.
+   */
+  provider?: LanguageProvider;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -323,6 +332,7 @@ export async function instrumentWithRetry(
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
   const formatFeedbackFn = (await import('../validation/feedback.ts')).formatFeedbackForAgent;
   const anthropicClient = options?.anthropicClient ?? new Anthropic();
+  const provider = options?.provider ?? DEFAULT_PROVIDER;
 
   let wholeFileResult: FileResult;
   try {
@@ -330,7 +340,7 @@ export async function instrumentWithRetry(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
       options?.projectRoot, anthropicClient, options?.clock,
-      options?.existingSpanNames,
+      options?.existingSpanNames, provider,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -380,6 +390,7 @@ async function executeRetryLoop(
   anthropicClient?: Anthropic,
   clock?: () => number,
   existingSpanNames?: string[],
+  provider?: LanguageProvider,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -555,6 +566,7 @@ async function executeRetryLoop(
       config: output.schemaExtensions.length > 0
         ? { ...validationConfig, declaredSpanExtensions: output.schemaExtensions }
         : validationConfig,
+      provider,
     });
 
     lastValidation = validation;
@@ -678,13 +690,10 @@ async function functionLevelFallback(
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
   retryOptions?: InstrumentWithRetryOptions,
 ): Promise<FileResult | null> {
-  // Parse the file to extract functions
-  const project = new Project({
-    compilerOptions: { allowJs: true, noEmit: true },
-    skipAddingFilesFromTsConfig: true,
-  });
-  const sourceFile = project.createSourceFile(`${filePath}.tmp`, originalCode);
-  const extractedFunctions = extractExportedFunctions(sourceFile, { includeNonExported: true });
+  const fnProvider = retryOptions?.provider ?? DEFAULT_PROVIDER;
+
+  // Extract functions via provider (language-agnostic interface)
+  const extractedFunctions = fnProvider.extractFunctions(originalCode);
 
   if (extractedFunctions.length === 0) {
     return null; // No extractable functions — fallback not applicable
@@ -695,8 +704,8 @@ async function functionLevelFallback(
   const tmpBase = tmpdir();
 
   for (const fn of extractedFunctions) {
-    const functionContext = fn.buildContext(sourceFile);
-    const tmpFilePath = join(tmpBase, `fn-${fn.name}-${Date.now()}.js`);
+    const functionContext = fn.contextHeader;
+    const tmpFilePath = join(tmpBase, `fn-${fn.name}-${Date.now()}${fnProvider.fileExtensions[0]}`);
 
     try {
       // Write function context to temp file for instrumentWithRetry
@@ -751,8 +760,8 @@ async function functionLevelFallback(
     return null; // All functions failed — fall through to whole-file failure
   }
 
-  // Reassemble: replace instrumented functions in the original file
-  let reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
+  // Reassemble: replace instrumented functions in the original file via provider
+  let reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
 
   // Write reassembled code and check syntax before running full validation
   await writeFile(filePath, reassembledCode, 'utf-8');
@@ -760,7 +769,7 @@ async function functionLevelFallback(
   // Whole-file syntax check catches assembly errors (corrupted imports, bad splicing)
   let syntaxPassed: boolean;
   try {
-    syntaxPassed = checkSyntax(filePath).passed;
+    syntaxPassed = (await fnProvider.checkSyntax(filePath)).passed;
   } catch {
     await writeFile(filePath, originalCode, 'utf-8');
     return null;
@@ -771,10 +780,10 @@ async function functionLevelFallback(
     for (const fn of extractedFunctions) {
       const result = fnResults.find(r => r.name === fn.name);
       if (!result?.success) continue;
-      const singleReassembled = reassembleFunctions(originalCode, extractedFunctions, [result]);
+      const singleReassembled = fnProvider.reassembleFunctions(originalCode, extractedFunctions, [result]);
       await writeFile(filePath, singleReassembled, 'utf-8');
       try {
-        const singleCheck = checkSyntax(filePath);
+        const singleCheck = await fnProvider.checkSyntax(filePath);
         if (!singleCheck.passed) {
           result.success = false;
           result.error = `Whole-file syntax error after assembly: ${singleCheck.message}`;
@@ -792,10 +801,10 @@ async function functionLevelFallback(
       return null;
     }
 
-    reassembledCode = reassembleFunctions(originalCode, extractedFunctions, fnResults);
+    reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
     await writeFile(filePath, reassembledCode, 'utf-8');
     try {
-      const retryCheck = checkSyntax(filePath);
+      const retryCheck = await fnProvider.checkSyntax(filePath);
       if (!retryCheck.passed) {
         await writeFile(filePath, originalCode, 'utf-8');
         return null;
@@ -810,6 +819,7 @@ async function functionLevelFallback(
   successful = fnResults.filter(r => r.success);
 
   const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
+  const fallbackProvider = retryOptions?.provider ?? DEFAULT_PROVIDER;
   // Collect schema extensions from successful functions so SCH-001 accepts
   // span names the agent declared as extensions (not just base registry names).
   const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
@@ -820,6 +830,7 @@ async function functionLevelFallback(
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,
+    provider: fallbackProvider,
   });
 
   // Calculate cumulative token usage (whole-file attempts + function-level)
@@ -898,7 +909,7 @@ async function functionLevelFallback(
   const partialResults = fnResults.map(r =>
     r.success ? r : { ...r, instrumentedCode: undefined },
   );
-  const partialCode = reassembleFunctions(originalCode, extractedFunctions, partialResults);
+  const partialCode = fallbackProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
 
   await writeFile(filePath, partialCode, 'utf-8');
   const partialValidation = await validateFileFn({
@@ -908,6 +919,7 @@ async function functionLevelFallback(
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,
+    provider: fallbackProvider,
   });
 
   // Commit the partial code regardless of whether blocking rules fire on the assembly.

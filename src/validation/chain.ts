@@ -2,9 +2,11 @@
 // ABOUTME: Short-circuits on first Tier 1 failure; skips Tier 2 if Tier 1 fails.
 
 import { checkElision } from './tier1/elision.ts';
-import { checkSyntax } from './tier1/syntax.ts';
-import { checkLint } from './tier1/lint.ts';
 import { checkWeaver } from './tier1/weaver.ts';
+import { JavaScriptProvider } from '../languages/javascript/index.ts';
+
+/** Default provider used when no provider is passed in ValidateFileInput. */
+const DEFAULT_PROVIDER = new JavaScriptProvider();
 import { checkSpansClosed } from './tier2/cdq001.ts';
 import { checkNonInstrumentationDiff } from './tier2/nds003.ts';
 import { checkOutboundCallSpans } from './tier2/cov002.ts';
@@ -46,28 +48,29 @@ import type { CheckResult, ValidateFileInput, ValidationResult } from './types.t
  */
 export async function validateFile(input: ValidateFileInput): Promise<ValidationResult> {
   const { originalCode, instrumentedCode, filePath, config } = input;
+  const provider = input.provider ?? DEFAULT_PROVIDER;
   const tier1Results: CheckResult[] = [];
   const tier2Results: CheckResult[] = [];
   const judgeTokenUsage: import('../agent/schema.ts').TokenUsage[] = [];
 
   // --- Tier 1: Structural checks (short-circuit on first failure) ---
 
-  // 1. Elision detection
+  // 1. Elision detection (cross-language — stays in tier1/elision.ts)
   const elisionResult = checkElision(instrumentedCode, originalCode, filePath);
   tier1Results.push(elisionResult);
   if (!elisionResult.passed) {
     return buildResult(tier1Results, tier2Results);
   }
 
-  // 2. Syntax checking (file must already be written to disk by caller)
-  const syntaxResult = checkSyntax(filePath);
+  // 2. Syntax checking — dispatched through provider (file must be written to disk by caller)
+  const syntaxResult = await provider.checkSyntax(filePath);
   tier1Results.push(syntaxResult);
   if (!syntaxResult.passed) {
     return buildResult(tier1Results, tier2Results);
   }
 
-  // 3. Lint checking (diff-based)
-  const lintResult = await checkLint(originalCode, instrumentedCode, filePath);
+  // 3. Lint checking (diff-based) — dispatched through provider
+  const lintResult = await provider.lintCheck(originalCode, instrumentedCode);
   tier1Results.push(lintResult);
   if (!lintResult.passed) {
     return buildResult(tier1Results, tier2Results);

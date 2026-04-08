@@ -179,7 +179,7 @@ At the end of B2:
 
 **Milestone B2 checklist:**
 
-- [ ] Create `src/languages/javascript/index.ts` — the `JavaScriptProvider` class:
+- [x] Create `src/languages/javascript/index.ts` — the `JavaScriptProvider` class:
   - Implements `LanguageProvider` from `src/languages/types.ts`
   - `id: 'javascript'`, `displayName: 'JavaScript'`, `fileExtensions: ['.js', '.jsx']`
   - `globPattern: '**/*.{js,jsx}'`, `defaultExclude` standard patterns (node_modules, dist, build, test fixtures)
@@ -199,7 +199,7 @@ At the end of B2:
   - `packageManager: 'npm'`, `installCommand()`, `dependencyFile: 'package.json'`
   - `hasImplementation()` — temporary placeholder: returns `true` for all 26 rule IDs so the parity matrix doesn't break during B2. **B3 replaces this placeholder with a real check against the registered rule list** — do not leave `return true` in place after B3 completes.
 
-- [ ] Create `src/languages/registry.ts` — provider registry:
+- [x] Create `src/languages/registry.ts` — provider registry:
   - `registerProvider(provider: LanguageProvider): void`
   - `getProvider(fileExtension: string): LanguageProvider | undefined`
   - `getProviderByLanguage(id: string): LanguageProvider | undefined`
@@ -207,44 +207,44 @@ At the end of B2:
   - Pre-registers `JavaScriptProvider` on import
   - Exported from `src/languages/index.ts`
 
-- [ ] Wire `src/coordinator/discovery.ts`:
+- [x] Wire `src/coordinator/discovery.ts`:
   - Accept `LanguageProvider` as a dependency (injectable, defaults to JS provider)
   - Use `provider.globPattern` and `provider.defaultExclude` instead of hardcoded patterns
   - Existing tests continue passing with default JS provider injected
 
-- [ ] Wire `src/coordinator/dispatch.ts`:
+- [x] Wire `src/coordinator/dispatch.ts`:
   - **Before modifying, read `src/coordinator/dispatch.ts` and `src/coordinator/coordinate.ts` in full to understand the existing injection pattern (dependencies are already passed as function arguments, not as module-level singletons)**. Extend the existing pattern — do not introduce a new injection mechanism.
   - Accept `LanguageProvider` as an additional dependency parameter (follow the same pattern as existing injectable deps)
   - Pass `provider.checkSyntax`, `provider.lintCheck`, `provider.formatCode` into the validation chain instead of the direct tier1 imports
   - Pass `provider.extractFunctions`, `provider.reassembleFunctions` into the fix loop
 
-- [ ] Wire `src/agent/prompt.ts`:
+- [x] Wire `src/agent/prompt.ts`:
   - Accept `LanguageProvider` as a dependency or `LanguagePromptSections` directly
   - Replace hardcoded JS prompt sections with `provider.getSystemPromptSections()`
   - Replace hardcoded examples with `provider.getInstrumentationExamples()`
 
-- [ ] Wire `src/validation/chain.ts`:
+- [x] Wire `src/validation/chain.ts`:
   - Accept `LanguageProvider` as a dependency (passed through `ValidationConfig` or as a direct parameter)
   - Tier 1 validation now calls `provider.checkSyntax()` and `provider.lintCheck()` instead of direct imports from `validation/tier1/`
   - Note: Tier 2 checker wiring via `ValidationRule` happens in B3, not B2
 
-- [ ] Wire `src/coordinator/dispatch.ts` project name read:
+- [x] Wire `src/coordinator/dispatch.ts` project name read:
   - The current code at line ~236 reads `package.json` directly (`readFile(join(projectDir, 'package.json'), 'utf-8')`). This silently fails for Python and Go projects that have no `package.json`.
   - Replace with `provider.readProjectName(projectDir)` — the method will be defined on the `LanguageProvider` interface by PRD #370 (a blocker for this PRD) and reads the language-appropriate manifest.
   - **Error handling is two-tier:**
     - `undefined` return (manifest file doesn't exist) → non-fatal; `projectName` stays `undefined` and the tracer name falls back to the default. Keep this path inside try/catch, same as today.
     - Thrown error (manifest exists but fails to parse) → propagate the error; do NOT swallow it. A corrupt `package.json` is a real problem the user should know about, not a silent fallback.
 
-- [ ] Wire `src/fix-loop/instrument-with-retry.ts` temp file extension:
+- [x] Wire `src/fix-loop/instrument-with-retry.ts` temp file extension:
   - **Before modifying, read `src/fix-loop/instrument-with-retry.ts` in full** to understand `InstrumentWithRetryOptions` — that's the existing options type for injectable deps.
   - Line 699 hardcodes `.js` in the temp file path: `` `fn-${fn.name}-${Date.now()}.js` ``
   - Replace with `provider.fileExtensions[0]` (already on the interface — e.g., `.js` for JS, `.py` for Python, `.go` for Go).
   - Add `provider: LanguageProvider` to `InstrumentWithRetryOptions` (the existing injectable deps type). Pass it from `dispatchFiles` → `instrumentWithRetry`. **Do NOT add a new injection mechanism** — extend `InstrumentWithRetryOptions`.
 
-- [ ] Delete re-export stubs from B1 where the consumer has been migrated in B2. Stubs for code that B3 will migrate (tier2 checkers) stay in place until B3 completes — do not delete them here. **"Progressively" means: delete a stub in the same commit that migrates its last consumer, not as a separate cleanup pass.**
+- [x] Delete re-export stubs from B1 where the consumer has been migrated in B2. Stubs for code that B3 will migrate (tier2 checkers) stay in place until B3 completes — do not delete them here. **"Progressively" means: delete a stub in the same commit that migrates its last consumer, not as a separate cleanup pass.**
 
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes — all existing tests green
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes — all existing tests green (1,936 tests green, 3 skipped: infrastructure-dependent)
 
 ---
 
@@ -481,3 +481,16 @@ After B3 completes, run a full eval against the commit-story-v2 eval repo (pass 
 ## Progress Log
 
 *Updated by `/prd-update-progress` as milestones complete.*
+
+**B2 complete (2026-04-08)**
+
+Coordinator wiring milestone complete. All 11 B2 checklist items done:
+
+- `JavaScriptProvider` class implemented in `src/languages/javascript/index.ts` — all `LanguageProvider` methods delegating to JS-specific modules. `findImports()` maps default imports into `importedNames`; `classifyFunction()` returns `'unknown'` (parameter names not available without source context). `formatCode()` added to `validation.ts` using Prettier `format()`.
+- Provider registry in `src/languages/registry.ts` with `_resetForTest()` for test isolation. Pre-registers JS provider on import. `src/languages/index.ts` created as public entry point.
+- `discovery.ts` wired: accepts optional `provider` (defaults to `JavaScriptProvider`), uses `provider.globPattern` and `provider.defaultExclude`. JS provider `defaultExclude` deliberately omits test-file patterns to preserve existing discovery test behavior.
+- `dispatch.ts` wired: provider extracted from `options.provider`, passed to `instrumentFn`. `readProjectName` migrated to `provider.readProjectName(projectDir)` with propagating parse errors (ENOENT returns `undefined`, parse errors throw).
+- `chain.ts` wired: imports `JavaScriptProvider` as module-level default, calls `provider.checkSyntax()` and `provider.lintCheck()` for tier1 dispatch. `ValidateFileInput` extended with optional `provider?: LanguageProvider` (inline type import avoids circular runtime dep).
+- `agent/prompt.ts` wired: accepts `provider?: LanguageProvider` as third param; calls `provider.getSystemPromptSections()` and `provider.getInstrumentationExamples()`. `EXAMPLES_SECTION` import removed; examples formatted as XML via `formatExamplesSection()`. "## Auto-Instrumentation Library Allowlist" section removed from shared template (now in `sections.otelPatterns`).
+- `instrument-with-retry.ts` wired: `provider` added to `InstrumentWithRetryOptions`; temp file extension uses `provider.fileExtensions[0]`; all three `reassembleFunctions` calls in `functionLevelFallback` replaced with `fnProvider.reassembleFunctions()`; `checkSyntax` calls replaced with `await fnProvider.checkSyntax()`; `extractExportedFunctions` call replaced with `fnProvider.extractFunctions()`. `Project`/ts-morph dependency removed from function-level fallback.
+- B1 stubs deleted: `validation/tier1/syntax.ts`, `validation/tier1/lint.ts`, `ast/variable-shadowing.ts`, `ast/index.ts`, `fix-loop/function-reassembly.ts`. `tier1/index.ts` and `validation/index.ts` updated to remove deleted exports.

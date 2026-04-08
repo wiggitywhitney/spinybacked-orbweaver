@@ -164,3 +164,25 @@ export async function checkLint(
     };
   }
 }
+
+/**
+ * Format JavaScript source code using Prettier.
+ *
+ * Returns the formatted source. If Prettier is not available or formatting
+ * fails, returns the original source unchanged.
+ *
+ * @param source - Source code text to format
+ * @param configDir - Directory to search for Prettier config files
+ * @returns Formatted source, or original source if formatting fails
+ */
+export async function formatCode(source: string, configDir: string): Promise<string> {
+  try {
+    const config = await prettier.resolveConfig(configDir);
+    return await prettier.format(source, {
+      ...config,
+      parser: 'babel',
+    });
+  } catch {
+    return source;
+  }
+}

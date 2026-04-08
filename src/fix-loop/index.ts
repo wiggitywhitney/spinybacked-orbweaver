@@ -7,5 +7,5 @@ export type { FileResult, FunctionResult, ValidationStrategy, SuggestedRefactor,
 export { addTokenUsage, totalTokens } from './token-budget.ts';
 export { extractExportedFunctions } from './function-extraction.ts';
 export type { ExtractedFunction, ExtractFunctionsOptions } from './function-extraction.ts';
-export { reassembleFunctions, deduplicateImports, ensureTracerAfterImports } from './function-reassembly.ts';
+export { reassembleFunctions, deduplicateImports, ensureTracerAfterImports } from '../languages/javascript/reassembly.ts';
 export { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';

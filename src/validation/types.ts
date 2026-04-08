@@ -103,4 +103,15 @@ export interface ValidateFileInput {
   filePath: string;
   /** Which checks to enable and their blocking/advisory classification. */
   config: ValidationConfig;
+  /**
+   * Language provider for this file.
+   *
+   * Tier 1 checks (syntax, lint, format) are dispatched through the provider.
+   * Defaults to the JavaScript provider when not specified, preserving backward
+   * compatibility for callers that don't yet supply a provider.
+   *
+   * Type-only import avoids a circular runtime dependency between validation and
+   * languages modules (both depend on each other for types only).
+   */
+  provider?: import('../languages/types.ts').LanguageProvider;
 }
