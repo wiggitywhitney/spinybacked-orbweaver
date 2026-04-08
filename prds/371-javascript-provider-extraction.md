@@ -39,6 +39,12 @@ The three-milestone structure exists to create independent testability checkpoin
 - Full interface from day one — every method in `LanguageProvider` must have a caller by end of B3
 - PRD #99 (auto-instrumentation allowlist) is closed and deferred to this provider implementation — do not reopen
 
+**B3 implementation decisions (2026-04-08):**
+- `RuleCheckResult` union type added to `src/languages/types.ts` — `ValidationRule.check()` returns `CheckResult | CheckResult[] | { results: CheckResult | CheckResult[]; judgeTokenUsage?: TokenUsage[] } | Promise<...>`. Future language providers must return one of these three forms. The chain's `unpackRuleResult()` normalizes all forms.
+- CDQ-008 per-file wrapper — CDQ-008 is inherently cross-file (runs in coordinator at run level). The per-file `ValidationRule` in `tier2/cdq008.ts` always passes; it exists only so CDQ-008 appears in `getAllRules()` for parity matrix checking. When implementing future providers, CDQ-008's parity entry is already covered by this shared rule — do not add a language-specific CDQ-008 rule.
+- API-003 and API-004 as separate ValidationRule objects — `api001.ts` exports three rules (API-001, API-003, API-004), each filtering the shared `checkForbiddenImports()` scanner to its own ruleId. This is why the "25 rules" count (23 checker files) resolves correctly.
+- `RegistrySpanDefinition` moved to `src/validation/types.ts` — was in `tier2/cov005.ts`. The move was required before deleting cov005.ts. PRD #372+ should import `RegistrySpanDefinition` from `src/validation/types.ts`, not from any rules file.
+
 ---
 
 ## File Move Map
