@@ -372,7 +372,7 @@ This is a significant refactor of `chain.ts` itself — not just the checkers. I
 - [x] **Final stub cleanup:** Zero re-export stubs remain in `src/ast/`, `src/validation/tier1/`, and `src/fix-loop/`. Consumers updated to import directly from `src/languages/javascript/ast.ts` and `src/languages/javascript/extraction.ts`.
 - [x] `npm run typecheck` passes
 - [x] `npm test` passes — 1,947 tests green (3 skipped: infrastructure-dependent), including 6 parity tests and 4 golden tests
-- [ ] **Eval gate: run full eval against the commit-story-v2 eval repo and confirm JavaScript quality is maintained before proceeding to PRD #372 (TypeScript).** B2 and B3 together change how the JS pipeline executes (coordinator dispatch + validation chain). The eval is the meaningful regression check — acceptance gates alone are too noisy. Command: run the eval repo against the current branch and confirm pass rate ≥ 90% on the commit-story-v2 fixture suite. Do not start TypeScript until this passes.
+- [x] **Eval gate: run full eval against the commit-story-v2 eval repo and confirm JavaScript quality is maintained before proceeding to PRD #372 (TypeScript).** B2 and B3 together change how the JS pipeline executes (coordinator dispatch + validation chain). The eval is the meaningful regression check — acceptance gates alone are too noisy. Command: run the eval repo against the current branch and confirm pass rate ≥ 90% on the commit-story-v2 fixture suite. Do not start TypeScript until this passes.
 
 ---
 
@@ -492,6 +492,17 @@ These gaps were identified during `/write-prompt` review of `agent/prompt.ts`. T
 1. **"### Import Addition" section in `buildSystemPrompt` is hardcoded JS-specific.** The line `Add \`import { trace, SpanStatusCode } from '@opentelemetry/api';\`` is valid for JS/TS but wrong for Python or Go. This section must be moved into the provider (new field on `LanguageProvider.getSystemPromptSections()`, e.g. `importAddition: string`) and injected via `sections.importAddition` instead of being hardcoded in the shared template. The `"Instrument the following JavaScript file."` line in `buildUserMessage` (around line 289) has the same issue.
 
 2. **`formatExamplesSection()` drops example `<notes>` elements.** The original `EXAMPLES_SECTION` had `<notes>` per example explaining non-obvious decisions (e.g., why auto-instrumentation was used, why a function was skipped). The new `Example` interface only has `{ description, before, after }`. Notes teach the LLM *why* patterns are correct — this is a mild quality regression. Fix: add `notes?: string` to the `Example` interface in `src/languages/types.ts`, update `getInstrumentationExamples()` in `src/languages/javascript/prompt.ts` to include the notes, and update `formatExamplesSection()` to include `<notes>` when present.
+
+**Eval gate passed + session work complete (2026-04-09)**
+
+Eval gate: run-12 scored 23/25 (92%) against the commit-story-v2 fixture suite — passes the ≥90% threshold. Zero failures traced to the B2/B3 architecture change. PRD #371 is complete.
+
+Additional work committed this session (outside PRD scope but on this branch):
+
+- CLI output readability overhaul (`src/interfaces/instrument-handler.ts`): verbose mode now shows `✅ SUCCESS` with span + attribute counts, tokens on a separate line, schema extensions and agent notes as bulleted sections with headers, relative paths throughout, human-readable duration, "Instrumentation report" label in artifact box. 52 handler tests, all green.
+- README: fine-grained PAT requirements documented, `urlChanged=true, path=token-swap` verification signal explained.
+- NDS-003 truthy-check gap fixed (`src/languages/javascript/rules/nds003.ts`): truthy property-access guards (`if (obj.property) {`) added to `INSTRUMENTATION_PATTERNS` allowlist alongside the existing `!== undefined`/`!= null` guards from PR #352. Resolves two distinct failure modes observed in eval run-12. Issues #388, #389, #390 filed.
+- 1,955 tests green (3 skipped: infrastructure-dependent).
 
 **B3 complete (2026-04-08)**
 
