@@ -2,7 +2,7 @@
 // ABOUTME: Covers port checking, full OTLP workflow with weaver registry emit, inactivity timeout, and port conflicts.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { createServer, createConnection } from 'node:net';
+import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import type { ChildProcess } from 'node:child_process';
@@ -46,8 +46,12 @@ function closeServer(server: Server): Promise<void> {
   });
 }
 
-/** Milliseconds to wait for gRPC service initialization after TCP port binding. */
-const GRPC_INIT_BUFFER_MS = 2_000;
+/**
+ * Milliseconds to wait for Weaver to be ready to receive OTLP telemetry.
+ * Matches the coordinator's WEAVER_STARTUP_TIMEOUT_MS (15s) — TCP port binding
+ * alone is not sufficient; gRPC service initialization takes additional time.
+ */
+const WEAVER_STARTUP_TIMEOUT_MS = 15_000;
 /** Milliseconds to wait for Weaver to process received telemetry before stopping. */
 const TELEMETRY_SETTLE_MS = 3_000;
 
@@ -55,30 +59,6 @@ const TELEMETRY_SETTLE_MS = 3_000;
 function waitForExit(proc: ChildProcess): Promise<number | null> {
   return new Promise((resolve) => {
     proc.on('close', (code) => resolve(code));
-  });
-}
-
-/**
- * Poll a TCP port until it accepts connections or the timeout elapses.
- * Used to wait for Weaver's admin HTTP server to be ready before sending requests.
- * A fixed sleep is unreliable on CI — this polls every 200ms instead.
- */
-function waitForPort(port: number, timeoutMs: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeoutMs;
-    function attempt() {
-      const socket = createConnection({ port, host: 'localhost' });
-      socket.on('connect', () => { socket.destroy(); resolve(); });
-      socket.on('error', () => {
-        socket.destroy();
-        if (Date.now() < deadline) {
-          setTimeout(attempt, 200);
-        } else {
-          reject(new Error(`Port ${port} not ready within ${timeoutMs}ms`));
-        }
-      });
-    }
-    attempt();
   });
 }
 
@@ -341,13 +321,17 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
       '--admin-port', String(PORTS.direct3.admin),
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    // Wait for both Weaver ports to accept TCP connections (up to 15s each),
-    // then add a buffer for gRPC service initialization after port binding.
-    // TCP connect succeeds as soon as the port is bound, but gRPC may not be
-    // ready to receive OTLP data for another second or two.
-    await waitForPort(PORTS.direct3.grpc, 15_000);
-    await waitForPort(PORTS.direct3.admin, 15_000);
-    await new Promise(resolve => setTimeout(resolve, GRPC_INIT_BUFFER_MS));
+    // Wait WEAVER_STARTUP_TIMEOUT_MS for Weaver to be ready, matching the coordinator's
+    // waitForWeaverReady() timeout. TCP port binding alone is not sufficient — the gRPC
+    // OTLP service takes additional time to initialize after the port is bound.
+    // Detect early Weaver exit (crash) so the test fails fast instead of timing out.
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      weaverProc!.on('close', (code) => {
+        if (!settled) { settled = true; reject(new Error(`Weaver exited early with code ${code}`)); }
+      });
+      setTimeout(() => { if (!settled) { settled = true; resolve(); } }, WEAVER_STARTUP_TIMEOUT_MS);
+    });
 
     // Emit test telemetry. Set OTEL_EXPORTER_OTLP_ENDPOINT to match what the
     // coordinator does when running a test suite — the coordinator injects this env
