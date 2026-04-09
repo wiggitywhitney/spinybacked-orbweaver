@@ -1,12 +1,14 @@
-// ABOUTME: File discovery for the coordinator — finds JavaScript files to instrument.
+// ABOUTME: File discovery for the coordinator — finds source files to instrument.
 // ABOUTME: Uses Node.js built-in glob with exclude patterns, SDK init auto-exclusion, and file limit enforcement.
 
 import { glob, stat } from 'node:fs/promises';
 import { isAbsolute, join, normalize, relative } from 'node:path';
+import type { LanguageProvider } from '../languages/types.ts';
+import { JavaScriptProvider } from '../languages/javascript/index.ts';
 
 /** Options controlling which files are discovered. */
 export interface DiscoverFilesOptions {
-  /** Glob patterns to exclude (e.g., test and spec files). */
+  /** Glob patterns to exclude (e.g., test and spec files). Merged with provider.defaultExclude. */
   exclude: string[];
   /** Path to the SDK init file (relative to projectDir), auto-excluded from discovery. */
   sdkInitFile: string;
@@ -14,6 +16,11 @@ export interface DiscoverFilesOptions {
   maxFilesPerRun: number;
   /** Optional target path (relative to projectDir or absolute) to scope discovery to a subdirectory or single file. */
   targetPath?: string;
+  /**
+   * Language provider used to determine glob pattern, file extensions, and default excludes.
+   * Defaults to the JavaScript provider when not specified.
+   */
+  provider?: LanguageProvider;
 }
 
 /**
@@ -33,6 +40,7 @@ export async function discoverFiles(
   options: DiscoverFilesOptions,
 ): Promise<string[]> {
   const { exclude, sdkInitFile, maxFilesPerRun, targetPath } = options;
+  const provider: LanguageProvider = options.provider ?? new JavaScriptProvider();
 
   // Normalize the SDK init file path for comparison (strip leading ./)
   const normalizedSdkInit = normalize(sdkInitFile);
@@ -52,9 +60,10 @@ export async function discoverFiles(
     }
 
     if (targetStat.isFile()) {
-      if (!resolvedTarget.endsWith('.js')) {
+      const validExtensions = provider.fileExtensions;
+      if (!validExtensions.some(ext => resolvedTarget.endsWith(ext))) {
         throw new Error(
-          `Target file must be a .js file, got: ${resolvedTarget}`,
+          `Target file must be a ${validExtensions.join(' or ')} file, got: ${resolvedTarget}`,
         );
       }
       // Compute relative path for SDK init comparison using path.relative for safe boundary check
@@ -70,11 +79,11 @@ export async function discoverFiles(
   }
 
   // Directory-scoped glob: use target directory as cwd when scoping to a subdirectory
-  const globPattern = '**/*.js';
+  const globPattern = provider.globPattern;
   const globCwd = resolvedTarget ?? projectDir;
 
-  // Build exclude list: always exclude node_modules, plus user patterns
-  const excludePatterns = ['**/node_modules/**', ...exclude];
+  // Build exclude list: provider defaults (includes node_modules) plus user patterns
+  const excludePatterns = [...provider.defaultExclude, ...exclude];
 
   const relativePaths: string[] = [];
   for await (const entry of glob(globPattern, { cwd: globCwd, exclude: excludePatterns })) {
@@ -99,7 +108,7 @@ export async function discoverFiles(
   if (absolutePaths.length === 0) {
     const searchDir = resolvedTarget ?? projectDir;
     throw new Error(
-      `No JavaScript files found in ${searchDir}. Check that the directory contains .js files and that exclude patterns are not too broad.`,
+      `No ${provider.displayName} files found in ${searchDir}. Check that the directory contains ${provider.fileExtensions.join('/')} files and that exclude patterns are not too broad.`,
     );
   }
 

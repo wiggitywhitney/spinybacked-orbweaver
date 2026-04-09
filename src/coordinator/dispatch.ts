@@ -2,8 +2,10 @@
 // ABOUTME: Includes already-instrumented detection, schema re-resolution per file, and sequential dispatch to instrumentWithRetry.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
+import { resolve } from 'node:path';
 import { execFile } from 'node:child_process';
+import type { LanguageProvider } from '../languages/types.ts';
+import { JavaScriptProvider } from '../languages/javascript/index.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';
@@ -164,6 +166,11 @@ interface DispatchFilesOptions {
     files: { path: string; originalContent: string; resultIndex: number }[];
     extensionsSnapshot: string | null | undefined;
   };
+  /**
+   * Language provider used for project name reading, validation, and function-level fallback.
+   * Defaults to the JavaScript provider when not specified.
+   */
+  provider?: LanguageProvider;
 }
 
 /**
@@ -204,6 +211,7 @@ export async function dispatchFiles(
   const registryDir = options?.registryDir;
   const extWarnings = options?.schemaExtensionWarnings;
   const isDryRun = options?.dryRun === true;
+  const provider: LanguageProvider = options?.provider ?? new JavaScriptProvider();
 
   const total = filePaths.length;
   const results: FileResult[] = [];
@@ -230,15 +238,13 @@ export async function dispatchFiles(
   const spanNameOrigins = new Map<string, string>();
   const abortTracker = new EarlyAbortTracker();
 
-  // Read project name from package.json for tracer naming fallback
+  // Read project name via provider for tracer naming fallback.
+  // provider.readProjectName() returns undefined when the manifest is absent (ENOENT) — non-fatal.
+  // Parse errors (manifest exists but is corrupt JSON) propagate — do NOT swallow them.
   let projectName: string | undefined;
-  try {
-    const pkgJson = JSON.parse(await readFile(join(projectDir, 'package.json'), 'utf-8'));
-    if (typeof pkgJson.name === 'string' && pkgJson.name.trim().length > 0) {
-      projectName = pkgJson.name.trim();
-    }
-  } catch {
-    // No package.json or unreadable — projectName stays undefined
+  const rawProjectName = await provider.readProjectName(projectDir);
+  if (typeof rawProjectName === 'string' && rawProjectName.trim().length > 0) {
+    projectName = rawProjectName.trim();
   }
 
   // Take initial checkpoint window snapshot for rollback capability
@@ -301,7 +307,7 @@ export async function dispatchFiles(
       const existingSpanNames = accumulatedExtensions
         .filter(ext => ext.startsWith('span.'))
         .map(ext => ext.slice(5));
-      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames });
+      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames, provider });
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);

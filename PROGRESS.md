@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-09) PRD #371 complete — JavaScript language provider extraction. All B1/B2/B3 milestones done; eval gate passed at 92% (commit-story-v2 run-12). Archived to prds/done/.
+
+- (2026-04-09) CLI output readability overhaul. Verbose mode shows structured per-file sections: prominent SUCCESS/FAILED/PARTIAL status with span and attribute counts, tokens on a separate line, schema extensions and agent notes as bulleted sections with headers. All paths relativized; Completed line shows human-readable duration; artifact box labels PR summary as "Instrumentation report". README documents fine-grained PAT requirements and push verification signal.
+
+- (2026-04-09) NDS-003 truthy property-access guard allowlist (#388). Added `if (obj.property) {` pattern to `INSTRUMENTATION_PATTERNS` alongside the existing `!== undefined`/`!= null` guards. Prevents attribute drops and unconditional nullable setAttribute failures observed in eval run-12.
+
+- (2026-04-09) JavaScriptProvider coordinator wiring (PRD #371, B2). `JavaScriptProvider` class implemented — all `LanguageProvider` methods delegating to JS-specific modules. Provider registry, `discovery.ts`, `dispatch.ts`, `chain.ts`, `agent/prompt.ts`, and `instrument-with-retry.ts` all wired to dispatch through provider interface. All 1,936 tests pass.
+
+- (2026-04-08) ValidationRule registry and checker split (PRD #371, B3). Created `src/validation/rule-registry.ts`. Added `ValidationRule` exports to all 23 JS checker files plus CDQ-008. `chain.ts` now dispatches Tier 2 via `getRulesForLanguage()` loop — 23 direct tier2 imports dropped. Deleted 19 non-portable `src/validation/tier2/` files; moved `RegistrySpanDefinition` to `src/validation/types.ts`. Deleted re-export stubs from `src/ast/` and `src/fix-loop/`. Feature parity test (6 tests) and golden file test (4 tests) added. 1,947 tests green.
+
+- (2026-04-07) JavaScript language provider file extraction (PRD #371, B1). Created `src/languages/javascript/` with ast.ts, validation.ts, extraction.ts, reassembly.ts, prompt.ts, and rules/ (23 checker files). Replaced original source files with re-export stubs. Moved all JS-specific tests to `test/languages/javascript/`. All 1,874 tests pass.
+
 - (2026-04-07) Language provider interface types (PRD #370, M1-M3). Created `src/languages/types.ts` with the full `LanguageProvider` interface and 9 supporting types: `FunctionClassification`, `FunctionInfo`, `ImportInfo`, `ExportInfo`, `ExtractedFunction`, `LanguagePromptSections`, `Example`, `RuleInput`, `ValidationRule`. Expanded `src/languages/plugin-api.ts` to re-export the public subset. Types only — no behavior changes; all existing tests pass.
 
 - (2026-04-07) Bumped Weaver CI pin from v0.21.2 to v0.22.1 across all four CI workflows (PRD #370 pre-work). Tagged `v1.0.0-javascript-only` on main as rollback baseline before the multi-language refactor begins.

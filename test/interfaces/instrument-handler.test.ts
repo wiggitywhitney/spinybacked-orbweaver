@@ -337,6 +337,19 @@ describe('handleInstrument', () => {
       expect(endLine).toBeDefined();
     });
 
+    it('shows duration in human-readable format in Completed line', async () => {
+      const deps = makeDeps({
+        coordinate: vi.fn().mockResolvedValue(
+          makeRunResult({ filesProcessed: 1, filesSucceeded: 1 }),
+        ),
+      });
+      await handleInstrument(makeOptions({ output: 'text' }), deps);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const endLine = stderrCalls.find((s: string) => s.includes('Completed'));
+      // Duration should be human-readable (e.g. "0.1s" or "1m 0.0s"), not raw seconds with decimal
+      expect(endLine).toMatch(/Completed in \d/);
+    });
+
     it('prints completion timestamp even on error paths (#188)', async () => {
       const deps = makeDeps({
         coordinate: vi.fn().mockRejectedValue(new Error('workflow failed')),
@@ -373,7 +386,7 @@ describe('handleInstrument', () => {
       await handleInstrument(makeOptions({ noPr: false }), deps);
       const output = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
 
-      expect(output).toContain('PR summary:');
+      expect(output).toContain('Instrumentation report:');
       expect(output).toContain('spiny-orb-pr-summary.md');
       expect(output).toContain('git diff');
     });
@@ -446,6 +459,26 @@ describe('handleInstrument', () => {
       const progressLine = stderrCalls.find((s: string) => s.includes('3 of 12'));
       expect(progressLine).toBeDefined();
       expect(progressLine).toContain('src/api-client.ts');
+    });
+
+    it('uses relative paths in onFileStart and onFileComplete output', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ projectDir: '/test/project' }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      callbacks.onFileStart!('/test/project/src/api.js', 0, 1);
+      const result = makeFileResult({ path: '/test/project/src/api.js', status: 'success', spansAdded: 1 });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // No absolute paths in any output line
+      const hasAbsPath = stderrCalls.some((s: string) => s.includes('/test/project/src/'));
+      expect(hasAbsPath).toBe(false);
+      // Relative path present
+      const hasRelPath = stderrCalls.some((s: string) => s.includes('src/api.js'));
+      expect(hasRelPath).toBe(true);
     });
 
     it('wires onFileComplete callback that writes status to stderr', async () => {
@@ -547,7 +580,7 @@ describe('handleInstrument', () => {
   });
 
   describe('verbose output', () => {
-    it('shows all notes without truncation in verbose mode', async () => {
+    it('shows all notes as bullets without truncation in verbose mode', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions({ verbose: true }), deps);
       const callbacks = getCallbacks(deps);
@@ -559,8 +592,8 @@ describe('handleInstrument', () => {
       callbacks.onFileComplete!(result, 0, 1);
 
       const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      // All 7 notes should be shown, not just 3
-      expect(stderrCalls.filter((s: string) => s.includes('Note:'))).toHaveLength(7);
+      // All 7 notes shown as bullet lines, not just 3
+      expect(stderrCalls.filter((s: string) => s.includes('• '))).toHaveLength(7);
       // No truncation message
       expect(stderrCalls.some((s: string) => s.includes('more notes'))).toBe(false);
     });
@@ -578,9 +611,78 @@ describe('handleInstrument', () => {
       callbacks.onFileComplete!(result, 0, 1);
 
       const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      const noteLine = stderrCalls.find((s: string) => s.includes('Note:'));
+      const noteLine = stderrCalls.find((s: string) => s.includes('• '));
       expect(noteLine).toContain('RST-001 (No Utility Spans)');
       expect(noteLine).toContain('RST-003 (No Thin Wrapper Spans)');
+    });
+
+    it('shows SUCCESS in caps with span and attribute counts in verbose mode', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ status: 'success', spansAdded: 3, attributesCreated: 5 });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const statusLine = stderrCalls.find((s: string) => s.includes('SUCCESS'));
+      expect(statusLine).toBeDefined();
+      expect(statusLine).toContain('3 spans');
+      expect(statusLine).toContain('5 attributes');
+    });
+
+    it('shows tokens on a separate line in verbose mode', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        tokenUsage: { inputTokens: 0, outputTokens: 4200, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const tokensLine = stderrCalls.find((s: string) => s.includes('Tokens:'));
+      expect(tokensLine).toBeDefined();
+      expect(tokensLine).toContain('4.2K');
+    });
+
+    it('shows schema extensions as bullets with section header in verbose mode', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ schemaExtensions: ['span.foo.bar', 'span.foo.baz'] });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const headerLine = stderrCalls.find((s: string) => s.includes('Schema extensions'));
+      expect(headerLine).toBeDefined();
+      // Both extensions shown as bullets
+      const bulletLines = stderrCalls.filter((s: string) => s.includes('• '));
+      expect(bulletLines.some((s: string) => s.includes('span.foo.bar'))).toBe(true);
+      expect(bulletLines.some((s: string) => s.includes('span.foo.baz'))).toBe(true);
+    });
+
+    it('shows Agent notes section header when notes are present', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({ notes: ['a note'] });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const headerLine = stderrCalls.find((s: string) => s.includes('Agent notes'));
+      expect(headerLine).toBeDefined();
     });
 
     it('prints blank line after file output for visual separation', async () => {
@@ -715,7 +817,7 @@ describe('handleInstrument', () => {
       // Should have box-drawing characters
       expect(output).toContain('╔');
       expect(output).toContain('╚');
-      expect(output).toContain('PR summary:');
+      expect(output).toContain('Instrumentation report:');
       expect(output).toContain('spiny-orb-pr-summary.md');
     });
   });

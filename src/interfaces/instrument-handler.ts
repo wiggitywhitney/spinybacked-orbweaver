@@ -1,7 +1,7 @@
 // ABOUTME: Handler for the `spiny-orb instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
-import { basename, join, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
@@ -11,6 +11,37 @@ import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting
 import { formatRuleId, expandRuleCodesInText } from '../validation/rule-names.ts';
 import { companionPath } from '../deliverables/companion-path.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
+
+// ANSI color helpers — gated on stderr TTY or FORCE_COLOR=1 env var.
+// When piping through `tee`, stderr is not a TTY; set FORCE_COLOR=1 to get colors in both terminal and log file.
+const _useColor = process.stderr.isTTY === true || process.env.FORCE_COLOR === '1';
+function _green(s: string): string { return _useColor ? `\x1b[32m${s}\x1b[0m` : s; }
+function _red(s: string): string { return _useColor ? `\x1b[31m${s}\x1b[0m` : s; }
+function _yellow(s: string): string { return _useColor ? `\x1b[33m${s}\x1b[0m` : s; }
+function _dim(s: string): string { return _useColor ? `\x1b[2m${s}\x1b[0m` : s; }
+
+/**
+ * Return a path relative to projectDir, or the original path if it is not under projectDir.
+ */
+function toDisplayPath(filePath: string, projectDir: string): string {
+  const rel = relative(projectDir, filePath);
+  return rel.startsWith('..') ? filePath : rel;
+}
+
+/**
+ * Format a duration in milliseconds as a human-readable string.
+ * Examples: "0.4s", "45.3s", "2m 5.1s", "1h 3m 22.0s"
+ */
+function formatDuration(ms: number): string {
+  // Round to 1 decimal place before computing to prevent "60.0s" edge cases
+  const totalSecs = Math.round(ms / 100) / 10;
+  const hours = Math.floor(totalSecs / 3600);
+  const minutes = Math.floor((totalSecs % 3600) / 60);
+  const secs = (totalSecs % 60).toFixed(1);
+  if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
 
 /** Options parsed from CLI arguments for the instrument command. */
 export interface InstrumentOptions {
@@ -133,59 +164,103 @@ export async function handleInstrument(
       }
     },
     onFileStart: (path, index, total) => {
-      deps.stderr(`Processing file ${index + 1} of ${total}: ${path}`);
+      deps.stderr(`Processing file ${index + 1} of ${total}: ${toDisplayPath(path, options.projectDir)}`);
     },
     onFileComplete: (result, _index, _total) => {
-      let statusLabel: string;
+      const displayPath = toDisplayPath(result.path, options.projectDir);
       const outputKTokens = (result.tokenUsage.outputTokens / 1000).toFixed(1);
       const attempts = result.validationAttempts;
       const attemptSuffix = attempts > 1 ? `, ${attempts} attempts` : '';
+      const hasCompanion = result.status === 'success' || result.status === 'partial';
+      const refactorCount = result.suggestedRefactors?.length ?? 0;
+
+      if (!options.verbose || result.status === 'skipped') {
+        // Compact single-line format for non-verbose mode
+        const attrsCount = result.attributesCreated ?? 0;
+        const attrsStr = attrsCount === 1 ? '1 attribute' : `${attrsCount} attributes`;
+        let statusLabel: string;
+        if (result.status === 'success') {
+          statusLabel = `success (${result.spansAdded} spans, ${attrsStr}${attemptSuffix}, ${outputKTokens}K tokens)`;
+        } else if (result.status === 'failed') {
+          const detail = result.reason || result.lastError || '';
+          statusLabel = detail ? `failed (${detail}${attemptSuffix})` : `failed${attemptSuffix ? ` (${attemptSuffix.slice(2)})` : ''}`;
+        } else if (result.status === 'partial') {
+          statusLabel = `partial (${result.spansAdded} spans, ${attrsStr}${attemptSuffix}, ${outputKTokens}K tokens)`;
+        } else {
+          statusLabel = result.status;
+        }
+        if (refactorCount > 0) {
+          const noun = refactorCount === 1 ? 'refactor' : 'refactors';
+          statusLabel += ` — ${refactorCount} recommended ${noun}`;
+        }
+        if (hasCompanion) {
+          deps.stderr(`  ${displayPath}: ${statusLabel} → ${companionPath(displayPath)}`);
+        } else {
+          deps.stderr(`  ${displayPath}: ${statusLabel}`);
+        }
+        return;
+      }
+
+      // Verbose mode: structured multi-line format
+      const spansStr = result.spansAdded === 1 ? '1 span' : `${result.spansAdded} spans`;
+      const attrsCount = result.attributesCreated ?? 0;
+      const attrsStr = attrsCount === 1 ? '1 attribute' : `${attrsCount} attributes`;
+
+      // Prominent status line
+      let statusLine: string;
       if (result.status === 'success') {
-        statusLabel = `success (${result.spansAdded} spans${attemptSuffix}, ${outputKTokens}K output tokens)`;
+        statusLine = `  ✅ ${_green('SUCCESS')} — ${spansStr}, ${attrsStr}${attemptSuffix}`;
       } else if (result.status === 'failed') {
         const detail = result.reason || result.lastError || '';
-        statusLabel = detail ? `failed (${detail}${attemptSuffix})` : `failed${attemptSuffix ? ` (${attemptSuffix.slice(2)})` : ''}`;
-      } else if (result.status === 'partial') {
-        statusLabel = `partial (${result.spansAdded} spans${attemptSuffix}, ${outputKTokens}K output tokens)`;
+        statusLine = `  ❌ ${_red('FAILED')}${detail ? ` — ${detail}` : ''}${attemptSuffix}`;
       } else {
-        statusLabel = result.status;
+        statusLine = `  ⚠️  ${_yellow('PARTIAL')} — ${spansStr}, ${attrsStr}${attemptSuffix}`;
       }
-      const refactorCount = result.suggestedRefactors?.length ?? 0;
+      deps.stderr(statusLine);
+      deps.stderr(`  Tokens: ${outputKTokens}K output`);
+
       if (refactorCount > 0) {
         const noun = refactorCount === 1 ? 'refactor' : 'refactors';
-        statusLabel += ` — ${refactorCount} recommended ${noun}`;
+        deps.stderr(`  ${refactorCount} recommended ${noun}`);
       }
-      // Show companion file path for files that produce one (success/partial)
-      const hasCompanion = result.status === 'success' || result.status === 'partial';
-      if (hasCompanion && !options.verbose) {
-        deps.stderr(`  ${result.path}: ${statusLabel} → ${companionPath(result.path)}`);
-      } else {
-        deps.stderr(`  ${result.path}: ${statusLabel}`);
-      }
-      if (options.verbose && result.status !== 'skipped') {
-        // Show function-level details when available
-        if (result.functionResults && result.functionResults.length > 0) {
-          for (const fn of result.functionResults) {
-            const fnStatus = fn.success ? `instrumented (${fn.spansAdded} spans)` : `skipped — ${fn.error ?? 'unknown'}`;
-            deps.stderr(`    ${fn.name}: ${fnStatus}`);
-          }
-        }
-        // Show schema extensions
-        if (result.schemaExtensions.length > 0) {
-          deps.stderr(`    Extensions: ${result.schemaExtensions.join(', ')}`);
-        }
-        // Show all agent notes in verbose mode with rule codes expanded
-        if (result.notes && result.notes.length > 0) {
-          for (const note of result.notes) {
-            deps.stderr(`    Note: ${expandRuleCodesInText(note)}`);
-          }
-        }
-        // Show companion file path in verbose mode
-        if (hasCompanion) {
-          deps.stderr(`    Report: ${companionPath(result.path)}`);
-        }
+
+      // Function-level details when available
+      if (result.functionResults && result.functionResults.length > 0) {
         deps.stderr('');
+        for (const fn of result.functionResults) {
+          const fnStatus = fn.success ? `instrumented (${fn.spansAdded} spans)` : `skipped — ${fn.error ?? 'unknown'}`;
+          deps.stderr(`    ${fn.name}: ${fnStatus}`);
+        }
       }
+
+      // Schema extensions as bullets
+      if (result.schemaExtensions.length > 0) {
+        deps.stderr('');
+        deps.stderr(`  ${_dim('Schema extensions')}`);
+        deps.stderr(`  ${_dim('─'.repeat(60))}`);
+        for (const ext of result.schemaExtensions) {
+          deps.stderr(`  • ${ext}`);
+        }
+      }
+
+      // Agent notes as bullets with section header
+      if (result.notes && result.notes.length > 0) {
+        deps.stderr('');
+        deps.stderr(`  ${_dim('Agent notes')}`);
+        deps.stderr(`  ${_dim('─'.repeat(60))}`);
+        for (const note of result.notes) {
+          deps.stderr('');
+          deps.stderr(`  • ${expandRuleCodesInText(note)}`);
+        }
+      }
+
+      // Companion report path
+      if (hasCompanion) {
+        deps.stderr('');
+        deps.stderr(`  Report: ${companionPath(displayPath)}`);
+      }
+
+      deps.stderr('');
     },
     onRunComplete: (results) => {
       const committed = results.filter(r => r.status === 'success' && r.spansAdded > 0).length;
@@ -282,8 +357,8 @@ export async function handleInstrument(
     return { exitCode: 2 };
   } finally {
     const runEndTime = new Date();
-    const durationSec = ((runEndTime.getTime() - runStartTime.getTime()) / 1000).toFixed(1);
-    deps.stderr(`Completed: ${runEndTime.toISOString()} (${durationSec}s)`);
+    const durationMs = runEndTime.getTime() - runStartTime.getTime();
+    deps.stderr(`Completed in ${formatDuration(durationMs)}`);
   }
 
   // Output results
@@ -348,7 +423,7 @@ export async function handleInstrument(
         lines.push(`  Diff:   git diff ${defaultBranch}...${branchName}`);
       }
       if (prSummaryPath) {
-        lines.push(`  PR summary: ${prSummaryPath}`);
+        lines.push(`  Instrumentation report: ${toDisplayPath(prSummaryPath, options.projectDir)}`);
       }
       if (prUrl) {
         lines.push(`  PR: ${prUrl}`);

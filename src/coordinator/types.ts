@@ -5,6 +5,7 @@ import type { FileResult } from '../fix-loop/types.ts';
 import type { TokenUsage } from '../agent/schema.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { WriteSchemaExtensionsResult } from './schema-extensions.ts';
+import type { LanguageProvider } from '../languages/types.ts';
 
 /**
  * Pre-run cost ceiling calculation.
@@ -76,7 +77,7 @@ export interface DispatchFilesDeps {
     originalCode: string,
     resolvedSchema: object,
     config: AgentConfig,
-    options?: { projectRoot?: string },
+    options?: { projectRoot?: string; existingSpanNames?: string[]; provider?: LanguageProvider },
   ) => Promise<FileResult>;
   writeSchemaExtensions?: (
     registryDir: string,

@@ -85,7 +85,7 @@ function findTypeViolations(
 
     const methodName = expr.getName();
     const receiverText = expr.getExpression().getText();
-    if (!receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return;
+    if (!/\b(?:span|activeSpan|parentSpan|rootSpan|childSpan)\b/i.test(receiverText)) return;
 
     if (methodName === 'setAttribute') {
       checkSetAttributeValue(node, attrDefs, violations);

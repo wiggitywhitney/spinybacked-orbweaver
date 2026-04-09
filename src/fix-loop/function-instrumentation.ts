@@ -8,7 +8,7 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentFileResult } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import type { TokenUsage } from '../agent/schema.ts';
-import type { ExtractedFunction } from './function-extraction.ts';
+import type { ExtractedFunction } from '../languages/javascript/extraction.ts';
 import type { FunctionResult } from './types.ts';
 
 const ZERO_TOKENS: TokenUsage = {

@@ -2,11 +2,10 @@
 
 ## Short-term
 
-- JavaScript language provider extraction — JS becomes the first named `LanguageProvider` (PRD #371)
+- TypeScript language provider — interface canary test; validates abstraction before Python (PRD #372)
 
 ## Medium-term
 
-- TypeScript language provider — interface canary test; validates abstraction before Python (PRD #372)
 - Python language provider — interface stress test; fundamentally different OTel API and tooling (PRD #373)
 - JS/TS semconv constants — update prompts to use `@opentelemetry/semantic-conventions` typed constants after research spike (issue #378)
 
