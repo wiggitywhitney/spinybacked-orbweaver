@@ -143,6 +143,10 @@ All three interfaces share the same `spiny-orb.yaml` configuration and produce t
 ### Optional
 
 - **`gh` CLI** — for automatic PR creation. If `gh auth login` credentials aren't available to subprocesses, set `GITHUB_TOKEN` in your `.env` file. Without gh auth, the agent still creates the feature branch and commits. Use `--no-pr` to suppress the warning.
+
+  **Token requirements:** Use a [fine-grained personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token), not a classic token. The token needs **Contents: Read and write** and **Pull requests: Read and write** permissions scoped to the target repository. Classic tokens and fine-grained tokens without explicit push scope fail silently — the agent reports a push error rather than a PR URL.
+
+  **Verify the token is working:** After the agent runs, check stderr for the line `pushBranch: urlChanged=true, path=token-swap`. This confirms the agent's credential injection mechanism fired with your token. If you see `path=bare-push` instead, the token was not set or was empty. This diagnostic appears on every push regardless of `--verbose`. Note: SSH remotes do not use token injection — `path=token-swap` only applies to HTTPS remotes.
 - **An existing test suite** — if `testCommand` is configured in `spiny-orb.yaml`, the agent runs it as an end-of-run validation gate. If not configured, it skips the check with a note in the results.
 
 > **Node.js version:** spiny-orb requires Node.js >= 24 ([nodejs.org](https://nodejs.org/)). If you run it on an older version, it exits immediately with a clear message rather than crashing. Your *target project* (the code you're instrumenting) can use any Node.js version.
