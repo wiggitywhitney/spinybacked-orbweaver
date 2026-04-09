@@ -39,6 +39,12 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // so false negatives from guard-wrapped business logic don't arise in practice.
   // The same trade-off exists for standalone `}` (line 31) — accepted since v1.
   /^\s*if\s*\(\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*\)\s*\{?\s*$/,
+  // Truthy property-access guards wrapping setAttribute calls (#388).
+  // Matches: if (context.chat) {, if (result.data) {, etc.
+  // Requires at least one dot dereference to avoid matching bare identifier
+  // guards (if (x) {) which are more likely to be business logic.
+  // Same trade-off applies: also filters truthy guards wrapping business logic.
+  /^\s*if\s*\(\s*\w+(?:\.\w+)+\s*\)\s*\{?\s*$/,
   // Re-throw of caught exception (after recording exception on span)
   /^\s*throw\s+(?:err|error|e|ex|exception)\s*;/,
   // Return with span wrapper

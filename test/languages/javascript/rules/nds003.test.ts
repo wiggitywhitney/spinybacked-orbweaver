@@ -561,6 +561,35 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
 
+    it('allows truthy property-access guard around setAttribute (#388)', () => {
+      const original = [
+        'function handleMessage(context) {',
+        '  doWork(context);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'function handleMessage(context) {',
+        '  return tracer.startActiveSpan("handleMessage", (span) => {',
+        '    try {',
+        '      if (context.chat) {',
+        '        span.setAttribute("commit_story.context.messages_count", context.chat.length);',
+        '      }',
+        '      doWork(context);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
     it('still catches genuine business logic additions', () => {
       const original = [
         'function doWork() {',
@@ -583,6 +612,29 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('known limitations', () => {
+    it('truthy property guard wrapping business logic is not detected (accepted trade-off)', () => {
+      // Same trade-off as the undefined guard: if (obj.prop) { businessLogic() } passes
+      // because the guard line matches the pattern. In practice the agent only generates
+      // these guards around span.setAttribute() calls, so false negatives don't arise.
+      const original = [
+        'function handleMessage(context) {',
+        '  doWork(context);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function handleMessage(context) {',
+        '  if (context.chat) {',
+        '    doWork(context);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
     it('guard wrapping business logic is not detected (accepted trade-off)', () => {
       // This documents a known limitation: if the agent wrapped existing business
       // logic in a defined-value guard (not instrumentation), NDS-003 would not
