@@ -325,23 +325,28 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
   });
 
   it('receives telemetry from weaver registry emit and produces compliance report', async () => {
+    // No --format flag: the coordinator never passes --format, and some Weaver
+    // versions write the compliance report to stdout when --format json is set,
+    // which means /stop returns an empty body. Omitting --format keeps the
+    // compliance report in the /stop response body, matching coordinator behavior.
     weaverProc = spawn('weaver', [
       'registry', 'live-check', '-r', VALID_REGISTRY,
       '--inactivity-timeout', '30',
       '--otlp-grpc-port', String(PORTS.direct3.grpc),
       '--admin-port', String(PORTS.direct3.admin),
-      '--format', 'json',
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    // Wait for both Weaver ports to accept connections (up to 15s each).
-    // Poll via TCP rather than using a fixed sleep — CI runners are slower than local.
-    // Poll the gRPC port first (telemetry target), then admin (control target).
+    // Wait for both Weaver ports to accept TCP connections (up to 15s each),
+    // then add a buffer for gRPC service initialization after port binding.
+    // TCP connect succeeds as soon as the port is bound, but gRPC may not be
+    // ready to receive OTLP data for another second or two.
     await waitForPort(PORTS.direct3.grpc, 15_000);
     await waitForPort(PORTS.direct3.admin, 15_000);
+    await new Promise(resolve => setTimeout(resolve, 2_000));
 
     // Emit test telemetry. Set OTEL_EXPORTER_OTLP_ENDPOINT to match what the
     // coordinator does when running a test suite — the coordinator injects this env
-    // var and some Weaver versions use it instead of the --endpoint flag.
+    // var alongside the --endpoint flag.
     const emitProc = spawn('weaver', [
       'registry', 'emit', '-r', VALID_REGISTRY,
       '--endpoint', `http://localhost:${PORTS.direct3.grpc}`,
@@ -352,8 +357,7 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     await waitForExit(emitProc);
 
     // Give Weaver time to process the received telemetry before stopping.
-    // CI runners are slower than local — 3s is more reliable than 1s.
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 3_000));
 
     // Stop Weaver and get compliance report
     const response = await fetch(`http://localhost:${PORTS.direct3.admin}/stop`, {
