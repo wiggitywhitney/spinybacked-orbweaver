@@ -130,7 +130,8 @@ Save the completed findings to this exact path. The file must exist and be commi
   4. Which attributes that spiny-orb's checkers care about (HTTP method, status code, URL, DB system, etc.) have stable constants vs. incubating?
   5. What does the official OTel JS documentation currently show as the idiomatic import pattern?
 - [ ] Record the recommended usage pattern (import path, constant naming, how to distinguish stable from incubating) in the file — this is what the prompt and checker milestones will consume
-- [ ] Record any gotchas (breaking changes, non-obvious migration steps, things training data gets wrong) in `~/.claude/rules/otel-semconv-gotchas.md` and reference it from `~/.claude/CLAUDE.md`
+- [ ] Record any gotchas (breaking changes, non-obvious migration steps, things training data gets wrong) as a dedicated section in `docs/research/typescript-semconv-constants.md` — this is the canonical location. Optionally also copy to `~/.claude/rules/otel-semconv-gotchas.md` for local convenience, but the repo file is the source of truth.
+- [ ] Add a metadata header at the top of `docs/research/typescript-semconv-constants.md` containing: retrieval date, exact `@opentelemetry/semantic-conventions` package version(s) documented, and links to the official sources used (OTel JS docs, GitHub release/commit, relevant spec URLs). This allows downstream milestones (C1, C3, C5) to verify whether the snapshot is still current.
 - [ ] Close issue #378 with a comment referencing this PRD and the output file path
 - [ ] Commit `docs/research/typescript-semconv-constants.md`
 
