@@ -43,15 +43,21 @@ export function getAllRules(): ValidationRule[] {
 }
 
 /**
- * Look up a rule by its rule ID, returning the first matching entry across all providers.
+ * Look up a rule by its rule ID and optional language provider.
  *
- * When multiple providers register rules with the same ruleId for different languages,
- * the first one found is returned. Prefer `getRulesForLanguage()` for language-aware lookup.
+ * When `languageId` is provided, returns the rule registered by that specific
+ * provider. When omitted, returns the first matching entry across all providers
+ * (insertion order). Prefer `getRulesForLanguage()` for querying all rules for
+ * a given language.
  *
  * @param ruleId - Rule identifier (e.g. 'COV-001', 'NDS-003')
+ * @param languageId - Optional provider language ID (e.g. 'javascript', 'typescript')
  * @returns The registered rule, or undefined if not found
  */
-export function getRuleById(ruleId: string): ValidationRule | undefined {
+export function getRuleById(ruleId: string, languageId?: string): ValidationRule | undefined {
+  if (languageId !== undefined) {
+    return rules.get(`${languageId}:${ruleId}`);
+  }
   return [...rules.values()].find(r => r.ruleId === ruleId);
 }
 

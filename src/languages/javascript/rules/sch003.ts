@@ -269,7 +269,7 @@ function pass(filePath: string, message: string): CheckResult {
 
 /**
  * SCH-003 ValidationRule — attribute values must conform to registry type constraints.
- * Applies to all languages (every language needs attribute values validated against the registry).
+ * Applies to JavaScript and TypeScript only (uses ts-morph for parsing).
  */
 export const sch003Rule: ValidationRule = {
   ruleId: 'SCH-003',

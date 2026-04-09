@@ -184,7 +184,7 @@ function pass(filePath: string, message: string): CheckResult {
 
 /**
  * SCH-002 ValidationRule — attribute keys must match names in the Weaver registry.
- * Applies to all languages (every language needs attribute keys validated against the registry).
+ * Applies to JavaScript and TypeScript only (uses ts-morph for parsing).
  */
 export const sch002Rule: ValidationRule = {
   ruleId: 'SCH-002',

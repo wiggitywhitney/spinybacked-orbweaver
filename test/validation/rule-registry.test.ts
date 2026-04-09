@@ -80,15 +80,32 @@ describe('rule-registry', () => {
   });
 
   describe('getRuleById', () => {
-    it('returns the rule for the given ruleId', () => {
+    it('returns the rule for the given ruleId (no languageId)', () => {
       const rule = makeRule('NDS-003', ['javascript']);
       registerRule(rule, 'javascript');
 
       expect(getRuleById('NDS-003')).toBe(rule);
     });
 
+    it('returns the correct rule when languageId is specified', () => {
+      const jsRule = makeRule('RST-001', ['javascript']);
+      const tsRule = makeRule('RST-001', ['typescript']);
+      registerRule(jsRule, 'javascript');
+      registerRule(tsRule, 'typescript');
+
+      expect(getRuleById('RST-001', 'javascript')).toBe(jsRule);
+      expect(getRuleById('RST-001', 'typescript')).toBe(tsRule);
+    });
+
     it('returns undefined for an unregistered ruleId', () => {
       expect(getRuleById('UNKNOWN')).toBeUndefined();
+    });
+
+    it('returns undefined when languageId is specified but not registered', () => {
+      const rule = makeRule('COV-001', ['javascript']);
+      registerRule(rule, 'javascript');
+
+      expect(getRuleById('COV-001', 'python')).toBeUndefined();
     });
   });
 
