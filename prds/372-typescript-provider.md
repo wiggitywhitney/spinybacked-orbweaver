@@ -5,7 +5,8 @@
 **GitHub Issue**: [#372](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/372)  
 **Blocked by**: PRD #371 (JavaScript extraction) must be merged first  
 **Blocks**: PRD #373 (Python provider)  
-**Created**: 2026-04-06
+**Created**: 2026-04-06  
+**Absorbs**: Issue #378 (semconv research spike folded into Milestone C0)
 
 ---
 
@@ -106,7 +107,7 @@ _Populate as decisions are made during implementation._
 
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
-| (none yet) | | | |
+| D-1 | Fold issue #378 (semconv research spike) into this PRD as Milestone C0 | Research is a prerequisite for the TypeScript prompt and checker work in this PRD. Running it as a standalone issue wastes context — a future agent writing the prompt would have no access to the findings. Folding it in and saving findings to a versioned file (`docs/research/typescript-semconv-constants.md`) ensures every subsequent agent reads the same ground truth before touching prompt or checker code. | 2026-04-09 |
 
 ---
 
@@ -114,7 +115,30 @@ _Populate as decisions are made during implementation._
 
 These follow the Part 8 checklist from the research doc. All items are unchecked — this PRD is a skeleton. Refine milestones after PRD #371 is merged and OD-1 through OD-4 are resolved.
 
+### Milestone C0: Research — JS/TS semconv constants
+
+**Purpose**: Answer the open questions about `@opentelemetry/semantic-conventions` before any prompt or checker code is written. The findings are saved to a versioned file that every subsequent milestone reads as its first step.
+
+**Output file**: `docs/research/typescript-semconv-constants.md`  
+Save the completed findings to this exact path. The file must exist and be committed before this milestone is marked complete. Do not put findings in a comment, PROGRESS.md, or any other location — the subsequent milestones' Step 0 instructions reference this path specifically.
+
+- [ ] Run `/research @opentelemetry/semantic-conventions` to gather current state
+- [ ] Answer all five questions from issue #378 and record them in `docs/research/typescript-semconv-constants.md`:
+  1. What is the current stable version? What naming prefix does it use?
+  2. Has there been any further migration since v1.26.0, or is the current convention stable?
+  3. What is the import pattern for stable vs. incubating attributes? Are they separate entry-points?
+  4. Which attributes that spiny-orb's checkers care about (HTTP method, status code, URL, DB system, etc.) have stable constants vs. incubating?
+  5. What does the official OTel JS documentation currently show as the idiomatic import pattern?
+- [ ] Record the recommended usage pattern (import path, constant naming, how to distinguish stable from incubating) in the file — this is what the prompt and checker milestones will consume
+- [ ] Record any gotchas (breaking changes, non-obvious migration steps, things training data gets wrong) as a dedicated section in `docs/research/typescript-semconv-constants.md` — this is the canonical location. Optionally also copy to `~/.claude/rules/otel-semconv-gotchas.md` for local convenience, but the repo file is the source of truth.
+- [ ] Add a metadata header at the top of `docs/research/typescript-semconv-constants.md` containing: retrieval date, exact `@opentelemetry/semantic-conventions` package version(s) documented, and links to the official sources used (OTel JS docs, GitHub release/commit, relevant spec URLs). This allows downstream milestones (C1, C3, C5) to verify whether the snapshot is still current.
+- [ ] Close issue #378 with a comment referencing this PRD and the output file path
+- [ ] Commit `docs/research/typescript-semconv-constants.md`
+
 ### Milestone C1: Implement TypeScriptProvider
+
+**Step 0 — Read research findings before proceeding.**  
+Open `docs/research/typescript-semconv-constants.md` (created in Milestone C0) and read it in full before writing any code. This file contains the current semconv naming convention, import pattern, and gotchas. You will need it when setting `otelSemconvPackage` and when deciding which attribute constants are safe to reference. Do not skip this step — if the file does not exist, Milestone C0 has not been completed and this milestone cannot begin.
 
 Following the Part 8 checklist, Step 1:
 
@@ -136,12 +160,15 @@ Following the Part 8 checklist, Step 1:
 - [ ] `formatCode()` — Prettier (already handles TypeScript)
 - [ ] `lintCheck()` — Prettier diff (same as JavaScript)
 - [ ] File discovery: `globPattern: '**/*.{ts,tsx}'` (or `'**/*.ts'` if OD-2 defers TSX), `defaultExclude` includes `*.d.ts`, generated files, `*.test.ts`
-- [ ] `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — same package as JavaScript. **Do NOT update the prompt to use typed constants in this PRD** — the naming convention migration (`SEMATTRS_*` → `ATTR_*` at v1.26.0) requires a research spike before any prompt change is safe (see issue #378).
+- [ ] `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — same package as JavaScript. The correct constant naming convention and import path are in `docs/research/typescript-semconv-constants.md` (Milestone C0). Use the findings there when configuring this field.
 - [ ] Register `TypeScriptProvider` in `src/languages/registry.ts` for `.ts` (and `.tsx` if OD-2 resolves to include it)
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes
 
 ### Milestone C2: TypeScript-specific prompt sections
+
+**Step 0 — Read research findings before proceeding.**  
+Open `docs/research/typescript-semconv-constants.md` (created in Milestone C0) and read it in full before writing any prompt content. The prompt will instruct the LLM to use typed semconv constants — you must know the correct import path, naming prefix, and which attributes are stable vs. incubating before writing those instructions. Do not skip this step.
 
 Following Part 8 checklist, Step 2:
 
@@ -151,6 +178,7 @@ Following Part 8 checklist, Step 2:
 - [ ] Tracer acquisition: same as JavaScript (`trace.getTracer()`)
 - [ ] Span creation idioms: same as JavaScript (`tracer.startActiveSpan()`, `tracer.startSpan()`)
 - [ ] Error handling: `try/catch` — same as JavaScript; TypeScript catch binding is `unknown` type, may need type narrowing (`if (err instanceof Error)`)
+- [ ] Semconv constants guidance: using findings from `docs/research/typescript-semconv-constants.md`, add prompt instructions covering the correct import path, naming prefix, and how to distinguish stable from incubating attributes. This replaces the raw string approach used in the JavaScript prompt.
 - [ ] At least 5 before/after TypeScript examples:
   - Async function with type annotations
   - Class method with decorator
@@ -159,6 +187,9 @@ Following Part 8 checklist, Step 2:
   - TSX component (if OD-2 includes TSX)
 
 ### Milestone C3: TypeScript Tier 2 checker implementations
+
+**Step 0 — Read research findings before proceeding.**  
+Open `docs/research/typescript-semconv-constants.md` (created in Milestone C0) and read it in full before writing any checker code. Rules like `sch002` (attribute keys) and `cov005` (registry-defined attributes) depend on knowing which semconv constant names are valid and how they are imported. Do not skip this step.
 
 Following Part 8 checklist, Step 3:
 
@@ -201,6 +232,9 @@ describe('NDS-004: Signatures preserved', () => {
 - [ ] All consistency tests pass
 
 ### Milestone C5: Golden file tests
+
+**Step 0 — Read research findings before proceeding.**  
+Open `docs/research/typescript-semconv-constants.md` (created in Milestone C0) and read it in full before writing any fixture files. The "after" fixture files will contain instrumented TypeScript code — they must use the correct semconv import pattern and constant names as established in the research. Do not skip this step.
 
 Following Part 8 checklist, Step 4:
 
