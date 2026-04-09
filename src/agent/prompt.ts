@@ -214,7 +214,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **SCH-001**: Use registry-defined span names when they match the operation. Do NOT invent names when the registry already defines one.
 - **SCH-002**: Use registry-defined attribute keys. Check for semantic equivalence, not just exact name matches.
 - **SCH-003**: Attribute values must conform to registry-defined types and constraints. Count attributes (\`*_count\`) MUST use \`type: int\` in schema extensions and pass raw numbers to \`setAttribute\` — never wrap numeric values in \`String()\`.
-- **SCH-004**: Do NOT create attributes that duplicate existing registry entries under a different name.
+- **SCH-004**: Do NOT create attributes that duplicate existing registry entries under a different name. **Do NOT cite SCH-004 in advisory notes or instrumentation reasoning unless you can identify a specific existing entry in the resolved schema that would be made redundant.** If no such entry exists in the resolved schema passed in context, SCH-004 does not apply.
 
 ### Code Quality
 
@@ -222,7 +222,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
 - **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
-- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`.
+- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`. **Exemption: CDQ-006 does not apply to root spans or spans created at the entry point of a traced operation — these always record.** Do not add \`isRecording()\` guards to root spans or entry-point spans. Do not cite CDQ-006 violations for root spans or entry-point spans in advisory notes or instrumentation reasoning.
 - **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields (\`email\`, \`password\`, \`ssn\`), or undefined values. Watch for optional chaining (\`?.\`) in \`setAttribute\` value arguments — these can produce \`undefined\`. Guard with an \`if\` check.
 - **CDQ-008**: Use the same tracer naming convention across all files. Do NOT vary the pattern.
 
