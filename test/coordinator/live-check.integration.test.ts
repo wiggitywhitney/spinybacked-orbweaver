@@ -2,7 +2,7 @@
 // ABOUTME: Covers port checking, full OTLP workflow with weaver registry emit, inactivity timeout, and port conflicts.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { createServer } from 'node:net';
+import { createServer, createConnection } from 'node:net';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import type { ChildProcess } from 'node:child_process';
@@ -50,6 +50,30 @@ function closeServer(server: Server): Promise<void> {
 function waitForExit(proc: ChildProcess): Promise<number | null> {
   return new Promise((resolve) => {
     proc.on('close', (code) => resolve(code));
+  });
+}
+
+/**
+ * Poll a TCP port until it accepts connections or the timeout elapses.
+ * Used to wait for Weaver's admin HTTP server to be ready before sending requests.
+ * A fixed sleep is unreliable on CI — this polls every 200ms instead.
+ */
+function waitForPort(port: number, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    function attempt() {
+      const socket = createConnection({ port, host: 'localhost' });
+      socket.on('connect', () => { socket.destroy(); resolve(); });
+      socket.on('error', () => {
+        socket.destroy();
+        if (Date.now() < deadline) {
+          setTimeout(attempt, 200);
+        } else {
+          reject(new Error(`Port ${port} not ready within ${timeoutMs}ms`));
+        }
+      });
+    }
+    attempt();
   });
 }
 
@@ -309,8 +333,9 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
       '--format', 'json',
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    // Wait for Weaver to start
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Wait for Weaver's admin port to accept connections (up to 15s).
+    // A fixed sleep is unreliable on CI — poll via TCP instead.
+    await waitForPort(PORTS.direct3.admin, 15_000);
 
     // Emit test telemetry
     const emitProc = spawn('weaver', [
@@ -319,8 +344,9 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
     await waitForExit(emitProc);
 
-    // Give live-check a moment to process
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Give Weaver time to process the received telemetry before stopping.
+    // CI runners are slower than local — 3s is more reliable than 1s.
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
     // Stop Weaver and get compliance report
     const response = await fetch(`http://localhost:${PORTS.direct3.admin}/stop`, {
