@@ -46,15 +46,6 @@ function closeServer(server: Server): Promise<void> {
   });
 }
 
-/**
- * Milliseconds to wait for Weaver to be ready to receive OTLP telemetry.
- * Matches the coordinator's WEAVER_STARTUP_TIMEOUT_MS (15s) — TCP port binding
- * alone is not sufficient; gRPC service initialization takes additional time.
- */
-const WEAVER_STARTUP_TIMEOUT_MS = 15_000;
-/** Milliseconds to wait for Weaver to process received telemetry before stopping. */
-const TELEMETRY_SETTLE_MS = 3_000;
-
 /** Helper: wait for a child process to exit. */
 function waitForExit(proc: ChildProcess): Promise<number | null> {
   return new Promise((resolve) => {
@@ -310,55 +301,20 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
   });
 
   it('receives telemetry from weaver registry emit and produces compliance report', async () => {
-    // No --format flag: the coordinator never passes --format, and some Weaver
-    // versions write the compliance report to stdout when --format json is set,
-    // which means /stop returns an empty body. Omitting --format keeps the
-    // compliance report in the /stop response body, matching coordinator behavior.
-    weaverProc = spawn('weaver', [
-      'registry', 'live-check', '-r', VALID_REGISTRY,
-      '--inactivity-timeout', '30',
-      '--otlp-grpc-port', String(PORTS.direct3.grpc),
-      '--admin-port', String(PORTS.direct3.admin),
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // Use runLiveCheck with the emit command as the test suite, matching the
+    // coordinator's "runs full workflow" test pattern on isolated ports.
+    // Direct Weaver spawn + manual emit coordination was unreliable on CI —
+    // runLiveCheck manages startup timing and OTEL env injection internally.
+    const emitCommand = `weaver registry emit -r ${VALID_REGISTRY} --endpoint http://localhost:${PORTS.direct3.grpc}`;
 
-    // Wait WEAVER_STARTUP_TIMEOUT_MS for Weaver to be ready, matching the coordinator's
-    // waitForWeaverReady() timeout. TCP port binding alone is not sufficient — the gRPC
-    // OTLP service takes additional time to initialize after the port is bound.
-    // Detect early Weaver exit (crash) so the test fails fast instead of timing out.
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      weaverProc!.on('close', (code) => {
-        if (!settled) { settled = true; reject(new Error(`Weaver exited early with code ${code}`)); }
-      });
-      setTimeout(() => { if (!settled) { settled = true; resolve(); } }, WEAVER_STARTUP_TIMEOUT_MS);
+    const result = await runLiveCheck(VALID_REGISTRY, process.cwd(), emitCommand, {
+      grpcPort: PORTS.direct3.grpc,
+      adminPort: PORTS.direct3.admin,
+      inactivityTimeoutSeconds: 30,
     });
 
-    // Emit test telemetry. Set OTEL_EXPORTER_OTLP_ENDPOINT to match what the
-    // coordinator does when running a test suite — the coordinator injects this env
-    // var alongside the --endpoint flag.
-    const emitProc = spawn('weaver', [
-      'registry', 'emit', '-r', VALID_REGISTRY,
-      '--endpoint', `http://localhost:${PORTS.direct3.grpc}`,
-    ], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, OTEL_EXPORTER_OTLP_ENDPOINT: `http://localhost:${PORTS.direct3.grpc}` },
-    });
-    await waitForExit(emitProc);
-
-    // Give Weaver time to process the received telemetry before stopping.
-    await new Promise(resolve => setTimeout(resolve, TELEMETRY_SETTLE_MS));
-
-    // Stop Weaver and get compliance report
-    const response = await fetch(`http://localhost:${PORTS.direct3.admin}/stop`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(5000),
-    });
-
-    expect(response.ok).toBe(true);
-    const report = await response.text();
-    expect(report.length).toBeGreaterThan(0);
-
-    await waitForExit(weaverProc);
-    weaverProc = undefined;
+    expect(result.skipped).toBeFalsy();
+    expect(result.complianceReport).toBeDefined();
+    expect(result.complianceReport!.length).toBeGreaterThan(0);
   });
 });
