@@ -313,8 +313,10 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
       inactivityTimeoutSeconds: 30,
     });
 
-    expect(result.skipped).toBeFalsy();
+    expect(result.skipped).toBe(false);
+    expect(result.testsPassed).toBe(true);
     expect(result.complianceReport).toBeDefined();
     expect(result.complianceReport!.length).toBeGreaterThan(0);
+    expect(result.warnings, `Unexpected warnings: ${JSON.stringify(result.warnings)}`).toHaveLength(0);
   });
 });
