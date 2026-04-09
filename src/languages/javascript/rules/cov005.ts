@@ -172,10 +172,6 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
     if (spanCallParent && Node.isVariableDeclaration(spanCallParent)) {
       spanVarName = spanCallParent.getName();
     }
-    const spanEndPattern = spanVarName
-      ? new RegExp(`\\b${escapeForRegExp(spanVarName)}\\.end\\s*\\(`)
-      : null;
-
     // Walk up to the nearest containing block or source file
     let containingBlock: Node | undefined;
     let ancestorStatement: Node | undefined;

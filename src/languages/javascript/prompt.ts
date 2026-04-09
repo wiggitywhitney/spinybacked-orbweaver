@@ -255,7 +255,7 @@ export function getSystemPromptSections(): LanguagePromptSections {
   \`\`\`
   This is the ONLY non-instrumentation code change the validator permits. Use it only for capturing values needed by \`setAttribute\` or \`addEvent\`.`,
 
-    tracerAcquisition: `Add \`const tracer = trace.getTracer(name);\` at module scope if not already present. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.`,
+    tracerAcquisition: `Add \`const tracer = trace.getTracer('service-name');\` at module scope if not already present, replacing \`'service-name'\` with a stable identifier for this service. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.`,
 
     spanCreation: `Wrap function bodies with \`tracer.startActiveSpan()\`:
 

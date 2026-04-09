@@ -110,7 +110,7 @@ export async function discoverFiles(
   if (absolutePaths.length === 0) {
     const searchDir = resolvedTarget ?? projectDir;
     throw new Error(
-      `No JavaScript files found in ${searchDir}. Check that the directory contains .js files and that exclude patterns are not too broad.`,
+      `No ${provider.displayName} files found in ${searchDir}. Check that the directory contains ${provider.fileExtensions.join('/')} files and that exclude patterns are not too broad.`,
     );
   }
 

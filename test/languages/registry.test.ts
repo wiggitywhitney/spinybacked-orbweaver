@@ -17,7 +17,7 @@ describe('language provider registry', () => {
     _resetForTest();
   });
 
-  it('pre-registers JavaScriptProvider on import', async () => {
+  it('registers JavaScriptProvider for all expected extensions and language id', () => {
     // Re-import after reset to trigger the module-level registration.
     // The module is already cached, so we call registerProvider manually.
     const jsProvider = new JavaScriptProvider();
