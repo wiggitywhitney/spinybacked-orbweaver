@@ -368,6 +368,8 @@ export async function getUsers(req, res) {
     }
   });
 }`,
+      notes: `librariesNeeded: [{ package: "@opentelemetry/instrumentation-pg", importName: "PgInstrumentation" }]
+The handler gets a manual span as a service entry point. The pg.query call is covered by auto-instrumentation.`,
     },
     {
       description: 'Async function with existing try/catch',
@@ -510,6 +512,7 @@ export async function getUsers(req, res) {
 }
 
 app.get('/users', getUsers);`,
+      notes: `Both express and pg have auto-instrumentation libraries. Recorded in librariesNeeded: [{ package: "@opentelemetry/instrumentation-express", importName: "ExpressInstrumentation" }, { package: "@opentelemetry/instrumentation-pg", importName: "PgInstrumentation" }]. The handler function getUsers still gets a manual span as a service entry point.`,
     },
   ];
 }
