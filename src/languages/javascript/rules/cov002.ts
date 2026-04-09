@@ -2,7 +2,7 @@
 // ABOUTME: AST-based detection of outbound call sites (fetch, HTTP, DB, messaging) without enclosing spans.
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
-import type { CallExpression, SourceFile } from 'ts-morph';
+import type { CallExpression, Identifier, SourceFile } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
 
@@ -227,39 +227,60 @@ function isInsideSpanScope(node: CallExpression): boolean {
                 if (!Node.isPropertyAccessExpression(callee)) continue;
                 if (callee.getName() !== 'startSpan') continue;
 
-                // Extract all variable names bound by this declaration.
+                // Extract bound identifiers from this declaration, capturing
+                // both name and symbol for each. Symbol identity is used where
+                // available to avoid false matches when an inner scope shadows
+                // the span variable name.
                 // Handles simple assignments (`const span = ...`) and
                 // destructuring (`const { span } = ...`).
                 const nameNode = decl.getNameNode();
-                const boundNames: string[] = Node.isIdentifier(nameNode)
-                  ? [nameNode.getText()]
-                  : nameNode.getDescendantsOfKind(SyntaxKind.Identifier).map(id => id.getText());
+                const boundIdentifiers: Array<{ name: string; sym: ReturnType<Identifier['getSymbol']> }> =
+                  (Node.isIdentifier(nameNode)
+                    ? [nameNode]
+                    : nameNode.getDescendantsOfKind(SyntaxKind.Identifier)
+                  ).map(id => ({ name: id.getText(), sym: id.getSymbol() }));
 
-                // Skip this declaration if any bound name was ended (via .end())
+                /**
+                 * Returns true if `identifier` refers to one of the bound variables.
+                 * Uses symbol identity when both symbols are available (handles
+                 * shadowing); falls back to name comparison otherwise.
+                 */
+                function matchesBound(identifier: Identifier): boolean {
+                  const idSym = identifier.getSymbol();
+                  for (const b of boundIdentifiers) {
+                    if (b.sym !== undefined && idSym !== undefined) {
+                      if (b.sym === idSym) return true;
+                    } else if (b.name === identifier.getText()) {
+                      return true;
+                    }
+                  }
+                  return false;
+                }
+
+                // Skip this declaration if any bound variable was ended (via .end())
                 // in the statements between the declaration and this try block.
                 let alreadyEnded = false;
-                for (let j = i + 1; j < tryIndex && !alreadyEnded; j++) {
-                  statements[j].forEachDescendant((endNode) => {
-                    if (!Node.isCallExpression(endNode)) return;
+                outer: for (let j = i + 1; j < tryIndex; j++) {
+                  for (const endNode of statements[j].getDescendantsOfKind(SyntaxKind.CallExpression)) {
                     const endExpr = endNode.getExpression();
-                    if (!Node.isPropertyAccessExpression(endExpr)) return;
+                    if (!Node.isPropertyAccessExpression(endExpr)) continue;
                     const obj = endExpr.getExpression();
                     if (Node.isIdentifier(obj)
-                      && boundNames.includes(obj.getText())
+                      && matchesBound(obj)
                       && endExpr.getName() === 'end') {
                       alreadyEnded = true;
+                      break outer;
                     }
-                  });
+                  }
                 }
                 if (alreadyEnded) continue;
 
-                // Check that the bound name is referenced in the try statement
+                // Check that a bound variable is referenced in the try statement
                 // AND that no .end() call on it appears before the outbound call
-                // in the try block. This prevents a span that was ended early
-                // (before the outbound call) inside the try from being treated
-                // as still active.
+                // in the try block. Uses symbol identity to avoid attributing an
+                // inner (shadowing) span.end() to the outer span declaration.
                 const allIdentifiers = parent.getDescendantsOfKind(SyntaxKind.Identifier);
-                if (!allIdentifiers.some(id => boundNames.includes(id.getText()))) continue;
+                if (!allIdentifiers.some(id => matchesBound(id))) continue;
 
                 const outboundCallStart = node.getStart();
                 const tryBlock = parent.getFirstChildByKind(SyntaxKind.Block);
@@ -271,7 +292,7 @@ function isInsideSpanScope(node: CallExpression): boolean {
                     if (!Node.isPropertyAccessExpression(endExpr)) return;
                     const obj = endExpr.getExpression();
                     if (Node.isIdentifier(obj)
-                      && boundNames.includes(obj.getText())
+                      && matchesBound(obj)
                       && endExpr.getName() === 'end'
                       && endNode.getStart() < outboundCallStart) {
                       endedBeforeOutbound = true;
