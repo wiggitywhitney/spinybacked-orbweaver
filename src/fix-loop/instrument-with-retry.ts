@@ -2,7 +2,7 @@
 // ABOUTME: Retry with multi-turn feedback, fresh regeneration, oscillation detection, and token budget tracking.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import Anthropic from '@anthropic-ai/sdk';
@@ -390,7 +390,7 @@ async function executeRetryLoop(
   anthropicClient?: Anthropic,
   clock?: () => number,
   existingSpanNames?: string[],
-  provider?: LanguageProvider,
+  provider: LanguageProvider = DEFAULT_PROVIDER,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -551,8 +551,11 @@ async function executeRetryLoop(
     // already happened and the tokens are spent, so throwing away good code is wasteful.
     const budgetExceeded = totalTokens(cumulativeTokens) > config.maxTokensPerFile;
 
-    // Fix tracer init placement: ensure it's after all imports, not between them
-    output.instrumentedCode = ensureTracerAfterImports(output.instrumentedCode);
+    // Fix tracer init placement: ensure it's after all imports, not between them.
+    // Only applies to JS/TS — ensureTracerAfterImports parses JS/TS import syntax.
+    if (provider.id === 'javascript' || provider.id === 'typescript') {
+      output.instrumentedCode = ensureTracerAfterImports(output.instrumentedCode);
+    }
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -705,7 +708,9 @@ async function functionLevelFallback(
 
   for (const fn of extractedFunctions) {
     const functionContext = fn.contextHeader;
-    const fnExt = fnProvider.fileExtensions[0] ?? '.js';
+    // Use the source file's own extension for the temp file so ts-morph (and other
+    // language-specific parsers) use the correct parsing mode (e.g. .jsx vs .js).
+    const fnExt = extname(filePath) || (fnProvider.fileExtensions[0] ?? '.js');
     const tmpFilePath = join(tmpBase, `fn-${fn.name}-${Date.now()}${fnExt}`);
 
     try {

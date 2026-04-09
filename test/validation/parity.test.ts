@@ -43,14 +43,30 @@ describe('feature parity matrix', () => {
     }
   });
 
-  it('SCH rules apply to all languages (cross-language concept)', () => {
+  it('SCH-001 and SCH-004 apply to all languages (cross-language concept)', () => {
     const rules = getAllRules();
-    const schRules = rules.filter(r => r.ruleId.startsWith('SCH-'));
-    expect(schRules.length).toBe(4);
-    for (const rule of schRules) {
+    const universalSchRules = rules.filter(r => r.ruleId === 'SCH-001' || r.ruleId === 'SCH-004');
+    expect(universalSchRules.length).toBe(2);
+    for (const rule of universalSchRules) {
       expect(rule.applicableTo('python'), `${rule.ruleId}.applicableTo('python')`).toBe(true);
       expect(rule.applicableTo('go'), `${rule.ruleId}.applicableTo('go')`).toBe(true);
     }
+  });
+
+  it('SCH-002 and SCH-003 apply only to JS/TS (ts-morph internal — not safe for Python/Go)', () => {
+    const rules = getAllRules();
+    const sch002 = rules.find(r => r.ruleId === 'SCH-002');
+    const sch003 = rules.find(r => r.ruleId === 'SCH-003');
+    expect(sch002).toBeDefined();
+    expect(sch003).toBeDefined();
+    expect(sch002!.applicableTo('javascript')).toBe(true);
+    expect(sch002!.applicableTo('typescript')).toBe(true);
+    expect(sch002!.applicableTo('python')).toBe(false);
+    expect(sch002!.applicableTo('go')).toBe(false);
+    expect(sch003!.applicableTo('javascript')).toBe(true);
+    expect(sch003!.applicableTo('typescript')).toBe(true);
+    expect(sch003!.applicableTo('python')).toBe(false);
+    expect(sch003!.applicableTo('go')).toBe(false);
   });
 
   it('NDS-006 applies only to JS/TS, not Python or Go', () => {

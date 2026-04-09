@@ -82,7 +82,7 @@ export class JavaScriptProvider implements LanguageProvider {
     // This populates the registry so the validation chain can dispatch
     // through getRulesForLanguage('javascript') instead of direct imports.
     for (const rule of JS_RULES) {
-      registerRule(rule);
+      registerRule(rule, 'javascript');
     }
   }
 
