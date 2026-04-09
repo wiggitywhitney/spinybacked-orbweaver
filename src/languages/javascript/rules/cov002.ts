@@ -3,6 +3,24 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CallExpression, Identifier, SourceFile } from 'ts-morph';
+
+/**
+ * SyntaxKinds that introduce a new execution scope.
+ * When encountered during scoped traversal, iteration stops descending into
+ * that node's children — preventing closures and nested functions from being
+ * mistaken for direct callsites in the current scope.
+ */
+const SCOPE_BREAKERS = new Set([
+  SyntaxKind.ArrowFunction,
+  SyntaxKind.FunctionExpression,
+  SyntaxKind.FunctionDeclaration,
+  SyntaxKind.MethodDeclaration,
+  SyntaxKind.Constructor,
+  SyntaxKind.ClassDeclaration,
+  SyntaxKind.ClassExpression,
+  SyntaxKind.GetAccessor,
+  SyntaxKind.SetAccessor,
+]);
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
 
@@ -259,26 +277,28 @@ function isInsideSpanScope(node: CallExpression): boolean {
 
                 // Skip this declaration if any bound variable was ended (via .end())
                 // in the statements between the declaration and this try block.
+                // Uses scoped traversal to ignore .end() calls inside closures
+                // that may not have executed yet.
                 let alreadyEnded = false;
-                outer: for (let j = i + 1; j < tryIndex; j++) {
-                  for (const endNode of statements[j].getDescendantsOfKind(SyntaxKind.CallExpression)) {
+                for (let j = i + 1; j < tryIndex; j++) {
+                  statements[j].forEachDescendant((endNode, traversal) => {
+                    if (SCOPE_BREAKERS.has(endNode.getKind())) { traversal.skip(); return; }
+                    if (!Node.isCallExpression(endNode)) return;
                     const endExpr = endNode.getExpression();
-                    if (!Node.isPropertyAccessExpression(endExpr)) continue;
+                    if (!Node.isPropertyAccessExpression(endExpr)) return;
                     const obj = endExpr.getExpression();
-                    if (Node.isIdentifier(obj)
-                      && matchesBound(obj)
-                      && endExpr.getName() === 'end') {
+                    if (Node.isIdentifier(obj) && matchesBound(obj) && endExpr.getName() === 'end') {
                       alreadyEnded = true;
-                      break outer;
+                      traversal.stop();
                     }
-                  }
+                  });
+                  if (alreadyEnded) break;
                 }
                 if (alreadyEnded) continue;
 
-                // Check that a bound variable is referenced in the try statement
-                // AND that no .end() call on it appears before the outbound call
-                // in the try block. Uses symbol identity to avoid attributing an
-                // inner (shadowing) span.end() to the outer span declaration.
+                // Check that a bound variable is referenced anywhere in the try
+                // statement (including closures) — verifies the span is actually
+                // used, not just coincidentally in scope.
                 const allIdentifiers = parent.getDescendantsOfKind(SyntaxKind.Identifier);
                 if (!allIdentifiers.some(id => matchesBound(id))) continue;
 
@@ -286,18 +306,20 @@ function isInsideSpanScope(node: CallExpression): boolean {
                 const tryBlock = parent.getFirstChildByKind(SyntaxKind.Block);
                 let endedBeforeOutbound = false;
                 if (tryBlock) {
-                  for (const endNode of tryBlock.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+                  tryBlock.forEachDescendant((endNode, traversal) => {
+                    if (SCOPE_BREAKERS.has(endNode.getKind())) { traversal.skip(); return; }
+                    if (!Node.isCallExpression(endNode)) return;
                     const endExpr = endNode.getExpression();
-                    if (!Node.isPropertyAccessExpression(endExpr)) continue;
+                    if (!Node.isPropertyAccessExpression(endExpr)) return;
                     const obj = endExpr.getExpression();
                     if (Node.isIdentifier(obj)
                       && matchesBound(obj)
                       && endExpr.getName() === 'end'
                       && endNode.getStart() < outboundCallStart) {
                       endedBeforeOutbound = true;
-                      break;
+                      traversal.stop();
                     }
-                  }
+                  });
                 }
                 if (!endedBeforeOutbound) {
                   return true;

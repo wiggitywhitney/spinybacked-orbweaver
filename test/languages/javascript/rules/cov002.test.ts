@@ -404,6 +404,26 @@ describe('checkOutboundCallSpans (COV-002)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('does not treat span.end() inside an unexecuted closure as ending the span', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function handleRequest() {',
+        '  const span = tracer.startSpan("op");',
+        '  try {',
+        '    const cleanup = () => span.end();',
+        '    const res = await fetch("/api");',
+        '    cleanup();',
+        '    return res;',
+        '  } finally {}',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('is not fooled by span.end() on a shadowing inner variable with the same name', () => {
       // The outer span is still active during fetch — only the inner (shadowing)
       // span was ended. The fetch should be treated as covered.
