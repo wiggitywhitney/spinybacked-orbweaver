@@ -27,8 +27,9 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     useInMemoryFileSystem: true,
   });
   const sourceFile = project.createSourceFile('check.js', code);
+  const fileHasInstrumentation = hasSpanCall(code);
 
-  const flagged: Array<{ name: string; line: number; reason: string }> = [];
+  const flagged: Array<{ name: string; line: number; reason: string; exported: boolean }> = [];
 
   // Check function declarations
   for (const fn of sourceFile.getFunctions()) {
@@ -41,14 +42,15 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     // Pure sync functions should not be flagged even if they call I/O-looking
     // patterns — the function declaration tells us it's synchronous.
     if (fn.isAsync()) {
-      flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function' });
+      flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function', exported: fn.isExported() });
     } else if (hasDirectAwait(fn)) {
-      flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await' });
+      flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await', exported: fn.isExported() });
     }
   }
 
   // Check variable-assigned functions
   for (const varStatement of sourceFile.getVariableStatements()) {
+    const isExported = varStatement.isExported();
     for (const decl of varStatement.getDeclarations()) {
       const initializer = decl.getInitializer();
       if (!initializer) continue;
@@ -63,14 +65,14 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
       if (hasSpanCall(bodyText)) continue;
 
       if (fn.isAsync()) {
-        flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function' });
+        flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function', exported: isExported });
       } else if (hasDirectAwait(fn)) {
-        flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await' });
+        flagged.push({ name, line: fn.getStartLineNumber(), reason: 'contains await', exported: isExported });
       }
     }
   }
 
-  // Check class methods
+  // Check class methods (not exported as individual items)
   sourceFile.forEachDescendant((node) => {
     if (!Node.isMethodDeclaration(node)) return;
 
@@ -80,9 +82,45 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     if (hasSpanCall(bodyText)) return;
 
     if (node.isAsync()) {
-      flagged.push({ name, line: node.getStartLineNumber(), reason: 'async class method' });
+      flagged.push({ name, line: node.getStartLineNumber(), reason: 'async class method', exported: false });
     } else if (hasDirectAwait(node)) {
-      flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method contains await' });
+      flagged.push({ name, line: node.getStartLineNumber(), reason: 'class method contains await', exported: false });
+    }
+  });
+
+  // Check CJS exported async functions:
+  // module.exports.foo = async function() {} and module.exports = { foo: async () => {} }
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isBinaryExpression(node)) return;
+
+    const left = node.getLeft().getText();
+    const right = node.getRight();
+
+    // Pattern: module.exports.foo = async function() {} or async () => {}
+    const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
+    if (nameMatch) {
+      const name = nameMatch[1];
+      if (Node.isFunctionExpression(right) || Node.isArrowFunction(right)) {
+        if (right.isAsync() && !hasSpanCall(right.getText())) {
+          flagged.push({ name, line: node.getStartLineNumber(), reason: 'async function', exported: true });
+        }
+      }
+      return;
+    }
+
+    // Pattern: module.exports = { foo: async () => {} }
+    if (left === 'module.exports' && Node.isObjectLiteralExpression(right)) {
+      for (const prop of right.getProperties()) {
+        if (!Node.isPropertyAssignment(prop)) continue;
+        const init = prop.getInitializer();
+        if (!init) continue;
+        if ((Node.isArrowFunction(init) || Node.isFunctionExpression(init)) && init.isAsync()) {
+          if (!hasSpanCall(init.getText())) {
+            const name = prop.getNameNode().getText();
+            flagged.push({ name, line: prop.getStartLineNumber(), reason: 'async function', exported: true });
+          }
+        }
+      }
     }
   });
 
@@ -103,10 +141,13 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     passed: false,
     filePath,
     lineNumber: f.line,
-    message:
-      `"${f.name}" (${f.reason}) at line ${f.line} has no span. ` +
-      `Async functions and await expressions benefit from spans ` +
-      `for latency tracking and error visibility. Consider adding a span.`,
+    message: f.exported && fileHasInstrumentation
+      ? `"${f.name}" (${f.reason}) at line ${f.line} is exported and async but has no span. ` +
+        `Context propagation is not a valid COV-004 exemption for exported async I/O functions. ` +
+        `Valid reasons to skip: RST-004 (unexported function) or RST-001 (synchronous, no I/O).`
+      : `"${f.name}" (${f.reason}) at line ${f.line} has no span. ` +
+        `Async functions and await expressions benefit from spans ` +
+        `for latency tracking and error visibility. Consider adding a span.`,
     tier: 2,
     blocking: false,
   }));

@@ -175,6 +175,78 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
     });
   });
 
+  describe('context propagation exemption — exported async functions', () => {
+    it('flags exported ESM async function without span when file has instrumentation, with explicit message', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'export async function processOrchestrator(data) {',
+        '  return tracer.startActiveSpan("processOrchestrator", async (span) => {',
+        '    try { return await run(data); } finally { span.end(); }',
+        '  });',
+        '}',
+        'export async function saveSummary(data) {',
+        '  await fs.writeFile("summary.json", JSON.stringify(data));',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      const failure = results.find((r) => !r.passed && r.message.includes('saveSummary'));
+      expect(failure).toBeDefined();
+      expect(failure!.message).toContain('Context propagation');
+      expect(failure!.message).toContain('RST-004');
+      expect(failure!.message).toContain('RST-001');
+    });
+
+    it('flags CJS module.exports.X = async function without span', () => {
+      const code = [
+        'module.exports.readDayEntries = async function(dir) {',
+        '  return await fs.readdir(dir);',
+        '};',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+      expect(failures[0].message).toContain('readDayEntries');
+    });
+
+    it('passes CJS module.exports.X = async function when span is present', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'module.exports.readDayEntries = async function(dir) {',
+        '  return tracer.startActiveSpan("readDayEntries", async (span) => {',
+        '    try { return await fs.readdir(dir); } finally { span.end(); }',
+        '  });',
+        '};',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+
+    it('flags CJS module.exports.X async when file has instrumentation, with explicit message', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'module.exports.processData = async function(data) {',
+        '  return tracer.startActiveSpan("processData", async (span) => {',
+        '    try { return await run(data); } finally { span.end(); }',
+        '  });',
+        '};',
+        'module.exports.saveSummary = async function(data) {',
+        '  await fs.writeFile("summary.json", JSON.stringify(data));',
+        '};',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      const failure = results.find((r) => !r.passed && r.message.includes('saveSummary'));
+      expect(failure).toBeDefined();
+      expect(failure!.message).toContain('Context propagation');
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';
