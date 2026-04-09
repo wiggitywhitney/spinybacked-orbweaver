@@ -68,7 +68,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
-        'async function getUsers(pool) {',
+        'const { Pool } = require("pg");',
+        'const pool = new Pool();',
+        'async function getUsers() {',
         '  return tracer.startActiveSpan("getUsers", async (span) => {',
         '    try {',
         '      return await pool.query("SELECT * FROM users");',
@@ -119,7 +121,9 @@ describe('checkOutboundCallSpans (COV-002)', () => {
 
     it('fails when pool.query() has no enclosing span', () => {
       const code = [
-        'async function getUsers(pool) {',
+        'const { Pool } = require("pg");',
+        'const pool = new Pool();',
+        'async function getUsers() {',
         '  return await pool.query("SELECT * FROM users");',
         '}',
       ].join('\n');
@@ -225,6 +229,7 @@ describe('checkOutboundCallSpans (COV-002)', () => {
 
     it('detects amqp channel.publish() as outbound', () => {
       const code = [
+        'const amqplib = require("amqplib");',
         'async function sendMessage(channel, msg) {',
         '  channel.publish("exchange", "key", Buffer.from(msg));',
         '}',
@@ -237,6 +242,7 @@ describe('checkOutboundCallSpans (COV-002)', () => {
 
     it('detects channel.sendToQueue() as outbound', () => {
       const code = [
+        'const amqplib = require("amqplib");',
         'async function enqueue(channel, msg) {',
         '  channel.sendToQueue("my-queue", Buffer.from(msg));',
         '}',
@@ -245,6 +251,165 @@ describe('checkOutboundCallSpans (COV-002)', () => {
       const results = checkOutboundCallSpans(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
+    });
+  });
+
+  describe('import-aware detection — issue #385', () => {
+    it('does not flag store.get() as a redis outbound call without a redis import', () => {
+      const code = [
+        'function getPrefs(store, userId) {',
+        '  return store.get(`user.${userId}.prefs`);',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag client.get() as an outbound call without a redis/db import', () => {
+      const code = [
+        'async function fetchUser(client, id) {',
+        '  return await client.get(`/users/${id}`);',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag pool.query() as outbound without a database import', () => {
+      const code = [
+        'async function search(pool, term) {',
+        '  return await pool.query(term);',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag channel.publish() as outbound without an amqplib import', () => {
+      const code = [
+        'async function broadcast(channel, msg) {',
+        '  channel.publish("events", "key", Buffer.from(msg));',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags store.get() as a redis outbound call when redis is imported', () => {
+      const code = [
+        'const redis = require("redis");',
+        'const store = redis.createClient();',
+        'async function getPrefs(userId) {',
+        '  return await store.get(`user.${userId}.prefs`);',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags client.query() as outbound when pg is imported', () => {
+      const code = [
+        'const { Client } = require("pg");',
+        'const client = new Client();',
+        'async function getUser(id) {',
+        '  return await client.query("SELECT * FROM users WHERE id = $1", [id]);',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags channel.publish() as outbound when amqplib is imported', () => {
+      const code = [
+        'const amqplib = require("amqplib");',
+        'async function sendMessage(channel, msg) {',
+        '  channel.publish("exchange", "key", Buffer.from(msg));',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags outbound calls with ES module imports too', () => {
+      const code = [
+        'import { createClient } from "redis";',
+        'const cache = createClient();',
+        'async function get(key) {',
+        '  return await cache.get(key);',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
+  describe('stale span detection — issue #387', () => {
+    it('does not treat a startSpan that was already ended as covering a later outbound call', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function handleRequest() {',
+        '  const span = tracer.startSpan("outer");',
+        '  try {',
+        '    // outer work',
+        '  } finally {',
+        '    span.end();',
+        '  }',
+        '  // span is now ended — the fetch below is not covered',
+        '  try {',
+        '    const res = await fetch("/api/data");',
+        '    span.setAttribute("done", true);',
+        '    return res;',
+        '  } finally {}',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('correctly detects a live startSpan covering an outbound call when a prior span was ended', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function handleRequest() {',
+        '  const outerSpan = tracer.startSpan("outer");',
+        '  try {',
+        '    // outer work',
+        '  } finally {',
+        '    outerSpan.end();',
+        '  }',
+        '  const innerSpan = tracer.startSpan("inner");',
+        '  try {',
+        '    const res = await fetch("/api/data");',
+        '    innerSpan.setAttribute("result", res.status);',
+        '    return res;',
+        '  } finally {',
+        '    innerSpan.end();',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 

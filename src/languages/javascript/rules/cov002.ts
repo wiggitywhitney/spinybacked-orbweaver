@@ -1,21 +1,26 @@
 // ABOUTME: COV-002 Tier 2 check — outbound calls have spans.
 // ABOUTME: AST-based detection of outbound call sites (fetch, HTTP, DB, messaging) without enclosing spans.
 
-import { Project, Node } from 'ts-morph';
-import type { CallExpression } from 'ts-morph';
+import { Project, Node, SyntaxKind } from 'ts-morph';
+import type { CallExpression, SourceFile } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
  * Known outbound call patterns grouped by category.
- * Each entry is [objectPattern, methodPattern] where:
+ * Each entry has objectPattern, methodPattern, and label where:
  * - objectPattern is null for standalone function calls (e.g. fetch())
- * - objectPattern is a regex matching the receiver for method calls (e.g. axios.get())
+ * - objectPattern matches the receiver variable name for method calls
+ * - requiredImport, if set, means the pattern only fires when the file
+ *   imports from a matching library — prevents false positives from
+ *   generic variable names like `client`, `store`, `pool` that are
+ *   common in non-database contexts (issue #385)
  */
 const OUTBOUND_PATTERNS: Array<{
   objectPattern: RegExp | null;
   methodPattern: RegExp;
   label: string;
+  requiredImport?: RegExp;
 }> = [
   // Global/standalone functions
   { objectPattern: null, methodPattern: /^fetch$/, label: 'fetch' },
@@ -26,18 +31,50 @@ const OUTBOUND_PATTERNS: Array<{
   // HTTP clients — node:http / node:https
   { objectPattern: /^https?$/, methodPattern: /^(request|get)$/, label: 'http/https' },
 
-  // Database clients — pg (postgres), mysql, generic database
-  { objectPattern: /(?:pool|client|connection|db|database|pg|mysql|knex)/i, methodPattern: /^query$/, label: 'query' },
+  // Database clients — library-specific identifiers, always apply
+  { objectPattern: /^(?:pg|mysql|knex|db|database)$/i, methodPattern: /^query$/, label: 'query' },
+  // Database clients — generic identifiers only when a DB library is imported
+  { objectPattern: /^(?:pool|client|connection)$/i, methodPattern: /^query$/, label: 'query', requiredImport: /^(pg|postgres|mysql|mysql2|knex)/ },
 
-  // Database clients — mysql execute
-  { objectPattern: /(?:pool|client|connection|db|database|mysql|knex)/i, methodPattern: /^execute$/, label: 'execute' },
+  // Database execute — library-specific
+  { objectPattern: /^(?:mysql|knex|db|database)$/i, methodPattern: /^execute$/, label: 'execute' },
+  // Database execute — generic only when a DB library is imported
+  { objectPattern: /^(?:pool|client|connection)$/i, methodPattern: /^execute$/, label: 'execute', requiredImport: /^(mysql|mysql2|knex)/ },
 
-  // Redis
-  { objectPattern: /(?:redis|cache|store|client)/i, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis' },
+  // Redis — library-specific identifier, always apply
+  { objectPattern: /^redis$/i, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis' },
+  // Redis — generic identifiers only when a Redis library is imported
+  { objectPattern: /^(?:cache|store|client)$/i, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis', requiredImport: /^(redis|ioredis|@redis\/)/ },
 
-  // Message queues — AMQP (RabbitMQ)
-  { objectPattern: /(?:channel|rabbit|amqp|mq|queue|exchange)/i, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp' },
+  // Message queues — AMQP specific identifiers, always apply
+  { objectPattern: /^(?:rabbit|amqp|amqplib|mq)$/i, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp' },
+  // Message queues — generic identifiers only when amqplib is imported
+  { objectPattern: /^(?:channel|queue|exchange)$/i, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp', requiredImport: /^(amqplib|@cloudamqp\/)/ },
 ];
+
+/**
+ * Collect all import/require source strings from a source file.
+ * Returns a Set of raw module specifier strings (e.g. 'pg', 'redis').
+ */
+function collectImportSources(sourceFile: SourceFile): Set<string> {
+  const sources = new Set<string>();
+
+  for (const imp of sourceFile.getImportDeclarations()) {
+    sources.add(imp.getModuleSpecifierValue());
+  }
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+    const expr = node.getExpression();
+    if (!Node.isIdentifier(expr) || expr.getText() !== 'require') return;
+    const args = node.getArguments();
+    if (args.length > 0 && Node.isStringLiteral(args[0])) {
+      sources.add(args[0].getLiteralValue());
+    }
+  });
+
+  return sources;
+}
 
 /**
  * COV-002: Verify that outbound calls (HTTP, database, messaging) have enclosing spans.
@@ -56,13 +93,14 @@ export function checkOutboundCallSpans(code: string, filePath: string): CheckRes
     useInMemoryFileSystem: true,
   });
   const sourceFile = project.createSourceFile('check.js', code);
+  const importSources = collectImportSources(sourceFile);
 
   const unspannedCalls: Array<{ line: number; callText: string }> = [];
 
   sourceFile.forEachDescendant((node) => {
     if (!Node.isCallExpression(node)) return;
 
-    const match = matchOutboundPattern(node);
+    const match = matchOutboundPattern(node, importSources);
     if (!match) return;
 
     if (!isInsideSpanScope(node)) {
@@ -103,8 +141,10 @@ export function checkOutboundCallSpans(code: string, filePath: string): CheckRes
 /**
  * Check if a call expression matches a known outbound pattern.
  * Returns a human-readable label for the call, or null if no match.
+ * Patterns with requiredImport are only applied when the file imports
+ * from a matching library source (issue #385).
  */
-function matchOutboundPattern(callExpr: CallExpression): string | null {
+function matchOutboundPattern(callExpr: CallExpression, importSources: Set<string>): string | null {
   const expr = callExpr.getExpression();
 
   // Check standalone function calls (e.g., fetch())
@@ -124,11 +164,14 @@ function matchOutboundPattern(callExpr: CallExpression): string | null {
     const objectText = expr.getExpression().getText();
 
     for (const pattern of OUTBOUND_PATTERNS) {
-      if (pattern.objectPattern !== null
-        && pattern.objectPattern.test(objectText)
-        && pattern.methodPattern.test(methodName)) {
-        return `${objectText}.${methodName}`;
+      if (pattern.objectPattern === null) continue;
+      if (!pattern.objectPattern.test(objectText)) continue;
+      if (!pattern.methodPattern.test(methodName)) continue;
+      if (pattern.requiredImport) {
+        const hasRequiredImport = [...importSources].some(src => pattern.requiredImport!.test(src));
+        if (!hasRequiredImport) continue;
       }
+      return `${objectText}.${methodName}`;
     }
     return null;
   }
@@ -139,6 +182,10 @@ function matchOutboundPattern(callExpr: CallExpression): string | null {
 /**
  * Check if a node is enclosed in a span scope — either inside a
  * startActiveSpan callback or after a startSpan declaration in the same block.
+ *
+ * Uses AST traversal for the try-block check to avoid false positives from
+ * startSpan references in comments or string literals, and to skip stale
+ * spans that were already ended before the current try block (issue #387).
  */
 function isInsideSpanScope(node: CallExpression): boolean {
   let current = node.getParent();
@@ -154,7 +201,10 @@ function isInsideSpanScope(node: CallExpression): boolean {
       }
     }
 
-    // Pattern 2: Inside a try block that follows a startSpan declaration
+    // Pattern 2: Inside a try block that follows a startSpan declaration.
+    // Uses AST traversal (not string matching) to find real startSpan calls,
+    // extract bound variable names, and skip spans already ended before this
+    // try block.
     if (Node.isBlock(current)) {
       const parent = current.getParent();
       if (parent && Node.isTryStatement(parent)) {
@@ -163,21 +213,49 @@ function isInsideSpanScope(node: CallExpression): boolean {
           const statements = tryParent.getStatements();
           const tryIndex = statements.findIndex(s => s === parent);
           if (tryIndex > 0) {
-            // Check if preceding statement declares a span variable via startSpan
             for (let i = 0; i < tryIndex; i++) {
-              const stmtText = statements[i].getText();
-              if (stmtText.includes('.startSpan(')) {
-                // Verify the span variable is referenced in the try block
-                const spanVarMatch = stmtText.match(/(?:const|let|var)\s+(\w+)\s*=.*\.startSpan\(/);
-                if (spanVarMatch) {
-                  const spanVar = spanVarMatch[1];
-                  const tryStatementText = parent.getText();
-                  // Use word boundary to avoid matching substrings like "responseSpan." when spanVar="span"
-                  const escapedSpanVar = spanVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                  const spanUsagePattern = new RegExp(`\\b${escapedSpanVar}\\.`);
-                  if (spanUsagePattern.test(tryStatementText)) {
-                    return true;
-                  }
+              const stmt = statements[i];
+              if (!Node.isVariableStatement(stmt)) continue;
+
+              for (const decl of stmt.getDeclarationList().getDeclarations()) {
+                const init = decl.getInitializer();
+                if (!init || !Node.isCallExpression(init)) continue;
+
+                const callee = init.getExpression();
+                if (!Node.isPropertyAccessExpression(callee)) continue;
+                if (callee.getName() !== 'startSpan') continue;
+
+                // Extract all variable names bound by this declaration.
+                // Handles simple assignments (`const span = ...`) and
+                // destructuring (`const { span } = ...`).
+                const nameNode = decl.getNameNode();
+                const boundNames: string[] = Node.isIdentifier(nameNode)
+                  ? [nameNode.getText()]
+                  : nameNode.getDescendantsOfKind(SyntaxKind.Identifier).map(id => id.getText());
+
+                // Skip this declaration if any bound name was ended (via .end())
+                // in the statements between the declaration and this try block.
+                let alreadyEnded = false;
+                for (let j = i + 1; j < tryIndex && !alreadyEnded; j++) {
+                  statements[j].forEachDescendant((endNode) => {
+                    if (!Node.isCallExpression(endNode)) return;
+                    const endExpr = endNode.getExpression();
+                    if (!Node.isPropertyAccessExpression(endExpr)) return;
+                    const obj = endExpr.getExpression();
+                    if (Node.isIdentifier(obj)
+                      && boundNames.includes(obj.getText())
+                      && endExpr.getName() === 'end') {
+                      alreadyEnded = true;
+                    }
+                  });
+                }
+                if (alreadyEnded) continue;
+
+                // Check that at least one bound name is referenced anywhere in
+                // the try statement (try block, catch clause, or finally block).
+                const identifiers = parent.getDescendantsOfKind(SyntaxKind.Identifier);
+                if (identifiers.some(id => boundNames.includes(id.getText()))) {
+                  return true;
                 }
               }
             }
