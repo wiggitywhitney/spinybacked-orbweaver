@@ -385,6 +385,25 @@ describe('checkOutboundCallSpans (COV-002)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('does not treat a span as active after span.end() inside the same try block', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function handleRequest() {',
+        '  const span = tracer.startSpan("op");',
+        '  try {',
+        '    span.end();',
+        '    const res = await fetch("/api/data");',
+        '    return res;',
+        '  } finally {}',
+        '}',
+      ].join('\n');
+
+      const results = checkOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('correctly detects a live startSpan covering an outbound call when a prior span was ended', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',

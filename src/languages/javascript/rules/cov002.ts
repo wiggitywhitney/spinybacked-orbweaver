@@ -34,22 +34,24 @@ const OUTBOUND_PATTERNS: Array<{
   // Database clients — library-specific identifiers, always apply
   { objectPattern: /^(?:pg|mysql|knex|db|database)$/i, methodPattern: /^query$/, label: 'query' },
   // Database clients — generic identifiers only when a DB library is imported
-  { objectPattern: /^(?:pool|client|connection)$/i, methodPattern: /^query$/, label: 'query', requiredImport: /^(pg|postgres|mysql|mysql2|knex)/ },
+  // (?:$|\/) ensures pg-format, postgres-js, etc. do not match
+  { objectPattern: /^(?:pool|client|connection)$/i, methodPattern: /^query$/, label: 'query', requiredImport: /^(?:pg|postgres|mysql|mysql2|knex)(?:$|\/)/ },
 
   // Database execute — library-specific
   { objectPattern: /^(?:mysql|knex|db|database)$/i, methodPattern: /^execute$/, label: 'execute' },
   // Database execute — generic only when a DB library is imported
-  { objectPattern: /^(?:pool|client|connection)$/i, methodPattern: /^execute$/, label: 'execute', requiredImport: /^(mysql|mysql2|knex)/ },
+  { objectPattern: /^(?:pool|client|connection)$/i, methodPattern: /^execute$/, label: 'execute', requiredImport: /^(?:mysql|mysql2|knex)(?:$|\/)/ },
 
   // Redis — library-specific identifier, always apply
   { objectPattern: /^redis$/i, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis' },
   // Redis — generic identifiers only when a Redis library is imported
-  { objectPattern: /^(?:cache|store|client)$/i, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis', requiredImport: /^(redis|ioredis|@redis\/)/ },
+  // (?:$|\/) prevents redis-smq and similar from matching
+  { objectPattern: /^(?:cache|store|client)$/i, methodPattern: /^(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop|sadd|srem|zadd|zrem|publish|subscribe)$/, label: 'redis', requiredImport: /^(?:(?:redis|ioredis)(?:$|\/)|@redis\/)/ },
 
   // Message queues — AMQP specific identifiers, always apply
   { objectPattern: /^(?:rabbit|amqp|amqplib|mq)$/i, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp' },
   // Message queues — generic identifiers only when amqplib is imported
-  { objectPattern: /^(?:channel|queue|exchange)$/i, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp', requiredImport: /^(amqplib|@cloudamqp\/)/ },
+  { objectPattern: /^(?:channel|queue|exchange)$/i, methodPattern: /^(publish|sendToQueue|consume|assertQueue|assertExchange)$/, label: 'amqp', requiredImport: /^(?:amqplib(?:$|\/)|@cloudamqp\/)/ },
 ];
 
 /**
@@ -251,10 +253,32 @@ function isInsideSpanScope(node: CallExpression): boolean {
                 }
                 if (alreadyEnded) continue;
 
-                // Check that at least one bound name is referenced anywhere in
-                // the try statement (try block, catch clause, or finally block).
-                const identifiers = parent.getDescendantsOfKind(SyntaxKind.Identifier);
-                if (identifiers.some(id => boundNames.includes(id.getText()))) {
+                // Check that the bound name is referenced in the try statement
+                // AND that no .end() call on it appears before the outbound call
+                // in the try block. This prevents a span that was ended early
+                // (before the outbound call) inside the try from being treated
+                // as still active.
+                const allIdentifiers = parent.getDescendantsOfKind(SyntaxKind.Identifier);
+                if (!allIdentifiers.some(id => boundNames.includes(id.getText()))) continue;
+
+                const outboundCallStart = node.getStart();
+                const tryBlock = parent.getFirstChildByKind(SyntaxKind.Block);
+                let endedBeforeOutbound = false;
+                if (tryBlock) {
+                  tryBlock.forEachDescendant((endNode) => {
+                    if (!Node.isCallExpression(endNode)) return;
+                    const endExpr = endNode.getExpression();
+                    if (!Node.isPropertyAccessExpression(endExpr)) return;
+                    const obj = endExpr.getExpression();
+                    if (Node.isIdentifier(obj)
+                      && boundNames.includes(obj.getText())
+                      && endExpr.getName() === 'end'
+                      && endNode.getStart() < outboundCallStart) {
+                      endedBeforeOutbound = true;
+                    }
+                  });
+                }
+                if (!endedBeforeOutbound) {
                   return true;
                 }
               }
