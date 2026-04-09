@@ -678,7 +678,7 @@ The orchestrator loads the resolved schema and loads the file that's going to be
 flowchart LR
   O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
   O -->|"loads"| F["Source File"]
-  O -->|"sends both + rules"| A["Fresh Agent"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
 
   style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
   style S fill:none,stroke:#9C27B0
@@ -687,7 +687,7 @@ flowchart LR
 ```
 
 ::: {.notes}
-It sends that plus instructions to a brand new agent. Those instructions include rules about what makes good instrumentation — inspired by community best practices.
+It sends that plus instructions to a brand new LLM call. Those instructions include rules about what makes good instrumentation — inspired by community best practices.
 :::
 
 ## {.center}
@@ -696,7 +696,7 @@ It sends that plus instructions to a brand new agent. Those instructions include
 flowchart LR
   O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
   O -->|"loads"| F["Source File"]
-  O -->|"sends both + rules"| A["Fresh Agent"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
   A -->|"instruments"| V["Validator"]
 
   style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
@@ -707,7 +707,7 @@ flowchart LR
 ```
 
 ::: {.notes}
-The agent instruments the code, and there's a validator that checks the output.
+The LLM instruments the code, and there's a validator that checks the output.
 :::
 
 ## {.center}
@@ -716,7 +716,7 @@ The agent instruments the code, and there's a validator that checks the output.
 flowchart LR
   O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
   O -->|"loads"| F["Source File"]
-  O -->|"sends both + rules"| A["Fresh Agent"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
   A -->|"instruments"| V["Validator"]
   V -->|"feedback"| A
 
@@ -728,7 +728,7 @@ flowchart LR
 ```
 
 ::: {.notes}
-If it fails, the agent gets a chance to try again — it's told what exactly failed. If it fails a second time, it gets a fresh, whole new agent with the same instructions plus advice about how not to fail in those specific ways. If the whole-file approach fails after all retries, it falls back to instrumenting function by function.
+If it fails, the LLM gets a chance to try again — it's told what exactly failed. If it fails a second time, it gets a fresh LLM call with the same instructions plus advice about how not to fail in those specific ways. If the whole-file approach fails after all retries, it falls back to instrumenting function by function.
 :::
 
 ## {.center}
@@ -737,7 +737,7 @@ If it fails, the agent gets a chance to try again — it's told what exactly fai
 flowchart LR
   O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
   O -->|"loads"| F["Source File"]
-  O -->|"sends both + rules"| A["Fresh Agent"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
   A -->|"instruments"| V["Validator"]
   V -->|"feedback"| A
   V -->|"passes"| R["Results"]
@@ -752,7 +752,7 @@ flowchart LR
 ```
 
 ::: {.notes}
-Once the agent instruments the code in a way that passes the validator, the results go back to the orchestrator — the instrumented code, the notes, schema extensions, and any recommended auto-instrumentation libraries. The orchestrator saves them, creates the companion file, and updates the Weaver registry so the next file gets the updated schema.
+Once the LLM instruments the code in a way that passes the validator, the results go back to the orchestrator — the instrumented code, the notes, schema extensions, and any recommended auto-instrumentation libraries. The orchestrator saves them, creates the companion file, and updates the Weaver registry so the next file gets the updated schema.
 :::
 
 ## {.center}
@@ -762,7 +762,7 @@ Files are instrumented one at a time. The schema evolves!
 :::
 
 ::: {.notes}
-That's why all these files cannot be instrumented in parallel. We're building one source of truth that they're all working from. If one agent makes up a convention for my journal summary functions, we want every agent that comes after to use that exact same convention.
+That's why all these files cannot be instrumented in parallel. We're building one source of truth that they're all working from. If one LLM makes up a convention for my journal summary functions, we want every LLM that comes after to use that exact same convention.
 :::
 
 ## {.center}

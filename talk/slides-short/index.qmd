@@ -1,0 +1,342 @@
+---
+format: revealjs
+---
+
+## {.center}
+
+::: {.big-text}
+Auto-instrumentation covers the stack. The problem is...
+:::
+
+::: {.notes}
+Auto-instrumentation covers the framework layer — HTTP servers, databases, LLM clients. Libraries that patch your framework internals and create spans automatically.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+Business logic stays uninstrumented.
+:::
+
+::: {.notes}
+Auto-instrumentation knows "an LLM call happened" but not "we were generating a daily summary for March 15th." That context requires manual instrumentation — and that's the part nobody wants to do.
+:::
+
+## {background-color="#00897B" .center}
+
+[Spinybacked Orbweaver]{style="font-size: 2.5em; font-weight: bold; color: #fff;"}
+
+::: {.notes}
+Spinybacked Orbweaver. Before I get into how it works, I want to make sure you know about OpenTelemetry Weaver — the foundation it's built on.
+:::
+
+## OpenTelemetry Weaver {.center}
+
+::: {.notes}
+OpenTelemetry Weaver.
+:::
+
+## OpenTelemetry Weaver {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+:::
+
+::: {.notes}
+With Weaver, you define your spans, attributes, and groups in a registry.
+:::
+
+## OpenTelemetry Weaver {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+
+[Validate them]{.rainbow-2}
+:::
+
+::: {.notes}
+Weaver validates your registry for correctness and consistency — naming conventions, attribute types, stability rules.
+:::
+
+## OpenTelemetry Weaver {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+
+[Validate them]{.rainbow-2}
+
+[Extend them]{.rainbow-3}
+:::
+
+::: {.notes}
+You can extend your conventions over time and import other registries as dependencies.
+:::
+
+## OpenTelemetry Weaver {.center}
+
+::: {.big-text .spaced}
+[Define your telemetry conventions]{.rainbow-1}
+
+[Validate them]{.rainbow-2}
+
+[Extend them]{.rainbow-3}
+
+[The registry is the contract]{.rainbow-4}
+:::
+
+::: {.notes}
+The registry is the contract the LLM reads, follows, and extends.
+:::
+
+## {background-color="#00897B" .center}
+
+[Spinybacked Orbweaver]{style="font-size: 2.5em; font-weight: bold; color: #fff;"}
+
+::: {.notes}
+Spinybacked Orbweaver.
+:::
+
+## Spinybacked Orbweaver {.center}
+
+::: {.notes}
+Here's what it takes in and what it gives you.
+:::
+
+## Spinybacked Orbweaver {.center}
+
+:::: {.columns}
+::: {.column width="45%"}
+**In**
+
+[Your JavaScript code]{.rainbow-1}
+:::
+::: {.column width="55%"}
+:::
+::::
+
+::: {.notes}
+You give it your JavaScript code...
+:::
+
+## Spinybacked Orbweaver {.center}
+
+:::: {.columns}
+::: {.column width="45%"}
+**In**
+
+[Your JavaScript code]{.rainbow-1}
+
+[Your Weaver registry]{.rainbow-2}
+:::
+::: {.column width="55%"}
+:::
+::::
+
+::: {.notes}
+...and your Weaver registry.
+:::
+
+## Spinybacked Orbweaver {.center}
+
+:::: {.columns}
+::: {.column width="45%"}
+**In**
+
+[Your JavaScript code]{.rainbow-1}
+
+[Your Weaver registry]{.rainbow-2}
+:::
+::: {.column width="55%"}
+**Out**
+
+[Instrumented files (on a branch)]{.rainbow-3}
+:::
+::::
+
+::: {.notes}
+It gives you instrumented files on a new branch...
+:::
+
+## Spinybacked Orbweaver {.center}
+
+:::: {.columns}
+::: {.column width="45%"}
+**In**
+
+[Your JavaScript code]{.rainbow-1}
+
+[Your Weaver registry]{.rainbow-2}
+:::
+::: {.column width="55%"}
+**Out**
+
+[Instrumented files (on a branch)]{.rainbow-3}
+
+[Reasoning reports]{.rainbow-4}
+:::
+::::
+
+::: {.notes}
+...companion reasoning files explaining every decision...
+:::
+
+## Spinybacked Orbweaver {.center}
+
+:::: {.columns}
+::: {.column width="45%"}
+**In**
+
+[Your JavaScript code]{.rainbow-1}
+
+[Your Weaver registry]{.rainbow-2}
+:::
+::: {.column width="55%"}
+**Out**
+
+[Instrumented files (on a branch)]{.rainbow-3}
+
+[Reasoning reports]{.rainbow-4}
+
+[Extended Weaver schema]{.rainbow-5}
+:::
+::::
+
+::: {.notes}
+...an extended Weaver schema with any new conventions the LLM invented...
+:::
+
+## Spinybacked Orbweaver {.center}
+
+:::: {.columns}
+::: {.column width="45%"}
+**In**
+
+[Your JavaScript code]{.rainbow-1}
+
+[Your Weaver registry]{.rainbow-2}
+:::
+::: {.column width="55%"}
+**Out**
+
+[Instrumented files (on a branch)]{.rainbow-3}
+
+[Reasoning reports]{.rainbow-4}
+
+[Extended Weaver schema]{.rainbow-5}
+
+[PR-ready overview]{.rainbow-6}
+:::
+::::
+
+::: {.notes}
+...and a PR-ready overview.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+The architecture
+:::
+
+::: {.notes}
+Here's how it works.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+```
+
+::: {.notes}
+The orchestrator loads the resolved schema and loads the file to be instrumented.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+```
+
+::: {.notes}
+It sends both plus instrumentation rules to a fresh LLM call.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
+  A -->|"instruments"| V["Validator"]
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+  style V fill:#e8f5f3,stroke:#FF9800,stroke-width:2px
+```
+
+::: {.notes}
+The LLM instruments the code. A validator checks the output against quality rules.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
+  A -->|"instruments"| V["Validator"]
+  V -->|"feedback"| A
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+  style V fill:#e8f5f3,stroke:#FF9800,stroke-width:2px
+```
+
+::: {.notes}
+If it fails, the LLM gets feedback and tries again.
+:::
+
+## {.center}
+
+```{mermaid}
+flowchart LR
+  O["Orchestrator"] -->|"loads"| S["Resolved Schema"]
+  O -->|"loads"| F["Source File"]
+  O -->|"sends both + rules"| A["Fresh LLM"]
+  A -->|"instruments"| V["Validator"]
+  V -->|"feedback"| A
+  V -->|"passes"| R["Results"]
+  R -->|"code + notes + schema"| O
+
+  style O fill:#e8f5f3,stroke:#00897B,stroke-width:2px
+  style S fill:none,stroke:#9C27B0
+  style F fill:none,stroke:#E91E63
+  style A fill:#e8f5f3,stroke:#2196F3,stroke-width:2px
+  style V fill:#e8f5f3,stroke:#FF9800,stroke-width:2px
+  style R fill:none,stroke:#4CAF50
+```
+
+::: {.notes}
+Once it passes, results go back to the orchestrator — instrumented code, reasoning notes, and schema extensions. The schema is updated so the next file inherits any new conventions. Files are processed one at a time so the schema evolves across the run.
+:::
