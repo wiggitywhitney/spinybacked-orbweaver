@@ -46,6 +46,11 @@ function closeServer(server: Server): Promise<void> {
   });
 }
 
+/** Milliseconds to wait for gRPC service initialization after TCP port binding. */
+const GRPC_INIT_BUFFER_MS = 2_000;
+/** Milliseconds to wait for Weaver to process received telemetry before stopping. */
+const TELEMETRY_SETTLE_MS = 3_000;
+
 /** Helper: wait for a child process to exit. */
 function waitForExit(proc: ChildProcess): Promise<number | null> {
   return new Promise((resolve) => {
@@ -342,7 +347,7 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     // ready to receive OTLP data for another second or two.
     await waitForPort(PORTS.direct3.grpc, 15_000);
     await waitForPort(PORTS.direct3.admin, 15_000);
-    await new Promise(resolve => setTimeout(resolve, 2_000));
+    await new Promise(resolve => setTimeout(resolve, GRPC_INIT_BUFFER_MS));
 
     // Emit test telemetry. Set OTEL_EXPORTER_OTLP_ENDPOINT to match what the
     // coordinator does when running a test suite — the coordinator injects this env
@@ -357,7 +362,7 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     await waitForExit(emitProc);
 
     // Give Weaver time to process the received telemetry before stopping.
-    await new Promise(resolve => setTimeout(resolve, 3_000));
+    await new Promise(resolve => setTimeout(resolve, TELEMETRY_SETTLE_MS));
 
     // Stop Weaver and get compliance report
     const response = await fetch(`http://localhost:${PORTS.direct3.admin}/stop`, {
