@@ -6,9 +6,6 @@ import { isAbsolute, join, normalize, relative } from 'node:path';
 import type { LanguageProvider } from '../languages/types.ts';
 import { JavaScriptProvider } from '../languages/javascript/index.ts';
 
-/** Default provider used when no provider is specified. */
-const DEFAULT_PROVIDER: LanguageProvider = new JavaScriptProvider();
-
 /** Options controlling which files are discovered. */
 export interface DiscoverFilesOptions {
   /** Glob patterns to exclude (e.g., test and spec files). Merged with provider.defaultExclude. */
@@ -42,7 +39,8 @@ export async function discoverFiles(
   projectDir: string,
   options: DiscoverFilesOptions,
 ): Promise<string[]> {
-  const { exclude, sdkInitFile, maxFilesPerRun, targetPath, provider = DEFAULT_PROVIDER } = options;
+  const { exclude, sdkInitFile, maxFilesPerRun, targetPath } = options;
+  const provider: LanguageProvider = options.provider ?? new JavaScriptProvider();
 
   // Normalize the SDK init file path for comparison (strip leading ./)
   const normalizedSdkInit = normalize(sdkInitFile);

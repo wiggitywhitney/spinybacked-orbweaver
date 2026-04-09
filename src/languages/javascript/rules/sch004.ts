@@ -80,13 +80,13 @@ export async function checkNoRedundantSchemaEntries(
   const scriptFlags: RedundancyFlag[] = [];
   const unflaggedNovelKeys: AttributeKeyEntry[] = [];
   const registryNameList = [...registryNames];
+  const registryTokenList = registryNameList.map((name) => ({ name, tokens: tokenize(name) }));
 
   for (const entry of novelKeys) {
     const entryTokens = tokenize(entry.key);
     let bestMatch: { name: string; similarity: number } | null = null;
 
-    for (const regName of registryNameList) {
-      const regTokens = tokenize(regName);
+    for (const { name: regName, tokens: regTokens } of registryTokenList) {
       const sim = jaccardSimilarity(entryTokens, regTokens);
       if (sim > 0.5 && (!bestMatch || sim > bestMatch.similarity)) {
         bestMatch = { name: regName, similarity: sim };
