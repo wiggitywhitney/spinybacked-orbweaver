@@ -301,38 +301,22 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
   });
 
   it('receives telemetry from weaver registry emit and produces compliance report', async () => {
-    weaverProc = spawn('weaver', [
-      'registry', 'live-check', '-r', VALID_REGISTRY,
-      '--inactivity-timeout', '30',
-      '--otlp-grpc-port', String(PORTS.direct3.grpc),
-      '--admin-port', String(PORTS.direct3.admin),
-      '--format', 'json',
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // Use runLiveCheck with the emit command as the test suite, matching the
+    // coordinator's "runs full workflow" test pattern on isolated ports.
+    // Direct Weaver spawn + manual emit coordination was unreliable on CI —
+    // runLiveCheck manages startup timing and OTEL env injection internally.
+    const emitCommand = `weaver registry emit -r ${VALID_REGISTRY} --endpoint http://localhost:${PORTS.direct3.grpc}`;
 
-    // Wait for Weaver to start
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Emit test telemetry
-    const emitProc = spawn('weaver', [
-      'registry', 'emit', '-r', VALID_REGISTRY,
-      '--endpoint', `http://localhost:${PORTS.direct3.grpc}`,
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
-    await waitForExit(emitProc);
-
-    // Give live-check a moment to process
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Stop Weaver and get compliance report
-    const response = await fetch(`http://localhost:${PORTS.direct3.admin}/stop`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(5000),
+    const result = await runLiveCheck(VALID_REGISTRY, process.cwd(), emitCommand, {
+      grpcPort: PORTS.direct3.grpc,
+      adminPort: PORTS.direct3.admin,
+      inactivityTimeoutSeconds: 30,
     });
 
-    expect(response.ok).toBe(true);
-    const report = await response.text();
-    expect(report.length).toBeGreaterThan(0);
-
-    await waitForExit(weaverProc);
-    weaverProc = undefined;
+    expect(result.skipped).toBe(false);
+    expect(result.testsPassed).toBe(true);
+    expect(result.complianceReport).toBeDefined();
+    expect(result.complianceReport!.length).toBeGreaterThan(0);
+    expect(result.warnings, `Unexpected warnings: ${JSON.stringify(result.warnings)}`).toHaveLength(0);
   });
 });
