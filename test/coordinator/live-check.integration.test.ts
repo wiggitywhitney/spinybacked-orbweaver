@@ -333,15 +333,22 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
       '--format', 'json',
     ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-    // Wait for Weaver's admin port to accept connections (up to 15s).
-    // A fixed sleep is unreliable on CI — poll via TCP instead.
+    // Wait for both Weaver ports to accept connections (up to 15s each).
+    // Poll via TCP rather than using a fixed sleep — CI runners are slower than local.
+    // Poll the gRPC port first (telemetry target), then admin (control target).
+    await waitForPort(PORTS.direct3.grpc, 15_000);
     await waitForPort(PORTS.direct3.admin, 15_000);
 
-    // Emit test telemetry
+    // Emit test telemetry. Set OTEL_EXPORTER_OTLP_ENDPOINT to match what the
+    // coordinator does when running a test suite — the coordinator injects this env
+    // var and some Weaver versions use it instead of the --endpoint flag.
     const emitProc = spawn('weaver', [
       'registry', 'emit', '-r', VALID_REGISTRY,
       '--endpoint', `http://localhost:${PORTS.direct3.grpc}`,
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, OTEL_EXPORTER_OTLP_ENDPOINT: `http://localhost:${PORTS.direct3.grpc}` },
+    });
     await waitForExit(emitProc);
 
     // Give Weaver time to process the received telemetry before stopping.
