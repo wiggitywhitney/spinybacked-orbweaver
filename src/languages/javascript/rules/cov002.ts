@@ -286,18 +286,18 @@ function isInsideSpanScope(node: CallExpression): boolean {
                 const tryBlock = parent.getFirstChildByKind(SyntaxKind.Block);
                 let endedBeforeOutbound = false;
                 if (tryBlock) {
-                  tryBlock.forEachDescendant((endNode) => {
-                    if (!Node.isCallExpression(endNode)) return;
+                  for (const endNode of tryBlock.getDescendantsOfKind(SyntaxKind.CallExpression)) {
                     const endExpr = endNode.getExpression();
-                    if (!Node.isPropertyAccessExpression(endExpr)) return;
+                    if (!Node.isPropertyAccessExpression(endExpr)) continue;
                     const obj = endExpr.getExpression();
                     if (Node.isIdentifier(obj)
                       && matchesBound(obj)
                       && endExpr.getName() === 'end'
                       && endNode.getStart() < outboundCallStart) {
                       endedBeforeOutbound = true;
+                      break;
                     }
-                  });
+                  }
                 }
                 if (!endedBeforeOutbound) {
                   return true;
