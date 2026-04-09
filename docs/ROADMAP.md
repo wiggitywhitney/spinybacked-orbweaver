@@ -2,7 +2,7 @@
 
 ## Short-term
 
-- JavaScript language provider extraction — JS becomes the first named `LanguageProvider` (PRD #371)
+- TypeScript language provider — interface canary test; validates abstraction before Python (PRD #372)
 
 ## Medium-term
 
