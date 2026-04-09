@@ -119,6 +119,8 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
 
 /**
  * Check if any callback argument of a call expression contains a span creation call.
+ * Handles both inline callbacks (ArrowFunction, FunctionExpression) and named
+ * function references (Identifier) by resolving the identifier to its declaration.
  */
 function callbackHasSpan(callExpr: CallExpression): boolean {
   const args = callExpr.getArguments();
@@ -127,6 +129,25 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
       const bodyText = arg.getText();
       if (bodyText.includes('.startActiveSpan') || bodyText.includes('.startSpan')) {
         return true;
+      }
+    } else if (Node.isIdentifier(arg)) {
+      // Named reference — resolve to its declaration and check the body.
+      // Conservative: unresolvable references are treated as missing a span.
+      const symbol = arg.getSymbol();
+      if (!symbol) continue;
+      for (const decl of symbol.getDeclarations()) {
+        let bodyText: string | null = null;
+        if (Node.isFunctionDeclaration(decl)) {
+          bodyText = decl.getText();
+        } else if (Node.isVariableDeclaration(decl)) {
+          const init = decl.getInitializer();
+          if (init && (Node.isArrowFunction(init) || Node.isFunctionExpression(init))) {
+            bodyText = init.getText();
+          }
+        }
+        if (bodyText && (bodyText.includes('.startActiveSpan') || bodyText.includes('.startSpan'))) {
+          return true;
+        }
       }
     }
   }
