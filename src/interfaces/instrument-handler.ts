@@ -33,7 +33,8 @@ function toDisplayPath(filePath: string, projectDir: string): string {
  * Examples: "0.4s", "45.3s", "2m 5.1s", "1h 3m 22.0s"
  */
 function formatDuration(ms: number): string {
-  const totalSecs = ms / 1000;
+  // Round to 1 decimal place before computing to prevent "60.0s" edge cases
+  const totalSecs = Math.round(ms / 100) / 10;
   const hours = Math.floor(totalSecs / 3600);
   const minutes = Math.floor((totalSecs % 3600) / 60);
   const secs = (totalSecs % 60).toFixed(1);

@@ -178,7 +178,7 @@ function checkValueAgainstType(
 
   // Integer type — must be a number AND an integer value
   if (typeStr === 'int') {
-    if (literalType.kind !== 'number' || !Number.isInteger(Number(literalType.raw))) {
+    if (literalType.kind !== 'number' || !Number.isInteger(literalType.value as number)) {
       return {
         key,
         line,
