@@ -497,5 +497,22 @@ describe('checkEntryPointSpans (COV-001)', () => {
       const results = checkEntryPointSpans(code, filePath);
       expect(results.every((r) => r.passed)).toBe(true);
     });
+
+    it('passes when named handler is a function expression using startSpan', () => {
+      const code = [
+        'const { trace, context } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'const getUsers = async function(req, res) {',
+        '  const span = tracer.startSpan("GET /users");',
+        '  return context.with(context.active(), async () => {',
+        '    try { res.json([]); } finally { span.end(); }',
+        '  });',
+        '};',
+        'app.get("/users", getUsers);',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
   });
 });

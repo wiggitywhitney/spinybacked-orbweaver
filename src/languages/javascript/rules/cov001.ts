@@ -118,6 +118,13 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
 }
 
 /**
+ * Check if source text contains a span creation call.
+ */
+function hasSpanStartCall(text: string): boolean {
+  return text.includes('.startActiveSpan') || text.includes('.startSpan');
+}
+
+/**
  * Check if any callback argument of a call expression contains a span creation call.
  * Handles both inline callbacks (ArrowFunction, FunctionExpression) and named
  * function references (Identifier) by resolving the identifier to its declaration.
@@ -126,8 +133,7 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
   const args = callExpr.getArguments();
   for (const arg of args) {
     if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg)) {
-      const bodyText = arg.getText();
-      if (bodyText.includes('.startActiveSpan') || bodyText.includes('.startSpan')) {
+      if (hasSpanStartCall(arg.getText())) {
         return true;
       }
     } else if (Node.isIdentifier(arg)) {
@@ -145,7 +151,7 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
             bodyText = init.getText();
           }
         }
-        if (bodyText && (bodyText.includes('.startActiveSpan') || bodyText.includes('.startSpan'))) {
+        if (bodyText && hasSpanStartCall(bodyText)) {
           return true;
         }
       }
@@ -200,7 +206,7 @@ function checkExportedAsyncFunctions(
           if (!isServiceEntryPoint(paramNames, filePath)) return;
 
           const bodyText = right.getText();
-          if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
+          if (!hasSpanStartCall(bodyText)) {
             unspanned.push({
               line: node.getStartLineNumber(),
               description: `exported async function: ${name}`,
@@ -223,7 +229,7 @@ function checkExportedAsyncFunctions(
           if (!isServiceEntryPoint(paramNames, filePath)) continue;
 
           const bodyText = init.getText();
-          if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
+          if (!hasSpanStartCall(bodyText)) {
             unspanned.push({
               line: prop.getStartLineNumber(),
               description: `exported async function: ${name}`,
@@ -242,7 +248,7 @@ function checkExportedAsyncFunctions(
       if (!isServiceEntryPoint(paramNames, filePath)) continue;
 
       const bodyText = fn.getText();
-      if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
+      if (!hasSpanStartCall(bodyText)) {
         unspanned.push({
           line: fn.getStartLineNumber(),
           description: `exported async function: ${name}`,
@@ -263,7 +269,7 @@ function checkExportedAsyncFunctions(
         if (!isServiceEntryPoint(paramNames, filePath)) continue;
 
         const bodyText = init.getText();
-        if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
+        if (!hasSpanStartCall(bodyText)) {
           unspanned.push({
             line: varStatement.getStartLineNumber(),
             description: `exported async function: ${name}`,
