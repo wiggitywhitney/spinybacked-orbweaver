@@ -439,4 +439,80 @@ describe('checkEntryPointSpans (COV-001)', () => {
       expect(results.every((r) => r.passed)).toBe(true);
     });
   });
+
+  describe('named function reference handlers', () => {
+    it('passes when named handler contains startActiveSpan', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function getUsers(req, res) {',
+        '  return tracer.startActiveSpan("GET /users", async (span) => {',
+        '    try { res.json([]); } finally { span.end(); }',
+        '  });',
+        '}',
+        'app.get("/users", getUsers);',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+
+    it('flags named handler without span', () => {
+      const code = [
+        'async function getUsers(req, res) {',
+        '  res.json([]);',
+        '}',
+        'app.get("/users", getUsers);',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+      expect(failures[0].ruleId).toBe('COV-001');
+    });
+
+    it('fails conservatively when named reference cannot be resolved', () => {
+      // unknownHandler is not declared in this file — unresolvable reference
+      const code = [
+        'app.get("/users", unknownHandler);',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+
+    it('passes when named handler is an arrow function assigned to a variable with span', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'const getUsers = async (req, res) => {',
+        '  return tracer.startActiveSpan("GET /users", async (span) => {',
+        '    try { res.json([]); } finally { span.end(); }',
+        '  });',
+        '};',
+        'app.get("/users", getUsers);',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+
+    it('passes when named handler is a function expression using startSpan', () => {
+      const code = [
+        'const { trace, context } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'const getUsers = async function(req, res) {',
+        '  const span = tracer.startSpan("GET /users");',
+        '  return context.with(context.active(), async () => {',
+        '    try { res.json([]); } finally { span.end(); }',
+        '  });',
+        '};',
+        'app.get("/users", getUsers);',
+      ].join('\n');
+
+      const results = checkEntryPointSpans(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+  });
 });
