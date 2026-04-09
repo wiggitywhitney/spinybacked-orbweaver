@@ -20,16 +20,19 @@ function escapeXmlAttr(s: string): string {
 }
 
 function formatExamplesSection(examples: Example[]): string {
-  const formatted = examples.map((ex, i) =>
-    `<example id="${i + 1}" title="${escapeXmlAttr(ex.description)}">
+  const formatted = examples.map((ex, i) => {
+    const notesPart = ex.notes
+      ? `\n<notes>\n${ex.notes.replace(/&/g, '&amp;').replace(/</g, '&lt;')}\n</notes>`
+      : '';
+    return `<example id="${i + 1}" title="${escapeXmlAttr(ex.description)}">
 <before>
 ${ex.before}
 </before>
 <after>
 ${ex.after}
-</after>
-</example>`,
-  ).join('\n\n');
+</after>${notesPart}
+</example>`;
+  }).join('\n\n');
 
   return `## Examples
 

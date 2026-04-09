@@ -160,7 +160,8 @@ Following the Part 8 checklist, Step 1:
 - [ ] `formatCode()` — Prettier (already handles TypeScript)
 - [ ] `lintCheck()` — Prettier diff (same as JavaScript)
 - [ ] File discovery: `globPattern: '**/*.{ts,tsx}'` (or `'**/*.ts'` if OD-2 defers TSX), `defaultExclude` includes `*.d.ts`, generated files, `*.test.ts`
-- [ ] `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — same package as JavaScript. The correct constant naming convention and import path are in `docs/research/typescript-semconv-constants.md` (Milestone C0). Use the findings there when configuring this field.
+- [ ] `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — same package as JavaScript (provider contract expects a package name string or `null`; see `otelSemconvPackage` in `src/languages/types.ts`).
+- [ ] Use findings from `docs/research/typescript-semconv-constants.md` (Milestone C0) to guide semconv constant naming and import-path instructions in prompts, checkers, and fixtures — not to change this field.
 - [ ] Register `TypeScriptProvider` in `src/languages/registry.ts` for `.ts` (and `.tsx` if OD-2 resolves to include it)
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes

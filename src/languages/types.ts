@@ -176,6 +176,8 @@ export interface Example {
   before: string;
   /** Source code after instrumentation. */
   after: string;
+  /** Optional explanation of non-obvious decisions (librariesNeeded, skip rationale, etc.). */
+  notes?: string;
 }
 
 /**
