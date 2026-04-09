@@ -3,18 +3,26 @@
 
 import type { ValidationRule } from '../languages/types.ts';
 
-/** Map from rule ID to the registered ValidationRule. */
+/**
+ * Map from composite key (`${languageId}:${ruleId}`) to the registered ValidationRule.
+ *
+ * Keying by (languageId, ruleId) prevents a second language provider's rule from
+ * silently replacing the first provider's rule for the same ruleId.
+ */
 const rules = new Map<string, ValidationRule>();
 
 /**
- * Register a validation rule.
+ * Register a validation rule under a specific language provider.
  *
- * If a rule with the same ruleId is already registered, it is replaced.
+ * Uses a composite key of `${languageId}:${ruleId}` so multiple providers can
+ * register independent implementations of the same rule without collision.
+ * Re-registering the same (languageId, ruleId) pair replaces the existing entry.
  *
  * @param rule - The validation rule to register
+ * @param languageId - The language provider registering this rule (e.g. 'javascript')
  */
-export function registerRule(rule: ValidationRule): void {
-  rules.set(rule.ruleId, rule);
+export function registerRule(rule: ValidationRule, languageId: string): void {
+  rules.set(`${languageId}:${rule.ruleId}`, rule);
 }
 
 /**
@@ -35,13 +43,22 @@ export function getAllRules(): ValidationRule[] {
 }
 
 /**
- * Look up a rule by its rule ID.
+ * Look up a rule by its rule ID and optional language provider.
+ *
+ * When `languageId` is provided, returns the rule registered by that specific
+ * provider. When omitted, returns the first matching entry across all providers
+ * (insertion order). Prefer `getRulesForLanguage()` for querying all rules for
+ * a given language.
  *
  * @param ruleId - Rule identifier (e.g. 'COV-001', 'NDS-003')
+ * @param languageId - Optional provider language ID (e.g. 'javascript', 'typescript')
  * @returns The registered rule, or undefined if not found
  */
-export function getRuleById(ruleId: string): ValidationRule | undefined {
-  return rules.get(ruleId);
+export function getRuleById(ruleId: string, languageId?: string): ValidationRule | undefined {
+  if (languageId !== undefined) {
+    return rules.get(`${languageId}:${ruleId}`);
+  }
+  return [...rules.values()].find(r => r.ruleId === ruleId);
 }
 
 /**
