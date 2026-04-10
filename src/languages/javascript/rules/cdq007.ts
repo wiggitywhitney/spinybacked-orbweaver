@@ -40,7 +40,11 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const ext = filePath.endsWith('.tsx') ? 'tsx'
+    : filePath.endsWith('.ts') ? 'ts'
+    : filePath.endsWith('.jsx') ? 'jsx'
+    : 'js';
+  const sourceFile = project.createSourceFile(`check.${ext}`, code);
 
   const findings: Array<{ line: number; message: string }> = [];
 
@@ -174,23 +178,32 @@ function isNullCheckCondition(condition: import('ts-morph').Expression, varName:
     return true;
   }
 
-  // Binary comparison: entries != null, entries !== undefined, entries == null, etc.
+  // Binary expression: check operator to distinguish guards from non-guards.
   if (Node.isBinaryExpression(condition)) {
     const left = condition.getLeft();
     const right = condition.getRight();
-    const rightText = right.getText();
-    if (
-      Node.isIdentifier(left) && left.getText() === varName &&
-      (rightText === 'null' || rightText === 'undefined')
-    ) {
-      return true;
-    }
-  }
+    const operator = condition.getOperatorToken().getKind();
 
-  // Logical AND short-circuit: "entries && ..." at the start of the condition
-  const condText = condition.getText().trim();
-  if (condText.startsWith(varName + ' &&') || condText.startsWith(varName + '&&')) {
-    return true;
+    // Logical AND: entries && ... → recurse on left to check if left guards varName
+    if (operator === SyntaxKind.AmpersandAmpersandToken) {
+      return isNullCheckCondition(left, varName);
+    }
+
+    // Only != and !== operators indicate "is not null" guards.
+    // == and === indicate "is null/undefined" (the unsafe path), so reject those.
+    if (
+      operator !== SyntaxKind.ExclamationEqualsToken &&
+      operator !== SyntaxKind.ExclamationEqualsEqualsToken
+    ) {
+      return false;
+    }
+
+    const leftIsVar = Node.isIdentifier(left) && left.getText() === varName;
+    const rightIsVar = Node.isIdentifier(right) && right.getText() === varName;
+    const leftIsNullish = left.getText() === 'null' || left.getText() === 'undefined';
+    const rightIsNullish = right.getText() === 'null' || right.getText() === 'undefined';
+
+    return (leftIsVar && rightIsNullish) || (rightIsVar && leftIsNullish);
   }
 
   return false;
