@@ -263,6 +263,13 @@ export async function validateCredentials(dir: string): Promise<void> {
     );
   }
 
+  // SSH and non-HTTP remotes (git://, file://) use key-based auth — there is
+  // no token to validate. If the key is not configured, the push will fail with
+  // a clear SSH error at that point.
+  if (remoteUrl && !remoteUrl.startsWith('http://') && !remoteUrl.startsWith('https://')) {
+    return;
+  }
+
   try {
     await git.listRemote(['--heads']);
   } catch (err) {
