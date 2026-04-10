@@ -263,9 +263,9 @@ export async function validateCredentials(dir: string): Promise<void> {
     );
   }
 
-  // SSH and non-HTTP remotes (git://, file://) use key-based auth — there is
-  // no token to validate. If the key is not configured, the push will fail with
-  // a clear SSH error at that point.
+  // Non-HTTP remotes (e.g., SSH scp-style URLs, git://, file://) are skipped here
+  // because GITHUB_TOKEN-based HTTPS validation does not apply to them.
+  // Auth/connectivity errors for these transports will surface at push time.
   if (remoteUrl && !remoteUrl.startsWith('http://') && !remoteUrl.startsWith('https://')) {
     return;
   }

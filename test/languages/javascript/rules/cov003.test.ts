@@ -398,12 +398,14 @@ describe('checkErrorVisibility (COV-003)', () => {
 
   describe('manual startSpan (span variable) pattern', () => {
     it('flags manual span with catch that rethrows but lacks error recording', () => {
+      // Uses the correct OTel JS API: trace.setSpan(context.active(), span)
       const code = [
         'const { trace, context } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
         'async function fetchData() {',
         '  const span = tracer.startSpan("fetchData");',
-        '  return context.with(context.with(context.active(), span), async () => {',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
         '    try {',
         '      const result = await fetch("/api/data");',
         '      return result.json();',
@@ -428,7 +430,8 @@ describe('checkErrorVisibility (COV-003)', () => {
         'const tracer = trace.getTracer("svc");',
         'async function fetchData() {',
         '  const span = tracer.startSpan("fetchData");',
-        '  return context.with(context.with(context.active(), span), async () => {',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
         '    try {',
         '      const result = await fetch("/api/data");',
         '      return result.json();',
@@ -454,7 +457,8 @@ describe('checkErrorVisibility (COV-003)', () => {
         'const tracer = trace.getTracer("svc");',
         'async function tryLoadConfig(path) {',
         '  const span = tracer.startSpan("tryLoadConfig");',
-        '  return context.with(context.with(context.active(), span), async () => {',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
         '    try {',
         '      return JSON.parse(await readFile(path, "utf8"));',
         '    } catch (err) {',
@@ -477,11 +481,14 @@ describe('checkErrorVisibility (COV-003)', () => {
         'const tracer = trace.getTracer("svc");',
         'async function maybeLoad(path) {',
         '  const span = tracer.startSpan("maybeLoad");',
-        '  return context.with(context.with(context.active(), span), async () => {',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
         '    try {',
         '      return await readFile(path);',
-        '    } catch {}',
-        '    span.end();',
+        '    } catch {',
+        '    } finally {',
+        '      span.end();',
+        '    }',
         '  });',
         '}',
       ].join('\n');

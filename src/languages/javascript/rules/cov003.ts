@@ -66,10 +66,11 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
             container = container.getParent();
           }
           if (container && (Node.isBlock(container) || Node.isSourceFile(container))) {
-            // Check each TryStatement individually — same logic as startActiveSpan.
-            // getDescendantsOfKind traverses nested blocks, so catch blocks inside
-            // callbacks (e.g., context.with) are found correctly.
-            const tryStatements = container.getDescendantsOfKind(SyntaxKind.TryStatement);
+            // Only check TryStatements that reference the span variable — this filters out
+            // unrelated try/catch blocks that happen to be in the same container block
+            // (e.g., code before the span is created, or independent helper functions).
+            const tryStatements = container.getDescendantsOfKind(SyntaxKind.TryStatement)
+              .filter((t) => t.getText().includes(spanVarName));
             for (const tryStmt of tryStatements) {
               const catchClause = tryStmt.getCatchClause();
               if (catchClause && !isExpectedConditionCatch(catchClause)) {
