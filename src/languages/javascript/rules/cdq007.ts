@@ -66,8 +66,8 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
     const valueArg = args[1];
     const line = node.getStartLineNumber();
 
-    // Check 1: PII attribute name
-    const keyText = keyArg.getText().replace(/^['"]|['"]$/g, '');
+    // Check 1: PII attribute name — strip surrounding quotes and backticks
+    const keyText = keyArg.getText().replace(/^[`'"]|[`'"]$/g, '');
     // Match on the last segment of dotted keys (e.g., "commit.author" → "author")
     const keySegments = keyText.split('.');
     const lastSegment = keySegments[keySegments.length - 1] ?? '';
@@ -184,9 +184,9 @@ function isNullCheckCondition(condition: import('ts-morph').Expression, varName:
     const right = condition.getRight();
     const operator = condition.getOperatorToken().getKind();
 
-    // Logical AND: entries && ... → recurse on left to check if left guards varName
+    // Logical AND: either side could guard varName (entries && x, or x && entries)
     if (operator === SyntaxKind.AmpersandAmpersandToken) {
-      return isNullCheckCondition(left, varName);
+      return isNullCheckCondition(left, varName) || isNullCheckCondition(right, varName);
     }
 
     // Only != and !== operators indicate "is not null" guards.
@@ -245,15 +245,11 @@ function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: s
 
   for (let i = 0; i < stmtIndex; i++) {
     const s = statements[i];
-    if (!s) continue;
-    const ifStatements = s.getKind() === SyntaxKind.IfStatement
-      ? [s]
-      : s.getDescendantsOfKind(SyntaxKind.IfStatement);
-    for (const ifStmt of ifStatements) {
-      if (!Node.isIfStatement(ifStmt)) continue;
-      if (isNullCheckCondition(ifStmt.getExpression(), varName)) {
-        return true;
-      }
+    // Only check top-level if statements — getDescendantsOfKind would find
+    // ifs nested inside loops or other blocks that aren't guards for this scope.
+    if (!s || !Node.isIfStatement(s)) continue;
+    if (isNullCheckCondition(s.getExpression(), varName)) {
+      return true;
     }
   }
 
