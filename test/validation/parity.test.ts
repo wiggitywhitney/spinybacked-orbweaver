@@ -88,7 +88,7 @@ describe('feature parity matrix', () => {
     expect(cdq008!.applicableTo('go')).toBe(true);
   });
 
-  it('all 26 expected rules are registered', () => {
+  it('all 27 expected rules are registered', () => {
     const rules = getAllRules();
     const ruleIds = new Set(rules.map(r => r.ruleId));
 
@@ -96,7 +96,7 @@ describe('feature parity matrix', () => {
       'COV-001', 'COV-002', 'COV-003', 'COV-004', 'COV-005', 'COV-006',
       'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005',
       'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006',
-      'CDQ-001', 'CDQ-006', 'CDQ-008',
+      'CDQ-001', 'CDQ-006', 'CDQ-007', 'CDQ-008',
       'API-001', 'API-002', 'API-003', 'API-004',
       'SCH-001', 'SCH-002', 'SCH-003', 'SCH-004',
     ];
