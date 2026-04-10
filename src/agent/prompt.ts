@@ -221,7 +221,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Code Quality
 
-- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern.
+- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT wrap \`process.exit()\` calls in span instrumentation; replace \`process.exit()\` with \`return\` so the span's \`finally\` block can execute. If the function genuinely must terminate the process, leave \`process.exit()\` untouched and document it in advisory notes rather than adding instrumentation around it.
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
 - **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.

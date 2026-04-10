@@ -54,28 +54,30 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
     // For startSpan (non-callback style), check sibling scope for error recording
     if (!spanParam) {
       if (text.endsWith('.startSpan')) {
-        // Find the span variable name from the declaration
+        // Use AST to get the variable name — VariableDeclaration.getName() is reliable;
+        // getText() omits the const/let/var keyword so regex matching fails there.
         const parentNode = node.getParent();
-        if (parentNode) {
-          const declText = parentNode.getText();
-          const varMatch = declText.match(/(?:const|let|var)\s+(\w+)\s*=/);
-          if (varMatch) {
-            const spanVarName = varMatch[1];
-            // Walk up to find the containing block and check for error recording
-            let container = parentNode.getParent();
-            while (container && !Node.isBlock(container) && !Node.isSourceFile(container)) {
-              container = container.getParent();
-            }
-            if (container && (Node.isBlock(container) || Node.isSourceFile(container))) {
-              // Use AST to find try/catch — avoids false positives from "try"/"catch" in strings or identifiers
-              const hasTryCatch = container.getDescendantsOfKind(SyntaxKind.TryStatement)
-                .some((t) => t.getCatchClause() !== undefined);
-              if (hasTryCatch) {
-                const blockText = container.getText();
-                if (!hasErrorRecording(blockText, spanVarName)) {
+        if (Node.isVariableDeclaration(parentNode)) {
+          const spanVarName = parentNode.getName();
+          // Walk up to find the containing block.
+          // Typed as Node to allow reassignment through getParent() up the tree.
+          let container: import('ts-morph').Node | undefined = parentNode.getParent();
+          while (container && !Node.isBlock(container) && !Node.isSourceFile(container)) {
+            container = container.getParent();
+          }
+          if (container && (Node.isBlock(container) || Node.isSourceFile(container))) {
+            // Check each TryStatement individually — same logic as startActiveSpan.
+            // getDescendantsOfKind traverses nested blocks, so catch blocks inside
+            // callbacks (e.g., context.with) are found correctly.
+            const tryStatements = container.getDescendantsOfKind(SyntaxKind.TryStatement);
+            for (const tryStmt of tryStatements) {
+              const catchClause = tryStmt.getCatchClause();
+              if (catchClause && !isExpectedConditionCatch(catchClause)) {
+                const catchText = catchClause.getText();
+                if (!hasErrorRecording(catchText, spanVarName)) {
                   issues.push({
-                    line: node.getStartLineNumber(),
-                    description: `startSpan "${spanVarName}" — catch block does not record error on span`,
+                    line: tryStmt.getStartLineNumber(),
+                    description: `startSpan "${spanVarName}" — catch block at line ${catchClause.getStartLineNumber()} does not record error on span`,
                   });
                 }
               }
