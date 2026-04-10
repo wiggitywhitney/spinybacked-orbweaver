@@ -148,37 +148,73 @@ const NON_SPAN_RECEIVERS = new Set([
 
 /**
  * Check if a receiver expression is likely a span variable.
+ * Only accepts receivers explicitly indicating a span (name contains "span").
  */
 function isSpanReceiver(receiverText: string): boolean {
   const parts = receiverText.split('.');
   const name = parts[parts.length - 1].toLowerCase();
   if (NON_SPAN_RECEIVERS.has(name)) return false;
-  if (/span/i.test(name)) return true;
-  // Accept simple single-identifier receivers (likely span callback params)
-  if (parts.length === 1) return true;
+  // Require the name to match /span/i — avoids false positives from arbitrary
+  // single-identifier receivers (maps, config objects, etc.)
+  return /span/i.test(name);
+}
+
+/**
+ * Check if an IfStatement condition is a null/undefined guard for `varName`.
+ * Only accepts conditions that are direct existence checks:
+ * - `if (varName)` → simple identifier
+ * - `if (varName != null)`, `if (varName !== undefined)` → binary comparison
+ * - `if (varName && ...)` → logical AND short-circuit
+ *
+ * Rejects complex expressions that merely contain the name as a substring.
+ */
+function isNullCheckCondition(condition: import('ts-morph').Expression, varName: string): boolean {
+  // Direct identifier: if (entries)
+  if (Node.isIdentifier(condition) && condition.getText() === varName) {
+    return true;
+  }
+
+  // Binary comparison: entries != null, entries !== undefined, entries == null, etc.
+  if (Node.isBinaryExpression(condition)) {
+    const left = condition.getLeft();
+    const right = condition.getRight();
+    const rightText = right.getText();
+    if (
+      Node.isIdentifier(left) && left.getText() === varName &&
+      (rightText === 'null' || rightText === 'undefined')
+    ) {
+      return true;
+    }
+  }
+
+  // Logical AND short-circuit: "entries && ..." at the start of the condition
+  const condText = condition.getText().trim();
+  if (condText.startsWith(varName + ' &&') || condText.startsWith(varName + '&&')) {
+    return true;
+  }
+
   return false;
 }
 
 /**
  * Check if a null/undefined guard for `varName` exists before or around `setAttrCall`.
  * Detects two patterns:
- * 1. The setAttrCall is inside an enclosing if statement whose condition checks varName
- * 2. A preceding sibling statement in the enclosing block is an if that checks varName
+ * 1. The setAttrCall is inside an enclosing if statement that null-checks varName
+ * 2. A preceding sibling statement in the enclosing block null-checks varName
  */
 function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: string): boolean {
   // Pattern 1: Check enclosing if statements — the setAttribute is inside an if(varName) block
   let current: import('ts-morph').Node | undefined = setAttrCall.getParent();
   while (current) {
     if (Node.isIfStatement(current)) {
-      const condText = current.getExpression().getText();
-      if (condText.includes(varName)) {
+      if (isNullCheckCondition(current.getExpression(), varName)) {
         return true;
       }
     }
     current = current.getParent();
   }
 
-  // Pattern 2: A preceding sibling statement in the containing block checks varName
+  // Pattern 2: A preceding sibling statement in the containing block null-checks varName
   let stmt: import('ts-morph').Node | undefined = setAttrCall;
   let block: import('ts-morph').Node | undefined;
   while (stmt) {
@@ -202,7 +238,7 @@ function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: s
       : s.getDescendantsOfKind(SyntaxKind.IfStatement);
     for (const ifStmt of ifStatements) {
       if (!Node.isIfStatement(ifStmt)) continue;
-      if (ifStmt.getExpression().getText().includes(varName)) {
+      if (isNullCheckCondition(ifStmt.getExpression(), varName)) {
         return true;
       }
     }
