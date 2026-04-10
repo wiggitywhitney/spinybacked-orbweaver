@@ -263,6 +263,13 @@ export async function validateCredentials(dir: string): Promise<void> {
     );
   }
 
+  // Non-HTTP remotes (e.g., SSH scp-style URLs, git://, file://) are skipped here
+  // because GITHUB_TOKEN-based HTTPS validation does not apply to them.
+  // Auth/connectivity errors for these transports will surface at push time.
+  if (remoteUrl && !remoteUrl.startsWith('http://') && !remoteUrl.startsWith('https://')) {
+    return;
+  }
+
   try {
     await git.listRemote(['--heads']);
   } catch (err) {

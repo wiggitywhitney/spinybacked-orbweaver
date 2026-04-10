@@ -396,6 +396,109 @@ describe('checkErrorVisibility (COV-003)', () => {
     });
   });
 
+  describe('manual startSpan (span variable) pattern', () => {
+    it('flags manual span with catch that rethrows but lacks error recording', () => {
+      // Uses the correct OTel JS API: trace.setSpan(context.active(), span)
+      const code = [
+        'const { trace, context } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function fetchData() {',
+        '  const span = tracer.startSpan("fetchData");',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
+        '    try {',
+        '      const result = await fetch("/api/data");',
+        '      return result.json();',
+        '    } catch (error) {',
+        '      console.error(error);',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results.some((r) => !r.passed)).toBe(true);
+      expect(results.some((r) => r.ruleId === 'COV-003' && !r.passed)).toBe(true);
+    });
+
+    it('passes when manual span catch has recordException', () => {
+      const code = [
+        'const { trace, context, SpanStatusCode } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function fetchData() {',
+        '  const span = tracer.startSpan("fetchData");',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
+        '    try {',
+        '      const result = await fetch("/api/data");',
+        '      return result.json();',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when manual span catch swallows error (expected-condition, no rethrow)', () => {
+      const code = [
+        'const { trace, context } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function tryLoadConfig(path) {',
+        '  const span = tracer.startSpan("tryLoadConfig");',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
+        '    try {',
+        '      return JSON.parse(await readFile(path, "utf8"));',
+        '    } catch (err) {',
+        '      return {};',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when manual span catch is empty (control flow)', () => {
+      const code = [
+        'const { trace, context } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function maybeLoad(path) {',
+        '  const span = tracer.startSpan("maybeLoad");',
+        '  const ctxWithSpan = trace.setSpan(context.active(), span);',
+        '  return context.with(ctxWithSpan, async () => {',
+        '    try {',
+        '      return await readFile(path);',
+        '    } catch {',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';

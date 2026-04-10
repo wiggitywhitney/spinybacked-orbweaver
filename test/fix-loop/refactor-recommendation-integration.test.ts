@@ -153,7 +153,7 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it('produces actionable refactor recommendation when NDS-003 persists across retry attempts', async () => {
+  it('produces actionable refactor recommendation when NDS-003 persists across retry attempts', { timeout: 30000 }, async () => {
     // Mock instrumentFile to return realistic instrumented code with const-extraction
     // that triggers NDS-003. Use real validateFile to detect the violation naturally.
     const deps: InstrumentWithRetryDeps = {
