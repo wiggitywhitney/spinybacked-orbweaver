@@ -257,6 +257,23 @@ export { foo, bar };`;
       const source = `function internal(): void {}`;
       expect(provider.findExports(source)).toHaveLength(0);
     });
+
+    it('excludes type-only re-exports (export type { Foo })', () => {
+      const source = `type Foo = string;
+export type { Foo };`;
+      // type-only re-exports are not runtime values — should not appear in ExportInfo
+      expect(provider.findExports(source)).toHaveLength(0);
+    });
+
+    it('excludes type-only specifiers in mixed exports (export { type Foo, Bar })', () => {
+      const source = `type Foo = string;
+function bar(): void {}
+export { type Foo, bar };`;
+      const exports = provider.findExports(source);
+      const names = exports.map(e => e.name);
+      expect(names).toContain('bar');
+      expect(names).not.toContain('Foo');
+    });
   });
 
   describe('classifyFunction', () => {
