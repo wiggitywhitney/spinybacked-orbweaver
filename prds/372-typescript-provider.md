@@ -255,11 +255,11 @@ Following Part 8 checklist, Step 4:
 
 ### Milestone C6: Canary test evaluation
 
-- [ ] Count how many `LanguageProvider` interface methods were added, removed, or changed during TypeScript implementation
-- [ ] Calculate percentage: `(changed methods) / (total interface methods)` from PRD #370
-- [ ] **If >20%: STOP IMMEDIATELY.** Create a GitHub issue titled "PRD #370 revision: interface changes surfaced by TypeScript provider." Do NOT start PRD #373 (Python) until the interface revision is merged. Record findings in this PRD's decision log. The canary fired — this means the interface design needs fixing before it propagates to Python and Go.
-- [ ] **If ≤20%:** Record the canary result in PROGRESS.md (e.g., "TypeScript provider required 2/18 = 11% interface changes — canary passed"). Update this PRD as complete. Proceed to PRD #373.
-- [ ] **If 0%:** Also record this — it means the interface generalized perfectly to TypeScript, which is the ideal outcome.
+- [x] Count how many `LanguageProvider` interface methods were added, removed, or changed during TypeScript implementation
+- [x] Calculate percentage: `(changed methods) / (total interface methods)` from PRD #370
+- [x] **If >20%: STOP IMMEDIATELY.** Create a GitHub issue titled "PRD #370 revision: interface changes surfaced by TypeScript provider." Do NOT start PRD #373 (Python) until the interface revision is merged. Record findings in this PRD's decision log. The canary fired — this means the interface design needs fixing before it propagates to Python and Go.
+- [x] **If ≤20%:** Record the canary result in PROGRESS.md (e.g., "TypeScript provider required 2/18 = 11% interface changes — canary passed"). Update this PRD as complete. Proceed to PRD #373. — **0/27 = 0% — canary passed.**
+- [x] **If 0%:** Also record this — it means the interface generalized perfectly to TypeScript, which is the ideal outcome. — **Confirmed: 0 interface changes across 27 members.**
 
 ### Milestone C7: Real-world evaluation
 
