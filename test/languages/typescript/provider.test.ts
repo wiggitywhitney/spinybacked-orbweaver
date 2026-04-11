@@ -105,12 +105,27 @@ describe('TypeScriptProvider', () => {
   // ─── Feature parity ─────────────────────────────────────────────────────
 
   describe('hasImplementation', () => {
-    it('returns false for all rule IDs in C1 (no TS rules registered yet)', () => {
-      // TypeScript Tier 2 rules are added in Milestone C3.
-      // In C1 the provider implements all interface methods but registers no rules.
-      expect(provider.hasImplementation('COV-001')).toBe(false);
+    it('returns true for TypeScript-specific rule implementations (C3)', () => {
+      // TypeScript-specific rules registered in Milestone C3
+      expect(provider.hasImplementation('COV-001')).toBe(true);
+      expect(provider.hasImplementation('COV-003')).toBe(true);
+      expect(provider.hasImplementation('NDS-004')).toBe(true);
+      expect(provider.hasImplementation('NDS-006')).toBe(true);
+    });
+
+    it('returns true for rule IDs covered by inherited JS implementations', () => {
+      // Rules where JS implementation applies to TypeScript (no TS-specific version needed)
+      expect(provider.hasImplementation('COV-002')).toBe(true);
+      expect(provider.hasImplementation('COV-004')).toBe(true);
+      expect(provider.hasImplementation('RST-001')).toBe(true);
+      expect(provider.hasImplementation('SCH-002')).toBe(true);
+      expect(provider.hasImplementation('NDS-003')).toBe(true);
+      expect(provider.hasImplementation('CDQ-008')).toBe(true);
+    });
+
+    it('returns false for NDS-001 (syntax check — dispatched through checkSyntax, not a ValidationRule)', () => {
+      // NDS-001 is Tier 1 (checkSyntax), not a registered ValidationRule
       expect(provider.hasImplementation('NDS-001')).toBe(false);
-      expect(provider.hasImplementation('SCH-002')).toBe(false);
     });
 
     it('returns false for unknown rule IDs', () => {

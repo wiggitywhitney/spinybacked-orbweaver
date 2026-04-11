@@ -1,7 +1,5 @@
-// ABOUTME: COV-001 Tier 2 check — entry points have spans.
-// ABOUTME: Detects Express/Fastify/http.createServer handlers and exported async functions without spans.
-
-import { basename } from 'node:path';
+// ABOUTME: COV-001 TypeScript Tier 2 check — entry points have spans.
+// ABOUTME: Extends JS entry point detection with NestJS @Controller class/method decorator support.
 
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
@@ -27,6 +25,22 @@ const ENTRY_POINT_PATTERNS: Array<{
 ];
 
 /**
+ * NestJS HTTP method decorator names that mark a class method as a route handler.
+ */
+const NESTJS_METHOD_DECORATORS = new Set([
+  'Get', 'Post', 'Put', 'Patch', 'Delete', 'Options', 'Head', 'All',
+  // Also handle lower-case variants in case of non-standard usage
+  'get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'all',
+]);
+
+/**
+ * NestJS class-level controller decorators that mark a class as a NestJS controller.
+ */
+const NESTJS_CLASS_DECORATORS = new Set([
+  'Controller', 'Resolver',
+]);
+
+/**
  * Parameter names that signal a function is a request/event handler entry point.
  */
 const ENTRY_POINT_PARAM_NAMES = new Set([
@@ -37,33 +51,34 @@ const ENTRY_POINT_PARAM_NAMES = new Set([
 
 /**
  * Directory names that indicate a file is a service module (entry point container).
- * Matched as path segments — handles POSIX (/routes/), Windows (\routes\),
- * and repo-relative paths (routes/file.js).
  */
 const SERVICE_MODULE_DIRS = /(?:^|[\\/])(routes|handlers|controllers|api|services|middleware|resolvers|mutations|queries|endpoints|jobs|workers|subscribers|commands)(?:[\\/])/;
 
 /**
- * COV-001: Verify that entry points have spans.
+ * COV-001 TypeScript: Verify that entry points have spans.
  *
  * Detects:
  * - Express route handlers (app.get, app.post, router.get, etc.)
  * - Fastify handlers (fastify.get, etc.)
  * - http.createServer callbacks
  * - Exported async service functions
+ * - NestJS @Controller classes with @Get/@Post/@Put/etc. decorated methods
  *
- * Each entry point should have a span for request tracing.
- * This is a blocking check — missing entry point spans are critical.
- *
- * @param code - The instrumented JavaScript code to check
+ * @param code - The instrumented TypeScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @returns CheckResult[] — one per finding (or a single passing result)
  */
-export function checkEntryPointSpans(code: string, filePath: string): CheckResult[] {
+export function checkEntryPointSpansTs(code: string, filePath: string): CheckResult[] {
   const project = new Project({
-    compilerOptions: { allowJs: true },
+    compilerOptions: {
+      strict: true,
+      skipLibCheck: true,
+      noEmit: true,
+      experimentalDecorators: true,
+    },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile(basename(filePath), code);
+  const sourceFile = project.createSourceFile('check.tsx', code);
 
   const unspanned: Array<{ line: number; description: string }> = [];
 
@@ -78,7 +93,6 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
 
     for (const ep of ENTRY_POINT_PATTERNS) {
       if (ep.pattern.test(fullText)) {
-        // Check if any callback argument contains a span
         if (!callbackHasSpan(node)) {
           unspanned.push({
             line: node.getStartLineNumber(),
@@ -89,6 +103,9 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
       }
     }
   });
+
+  // Check NestJS controller class methods with route decorators
+  checkNestJsControllerMethods(sourceFile, unspanned);
 
   // Check exported async service functions
   checkExportedAsyncFunctions(sourceFile, unspanned, filePath);
@@ -112,7 +129,7 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
     lineNumber: u.line,
     message:
       `COV-001 check failed: ${u.description} at line ${u.line}. ` +
-      `Entry points (route handlers, server callbacks, exported service functions) ` +
+      `Entry points (route handlers, server callbacks, NestJS controller methods, exported service functions) ` +
       `must have spans for request tracing and error visibility.`,
     tier: 2 as const,
     blocking: true,
@@ -128,8 +145,6 @@ function hasSpanStartCall(text: string): boolean {
 
 /**
  * Check if any callback argument of a call expression contains a span creation call.
- * Handles both inline callbacks (ArrowFunction, FunctionExpression) and named
- * function references (Identifier) by resolving the identifier to its declaration.
  */
 function callbackHasSpan(callExpr: CallExpression): boolean {
   const args = callExpr.getArguments();
@@ -139,8 +154,6 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
         return true;
       }
     } else if (Node.isIdentifier(arg)) {
-      // Named reference — resolve to its declaration and check the body.
-      // Conservative: unresolvable references are treated as missing a span.
       const symbol = arg.getSymbol();
       if (!symbol) continue;
       for (const decl of symbol.getDeclarations()) {
@@ -163,14 +176,48 @@ function callbackHasSpan(callExpr: CallExpression): boolean {
 }
 
 /**
- * Determine whether an exported async function looks like a service entry point.
- * Uses two heuristics per the spec ("exported async functions from service modules"):
- * 1. Parameter names that signal request/event handling (req, res, ctx, event, etc.)
- * 2. File path in a service-module directory (routes/, handlers/, controllers/, api/, services/,
- *    middleware/, resolvers/, mutations/, queries/, endpoints/, jobs/, workers/, subscribers/, commands/)
+ * Check NestJS controller classes for route-decorated methods without spans.
  *
- * Returns false for utility/helper functions in non-service directories with
- * generic parameter names — these are exported for reuse, not as entry points.
+ * Detects classes with a @Controller (or @Resolver) class decorator and
+ * looks for methods on those classes that have HTTP method decorators
+ * (@Get, @Post, @Put, @Patch, @Delete, @Options, @Head, @All) but no span.
+ */
+function checkNestJsControllerMethods(
+  sourceFile: import('ts-morph').SourceFile,
+  unspanned: Array<{ line: number; description: string }>,
+): void {
+  for (const cls of sourceFile.getClasses()) {
+    // Check if the class has a NestJS controller decorator
+    const hasControllerDecorator = cls.getDecorators().some((dec) => {
+      const name = dec.getName();
+      return NESTJS_CLASS_DECORATORS.has(name);
+    });
+
+    if (!hasControllerDecorator) continue;
+
+    // Class is a NestJS controller — check each method for route decorators
+    for (const method of cls.getMethods()) {
+      const routeDecorators = method.getDecorators().filter((dec) => {
+        return NESTJS_METHOD_DECORATORS.has(dec.getName());
+      });
+
+      if (routeDecorators.length === 0) continue;
+
+      // Method has a route decorator — check if it has a span
+      const methodText = method.getText();
+      if (!hasSpanStartCall(methodText)) {
+        const decoratorNames = routeDecorators.map((d) => `@${d.getName()}`).join(', ');
+        unspanned.push({
+          line: method.getStartLineNumber(),
+          description: `NestJS controller method: ${cls.getName() ?? '<anonymous>'}.${method.getName()} (${decoratorNames})`,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Determine whether an exported async function looks like a service entry point.
  */
 function isServiceEntryPoint(paramNames: string[], filePath: string): boolean {
   if (paramNames.some((p) => ENTRY_POINT_PARAM_NAMES.has(p))) {
@@ -181,67 +228,12 @@ function isServiceEntryPoint(paramNames: string[], filePath: string): boolean {
 
 /**
  * Check exported async functions for missing spans.
- * Only flags functions that look like service entry points (request handlers
- * or exports from service module directories), not utility/helper exports.
  */
 function checkExportedAsyncFunctions(
   sourceFile: import('ts-morph').SourceFile,
   unspanned: Array<{ line: number; description: string }>,
   filePath: string,
 ): void {
-  // Check if exported functions are async and lack spans
-  // Pattern 1: module.exports.name = async function ... or module.exports.name = async () => ...
-  // Pattern 2: module.exports = { name: async () => {} }
-  sourceFile.forEachDescendant((node) => {
-    if (!Node.isBinaryExpression(node)) return;
-
-    const left = node.getLeft().getText();
-    const right = node.getRight();
-
-    // Pattern 1: module.exports.foo = async () => {}
-    const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
-    if (nameMatch) {
-      const name = nameMatch[1];
-      if (Node.isFunctionExpression(right) || Node.isArrowFunction(right)) {
-        if (right.isAsync()) {
-          const paramNames = right.getParameters().map((p) => p.getName());
-          if (!isServiceEntryPoint(paramNames, filePath)) return;
-
-          const bodyText = right.getText();
-          if (!hasSpanStartCall(bodyText)) {
-            unspanned.push({
-              line: node.getStartLineNumber(),
-              description: `exported async function: ${name}`,
-            });
-          }
-        }
-      }
-      return;
-    }
-
-    // Pattern 2: module.exports = { foo: async () => {} }
-    if (left === 'module.exports' && Node.isObjectLiteralExpression(right)) {
-      for (const prop of right.getProperties()) {
-        if (!Node.isPropertyAssignment(prop)) continue;
-        const init = prop.getInitializer();
-        if (!init) continue;
-        if ((Node.isArrowFunction(init) || Node.isFunctionExpression(init)) && init.isAsync()) {
-          const name = prop.getNameNode().getText();
-          const paramNames = init.getParameters().map((p) => p.getName());
-          if (!isServiceEntryPoint(paramNames, filePath)) continue;
-
-          const bodyText = init.getText();
-          if (!hasSpanStartCall(bodyText)) {
-            unspanned.push({
-              line: prop.getStartLineNumber(),
-              description: `exported async function: ${name}`,
-            });
-          }
-        }
-      }
-    }
-  });
-
   // ESM-style function declarations: export async function foo() {}
   for (const fn of sourceFile.getFunctions()) {
     if (fn.isExported() && fn.isAsync()) {
@@ -282,17 +274,15 @@ function checkExportedAsyncFunctions(
   }
 }
 
-/** COV-001 ValidationRule — entry points must have spans. */
-export const cov001Rule: ValidationRule = {
+/** COV-001 TypeScript ValidationRule — entry points must have spans. */
+export const cov001TsRule: ValidationRule = {
   ruleId: 'COV-001',
   dimension: 'Coverage',
   blocking: true,
   applicableTo(language: string): boolean {
-    // TypeScript has a dedicated cov001 implementation in typescript/rules/cov001.ts
-    // that adds NestJS decorator detection. The JS implementation covers JavaScript only.
-    return language === 'javascript';
+    return language === 'typescript';
   },
   check(input: RuleInput): CheckResult[] {
-    return checkEntryPointSpans(input.instrumentedCode, input.filePath);
+    return checkEntryPointSpansTs(input.instrumentedCode, input.filePath);
   },
 };

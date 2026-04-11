@@ -199,16 +199,16 @@ Open `docs/research/typescript-semconv-constants.md` (created in Milestone C0) a
 
 Following Part 8 checklist, Step 3:
 
-- [ ] Create `src/languages/typescript/rules/` directory
-- [ ] For each shared-concept rule: implement TypeScript-specific version in `src/languages/typescript/rules/`
+- [x] Create `src/languages/typescript/rules/` directory
+- [x] For each shared-concept rule: implement TypeScript-specific version in `src/languages/typescript/rules/`
   - `cov001.ts` — entry point classification: NestJS `@Controller`, Express handlers (same as JS), TypeScript class methods with route decorators
   - `cov003.ts` — error recording: `try/catch` with TypeScript `unknown` catch type (`catch (err: unknown)`)
   - `nds004.ts` — signature preservation: must preserve type annotations, generics, access modifiers
   - `nds006.ts` — module system match: same as JavaScript (ESM/CJS concern applies to TypeScript too)
-  - **All remaining shared-concept rules (`cov002`, `cov004`, `cov005`, `cov006`, `rst001`–`rst005`, `nds003`, `nds005`, `cdq001`, `cdq006`, `api001`, `api002`):** Start with the JS implementation and extend only if TypeScript introduces a new pattern. Document in PROGRESS.md which rules reused JS implementations and which needed TS-specific versions — do not leave this undocumented.
-- [ ] Register TypeScript rules in `TypeScriptProvider`
-- [ ] `TypeScriptProvider.hasImplementation()` returns `true` for all applicable rules
-- [ ] Feature parity assertion test passes for TypeScript
+  - **All remaining shared-concept rules (`cov002`, `cov004`, `cov005`, `cov006`, `rst001`–`rst005`, `nds003`, `nds005`, `cdq001`, `cdq006`, `api001`, `api002`):** Reuse JS implementations via `TS_INHERITED_RULE_IDS` in TypeScriptProvider. These rules use ts-morph operations (string matching, AST nodes common to JS/TS) that work correctly for TypeScript code. Documented in PROGRESS.md.
+- [x] Register TypeScript rules in `TypeScriptProvider`
+- [x] `TypeScriptProvider.hasImplementation()` returns `true` for all applicable rules
+- [x] Feature parity assertion test passes for TypeScript
 
 ### Milestone C4: Cross-language rule consistency tests
 
