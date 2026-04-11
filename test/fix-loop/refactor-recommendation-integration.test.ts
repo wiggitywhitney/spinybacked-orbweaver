@@ -1,7 +1,11 @@
 // ABOUTME: Integration test for refactor recommendations — real NDS-003 detection with realistic fixture.
 // ABOUTME: Verifies end-to-end: const-extraction pattern → NDS-003 → persistent detection → actionable recommendation.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// All tests in this file do real validation-chain work that can take >5s under
+// parallel test suite load. Set a file-level timeout to prevent flaky failures.
+vi.setConfig({ testTimeout: 30000 });
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
