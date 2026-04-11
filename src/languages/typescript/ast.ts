@@ -133,15 +133,18 @@ export function findTsExports(source: string): ExportInfo[] {
   }
 
   // Re-export blocks: export { foo, bar }
+  // Skip type-only export declarations (`export type { Foo }`) and individual
+  // type-only specifiers in mixed exports (`export { type Foo, Bar }`) — these
+  // are not runtime-exported values.
   for (const exportDecl of sourceFile.getExportDeclarations()) {
-    if (!exportDecl.isNamespaceExport()) {
-      for (const named of exportDecl.getNamedExports()) {
-        exports.push({
-          name: named.getNameNode().getText(),
-          lineNumber: exportDecl.getStartLineNumber(),
-          isDefault: false,
-        });
-      }
+    if (exportDecl.isTypeOnly() || exportDecl.isNamespaceExport()) continue;
+    for (const named of exportDecl.getNamedExports()) {
+      if (named.isTypeOnly()) continue;
+      exports.push({
+        name: named.getNameNode().getText(),
+        lineNumber: exportDecl.getStartLineNumber(),
+        isDefault: false,
+      });
     }
   }
 
