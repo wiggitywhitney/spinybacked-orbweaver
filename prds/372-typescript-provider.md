@@ -108,6 +108,10 @@ _Populate as decisions are made during implementation._
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
 | D-1 | Fold issue #378 (semconv research spike) into this PRD as Milestone C0 | Research is a prerequisite for the TypeScript prompt and checker work in this PRD. Running it as a standalone issue wastes context — a future agent writing the prompt would have no access to the findings. Folding it in and saving findings to a versioned file (`docs/research/typescript-semconv-constants.md`) ensures every subsequent agent reads the same ground truth before touching prompt or checker code. | 2026-04-09 |
+| D-2 | Use ts-morph for TypeScript AST analysis (OD-1) | ts-morph handles TypeScript and TSX natively via the TypeScript compiler API. Adding tree-sitter-typescript would add a new dependency and require learning new binding patterns — high cost, no benefit at this stage. ts-morph is already a project dependency. Python (PRD #373) will introduce web-tree-sitter when needed. Deferred tree-sitter adoption is recorded in PROGRESS.md as known debt. | 2026-04-11 |
+| D-3 | Include .tsx support from day one (OD-2) | ts-morph handles TSX natively with the .tsx file extension — no separate grammar or dependency needed. The glob pattern covers `**/*.{ts,tsx}` and `defaultExclude` filters `**/*.d.ts`. Per OD-2 recommendation: include TSX when using ts-morph because the cost is near-zero. | 2026-04-11 |
+| D-4 | Return raw specifiers from findImports() — no tsconfig.json resolution (OD-3) | Consistent with the JavaScript provider. The agent's prompt context needs OTel package names (bare specifiers), not resolved filesystem paths. Path aliases do not affect OTel import detection. tsconfig.json resolution would require reading the project's config file, adding I/O and complexity for no benefit. | 2026-04-11 |
+| D-5 | Use name-based heuristics for classification; abstain with 'unknown' when uncertain (OD-4) | No Tier 2 checker in the initial implementation requires type-aware analysis. Pattern matching on parameter names, decorators, and directory structure is sufficient. 'unknown' means the checker abstains rather than producing false positives or false negatives. Type-aware classification can be added in a later PRD if needed. | 2026-04-11 |
 
 ---
 
@@ -145,26 +149,26 @@ Following the Part 8 checklist, Step 1:
 **Before writing any TypeScript provider code:** Read `src/languages/javascript/index.ts` (the JavaScript provider) in full — this is the reference implementation that defines what all `LanguageProvider` methods look like in practice. **Do not implement TypeScript provider methods without first understanding the corresponding JavaScript implementation.**
 
 **Resolve outstanding decisions before touching any source file:**
-- [ ] **OD-1 (ts-morph vs. tree-sitter-typescript):** The recommendation is ts-morph for the initial implementation (it already handles TypeScript natively). If you have a strong reason to use tree-sitter-typescript instead, run `/research tree-sitter-typescript` first. Record the decision in the Decision Log using the format: `| OD-1 | [chosen approach] | [one-sentence rationale] | [today's date] |` — column order is ID, Decision, Rationale, Date to match the table header. Do not start coding until this is recorded.
-- [ ] **OD-2 (TSX handling):** If using ts-morph (OD-1 recommendation), include `.tsx` from day one — ts-morph handles it natively. If using tree-sitter, defer `.tsx`. Record in Decision Log using format: `| OD-X | [decision] | [rationale] | [date] |`.
-- [ ] **OD-3 (module resolution):** Adopt the recommendation: return raw specifiers from `findImports()`, no `tsconfig.json` resolution, no path alias lookup. Record in Decision Log using format: `| OD-X | [decision] | [rationale] | [date] |`.
-- [ ] **OD-4 (type-aware analysis):** Adopt the recommendation: use name-based heuristics; abstain (return `'unknown'`) when heuristics are insufficient rather than guessing. Record in Decision Log using format: `| OD-X | [decision] | [rationale] | [date] |`.
-- [ ] Create `src/languages/typescript/` directory
-- [ ] Create `src/languages/typescript/ast.ts` — function finding, import detection, export detection, function classification, existing instrumentation detection using resolved parser approach
-- [ ] `findFunctions()` returns language-agnostic `FunctionInfo` (from `src/languages/types.ts`)
-- [ ] `findImports()` handles TypeScript import syntax: `import type`, `import type { }`, namespace imports `import * as`, re-exports `export { } from`
-- [ ] `classifyFunction()` handles TypeScript-specific patterns: decorators (`@Injectable`, `@Controller`, `@Route`), class methods, arrow function properties, overloaded signatures
-- [ ] `detectExistingInstrumentation()` pattern covers TypeScript OTel import syntax
-- [ ] `extractFunctions()` and `reassembleFunctions()` handle TypeScript syntax (type annotations, decorators, generics)
-- [ ] `checkSyntax()` — implement using `tsc --noEmit`. **Do NOT use `node --check`** — Node's native type stripping only validates JavaScript syntax, not TypeScript types. TypeScript's value for instrumentation validation is catching type errors introduced by the agent (e.g., wrong argument type to `span.setAttribute()`). `tsc --noEmit` is required.
-- [ ] `formatCode()` — Prettier (already handles TypeScript)
-- [ ] `lintCheck()` — Prettier diff (same as JavaScript)
-- [ ] File discovery: `globPattern: '**/*.{ts,tsx}'` (or `'**/*.ts'` if OD-2 defers TSX), `defaultExclude` includes `*.d.ts`, generated files, `*.test.ts`
-- [ ] `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — same package as JavaScript (provider contract expects a package name string or `null`; see `otelSemconvPackage` in `src/languages/types.ts`).
-- [ ] Use findings from `docs/research/typescript-semconv-constants.md` (Milestone C0) to guide semconv constant naming and import-path instructions in prompts, checkers, and fixtures — not to change this field.
-- [ ] Register `TypeScriptProvider` in `src/languages/registry.ts` for `.ts` (and `.tsx` if OD-2 resolves to include it)
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] **OD-1 (ts-morph vs. tree-sitter-typescript):** Resolved as D-2 — ts-morph for initial implementation. Recorded in Decision Log.
+- [x] **OD-2 (TSX handling):** Resolved as D-3 — include `.tsx` from day one. Recorded in Decision Log.
+- [x] **OD-3 (module resolution):** Resolved as D-4 — return raw specifiers. Recorded in Decision Log.
+- [x] **OD-4 (type-aware analysis):** Resolved as D-5 — name-based heuristics, 'unknown' when insufficient. Recorded in Decision Log.
+- [x] Create `src/languages/typescript/` directory
+- [x] Create `src/languages/typescript/ast.ts` — function finding, import detection, export detection, function classification, existing instrumentation detection using resolved parser approach
+- [x] `findFunctions()` returns language-agnostic `FunctionInfo` (from `src/languages/types.ts`)
+- [x] `findImports()` handles TypeScript import syntax: `import type`, `import type { }`, namespace imports `import * as`, re-exports `export { } from`
+- [x] `classifyFunction()` handles TypeScript-specific patterns: decorators (`@Injectable`, `@Controller`, `@Route`), class methods, arrow function properties, overloaded signatures
+- [x] `detectExistingInstrumentation()` pattern covers TypeScript OTel import syntax
+- [x] `extractFunctions()` and `reassembleFunctions()` handle TypeScript syntax (type annotations, decorators, generics)
+- [x] `checkSyntax()` — implement using `tsc --noEmit`. **Do NOT use `node --check`** — Node's native type stripping only validates JavaScript syntax, not TypeScript types. TypeScript's value for instrumentation validation is catching type errors introduced by the agent (e.g., wrong argument type to `span.setAttribute()`). `tsc --noEmit` is required.
+- [x] `formatCode()` — Prettier (already handles TypeScript)
+- [x] `lintCheck()` — Prettier diff (same as JavaScript)
+- [x] File discovery: `globPattern: '**/*.{ts,tsx}'`, `defaultExclude` includes `**/*.d.ts`, generated files, `**/*.test.ts`
+- [x] `otelSemconvPackage: '@opentelemetry/semantic-conventions'` — same package as JavaScript (provider contract expects a package name string or `null`; see `otelSemconvPackage` in `src/languages/types.ts`).
+- [x] Use findings from `docs/research/typescript-semconv-constants.md` (Milestone C0) to guide semconv constant naming and import-path instructions in prompts, checkers, and fixtures — not to change this field.
+- [x] Register `TypeScriptProvider` in `src/languages/registry.ts` for `.ts` and `.tsx` (D-3: TSX included from day one)
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### Milestone C2: TypeScript-specific prompt sections
 
@@ -173,20 +177,20 @@ Open `docs/research/typescript-semconv-constants.md` (created in Milestone C0) a
 
 Following Part 8 checklist, Step 2:
 
-- [ ] Create `src/languages/typescript/prompt.ts`
-- [ ] Constraints section: TypeScript-specific — preserve type annotations, do not strip types, do not change `import type` to `import`, do not introduce `any`
-- [ ] OTel SDK patterns: same as JavaScript (`@opentelemetry/api`)
-- [ ] Tracer acquisition: same as JavaScript (`trace.getTracer()`)
-- [ ] Span creation idioms: same as JavaScript (`tracer.startActiveSpan()`, `tracer.startSpan()`)
-- [ ] Error handling: `try/catch` — same as JavaScript; TypeScript catch binding is `unknown` type, may need type narrowing (`if (err instanceof Error)`)
-- [ ] Semconv constants guidance: using findings from `docs/research/typescript-semconv-constants.md`, add prompt instructions covering the correct import path, naming prefix, and how to distinguish stable from incubating attributes. This replaces the raw string approach used in the JavaScript prompt.
+- [x] Create `src/languages/typescript/prompt.ts`
+- [x] Constraints section: TypeScript-specific — preserve type annotations, do not strip types, do not change `import type` to `import`, do not introduce `any`
+- [x] OTel SDK patterns: same as JavaScript (`@opentelemetry/api`)
+- [x] Tracer acquisition: same as JavaScript (`trace.getTracer()`)
+- [x] Span creation idioms: same as JavaScript (`tracer.startActiveSpan()`, `tracer.startSpan()`)
+- [x] Error handling: `try/catch` — same as JavaScript; TypeScript catch binding is `unknown` type, may need type narrowing (`if (err instanceof Error)`)
+- [x] Semconv constants guidance: using findings from `docs/research/typescript-semconv-constants.md`, add prompt instructions covering the correct import path, naming prefix, and how to distinguish stable from incubating attributes. This replaces the raw string approach used in the JavaScript prompt.
 - [ ] **Attribute priority section (PRD #581):** The TypeScript prompt's attribute priority must follow the registry-first + pattern inference approach established in PRD #581 — not the old OTel-first ordering used in the JavaScript prompt. If PRD #581 has not yet merged when this milestone begins, apply the new approach directly: (1) check the registry for semantic equivalents (including any imported semconv), (2) if nothing equivalent exists, observe and follow the naming patterns of existing registered attributes (namespace, casing, structure) rather than reaching for raw OTel convention names. Add an explicit negative constraint: do NOT apply OTel attribute names from training data that are not present in the resolved registry.
-- [ ] At least 5 before/after TypeScript examples:
+- [x] At least 5 before/after TypeScript examples:
   - Async function with type annotations
   - Class method with decorator
   - Generic function (verify type parameters are preserved)
   - Function with `import type` dependencies
-  - TSX component (if OD-2 includes TSX)
+  - TSX component (D-3: TSX is included from day one — this example is required, not optional)
 
 ### Milestone C3: TypeScript Tier 2 checker implementations
 
@@ -242,8 +246,9 @@ Following Part 8 checklist, Step 4:
 
 - [ ] Create `test/fixtures/languages/typescript/` with at minimum:
   - A TypeScript Express/Fastify handler (before + after + expected schema)
-  - A NestJS controller method with decorator (if decorator support is in scope)
+  - A NestJS controller method with decorator (D-5: pattern-based decorator detection is in scope)
   - A generic utility function (verify type parameter preservation)
+  - A TSX React component handler (D-3: TSX is in scope from day one)
 - [ ] Write `test/languages/typescript/golden.test.ts` — full pipeline against each fixture
 - [ ] All golden tests pass
 

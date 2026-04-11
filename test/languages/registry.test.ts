@@ -10,6 +10,7 @@ import {
   _resetForTest,
 } from '../../src/languages/registry.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+import { TypeScriptProvider } from '../../src/languages/typescript/index.ts';
 
 describe('language provider registry', () => {
   beforeEach(() => {
@@ -26,6 +27,15 @@ describe('language provider registry', () => {
     expect(getProvider('.js')).toBe(jsProvider);
     expect(getProvider('.jsx')).toBe(jsProvider);
     expect(getProviderByLanguage('javascript')).toBe(jsProvider);
+  });
+
+  it('registers TypeScriptProvider for all expected extensions and language id', () => {
+    const tsProvider = new TypeScriptProvider();
+    registerProvider(tsProvider);
+
+    expect(getProvider('.ts')).toBe(tsProvider);
+    expect(getProvider('.tsx')).toBe(tsProvider);
+    expect(getProviderByLanguage('typescript')).toBe(tsProvider);
   });
 
   describe('registerProvider', () => {
