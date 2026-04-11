@@ -232,11 +232,11 @@ describe('NDS-004: Signatures preserved', () => {
 });
 ```
 
-- [ ] For each shared-concept rule with both a JavaScript and TypeScript implementation, write at least one test that verifies the same violation is caught by both
-- [ ] Test file lives in `test/validation/cross-language-consistency.test.ts`
-- [ ] Tests use the fixture files from `test/fixtures/languages/javascript/` (created in PRD #371 B3). **TypeScript fixture files do not exist yet** — C4 tests can only cover JS vs TS for rules where a TypeScript example can be embedded inline in the test (not as a fixture file). Create `test/fixtures/languages/typescript/` in Milestone C5 (Golden file tests) and add fixture-based consistency tests as a follow-up checklist item in C5.
-- [ ] Each subsequent provider PRD (Python, Go) adds cases to this test file in its Milestone D3/E3
-- [ ] All consistency tests pass
+- [x] For each shared-concept rule with both a JavaScript and TypeScript implementation, write at least one test that verifies the same violation is caught by both
+- [x] Test file lives in `test/validation/cross-language-consistency.test.ts`
+- [x] Tests use the fixture files from `test/fixtures/languages/javascript/` (created in PRD #371 B3). **TypeScript fixture files do not exist yet** — C4 tests can only cover JS vs TS for rules where a TypeScript example can be embedded inline in the test (not as a fixture file). Create `test/fixtures/languages/typescript/` in Milestone C5 (Golden file tests) and add fixture-based consistency tests as a follow-up checklist item in C5.
+- [x] Each subsequent provider PRD (Python, Go) adds cases to this test file in its Milestone D3/E3
+- [x] All consistency tests pass
 
 ### Milestone C5: Golden file tests
 
