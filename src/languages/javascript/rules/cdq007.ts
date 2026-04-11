@@ -23,10 +23,18 @@ const PII_SUFFIX_NAMES = new Set([
 ]);
 
 /**
- * Identifier substrings that indicate a filesystem path value.
- * Variables whose names contain these substrings likely hold absolute paths.
+ * Identifier token segments that indicate a filesystem path value.
+ * Matched against camelCase/underscore-split tokens (exact match only).
  */
 const PATH_IDENTIFIER_PATTERNS = ['path', 'dir', 'file'];
+
+/**
+ * All-lowercase compound identifiers that are well-known path identifiers but
+ * don't split at camelCase boundaries (e.g., "filepath" stays as one token).
+ */
+const PATH_COMPOUND_TOKENS = new Set([
+  'filepath', 'filename', 'dirname', 'pathname',
+]);
 
 /**
  * CDQ-007: Flag setAttribute calls with data quality issues.
@@ -79,7 +87,7 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
     // Skip identifiers/expressions (e.g., `setAttribute(keyVar, ...)`) because
     // keyVar's identifier name is not the attribute key at runtime.
     if (Node.isStringLiteral(keyArg) || Node.isNoSubstitutionTemplateLiteral(keyArg)) {
-      const keyText = keyArg.getText().replace(/^[`'"]|[`'"]$/g, '');
+      const keyText = String(keyArg.getLiteralValue());
       const keySegments = keyText.split('.');
       const lastSegment = keySegments[keySegments.length - 1] ?? '';
       if (PII_ATTRIBUTE_NAMES.has(keyText) || PII_SUFFIX_NAMES.has(lastSegment)) {
@@ -100,9 +108,12 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
         .split(/(?<=[a-z])(?=[A-Z])|[_\-.]/)
         .map((t) => t.toLowerCase())
         .filter((t) => t.length > 0);
-      // Also match lowercase compound identifiers like "filepath", "dirname" where
-      // the path word is a prefix (startsWith catches compounds that didn't split).
-      if (PATH_IDENTIFIER_PATTERNS.some((p) => tokens.some((t) => t === p || t.startsWith(p)))) {
+      // Also match well-known all-lowercase compound path identifiers (e.g., "filepath",
+      // "dirname") that don't split at camelCase boundaries.
+      if (
+        PATH_IDENTIFIER_PATTERNS.some((p) => tokens.includes(p)) ||
+        tokens.some((t) => PATH_COMPOUND_TOKENS.has(t))
+      ) {
         findings.push({
           line,
           message:
