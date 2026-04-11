@@ -52,6 +52,7 @@
   },
   "homepage": "https://github.com/wiggitywhitney/spinybacked-orbweaver#readme",
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "@types/node": "^24.11.0",
     "@types/yargs": "^17.0.35",
     "@vitest/coverage-v8": "^4.0.18",

@@ -245,13 +245,13 @@ Open `docs/research/typescript-semconv-constants.md` (created in Milestone C0) a
 
 Following Part 8 checklist, Step 4:
 
-- [ ] Create `test/fixtures/languages/typescript/` with at minimum:
+- [x] Create `test/fixtures/languages/typescript/` with at minimum:
   - A TypeScript Express/Fastify handler (before + after + expected schema)
   - A NestJS controller method with decorator (D-5: pattern-based decorator detection is in scope)
   - A generic utility function (verify type parameter preservation)
   - A TSX React component handler (D-3: TSX is in scope from day one)
-- [ ] Write `test/languages/typescript/golden.test.ts` — full pipeline against each fixture
-- [ ] All golden tests pass
+- [x] Write `test/languages/typescript/golden.test.ts` — full pipeline against each fixture
+- [x] All golden tests pass
 
 ### Milestone C6: Canary test evaluation
 
