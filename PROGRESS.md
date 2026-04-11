@@ -98,6 +98,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-04-14) Started registry span deduplication rule (SCH-005). The first building block — extracting span definitions from the resolved Weaver registry — is implemented and tested. This feeds a two-tier duplicate-detection check (structural similarity + LLM judge) that will flag when separate instrumentation runs name the same operation differently.
 
+- (2026-04-11) Semconv research for TypeScript provider (PRD #372, C0). Researched `@opentelemetry/semantic-conventions` v1.40.0: two entry-points (stable vs `/incubating`), full attribute status table (HTTP/DB/RPC/messaging), DB naming changes (`db.system.name` not `db.system`), HTTP URL migration (`url.full` not `http.url`). Saved to `docs/research/typescript-semconv-constants.md`. Global gotchas rule written.
+
 - (2026-04-09) PRD #371 complete — JavaScript language provider extraction. All B1/B2/B3 milestones done; eval gate passed at 92% (commit-story-v2 run-12). Archived to prds/done/.
 
 - (2026-04-09) CLI output readability overhaul. Verbose mode shows structured per-file sections: prominent SUCCESS/FAILED/PARTIAL status with span and attribute counts, tokens on a separate line, schema extensions and agent notes as bulleted sections with headers. All paths relativized; Completed line shows human-readable duration; artifact box labels PR summary as "Instrumentation report". README documents fine-grained PAT requirements and push verification signal.
