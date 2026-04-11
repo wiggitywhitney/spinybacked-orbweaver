@@ -1,7 +1,5 @@
-// ABOUTME: COV-003 Tier 2 check — failable operations have error visibility.
-// ABOUTME: Verifies that spans around failable operations include error recording (recordException/setStatus).
-
-import { basename } from 'node:path';
+// ABOUTME: COV-003 TypeScript Tier 2 check — failable operations have error visibility.
+// ABOUTME: TypeScript-specific version: uses TypeScript parsing for catch (err: unknown) and other TS patterns.
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
@@ -9,8 +7,6 @@ import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
  * Error recording patterns that satisfy COV-003.
- * Any of these in a catch block (or within the span callback) indicates
- * error visibility is present.
  */
 const ERROR_RECORDING_PATTERNS = [
   '.recordException(',
@@ -20,26 +16,25 @@ const ERROR_RECORDING_PATTERNS = [
 ];
 
 /**
- * COV-003: Verify that failable operations have error visibility.
+ * COV-003 TypeScript: Verify that failable operations have error visibility.
  *
- * For each span (startActiveSpan/startSpan), checks that:
- * 1. If the span callback has a try/catch, the catch block records the error
- *    on the span (recordException, setStatus, or error-related setAttribute)
- * 2. If the span wraps failable operations (async calls, I/O), there IS a
- *    catch block with error recording
+ * TypeScript-specific version: parses code as TypeScript so that TypeScript
+ * syntax like `catch (err: unknown)` is handled correctly by the compiler.
  *
- * This is a blocking check — missing error visibility hides failures.
- *
- * @param code - The instrumented JavaScript code to check
+ * @param code - The instrumented TypeScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
  * @returns CheckResult[] — one per finding (or a single passing result)
  */
-export function checkErrorVisibility(code: string, filePath: string): CheckResult[] {
+export function checkErrorVisibilityTs(code: string, filePath: string): CheckResult[] {
   const project = new Project({
-    compilerOptions: { allowJs: true },
+    compilerOptions: {
+      strict: true,
+      skipLibCheck: true,
+      noEmit: true,
+    },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile(basename(filePath), code);
+  const sourceFile = project.createSourceFile('check.tsx', code);
 
   const issues: Array<{ line: number; description: string }> = [];
 
@@ -56,21 +51,14 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
     // For startSpan (non-callback style), check sibling scope for error recording
     if (!spanParam) {
       if (text.endsWith('.startSpan')) {
-        // Use AST to get the variable name — VariableDeclaration.getName() is reliable;
-        // getText() omits the const/let/var keyword so regex matching fails there.
         const parentNode = node.getParent();
         if (Node.isVariableDeclaration(parentNode)) {
           const spanVarName = parentNode.getName();
-          // Walk up to find the containing block.
-          // Typed as Node to allow reassignment through getParent() up the tree.
           let container: import('ts-morph').Node | undefined = parentNode.getParent();
           while (container && !Node.isBlock(container) && !Node.isSourceFile(container)) {
             container = container.getParent();
           }
           if (container && (Node.isBlock(container) || Node.isSourceFile(container))) {
-            // Only check TryStatements that reference the span variable — this filters out
-            // unrelated try/catch blocks that happen to be in the same container block
-            // (e.g., code before the span is created, or independent helper functions).
             const tryStatements = container.getDescendantsOfKind(SyntaxKind.TryStatement)
               .filter((t) => t.getText().includes(spanVarName));
             for (const tryStmt of tryStatements) {
@@ -95,9 +83,6 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
     for (const arg of args) {
       if (!Node.isArrowFunction(arg) && !Node.isFunctionExpression(arg)) continue;
 
-      const callbackText = arg.getText();
-
-      // Find try statements in the callback
       const tryStatements: import('ts-morph').TryStatement[] = [];
       arg.forEachDescendant((desc) => {
         if (Node.isTryStatement(desc)) {
@@ -110,9 +95,7 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
       for (const tryStmt of tryStatements) {
         const catchClause = tryStmt.getCatchClause();
 
-        // Case 1: try/catch exists but catch doesn't record on span
         if (catchClause) {
-          // Exempt expected-condition catches (empty, fallback returns, ENOENT checks, continue)
           if (!isExpectedConditionCatch(catchClause)) {
             const catchText = catchClause.getText();
             if (!hasErrorRecording(catchText, spanParam)) {
@@ -124,18 +107,14 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
           }
         }
 
-        // Case 2: try/finally without catch — check if this is a span lifecycle pattern
         if (!catchClause) {
           const finallyBlock = tryStmt.getFinallyBlock();
-          // Span lifecycle try/finally: the finally block ends the span and errors
-          // propagate to the parent span naturally. This is the standard pattern
-          // when the agent chooses not to add error recording (expected-condition operations).
           if (finallyBlock && hasSpanEnd(finallyBlock, spanParam)) {
             continue;
           }
-          // Non-lifecycle try/finally with failable operations and no error recording
           const tryBlockText = tryStmt.getTryBlock().getText();
           if (containsFailableOperation(tryBlockText)) {
+            const callbackText = arg.getText();
             if (!hasErrorRecording(callbackText, spanParam)) {
               issues.push({
                 line: tryStmt.getStartLineNumber(),
@@ -175,9 +154,7 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
 }
 
 /**
- * Expected-condition error code patterns — catches that check for these
- * represent normal control flow (file-not-found, optional features),
- * not genuine errors that should be recorded on spans.
+ * Expected-condition error code patterns.
  */
 const EXPECTED_CONDITION_PATTERNS = [
   'ENOENT',
@@ -188,35 +165,23 @@ const EXPECTED_CONDITION_PATTERNS = [
 ];
 
 /**
- * Detect whether a catch clause handles an expected condition (control flow)
- * rather than a genuine error. Expected-condition catches are exempt from
- * COV-003 error recording requirements because recording them as errors
- * pollutes metrics and triggers false alerts (NDS-005b violations).
- *
- * Patterns detected:
- * - Empty catch blocks: `catch {}` or `catch (_e) {}`
- * - Default-value returns: `catch (e) { return null; }` or `catch { return {}; }`
- * - Error-code checks: `if (err.code === 'ENOENT')` patterns
- * - Loop control flow: `catch (e) { continue; }`
+ * Detect whether a catch clause handles an expected condition.
+ * TypeScript-specific: handles catch clauses with type annotations (catch (err: unknown)).
+ * The `: unknown` type annotation doesn't change the semantics — we still check
+ * whether the catch block rethrows or handles gracefully.
  */
-export function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): boolean {
+function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): boolean {
   const block = catchClause.getBlock();
   const statements = block.getStatements();
 
-  // Empty catch body: `catch {}` or `catch (_e) {}`
   if (statements.length === 0) {
     return true;
   }
 
   const bodyText = block.getText();
 
-  // Core heuristic: a catch that doesn't rethrow is handling the error gracefully.
-  // From OTel's perspective, the operation succeeded (possibly with degraded results)
-  // — recording setStatus(ERROR) would be misleading because the caller sees success.
-  // Use AST to find real ThrowStatements — regex /\bthrow\b/ matches "throw" in strings/comments.
   const throwStatements = block.getDescendantsOfKind(SyntaxKind.ThrowStatement)
     .filter((t) => {
-      // Exclude throws inside nested function declarations/expressions
       let parent: import('ts-morph').Node | undefined = t.getParent();
       while (parent && parent !== block) {
         if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent) || Node.isFunctionDeclaration(parent)) {
@@ -231,13 +196,7 @@ export function isExpectedConditionCatch(catchClause: import('ts-morph').CatchCl
     return true;
   }
 
-  // Has throw — check if it's a mixed path with expected-condition code patterns.
-  // E.g., `if (err.code === 'ENOENT') return null; throw err;` — the ENOENT path
-  // is expected-condition, but the rethrow path is a genuine error needing recording.
-  // We conservatively flag these as NOT expected-condition so error recording is required.
   if (EXPECTED_CONDITION_PATTERNS.some((pattern) => bodyText.includes(pattern))) {
-    // Even though expected-condition patterns are present, the rethrow means
-    // there's a genuine error path. Return false — error recording is needed.
     return false;
   }
 
@@ -271,8 +230,7 @@ function hasErrorRecording(text: string, spanParam: string): boolean {
 }
 
 /**
- * Check if a finally block contains a direct span.end() call (not nested in a closure).
- * Uses AST to avoid false positives from text matching.
+ * Check if a finally block contains a direct span.end() call.
  */
 function hasSpanEnd(finallyBlock: import('ts-morph').Block, spanParam: string): boolean {
   const callExprs = finallyBlock.getDescendantsOfKind(SyntaxKind.CallExpression);
@@ -282,7 +240,6 @@ function hasSpanEnd(finallyBlock: import('ts-morph').Block, spanParam: string): 
     if (expr.getName() !== 'end') return false;
     const receiver = expr.getExpression().getText();
     if (receiver !== spanParam) return false;
-    // Ensure the call is not inside a nested function
     let parent = call.getParent();
     while (parent && parent !== finallyBlock) {
       if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent) || Node.isFunctionDeclaration(parent)) {
@@ -295,7 +252,7 @@ function hasSpanEnd(finallyBlock: import('ts-morph').Block, spanParam: string): 
 }
 
 /**
- * Check if code contains operations that can fail (async calls, I/O, etc.).
+ * Check if code contains operations that can fail.
  */
 function containsFailableOperation(text: string): boolean {
   return (
@@ -311,17 +268,15 @@ function containsFailableOperation(text: string): boolean {
   );
 }
 
-/** COV-003 ValidationRule — failable operations must have error visibility. */
-export const cov003Rule: ValidationRule = {
+/** COV-003 TypeScript ValidationRule — failable operations must have error visibility. */
+export const cov003TsRule: ValidationRule = {
   ruleId: 'COV-003',
   dimension: 'Coverage',
   blocking: true,
   applicableTo(language: string): boolean {
-    // TypeScript has a dedicated cov003 implementation in typescript/rules/cov003.ts
-    // that uses TypeScript parsing (handles catch (err: unknown) correctly).
-    return language === 'javascript';
+    return language === 'typescript';
   },
   check(input: RuleInput): CheckResult[] {
-    return checkErrorVisibility(input.instrumentedCode, input.filePath);
+    return checkErrorVisibilityTs(input.instrumentedCode, input.filePath);
   },
 };

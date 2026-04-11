@@ -327,7 +327,9 @@ export const nds004Rule: ValidationRule = {
   dimension: 'Non-destructive',
   blocking: true,
   applicableTo(language: string): boolean {
-    return language === 'javascript' || language === 'typescript';
+    // TypeScript has a dedicated nds004 implementation in typescript/rules/nds004.ts
+    // that uses TypeScript parsing (handles type-annotated parameters correctly).
+    return language === 'javascript';
   },
   check(input) {
     return checkExportedSignaturePreservation(input.originalCode, input.instrumentedCode, input.filePath);

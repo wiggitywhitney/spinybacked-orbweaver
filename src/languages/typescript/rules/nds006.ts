@@ -1,5 +1,5 @@
-// ABOUTME: NDS-006 Tier 2 check — module system preservation.
-// ABOUTME: Detects when instrumented code uses a different module system (ESM vs CJS) than the original.
+// ABOUTME: NDS-006 TypeScript Tier 2 check — module system preservation.
+// ABOUTME: TypeScript-specific version: uses TypeScript parsing for correct ESM/CJS detection.
 
 import { Project, Node } from 'ts-morph';
 import type { SourceFile } from 'ts-morph';
@@ -17,10 +17,9 @@ interface ModuleSignals {
 }
 
 /**
- * Detect module system signals in a source file using AST analysis.
- *
- * ESM signals: import declarations, export declarations/assignments.
- * CJS signals: require() calls, module.exports, exports.prop assignments.
+ * Detect module system signals in a TypeScript source file.
+ * TypeScript files use ESM (import/export) natively. CJS patterns (require/module.exports)
+ * are unusual in TypeScript but possible in .ts files targeting CommonJS output.
  */
 function detectModuleSignals(sourceFile: SourceFile): ModuleSignals {
   const signals: ModuleSignals = {
@@ -30,14 +29,13 @@ function detectModuleSignals(sourceFile: SourceFile): ModuleSignals {
     hasCjsExports: false,
   };
 
-  // ESM imports
+  // ESM imports (includes `import type { }` declarations)
   if (sourceFile.getImportDeclarations().length > 0) {
     signals.hasEsmImport = true;
   }
 
   // ESM exports: explicit export declarations, export assignments, and
   // functions/classes/variables with the export keyword.
-  // Do NOT use getExportedDeclarations() — it also picks up CJS exports.prop.
   if (
     sourceFile.getExportDeclarations().length > 0 ||
     sourceFile.getExportAssignments().length > 0
@@ -45,7 +43,6 @@ function detectModuleSignals(sourceFile: SourceFile): ModuleSignals {
     signals.hasEsmExport = true;
   }
 
-  // Check for `export function`, `export class`, `export const`, `export default`
   sourceFile.forEachChild((node) => {
     if (Node.isExportable(node) && node.isExported()) {
       signals.hasEsmExport = true;
@@ -54,7 +51,6 @@ function detectModuleSignals(sourceFile: SourceFile): ModuleSignals {
 
   // CJS require() and module.exports / exports.prop
   sourceFile.forEachDescendant((node) => {
-    // require() calls
     if (Node.isCallExpression(node)) {
       const expr = node.getExpression();
       if (Node.isIdentifier(expr) && expr.getText() === 'require') {
@@ -65,11 +61,9 @@ function detectModuleSignals(sourceFile: SourceFile): ModuleSignals {
       }
     }
 
-    // module.exports or exports.prop
     if (Node.isPropertyAccessExpression(node)) {
       const text = node.getText();
       if (text.startsWith('module.exports') || text.startsWith('exports.')) {
-        // Only count as CJS if it's an assignment target (left side of =)
         const parent = node.getParent();
         if (
           parent &&
@@ -87,7 +81,6 @@ function detectModuleSignals(sourceFile: SourceFile): ModuleSignals {
 
 /**
  * Classify a file's module system based on its signals.
- * Returns 'esm', 'cjs', 'mixed', or 'unknown'.
  */
 function classifyModuleSystem(signals: ModuleSignals): 'esm' | 'cjs' | 'mixed' | 'unknown' {
   const hasEsm = signals.hasEsmImport || signals.hasEsmExport;
@@ -101,7 +94,6 @@ function classifyModuleSystem(signals: ModuleSignals): 'esm' | 'cjs' | 'mixed' |
 
 /**
  * Find CJS-style nodes in instrumented code that weren't in the original.
- * Returns line numbers of newly introduced CJS patterns.
  */
 function findNewCjsPatterns(
   originalSource: SourceFile,
@@ -110,12 +102,10 @@ function findNewCjsPatterns(
   const originalRequireLines = new Set<string>();
   const originalExportLines = new Set<string>();
 
-  // Collect original CJS patterns (by text content for comparison)
   originalSource.forEachDescendant((node) => {
     if (Node.isCallExpression(node)) {
       const expr = node.getExpression();
       if (Node.isIdentifier(expr) && expr.getText() === 'require') {
-        // Only count require() with a string literal arg — consistent with detectModuleSignals
         const args = node.getArguments();
         if (args.length > 0 && Node.isStringLiteral(args[0])) {
           originalRequireLines.add(node.getText());
@@ -167,7 +157,6 @@ function findNewCjsPatterns(
 
 /**
  * Find ESM-style nodes in instrumented code that weren't in the original.
- * Returns line numbers of newly introduced ESM patterns.
  */
 function findNewEsmPatterns(
   originalSource: SourceFile,
@@ -185,7 +174,6 @@ function findNewEsmPatterns(
     }
   }
 
-  // Check for new export declarations (by text content)
   const originalExportTexts = new Set([
     ...originalSource.getExportDeclarations().map(e => e.getText()),
     ...originalSource.getExportAssignments().map(e => e.getText()),
@@ -202,7 +190,6 @@ function findNewEsmPatterns(
     }
   }
 
-  // Check for new exported declarations (export function, export class, export const)
   const originalExportedNames = new Set<string>();
   originalSource.forEachChild((node) => {
     if (Node.isExportable(node) && node.isExported()) {
@@ -228,35 +215,28 @@ function findNewEsmPatterns(
 }
 
 /**
- * NDS-006: Verify instrumented code uses the same module system as the original.
+ * NDS-006 TypeScript: Verify instrumented code uses the same module system as the original.
  *
- * Detects ESM (import/export) vs CJS (require/module.exports) in both the
- * original and instrumented code. Flags when the instrumented output introduces
- * the wrong module system.
- *
- * Cases:
- * - Original is ESM, instrumented adds CJS → failure
- * - Original is CJS, instrumented adds ESM → failure
- * - Original is mixed or unknown → pass (can't enforce)
- * - Same module system → pass
- *
- * @param originalCode - The original source code before instrumentation
+ * @param originalCode - The original TypeScript code before instrumentation
  * @param instrumentedCode - The agent's instrumented output
  * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult[] — one per mismatch, or a single passing result
  */
-export function checkModuleSystemMatch(
+export function checkModuleSystemMatchTs(
   originalCode: string,
   instrumentedCode: string,
   filePath: string,
 ): CheckResult[] {
   const project = new Project({
-    compilerOptions: { allowJs: true },
+    compilerOptions: {
+      strict: true,
+      skipLibCheck: true,
+      noEmit: true,
+    },
     useInMemoryFileSystem: true,
   });
 
-  const originalSource = project.createSourceFile('original.js', originalCode);
-  const instrumentedSource = project.createSourceFile('instrumented.js', instrumentedCode);
+  const originalSource = project.createSourceFile('original.tsx', originalCode);
+  const instrumentedSource = project.createSourceFile('instrumented.tsx', instrumentedCode);
 
   const originalSignals = detectModuleSignals(originalSource);
   const instrumentedSignals = detectModuleSignals(instrumentedSource);
@@ -264,18 +244,14 @@ export function checkModuleSystemMatch(
   const originalSystem = classifyModuleSystem(originalSignals);
   const instrumentedSystem = classifyModuleSystem(instrumentedSignals);
 
-  // If original is mixed or unknown, we can't enforce — pass
   if (originalSystem === 'mixed' || originalSystem === 'unknown') {
     return [passingResult(filePath)];
   }
 
-  // If instrumented matches original system, pass
   if (instrumentedSystem === originalSystem) {
     return [passingResult(filePath)];
   }
 
-  // If original had a clear module system but instrumented lost all signals,
-  // that means instrumentation stripped the module system markers — flag it
   if (instrumentedSystem === 'unknown') {
     return [{
       ruleId: 'NDS-006',
@@ -288,25 +264,21 @@ export function checkModuleSystemMatch(
         `Instrumentation may have removed exports or imports. ` +
         `Preserve the original file's ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} patterns.`,
       tier: 2 as const,
-      blocking: true,
+      blocking: false,
     }];
   }
 
-  // Mismatch detected — find the specific offending lines
   const violations: Array<{ line: number; description: string }> = [];
 
   if (originalSystem === 'esm') {
-    // Original is ESM but instrumented introduced CJS
     const newCjsLines = findNewCjsPatterns(originalSource, instrumentedSource);
     for (const line of newCjsLines) {
       violations.push({ line, description: 'CJS require() or module.exports in ESM file' });
     }
-    // If we couldn't find specific lines, report file-level
     if (violations.length === 0) {
       violations.push({ line: 0, description: 'CJS patterns introduced in ESM file' });
     }
   } else if (originalSystem === 'cjs') {
-    // Original is CJS but instrumented introduced ESM
     const newEsmLines = findNewEsmPatterns(originalSource, instrumentedSource);
     for (const line of newEsmLines) {
       violations.push({ line, description: 'ESM import or export in CJS file' });
@@ -328,7 +300,7 @@ export function checkModuleSystemMatch(
       `Instrumented code must use the same module system as the original file. ` +
       `Use ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} for instrumentation additions.`,
     tier: 2 as const,
-    blocking: true,
+    blocking: false,
   }));
 }
 
@@ -340,21 +312,19 @@ function passingResult(filePath: string): CheckResult {
     lineNumber: null,
     message: 'Module system preserved. Instrumented code uses the same module system as the original.',
     tier: 2,
-    blocking: true,
+    blocking: false,
   };
 }
 
-/** NDS-006 ValidationRule — instrumented code must use the same module system (CJS/ESM) as the original. */
-export const nds006Rule: ValidationRule = {
+/** NDS-006 TypeScript ValidationRule — instrumented code must use the same module system as the original. */
+export const nds006TsRule: ValidationRule = {
   ruleId: 'NDS-006',
   dimension: 'Non-destructive',
-  blocking: true,
+  blocking: false,
   applicableTo(language: string): boolean {
-    // TypeScript has a dedicated nds006 implementation in typescript/rules/nds006.ts
-    // that uses TypeScript parsing. The JS implementation covers JavaScript only.
-    return language === 'javascript';
+    return language === 'typescript';
   },
   check(input) {
-    return checkModuleSystemMatch(input.originalCode, input.instrumentedCode, input.filePath);
+    return checkModuleSystemMatchTs(input.originalCode, input.instrumentedCode, input.filePath);
   },
 };
