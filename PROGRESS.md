@@ -90,6 +90,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-04-14) Started registry span deduplication rule (SCH-005). The first building block — extracting span definitions from the resolved Weaver registry — is implemented and tested. This feeds a two-tier duplicate-detection check (structural similarity + LLM judge) that will flag when separate instrumentation runs name the same operation differently.
 
+- (2026-04-11) TypeScript language provider — Milestones C1 and C2 of PRD #372. `TypeScriptProvider` implements all `LanguageProvider` interface methods using ts-morph (decisions D-2 through D-5 recorded). Covers `.ts` and `.tsx` extensions, `tsc --noEmit` syntax checking, Prettier formatting with TypeScript parser, full AST analysis, and 5 TypeScript/TSX instrumentation examples with semconv `ATTR_*` constants guidance. Registered in the language registry alongside `JavaScriptProvider`. Tree-sitter adoption deferred to PRD #373 — ts-morph handles TypeScript natively with no new dependency. 51 new provider tests; all 2063 tests pass.
+
 - (2026-04-11) Semconv research for TypeScript provider (PRD #372, C0). Researched `@opentelemetry/semantic-conventions` v1.40.0: two entry-points (stable vs `/incubating`), full attribute status table (HTTP/DB/RPC/messaging), DB naming changes (`db.system.name` not `db.system`), HTTP URL migration (`url.full` not `http.url`). Saved to `docs/research/typescript-semconv-constants.md` (includes gotchas section); local copy at `~/.claude/rules/otel-semconv-gotchas.md` for cross-project reuse.
 
 - (2026-04-09) PRD #371 complete — JavaScript language provider extraction. All B1/B2/B3 milestones done; eval gate passed at 92% (commit-story-v2 run-12). Archived to prds/done/.
