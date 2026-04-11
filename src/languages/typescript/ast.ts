@@ -109,12 +109,14 @@ export function findTsExports(source: string): ExportInfo[] {
   const exports: ExportInfo[] = [];
 
   // Named function declarations: export function foo() {}
+  // Skip default exports here — they are captured below via getDefaultExportSymbol()
+  // so that each export appears exactly once with the canonical name 'default'.
   for (const fn of sourceFile.getFunctions()) {
-    if (fn.isExported()) {
+    if (fn.isExported() && !fn.isDefaultExport()) {
       exports.push({
         name: fn.getName() ?? '<anonymous>',
         lineNumber: fn.getStartLineNumber(),
-        isDefault: fn.isDefaultExport(),
+        isDefault: false,
       });
     }
   }

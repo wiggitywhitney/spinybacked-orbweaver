@@ -291,7 +291,7 @@ interface LoginProps {
   onSuccess: (userId: string) => void;
 }
 
-export async function handleLogin(event: FormEvent, email: string): Promise<void> {
+export async function handleLogin(event: FormEvent, email: string): Promise<string> {
   event.preventDefault();
   const response = await fetch('/api/login', {
     method: 'POST',
@@ -311,7 +311,7 @@ interface LoginProps {
   onSuccess: (userId: string) => void;
 }
 
-export async function handleLogin(event: FormEvent, email: string): Promise<void> {
+export async function handleLogin(event: FormEvent, email: string): Promise<string> {
   return tracer.startActiveSpan('my_service.auth.handle_login', async (span) => {
     try {
       event.preventDefault();
