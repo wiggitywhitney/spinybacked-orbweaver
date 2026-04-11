@@ -263,10 +263,13 @@ export async function validateCredentials(dir: string): Promise<void> {
     );
   }
 
-  // Non-HTTP remotes (e.g., SSH scp-style URLs, git://, file://) are skipped here
-  // because GITHUB_TOKEN-based HTTPS validation does not apply to them.
-  // Auth/connectivity errors for these transports will surface at push time.
-  if (remoteUrl && !remoteUrl.startsWith('http://') && !remoteUrl.startsWith('https://')) {
+  // SSH remotes use key-based auth — skip preflight credential probing.
+  // git:// and file:// are left in so ls-remote can still surface connectivity
+  // errors for those transports. If SSH key auth fails it surfaces at push time.
+  const isSshRemote = !!remoteUrl && (
+    remoteUrl.startsWith('git@') || remoteUrl.startsWith('ssh://')
+  );
+  if (isSshRemote) {
     return;
   }
 

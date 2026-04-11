@@ -1,6 +1,7 @@
 // ABOUTME: Generates per-file markdown reasoning reports from FileResult data.
 // ABOUTME: Explains what spans were added, what was skipped, validation journey, and cost.
 
+import { basename, relative } from 'node:path';
 import type { FileResult } from '../fix-loop/types.ts';
 import { formatRuleId } from '../validation/rule-names.ts';
 
@@ -10,12 +11,19 @@ import { formatRuleId } from '../validation/rule-names.ts';
  * a human-readable explanation of what happened and why.
  *
  * @param result - Complete FileResult from the fix loop
+ * @param projectDir - Optional project root used to compute a relative path for the report title.
+ *   When provided, the title shows the path relative to this directory.
+ *   When omitted, falls back to the basename of the file path.
  * @returns Markdown string suitable for writing to a companion .md file
  */
-export function renderReasoningReport(result: FileResult): string {
+export function renderReasoningReport(result: FileResult, projectDir?: string): string {
   const sections: string[] = [];
 
-  sections.push(`# Instrumentation Report: ${result.path}`);
+  // Use a relative path when projectDir is provided, but fall back to basename
+  // if the file is outside the project root (relative path would start with '..').
+  const rel = projectDir ? relative(projectDir, result.path) : null;
+  const displayPath = rel && !rel.startsWith('..') ? rel : basename(result.path);
+  sections.push(`# Instrumentation Report: ${displayPath}`);
   sections.push('');
 
   // Summary section

@@ -28,9 +28,22 @@ function makeResult(overrides: Partial<FileResult> = {}): FileResult {
 }
 
 describe('renderReasoningReport', () => {
-  it('includes file path in title', () => {
+  it('includes basename in title when no projectDir provided', () => {
     const report = renderReasoningReport(makeResult());
-    expect(report).toContain('# Instrumentation Report: /project/src/order-service.js');
+    expect(report).toContain('# Instrumentation Report: order-service.js');
+  });
+
+  it('includes relative path in title when projectDir is provided', () => {
+    const report = renderReasoningReport(makeResult(), '/project');
+    expect(report).toContain('# Instrumentation Report: src/order-service.js');
+  });
+
+  it('falls back to basename when file is outside projectDir', () => {
+    const report = renderReasoningReport(makeResult(), '/other/project');
+    // path.relative from an unrelated dir produces '../../project/src/order-service.js'
+    // which exposes extra path structure — fall back to basename
+    expect(report).toContain('# Instrumentation Report: order-service.js');
+    expect(report).not.toContain('..');
   });
 
   it('includes summary with status, spans, attempts, and tokens', () => {

@@ -125,7 +125,7 @@ export async function runGitWorkflow(
           })
           .then(() => {
             const companionFilePath = companionPath(result.path);
-            const companionContent = renderReasoningReport(result);
+            const companionContent = renderReasoningReport(result, projectDir);
             return deps.commitFileResult(result, projectDir, {
               registryDir: absoluteRegistryDir,
               companionFiles: [{ path: companionFilePath, content: companionContent }],
