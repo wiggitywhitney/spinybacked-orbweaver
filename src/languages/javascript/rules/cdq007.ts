@@ -75,21 +75,23 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
     const valueArg = args[1];
     const line = node.getStartLineNumber();
 
-    // Check 1: PII attribute name — strip surrounding quotes and backticks
-    const keyText = keyArg.getText().replace(/^[`'"]|[`'"]$/g, '');
-    // Match on the last segment of dotted keys (e.g., "commit.author" → "author")
-    const keySegments = keyText.split('.');
-    const lastSegment = keySegments[keySegments.length - 1] ?? '';
-    if (PII_ATTRIBUTE_NAMES.has(keyText) || PII_SUFFIX_NAMES.has(lastSegment)) {
-      findings.push({
-        line,
-        message:
-          `setAttribute key "${keyText}" at line ${line} may expose PII in telemetry. ` +
-          `Use a non-identifying attribute name or hash/redact the value before setting.`,
-      });
-      return; // one finding per setAttribute call is sufficient
+    // Check 1: PII attribute name — only for statically known string keys.
+    // Skip identifiers/expressions (e.g., `setAttribute(keyVar, ...)`) because
+    // keyVar's identifier name is not the attribute key at runtime.
+    if (Node.isStringLiteral(keyArg) || Node.isNoSubstitutionTemplateLiteral(keyArg)) {
+      const keyText = keyArg.getText().replace(/^[`'"]|[`'"]$/g, '');
+      const keySegments = keyText.split('.');
+      const lastSegment = keySegments[keySegments.length - 1] ?? '';
+      if (PII_ATTRIBUTE_NAMES.has(keyText) || PII_SUFFIX_NAMES.has(lastSegment)) {
+        findings.push({
+          line,
+          message:
+            `setAttribute key "${keyText}" at line ${line} may expose PII in telemetry. ` +
+            `Use a non-identifying attribute name or hash/redact the value before setting.`,
+        });
+        return;
+      }
     }
-
     // Check 2: Filesystem path value — value is an identifier whose name suggests a path.
     // Tokenize by camelCase/underscore/hyphen/dot to avoid substring false positives
     // (e.g., "profileId" contains "file" but is not a path identifier).
@@ -98,7 +100,9 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
         .split(/(?<=[a-z])(?=[A-Z])|[_\-.]/)
         .map((t) => t.toLowerCase())
         .filter((t) => t.length > 0);
-      if (PATH_IDENTIFIER_PATTERNS.some((p) => tokens.includes(p))) {
+      // Also match lowercase compound identifiers like "filepath", "dirname" where
+      // the path word is a prefix (startsWith catches compounds that didn't split).
+      if (PATH_IDENTIFIER_PATTERNS.some((p) => tokens.some((t) => t === p || t.startsWith(p)))) {
         findings.push({
           line,
           message:
@@ -231,9 +235,9 @@ function isNullCheckCondition(condition: import('ts-morph').Expression, varName:
  */
 function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: string): boolean {
   // Pattern 1: setAttribute is inside the THEN branch of an enclosing if that guards varName.
-  // Verify the call is in the then-branch — else-branch means varName may be null/falsy there.
+  // Stop at function boundaries — a guard in an outer function doesn't protect an inner function.
   let current: import('ts-morph').Node | undefined = setAttrCall.getParent();
-  while (current) {
+  while (current && !isFunctionBoundary(current)) {
     if (Node.isIfStatement(current)) {
       if (isNullCheckCondition(current.getExpression(), varName)) {
         const thenStmt = current.getThenStatement();
@@ -248,30 +252,47 @@ function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: s
   // Pattern 2: preceding sibling is a terminating NEGATIVE guard, e.g.:
   //   if (!entries) return;
   //   if (entries == null) throw new Error(...);
-  // After such a statement, varName is guaranteed to be non-null.
-  let stmt: import('ts-morph').Node | undefined = setAttrCall;
-  let block: import('ts-morph').Node | undefined;
-  while (stmt) {
-    const parent = stmt.getParent();
-    if (parent && (Node.isBlock(parent) || Node.isSourceFile(parent))) {
-      block = parent;
-      break;
+  // Walk up through ancestor blocks (within the same function scope) collecting
+  // preceding sibling if-statements at each level.
+  let nodeRef: import('ts-morph').Node | undefined = setAttrCall;
+  while (nodeRef && !isFunctionBoundary(nodeRef)) {
+    // Find the containing block for nodeRef
+    let childRef: import('ts-morph').Node | undefined = nodeRef;
+    let blockRef: import('ts-morph').Node | undefined = nodeRef.getParent();
+    while (blockRef && !isFunctionBoundary(blockRef) && !Node.isBlock(blockRef) && !Node.isSourceFile(blockRef)) {
+      childRef = blockRef;
+      blockRef = blockRef.getParent();
     }
-    stmt = parent;
-  }
-  if (block && stmt && (Node.isBlock(block) || Node.isSourceFile(block))) {
-    const statements = block.getStatements();
-    const stmtIndex = statements.findIndex((s) => s === stmt);
-    for (let i = 0; i < stmtIndex; i++) {
-      const s = statements[i];
+    if (!blockRef || isFunctionBoundary(blockRef) || (!Node.isBlock(blockRef) && !Node.isSourceFile(blockRef))) break;
+    if (!childRef) break;
+
+    const stmts = blockRef.getStatements();
+    const idx = stmts.findIndex((s) => s === childRef);
+    for (let i = 0; i < idx; i++) {
+      const s = stmts[i];
       if (!s || !Node.isIfStatement(s)) continue;
       if (isNegativeNullCheckCondition(s.getExpression(), varName) && isThenTerminating(s)) {
         return true;
       }
     }
+
+    nodeRef = blockRef; // move up to block level and continue scanning
   }
 
   return false;
+}
+
+/**
+ * Check if a node is a function boundary (prevents guards from crossing scopes).
+ */
+function isFunctionBoundary(node: import('ts-morph').Node): boolean {
+  return (
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isArrowFunction(node) ||
+    Node.isMethodDeclaration(node) ||
+    Node.isConstructorDeclaration(node)
+  );
 }
 
 /**
