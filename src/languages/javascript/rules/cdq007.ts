@@ -6,11 +6,20 @@ import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
- * PII-sensitive attribute name patterns.
- * These names expose personally identifiable information in telemetry.
+ * PII-sensitive attribute names — flagged when the full key matches exactly.
  */
 const PII_ATTRIBUTE_NAMES = new Set([
   'author', 'committer', 'username', 'email', 'password', 'ssn', 'name', 'user',
+]);
+
+/**
+ * PII names that are specific enough to flag as the last segment of a dotted key
+ * (e.g., "commit.author" → "author" flagged). "name" and "user" are excluded here
+ * because they appear in legitimate non-PII OTel keys (e.g., "service.name",
+ * "process.name"). They are still caught when the full key matches exactly.
+ */
+const PII_SUFFIX_NAMES = new Set([
+  'author', 'committer', 'username', 'email', 'password', 'ssn',
 ]);
 
 /**
@@ -71,7 +80,7 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
     // Match on the last segment of dotted keys (e.g., "commit.author" → "author")
     const keySegments = keyText.split('.');
     const lastSegment = keySegments[keySegments.length - 1] ?? '';
-    if (PII_ATTRIBUTE_NAMES.has(lastSegment) || PII_ATTRIBUTE_NAMES.has(keyText)) {
+    if (PII_ATTRIBUTE_NAMES.has(keyText) || PII_SUFFIX_NAMES.has(lastSegment)) {
       findings.push({
         line,
         message:
@@ -81,10 +90,15 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
       return; // one finding per setAttribute call is sufficient
     }
 
-    // Check 2: Filesystem path value — value is an identifier whose name suggests a path
+    // Check 2: Filesystem path value — value is an identifier whose name suggests a path.
+    // Tokenize by camelCase/underscore/hyphen/dot to avoid substring false positives
+    // (e.g., "profileId" contains "file" but is not a path identifier).
     if (Node.isIdentifier(valueArg)) {
-      const identName = valueArg.getText().toLowerCase();
-      if (PATH_IDENTIFIER_PATTERNS.some((p) => identName.includes(p))) {
+      const tokens = valueArg.getText()
+        .split(/(?<=[a-z])(?=[A-Z])|[_\-.]/)
+        .map((t) => t.toLowerCase())
+        .filter((t) => t.length > 0);
+      if (PATH_IDENTIFIER_PATTERNS.some((p) => tokens.includes(p))) {
         findings.push({
           line,
           message:
@@ -216,9 +230,8 @@ function isNullCheckCondition(condition: import('ts-morph').Expression, varName:
  * 2. A preceding sibling statement in the enclosing block null-checks varName
  */
 function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: string): boolean {
-  // Only Pattern 1: setAttribute is inside the THEN branch of an enclosing if that guards varName.
-  // We walk up from the call and, when we find a guarding IfStatement, verify the call is in the
-  // then-branch — if it is in the else-branch, varName may actually be null/falsy there.
+  // Pattern 1: setAttribute is inside the THEN branch of an enclosing if that guards varName.
+  // Verify the call is in the then-branch — else-branch means varName may be null/falsy there.
   let current: import('ts-morph').Node | undefined = setAttrCall.getParent();
   while (current) {
     if (Node.isIfStatement(current)) {
@@ -232,6 +245,88 @@ function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: s
     current = current.getParent();
   }
 
+  // Pattern 2: preceding sibling is a terminating NEGATIVE guard, e.g.:
+  //   if (!entries) return;
+  //   if (entries == null) throw new Error(...);
+  // After such a statement, varName is guaranteed to be non-null.
+  let stmt: import('ts-morph').Node | undefined = setAttrCall;
+  let block: import('ts-morph').Node | undefined;
+  while (stmt) {
+    const parent = stmt.getParent();
+    if (parent && (Node.isBlock(parent) || Node.isSourceFile(parent))) {
+      block = parent;
+      break;
+    }
+    stmt = parent;
+  }
+  if (block && stmt && (Node.isBlock(block) || Node.isSourceFile(block))) {
+    const statements = block.getStatements();
+    const stmtIndex = statements.findIndex((s) => s === stmt);
+    for (let i = 0; i < stmtIndex; i++) {
+      const s = statements[i];
+      if (!s || !Node.isIfStatement(s)) continue;
+      if (isNegativeNullCheckCondition(s.getExpression(), varName) && isThenTerminating(s)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check if an IfStatement condition is a NEGATIVE null check for varName.
+ * Detects: !varName, varName == null, varName === null, varName === undefined, etc.
+ */
+function isNegativeNullCheckCondition(
+  condition: import('ts-morph').Expression,
+  varName: string,
+): boolean {
+  // !varName
+  if (Node.isPrefixUnaryExpression(condition)) {
+    const op = condition.getOperatorToken();
+    if (op === SyntaxKind.ExclamationToken) {
+      const operand = condition.getOperand();
+      if (Node.isIdentifier(operand) && operand.getText() === varName) return true;
+    }
+  }
+
+  // varName == null, varName === null, varName === undefined, null === varName, etc.
+  if (Node.isBinaryExpression(condition)) {
+    const left = condition.getLeft();
+    const right = condition.getRight();
+    const operator = condition.getOperatorToken().getKind();
+    if (
+      operator !== SyntaxKind.EqualsEqualsToken &&
+      operator !== SyntaxKind.EqualsEqualsEqualsToken
+    ) return false;
+    const leftIsVar = Node.isIdentifier(left) && left.getText() === varName;
+    const rightIsVar = Node.isIdentifier(right) && right.getText() === varName;
+    const leftIsNullish = left.getText() === 'null' || left.getText() === 'undefined';
+    const rightIsNullish = right.getText() === 'null' || right.getText() === 'undefined';
+    return (leftIsVar && rightIsNullish) || (rightIsVar && leftIsNullish);
+  }
+
+  return false;
+}
+
+/**
+ * Check if the then-branch of an IfStatement terminates (return/throw/break/continue).
+ */
+function isThenTerminating(ifStmt: import('ts-morph').IfStatement): boolean {
+  const thenStmt = ifStmt.getThenStatement();
+  if (
+    Node.isReturnStatement(thenStmt) || Node.isThrowStatement(thenStmt) ||
+    Node.isBreakStatement(thenStmt) || Node.isContinueStatement(thenStmt)
+  ) return true;
+  if (Node.isBlock(thenStmt)) {
+    const stmts = thenStmt.getStatements();
+    const last = stmts[stmts.length - 1];
+    return !!last && (
+      Node.isReturnStatement(last) || Node.isThrowStatement(last) ||
+      Node.isBreakStatement(last) || Node.isContinueStatement(last)
+    );
+  }
   return false;
 }
 
