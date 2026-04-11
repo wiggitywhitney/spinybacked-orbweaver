@@ -45,6 +45,10 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // guards (if (x) {) which are more likely to be business logic.
   // Same trade-off applies: also filters truthy guards wrapping business logic.
   /^\s*if\s*\(\s*\w+(?:\.\w+)+\s*\)\s*\{?\s*$/,
+  // TypeScript error type-narrowing guard inside catch blocks.
+  // `if (err instanceof Error) {` is required when catch variable is typed `unknown`
+  // (enabled by `useUnknownInCatchVariables` in strict mode) and wraps `span.recordException`.
+  /^\s*if\s*\(\s*\w+\s+instanceof\s+Error\s*\)\s*\{?\s*$/,
   // Re-throw of caught exception (after recording exception on span)
   /^\s*throw\s+(?:err|error|e|ex|exception)\s*;/,
   // Return with span wrapper

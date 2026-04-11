@@ -7,6 +7,9 @@ journal/
 .vals.yaml
 evaluation-output/
 
+# TypeScript golden test temp directories (written inside project for tsc module resolution)
+test/tmp-ts-golden-*/
+
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
 .claude/skills/
