@@ -216,43 +216,34 @@ function isNullCheckCondition(condition: import('ts-morph').Expression, varName:
  * 2. A preceding sibling statement in the enclosing block null-checks varName
  */
 function hasNullGuard(setAttrCall: import('ts-morph').CallExpression, varName: string): boolean {
-  // Pattern 1: Check enclosing if statements — the setAttribute is inside an if(varName) block
+  // Only Pattern 1: setAttribute is inside the THEN branch of an enclosing if that guards varName.
+  // We walk up from the call and, when we find a guarding IfStatement, verify the call is in the
+  // then-branch — if it is in the else-branch, varName may actually be null/falsy there.
   let current: import('ts-morph').Node | undefined = setAttrCall.getParent();
   while (current) {
     if (Node.isIfStatement(current)) {
       if (isNullCheckCondition(current.getExpression(), varName)) {
-        return true;
+        const thenStmt = current.getThenStatement();
+        if (isInsideNode(setAttrCall, thenStmt)) {
+          return true;
+        }
       }
     }
     current = current.getParent();
   }
 
-  // Pattern 2: A preceding sibling statement in the containing block null-checks varName
-  let stmt: import('ts-morph').Node | undefined = setAttrCall;
-  let block: import('ts-morph').Node | undefined;
-  while (stmt) {
-    const parent = stmt.getParent();
-    if (parent && (Node.isBlock(parent) || Node.isSourceFile(parent))) {
-      block = parent;
-      break;
-    }
-    stmt = parent;
+  return false;
+}
+
+/**
+ * Check if `node` is a descendant of `ancestor`.
+ */
+function isInsideNode(node: import('ts-morph').Node, ancestor: import('ts-morph').Node): boolean {
+  let c: import('ts-morph').Node | undefined = node.getParent();
+  while (c) {
+    if (c === ancestor) return true;
+    c = c.getParent();
   }
-  if (!block || !stmt || (!Node.isBlock(block) && !Node.isSourceFile(block))) return false;
-
-  const statements = block.getStatements();
-  const stmtIndex = statements.findIndex((s) => s === stmt);
-
-  for (let i = 0; i < stmtIndex; i++) {
-    const s = statements[i];
-    // Only check top-level if statements — getDescendantsOfKind would find
-    // ifs nested inside loops or other blocks that aren't guards for this scope.
-    if (!s || !Node.isIfStatement(s)) continue;
-    if (isNullCheckCondition(s.getExpression(), varName)) {
-      return true;
-    }
-  }
-
   return false;
 }
 

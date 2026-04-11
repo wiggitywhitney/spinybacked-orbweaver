@@ -19,7 +19,10 @@ import { formatRuleId } from '../validation/rule-names.ts';
 export function renderReasoningReport(result: FileResult, projectDir?: string): string {
   const sections: string[] = [];
 
-  const displayPath = projectDir ? relative(projectDir, result.path) : basename(result.path);
+  // Use a relative path when projectDir is provided, but fall back to basename
+  // if the file is outside the project root (relative path would start with '..').
+  const rel = projectDir ? relative(projectDir, result.path) : null;
+  const displayPath = rel && !rel.startsWith('..') ? rel : basename(result.path);
   sections.push(`# Instrumentation Report: ${displayPath}`);
   sections.push('');
 

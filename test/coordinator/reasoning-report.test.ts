@@ -38,11 +38,12 @@ describe('renderReasoningReport', () => {
     expect(report).toContain('# Instrumentation Report: src/order-service.js');
   });
 
-  it('includes basename in title when projectDir does not share a prefix', () => {
+  it('falls back to basename when file is outside projectDir', () => {
     const report = renderReasoningReport(makeResult(), '/other/project');
-    // path.relative from an unrelated dir produces a long relative path with ..
-    // the report should still not contain the absolute path
-    expect(report).not.toContain('# Instrumentation Report: /project/src/order-service.js');
+    // path.relative from an unrelated dir produces '../../project/src/order-service.js'
+    // which exposes extra path structure — fall back to basename
+    expect(report).toContain('# Instrumentation Report: order-service.js');
+    expect(report).not.toContain('..');
   });
 
   it('includes summary with status, spans, attempts, and tokens', () => {
