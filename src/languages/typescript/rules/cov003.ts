@@ -197,7 +197,7 @@ function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): 
   }
 
   if (EXPECTED_CONDITION_PATTERNS.some((pattern) => bodyText.includes(pattern))) {
-    return false;
+    return true;
   }
 
   return false;
