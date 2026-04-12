@@ -113,6 +113,7 @@ _Populate as decisions are made during implementation._
 | D-4 | Return raw specifiers from findImports() — no tsconfig.json resolution (OD-3) | Consistent with the JavaScript provider. The agent's prompt context needs OTel package names (bare specifiers), not resolved filesystem paths. Path aliases do not affect OTel import detection. tsconfig.json resolution would require reading the project's config file, adding I/O and complexity for no benefit. | 2026-04-11 |
 | D-5 | Use name-based heuristics for classification; abstain with 'unknown' when uncertain (OD-4) | No Tier 2 checker in the initial implementation requires type-aware analysis. Pattern matching on parameter names, decorators, and directory structure is sufficient. 'unknown' means the checker abstains rather than producing false positives or false negatives. Type-aware classification can be added in a later PRD if needed. | 2026-04-11 |
 | D-6 | Language-specific rules apply to their own language only; inherited rules acknowledged via TS_INHERITED_RULE_IDS (C3) | TS rules (cov001, cov003, nds004, nds006) have `applicableTo('typescript') === true, applicableTo('javascript') === false`; the corresponding JS rules return JS-only. This prevents duplicate rule execution when both providers are registered. 23 remaining rules are handled by JS implementations that apply to TypeScript; TypeScriptProvider.hasImplementation() acknowledges these via TS_INHERITED_RULE_IDS rather than re-registering them. | 2026-04-11 |
+| D-7 | Fix run-13 eval issues (#435–#440) on independent branches from main; rebase before TypeScript eval | All run-13 findings (null-safe guards, string coercion, smart rollback, summaryNode NDS-003, partial commit, SCH-004 judge quality) will be fixed on independent branches from main, not on this branch. Before running C7, rebase this branch on main to pull in all fixes. Additionally, the null-guard (#435) and string coercion (#436) prompt guidance must be applied to `src/languages/typescript/prompt.ts` on this branch explicitly — those fixes land in the JS prompt (on main) but the TS prompt lives only here and needs the same guidance applied directly. | 2026-04-12 |
 
 ---
 
@@ -264,6 +265,11 @@ Following Part 8 checklist, Step 4:
 ### Milestone C7: Real-world evaluation
 
 Following Part 8 checklist, Steps 5 and 6:
+
+**Before running the eval (D-7):**
+- [ ] Rebase this branch on main — pulls in all run-13 fixes (#435–#440: null-safe guards, string coercion, smart rollback, summaryNode NDS-003, partial commit, SCH-004 judge quality)
+- [ ] Apply null-guard guidance to `src/languages/typescript/prompt.ts`: when accessing a property on a guarded value, use `!= null` not `!== undefined` (matching the JS prompt fix from #435)
+- [ ] Apply string coercion guidance to `src/languages/typescript/prompt.ts`: when extracting a date string from a timestamp field, use `new Date(value).toISOString().split('T')[0]` (matching the JS prompt fix from #436)
 
 - [ ] Identify a real open-source TypeScript project to use as evaluation target (not a fixture — a real project)
 - [ ] Instrument 20+ files using `spiny-orb instrument`
