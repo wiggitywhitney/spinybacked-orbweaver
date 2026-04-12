@@ -1,6 +1,8 @@
 // ABOUTME: COV-004 Tier 2 check — async operations have spans.
 // ABOUTME: Flags async functions and functions containing await without enclosing spans.
 
+import { basename } from 'node:path';
+
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
@@ -26,7 +28,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
   const fileHasInstrumentation = hasSpanCall(code);
 
   const flagged: Array<{ name: string; line: number; reason: string; exported: boolean }> = [];

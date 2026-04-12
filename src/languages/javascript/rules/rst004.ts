@@ -1,6 +1,8 @@
 // ABOUTME: RST-004 Tier 2 check — no spans on internal implementation details.
 // ABOUTME: Flags spans on unexported functions and private class methods, exempting I/O boundaries.
 
+import { basename } from 'node:path';
+
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
@@ -40,7 +42,7 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const flagged: Array<{ name: string; line: number; kind: string }> = [];
 

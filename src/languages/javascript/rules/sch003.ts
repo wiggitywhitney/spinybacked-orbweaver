@@ -1,6 +1,8 @@
 // ABOUTME: SCH-003 Tier 2 check — attribute values conform to registry types.
 // ABOUTME: Verifies setAttribute values match type constraints (enum members, int, string, boolean).
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { Expression } from 'ts-morph';
@@ -44,7 +46,7 @@ export function checkAttributeValuesConformToTypes(
     return [pass(filePath, 'No registry type definitions to check against.')];
   }
 
-  const violations = findTypeViolations(code, attrDefs);
+  const violations = findTypeViolations(code, attrDefs, filePath);
 
   if (violations.length === 0) {
     return [pass(filePath, 'All attribute values conform to registry type definitions.')];
@@ -69,12 +71,13 @@ export function checkAttributeValuesConformToTypes(
 function findTypeViolations(
   code: string,
   attrDefs: Map<string, ResolvedRegistryAttribute>,
+  filePath: string,
 ): TypeViolation[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const violations: TypeViolation[] = [];
 

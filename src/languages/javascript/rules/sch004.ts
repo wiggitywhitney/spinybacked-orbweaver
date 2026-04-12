@@ -1,6 +1,8 @@
 // ABOUTME: SCH-004 Tier 2 check — no redundant schema entries.
 // ABOUTME: Flags agent-added attribute keys that are near-duplicates of existing registry entries.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -64,7 +66,7 @@ export async function checkNoRedundantSchemaEntries(
     return { results: [pass(filePath, 'No registry attributes to check for redundancy.')], judgeTokenUsage: [] };
   }
 
-  const usedKeys = extractAttributeKeys(code);
+  const usedKeys = extractAttributeKeys(code, filePath);
 
   if (usedKeys.length === 0) {
     return { results: [pass(filePath, 'No setAttribute calls found to check.')], judgeTokenUsage: [] };
@@ -209,12 +211,12 @@ interface AttributeKeyEntry {
 /**
  * Extract attribute keys from setAttribute calls.
  */
-function extractAttributeKeys(code: string): AttributeKeyEntry[] {
+function extractAttributeKeys(code: string, filePath: string): AttributeKeyEntry[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const entries: AttributeKeyEntry[] = [];
   const seen = new Set<string>();

@@ -1,6 +1,8 @@
 // ABOUTME: COV-003 Tier 2 check — failable operations have error visibility.
 // ABOUTME: Verifies that spans around failable operations include error recording (recordException/setStatus).
 
+import { basename } from 'node:path';
+
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
@@ -37,7 +39,7 @@ export function checkErrorVisibility(code: string, filePath: string): CheckResul
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const issues: Array<{ line: number; description: string }> = [];
 

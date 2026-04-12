@@ -1,6 +1,8 @@
 // ABOUTME: CDQ-006 Tier 2 check — expensive attribute computation guarded.
 // ABOUTME: Flags setAttribute calls with expensive values lacking span.isRecording() guard.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
@@ -38,7 +40,7 @@ export function checkIsRecordingGuard(code: string, filePath: string): CheckResu
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const unguarded: Array<{ line: number; detail: string }> = [];
 
