@@ -80,12 +80,11 @@ function inferValueType(valueNode: Node): InferredType {
 /**
  * Normalize a registry attribute type to a comparable string.
  * Enum types normalize to 'string' (enum values are strings).
- * Array types like 'string[]' normalize to 'string'.
+ * Collection types like 'string[]' are kept distinct from scalar types.
  */
 function normalizeRegistryType(type: ResolvedRegistryAttribute['type']): string | undefined {
   if (!type) return undefined;
   if (isEnumType(type)) return 'string';
-  if (type === 'string[]') return 'string';
   return type;
 }
 
