@@ -1,0 +1,2 @@
+E2E test artifact created at 2026-04-12T17:29:48.259Z
+This file should be deleted by test cleanup.
