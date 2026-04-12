@@ -67,7 +67,7 @@ Running the judge on all O(n²) pairs is expensive. The script tier uses Jaccard
 
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
-| (none yet) | | | |
+| D-1 | Post-verdict namespace validation before emitting findings | The judge's output is probabilistic. Before a "duplicate" verdict causes a finding, validate deterministically that both span IDs share the same root namespace segment (the segment after `span.`, e.g., `commit_story` in `span.commit_story.generate`). If the root namespaces differ, discard the verdict — different root namespaces mean different operational domains. This is the deterministic gate that prevents probabilistic false positives. Driven by the SCH-004 false positive pattern (issue #440) where type mismatches caused hallucinated semantic equivalence; the namespace check is the SCH-005 analog to SCH-004's type check. | 2026-04-12 |
 
 ---
 
@@ -97,8 +97,9 @@ Before writing any code, read how `tokenize()` and `jaccardSimilarity()` are imp
 
 - [ ] For pairs with 0.2 < Jaccard ≤ 0.5 (per OD-3), call `callJudge()` with span IDs and briefs as context (per OD-2). Use a confidence threshold of 0.7, matching SCH-004.
 - [ ] Design the judge question using this template as a starting point: `"Are span IDs '[id-a]' and '[id-b]' semantic duplicates — do they represent the same operation? Answer false only if they clearly measure the same thing in the same domain. Spans in different domains (e.g., HTTP vs. database) are NOT duplicates even if their names share words. Brief for '[id-a]': [brief or 'not provided']. Brief for '[id-b]': [brief or 'not provided']."` Pass all span IDs in the registry as `candidates`.
-- [ ] Emit an advisory finding when the judge answers `false` (is a duplicate) with confidence ≥ 0.7. When the judge returns `null` (failure), skip silently and continue.
-- [ ] Unit test (mock `callJudge`): verify the judge is called with the correct structure for a pair in the Jaccard gap. Verify a `false` verdict at confidence 0.8 produces a finding. Verify a `true` verdict and a `null` result produce no finding.
+- [ ] When the judge answers `false` (is a duplicate) with confidence ≥ 0.7, apply a deterministic namespace check before emitting a finding (D-1): extract the root namespace segment from each span ID (the segment immediately after `span.`, e.g., `commit_story` from `span.commit_story.generate`) and verify they match. If the root namespaces differ, discard the verdict silently — different root namespaces mean different operational domains and the judge is over-matching. Only emit the finding if both the confidence threshold and the namespace check pass.
+- [ ] When the judge returns `null` (failure), skip silently and continue.
+- [ ] Unit test (mock `callJudge`): verify the judge is called with the correct structure for a pair in the Jaccard gap. Verify a `false` verdict at confidence 0.8 with matching root namespaces produces a finding. Verify a `false` verdict at confidence 0.8 with differing root namespaces produces no finding (D-1). Verify a `true` verdict and a `null` result produce no finding.
 - [ ] `npm run typecheck` passes.
 
 ### M4: Coordinator wiring
