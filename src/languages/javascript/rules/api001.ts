@@ -1,6 +1,8 @@
 // ABOUTME: API-001/003/004 combined Tier 2 check — forbidden import detection.
 // ABOUTME: Scans for OTel SDK internals, vendor-specific SDKs, and OTel non-API packages.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
@@ -108,7 +110,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const violations: Array<{
     line: number;

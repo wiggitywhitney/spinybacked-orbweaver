@@ -1,6 +1,8 @@
 // ABOUTME: COV-005 Tier 2 check — domain-specific attributes present.
 // ABOUTME: Compares setAttribute calls against registry-defined required/recommended attributes per span.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult, RegistrySpanDefinition } from '../../../validation/types.ts';
@@ -47,7 +49,7 @@ export function checkDomainAttributes(
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   // Build a lookup from span name to registry definition
   const registryByName = new Map<string, RegistrySpanDefinition>();

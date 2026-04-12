@@ -1,6 +1,8 @@
 // ABOUTME: COV-001 Tier 2 check — entry points have spans.
 // ABOUTME: Detects Express/Fastify/http.createServer handlers and exported async functions without spans.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
@@ -61,7 +63,7 @@ export function checkEntryPointSpans(code: string, filePath: string): CheckResul
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const unspanned: Array<{ line: number; description: string }> = [];
 

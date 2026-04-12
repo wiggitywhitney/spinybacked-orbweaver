@@ -1,6 +1,8 @@
 // ABOUTME: COV-002 Tier 2 check — outbound calls have spans.
 // ABOUTME: AST-based detection of outbound call sites (fetch, HTTP, DB, messaging) without enclosing spans.
 
+import { basename } from 'node:path';
+
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CallExpression, Identifier, SourceFile } from 'ts-morph';
 
@@ -112,7 +114,7 @@ export function checkOutboundCallSpans(code: string, filePath: string): CheckRes
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
   const importSources = collectImportSources(sourceFile);
 
   const unspannedCalls: Array<{ line: number; callText: string }> = [];

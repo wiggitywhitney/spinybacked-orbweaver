@@ -1,6 +1,8 @@
 // ABOUTME: RST-003 Tier 2 check — no duplicate spans on thin wrappers.
 // ABOUTME: Flags spans on functions whose body is a single return delegating to another function.
 
+import { basename } from 'node:path';
+
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
@@ -24,7 +26,7 @@ export function checkThinWrapperSpans(code: string, filePath: string): CheckResu
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const flagged: Array<{ name: string; line: number }> = [];
 

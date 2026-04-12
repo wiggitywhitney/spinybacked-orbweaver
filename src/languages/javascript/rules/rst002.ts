@@ -1,6 +1,8 @@
 // ABOUTME: RST-002 Tier 2 check — no spans on trivial accessors.
 // ABOUTME: Flags spans on get/set accessor declarations and trivial property accessor methods.
 
+import { basename } from 'node:path';
+
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
@@ -32,7 +34,7 @@ export function checkTrivialAccessorSpans(code: string, filePath: string): Check
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const flagged: Array<{ name: string; line: number; kind: string }> = [];
 

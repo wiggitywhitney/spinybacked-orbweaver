@@ -1,6 +1,8 @@
 // ABOUTME: SCH-002 Tier 2 check — attribute keys match registry names.
 // ABOUTME: Compares setAttribute/setAttributes key strings against the resolved Weaver registry.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
@@ -46,7 +48,7 @@ export function checkAttributeKeysMatchRegistry(
     return [pass(filePath, 'No registry attributes to check against.')];
   }
 
-  const usedAttributes = extractAttributeKeys(code);
+  const usedAttributes = extractAttributeKeys(code, filePath);
 
   if (usedAttributes.length === 0) {
     return [pass(filePath, 'No setAttribute/setAttributes calls found to check.')];
@@ -91,12 +93,12 @@ interface AttributeKeyEntry {
 /**
  * Extract attribute keys from setAttribute and setAttributes calls.
  */
-function extractAttributeKeys(code: string): AttributeKeyEntry[] {
+function extractAttributeKeys(code: string, filePath: string): AttributeKeyEntry[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const entries: AttributeKeyEntry[] = [];
 

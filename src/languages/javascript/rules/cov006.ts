@@ -1,6 +1,8 @@
 // ABOUTME: COV-006 Tier 2 check — auto-instrumentation preferred over manual spans.
 // ABOUTME: Flags manual spans on operations covered by known auto-instrumentation libraries.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
@@ -54,7 +56,7 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const flagged: Array<{ line: number; library: string; spanName: string }> = [];
 

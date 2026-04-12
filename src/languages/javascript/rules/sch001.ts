@@ -1,6 +1,8 @@
 // ABOUTME: SCH-001 Tier 2 check — span names match registry operations.
 // ABOUTME: Compares span name literals against span definitions in the resolved Weaver registry.
 
+import { basename } from 'node:path';
+
 import { Project, Node } from 'ts-morph';
 import type { CallExpression } from 'ts-morph';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -65,7 +67,7 @@ export async function checkSpanNamesMatchRegistry(
   const spanDefs = getSpanDefinitions(registry);
 
   // Extract span info in a single AST pass
-  const { literalNames: spanNames, nonLiteralCount, zeroArgCount } = extractSpanInfo(code);
+  const { literalNames: spanNames, nonLiteralCount, zeroArgCount } = extractSpanInfo(code, filePath);
 
   if (spanNames.length === 0 && nonLiteralCount === 0 && zeroArgCount === 0) {
     return { results: [pass(filePath, 'No span calls found to check.')], judgeTokenUsage: [] };
@@ -357,12 +359,12 @@ interface SpanInfo {
  * Extract span info from startActiveSpan/startSpan calls in a single AST pass.
  * Returns both literal span name entries and a count of non-literal (dynamic) span names.
  */
-function extractSpanInfo(code: string): SpanInfo {
+function extractSpanInfo(code: string, filePath: string): SpanInfo {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('check.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const literalNames: SpanNameEntry[] = [];
   let nonLiteralCount = 0;
