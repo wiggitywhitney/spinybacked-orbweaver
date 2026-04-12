@@ -1,5 +1,5 @@
 // ABOUTME: Tests for checkpoint test failure rollback in the dispatch loop.
-// ABOUTME: Verifies file content restoration, result status updates, schema extension rollback, and continuation after rollback.
+// ABOUTME: Verifies file content restoration, result status updates, schema extension rollback, and smart targeted rollback.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 
-import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
+import { dispatchFiles, parseFailingSourceFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks, DispatchCheckpointConfig } from '../../src/coordinator/types.ts';
 
 const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
@@ -404,5 +404,280 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
       expect(rollbackWarning).toBeDefined();
       expect(warnings.some(w => w.includes('ReferenceError: tracer is not defined'))).toBe(true);
     });
+  });
+});
+
+describe('parseFailingSourceFiles', () => {
+  it('extracts absolute path from stack frame with function name', () => {
+    const output = `
+  ● Test › foo
+
+    ReferenceError: tracer is not defined
+
+      at Object.<anonymous> (/project/src/summary-graph.js:45:12)
+      at processTicksAndRejections (node:internal/process/task_queues:95:5)
+    `;
+    const windowPaths = ['/project/src/summary-graph.js', '/project/src/other.js'];
+    expect(parseFailingSourceFiles(output, windowPaths)).toEqual(['/project/src/summary-graph.js']);
+  });
+
+  it('extracts bare absolute path stack frame', () => {
+    const output = `at /project/src/journal-manager.js:123:45`;
+    const windowPaths = ['/project/src/journal-manager.js', '/project/src/unrelated.js'];
+    expect(parseFailingSourceFiles(output, windowPaths)).toEqual(['/project/src/journal-manager.js']);
+  });
+
+  it('extracts relative path matched against window absolute paths', () => {
+    const output = `at src/summary-graph.js:45:12`;
+    const windowPaths = ['/project/src/summary-graph.js', '/project/src/other.js'];
+    expect(parseFailingSourceFiles(output, windowPaths)).toEqual(['/project/src/summary-graph.js']);
+  });
+
+  it('skips test file frames and finds src frame one level deeper', () => {
+    const output = `
+      at /project/test/summary-graph.test.js:12:3
+      at Object.<anonymous> (/project/src/summary-graph.js:45:12)
+    `;
+    const windowPaths = ['/project/src/summary-graph.js'];
+    expect(parseFailingSourceFiles(output, windowPaths)).toEqual(['/project/src/summary-graph.js']);
+  });
+
+  it('returns multiple matching files when multiple appear in stack trace', () => {
+    const output = `
+      at /project/src/file-a.js:10:5
+      at /project/src/file-b.js:20:5
+    `;
+    const windowPaths = ['/project/src/file-a.js', '/project/src/file-b.js', '/project/src/file-c.js'];
+    const result = parseFailingSourceFiles(output, windowPaths);
+    expect(result).toContain('/project/src/file-a.js');
+    expect(result).toContain('/project/src/file-b.js');
+    expect(result).not.toContain('/project/src/file-c.js');
+  });
+
+  it('returns empty array when no window files appear in stack trace', () => {
+    const output = `at node:internal/process/task_queues:95:5`;
+    const windowPaths = ['/project/src/summary-graph.js'];
+    expect(parseFailingSourceFiles(output, windowPaths)).toEqual([]);
+  });
+
+  it('returns empty array for empty output', () => {
+    expect(parseFailingSourceFiles('', ['/project/src/foo.js'])).toEqual([]);
+  });
+
+  it('returns empty array for empty window paths', () => {
+    expect(parseFailingSourceFiles('at /project/src/foo.js:1:1', [])).toEqual([]);
+  });
+
+  it('does not duplicate a file appearing multiple times in stack trace', () => {
+    const output = `
+      at /project/src/foo.js:10:5
+      at /project/src/foo.js:20:5
+    `;
+    const result = parseFailingSourceFiles(output, ['/project/src/foo.js']);
+    expect(result).toHaveLength(1);
+  });
+});
+
+describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'smart-rollback-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function createFile(name: string, content = 'function x() {}'): Promise<string> {
+    const filePath = join(tmpDir, name);
+    await writeFile(filePath, content, 'utf-8');
+    return filePath;
+  }
+
+  function makeDepsWithDiskWrite(overrides: Partial<DispatchFilesDeps> = {}): DispatchFilesDeps {
+    return {
+      resolveSchema: vi.fn().mockResolvedValue({ resolved: true }),
+      instrumentWithRetry: vi.fn().mockImplementation(async (filePath: string) => {
+        await writeFile(filePath, '// INSTRUMENTED', 'utf-8');
+        return {
+          path: filePath,
+          status: 'success' as const,
+          spansAdded: 1,
+          librariesNeeded: [],
+          schemaExtensions: [],
+          attributesCreated: 0,
+          validationAttempts: 1,
+          validationStrategyUsed: 'initial-generation' as const,
+          tokenUsage: { inputTokens: 100, outputTokens: 50, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+        };
+      }),
+      ...overrides,
+    };
+  }
+
+  const passingCheckpointConfig: DispatchCheckpointConfig = {
+    registryDir: resolve(import.meta.dirname, '../fixtures/weaver-registry/valid-modified'),
+    baselineSnapshotDir: resolve(import.meta.dirname, '../fixtures/weaver-registry/baseline'),
+  };
+
+  it('reverts only the identified failing file, leaving other window files instrumented', async () => {
+    const originalA = 'function a() {}';
+    const originalB = 'function b() {}';
+    const files = await Promise.all([
+      createFile('a.js', originalA),
+      createFile('b.js', originalB),
+    ]);
+
+    const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+    // First test run fails with b.js in the stack trace; re-run passes
+    let callCount = 0;
+    await dispatchFiles(files, tmpDir, config, undefined, {
+      deps: makeDepsWithDiskWrite(),
+      checkpoint: passingCheckpointConfig,
+      runTestCommand: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            passed: false,
+            error: 'ReferenceError',
+            output: `at Object.<anonymous> (${files[1]}:10:5)`,
+          };
+        }
+        // Re-run after targeted rollback passes
+        return { passed: true };
+      },
+      baselineTestPassed: true,
+    });
+
+    // a.js should remain instrumented (not rolled back)
+    const contentA = await readFile(files[0], 'utf-8');
+    expect(contentA).toBe('// INSTRUMENTED');
+
+    // b.js should be reverted to original
+    const contentB = await readFile(files[1], 'utf-8');
+    expect(contentB).toBe(originalB);
+  });
+
+  it('marks only the identified failing file as failed, other window files stay succeeded', async () => {
+    const files = await Promise.all([
+      createFile('a.js'),
+      createFile('b.js'),
+    ]);
+
+    const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+    let callCount = 0;
+    const results = await dispatchFiles(files, tmpDir, config, undefined, {
+      deps: makeDepsWithDiskWrite(),
+      checkpoint: passingCheckpointConfig,
+      runTestCommand: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            passed: false,
+            error: 'ReferenceError',
+            output: `at Object.<anonymous> (${files[1]}:10:5)`,
+          };
+        }
+        return { passed: true };
+      },
+      baselineTestPassed: true,
+    });
+
+    expect(results[0].status).toBe('success');
+    expect(results[1].status).toBe('failed');
+    expect(results[1].reason).toMatch(/smart rollback|targeted rollback/i);
+  });
+
+  it('falls back to full window rollback when re-run still fails after targeted revert', async () => {
+    const originalA = 'function a() {}';
+    const originalB = 'function b() {}';
+    const files = await Promise.all([
+      createFile('a.js', originalA),
+      createFile('b.js', originalB),
+    ]);
+
+    const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+    let callCount = 0;
+    const results = await dispatchFiles(files, tmpDir, config, undefined, {
+      deps: makeDepsWithDiskWrite(),
+      checkpoint: passingCheckpointConfig,
+      runTestCommand: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            passed: false,
+            error: 'ReferenceError',
+            output: `at Object.<anonymous> (${files[1]}:10:5)`,
+          };
+        }
+        // Re-run after targeted rollback ALSO fails — full fallback
+        return { passed: false, error: 'Still failing' };
+      },
+      baselineTestPassed: true,
+    });
+
+    // Both files should be rolled back (full fallback)
+    const contentA = await readFile(files[0], 'utf-8');
+    expect(contentA).toBe(originalA);
+    expect(results[0].status).toBe('failed');
+    expect(results[1].status).toBe('failed');
+  });
+
+  it('falls back to full window rollback when no failing files identified in stack trace', async () => {
+    const originalA = 'function a() {}';
+    const originalB = 'function b() {}';
+    const files = await Promise.all([
+      createFile('a.js', originalA),
+      createFile('b.js', originalB),
+    ]);
+
+    const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+    const results = await dispatchFiles(files, tmpDir, config, undefined, {
+      deps: makeDepsWithDiskWrite(),
+      checkpoint: passingCheckpointConfig,
+      runTestCommand: async () => ({
+        passed: false,
+        error: 'Some error',
+        output: 'at node:internal/process/task_queues:95:5',
+      }),
+      baselineTestPassed: true,
+    });
+
+    // No files identified → full rollback
+    const contentA = await readFile(files[0], 'utf-8');
+    const contentB = await readFile(files[1], 'utf-8');
+    expect(contentA).toBe(originalA);
+    expect(contentB).toBe(originalB);
+    expect(results[0].status).toBe('failed');
+    expect(results[1].status).toBe('failed');
+  });
+
+  it('falls back to full window rollback when output field is absent', async () => {
+    const originalA = 'function a() {}';
+    const files = await Promise.all([
+      createFile('a.js', originalA),
+      createFile('b.js', originalA),
+    ]);
+
+    const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+    const results = await dispatchFiles(files, tmpDir, config, undefined, {
+      deps: makeDepsWithDiskWrite(),
+      checkpoint: passingCheckpointConfig,
+      runTestCommand: async () => ({
+        passed: false,
+        error: 'ReferenceError: tracer is not defined',
+        // No output field — old runner interface
+      }),
+      baselineTestPassed: true,
+    });
+
+    expect(results[0].status).toBe('failed');
+    expect(results[1].status).toBe('failed');
   });
 });
