@@ -146,6 +146,7 @@ Before writing any code, read `src/coordinator/coordinate.ts` to find where CDQ-
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 - This check complements SCH-004 (attribute key deduplication in code). They operate on different artifacts: SCH-004 checks `setAttribute()` calls in instrumented code; SCH-005 checks span definitions in the registry.
 - The two-tier design (Jaccard script + LLM judge) is intentional — Jaccard catches structural near-duplicates cheaply; the judge catches semantic equivalence the script misses. Do not collapse them into a single LLM call.
+- **Judge prompt warning — type-level discrimination:** The SCH-004 judge has a known false positive pattern: it hallucinates semantic equivalence between attributes that share a concept word but have different value types (e.g., a string label like "2026-W09" vs. an integer count, a boolean flag vs. an integer limit). The SCH-004 fix is tracked in issue #440. When writing the SCH-005 judge question in M3, explicitly include a negative constraint: "Spans with different structural roles or value semantics are NOT duplicates even if their names share words." The run-13 SCH-004 false positives are concrete examples of what this constraint must prevent.
 
 ---
 
