@@ -43,7 +43,7 @@ import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
 export function executeProjectTests(
   projectDir: string,
   testCommand: string,
-): Promise<{ passed: boolean; error?: string }> {
+): Promise<{ passed: boolean; error?: string; output?: string }> {
   const cmd = process.platform === 'win32' ? 'cmd.exe' : 'sh';
   const args = process.platform === 'win32' ? ['/c', testCommand] : ['-c', testCommand];
 
@@ -52,10 +52,11 @@ export function executeProjectTests(
       cwd: projectDir,
       timeout: 300_000,
       maxBuffer: 10 * 1024 * 1024,
-    }, (error, _stdout, stderr) => {
+    }, (error, stdout, stderr) => {
       if (error) {
         const errorMsg = stderr?.trim() || error.message;
-        resolve({ passed: false, error: errorMsg });
+        const combined = [stdout?.trim(), stderr?.trim()].filter(Boolean).join('\n');
+        resolve({ passed: false, error: errorMsg, output: combined || undefined });
         return;
       }
       resolve({ passed: true });
@@ -116,7 +117,7 @@ export interface CoordinateDeps {
   /** Injectable test suite detection for checkpoint test wiring. */
   hasTestSuite?: (testCommand: string, projectDir?: string) => Promise<boolean>;
   /** Injectable test runner for checkpoint tests. Runs test command without OTLP overrides. */
-  executeProjectTests?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
+  executeProjectTests?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string; output?: string }>;
   /** Write file content for end-of-run rollback. Defaults to fs/promises writeFile. */
   writeFileForRollback?: (filePath: string, content: string) => Promise<void>;
   /** Restore schema extensions file from snapshot for end-of-run rollback. */

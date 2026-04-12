@@ -57,6 +57,49 @@ export async function validateRegistryCheck(
 }
 
 /**
+ * Parse stack trace output to identify which source files in the checkpoint window caused a
+ * test failure. Matches "at ..." stack frame lines against the absolute paths of window files.
+ *
+ * Handles both absolute paths (`/abs/path/file.js:line`) and relative paths (`src/file.js:line`).
+ * Skips Node.js internal frames (node: prefix). Test files in stack traces are still traversed;
+ * if a test file appears, the src file one frame deeper is also checked.
+ *
+ * @param output - Combined stdout + stderr from the test runner
+ * @param windowPaths - Absolute paths of files in the current checkpoint window
+ * @returns Subset of windowPaths that appear in the stack trace, deduplicated, in window order
+ */
+export function parseFailingSourceFiles(output: string, windowPaths: string[]): string[] {
+  if (!output || windowPaths.length === 0) return [];
+
+  // Match "at ..." stack frame file references. Captures the path before `:linenum`.
+  // [^\s(]+\s+\(  — optional "FunctionName (" prefix
+  // [^\s():]+     — file path (stops at colon, so line numbers are not included)
+  // (?=:\d)       — lookahead: must be followed by :digits (confirms it's a file:line reference)
+  const framePattern = /\bat\s+(?:[^\s(]+\s+\()?([^\s():]+\.(?:js|ts|mjs|cjs))(?=:\d)/g;
+
+  const foundPaths = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = framePattern.exec(output)) !== null) {
+    foundPaths.add(match[1]);
+  }
+
+  if (foundPaths.size === 0) return [];
+
+  const matched: string[] = [];
+  for (const windowPath of windowPaths) {
+    for (const found of foundPaths) {
+      // Match if exact (absolute path) or if window path ends with the relative found path
+      if (windowPath === found || windowPath.endsWith(`/${found}`)) {
+        matched.push(windowPath);
+        break;
+      }
+    }
+  }
+
+  return matched;
+}
+
+/**
  * Patterns that indicate a file already has OpenTelemetry instrumentation.
  * Uses string/regex matching (no AST) for speed — this is an optimization
  * to avoid wasting LLM calls on obviously-instrumented files.
@@ -158,7 +201,7 @@ interface DispatchFilesOptions {
   /** When true, revert every file after processing and skip schema checkpoints. */
   dryRun?: boolean;
   /** Injectable test runner for checkpoint test execution (NDS-002). */
-  runTestCommand?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string }>;
+  runTestCommand?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string; output?: string }>;
   /** Whether baseline tests passed before instrumentation. When false, checkpoint test failure does not trigger rollback. */
   baselineTestPassed?: boolean;
   /** Mutable output — populated at end of dispatch with checkpoint window state for end-of-run rollback. */
@@ -503,12 +546,14 @@ export async function dispatchFiles(
           // Run BEFORE firing callback so the callback receives a composite result.
           let checkpointPassed = checkpointResult.passed;
           let testFailedAtCheckpoint = false;
+          let lastTestOutput: string | undefined;
           if (checkpointResult.passed && options?.runTestCommand && await hasTestSuite(config.testCommand, projectDir)) {
             try {
               const testResult = await options.runTestCommand(projectDir, config.testCommand);
               if (!testResult.passed) {
                 checkpointPassed = false;
                 testFailedAtCheckpoint = true;
+                lastTestOutput = testResult.output;
                 if (extWarnings) {
                   extWarnings.push(
                     `Checkpoint test run failed at file ${i + 1}/${total} ` +
@@ -552,37 +597,94 @@ export async function dispatchFiles(
             locSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
           } else if (testFailedAtCheckpoint && options?.baselineTestPassed === true) {
-            // Test failure with passing baseline — roll back files in checkpoint window
-            for (const tracked of checkpointWindowFiles) {
+            // Test failure with passing baseline — attempt smart (targeted) rollback first.
+            // Parse stack trace to identify which window files caused the failure.
+            // Only revert those files and re-run; fall back to full rollback on re-run failure
+            // or when no failing files can be identified from the output.
+            const failingFiles = lastTestOutput
+              ? parseFailingSourceFiles(lastTestOutput, checkpointWindowFiles.map(f => f.path))
+              : [];
+
+            let didSmartRollback = false;
+            if (failingFiles.length > 0 && options.runTestCommand) {
+              // Step 1: Revert only the identified failing files
+              for (const tracked of checkpointWindowFiles) {
+                if (failingFiles.includes(tracked.path)) {
+                  try {
+                    await writeFile(tracked.path, tracked.originalContent, 'utf-8');
+                  } catch { /* best-effort file restore */ }
+                  results[tracked.resultIndex].status = 'failed';
+                  results[tracked.resultIndex].reason =
+                    `Smart rollback: identified as failing file in checkpoint test at file ${i + 1}/${total}`;
+                }
+              }
+
+              // Step 2: Re-run tests to verify remaining window files are clean
+              let reRunPassed = false;
               try {
-                await writeFile(tracked.path, tracked.originalContent, 'utf-8');
-              } catch { /* best-effort file restore */ }
-              results[tracked.resultIndex].status = 'failed';
-              results[tracked.resultIndex].reason =
-                `Rolled back: checkpoint test failure at file ${i + 1}/${total}`;
+                const reRunResult = await options.runTestCommand(projectDir, config.testCommand);
+                reRunPassed = reRunResult.passed;
+              } catch { /* re-run infrastructure failure → treat as still failing */ }
+
+              if (reRunPassed) {
+                // Targeted rollback succeeded — remaining window files are clean
+                didSmartRollback = true;
+                try {
+                  callbacks?.onCheckpointRollback?.(failingFiles);
+                } catch { /* callback failure must not abort dispatch */ }
+                if (extWarnings) {
+                  const keptCount = checkpointWindowFiles.length - failingFiles.length;
+                  extWarnings.push(
+                    `Smart rollback: reverted ${failingFiles.length} file(s) at checkpoint ` +
+                    `(file ${i + 1}/${total}), ${keptCount} file(s) kept`,
+                  );
+                }
+              } else {
+                // Re-run still fails — revert remaining (not yet rolled back) window files
+                for (const tracked of checkpointWindowFiles) {
+                  if (!failingFiles.includes(tracked.path)) {
+                    try {
+                      await writeFile(tracked.path, tracked.originalContent, 'utf-8');
+                    } catch { /* best-effort file restore */ }
+                    results[tracked.resultIndex].status = 'failed';
+                    results[tracked.resultIndex].reason =
+                      `Rolled back: checkpoint test failure (smart rollback fallback) at file ${i + 1}/${total}`;
+                  }
+                }
+              }
             }
 
-            // Restore schema extensions to last passing checkpoint state
-            if (registryDir && checkpointExtensionsSnapshot !== undefined) {
-              accumulatedExtensions.length = checkpointAccumulatorLength;
-              seenExtensions.clear();
-              for (const ext of accumulatedExtensions) seenExtensions.add(ext);
-              try {
-                await restoreFn(registryDir, checkpointExtensionsSnapshot);
-              } catch { /* best-effort restore */ }
+            if (!didSmartRollback && failingFiles.length === 0) {
+              // No stack trace match — full window rollback
+              for (const tracked of checkpointWindowFiles) {
+                try {
+                  await writeFile(tracked.path, tracked.originalContent, 'utf-8');
+                } catch { /* best-effort file restore */ }
+                results[tracked.resultIndex].status = 'failed';
+                results[tracked.resultIndex].reason =
+                  `Rolled back: checkpoint test failure at file ${i + 1}/${total}`;
+              }
             }
 
-            // Fire rollback callback
-            try {
-              callbacks?.onCheckpointRollback?.(checkpointWindowFiles.map(f => f.path));
-            } catch { /* callback failure must not abort dispatch */ }
-
-            // Surface rollback in warnings
-            if (extWarnings) {
-              extWarnings.push(
-                `Rolled back ${checkpointWindowFiles.length} file(s) at checkpoint ` +
-                `(file ${i + 1}/${total}) due to test failure`,
-              );
+            if (!didSmartRollback) {
+              // Full rollback path: restore schema extensions and fire callback
+              if (registryDir && checkpointExtensionsSnapshot !== undefined) {
+                accumulatedExtensions.length = checkpointAccumulatorLength;
+                seenExtensions.clear();
+                for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+                try {
+                  await restoreFn(registryDir, checkpointExtensionsSnapshot);
+                } catch { /* best-effort restore */ }
+              }
+              try {
+                callbacks?.onCheckpointRollback?.(checkpointWindowFiles.map(f => f.path));
+              } catch { /* callback failure must not abort dispatch */ }
+              if (extWarnings) {
+                extWarnings.push(
+                  `Rolled back ${checkpointWindowFiles.length} file(s) at checkpoint ` +
+                  `(file ${i + 1}/${total}) due to test failure`,
+                );
+              }
             }
 
             // Reset window and take new snapshot — always continue after rollback
