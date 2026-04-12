@@ -11,6 +11,8 @@
 
 Successive instrumentation runs on different files can independently define spans representing the same operation with slightly different names. Because each file is instrumented in isolation, the LLM has no cross-run visibility into what span names already exist. Over time, the Weaver registry accumulates semantically duplicate entries — spans that mean the same thing named differently.
 
+**Concrete evidence from run-13 (commit-story-v2, 2026-04-12):** The run produced a span name collision warning: `commit_story.summarize.run_weekly_summarize` was independently declared by both `src/commands/summarize.js` and `src/managers/summary-manager.js` in the same run. Neither file had visibility into the other's schema extensions. This is exactly the class of drift this rule is designed to catch.
+
 Structural validation (`weaver registry check`) catches naming convention violations but not semantic equivalence. SCH-004 catches duplicate attribute *keys* in instrumented code but does not check whether the span *definitions* added to the registry are semantically equivalent to each other.
 
 ---
