@@ -270,7 +270,8 @@ describe('NDS-004: Exported function signatures preserved', () => {
     // Agent incorrectly added a span parameter
     const instrumented = [
       "import { trace } from '@opentelemetry/api';",
-      "import type { Request, Response, Span } from 'express';",
+      "import type { Request, Response } from 'express';",
+      "import type { Span } from '@opentelemetry/api';",
       'export async function handleRequest(req: Request, res: Response, span: Span): Promise<void> {',
       '  res.json({});',
       '}',

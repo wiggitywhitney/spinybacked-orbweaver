@@ -28,7 +28,7 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
   // ESM: export function declarations (named and default)
   for (const fn of sourceFile.getFunctions()) {
     if (!fn.isExported()) continue;
-    const name = fn.getName() ?? '<default>';
+    const name = fn.getName() ?? 'default';
     if (seen.has(name)) continue;
     seen.add(name);
     signatures.push({
