@@ -10,8 +10,115 @@ import type { CheckResult } from '../../../validation/types.ts';
 import type { TokenUsage } from '../../../agent/schema.ts';
 import { callJudge } from '../../../validation/judge.ts';
 import type { JudgeOptions } from '../../../validation/judge.ts';
-import { parseResolvedRegistry, getAllAttributeNames } from '../../../validation/tier2/registry-types.ts';
+import {
+  parseResolvedRegistry,
+  getAllAttributeNames,
+  getAttributeDefinitions,
+  isEnumType,
+} from '../../../validation/tier2/registry-types.ts';
+import type { ResolvedRegistryAttribute } from '../../../validation/tier2/registry-types.ts';
 import type { ValidationRule } from '../../types.ts';
+
+/**
+ * Inferred value type of a span.setAttribute(key, value) value expression.
+ * 'unknown' means the type could not be determined from the AST.
+ */
+type InferredType = 'string' | 'int' | 'double' | 'boolean' | 'unknown';
+
+/**
+ * Infer the value type from a ts-morph AST node for the setAttribute value argument.
+ * Handles literals, .length property access, and common call expression patterns.
+ * Returns 'unknown' when the type cannot be determined statically.
+ */
+function inferValueType(valueNode: Node): InferredType {
+  // String literals: "foo", 'bar'
+  if (Node.isStringLiteral(valueNode)) return 'string';
+
+  // Template literals: `${x}` or `literal`
+  if (Node.isTemplateExpression(valueNode) || Node.isNoSubstitutionTemplateLiteral(valueNode)) {
+    return 'string';
+  }
+
+  // Numeric literals: 42 → int, 3.14 → double
+  if (Node.isNumericLiteral(valueNode)) {
+    return valueNode.getText().includes('.') ? 'double' : 'int';
+  }
+
+  // Boolean literals: true, false
+  const text = valueNode.getText();
+  if (text === 'true' || text === 'false') return 'boolean';
+
+  // Property access ending in .length: arr.length → int
+  if (Node.isPropertyAccessExpression(valueNode) && valueNode.getName() === 'length') {
+    return 'int';
+  }
+
+  // Prefix unary negation: !x → boolean
+  if (Node.isPrefixUnaryExpression(valueNode) && valueNode.getText().startsWith('!')) {
+    return 'boolean';
+  }
+
+  // Call expressions: parseInt, parseFloat, Number, Boolean, String, .toString()
+  if (Node.isCallExpression(valueNode)) {
+    const exprText = valueNode.getExpression().getText();
+    if (exprText === 'parseInt' || exprText === 'Math.round' || exprText === 'Math.floor' ||
+        exprText === 'Math.ceil' || exprText === 'Number') {
+      return 'int';
+    }
+    if (exprText === 'parseFloat') return 'double';
+    if (exprText === 'Boolean') return 'boolean';
+    if (exprText === 'String' || exprText.endsWith('.toString') || exprText.endsWith('.join') ||
+        exprText.endsWith('.trim') || exprText.endsWith('.toUpperCase') ||
+        exprText.endsWith('.toLowerCase')) {
+      return 'string';
+    }
+  }
+
+  return 'unknown';
+}
+
+/**
+ * Normalize a registry attribute type to a comparable string.
+ * Enum types normalize to 'string' (enum values are strings).
+ * Collection types like 'string[]' are kept distinct from scalar types.
+ */
+function normalizeRegistryType(type: ResolvedRegistryAttribute['type']): string | undefined {
+  if (!type) return undefined;
+  if (isEnumType(type)) return 'string';
+  return type;
+}
+
+/**
+ * Check whether a novel attribute's inferred type is compatible with a registry attribute type.
+ * 'unknown' inferred type is always compatible (can't determine → don't pre-filter).
+ * int and double are mutually compatible (both numeric).
+ */
+function isTypeCompatible(
+  novelType: InferredType,
+  registryAttrType: ResolvedRegistryAttribute['type'],
+): boolean {
+  if (novelType === 'unknown') return true;
+  const registryType = normalizeRegistryType(registryAttrType);
+  if (!registryType) return true;
+
+  // Numeric types are compatible with each other
+  if ((novelType === 'int' || novelType === 'double') &&
+      (registryType === 'int' || registryType === 'double')) {
+    return true;
+  }
+
+  return novelType === registryType;
+}
+
+/**
+ * Attempt to extract a registry attribute name from a judge suggestion string.
+ * Suggestions typically read: 'Use "attr.name" instead of ...'
+ * Returns the first quoted dotted-identifier found, or null if none.
+ */
+function extractAttributeFromSuggestion(suggestion: string): string | null {
+  const match = suggestion.match(/["']([a-z][a-z0-9._-]*)["']/);
+  return match?.[1] ?? null;
+}
 
 interface RedundancyFlag {
   key: string;
@@ -125,13 +232,28 @@ export async function checkNoRedundantSchemaEntries(
   const judgeTokenUsage: TokenUsage[] = [];
 
   if (judgeDeps && unflaggedNovelKeys.length > 0) {
+    // Build attribute definitions map once for pre-filtering and post-validation
+    const attrDefs = getAttributeDefinitions(registry);
+
     for (const entry of unflaggedNovelKeys) {
+      // Pre-filter: only pass registry attributes whose value type is compatible with the novel
+      // attribute's inferred type. Prevents the judge from flagging type-incompatible pairs
+      // (e.g., a string label vs. an integer count) as semantic duplicates.
+      const typedCandidates = registryNameList.filter(name => {
+        const def = attrDefs.get(name);
+        return isTypeCompatible(entry.inferredType, def?.type);
+      });
+
+      // If no compatible candidates exist, this novel attribute cannot be a semantic
+      // duplicate of any registry attribute with a compatible value type — skip the judge.
+      if (typedCandidates.length === 0) continue;
+
       const result = await callJudge(
         {
           ruleId: 'SCH-004',
           context: `Novel attribute key "${entry.key}" at line ${entry.line} is not in the registry and has no high token-similarity match.`,
-          question: `Is attribute "${entry.key}" semantically distinct from all registered attribute keys? Answer true if it captures a unique concept not already represented in the registry. Answer false if it is a semantic duplicate of an existing key — and if so, which registered key should be used instead? Important: respect domain boundaries. Application-domain attributes (e.g., generated_count, section_count) are NOT duplicates of OTel semantic convention fields (e.g., gen_ai.usage.output_tokens) even if they share similar words. Only flag as duplicates when the keys measure the same thing in the same domain.`,
-          candidates: registryNameList,
+          question: `Is attribute "${entry.key}" semantically distinct from all registered attribute keys? Answer true if it captures a unique concept not already represented in the registry. Answer false if it is a semantic duplicate of an existing key — and if so, which registered key should be used instead? Important: respect domain boundaries. Application-domain attributes (e.g., generated_count, section_count) are NOT duplicates of OTel semantic convention fields (e.g., gen_ai.usage.output_tokens) even if they share similar words. Only flag as duplicates when the keys measure the same thing in the same domain. Attributes with different value types (e.g., a string label vs. an integer count) are NOT semantic duplicates even if they describe the same concept.`,
+          candidates: typedCandidates,
         },
         judgeDeps.client,
         judgeDeps.options,
@@ -146,6 +268,19 @@ export async function checkNoRedundantSchemaEntries(
         }
 
         if (!result.verdict.answer && result.verdict.confidence >= 0.7) {
+          // Post-validate: check that the matched registry attribute is type-compatible.
+          // Safety net for edge cases where the judge suggests an attribute outside the
+          // pre-filtered candidates (e.g., hallucination pointing to a filtered-out attr).
+          const suggestionText = result.verdict.suggestion ?? '';
+          const matchedName = extractAttributeFromSuggestion(suggestionText);
+          if (matchedName) {
+            const matchedAttr = attrDefs.get(matchedName);
+            if (matchedAttr && !isTypeCompatible(entry.inferredType, matchedAttr.type)) {
+              // Type mismatch — discard verdict to prevent false positive finding
+              continue;
+            }
+          }
+
           // Judge says this IS a semantic duplicate (with sufficient confidence)
           const suggestion = result.verdict.suggestion ?? 'Use the matching registry key.';
           judgeResults.push({
@@ -206,6 +341,7 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 interface AttributeKeyEntry {
   key: string;
   line: number;
+  inferredType: InferredType;
 }
 
 /**
@@ -240,7 +376,7 @@ function extractAttributeKeys(code: string, filePath: string): AttributeKeyEntry
 }
 
 /**
- * Extract attribute key from span.setAttribute("key", value).
+ * Extract attribute key and infer value type from span.setAttribute("key", value).
  */
 function extractFromSetAttribute(
   callExpr: CallExpression,
@@ -255,7 +391,8 @@ function extractFromSetAttribute(
     const key = firstArg.getLiteralValue();
     if (!seen.has(key)) {
       seen.add(key);
-      entries.push({ key, line: callExpr.getStartLineNumber() });
+      const inferredType = inferValueType(args[1]);
+      entries.push({ key, line: callExpr.getStartLineNumber(), inferredType });
     }
   }
 }

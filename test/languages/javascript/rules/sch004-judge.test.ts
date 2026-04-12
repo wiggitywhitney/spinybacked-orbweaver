@@ -223,7 +223,10 @@ describe('SCH-004 judge integration', () => {
   });
 
   describe('judge question construction', () => {
-    it('passes registry attribute names as candidates', async () => {
+    it('passes only type-compatible registry attribute names as candidates', async () => {
+      // codeWithTrulyNovelKey uses span.setAttribute("completely.different.attribute", "value")
+      // "value" is a string literal → inferred type 'string'
+      // Pre-filter: only string-typed registry attributes should be candidates
       const client = makeMockClient({
         verdict: { answer: true, confidence: 0.85 },
         tokenUsage: judgeTokenUsage,
@@ -236,14 +239,35 @@ describe('SCH-004 judge integration', () => {
         { client: client as any },
       );
 
-      // Verify the judge was called with correct candidates
+      // Verify the judge was called with only string-typed candidates
       expect(client._parseFn).toHaveBeenCalledTimes(1);
       const callArgs = client._parseFn.mock.calls[0][0];
       const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
+      // String-typed attributes included
       expect(userMessage).toContain('http.request.method');
-      expect(userMessage).toContain('http.request.duration');
-      expect(userMessage).toContain('http.response.status_code');
       expect(userMessage).toContain('myapp.order.id');
+      // Non-string attributes filtered out
+      expect(userMessage).not.toContain('http.request.duration');  // double
+      expect(userMessage).not.toContain('http.response.status_code');  // int
+    });
+
+    it('judge question includes type constraint about value type differences', async () => {
+      const client = makeMockClient({
+        verdict: { answer: true, confidence: 0.85 },
+        tokenUsage: judgeTokenUsage,
+      });
+
+      await checkNoRedundantSchemaEntries(
+        codeWithTrulyNovelKey,
+        filePath,
+        resolvedSchema,
+        { client: client as any },
+      );
+
+      expect(client._parseFn).toHaveBeenCalledTimes(1);
+      const callArgs = client._parseFn.mock.calls[0][0];
+      const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
+      expect(userMessage).toContain('different value types');
     });
   });
 
@@ -404,5 +428,354 @@ describe('SCH-004 judge integration', () => {
       expect(results[0].message).toContain('http_request_duration');
       expect(results[0].message).toContain('http.request.duration');
     });
+  });
+});
+
+describe('SCH-004 type-based pre-filtering', () => {
+  /** Schema with only int-typed registry attributes. */
+  const intOnlySchema = {
+    groups: [{
+      id: 'registry.test',
+      type: 'attribute_group',
+      attributes: [
+        { name: 'db.query.count', type: 'int' },
+        { name: 'http.response.status_code', type: 'int' },
+        { name: 'week.count', type: 'int' },
+      ],
+    }],
+  };
+
+  /** Schema with only string-typed registry attributes. */
+  const stringOnlySchema = {
+    groups: [{
+      id: 'registry.test',
+      type: 'attribute_group',
+      attributes: [
+        { name: 'db.system.name', type: 'string' },
+        { name: 'http.request.method', type: 'string' },
+        { name: 'week.label', type: 'string' },
+      ],
+    }],
+  };
+
+  /** Schema with mixed types. */
+  const mixedSchema = {
+    groups: [{
+      id: 'registry.test',
+      type: 'attribute_group',
+      attributes: [
+        { name: 'week.label', type: 'string' },
+        { name: 'year.label', type: 'string' },
+        { name: 'week.count', type: 'int' },
+      ],
+    }],
+  };
+
+  const filePath = '/tmp/test-file.js';
+
+  function makeMockClient(response: JudgeCallResult | null) {
+    const parseFn = vi.fn().mockResolvedValue(
+      response
+        ? {
+            parsed_output: response.verdict ? {
+              answer: response.verdict.answer,
+              suggestion: response.verdict.suggestion ?? null,
+              confidence: response.verdict.confidence,
+            } : null,
+            usage: {
+              input_tokens: response.tokenUsage.inputTokens,
+              output_tokens: response.tokenUsage.outputTokens,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }
+        : { parsed_output: null, usage: { input_tokens: 0, output_tokens: 0 } },
+    );
+    return { messages: { parse: parseFn }, _parseFn: parseFn };
+  }
+
+  const judgeTokenUsage: TokenUsage = {
+    inputTokens: 100, outputTokens: 40, cacheCreationInputTokens: 0, cacheReadInputTokens: 0,
+  };
+
+  it('does not call judge when boolean attribute has no boolean-typed registry candidates', async () => {
+    // true is a boolean literal → inferred type 'boolean'
+    // intOnlySchema has no boolean attrs → filtered candidates = [] → judge not called
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("summarize.force", true);',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: { answer: false, suggestion: 'Use "week.count"', confidence: 0.9 },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    const { results } = await checkNoRedundantSchemaEntries(
+      code, filePath, intOnlySchema, { client: client as any },
+    );
+
+    expect(client._parseFn).not.toHaveBeenCalled();
+    expect(results[0].passed).toBe(true);
+  });
+
+  it('does not call judge when string attribute has no string-typed registry candidates', async () => {
+    // "2026-W09" is a string literal → inferred type 'string'
+    // intOnlySchema has no string attrs → filtered candidates = [] → judge not called
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("week.label.novel", "2026-W09");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: { answer: false, suggestion: 'Use "week.count"', confidence: 0.9 },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    const { results } = await checkNoRedundantSchemaEntries(
+      code, filePath, intOnlySchema, { client: client as any },
+    );
+
+    expect(client._parseFn).not.toHaveBeenCalled();
+    expect(results[0].passed).toBe(true);
+  });
+
+  it('does not call judge when .length attribute has no numeric registry candidates', async () => {
+    // dates.length is a .length property access → inferred type 'int'
+    // stringOnlySchema has no int/double attrs → filtered candidates = [] → judge not called
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork(dates) {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("date.count.novel", dates.length);',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: { answer: false, suggestion: 'Use "week.label"', confidence: 0.9 },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    const { results } = await checkNoRedundantSchemaEntries(
+      code, filePath, stringOnlySchema, { client: client as any },
+    );
+
+    expect(client._parseFn).not.toHaveBeenCalled();
+    expect(results[0].passed).toBe(true);
+  });
+
+  it('calls judge with only string-compatible candidates when novel attribute is string-typed', async () => {
+    // "2026-W09" is a string literal → inferred type 'string'
+    // "period.identifier" has low Jaccard similarity to all registry attrs → goes to judge tier
+    // Pre-filter: only string-typed candidates should be in the judge's candidates list
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("period.identifier", "2026-W09");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: { answer: true, confidence: 0.85 },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    await checkNoRedundantSchemaEntries(
+      code, filePath, mixedSchema, { client: client as any },
+    );
+
+    expect(client._parseFn).toHaveBeenCalledTimes(1);
+    const callArgs = client._parseFn.mock.calls[0][0];
+    const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
+    // String candidates included
+    expect(userMessage).toContain('week.label');
+    expect(userMessage).toContain('year.label');
+    // Int candidates filtered out
+    expect(userMessage).not.toContain('week.count');
+  });
+
+  it('numeric novel attribute (int) is compatible with double registry candidates', async () => {
+    // 42 is a numeric literal → inferred type 'int'
+    // double is compatible with int (both numeric)
+    const doubleSchema = {
+      groups: [{
+        id: 'registry.test',
+        type: 'attribute_group',
+        attributes: [{ name: 'response.time', type: 'double' }],
+      }],
+    };
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("request.duration.ms", 42);',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: { answer: true, confidence: 0.85 },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    await checkNoRedundantSchemaEntries(
+      code, filePath, doubleSchema, { client: client as any },
+    );
+
+    // Judge should be called since int and double are compatible
+    expect(client._parseFn).toHaveBeenCalledTimes(1);
+    const callArgs = client._parseFn.mock.calls[0][0];
+    const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
+    expect(userMessage).toContain('response.time');
+  });
+});
+
+describe('SCH-004 post-verdict type validation', () => {
+  const filePath = '/tmp/test-file.js';
+
+  function makeMockClient(verdict: JudgeCallResult) {
+    const parseFn = vi.fn().mockResolvedValue({
+      parsed_output: verdict.verdict ? {
+        answer: verdict.verdict.answer,
+        suggestion: verdict.verdict.suggestion ?? null,
+        confidence: verdict.verdict.confidence,
+      } : null,
+      usage: {
+        input_tokens: verdict.tokenUsage.inputTokens,
+        output_tokens: verdict.tokenUsage.outputTokens,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+    });
+    return { messages: { parse: parseFn }, _parseFn: parseFn };
+  }
+
+  const judgeTokenUsage: TokenUsage = {
+    inputTokens: 100, outputTokens: 40, cacheCreationInputTokens: 0, cacheReadInputTokens: 0,
+  };
+
+  it('discards finding when judge suggestion points to type-incompatible registry attribute', async () => {
+    // Novel attr: "period.identifier" with string value → inferred 'string'
+    // Low Jaccard similarity to registry attrs → reaches the judge tier
+    // Judge hallucinates: suggests "week.count" (int) despite receiving only string candidates
+    // Post-validate: novel is string, matched is int → discard verdict
+    const mixedSchema = {
+      groups: [{
+        id: 'registry.test',
+        type: 'attribute_group',
+        attributes: [
+          { name: 'year.label', type: 'string' },
+          { name: 'week.count', type: 'int' },
+        ],
+      }],
+    };
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("period.identifier", "2026-W09");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: {
+        answer: false,
+        // Judge hallucinates a suggestion pointing to the int attr (not in pre-filtered candidates)
+        suggestion: 'Use "week.count" instead of "period.identifier".',
+        confidence: 0.9,
+      },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    const { results } = await checkNoRedundantSchemaEntries(
+      code, filePath, mixedSchema, { client: client as any },
+    );
+
+    // Post-validate discards: novel type 'string' vs matched type 'int' → incompatible
+    expect(results).toHaveLength(1);
+    expect(results[0].passed).toBe(true);
+  });
+
+  it('allows finding when judge suggestion points to type-compatible registry attribute', async () => {
+    // Novel attr: "period.identifier" with string value → compatible with string registry attr
+    const mixedSchema = {
+      groups: [{
+        id: 'registry.test',
+        type: 'attribute_group',
+        attributes: [
+          { name: 'year.label', type: 'string' },
+          { name: 'week.count', type: 'int' },
+        ],
+      }],
+    };
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("period.identifier", "2026-W09");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: {
+        answer: false,
+        suggestion: 'Use "year.label" instead of "period.identifier".',
+        confidence: 0.9,
+      },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    const { results } = await checkNoRedundantSchemaEntries(
+      code, filePath, mixedSchema, { client: client as any },
+    );
+
+    // Post-validate allows: novel type 'string' vs matched type 'string' → compatible
+    expect(results).toHaveLength(1);
+    expect(results[0].passed).toBe(false);
+    expect(results[0].message).toContain('period.identifier');
   });
 });
