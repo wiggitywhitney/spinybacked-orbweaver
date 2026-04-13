@@ -88,7 +88,7 @@ describe('feature parity matrix', () => {
     expect(cdq008!.applicableTo('go')).toBe(true);
   });
 
-  it('CDQ-009 applies to JS/TS only (not-null-safe guard check)', () => {
+  it('CDQ-009 applies to JS/TS, not Python/Go (not-null-safe guard check)', () => {
     const rules = getAllRules();
     const cdq009 = rules.find(r => r.ruleId === 'CDQ-009');
     expect(cdq009).toBeDefined();
