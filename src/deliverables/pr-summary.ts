@@ -364,7 +364,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
       const [, { fileDisplay, annotations }] = fileEntries[i];
       lines.push(`**${fileDisplay}**`);
       for (const ann of annotations) {
-        lines.push(`- ${formatRuleId(ann.ruleId)}: ${ann.message}`);
+        lines.push(`- ${formatRuleId(ann.ruleId)}: ${expandRuleCodesInText(ann.message)}`);
       }
       if (i < fileEntries.length - 1) {
         lines.push('');
