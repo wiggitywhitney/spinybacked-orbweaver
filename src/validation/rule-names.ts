@@ -25,6 +25,8 @@ const RULE_NAMES: Record<string, string> = {
   'CDQ-005': 'Async Context Maintained',
   'CDQ-006': 'isRecording Guard',
   'CDQ-008': 'Tracer Naming',
+  'CDQ-009': 'Null-Safe Guard',
+  'CDQ-010': 'String Method Type Safety',
 
   // Tier 2 — Restraint
   'RST-001': 'No Utility Spans',
