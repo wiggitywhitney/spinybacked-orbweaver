@@ -680,4 +680,51 @@ describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => 
     expect(results[0].status).toBe('failed');
     expect(results[1].status).toBe('failed');
   });
+
+  it('cleans up schema extensions from the reverted file after successful smart rollback', async () => {
+    const { cp } = await import('node:fs/promises');
+    const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
+    const registryDir = join(tmpDir, 'registry');
+    await cp(resolve(FIXTURES_DIR, 'valid'), registryDir, { recursive: true });
+    const baselineDir = resolve(FIXTURES_DIR, 'valid');
+
+    const files = await Promise.all([
+      createFile('a.js', 'function a() {}'),
+      createFile('b.js', 'function b() {}'),
+    ]);
+
+    const extA = '- id: test_app.payment.amount\n  type: double\n  stability: development\n  brief: Payment amount\n  examples: [29.99]';
+    const extB = '- id: test_app.shipping.cost\n  type: double\n  stability: development\n  brief: Shipping cost\n  examples: [5.99]';
+
+    const instrumentWithRetry = vi.fn().mockImplementation(async (filePath: string) => {
+      await writeFile(filePath, '// INSTRUMENTED', 'utf-8');
+      const index = files.indexOf(filePath);
+      if (index === 0) return makeSuccessResult(filePath, { schemaExtensions: [extA] });
+      return makeSuccessResult(filePath, { schemaExtensions: [extB] });
+    });
+
+    const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+    let callCount = 0;
+    await dispatchFiles(files, tmpDir, config, undefined, {
+      deps: { resolveSchema: vi.fn().mockResolvedValue({ resolved: true }), instrumentWithRetry },
+      checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
+      registryDir,
+      runTestCommand: async () => {
+        callCount++;
+        if (callCount === 1) {
+          // First run fails: stack trace points to b.js (the file that added extB)
+          return { passed: false, error: 'ReferenceError', output: `at Object.<anonymous> (${files[1]}:10:5)` };
+        }
+        // Re-run after targeted rollback of b.js passes
+        return { passed: true };
+      },
+      baselineTestPassed: true,
+    });
+
+    // Extensions file should contain a.js's extension but NOT b.js's (reverted)
+    const extContent = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    expect(extContent).toContain('payment.amount');
+    expect(extContent).not.toContain('shipping.cost');
+  });
 });
