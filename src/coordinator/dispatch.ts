@@ -2,7 +2,7 @@
 // ABOUTME: Includes already-instrumented detection, schema re-resolution per file, and sequential dispatch to instrumentWithRetry.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, basename } from 'node:path';
 import { execFile } from 'node:child_process';
 import type { LanguageProvider } from '../languages/types.ts';
 import { JavaScriptProvider } from '../languages/javascript/index.ts';
@@ -555,9 +555,16 @@ export async function dispatchFiles(
                 testFailedAtCheckpoint = true;
                 lastTestOutput = testResult.output;
                 if (extWarnings) {
+                  const windowPaths = checkpointWindowFiles.map(f => f.path);
+                  const failingSources = testResult.output
+                    ? parseFailingSourceFiles(testResult.output, windowPaths)
+                    : [];
+                  const failureSummary = failingSources.length > 0
+                    ? `changes to ${failingSources.map(p => basename(p)).join(', ')} broke tests`
+                    : 'tests failed';
                   extWarnings.push(
                     `Checkpoint test run failed at file ${i + 1}/${total} ` +
-                    `(${filePath}): ${testResult.error ?? 'tests failed'}`,
+                    `(${filePath}): ${failureSummary}`,
                   );
                 }
               }

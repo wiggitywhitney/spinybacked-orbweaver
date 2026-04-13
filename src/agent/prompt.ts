@@ -240,9 +240,9 @@ When you cannot instrument a function because doing so would require modifying n
 **When NOT to report**: Do not report refactors for patterns you can work around. Only report transforms you genuinely need but cannot make without changing business logic.
 
 Each entry in \`suggestedRefactors\` has:
-- \`description\`: What the user should change (human-readable)
+- \`description\`: What the user should change, in plain English. Name the function and describe the structural change needed. Do not cite rule IDs without explaining them. Good: \`"Extract the template literal in summaryNode (line 445) to a const variable so span.setAttribute can reference the already-assigned value after the assignment"\`. Bad: \`"NDS-003 refactor needed in summaryNode"\`.
 - \`diff\`: Unified diff showing the before/after (the user applies this)
-- \`reason\`: Why the agent needs this change to instrument correctly
+- \`reason\`: One sentence explaining what the current code structure prevents — describe the structural problem, not the rule that caught it. Good: \`"The template literal assigns directly inline — adding span context before it would modify the original line, which validation rejects as a non-instrumentation change"\`. Bad: \`"NDS-003 violation"\`.
 - \`unblocksRules\`: Which validation rules block instrumentation (e.g., \`["NDS-003"]\`)
 - \`startLine\`: First line of the code that needs refactoring (1-based)
 - \`endLine\`: Last line of the code that needs refactoring (1-based)
@@ -272,7 +272,23 @@ You are returning structured JSON via the output schema. Fill in each field:
 - \`attributesCreated\`: Count of new span attributes added that were not in the existing schema. 0 if none.
 - \`spanCategories\`: Breakdown of spans added: \`{ externalCalls, schemaDefined, serviceEntryPoints, totalFunctionsInFile }\`. Set to null only if the file could not be processed at all.
 - \`suggestedRefactors\`: Array of refactors the user should apply before re-running the agent. Empty array if no blocked transforms were identified. See the Suggested Refactors section above for field details.
-- \`notes\`: Array of 3-5 judgment call explanations focusing on non-obvious decisions. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Standard patterns (span wrapping, error recording, import additions) do not need notes — only explain what is surprising or requires judgment. Return an empty array if there are no non-obvious decisions to document.`;
+- \`notes\`: Array of 3-5 judgment call explanations focusing on non-obvious decisions. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Standard patterns (span wrapping, error recording, import additions) do not need notes — only explain what is surprising or requires judgment. Return an empty array if there are no non-obvious decisions to document.
+
+  **Write for an external reader.** Every note must be self-contained: name the function, describe what it does or what happened, and only then cite any rule — always with a plain-English explanation alongside it. A reviewer reading this PR has never seen the codebase and doesn\'t know the rule registry.
+
+  For each decision, follow this structure: *what the function does → what happened → why (with rule in parentheses if applicable)*. Never cite a rule ID alone.
+
+  Good:
+  - \`"formatTimestamp is a pure synchronous helper with no I/O — it doesn\'t need a span (RST-001: no spans on synchronous utilities)"\`
+  - \`"processEntry makes an LLM API call and is exported — it gets its own span even though it\'s called from within an already-instrumented parent (COV-004: all exported async operations must have spans)"\`
+  - \`"summaryNode cannot be instrumented without modifying the template literal on line 445, which validation rejects as a non-instrumentation change (NDS-003: original code must be preserved exactly). Recommend extracting the template literal to a const before re-running"\`
+  - \`"Used \'commit.sha\' for the span attribute rather than a generic \'id\' — \'commit.sha\' matches the domain terminology and the Weaver schema\'s registered key for this field"\`
+
+  Bad:
+  - \`"skipped per RST-001"\`
+  - \`"NDS-003: original line 27 missing/modified"\`
+  - \`"COV-004 exemption not applicable"\`
+  - \`"SCH-002 violation avoided"\``;
 }
 
 /**

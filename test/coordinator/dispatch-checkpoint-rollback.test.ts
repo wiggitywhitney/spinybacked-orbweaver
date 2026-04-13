@@ -402,7 +402,9 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
       // Should have a warning about the test failure AND a warning about rollback
       const rollbackWarning = warnings.find(w => w.toLowerCase().includes('rolled back'));
       expect(rollbackWarning).toBeDefined();
-      expect(warnings.some(w => w.includes('ReferenceError: tracer is not defined'))).toBe(true);
+      // Checkpoint warning should mention test failure without dumping raw error output
+      const checkpointWarning = warnings.find(w => w.includes('Checkpoint test run failed'));
+      expect(checkpointWarning).toBeDefined();
     });
   });
 });
