@@ -240,11 +240,12 @@ export function getSystemPromptSections(): LanguagePromptSections {
   // WRONG — entries?.length may be undefined
   span.setAttribute('result.count', entries?.length);
 
-  // CORRECT — guard optional values
-  if (entries !== undefined) {
+  // CORRECT — guard optional values with != null (covers both null and undefined)
+  if (entries != null) {
     span.setAttribute('result.count', entries.length);
   }
   \`\`\`
+- When guarding a variable before accessing its properties, always use \`!= null\` (loose inequality), not \`!== undefined\` (strict). \`!== undefined\` passes when the value is \`null\`, causing a TypeError on property access at runtime.
 - **Return-value capture is allowed.** When you need to call \`setAttribute\` on a return value, you may extract the expression to a \`const\`:
   \`\`\`javascript
   // Original: return computeResult();
