@@ -320,6 +320,39 @@ describe('checkUntypedStringMethod (CDQ-010)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('does not flag setAttribute on non-span receivers (DOM element)', () => {
+      const code = [
+        'function setAttr(element, obj) {',
+        '  element.setAttribute("data-id", obj.id.slice(0, 8));',
+        '}',
+      ].join('\n');
+
+      const results = checkUntypedStringMethod(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('TypeScript file support', () => {
+    it('flags the same pattern in a .ts file', () => {
+      const tsFilePath = '/tmp/test-file.ts';
+      const code = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function process(commit: { timestamp: Date }) {',
+        '  return tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("date", commit.timestamp.split("T")[0]);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkUntypedStringMethod(code, tsFilePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('CDQ-010');
+    });
   });
 
   describe('result shape', () => {
