@@ -98,7 +98,17 @@ describe('feature parity matrix', () => {
     expect(cdq009!.applicableTo('go')).toBe(false);
   });
 
-  it('all 28 expected rules are registered', () => {
+  it('CDQ-010 applies to JS/TS, not Python/Go (string method type safety check)', () => {
+    const rules = getAllRules();
+    const cdq010 = rules.find(r => r.ruleId === 'CDQ-010');
+    expect(cdq010).toBeDefined();
+    expect(cdq010!.applicableTo('javascript')).toBe(true);
+    expect(cdq010!.applicableTo('typescript')).toBe(true);
+    expect(cdq010!.applicableTo('python')).toBe(false);
+    expect(cdq010!.applicableTo('go')).toBe(false);
+  });
+
+  it('all 29 expected rules are registered', () => {
     const rules = getAllRules();
     const ruleIds = new Set(rules.map(r => r.ruleId));
 
@@ -106,7 +116,7 @@ describe('feature parity matrix', () => {
       'COV-001', 'COV-002', 'COV-003', 'COV-004', 'COV-005', 'COV-006',
       'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005',
       'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006',
-      'CDQ-001', 'CDQ-006', 'CDQ-007', 'CDQ-008', 'CDQ-009',
+      'CDQ-001', 'CDQ-006', 'CDQ-007', 'CDQ-008', 'CDQ-009', 'CDQ-010',
       'API-001', 'API-002', 'API-003', 'API-004',
       'SCH-001', 'SCH-002', 'SCH-003', 'SCH-004',
     ];

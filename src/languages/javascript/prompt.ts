@@ -263,7 +263,15 @@ export function getSystemPromptSections(): LanguagePromptSections {
   span.setAttribute('result.count', result.length);
   return result;
   \`\`\`
-  This is the ONLY non-instrumentation code change the validator permits. Use it only for capturing values needed by \`setAttribute\` or \`addEvent\`.`,
+  This is the ONLY non-instrumentation code change the validator permits. Use it only for capturing values needed by \`setAttribute\` or \`addEvent\`.
+- **Do not call string methods directly on property-access expressions.** When extracting a value for a span attribute, never assume an object field holds a string. Calling \`.split()\`, \`.slice()\`, \`.replace()\`, or similar string methods directly on \`obj.field\` will crash at runtime if the field is a \`Date\`, number, or other non-string type. When extracting a date string from a timestamp field, use \`new Date(value).toISOString().split('T')[0]\` — this handles both \`Date\` objects and ISO string inputs safely. For other fields, use \`String(value)\` to coerce explicitly.
+  \`\`\`javascript
+  // WRONG — crashes if commit.timestamp is a Date object
+  span.setAttribute('date', commit.timestamp.split('T')[0]);
+
+  // CORRECT — handles both Date objects and ISO strings
+  span.setAttribute('date', new Date(commit.timestamp).toISOString().split('T')[0]);
+  \`\`\``,
 
     tracerAcquisition: `Add \`const tracer = trace.getTracer('service-name');\` at module scope if not already present, replacing \`'service-name'\` with a stable identifier for this service. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.`,
 
