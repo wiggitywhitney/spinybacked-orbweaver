@@ -122,6 +122,7 @@ function findEnclosingGuardKind(
 
 /**
  * Check if a condition is `varName !== undefined` or `undefined !== varName` (strict only).
+ * Also handles && compounds: `varName !== undefined && ...` is still a strict-undefined guard.
  */
 function isStrictUndefinedGuard(
   condition: import('ts-morph').Expression,
@@ -130,6 +131,15 @@ function isStrictUndefinedGuard(
   if (!Node.isBinaryExpression(condition)) return false;
 
   const operator = condition.getOperatorToken().getKind();
+
+  // Handle && compound: x !== undefined && x.length > 0 still uses a not-null-safe guard
+  if (operator === SyntaxKind.AmpersandAmpersandToken) {
+    return (
+      isStrictUndefinedGuard(condition.getLeft(), varName) ||
+      isStrictUndefinedGuard(condition.getRight(), varName)
+    );
+  }
+
   if (operator !== SyntaxKind.ExclamationEqualsEqualsToken) return false;
 
   const left = condition.getLeft();

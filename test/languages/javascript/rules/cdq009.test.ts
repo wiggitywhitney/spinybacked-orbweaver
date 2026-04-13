@@ -52,6 +52,26 @@ describe('checkNotNullSafeGuard (CDQ-009)', () => {
       expect(results[0].message).toContain('config');
     });
 
+    it('flags compound condition: varName !== undefined && other_condition', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items) {',
+        '  return tracer.startActiveSpan("process", (span) => {',
+        '    if (items !== undefined && items.length > 0) {',
+        '      span.setAttribute("items.count", items.length);',
+        '    }',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNotNullSafeGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('items');
+    });
+
     it('flags undefined !== varName (reversed operand order)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
