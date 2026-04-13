@@ -105,6 +105,28 @@ describe('commitFileResult', () => {
     expect(committedFiles).toContain('telemetry/registry/agent-extensions.yaml');
   });
 
+  it('commits a partial file — successfully instrumented functions should land in git', async () => {
+    const srcDir = join(repoDir, 'src');
+    await mkdir(srcDir, { recursive: true });
+    const filePath = join(repoDir, 'src', 'graph.js');
+    await writeFile(filePath, 'import { trace } from "@opentelemetry/api";\n// partial instrumentation\n');
+
+    const result = makeFileResult({
+      path: filePath,
+      status: 'partial',
+      spansAdded: 3,
+      functionsInstrumented: 11,
+      functionsSkipped: 1,
+    });
+    const commitHash = await commitFileResult(result, repoDir);
+
+    expect(commitHash).toMatch(/^[a-f0-9]+$/);
+
+    const git = simpleGit(repoDir);
+    const log = await git.log({ maxCount: 1 });
+    expect(log.latest?.message).toBe('instrument src/graph.js');
+  });
+
   it('returns undefined and does not commit for failed files', async () => {
     const filePath = join(repoDir, 'src', 'broken.js');
     const result = makeFileResult({ path: filePath, status: 'failed' });
