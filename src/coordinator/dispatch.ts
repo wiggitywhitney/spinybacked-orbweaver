@@ -559,8 +559,11 @@ export async function dispatchFiles(
                   const failingSources = testResult.output
                     ? parseFailingSourceFiles(testResult.output, windowPaths)
                     : [];
+                  const baseNames = failingSources.map(p => basename(p));
+                  const hasDuplicates = new Set(baseNames).size !== baseNames.length;
+                  const displayNames = hasDuplicates ? failingSources : baseNames;
                   const failureSummary = failingSources.length > 0
-                    ? `changes to ${failingSources.map(p => basename(p)).join(', ')} broke tests`
+                    ? `changes to ${displayNames.join(', ')} broke tests`
                     : 'tests failed';
                   extWarnings.push(
                     `Checkpoint test run failed at file ${i + 1}/${total} ` +

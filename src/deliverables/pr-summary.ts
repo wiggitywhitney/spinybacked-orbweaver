@@ -197,8 +197,12 @@ function renderSchemaChanges(runResult: RunResult): string {
   lines.push('');
 
   if (runResult.schemaDiff) {
-    lines.push('### New Attribute Keys');
-    lines.push('');
+    // Only add a heading when the diff doesn't already contain its own ### headings.
+    // Real Weaver output uses plain-text labels; test fixtures may contain markdown headers.
+    if (!/^###\s/m.test(runResult.schemaDiff)) {
+      lines.push('### New Attribute Keys');
+      lines.push('');
+    }
     lines.push(runResult.schemaDiff);
   } else {
     lines.push('No schema changes detected.');
@@ -417,10 +421,10 @@ function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig, d
 }
 
 function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
-  // Exclude zero-span success files — their notes are repetitive ("No instrumentable functions")
-  // and already summarized in the per-file table's "No changes needed" line.
+  // Only show the pointer when at least one committed file has notes — failed files
+  // may not have a companion .instrumentation.md if they were never written to disk.
   const filesWithNotes = runResult.fileResults.filter(
-    f => f.notes && f.notes.length > 0 && !(f.status === 'success' && f.spansAdded === 0),
+    f => f.notes && f.notes.length > 0 && (f.status === 'success' || f.status === 'partial') && f.spansAdded > 0,
   );
 
   if (filesWithNotes.length === 0) return '';
