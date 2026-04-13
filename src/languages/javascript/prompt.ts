@@ -246,6 +246,15 @@ export function getSystemPromptSections(): LanguagePromptSections {
   }
   \`\`\`
 - When guarding a variable before accessing its properties, always use \`!= null\` (loose inequality), not \`!== undefined\` (strict). \`!== undefined\` passes when the value is \`null\`, causing a TypeError on property access at runtime.
+- **Do not modify the content of existing template literals.** If you need to capture a template literal value as a span attribute, add \`span.setAttribute()\` **after** the template literal assignment using the already-assigned variable — never inline a span context expression within the template expression itself.
+  \`\`\`javascript
+  // WRONG — modifies the template literal content, triggers NDS-003
+  const systemContent = \`\${traceId}\n\${guidelines}\n\${sectionPrompt}\`;
+
+  // CORRECT — capture the template literal value first, then set the attribute after
+  const systemContent = \`\${guidelines}\n\${sectionPrompt}\`;
+  span.setAttribute('ai.system_prompt', systemContent);
+  \`\`\`
 - **Return-value capture is allowed.** When you need to call \`setAttribute\` on a return value, you may extract the expression to a \`const\`:
   \`\`\`javascript
   // Original: return computeResult();
