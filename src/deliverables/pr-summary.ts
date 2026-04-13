@@ -364,7 +364,10 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
       const [, { fileDisplay, annotations }] = fileEntries[i];
       lines.push(`**${fileDisplay}**`);
       for (const ann of annotations) {
-        lines.push(`- ${formatRuleId(ann.ruleId)}: ${expandRuleCodesInText(ann.message)}`);
+        // Strip leading "RULE-NNN: " prefix from message — already rendered via formatRuleId above.
+        // Then expand any other rule codes in the body to include their human-readable labels.
+        const messageBody = ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, '');
+        lines.push(`- ${formatRuleId(ann.ruleId)}: ${expandRuleCodesInText(messageBody)}`);
       }
       if (i < fileEntries.length - 1) {
         lines.push('');
