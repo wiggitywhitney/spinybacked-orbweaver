@@ -341,7 +341,7 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('Span Extensions');
+      expect(md).toContain('New Span IDs');
       expect(md).toContain('span.myapp.fetch_data');
       expect(md).toContain('span.myapp.process_order');
     });
@@ -357,7 +357,7 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).not.toContain('Span Extensions');
+      expect(md).not.toContain('New Span IDs');
     });
 
     it('deduplicates span extensions across multiple files', () => {
@@ -378,8 +378,8 @@ describe('renderPrSummary', () => {
 
       // fetch_data appears in both files but should render once
       const matches = md.match(/span\.myapp\.fetch_data/g);
-      // One in per-file table extensions column + one in Span Extensions list
-      const spanSection = md.split('### Span Extensions')[1]?.split('##')[0] ?? '';
+      // One in per-file table extensions column + one in New Span IDs list
+      const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
       expect(spanSection.match(/span\.myapp\.fetch_data/g)).toHaveLength(1);
       expect(spanSection).toContain('span.myapp.save');
     });
@@ -396,7 +396,7 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('Span Extensions');
+      expect(md).toContain('New Span IDs');
       expect(md).toContain('span.myapp.partial_span');
     });
 
@@ -411,7 +411,7 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('Span Extensions');
+      expect(md).toContain('New Span IDs');
       expect(md).toContain('myapp.custom_operation');
     });
 
@@ -430,11 +430,11 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('Span Extensions');
+      expect(md).toContain('New Span IDs');
       expect(md).toContain('span.myapp.cli.main');
       expect(md).toContain('span.myapp.context.gather');
-      // Non-span bare string should not appear in the Span Extensions section
-      const spanSection = md.split('### Span Extensions')[1]?.split('##')[0] ?? '';
+      // Non-span bare string should not appear in the New Span IDs section
+      const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
       expect(spanSection).not.toContain('myapp.request.method');
     });
   });
@@ -673,7 +673,7 @@ describe('renderPrSummary', () => {
     });
   });
 
-    it('groups repeated advisories by rule ID with file count', () => {
+    it('groups advisories by file — each file gets its own section with a blank line between files', () => {
       const makeAdvisory = (file: string) => ({
         ruleId: 'CDQ-006',
         passed: false,
@@ -692,72 +692,33 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // Should group identical advisories into exactly 1 entry, not 3 separate lines
+      // Each file gets its own header and finding — 3 separate CDQ-006 bullets
       const advisorySection = md.split('### Advisory Findings')[1]?.split('##')[0] ?? '';
       const cdq006Bullets = advisorySection.split('\n').filter(l => l.startsWith('- ') && l.includes('CDQ-006'));
-      expect(cdq006Bullets).toHaveLength(1); // exactly 1 grouped entry
-      expect(advisorySection).toContain('3 files'); // mentions file count
-      // All three files appear in the grouped output
-      expect(advisorySection).toContain('a.js');
-      expect(advisorySection).toContain('b.js');
-      expect(advisorySection).toContain('c.js');
+      expect(cdq006Bullets).toHaveLength(3);
+      // All three files appear as bold headers
+      expect(advisorySection).toContain('**a.js**');
+      expect(advisorySection).toContain('**b.js**');
+      expect(advisorySection).toContain('**c.js**');
+      // Blank lines separate the file sections
+      expect(advisorySection).toContain('\n\n');
     });
 
   describe('agent notes section', () => {
-    it('includes notes from each file', () => {
+    it('shows companion file pointer when any file has notes', () => {
       const result = _makeRunResult({
         fileResults: [
           _makeFileResult({
             path: '/project/src/api-client.js',
             notes: ['Added context propagation for outgoing HTTP calls'],
           }),
-          _makeFileResult({
-            path: '/project/src/db-handler.js',
-            notes: ['File has 600 lines — may benefit from splitting'],
-          }),
         ],
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('context propagation');
-      expect(md).toContain('600 lines');
-    });
-
-    it('truncates notes to first 3 per file in PR summary', () => {
-      const notes = Array.from({ length: 10 }, (_, i) => `Note ${i + 1} about instrumentation decisions`);
-      const result = _makeRunResult({
-        fileResults: [
-          _makeFileResult({
-            path: '/project/src/api-client.js',
-            notes,
-          }),
-        ],
-      });
-      const md = renderPrSummary(result, _makeConfig());
-
-      const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
-      // Should show exactly 3 notes, not all 10
-      const noteLines = notesSection.split('\n').filter(l => l.startsWith('- Note'));
-      expect(noteLines).toHaveLength(3);
-      // First 3 notes present, 4th absent
-      expect(notesSection).toContain('Note 1');
-      expect(notesSection).toContain('Note 3');
-      expect(notesSection).not.toContain('Note 4 about');
-      // Should indicate 7 more notes exist
-      expect(notesSection).toContain('7 more');
-    });
-
-    it('expands rule codes in notes to include labels', () => {
-      const result = _makeRunResult({
-        fileResults: [
-          _makeFileResult({ notes: ['skipped per RST-001, RST-003'] }),
-        ],
-      });
-      const md = renderPrSummary(result, _makeConfig());
-
-      const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
-      expect(notesSection).toContain('RST-001 (No Utility Spans)');
-      expect(notesSection).toContain('RST-003 (No Thin Wrapper Spans)');
+      expect(md).toContain('## Agent Notes');
+      expect(md).toContain('.instrumentation.md');
+      expect(md).toContain('same directory');
     });
 
     it('skips notes section when no files have notes', () => {
@@ -1284,25 +1245,25 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain('Recommended Companion Packages');
     });
 
-    it('includes --import warning for short-lived targets with companion packages', () => {
-      const result = _makeRunResult({
-        companionPackages: ['@traceloop/instrumentation-langchain'],
-      });
-      const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
-
-      expect(md).toContain('Recommended Companion Packages');
-      expect(md).toContain('--import');
-      expect(md).toContain('in-app');
-    });
-
-    it('does not include --import warning for long-lived targets with companion packages', () => {
+    it('includes in-app initialization warning for all targets with companion packages', () => {
       const result = _makeRunResult({
         companionPackages: ['@traceloop/instrumentation-langchain'],
       });
       const md = renderPrSummary(result, _makeConfig({ targetType: 'long-lived' }));
+
+      expect(md).toContain('Recommended Companion Packages');
+      expect(md).toContain('--import');
+      expect(md).toContain('inside your application code');
+    });
+
+    it('includes short-lived section link for short-lived targets with companion packages', () => {
+      const result = _makeRunResult({
+        companionPackages: ['@traceloop/instrumentation-langchain'],
+      });
+      const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
       const companionSection = md.split('## Recommended Companion Packages')[1]?.split('##')[0] ?? '';
 
-      expect(companionSection).not.toContain('--import');
+      expect(companionSection).toContain('Short-Lived Process Setup Guidance');
     });
   });
 
@@ -1377,12 +1338,9 @@ describe('renderPrSummary', () => {
       const result = _makeRunResult({ fileResults: files, filesSucceeded: 3 });
       const md = renderPrSummary(result, _makeConfig());
 
-      // Instrumented file notes should appear
-      expect(md).toContain('Instrumented 3 functions');
-      // Zero-span file notes should NOT appear individually in Agent Notes section
-      const notesSection = md.split('## Agent Notes')[1]?.split('##')[0] ?? '';
-      expect(notesSection).not.toContain('skip1.js');
-      expect(notesSection).not.toContain('skip2.js');
+      // Instrumented file (api.js) has notes — Agent Notes section should appear with companion pointer
+      expect(md).toContain('## Agent Notes');
+      expect(md).toContain('.instrumentation.md');
     });
 
     it('distinguishes committed vs correct-skip in summary header', () => {
@@ -1395,7 +1353,7 @@ describe('renderPrSummary', () => {
 
       expect(md).toContain('Committed');
       expect(md).toContain('1');
-      expect(md).toContain('Correct skips');
+      expect(md).toContain('No changes needed');
     });
   });
 
@@ -1435,12 +1393,14 @@ describe('renderPrSummary', () => {
       expect(md).toContain('process.exit');
     });
 
-    it('warns about auto-instrumentation --import conflict for short-lived targets', () => {
+    it('does not include auto-instrumentation warning — that lives in companion packages section', () => {
       const result = _makeRunResult();
       const md = renderPrSummary(result, _makeConfig({ targetType: 'short-lived' }));
 
-      expect(md).toContain('auto-instrumentation');
-      expect(md).toContain('--import');
+      expect(md).not.toContain('Auto-Instrumentation Warning');
+      // Essential setup content still present
+      expect(md).toContain('SimpleSpanProcessor');
+      expect(md).toContain('process.exit');
     });
   });
 });

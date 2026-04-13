@@ -84,7 +84,7 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
   lines.push(`- **Files processed**: ${runResult.filesProcessed}`);
   lines.push(`- **Committed**: ${committed}`);
   if (correctSkips > 0) {
-    lines.push(`- **Correct skips**: ${correctSkips}`);
+    lines.push(`- **No changes needed**: ${correctSkips}`);
   }
   if (runResult.filesFailed > 0) {
     lines.push(`- **Failed**: ${runResult.filesFailed}`);
@@ -152,7 +152,7 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
   if (zeroSpanFiles.length > 0) {
     const names = zeroSpanFiles.map(f => display(f.path)).join(', ');
     lines.push('');
-    lines.push(`**Correct skips** (${zeroSpanFiles.length} files, 0 spans): ${names}`);
+    lines.push(`**No changes needed** (${zeroSpanFiles.length} files, 0 spans): ${names}`);
   }
 
   return lines.join('\n');
@@ -197,6 +197,12 @@ function renderSchemaChanges(runResult: RunResult): string {
   lines.push('');
 
   if (runResult.schemaDiff) {
+    // Only add a heading when the diff doesn't already contain its own ### headings.
+    // Real Weaver output uses plain-text labels; test fixtures may contain markdown headers.
+    if (!/^###\s/m.test(runResult.schemaDiff)) {
+      lines.push('### New Attribute Keys');
+      lines.push('');
+    }
     lines.push(runResult.schemaDiff);
   } else {
     lines.push('No schema changes detected.');
@@ -208,7 +214,7 @@ function renderSchemaChanges(runResult: RunResult): string {
   const spanExtensions = collectSpanExtensionIds(runResult);
   if (spanExtensions.length > 0) {
     lines.push('');
-    lines.push(`### Span Extensions (${spanExtensions.length})`);
+    lines.push(`### New Span IDs (${spanExtensions.length})`);
     lines.push('');
     for (const spanId of spanExtensions) {
       lines.push(`- \`${spanId}\``);
@@ -342,32 +348,29 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     lines.push('### Advisory Findings');
     lines.push('');
 
-    // Group by ruleId + message to collapse repeated findings.
-    // Use canonical filePath for deduplication, display path for rendering.
-    const groups = new Map<string, { ruleId: string; message: string; filePathSet: Set<string>; fileDisplayMap: Map<string, string> }>();
+    // Group by file so reviewers can navigate finding by finding within each file.
+    const fileGroups = new Map<string, { fileDisplay: string; annotations: CheckResult[] }>();
     for (const { filePath, fileDisplay, annotation } of allAdvisory) {
-      const key = `${annotation.ruleId}|${annotation.message}`;
-      const existing = groups.get(key);
+      const existing = fileGroups.get(filePath);
       if (existing) {
-        existing.filePathSet.add(filePath);
-        existing.fileDisplayMap.set(filePath, fileDisplay);
+        existing.annotations.push(annotation);
       } else {
-        groups.set(key, {
-          ruleId: annotation.ruleId,
-          message: annotation.message,
-          filePathSet: new Set([filePath]),
-          fileDisplayMap: new Map([[filePath, fileDisplay]]),
-        });
+        fileGroups.set(filePath, { fileDisplay, annotations: [annotation] });
       }
     }
 
-    for (const { ruleId, message, filePathSet, fileDisplayMap } of groups.values()) {
-      const displayNames = [...filePathSet].map(p => fileDisplayMap.get(p) ?? p);
-      if (displayNames.length === 1) {
-        lines.push(`- **${formatRuleId(ruleId)}** (${displayNames[0]}): ${message}`);
-      } else {
-        lines.push(`- **${formatRuleId(ruleId)}** (${displayNames.length} files): ${message}`);
-        lines.push(`  Files: ${displayNames.join(', ')}`);
+    const fileEntries = [...fileGroups.entries()];
+    for (let i = 0; i < fileEntries.length; i++) {
+      const [, { fileDisplay, annotations }] = fileEntries[i];
+      lines.push(`**${fileDisplay}**`);
+      for (const ann of annotations) {
+        // Strip leading "RULE-NNN: " prefix from message — already rendered via formatRuleId above.
+        // Then expand any other rule codes in the body to include their human-readable labels.
+        const messageBody = ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, '');
+        lines.push(`- ${formatRuleId(ann.ruleId)}: ${expandRuleCodesInText(messageBody)}`);
+      }
+      if (i < fileEntries.length - 1) {
+        lines.push('');
       }
     }
   }
@@ -421,31 +424,20 @@ function computeSensitivityWarnings(runResult: RunResult, config: AgentConfig, d
 }
 
 function renderAgentNotes(runResult: RunResult, display: DisplayFn): string {
-  // Exclude zero-span success files — their notes are repetitive ("No instrumentable functions")
-  // and already summarized in the per-file table's "Correct skips" line.
+  // Only show the pointer when at least one committed file has notes — failed files
+  // may not have a companion .instrumentation.md if they were never written to disk.
   const filesWithNotes = runResult.fileResults.filter(
-    f => f.notes && f.notes.length > 0 && !(f.status === 'success' && f.spansAdded === 0),
+    f => f.notes && f.notes.length > 0 && (f.status === 'success' || f.status === 'partial') && f.spansAdded > 0,
   );
 
   if (filesWithNotes.length === 0) return '';
 
-  const lines: string[] = ['## Agent Notes'];
-  lines.push('');
-
-  const MAX_NOTES_PER_FILE = 3;
-  for (const file of filesWithNotes) {
-    lines.push(`**${display(file.path)}**:`);
-    const shown = file.notes!.slice(0, MAX_NOTES_PER_FILE);
-    for (const note of shown) {
-      lines.push(`- ${expandRuleCodesInText(note)}`);
-    }
-    if (file.notes!.length > MAX_NOTES_PER_FILE) {
-      lines.push(`- *... ${file.notes!.length - MAX_NOTES_PER_FILE} more notes in reasoning report*`);
-    }
-    lines.push('');
-  }
-
-  return lines.join('\n').trimEnd();
+  return [
+    '## Agent Notes',
+    '',
+    "Each instrumented file has a companion `.instrumentation.md` file in the same directory " +
+    '(e.g., `src/api.js` → `src/api.instrumentation.md`) containing the agent\'s full decision notes.',
+  ].join('\n');
 }
 
 function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): string {
@@ -515,12 +507,18 @@ function renderCompanionPackages(runResult: RunResult, config: AgentConfig): str
     lines.push(`- \`${pkg}\``);
   }
 
+  lines.push('');
+  lines.push(
+    '> **Important**: Initialize these packages **inside your application code**, not via `--import`. ' +
+    'Loading them through `--import` can install a competing ESM hook registry alongside the one ' +
+    'already registered by your OTel SDK, causing spans to be created but silently dropped — ' +
+    'the exporter reports success but data never reaches the backend.',
+  );
+
   if (config.targetType === 'short-lived') {
     lines.push('');
     lines.push(
-      '> **Short-lived process warning**: Do not load these packages via `--import`. ' +
-      'Initialize them in-app instead to avoid ESM hook conflicts that cause silent span loss. ' +
-      'See the Short-Lived Process Setup Guidance section below for details.',
+      '> See the Short-Lived Process Setup Guidance section below for additional setup details.',
     );
   }
 
@@ -574,20 +572,6 @@ function renderShortLivedSetupGuidance(config: AgentConfig): string {
   lines.push('    .finally(() => originalExit.call(process, process.exitCode));');
   lines.push('};');
   lines.push('```');
-  lines.push('');
-  lines.push('### Auto-Instrumentation Warning');
-  lines.push('');
-  lines.push(
-    '**Do not load third-party auto-instrumentation packages via `--import`.** ' +
-    'They may bring a different version of `@opentelemetry/instrumentation` which installs ' +
-    'a separate `import-in-the-middle` with its own ESM hook registry. This causes silent span loss — ' +
-    'the exporter reports success but spans never reach the backend.',
-  );
-  lines.push('');
-  lines.push(
-    'Instead, initialize auto-instrumentation **inside your application code** (not in the `--import` bootstrap). ' +
-    'This avoids the competing ESM hook registries.',
-  );
 
   return lines.join('\n');
 }

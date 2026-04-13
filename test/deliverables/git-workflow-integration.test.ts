@@ -272,6 +272,6 @@ describe('git workflow integration', () => {
     expect(capturedPrBody).toContain('## Schema Changes');
     expect(capturedPrBody).toContain('## Token Usage');
     expect(capturedPrBody).toContain('## Agent Notes');
-    expect(capturedPrBody).toContain('Added HTTP span');
+    expect(capturedPrBody).toContain('.instrumentation.md');
   }, 30000);
 });
