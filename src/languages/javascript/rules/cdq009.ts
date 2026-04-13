@@ -97,8 +97,8 @@ export function checkNotNullSafeGuard(code: string, filePath: string): CheckResu
 /**
  * Walk up from a setAttribute call and determine if it is inside an if-statement
  * that guards `varName` with `!== undefined` (not null-safe).
- * Returns 'strict-undefined' if a !==undefined guard is found, 'other' for any
- * other guard kind (truthy, != null, etc.), or null if no enclosing guard.
+ * Returns 'strict-undefined' if a !==undefined guard is found, or null if no
+ * such enclosing guard exists (including truthy checks and != null guards).
  */
 function findEnclosingGuardKind(
   node: import('ts-morph').Node,
