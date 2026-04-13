@@ -627,7 +627,34 @@ export async function dispatchFiles(
               } catch { /* re-run infrastructure failure → treat as still failing */ }
 
               if (reRunPassed) {
-                // Targeted rollback succeeded — remaining window files are clean
+                // Targeted rollback succeeded — remaining window files are clean.
+                // Clean up schema extensions from the reverted files: restore to the
+                // pre-window checkpoint snapshot, then re-apply extensions from non-reverted files.
+                if (registryDir && checkpointExtensionsSnapshot !== undefined) {
+                  try {
+                    await restoreFn(registryDir, checkpointExtensionsSnapshot);
+                    accumulatedExtensions.length = checkpointAccumulatorLength;
+                    seenExtensions.clear();
+                    for (const ext of accumulatedExtensions) seenExtensions.add(ext);
+
+                    // Re-add extensions from non-reverted window files
+                    for (const tracked of checkpointWindowFiles) {
+                      if (!failingFiles.includes(tracked.path)) {
+                        for (const ext of (results[tracked.resultIndex].schemaExtensions ?? [])) {
+                          if (!seenExtensions.has(ext)) {
+                            accumulatedExtensions.push(ext);
+                            seenExtensions.add(ext);
+                          }
+                        }
+                      }
+                    }
+
+                    if (accumulatedExtensions.length > checkpointAccumulatorLength) {
+                      await writeExtFn(registryDir, accumulatedExtensions);
+                    }
+                  } catch { /* best-effort extension cleanup */ }
+                }
+
                 didSmartRollback = true;
                 try {
                   callbacks?.onCheckpointRollback?.(failingFiles);
