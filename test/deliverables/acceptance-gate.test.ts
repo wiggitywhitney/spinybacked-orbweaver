@@ -25,6 +25,7 @@ async function cloneTestRepo(): Promise<string> {
   await git.clone(REPO_ROOT, dir, ['--depth', '1', '--single-branch']);
   await git.addConfig('user.email', 'test@example.com');
   await git.addConfig('user.name', 'E2E Test');
+  await git.addConfig('commit.gpgsign', 'false');
 
   // Point the remote to the real GitHub repo for push
   const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: REPO_ROOT })

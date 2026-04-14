@@ -2740,6 +2740,12 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     // Should produce a partial result via the fallback-to-partial path
     expect(result.status).toBe('partial');
     expect(result.notes?.some(n => n.includes('Reassembly validation failed'))).toBe(true);
+
+    // The function-level fallback appends extra entries to errorProgression beyond what
+    // the whole-file retry loop produced ("function-level: N/M" + "reassembly: ..."),
+    // so errorProgression.length intentionally exceeds validationAttempts for partial files.
+    expect(result.functionsInstrumented).toBeDefined();
+    expect(result.errorProgression!.length).toBeGreaterThan(result.validationAttempts);
   });
 
   it('commits N passing functions even when partial reassembly validation fails blocking rules', async () => {

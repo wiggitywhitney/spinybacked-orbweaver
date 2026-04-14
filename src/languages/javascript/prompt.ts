@@ -257,13 +257,21 @@ export function getSystemPromptSections(): LanguagePromptSections {
   \`\`\`
 - **Return-value capture is allowed.** When you need to call \`setAttribute\` on a return value, you may extract the expression to a \`const\`:
   \`\`\`javascript
-  // Original: return computeResult();
-  // Allowed:
+  // ALLOWED — capturing a value that exists and will be returned
   const result = computeResult();
   span.setAttribute('result.count', result.length);
   return result;
   \`\`\`
   This is the ONLY non-instrumentation code change the validator permits. Use it only for capturing values needed by \`setAttribute\` or \`addEvent\`.
+
+  Do NOT initialize new variables to accumulate data (e.g., \`const names = []\`, \`const count = 0\`). Every \`const\` you add must capture a value that already exists in the function and will be returned — no other \`const\` introductions are permitted.
+
+  \`\`\`javascript
+  // WRONG — initializing an accumulation variable (NDS-003 violation)
+  const sectionNames = [];
+  sections.forEach(s => sectionNames.push(s.name));
+  span.setAttribute('sections', sectionNames.join(','));
+  \`\`\`
 - **Do not call string methods directly on property-access expressions.** When extracting a value for a span attribute, never assume an object field holds a string. Calling \`.split()\`, \`.slice()\`, \`.replace()\`, or similar string methods directly on \`obj.field\` will crash at runtime if the field is a \`Date\`, number, or other non-string type. When extracting a date string from a timestamp field, use \`new Date(value).toISOString().split('T')[0]\` — this handles both \`Date\` objects and ISO string inputs safely. For other fields, use \`String(value)\` to coerce explicitly.
   \`\`\`javascript
   // WRONG — crashes if commit.timestamp is a Date object
