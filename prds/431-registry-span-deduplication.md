@@ -117,8 +117,8 @@ Before writing any code, read `src/coordinator/coordinate.ts` to find where CDQ-
 
 ### M5: Acceptance gate verification
 
-- [ ] Run the full acceptance gate suite (`vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run --config vitest.acceptance.config.ts'`). All existing tests pass — this check is advisory and adds no blocking behavior.
-- [ ] Review acceptance gate output for any SCH-005 findings on the real target repos. If a finding fires and is clearly a false positive, note it in PROGRESS.md for prompt tuning.
+- [x] Run the full acceptance gate suite (`vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run --config vitest.acceptance.config.ts'`). All existing tests pass — this check is advisory and adds no blocking behavior.
+- [x] Review acceptance gate output for any SCH-005 findings on the real target repos. If a finding fires and is clearly a false positive, note it in PROGRESS.md for prompt tuning.
 
 ---
 
