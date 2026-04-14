@@ -780,6 +780,54 @@ describe('coordinate', () => {
     });
   });
 
+  describe('run-level advisory checks (SCH-005)', () => {
+    it('runs SCH-005 span deduplication and pushes findings when span IDs are similar (>0.5 Jaccard)', async () => {
+      // span.myapp.generate.run vs span.myapp.generate.execute:
+      // tokens {span,myapp,generate,run} vs {span,myapp,generate,execute}
+      // Intersection=3, Union=5 → Jaccard=0.6 → script tier catches this
+      const similarRegistry = {
+        groups: [
+          { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
+          { id: 'span.myapp.generate.execute', type: 'span', brief: 'Executes the generator' },
+        ],
+      };
+      const deps = makeDeps({
+        resolveSchemaForHash: vi.fn().mockResolvedValue(similarRegistry),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const sch005Findings = result.runLevelAdvisory.filter((r) => r.ruleId === 'SCH-005');
+      expect(sch005Findings.length).toBeGreaterThanOrEqual(1);
+      expect(sch005Findings[0]!.passed).toBe(false);
+      expect(sch005Findings[0]!.blocking).toBe(false);
+      // SCH-005 is non-blocking — all files still succeed
+      expect(result.filesFailed).toBe(0);
+    });
+
+    it('produces no SCH-005 advisory findings when registry spans are distinct', async () => {
+      // span.myapp.api.handle_request vs span.billing.payment.process:
+      // Intersection={span}, Union=8 → Jaccard=0.125 → no finding
+      const distinctRegistry = {
+        groups: [
+          { id: 'span.myapp.api.handle_request', type: 'span' },
+          { id: 'span.billing.payment.process', type: 'span' },
+        ],
+      };
+      const deps = makeDeps({
+        resolveSchemaForHash: vi.fn().mockResolvedValue(distinctRegistry),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const sch005Failures = result.runLevelAdvisory.filter(
+        (r) => r.ruleId === 'SCH-005' && !r.passed,
+      );
+      expect(sch005Failures).toHaveLength(0);
+      expect(result.filesFailed).toBe(0);
+    });
+  });
+
   describe('happy path end-to-end', () => {
     it('wires discovery → dispatch → aggregate → finalize in order', async () => {
       const callOrder: string[] = [];

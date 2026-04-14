@@ -109,11 +109,11 @@ Before writing any code, read how `tokenize()` and `jaccardSimilarity()` are imp
 
 Before writing any code, read `src/coordinator/coordinate.ts` to find where CDQ-008 is invoked. Wire `checkRegistrySpanDuplicates` at the same point, using the same resolved registry and Anthropic client that CDQ-008 uses.
 
-- [ ] Call `checkRegistrySpanDuplicates` in the coordinator after all files are processed. Pass the Anthropic client as judge deps when available.
-- [ ] Append results to `runResult.runLevelAdvisory` so they surface in the PR summary without new rendering code.
-- [ ] Integration test: a fixture registry containing two semantically similar span definitions (>0.5 Jaccard) produces a run where `runResult.runLevelAdvisory` contains at least one SCH-005 finding and `runResult.fileResults` all succeed.
-- [ ] Integration test: a fixture registry with no similar span definitions produces no SCH-005 findings and all files succeed.
-- [ ] `npm run typecheck` passes.
+- [x] Call `checkRegistrySpanDuplicates` in the coordinator after all files are processed. Pass the Anthropic client as judge deps when available.
+- [x] Append results to `runResult.runLevelAdvisory` so they surface in the PR summary without new rendering code.
+- [x] Integration test: a fixture registry containing two semantically similar span definitions (>0.5 Jaccard) produces a run where `runResult.runLevelAdvisory` contains at least one SCH-005 finding and `runResult.fileResults` all succeed.
+- [x] Integration test: a fixture registry with no similar span definitions produces no SCH-005 findings and all files succeed.
+- [x] `npm run typecheck` passes.
 
 ### M5: Acceptance gate verification
 
