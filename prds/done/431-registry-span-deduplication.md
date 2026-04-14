@@ -1,6 +1,6 @@
 # PRD #431: Registry span deduplication via LLM judge
 
-**Status**: Draft
+**Status**: Complete — 2026-04-14
 **Priority**: Medium
 **GitHub Issue**: [#431](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/431)
 **Created**: 2026-04-12
