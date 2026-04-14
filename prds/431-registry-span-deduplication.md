@@ -87,21 +87,21 @@ Before writing any code, read `src/validation/tier2/registry-types.ts` to unders
 
 Before writing any code, read how `tokenize()` and `jaccardSimilarity()` are implemented in `src/validation/tier2/sch004.ts`. Determine whether to copy or extract them to a shared location — if SCH-004 already exports them, import from there; if not, copy them into `sch005.ts` with a comment noting the duplication for future cleanup.
 
-- [ ] Add `checkRegistrySpanDuplicates(resolvedRegistry: object, judgeDeps?: Sch005JudgeDeps): Promise<CheckResult[]>` to `src/validation/tier2/sch005.ts`. `Sch005JudgeDeps` mirrors the shape used in SCH-004.
-- [ ] Script tier: for each pair of span definitions, compute Jaccard similarity on their tokenized IDs. Flag pairs with similarity >0.5 as advisory findings. Each finding includes both span IDs, their similarity score, and a suggestion to consolidate.
-- [ ] Export `sch005Rule` as a `ValidationRule` following the pattern of `sch004Rule`. Register SCH-005 in `src/validation/rule-names.ts` as `'No Duplicate Span Definitions'`. Export from `src/validation/tier2/index.ts`.
-- [ ] Unit test: two span IDs with >0.5 Jaccard similarity produce a finding. Two clearly distinct IDs produce no findings. Three spans where only one pair overlaps produces exactly one finding.
-- [ ] `npm run typecheck` passes.
+- [x] Add `checkRegistrySpanDuplicates(resolvedRegistry: object, judgeDeps?: Sch005JudgeDeps): Promise<CheckResult[]>` to `src/validation/tier2/sch005.ts`. `Sch005JudgeDeps` mirrors the shape used in SCH-004.
+- [x] Script tier: for each pair of span definitions, compute Jaccard similarity on their tokenized IDs. Flag pairs with similarity >0.5 as advisory findings. Each finding includes both span IDs, their similarity score, and a suggestion to consolidate.
+- [x] Export `sch005Rule` as a `ValidationRule` following the pattern of `sch004Rule`. Register SCH-005 in `src/validation/rule-names.ts` as `'No Duplicate Span Definitions'`. Export from `src/validation/tier2/index.ts`.
+- [x] Unit test: two span IDs with >0.5 Jaccard similarity produce a finding. Two clearly distinct IDs produce no findings. Three spans where only one pair overlaps produces exactly one finding.
+- [x] `npm run typecheck` passes.
 
 ### M3: LLM judge tier
 
 **Design:** The judge only handles semantic equivalence — all namespace decisions are deterministic. Two deterministic gates sandwich the judge call: (1) pre-filter: before calling the judge, check that both span IDs share the same root namespace (segment after `span.`) — skip the judge entirely if they differ; (2) post-validate: after a duplicate verdict, re-confirm namespace compatibility before emitting. The judge only reasons about whether two same-namespace spans describe the same operation.
 
-- [ ] For each pair in the Jaccard gap (0.2 < Jaccard ≤ 0.5, per OD-3): extract the root namespace from each span ID (segment immediately after `span.`, e.g., `commit_story` from `span.commit_story.generate`). If the root namespaces differ, skip this pair — do NOT call the judge.
-- [ ] For namespace-compatible pairs, call `callJudge()` with span IDs and briefs as context (per OD-2). Pass only the namespace-compatible span IDs as `candidates` — not all span IDs in the registry. Use confidence threshold 0.7, matching SCH-004.
-- [ ] Design the judge question using this template: `"Are span IDs '[id-a]' and '[id-b]' semantically distinct — do they represent different operations? Answer true if they represent clearly different operations. Answer false if they are semantic duplicates (the same operation named differently). Brief for '[id-a]': [brief or 'not provided']. Brief for '[id-b]': [brief or 'not provided']."` (Consistent with SCH-004: `false` = "not distinct" = IS a duplicate. Domain-boundary language is less critical here since pre-filtering already ensures same-namespace candidates.)
-- [ ] When the judge answers `false` with confidence ≥ 0.7: re-confirm deterministically that both span IDs share the same root namespace (post-validate safety net, D-1). If they differ, discard silently. Otherwise emit the advisory finding.
-- [ ] When the judge returns `null` (failure), skip silently and continue.
+- [x] For each pair in the Jaccard gap (0.2 < Jaccard ≤ 0.5, per OD-3): extract the root namespace from each span ID (segment immediately after `span.`, e.g., `commit_story` from `span.commit_story.generate`). If the root namespaces differ, skip this pair — do NOT call the judge.
+- [x] For namespace-compatible pairs, call `callJudge()` with span IDs and briefs as context (per OD-2). Pass only the namespace-compatible span IDs as `candidates` — not all span IDs in the registry. Use confidence threshold 0.7, matching SCH-004.
+- [x] Design the judge question using this template: `"Are span IDs '[id-a]' and '[id-b]' semantically distinct — do they represent different operations? Answer true if they represent clearly different operations. Answer false if they are semantic duplicates (the same operation named differently). Brief for '[id-a]': [brief or 'not provided']. Brief for '[id-b]': [brief or 'not provided']."` (Consistent with SCH-004: `false` = "not distinct" = IS a duplicate. Domain-boundary language is less critical here since pre-filtering already ensures same-namespace candidates.)
+- [x] When the judge answers `false` with confidence ≥ 0.7: re-confirm deterministically that both span IDs share the same root namespace (post-validate safety net, D-1). If they differ, discard silently. Otherwise emit the advisory finding.
+- [x] When the judge returns `null` (failure), skip silently and continue.
 - [ ] Unit tests (mock `callJudge`): verify the judge is NOT called for pairs with differing root namespaces. Verify the judge IS called with only namespace-compatible candidates. Verify a `false` verdict at confidence 0.8 with matching namespaces produces a finding. Verify a `false` verdict with differing namespaces is discarded by the post-validate gate. Verify `true` verdict and `null` produce no finding.
 - [ ] `npm run typecheck` passes.
 
