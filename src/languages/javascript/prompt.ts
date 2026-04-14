@@ -262,7 +262,7 @@ export function getSystemPromptSections(): LanguagePromptSections {
   span.setAttribute('result.count', result.length);
   return result;
   \`\`\`
-  This is the ONLY non-instrumentation code change the validator permits. Use it only for capturing values needed by \`setAttribute\` or \`addEvent\`.
+  This is the ONLY non-instrumentation code change the validator permits. Use it only for extracting a value that is already being returned so you can call \`setAttribute\` before returning it.
 
   Do NOT initialize new variables to accumulate data (e.g., \`const names = []\`, \`const count = 0\`). Every \`const\` you add must capture a value that already exists in the function — no new computation or accumulation is permitted.
 
