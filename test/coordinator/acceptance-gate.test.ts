@@ -264,7 +264,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     }
 
     // (f) Aggregate counts are correct
-    expect(result.filesSucceeded + result.filesFailed + result.filesSkipped).toBe(result.filesProcessed);
+    expect(result.filesSucceeded + result.filesFailed + result.filesSkipped + result.filesPartial).toBe(result.filesProcessed);
     expect(result.filesSucceeded).toBeGreaterThanOrEqual(1);
 
     // (g) Callbacks fired at all expected points

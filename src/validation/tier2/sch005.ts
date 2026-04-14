@@ -120,7 +120,7 @@ export async function checkRegistrySpanDuplicates(
   }
 
   const scriptFindings: CheckResult[] = [];
-  const jacardGapPairs: Array<{ a: SpanDefinition; b: SpanDefinition; similarity: number }> = [];
+  const jaccardGapPairs: Array<{ a: SpanDefinition; b: SpanDefinition; similarity: number }> = [];
 
   // Script tier: compare all pairs
   for (let i = 0; i < spans.length; i++) {
@@ -147,7 +147,7 @@ export async function checkRegistrySpanDuplicates(
         });
       } else if (sim > 0.2) {
         // Jaccard gap — candidates for the judge tier (M3)
-        jacardGapPairs.push({ a, b, similarity: sim });
+        jaccardGapPairs.push({ a, b, similarity: sim });
       }
     }
   }
@@ -156,8 +156,8 @@ export async function checkRegistrySpanDuplicates(
   const judgeTokenUsage: TokenUsage[] = [];
   const judgeFindings: CheckResult[] = [];
 
-  if (judgeDeps && jacardGapPairs.length > 0) {
-    for (const { a, b } of jacardGapPairs) {
+  if (judgeDeps && jaccardGapPairs.length > 0) {
+    for (const { a, b } of jaccardGapPairs) {
       // Pre-filter: skip pairs from different root namespaces (deterministic)
       const rootA = getRootNamespace(a.id);
       const rootB = getRootNamespace(b.id);
