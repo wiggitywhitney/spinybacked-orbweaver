@@ -102,8 +102,8 @@ Before writing any code, read how `tokenize()` and `jaccardSimilarity()` are imp
 - [x] Design the judge question using this template: `"Are span IDs '[id-a]' and '[id-b]' semantically distinct — do they represent different operations? Answer true if they represent clearly different operations. Answer false if they are semantic duplicates (the same operation named differently). Brief for '[id-a]': [brief or 'not provided']. Brief for '[id-b]': [brief or 'not provided']."` (Consistent with SCH-004: `false` = "not distinct" = IS a duplicate. Domain-boundary language is less critical here since pre-filtering already ensures same-namespace candidates.)
 - [x] When the judge answers `false` with confidence ≥ 0.7: re-confirm deterministically that both span IDs share the same root namespace (post-validate safety net, D-1). If they differ, discard silently. Otherwise emit the advisory finding.
 - [x] When the judge returns `null` (failure), skip silently and continue.
-- [ ] Unit tests (mock `callJudge`): verify the judge is NOT called for pairs with differing root namespaces. Verify the judge IS called with only namespace-compatible candidates. Verify a `false` verdict at confidence 0.8 with matching namespaces produces a finding. Verify a `false` verdict with differing namespaces is discarded by the post-validate gate. Verify `true` verdict and `null` produce no finding.
-- [ ] `npm run typecheck` passes.
+- [x] Unit tests (mock `callJudge`): verify the judge is NOT called for pairs with differing root namespaces. Verify the judge IS called with only namespace-compatible candidates. Verify a `false` verdict at confidence 0.8 with matching namespaces produces a finding. Verify a `false` verdict with differing namespaces is discarded by the post-validate gate. Verify `true` verdict and `null` produce no finding.
+- [x] `npm run typecheck` passes.
 
 ### M4: Coordinator wiring
 

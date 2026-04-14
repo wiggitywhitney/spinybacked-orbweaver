@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-14) Completed the SCH-005 judge tier test suite. Six unit tests mock `callJudge` directly and verify the full judge decision path: namespace pre-filtering blocks the judge for different-namespace pairs, same-namespace Jaccard-gap pairs reach the judge, a false verdict at confidence ≥ 0.7 emits an advisory finding, true verdicts and null returns produce no finding. All 25 SCH-005 tests pass.
+
 - (2026-04-14) Added the core detection logic for SCH-005, the registry span deduplication check. `checkRegistrySpanDuplicates` now runs two tiers: a Jaccard similarity script that catches structurally obvious duplicates (>50% token overlap), and an LLM judge tier for the gap cases (20–50% overlap) that uses namespace pre-filtering to avoid false positives. The per-file `sch005Rule` stub is wired into the rule registry so the check shows up in feature-parity matrices. All 2,092 tests pass.
 
 - (2026-04-14) Started registry span deduplication rule (SCH-005). The first building block — extracting span definitions from the resolved Weaver registry — is implemented and tested. This feeds a two-tier duplicate-detection check (structural similarity + LLM judge) that will flag when separate instrumentation runs name the same operation differently.

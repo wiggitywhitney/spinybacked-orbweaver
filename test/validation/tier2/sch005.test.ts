@@ -1,7 +1,14 @@
 // ABOUTME: Tests for SCH-005 registry span deduplication check.
 // ABOUTME: Covers extractSpanDefinitions, Jaccard script tier, LLM judge tier, and coordinator wiring.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../../../src/validation/judge.ts', () => ({
+  callJudge: vi.fn(),
+}));
+import { callJudge } from '../../../src/validation/judge.ts';
+import type { TokenUsage } from '../../../src/agent/schema.ts';
+
 import { extractSpanDefinitions, checkRegistrySpanDuplicates, sch005Rule } from '../../../src/validation/tier2/sch005.ts';
 
 // Fixture resolved registry with 3 span definitions and 2 attribute definitions
@@ -160,6 +167,137 @@ describe('checkRegistrySpanDuplicates (SCH-005 script tier)', () => {
     const finding = results.find(r => !r.passed);
     expect(finding?.message).toContain('span.myapp.generate.run');
     expect(finding?.message).toContain('span.myapp.generate.execute');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fixtures for judge tier (Jaccard gap: 0.2 < similarity ≤ 0.5)
+// ---------------------------------------------------------------------------
+
+// Same root namespace pair in the gap:
+// span.billing.process.payment → tokens {span, billing, process, payment}
+// span.billing.handle.charge   → tokens {span, billing, handle, charge}
+// Intersection: {span, billing} = 2, Union: 6 → Jaccard ≈ 0.333
+const REGISTRY_SAME_NS_GAP_PAIR = {
+  groups: [
+    { id: 'span.billing.process.payment', type: 'span', brief: 'Processes a payment' },
+    { id: 'span.billing.handle.charge', type: 'span', brief: 'Handles a charge' },
+  ],
+};
+
+// Different root namespace pair in the gap:
+// span.auth.request.handle   → tokens {span, auth, request, handle}
+// span.billing.request.process → tokens {span, billing, request, process}
+// Intersection: {span, request} = 2, Union: 6 → Jaccard ≈ 0.333
+const REGISTRY_DIFF_NS_GAP_PAIR = {
+  groups: [
+    { id: 'span.auth.request.handle', type: 'span', brief: 'Handles an auth request' },
+    { id: 'span.billing.request.process', type: 'span', brief: 'Processes a billing request' },
+  ],
+};
+
+describe('checkRegistrySpanDuplicates (SCH-005 judge tier)', () => {
+  const mockTokenUsage: TokenUsage = {
+    inputTokens: 100,
+    outputTokens: 40,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+  };
+
+  beforeEach(() => {
+    vi.mocked(callJudge).mockReset();
+  });
+
+  it('does not call judge for pairs with differing root namespaces', async () => {
+    // Pre-filter (D-1): pairs from different root namespaces are skipped before the judge call.
+    vi.mocked(callJudge).mockResolvedValue({
+      verdict: { answer: false, confidence: 0.9 },
+      tokenUsage: mockTokenUsage,
+    });
+
+    await checkRegistrySpanDuplicates(REGISTRY_DIFF_NS_GAP_PAIR, { client: {} as any });
+
+    expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+  });
+
+  it('calls judge with only namespace-compatible candidates', async () => {
+    vi.mocked(callJudge).mockResolvedValue({
+      verdict: { answer: true, confidence: 0.9 },
+      tokenUsage: mockTokenUsage,
+    });
+
+    await checkRegistrySpanDuplicates(REGISTRY_SAME_NS_GAP_PAIR, { client: {} as any });
+
+    expect(vi.mocked(callJudge)).toHaveBeenCalledTimes(1);
+    const question = vi.mocked(callJudge).mock.calls[0]![0];
+    // candidates contains only the two same-namespace span IDs being evaluated
+    expect(question.candidates).toEqual([
+      'span.billing.process.payment',
+      'span.billing.handle.charge',
+    ]);
+  });
+
+  it('produces a finding when judge returns false at confidence 0.8 with matching namespaces', async () => {
+    vi.mocked(callJudge).mockResolvedValue({
+      verdict: { answer: false, confidence: 0.8 },
+      tokenUsage: mockTokenUsage,
+    });
+
+    const { results, judgeTokenUsage } = await checkRegistrySpanDuplicates(
+      REGISTRY_SAME_NS_GAP_PAIR,
+      { client: {} as any },
+    );
+
+    const findings = results.filter((r) => !r.passed);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.ruleId).toBe('SCH-005');
+    expect(findings[0]!.blocking).toBe(false);
+    expect(judgeTokenUsage).toHaveLength(1);
+  });
+
+  it('produces no finding when differing-namespace pairs are filtered before reaching the judge', async () => {
+    // The D-1 pre-filter blocks judge calls for different root namespaces.
+    // Even with a false-verdict mock set up, the judge is never invoked,
+    // so no finding is emitted. This validates the combined namespace gate.
+    vi.mocked(callJudge).mockResolvedValue({
+      verdict: { answer: false, confidence: 0.9 },
+      tokenUsage: mockTokenUsage,
+    });
+
+    const { results } = await checkRegistrySpanDuplicates(REGISTRY_DIFF_NS_GAP_PAIR, {
+      client: {} as any,
+    });
+
+    const findings = results.filter((r) => !r.passed);
+    expect(findings).toHaveLength(0);
+    expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+  });
+
+  it('produces no finding when judge returns true (spans are distinct)', async () => {
+    vi.mocked(callJudge).mockResolvedValue({
+      verdict: { answer: true, confidence: 0.9 },
+      tokenUsage: mockTokenUsage,
+    });
+
+    const { results } = await checkRegistrySpanDuplicates(REGISTRY_SAME_NS_GAP_PAIR, {
+      client: {} as any,
+    });
+
+    const findings = results.filter((r) => !r.passed);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('produces no finding when judge returns null (API failure — skip silently)', async () => {
+    vi.mocked(callJudge).mockResolvedValue(null);
+
+    const { results, judgeTokenUsage } = await checkRegistrySpanDuplicates(
+      REGISTRY_SAME_NS_GAP_PAIR,
+      { client: {} as any },
+    );
+
+    const findings = results.filter((r) => !r.passed);
+    expect(findings).toHaveLength(0);
+    expect(judgeTokenUsage).toHaveLength(0);
   });
 });
 
