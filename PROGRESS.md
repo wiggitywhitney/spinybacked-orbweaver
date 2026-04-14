@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-14) Started registry span deduplication rule (SCH-005). The first building block — extracting span definitions from the resolved Weaver registry — is implemented and tested. This feeds a two-tier duplicate-detection check (structural similarity + LLM judge) that will flag when separate instrumentation runs name the same operation differently.
+
 - (2026-04-09) PRD #371 complete — JavaScript language provider extraction. All B1/B2/B3 milestones done; eval gate passed at 92% (commit-story-v2 run-12). Archived to prds/done/.
 
 - (2026-04-09) CLI output readability overhaul. Verbose mode shows structured per-file sections: prominent SUCCESS/FAILED/PARTIAL status with span and attribute counts, tokens on a separate line, schema extensions and agent notes as bulleted sections with headers. All paths relativized; Completed line shows human-readable duration; artifact box labels PR summary as "Instrumentation report". README documents fine-grained PAT requirements and push verification signal.

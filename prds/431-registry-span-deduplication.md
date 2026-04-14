@@ -79,9 +79,9 @@ Before writing any code, read `src/validation/tier2/registry-types.ts` to unders
 
 **Import constraint (applies to all milestones):** Do NOT introduce imports from packages not already present in `src/validation/tier2/` or `src/validation/`. If a utility (e.g., `tokenize`, `jaccardSimilarity`) is needed and not exported, copy it locally with a `// duplicated from sch004.ts — extract in a follow-up` comment.
 
-- [ ] In a new file `src/validation/tier2/sch005.ts`, write `extractSpanDefinitions(resolvedRegistry: object): Array<{id: string; brief?: string}>`. Use `parseResolvedRegistry()` and the existing registry type helpers. Return every span definition in the registry (entries with `type: "span"` or whose ID starts with `span.`). Check `registry-types.ts` to confirm the correct field to use for type discrimination.
-- [ ] Unit test: a fixture resolved registry containing 3 span definitions and 2 attribute definitions returns an array of exactly 3 items. A registry with no span definitions returns an empty array.
-- [ ] `npm run typecheck` passes.
+- [x] In a new file `src/validation/tier2/sch005.ts`, write `extractSpanDefinitions(resolvedRegistry: object): Array<{id: string; brief?: string}>`. Use `parseResolvedRegistry()` and the existing registry type helpers. Return every span definition in the registry (entries with `type: "span"` or whose ID starts with `span.`). Check `registry-types.ts` to confirm the correct field to use for type discrimination.
+- [x] Unit test: a fixture resolved registry containing 3 span definitions and 2 attribute definitions returns an array of exactly 3 items. A registry with no span definitions returns an empty array.
+- [x] `npm run typecheck` passes.
 
 ### M2: Script-based Jaccard similarity check
 
