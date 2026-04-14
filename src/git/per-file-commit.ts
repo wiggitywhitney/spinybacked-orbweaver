@@ -28,8 +28,10 @@ export interface CommitFileResultOptions {
 /**
  * Commit a single file's instrumentation result to the repository.
  *
- * For successful files: stages the instrumented source file and (if applicable)
- * the schema extensions file, then commits with a descriptive message.
+ * For successful and partial files: stages the instrumented source file and (if
+ * applicable) the schema extensions file, then commits with a descriptive message.
+ * Partial files have at least one successfully instrumented function and their
+ * work should land in git even if some functions could not be instrumented.
  *
  * For failed or skipped files: returns undefined without creating a commit.
  *
@@ -43,7 +45,7 @@ export async function commitFileResult(
   projectDir: string,
   options?: CommitFileResultOptions,
 ): Promise<string | undefined> {
-  if (result.status !== 'success') {
+  if (result.status !== 'success' && result.status !== 'partial') {
     return undefined;
   }
 

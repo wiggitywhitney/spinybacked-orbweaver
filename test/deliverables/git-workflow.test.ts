@@ -206,6 +206,34 @@ describe('runGitWorkflow', () => {
       expect(callArgs.companionFiles[0].content).toContain('Instrumentation Report');
     });
 
+    it('commits partial files — successfully instrumented functions should land in git', async () => {
+      const partialFile = makeFileResult({
+        path: '/project/src/graph.js',
+        status: 'partial',
+        spansAdded: 3,
+        functionsInstrumented: 11,
+        functionsSkipped: 1,
+      });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockImplementation(async (_dir, _config, callbacks) => {
+          callbacks?.onFileComplete?.(partialFile, 0, 1);
+          return makeRunResult({ fileResults: [partialFile], filesPartial: 1, filesSucceeded: 0 });
+        }),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.commitFileResult).toHaveBeenCalledWith(
+        partialFile,
+        '/project',
+        expect.objectContaining({ registryDir: '/project/semconv' }),
+      );
+      // Companion file should be created for partial results too
+      const callArgs = (deps.commitFileResult as ReturnType<typeof vi.fn>).mock.calls[0][2];
+      expect(callArgs.companionFiles).toHaveLength(1);
+      expect(callArgs.companionFiles[0].path).toBe('/project/src/graph.instrumentation.md');
+    });
+
     it('does not commit failed files', async () => {
       const failedFile = makeFileResult({ status: 'failed', reason: 'Syntax error' });
       const deps = makeDeps({

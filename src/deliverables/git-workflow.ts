@@ -113,8 +113,10 @@ export async function runGitWorkflow(
       // Fire caller's callback first
       callerCallbacks?.onFileComplete?.(result, index, total);
 
-      // Per-file commit for successful files (skip in dry-run)
-      if (!dryRun && result.status === 'success') {
+      // Per-file commit for successful and partial files (skip in dry-run).
+      // Partial files have at least one successfully instrumented function — that work
+      // should land in git even if other functions in the same file could not be instrumented.
+      if (!dryRun && (result.status === 'success' || result.status === 'partial')) {
         commitChain = commitChain
           .then(async () => {
             // Lazy branch creation: create branch on first successful file
