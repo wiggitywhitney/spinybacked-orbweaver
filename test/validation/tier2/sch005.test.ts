@@ -128,6 +128,17 @@ const REGISTRY_THREE_SPANS_ONE_OVERLAP = {
   ],
 };
 
+// Cross-namespace pair with high Jaccard (would score 0.60 without namespace gate):
+// span.orders.process.refund  → tokens: {span,orders,process,refund}
+// span.payments.process.refund → tokens: {span,payments,process,refund}
+// Jaccard = 3/5 = 0.60, but namespaces differ (orders vs payments) → no finding
+const REGISTRY_CROSS_NS_HIGH_JACCARD = {
+  groups: [
+    { id: 'span.orders.process.refund', type: 'span' },
+    { id: 'span.payments.process.refund', type: 'span' },
+  ],
+};
+
 describe('checkRegistrySpanDuplicates (SCH-005 script tier)', () => {
   it('produces a finding when two span IDs have >0.5 Jaccard similarity', async () => {
     const { results } = await checkRegistrySpanDuplicates(REGISTRY_SIMILAR_PAIR);
@@ -140,6 +151,12 @@ describe('checkRegistrySpanDuplicates (SCH-005 script tier)', () => {
 
   it('produces no findings when two span IDs are clearly distinct', async () => {
     const { results } = await checkRegistrySpanDuplicates(REGISTRY_DISTINCT_PAIR);
+    const findings = results.filter(r => !r.passed);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag cross-namespace pairs even when Jaccard >0.5', async () => {
+    const { results } = await checkRegistrySpanDuplicates(REGISTRY_CROSS_NS_HIGH_JACCARD);
     const findings = results.filter(r => !r.passed);
     expect(findings).toHaveLength(0);
   });

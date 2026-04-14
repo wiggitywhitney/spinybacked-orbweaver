@@ -264,7 +264,7 @@ export function getSystemPromptSections(): LanguagePromptSections {
   \`\`\`
   This is the ONLY non-instrumentation code change the validator permits. Use it only for capturing values needed by \`setAttribute\` or \`addEvent\`.
 
-  Do NOT initialize new variables to accumulate data (e.g., \`const names = []\`, \`const count = 0\`). Every \`const\` you add must capture a value that already exists in the function and will be returned — no other \`const\` introductions are permitted.
+  Do NOT initialize new variables to accumulate data (e.g., \`const names = []\`, \`const count = 0\`). Every \`const\` you add must capture a value that already exists in the function — no new computation or accumulation is permitted.
 
   \`\`\`javascript
   // WRONG — initializing an accumulation variable (NDS-003 violation)

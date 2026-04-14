@@ -129,6 +129,11 @@ export async function checkRegistrySpanDuplicates(
       const b = spans[j];
       if (!a || !b) continue;
 
+      // Namespace gate: skip cross-domain pairs deterministically (D-1)
+      const rootA = getRootNamespace(a.id);
+      const rootB = getRootNamespace(b.id);
+      if (rootA === null || rootB === null || rootA !== rootB) continue;
+
       const tokensA = tokenize(a.id);
       const tokensB = tokenize(b.id);
       const sim = jaccardSimilarity(tokensA, tokensB);

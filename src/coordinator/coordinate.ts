@@ -544,6 +544,12 @@ export async function coordinate(
       const sch005Result = await checkRegistrySpanDuplicates(resolvedRegistryAtEnd, sch005Deps);
       const sch005Failures = sch005Result.results.filter((r) => !r.passed);
       runResult.runLevelAdvisory.push(...sch005Failures);
+      for (const usage of sch005Result.judgeTokenUsage) {
+        runResult.actualTokenUsage.inputTokens += usage.inputTokens;
+        runResult.actualTokenUsage.outputTokens += usage.outputTokens;
+        runResult.actualTokenUsage.cacheCreationInputTokens += usage.cacheCreationInputTokens;
+        runResult.actualTokenUsage.cacheReadInputTokens += usage.cacheReadInputTokens;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       runResult.warnings.push(`SCH-005 span deduplication check failed (degraded): ${message}`);
