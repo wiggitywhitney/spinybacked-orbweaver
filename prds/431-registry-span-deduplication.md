@@ -1,6 +1,6 @@
 # PRD #431: Registry span deduplication via LLM judge
 
-**Status**: Complete — 2026-04-14
+**Status**: In Progress
 **Priority**: Medium
 **GitHub Issue**: [#431](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/431)
 **Created**: 2026-04-12
@@ -19,7 +19,7 @@ Structural validation (`weaver registry check`) catches naming convention violat
 
 ## Solution
 
-Add a run-level validation check that compares span definitions in the resolved Weaver registry for semantic equivalence. Use the same two-tier approach already established in SCH-004: Jaccard token similarity as a fast first pass, with the LLM judge handling cases that structural similarity misses.
+Add a run-level validation check that compares span definitions in the resolved Weaver registry for semantic equivalence. For each pair of span definitions sharing the same root namespace, call the LLM judge to determine whether they describe the same operation. When no judge client is available, the check degrades gracefully and produces no findings.
 
 This is an addition to the existing validation chain, not a replacement for any existing check.
 
@@ -61,6 +61,8 @@ Running the judge on all O(n²) pairs is expensive. The script tier uses Jaccard
 
 **Recommendation:** Only call the judge on pairs with 0.2 < Jaccard ≤ 0.5 — the gap between "definitely different" and "script already flagged." Pairs below 0.2 are almost certainly distinct.
 
+**Resolved by D-2 (2026-04-14):** Jaccard tier removed. All same-namespace pairs go to the judge. See D-2 for rationale.
+
 ---
 
 ## Decision Log
@@ -68,6 +70,7 @@ Running the judge on all O(n²) pairs is expensive. The script tier uses Jaccard
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
 | D-1 | Deterministic namespace filtering before and after judge call | All namespace-based decisions are deterministic — no LLM involved. Two layers: (1) Pre-filter: before calling the judge for a span pair, check deterministically that both span IDs share the same root namespace segment (the segment after `span.`). If they differ, skip the judge call entirely — different root namespaces mean different operational domains. (2) Post-validate: if the judge returns a duplicate verdict, re-confirm namespace compatibility deterministically before emitting. This is the safety net if pre-filtering is ever bypassed. The namespace check is the SCH-005 analog to SCH-004's type check (issue #440). | 2026-04-12 |
+| D-2 | Remove Jaccard tier — use judge-only detection for all same-namespace pairs | Jaccard token similarity was cargo-culted from SCH-004 without questioning fit. Span IDs are semantically rich and short (3–6 segments); "are these the same operation?" is a semantic question, not a structural one. Jaccard inflates scores via guaranteed-shared prefix tokens (D-1 ensures same root namespace, so those tokens always match), and with prefix stripped, the script tier rarely catches anything meaningful at the >0.5 threshold. The judge already does all the real work. Simplifying to judge-only removes `tokenize()`, `jaccardSimilarity()`, the gap-pair tracking, and the threshold tuning problem (issue #472, now closed). When no judge client is provided, the check degrades gracefully and returns no findings — same safe behavior as before. | 2026-04-14 |
 
 ---
 
@@ -85,7 +88,7 @@ Before writing any code, read `src/validation/tier2/registry-types.ts` to unders
 
 ### M2: Script-based Jaccard similarity check
 
-Before writing any code, read how `tokenize()` and `jaccardSimilarity()` are implemented in `src/validation/tier2/sch004.ts`. Determine whether to copy or extract them to a shared location — if SCH-004 already exports them, import from there; if not, copy them into `sch005.ts` with a comment noting the duplication for future cleanup.
+> **Superseded by D-2 (2026-04-14).** The Jaccard tier and all code introduced in this milestone (`tokenize`, `jaccardSimilarity`, script tier loop, gap-pair tracking) will be removed by M6. M2 is recorded here for history only.
 
 - [x] Add `checkRegistrySpanDuplicates(resolvedRegistry: object, judgeDeps?: Sch005JudgeDeps): Promise<CheckResult[]>` to `src/validation/tier2/sch005.ts`. `Sch005JudgeDeps` mirrors the shape used in SCH-004.
 - [x] Script tier: for each pair of span definitions, compute Jaccard similarity on their tokenized IDs. Flag pairs with similarity >0.5 as advisory findings. Each finding includes both span IDs, their similarity score, and a suggestion to consolidate.
@@ -94,6 +97,8 @@ Before writing any code, read how `tokenize()` and `jaccardSimilarity()` are imp
 - [x] `npm run typecheck` passes.
 
 ### M3: LLM judge tier
+
+> **Scope expanded by D-2 (2026-04-14).** M3 as implemented wired the judge only for the Jaccard gap (0.2–0.5). M6 will change this so the judge handles ALL same-namespace pairs directly, with no Jaccard pre-screening.
 
 **Design:** The judge only handles semantic equivalence — all namespace decisions are deterministic. Two deterministic gates sandwich the judge call: (1) pre-filter: before calling the judge, check that both span IDs share the same root namespace (segment after `span.`) — skip the judge entirely if they differ; (2) post-validate: after a duplicate verdict, re-confirm namespace compatibility before emitting. The judge only reasons about whether two same-namespace spans describe the same operation.
 
@@ -115,6 +120,23 @@ Before writing any code, read `src/coordinator/coordinate.ts` to find where CDQ-
 - [x] Integration test: a fixture registry with no similar span definitions produces no SCH-005 findings and all files succeed.
 - [x] `npm run typecheck` passes.
 
+### M6: Remove Jaccard tier — simplify to judge-only (Decision D-2)
+
+Before writing any code, read the current `src/validation/tier2/sch005.ts` in full to understand what will be removed vs. kept.
+
+**What to remove:** `tokenize()`, `jaccardSimilarity()`, the script tier loop (and `scriptFindings` / `jaccardGapPairs` accumulators), the `REGISTRY_SIMILAR_PAIR` / `REGISTRY_THREE_SPANS_ONE_OVERLAP` / `REGISTRY_CROSS_NS_HIGH_JACCARD` script-tier fixtures, and all unit tests that assert on Jaccard scores or script-tier findings specifically.
+
+**What to keep:** `extractSpanDefinitions()`, `getRootNamespace()`, `Sch005JudgeDeps`, `Sch005Result`, the judge call loop, the D-1 namespace pre-filter, the D-1 post-validate safety net, and all judge-tier unit tests (mocked `callJudge`).
+
+**What changes:** `checkRegistrySpanDuplicates` now iterates all same-namespace pairs directly and calls the judge on each. When `judgeDeps` is absent, return `{ results: [pass('SCH-005 requires a judge client — skipped.')], judgeTokenUsage: [] }` immediately after the `spans.length < 2` early-exit.
+
+- [ ] Remove `tokenize()`, `jaccardSimilarity()`, script tier loop, gap-pair tracking, and their imports/types from `sch005.ts`.
+- [ ] Simplify `checkRegistrySpanDuplicates`: when `judgeDeps` is absent, return pass immediately. When present, iterate all pairs, apply D-1 namespace pre-filter, call judge, apply D-1 post-validate, emit findings.
+- [ ] Update `test/validation/tier2/sch005.test.ts`: remove script-tier describe block and Jaccard fixtures. Retain all judge-tier tests. Update the coordinator fixture if it relied on Jaccard-threshold behavior.
+- [ ] Close GitHub issue #472 (Jaccard threshold tuning — no longer applicable).
+- [ ] `npm run typecheck` passes. `npm test` passes.
+- [ ] Re-run acceptance gate: `vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run --config vitest.acceptance.config.ts'`. All existing tests pass.
+
 ### M5: Acceptance gate verification
 
 - [x] Run the full acceptance gate suite (`vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run --config vitest.acceptance.config.ts'`). All existing tests pass — this check is advisory and adds no blocking behavior.
@@ -126,8 +148,9 @@ Before writing any code, read `src/coordinator/coordinate.ts` to find where CDQ-
 
 - Semantically duplicate span definitions in the Weaver registry are surfaced as advisory findings in the PR summary.
 - The check is non-blocking — runs with duplicate spans still succeed and produce a PR.
-- The LLM judge is called only for pairs in the Jaccard gap (0.2–0.5), not all O(n²) pairs.
-- Judge failures degrade gracefully — the script tier result stands and the run continues.
+- The LLM judge is called for all same-namespace pairs when a client is available.
+- When no judge client is provided, the check degrades gracefully and produces no findings.
+- Judge failures degrade gracefully — skipped silently, run continues.
 - All existing tests pass unchanged.
 
 ---
@@ -138,7 +161,7 @@ Before writing any code, read `src/coordinator/coordinate.ts` to find where CDQ-
   Mitigation: Non-blocking advisory only. The 0.7 confidence threshold on the judge reduces noise. The domain boundary instruction in the judge prompt further reduces false positives.
 
 - **Risk: Performance on large registries**
-  Mitigation: Jaccard is fast. The judge is called only for the Jaccard gap. If a registry has >100 spans, consider capping judge calls per run.
+  Mitigation: Judge is called for all same-namespace pairs — O(n²) within each namespace. For typical registries (10–30 spans per namespace) this is negligible. If a namespace grows beyond ~50 spans, consider capping judge calls per run.
 
 - **Risk: `extractSpanDefinitions` misses entries due to registry format variation**
   Mitigation: M1 includes reading `registry-types.ts` carefully before implementing. The unit test fixture should include both `type: "span"` entries and `span.*` ID entries to verify both detection paths.
@@ -149,7 +172,7 @@ Before writing any code, read `src/coordinator/coordinate.ts` to find where CDQ-
 
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 - This check complements SCH-004 (attribute key deduplication in code). They operate on different artifacts: SCH-004 checks `setAttribute()` calls in instrumented code; SCH-005 checks span definitions in the registry.
-- The two-tier design (Jaccard script + LLM judge) is intentional — Jaccard catches structural near-duplicates cheaply; the judge catches semantic equivalence the script misses. Do not collapse them into a single LLM call.
+- The Jaccard script tier was removed by D-2. Detection is now judge-only for all same-namespace pairs. See D-2 rationale for why the two-tier design was not appropriate for span IDs.
 - **Judge prompt warning — type-level discrimination:** The SCH-004 judge has a known false positive pattern: it hallucinates semantic equivalence between attributes that share a concept word but have different value types (e.g., a string label like "2026-W09" vs. an integer count, a boolean flag vs. an integer limit). The SCH-004 fix is tracked in issue #440. When writing the SCH-005 judge question in M3, explicitly include a negative constraint: "Spans with different structural roles or value semantics are NOT duplicates even if their names share words." The run-13 SCH-004 false positives are concrete examples of what this constraint must prevent.
 
 ---
