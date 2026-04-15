@@ -46,7 +46,9 @@ The audit closes with a complete, durable record of the rules landscape and leav
 - RST-004 — no spans on internal implementation details
 - RST-005 — no double-instrumentation
 - SCH-004 — no redundant schema entries
-- API-001, API-003, API-004 — forbidden OTel import detection (SDK internals, vendor SDKs, non-API packages; all implemented in `api001.ts`)
+- API-001 — non-API OTel package imports forbidden (e.g., `@opentelemetry/semantic-conventions`; in `api001.ts`)
+- API-003 — vendor-specific OTel SDK imports forbidden (in `api001.ts`)
+- API-004 — OTel SDK internal/implementation package imports forbidden; also flags SDK packages in library dependency manifests (split across `api001.ts` and `api002.ts`)
 - API-002 — `@opentelemetry/api` dependency placement (added as advisory in PRD #135, same batch as NDS-006 and RST-005 above)
 
 **Conditionally advisory** (advisory only when schema is sparse — worth reviewing the downgrade logic itself):
@@ -74,7 +76,7 @@ For each advisory rule and orphaned implementation:
 
 **No historical eval data** is introduced at any point. The implementation is the ground truth. Past run findings are not consulted.
 
-For shared-file rules (API-003/004): read their implementations in `api001.ts`, where they are exported alongside API-001. Audit them the same way as any other advisory rule.
+For API-003/004: API-003 and the import-level API-004 check are in `api001.ts` alongside API-001. API-004 also has a second implementation in `api002.ts` covering SDK packages in library dependency manifests. Read both files before auditing API-004.
 
 For orphaned implementations: read the code, understand what it does and why it may not have been registered, then decide: register it (with actionable output confirmed) or delete it.
 
@@ -231,14 +233,14 @@ Same process as M1 plus the downgrade logic review.
 
 ### Milestone M6: API rules
 
-Rules in scope: API-001, API-002, API-003, API-004 (all advisory). API-003 and API-004 are implemented in `api001.ts` alongside API-001 — read that file to find all three rule implementations.
+Rules in scope: API-001, API-002, API-003, API-004 (all advisory). API-003 and the import-level API-004 check are in `api001.ts`; API-004 also has a dependency-manifest check in `api002.ts`. Read both files before auditing API-004.
 
 Same process as M1.
 
-- [ ] API-001 (forbidden OTel import detection — SDK internals) audited, discussed, decision recorded
+- [ ] API-001 (non-API OTel package imports forbidden) audited, discussed, decision recorded
 - [ ] API-002 (`@opentelemetry/api` dependency placement) audited, discussed, decision recorded
-- [ ] API-003 (forbidden OTel import detection — vendor SDKs) audited, discussed, decision recorded
-- [ ] API-004 (forbidden OTel import detection — non-API packages) audited, discussed, decision recorded
+- [ ] API-003 (vendor-specific OTel SDK imports forbidden) audited, discussed, decision recorded
+- [ ] API-004 (SDK internal/implementation packages forbidden — split across `api001.ts` and `api002.ts`) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] API section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
