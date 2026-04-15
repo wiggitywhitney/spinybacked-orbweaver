@@ -12,6 +12,11 @@ import type { CoordinatorCallbacks } from '../../src/coordinator/types.ts';
 import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
 
+vi.mock('../../src/validation/judge.ts', () => ({
+  callJudge: vi.fn(),
+}));
+import { callJudge } from '../../src/validation/judge.ts';
+
 /** Minimal config for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -777,6 +782,92 @@ describe('coordinate', () => {
 
       expect(result.runLevelAdvisory).toHaveLength(0);
       expect(result.warnings.some(w => w.includes('CDQ-008'))).toBe(true);
+    });
+  });
+
+  describe('run-level advisory checks (SCH-005)', () => {
+    const mockTokenUsage: TokenUsage = {
+      inputTokens: 100,
+      outputTokens: 40,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    };
+
+    beforeEach(() => {
+      vi.mocked(callJudge).mockReset();
+    });
+
+    it('produces no SCH-005 findings when no judge client is provided (graceful degradation)', async () => {
+      // Without anthropicClient in deps, SCH-005 degrades gracefully regardless of spans.
+      const similarRegistry = {
+        groups: [
+          { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
+          { id: 'span.myapp.generate.execute', type: 'span', brief: 'Executes the generator' },
+        ],
+      };
+      const deps = makeDeps({
+        resolveSchemaForHash: vi.fn().mockResolvedValue(similarRegistry),
+        // no anthropicClient
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const sch005Failures = result.runLevelAdvisory.filter(
+        (r) => r.ruleId === 'SCH-005' && !r.passed,
+      );
+      expect(sch005Failures).toHaveLength(0);
+      expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+      expect(result.filesFailed).toBe(0);
+    });
+
+    it('produces SCH-005 finding when judge client provided and callJudge returns duplicate verdict', async () => {
+      vi.mocked(callJudge).mockResolvedValue({
+        verdict: { answer: false, confidence: 0.9 },
+        tokenUsage: mockTokenUsage,
+      });
+
+      // Same-namespace spans that the judge will flag as duplicates
+      const similarRegistry = {
+        groups: [
+          { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
+          { id: 'span.myapp.generate.execute', type: 'span', brief: 'Executes the generator' },
+        ],
+      };
+      const deps = makeDeps({
+        resolveSchemaForHash: vi.fn().mockResolvedValue(similarRegistry),
+        anthropicClient: {} as any,
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const sch005Findings = result.runLevelAdvisory.filter((r) => r.ruleId === 'SCH-005');
+      expect(sch005Findings.length).toBeGreaterThanOrEqual(1);
+      expect(sch005Findings[0]!.passed).toBe(false);
+      expect(sch005Findings[0]!.blocking).toBe(false);
+      // SCH-005 is non-blocking — all files still succeed
+      expect(result.filesFailed).toBe(0);
+    });
+
+    it('produces no SCH-005 advisory findings when registry spans are in different namespaces', async () => {
+      // Cross-namespace spans are filtered by D-1 pre-filter — no judge call, no finding.
+      const distinctRegistry = {
+        groups: [
+          { id: 'span.myapp.api.handle_request', type: 'span' },
+          { id: 'span.billing.payment.process', type: 'span' },
+        ],
+      };
+      const deps = makeDeps({
+        resolveSchemaForHash: vi.fn().mockResolvedValue(distinctRegistry),
+        anthropicClient: {} as any,
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const sch005Failures = result.runLevelAdvisory.filter(
+        (r) => r.ruleId === 'SCH-005' && !r.passed,
+      );
+      expect(sch005Failures).toHaveLength(0);
+      expect(result.filesFailed).toBe(0);
     });
   });
 

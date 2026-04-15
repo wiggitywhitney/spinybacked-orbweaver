@@ -264,7 +264,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     }
 
     // (f) Aggregate counts are correct
-    expect(result.filesSucceeded + result.filesFailed + result.filesSkipped).toBe(result.filesProcessed);
+    expect(result.filesSucceeded + result.filesFailed + result.filesSkipped + result.filesPartial).toBe(result.filesProcessed);
     expect(result.filesSucceeded).toBeGreaterThanOrEqual(1);
 
     // (g) Callbacks fired at all expected points
@@ -392,9 +392,15 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const nonSkipped = result.fileResults.filter(r => r.status !== 'skipped');
     for (const r of nonSkipped) {
       expect(r.errorProgression).toBeDefined();
-      // errorProgression tracks failed attempts only — a file that passes on
-      // attempt 1 has validationAttempts=1 but errorProgression=[] (empty).
-      expect(r.errorProgression!.length).toBeLessThanOrEqual(r.validationAttempts);
+      // The retry loop contributes exactly one errorProgression entry per attempt
+      // (covering both instrument failures and validation results), so length ==
+      // validationAttempts for whole-file results. The function-level fallback
+      // appends extra entries ("function-level: N/M..." and optionally
+      // "reassembly: ...") beyond what the retry loop produced, so partial-mode
+      // results may legitimately exceed that bound — skip the strict check there.
+      if (r.functionsInstrumented === undefined) {
+        expect(r.errorProgression!.length).toBeLessThanOrEqual(r.validationAttempts);
+      }
     }
   });
 });

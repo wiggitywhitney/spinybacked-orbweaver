@@ -101,6 +101,8 @@ Do not invent tasks outside the PRD structure. When a PRD exists, follow it. Do 
 
 ## Acceptance Gate Tests
 
+**Check the most recent acceptance gate run before every push.** Run `gh run list --workflow=acceptance-gate.yml --limit=1 --repo wiggitywhitney/spinybacked-orbweaver` before pushing. If the most recent run passed, or if no runs exist yet, proceed. If one is in progress, proceed. If the most recent run failed — on any branch — stop, investigate, and fix the failures before pushing.
+
 **Acceptance gate tests must actually run.** A suite that exits with zero test files is not a pass — it is a broken runner. If the acceptance gate hook reports "no test files found" or runs zero tests, stop and fix the execution environment (glob patterns, PATH, working directory) before proceeding. Silent non-execution is how acceptance gates go unenforced for entire PRD cycles.
 
 **Never dismiss acceptance gate test failures.** When the acceptance gate suite reports failures — whether during a hook, a manual run, or a `/prd-next` loop — treat every failure as a real signal that must be investigated. Do not rationalize failures as "unrelated to the current task" or "pre-existing." If the tests fail, something is wrong, and the current work cannot proceed until the failures are understood and resolved (or triaged into a dedicated PRD).

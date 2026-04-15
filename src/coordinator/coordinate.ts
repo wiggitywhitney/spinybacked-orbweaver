@@ -30,6 +30,8 @@ import { restoreExtensionsFile as defaultRestoreExtensionsFile } from './schema-
 import { checkGhAvailable as defaultCheckGhAvailable } from '../deliverables/git-workflow.ts';
 import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
 import type { FileContent } from '../validation/tier2/cdq008.ts';
+import { checkRegistrySpanDuplicates } from '../validation/tier2/sch005.ts';
+import type Anthropic from '@anthropic-ai/sdk';
 import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
 
 /**
@@ -122,6 +124,8 @@ export interface CoordinateDeps {
   writeFileForRollback?: (filePath: string, content: string) => Promise<void>;
   /** Restore schema extensions file from snapshot for end-of-run rollback. */
   restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
+  /** Anthropic client for SCH-005 judge calls. When absent, SCH-005 degrades gracefully (returns pass). */
+  anthropicClient?: Anthropic;
 }
 
 /**
@@ -518,16 +522,45 @@ export async function coordinate(
   }
 
   // Step 7d: Compute schema hash at run end (after potential rollback so it reflects final state)
+  let resolvedRegistryAtEnd: object | undefined;
   if (schemaHashStart !== undefined) {
     try {
       const endSchema = await resolveForHash(projectDir, config.schemaPath);
       schemaHashEnd = computeSchemaHash(endSchema);
+      resolvedRegistryAtEnd = endSchema;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       schemaHashWarnings.push(`Schema hash computation at run end failed (degraded): ${message}`);
     }
   }
   runResult.schemaHashEnd = schemaHashEnd;
+
+  // Step 7e: SCH-005 registry span deduplication check (advisory, degrade and warn on failure)
+  // Runs after dispatch so extensions are committed and reuses the already-resolved registry.
+  // Only failing results are pushed — passing "no duplicates found" is not surfaced.
+  // If resolvedRegistryAtEnd is absent (schema hash start failed or no schemaPath configured),
+  // emit a warning when a schema path is configured so the skip is not silent.
+  if (resolvedRegistryAtEnd) {
+    try {
+      const sch005Deps = deps?.anthropicClient ? { client: deps.anthropicClient } : undefined;
+      const sch005Result = await checkRegistrySpanDuplicates(resolvedRegistryAtEnd, sch005Deps);
+      const sch005Failures = sch005Result.results.filter((r) => !r.passed);
+      runResult.runLevelAdvisory.push(...sch005Failures);
+      for (const usage of sch005Result.judgeTokenUsage) {
+        runResult.actualTokenUsage.inputTokens += usage.inputTokens;
+        runResult.actualTokenUsage.outputTokens += usage.outputTokens;
+        runResult.actualTokenUsage.cacheCreationInputTokens += usage.cacheCreationInputTokens;
+        runResult.actualTokenUsage.cacheReadInputTokens += usage.cacheReadInputTokens;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      runResult.warnings.push(`SCH-005 span deduplication check failed (degraded): ${message}`);
+    }
+  } else if (config.schemaPath) {
+    runResult.warnings.push(
+      'SCH-005 span deduplication check skipped: registry not available (schema resolution may have failed at run start).',
+    );
+  }
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)
   // Dry-run skips finalization — no npm install, no SDK init file changes
