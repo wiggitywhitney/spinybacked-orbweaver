@@ -69,8 +69,10 @@ const filePath = '/tmp/test-file.js';
 
 /**
  * Code with a novel attribute that is semantically equivalent to a registry
- * entry but has completely different tokens (Jaccard similarity ≈ 0).
- * "request.latency" ≈ "http.request.duration" (same concept, different names).
+ * entry but has completely different tokens (Jaccard similarity ≤ 0.5).
+ * "http.request.latency" ≈ "http.request.duration" (same concept, different name).
+ * Jaccard = 2/4 = 0.5, which is NOT > 0.5, so it reaches the judge tier.
+ * Must stay in "http" namespace so the namespace pre-filter passes candidates through.
  */
 const codeWithSemanticDuplicate = [
   'const { trace } = require("@opentelemetry/api");',
@@ -78,7 +80,7 @@ const codeWithSemanticDuplicate = [
   'function doWork() {',
   '  return tracer.startActiveSpan("doWork", (span) => {',
   '    try {',
-  '      span.setAttribute("request.latency", 42);',
+  '      span.setAttribute("http.request.latency", 42);',
   '      return 1;',
   '    } finally { span.end(); }',
   '  });',
@@ -87,7 +89,8 @@ const codeWithSemanticDuplicate = [
 
 /**
  * Code with a truly novel attribute — not in registry and not semantically
- * equivalent to any registry entry.
+ * equivalent to any registry entry. Uses "http" namespace so the namespace
+ * pre-filter passes candidates through (allowing the judge to confirm novelty).
  */
 const codeWithTrulyNovelKey = [
   'const { trace } = require("@opentelemetry/api");',
@@ -95,7 +98,7 @@ const codeWithTrulyNovelKey = [
   'function doWork() {',
   '  return tracer.startActiveSpan("doWork", (span) => {',
   '    try {',
-  '      span.setAttribute("completely.different.attribute", "value");',
+  '      span.setAttribute("http.novel.distinct.attribute", "value");',
   '      return 1;',
   '    } finally { span.end(); }',
   '  });',
@@ -108,7 +111,7 @@ describe('SCH-004 judge integration', () => {
       const client = makeMockClient({
         verdict: {
           answer: false, // Does NOT pass — it IS a semantic duplicate
-          suggestion: 'Use "http.request.duration" instead of "request.latency".',
+          suggestion: 'Use "http.request.duration" instead of "http.request.latency".',
           confidence: 0.92,
         },
         tokenUsage: judgeTokenUsage,
@@ -124,7 +127,7 @@ describe('SCH-004 judge integration', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
       expect(results[0].ruleId).toBe('SCH-004');
-      expect(results[0].message).toContain('request.latency');
+      expect(results[0].message).toContain('http.request.latency');
       expect(results[0].message).toContain('http.request.duration');
       expect(results[0].blocking).toBe(false); // Still advisory
       expect(results[0].tier).toBe(2);
@@ -180,7 +183,7 @@ describe('SCH-004 judge integration', () => {
         resolvedSchema,
       );
 
-      // Script-only: "request.latency" has no Jaccard match → pass
+      // Script-only: "http.request.latency" has Jaccard = 0.5 (not > 0.5) → no script flag → pass
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
       expect(usage).toHaveLength(0);
@@ -239,13 +242,14 @@ describe('SCH-004 judge integration', () => {
         { client: client as any },
       );
 
-      // Verify the judge was called with only string-typed candidates
+      // Verify the judge was called with only same-namespace, string-typed candidates
       expect(client._parseFn).toHaveBeenCalledTimes(1);
       const callArgs = client._parseFn.mock.calls[0][0];
       const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
-      // String-typed attributes included
+      // Same-namespace ("http"), string-typed candidate included
       expect(userMessage).toContain('http.request.method');
-      expect(userMessage).toContain('myapp.order.id');
+      // Cross-namespace attribute excluded by namespace filter (even though string-typed)
+      expect(userMessage).not.toContain('myapp.order.id');
       // Non-string attributes filtered out
       expect(userMessage).not.toContain('http.request.duration');  // double
       expect(userMessage).not.toContain('http.response.status_code');  // int
@@ -291,8 +295,8 @@ describe('SCH-004 judge integration', () => {
         'function doWork() {',
         '  return tracer.startActiveSpan("doWork", (span) => {',
         '    try {',
-        '      span.setAttribute("request.latency", 42);',
-        '      span.setAttribute("totally.unique.metric", "abc");',
+        '      span.setAttribute("http.request.latency", 42);',
+        '      span.setAttribute("http.novel.distinct.metric", "abc");',
         '      return 1;',
         '    } finally { span.end(); }',
         '  });',
@@ -361,7 +365,7 @@ describe('SCH-004 judge integration', () => {
       const client = makeMockClient({
         verdict: {
           answer: false,
-          suggestion: 'Use "http.request.duration" instead of "request.latency".',
+          suggestion: 'Use "http.request.duration" instead of "http.request.latency".',
           confidence: 0.8,
         },
         tokenUsage: judgeTokenUsage,
@@ -382,7 +386,7 @@ describe('SCH-004 judge integration', () => {
       const client = makeMockClient({
         verdict: {
           answer: false,
-          suggestion: 'Use "http.request.duration" instead of "request.latency".',
+          suggestion: 'Use "http.request.duration" instead of "http.request.latency".',
           confidence: 0.7,
         },
         tokenUsage: judgeTokenUsage,
@@ -585,17 +589,17 @@ describe('SCH-004 type-based pre-filtering', () => {
     expect(results[0].passed).toBe(true);
   });
 
-  it('calls judge with only string-compatible candidates when novel attribute is string-typed', async () => {
+  it('calls judge with only same-namespace, string-compatible candidates when novel attribute is string-typed', async () => {
     // "2026-W09" is a string literal → inferred type 'string'
-    // "period.identifier" has low Jaccard similarity to all registry attrs → goes to judge tier
-    // Pre-filter: only string-typed candidates should be in the judge's candidates list
+    // "week.identifier" has low Jaccard similarity (0.33) to "week.label" → goes to judge tier
+    // Pre-filters: only "week"-namespace, string-typed candidates should be in the judge's list
     const code = [
       'const { trace } = require("@opentelemetry/api");',
       'const tracer = trace.getTracer("svc");',
       'function doWork() {',
       '  return tracer.startActiveSpan("doWork", (span) => {',
       '    try {',
-      '      span.setAttribute("period.identifier", "2026-W09");',
+      '      span.setAttribute("week.identifier", "2026-W09");',
       '      return 1;',
       '    } finally { span.end(); }',
       '  });',
@@ -614,16 +618,18 @@ describe('SCH-004 type-based pre-filtering', () => {
     expect(client._parseFn).toHaveBeenCalledTimes(1);
     const callArgs = client._parseFn.mock.calls[0][0];
     const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
-    // String candidates included
+    // Same-namespace ("week"), string-typed candidate included
     expect(userMessage).toContain('week.label');
-    expect(userMessage).toContain('year.label');
-    // Int candidates filtered out
+    // Cross-namespace candidate excluded by namespace filter (even though string-typed)
+    expect(userMessage).not.toContain('year.label');
+    // Int candidate filtered out by type filter
     expect(userMessage).not.toContain('week.count');
   });
 
   it('numeric novel attribute (int) is compatible with double registry candidates', async () => {
     // 42 is a numeric literal → inferred type 'int'
     // double is compatible with int (both numeric)
+    // Novel key uses "response" namespace to match the "response.time" registry attr.
     const doubleSchema = {
       groups: [{
         id: 'registry.test',
@@ -638,7 +644,7 @@ describe('SCH-004 type-based pre-filtering', () => {
       'function doWork() {',
       '  return tracer.startActiveSpan("doWork", (span) => {',
       '    try {',
-      '      span.setAttribute("request.duration.ms", 42);',
+      '      span.setAttribute("response.duration.ms", 42);',
       '      return 1;',
       '    } finally { span.end(); }',
       '  });',
@@ -659,6 +665,130 @@ describe('SCH-004 type-based pre-filtering', () => {
     const callArgs = client._parseFn.mock.calls[0][0];
     const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
     expect(userMessage).toContain('response.time');
+  });
+});
+
+describe('SCH-004 namespace pre-filtering', () => {
+  const filePath = '/tmp/test-file.js';
+
+  function makeMockClient(response: JudgeCallResult | null) {
+    const parseFn = vi.fn().mockResolvedValue(
+      response
+        ? {
+            parsed_output: response.verdict ? {
+              answer: response.verdict.answer,
+              suggestion: response.verdict.suggestion ?? null,
+              confidence: response.verdict.confidence,
+            } : null,
+            usage: {
+              input_tokens: response.tokenUsage.inputTokens,
+              output_tokens: response.tokenUsage.outputTokens,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+            },
+          }
+        : { parsed_output: null, usage: { input_tokens: 0, output_tokens: 0 } },
+    );
+    return { messages: { parse: parseFn }, _parseFn: parseFn };
+  }
+
+  const judgeTokenUsage: TokenUsage = {
+    inputTokens: 100, outputTokens: 40, cacheCreationInputTokens: 0, cacheReadInputTokens: 0,
+  };
+
+  /** Schema with cross-domain attributes — commit_story and gen_ai namespaces. */
+  const crossDomainSchema = {
+    groups: [{
+      id: 'registry.test',
+      type: 'attribute_group',
+      attributes: [
+        { name: 'gen_ai.request.model', type: 'string' },
+        { name: 'gen_ai.usage.output_tokens', type: 'int' },
+        { name: 'commit_story.entries.count', type: 'int' },
+      ],
+    }],
+  };
+
+  it('does not call judge when novel key has no same-namespace registry candidates', async () => {
+    // Novel key: "commit_story.summarize.week_label" (string) — reproduces run-13 false positive
+    // Root namespace: "commit_story"
+    // crossDomainSchema has one commit_story attr (int) — filtered by type (string novel vs int registry)
+    // After namespace filter: no string-typed commit_story candidates → judge not called
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("commit_story.summarize.week_label", "2026-W09");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: { answer: false, suggestion: 'Use "gen_ai.request.model"', confidence: 0.9 },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    const { results } = await checkNoRedundantSchemaEntries(
+      code, filePath, crossDomainSchema, { client: client as any },
+    );
+
+    expect(client._parseFn).not.toHaveBeenCalled();
+    expect(results[0].passed).toBe(true);
+  });
+
+  it('judge candidates exclude cross-domain registry attributes', async () => {
+    // Schema with same-namespace candidates AND cross-domain candidates.
+    // Novel key: "commit_story.generation.reference_id" (string, Jaccard < 0.5 vs all registry)
+    // Root namespace: "commit_story"
+    // Judge should only receive commit_story.* candidates, not gen_ai.* ones.
+    // ("commit_story.summarize.title" was NOT used because Jaccard = 0.75 vs "commit_story.title"
+    //  which triggers the script tier and bypasses the judge entirely.)
+    const schemaWithSameNamespace = {
+      groups: [{
+        id: 'registry.test',
+        type: 'attribute_group',
+        attributes: [
+          { name: 'commit_story.title', type: 'string' },
+          { name: 'gen_ai.request.model', type: 'string' },
+          { name: 'gen_ai.response.finish_reason', type: 'string' },
+        ],
+      }],
+    };
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doWork", (span) => {',
+      '    try {',
+      '      span.setAttribute("commit_story.generation.reference_id", "abc-123");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const client = makeMockClient({
+      verdict: { answer: true, confidence: 0.85 },
+      tokenUsage: judgeTokenUsage,
+    });
+
+    await checkNoRedundantSchemaEntries(
+      code, filePath, schemaWithSameNamespace, { client: client as any },
+    );
+
+    expect(client._parseFn).toHaveBeenCalledTimes(1);
+    const callArgs = client._parseFn.mock.calls[0][0];
+    const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
+    // Same-namespace candidate included
+    expect(userMessage).toContain('commit_story.title');
+    // Cross-domain candidates excluded
+    expect(userMessage).not.toContain('gen_ai.request.model');
+    expect(userMessage).not.toContain('gen_ai.response.finish_reason');
   });
 });
 
@@ -687,9 +817,9 @@ describe('SCH-004 post-verdict type validation', () => {
   };
 
   it('discards finding when judge suggestion points to type-incompatible registry attribute', async () => {
-    // Novel attr: "period.identifier" with string value → inferred 'string'
-    // Low Jaccard similarity to registry attrs → reaches the judge tier
-    // Judge hallucinates: suggests "week.count" (int) despite receiving only string candidates
+    // Novel attr: "year.identifier" with string value → inferred 'string'
+    // Low Jaccard similarity (0.33) to "year.label" → reaches the judge tier
+    // Judge hallucinates: suggests "week.count" (int) despite receiving only year-namespace string candidates
     // Post-validate: novel is string, matched is int → discard verdict
     const mixedSchema = {
       groups: [{
@@ -708,7 +838,7 @@ describe('SCH-004 post-verdict type validation', () => {
       'function doWork() {',
       '  return tracer.startActiveSpan("doWork", (span) => {',
       '    try {',
-      '      span.setAttribute("period.identifier", "2026-W09");',
+      '      span.setAttribute("year.identifier", "2026");',
       '      return 1;',
       '    } finally { span.end(); }',
       '  });',
@@ -719,7 +849,7 @@ describe('SCH-004 post-verdict type validation', () => {
       verdict: {
         answer: false,
         // Judge hallucinates a suggestion pointing to the int attr (not in pre-filtered candidates)
-        suggestion: 'Use "week.count" instead of "period.identifier".',
+        suggestion: 'Use "week.count" instead of "year.identifier".',
         confidence: 0.9,
       },
       tokenUsage: judgeTokenUsage,
@@ -735,7 +865,7 @@ describe('SCH-004 post-verdict type validation', () => {
   });
 
   it('allows finding when judge suggestion points to type-compatible registry attribute', async () => {
-    // Novel attr: "period.identifier" with string value → compatible with string registry attr
+    // Novel attr: "year.identifier" with string value → compatible with "year.label" (string)
     const mixedSchema = {
       groups: [{
         id: 'registry.test',
@@ -753,7 +883,7 @@ describe('SCH-004 post-verdict type validation', () => {
       'function doWork() {',
       '  return tracer.startActiveSpan("doWork", (span) => {',
       '    try {',
-      '      span.setAttribute("period.identifier", "2026-W09");',
+      '      span.setAttribute("year.identifier", "2026");',
       '      return 1;',
       '    } finally { span.end(); }',
       '  });',
@@ -763,7 +893,7 @@ describe('SCH-004 post-verdict type validation', () => {
     const client = makeMockClient({
       verdict: {
         answer: false,
-        suggestion: 'Use "year.label" instead of "period.identifier".',
+        suggestion: 'Use "year.label" instead of "year.identifier".',
         confidence: 0.9,
       },
       tokenUsage: judgeTokenUsage,
@@ -776,6 +906,6 @@ describe('SCH-004 post-verdict type validation', () => {
     // Post-validate allows: novel type 'string' vs matched type 'string' → compatible
     expect(results).toHaveLength(1);
     expect(results[0].passed).toBe(false);
-    expect(results[0].message).toContain('period.identifier');
+    expect(results[0].message).toContain('year.identifier');
   });
 });

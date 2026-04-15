@@ -54,7 +54,7 @@ function makeParseResponse(verdict: { answer: boolean; suggestion: string | null
 
 // Original code: has try/catch with throw (NDS-005 will detect removal)
 // Also uses a vague span name "doStuff" (SCH-001 judge catches)
-// Also adds a novel attribute "request.latency" (SCH-004 judge catches)
+// Also adds a novel attribute "http.request.latency" (SCH-004 judge catches)
 const originalCode = [
   'function processRequest(req) {',
   '  try {',
@@ -69,7 +69,9 @@ const originalCode = [
 
 // Instrumented code:
 // - Adds OTel spans with vague name "doStuff" (triggers SCH-001 fallback judge)
-// - Adds novel attribute "request.latency" not in registry (triggers SCH-004 judge)
+// - Adds novel attribute "http.request.latency" not in registry (triggers SCH-004 judge).
+//   Uses "http" namespace so the namespace pre-filter passes same-namespace registry candidates.
+//   Jaccard vs "http.request.duration" = 0.5 (not > 0.5) → reaches judge tier.
 // - Removes the `throw err` in catch block (triggers NDS-005 script + judge)
 const instrumentedCode = [
   'import { trace } from "@opentelemetry/api";',
@@ -78,7 +80,7 @@ const instrumentedCode = [
   'function processRequest(req) {',
   '  return tracer.startActiveSpan("doStuff", (span) => {',
   '    try {',
-  '      span.setAttribute("request.latency", 42);',
+  '      span.setAttribute("http.request.latency", 42);',
   '      const result = handleRequest(req);',
   '      return result;',
   '    } catch (err) {',
@@ -131,9 +133,9 @@ describe('full pipeline with all three judge-enhanced rules', () => {
         { answer: false, suggestion: 'Use "myapp.request.process" instead of "doStuff".', confidence: 0.85 },
         { input: 80, output: 30 },
       ))
-      // SCH-004 judge call: "request.latency" semantically matches "http.request.duration"
+      // SCH-004 judge call: "http.request.latency" semantically matches "http.request.duration"
       .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use "http.request.duration" instead of "request.latency".', confidence: 0.92 },
+        { answer: false, suggestion: 'Use "http.request.duration" instead of "http.request.latency".', confidence: 0.92 },
         { input: 120, output: 45 },
       ));
 
@@ -304,7 +306,7 @@ describe('full pipeline with all three judge-enhanced rules', () => {
       ))
       // SCH-004
       .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use "http.request.duration" instead of "request.latency".', confidence: 0.92 },
+        { answer: false, suggestion: 'Use "http.request.duration" instead of "http.request.latency".', confidence: 0.92 },
         { input: 120, output: 45 },
       ));
 
