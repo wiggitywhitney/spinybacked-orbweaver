@@ -132,7 +132,8 @@ Before writing any code, read the current `src/validation/tier2/sch005.ts` in fu
 
 - [ ] Remove `tokenize()`, `jaccardSimilarity()`, script tier loop, gap-pair tracking, and their imports/types from `sch005.ts`.
 - [ ] Simplify `checkRegistrySpanDuplicates`: when `judgeDeps` is absent, return pass immediately. When present, iterate all pairs, apply D-1 namespace pre-filter, call judge, apply D-1 post-validate, emit findings.
-- [ ] Update `test/validation/tier2/sch005.test.ts`: remove script-tier describe block and Jaccard fixtures. Retain all judge-tier tests. Update the coordinator fixture if it relied on Jaccard-threshold behavior.
+- [ ] Update `test/validation/tier2/sch005.test.ts`: remove script-tier describe block and Jaccard fixtures. Retain all judge-tier tests.
+- [ ] Update the coordinator integration test (`test/coordinator/coordinate.test.ts`): the existing "produces findings when span IDs are similar (>0.5 Jaccard)" test relies on the script tier producing findings without a judge client — after M6, that test produces no findings (graceful degradation). Replace it with two tests: (1) no judge client → no SCH-005 findings, all files succeed; (2) judge client injected + `callJudge` mocked (via `vi.mock('../../../src/validation/judge.ts', ...)`) to return a duplicate verdict → at least one SCH-005 finding, all files succeed.
 - [ ] Close GitHub issue #472 (Jaccard threshold tuning — no longer applicable).
 - [ ] `npm run typecheck` passes. `npm test` passes.
 - [ ] Re-run acceptance gate: `vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run --config vitest.acceptance.config.ts'`. All existing tests pass.
