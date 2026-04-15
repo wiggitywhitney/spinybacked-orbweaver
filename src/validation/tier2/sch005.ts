@@ -17,6 +17,8 @@ export interface SpanDefinition {
   id: string;
   /** Human-readable description, when present in the registry. */
   brief?: string;
+  /** Span kind (e.g. CLIENT, SERVER, INTERNAL, PRODUCER, CONSUMER), when present. */
+  span_kind?: string;
 }
 
 /**
@@ -40,7 +42,7 @@ export interface Sch005Result {
  * Extract all span definitions from the resolved registry.
  *
  * Uses `parseResolvedRegistry()` and `getSpanDefinitions()` from registry-types.ts.
- * Returns each span's ID and optional brief for use in similarity comparisons.
+ * Returns each span's ID, optional brief, and optional span_kind for use in comparisons.
  *
  * @param resolvedRegistry - Raw resolved registry object from `weaver registry resolve -f json`
  * @returns Array of span definitions (id + optional brief)
@@ -51,6 +53,7 @@ export function extractSpanDefinitions(resolvedRegistry: object): SpanDefinition
   return spanGroups.map((g) => ({
     id: g.id,
     ...(g.brief !== undefined ? { brief: g.brief } : {}),
+    ...(g.span_kind !== undefined ? { span_kind: g.span_kind } : {}),
   }));
 }
 
@@ -61,8 +64,9 @@ export function extractSpanDefinitions(resolvedRegistry: object): SpanDefinition
 /**
  * SCH-005: Flag span definitions in the resolved registry that may be semantic duplicates.
  *
- * Judge-only detection: for all same-namespace pairs, an LLM judge evaluates
- * semantic equivalence with namespace pre-filtering (D-1).
+ * Judge-only detection: for all same-namespace, compatible-span_kind pairs, an LLM judge
+ * evaluates semantic equivalence. Three deterministic gates precede the judge: namespace
+ * pre-filter (D-1), span_kind pre-filter (D-3), and post-validate (D-1 safety net).
  *
  * When no judge client is provided, degrades gracefully and returns pass.
  * This is a run-level advisory check — all findings are non-blocking.
@@ -104,6 +108,9 @@ export async function checkRegistrySpanDuplicates(
       const rootA = getRootNamespace(a.id);
       const rootB = getRootNamespace(b.id);
       if (rootA === null || rootB === null || rootA !== rootB) continue;
+
+      // Pre-filter: skip pairs with different span_kind — different structural roles (deterministic, D-3)
+      if (a.span_kind && b.span_kind && a.span_kind !== b.span_kind) continue;
 
       const result = await callJudge(
         {

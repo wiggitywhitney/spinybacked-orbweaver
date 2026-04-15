@@ -103,6 +103,8 @@ Before writing any code, read `src/validation/tier2/registry-types.ts` to unders
 
 **Design:** The judge only handles semantic equivalence — all namespace decisions are deterministic. Two deterministic gates sandwich the judge call: (1) pre-filter: before calling the judge, check that both span IDs share the same root namespace (segment after `span.`) — skip the judge entirely if they differ; (2) post-validate: after a duplicate verdict, re-confirm namespace compatibility before emitting. The judge only reasons about whether two same-namespace spans describe the same operation.
 
+> **Updated by D-3 (2026-04-15):** A third deterministic gate was added between (1) and (2): `span_kind` pre-filter — skip pairs where both spans have `span_kind` and values differ. See Design Notes: "Deterministic filter chain (as of D-3)" for the current authoritative description.
+
 - [x] For each pair in the Jaccard gap (0.2 < Jaccard ≤ 0.5, per OD-3): extract the root namespace from each span ID (segment immediately after `span.`, e.g., `commit_story` from `span.commit_story.generate`). If the root namespaces differ, skip this pair — do NOT call the judge.
 - [x] For namespace-compatible pairs, call `callJudge()` with span IDs and briefs as context (per OD-2). Pass only the namespace-compatible span IDs as `candidates` — not all span IDs in the registry. Use confidence threshold 0.7, matching SCH-004.
 - [x] Design the judge question using this template: `"Are span IDs '[id-a]' and '[id-b]' semantically distinct — do they represent different operations? Answer true if they represent clearly different operations. Answer false if they are semantic duplicates (the same operation named differently). Brief for '[id-a]': [brief or 'not provided']. Brief for '[id-b]': [brief or 'not provided']."` (Consistent with SCH-004: `false` = "not distinct" = IS a duplicate. Domain-boundary language is less critical here since pre-filtering already ensures same-namespace candidates.)
@@ -146,12 +148,12 @@ Before writing any code, read `src/validation/tier2/registry-types.ts` to confir
 
 **What changes:** `SpanDefinition` gains an optional `span_kind?: string` field. `extractSpanDefinitions` extracts it from registry groups when present. In `checkRegistrySpanDuplicates`, add a gate immediately after the D-1 namespace pre-filter: if `a.span_kind && b.span_kind && a.span_kind !== b.span_kind`, skip the judge call entirely (different structural roles, cannot be semantic duplicates).
 
-- [ ] Add `span_kind?: string` to the `SpanDefinition` interface in `sch005.ts`.
-- [ ] Update `extractSpanDefinitions` to include `span_kind` when present on the registry group (use the same conditional spread pattern as `brief`).
-- [ ] Unit test: `extractSpanDefinitions` returns `span_kind` when present on a registry group, and omits it when absent (mirrors the existing `brief` extraction tests).
-- [ ] In `checkRegistrySpanDuplicates`, add a `span_kind` pre-filter after the D-1 namespace gate: `if (a.span_kind && b.span_kind && a.span_kind !== b.span_kind) continue;`
-- [ ] Unit tests: (1) two same-namespace spans with different `span_kind` values (`CLIENT` vs `SERVER`) do not call the judge; (2) two same-namespace spans where one or both lack `span_kind` still reach the judge normally.
-- [ ] `npm run typecheck` passes. `npm test` passes.
+- [x] Add `span_kind?: string` to the `SpanDefinition` interface in `sch005.ts`.
+- [x] Update `extractSpanDefinitions` to include `span_kind` when present on the registry group (use the same conditional spread pattern as `brief`).
+- [x] Unit test: `extractSpanDefinitions` returns `span_kind` when present on a registry group, and omits it when absent (mirrors the existing `brief` extraction tests).
+- [x] In `checkRegistrySpanDuplicates`, add a `span_kind` pre-filter after the D-1 namespace gate: `if (a.span_kind && b.span_kind && a.span_kind !== b.span_kind) continue;`
+- [x] Unit tests: (1) two same-namespace spans with different `span_kind` values (`CLIENT` vs `SERVER`) do not call the judge; (2) two same-namespace spans where one or both lack `span_kind` still reach the judge normally.
+- [x] `npm run typecheck` passes. `npm test` passes.
 
 ### M5: Acceptance gate verification
 
@@ -174,7 +176,7 @@ Before writing any code, read `src/validation/tier2/registry-types.ts` to confir
 ## Risks and Mitigations
 
 - **Risk: False positives — spans flagged as duplicates when they're not**
-  Mitigation: Non-blocking advisory only. The 0.7 confidence threshold on the judge reduces noise. The domain boundary instruction in the judge prompt further reduces false positives.
+  Mitigation: Non-blocking advisory only. The `span_kind` deterministic pre-filter (D-3) eliminates structural-role false positives entirely — CLIENT/SERVER mismatches never reach the judge. The 0.7 confidence threshold and the domain boundary prompt constraint further reduce noise for the pairs that do reach the judge.
 
 - **Risk: Performance on large registries**
   Mitigation: Judge is called for all same-namespace pairs — O(n²) within each namespace. For typical registries (10–30 spans per namespace) this is negligible. If a namespace grows beyond ~50 spans, consider capping judge calls per run.
@@ -191,6 +193,7 @@ Before writing any code, read `src/validation/tier2/registry-types.ts` to confir
 - The Jaccard script tier was removed by D-2. Detection is now judge-only for all same-namespace pairs. See D-2 rationale for why the two-tier design was not appropriate for span IDs.
 - **Deterministic filter chain (as of D-3):** Three deterministic gates govern every judge call: (1) namespace pre-filter (D-1) — skip pairs with different root namespaces; (2) `span_kind` pre-filter (D-3) — skip pairs where both spans have `span_kind` and those values differ; (3) post-validate (D-1 safety net) — after a duplicate verdict, re-confirm namespace match before emitting. The judge only sees same-namespace, structurally compatible pairs.
 - **Judge prompt warning — type-level discrimination:** The SCH-004 judge has a known false positive pattern: it hallucinates semantic equivalence between attributes that share a concept word but have different value types (e.g., a string label like "2026-W09" vs. an integer count, a boolean flag vs. an integer limit). The SCH-004 fix is tracked in issue #440. When writing the SCH-005 judge question in M3, explicitly include a negative constraint: "Spans with different structural roles or value semantics are NOT duplicates even if their names share words." The run-13 SCH-004 false positives are concrete examples of what this constraint must prevent.
+- **Cross-rule insight (captured 2026-04-15, tracked in issue #440):** The D-1/D-3 deterministic pre-filter pattern used in SCH-005 applies directly to SCH-004's judge tier. SCH-004 currently passes the entire registry attribute list as judge candidates, so a novel `commit_story.*` key gets compared against `gen_ai.*` OTel attributes — which is exactly the cross-domain false positive class in issue #440. The fix: filter `candidates` to only include registry attributes sharing the same root namespace as the novel key before calling the judge. SCH-004's Jaccard script tier is working correctly and should not be removed — the false positives come from the judge tier only.
 
 ---
 

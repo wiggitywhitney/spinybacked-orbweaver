@@ -90,6 +90,20 @@ describe('extractSpanDefinitions', () => {
     const result = extractSpanDefinitions({});
     expect(result).toHaveLength(0);
   });
+
+  it('includes span_kind when present on a registry group', () => {
+    const registry = {
+      groups: [
+        { id: 'span.myapp.api.request', type: 'span', span_kind: 'SERVER' },
+        { id: 'span.myapp.db.query', type: 'span' },
+      ],
+    };
+    const result = extractSpanDefinitions(registry);
+    const server = result.find((s) => s.id === 'span.myapp.api.request');
+    const db = result.find((s) => s.id === 'span.myapp.db.query');
+    expect(server?.span_kind).toBe('SERVER');
+    expect(db?.span_kind).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -109,6 +123,22 @@ const REGISTRY_DIFF_NS_GAP_PAIR = {
   groups: [
     { id: 'span.auth.request.handle', type: 'span', brief: 'Handles an auth request' },
     { id: 'span.billing.request.process', type: 'span', brief: 'Processes a billing request' },
+  ],
+};
+
+// Same namespace, different span_kind — CLIENT vs SERVER
+const REGISTRY_DIFF_SPAN_KIND_PAIR = {
+  groups: [
+    { id: 'span.billing.process.payment', type: 'span', span_kind: 'CLIENT', brief: 'Client-side billing call' },
+    { id: 'span.billing.process.payment', type: 'span', span_kind: 'SERVER', brief: 'Server-side billing handler' },
+  ],
+};
+
+// Same namespace, one span missing span_kind
+const REGISTRY_ONE_MISSING_SPAN_KIND = {
+  groups: [
+    { id: 'span.billing.process.payment', type: 'span', span_kind: 'CLIENT', brief: 'Client-side billing call' },
+    { id: 'span.billing.handle.charge', type: 'span', brief: 'Handles a charge' },
   ],
 };
 
@@ -138,6 +168,28 @@ describe('checkRegistrySpanDuplicates (SCH-005)', () => {
     expect(results[0]!.passed).toBe(true);
     expect(judgeTokenUsage).toHaveLength(0);
     expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+  });
+
+  it('does not call judge for same-namespace pairs with different span_kind (D-3 pre-filter)', async () => {
+    vi.mocked(callJudge).mockResolvedValue({
+      verdict: { answer: false, confidence: 0.9 },
+      tokenUsage: mockTokenUsage,
+    });
+
+    await checkRegistrySpanDuplicates(REGISTRY_DIFF_SPAN_KIND_PAIR, { client: {} as any });
+
+    expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+  });
+
+  it('calls judge normally when one or both spans lack span_kind', async () => {
+    vi.mocked(callJudge).mockResolvedValue({
+      verdict: { answer: true, confidence: 0.9 },
+      tokenUsage: mockTokenUsage,
+    });
+
+    await checkRegistrySpanDuplicates(REGISTRY_ONE_MISSING_SPAN_KIND, { client: {} as any });
+
+    expect(vi.mocked(callJudge)).toHaveBeenCalledTimes(1);
   });
 
   it('does not call judge for pairs with differing root namespaces', async () => {
