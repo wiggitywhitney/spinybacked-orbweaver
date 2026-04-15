@@ -152,7 +152,7 @@ export interface Sch004Result {
  * 1. Script: Jaccard token similarity >0.5 catches obvious duplicates
  *    (e.g., "http_request_duration" vs "http.request.duration")
  * 2. Judge (optional): For novel keys the script misses, an LLM judge
- *    evaluates semantic equivalence (e.g., "request.latency" ≈ "http.request.duration")
+ *    evaluates semantic equivalence (e.g., "http.request.latency" ≈ "http.request.duration")
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
@@ -236,7 +236,7 @@ export async function checkNoRedundantSchemaEntries(
     const attrDefs = getAttributeDefinitions(registry);
 
     for (const entry of unflaggedNovelKeys) {
-      // Pre-filter: only pass registry attributes whose value type is compatible with the novel
+      // Pre-filter 1: only pass registry attributes whose value type is compatible with the novel
       // attribute's inferred type. Prevents the judge from flagging type-incompatible pairs
       // (e.g., a string label vs. an integer count) as semantic duplicates.
       const typedCandidates = registryNameList.filter(name => {
@@ -244,16 +244,24 @@ export async function checkNoRedundantSchemaEntries(
         return isTypeCompatible(entry.inferredType, def?.type);
       });
 
-      // If no compatible candidates exist, this novel attribute cannot be a semantic
-      // duplicate of any registry attribute with a compatible value type — skip the judge.
-      if (typedCandidates.length === 0) continue;
+      // Pre-filter 2: restrict to the same root namespace as the novel key. A novel
+      // commit_story.* attribute cannot be a semantic duplicate of a gen_ai.* attribute —
+      // they represent different operational domains. The root namespace is the first
+      // dot-separated segment (e.g., "commit_story" from "commit_story.summarize.week_label").
+      const novelRoot = entry.key.split('.')[0];
+      const namespacedCandidates = novelRoot
+        ? typedCandidates.filter(name => name.split('.')[0] === novelRoot)
+        : typedCandidates;
+
+      // If no candidates remain after both filters, skip the judge.
+      if (namespacedCandidates.length === 0) continue;
 
       const result = await callJudge(
         {
           ruleId: 'SCH-004',
           context: `Novel attribute key "${entry.key}" at line ${entry.line} is not in the registry and has no high token-similarity match.`,
           question: `Is attribute "${entry.key}" semantically distinct from all registered attribute keys? Answer true if it captures a unique concept not already represented in the registry. Answer false if it is a semantic duplicate of an existing key — and if so, which registered key should be used instead? Important: respect domain boundaries. Application-domain attributes (e.g., generated_count, section_count) are NOT duplicates of OTel semantic convention fields (e.g., gen_ai.usage.output_tokens) even if they share similar words. Only flag as duplicates when the keys measure the same thing in the same domain. Attributes with different value types (e.g., a string label vs. an integer count) are NOT semantic duplicates even if they describe the same concept.`,
-          candidates: typedCandidates,
+          candidates: namespacedCandidates,
         },
         judgeDeps.client,
         judgeDeps.options,
