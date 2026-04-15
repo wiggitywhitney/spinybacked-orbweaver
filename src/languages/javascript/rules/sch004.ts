@@ -152,7 +152,7 @@ export interface Sch004Result {
  * 1. Script: Jaccard token similarity >0.5 catches obvious duplicates
  *    (e.g., "http_request_duration" vs "http.request.duration")
  * 2. Judge (optional): For novel keys the script misses, an LLM judge
- *    evaluates semantic equivalence (e.g., "request.latency" ≈ "http.request.duration")
+ *    evaluates semantic equivalence (e.g., "http.request.latency" ≈ "http.request.duration")
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)
