@@ -2,6 +2,7 @@
 
 ## Short-term
 
+- Advisory rules audit — evaluate every advisory rule for soundness; apply simple decisions; document rebuilds for downstream PRDs (PRD #483)
 - TypeScript language provider — interface canary test; validates abstraction before Python (PRD #372)
 
 ## Medium-term
