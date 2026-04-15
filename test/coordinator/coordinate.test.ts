@@ -12,6 +12,11 @@ import type { CoordinatorCallbacks } from '../../src/coordinator/types.ts';
 import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
 
+vi.mock('../../src/validation/judge.ts', () => ({
+  callJudge: vi.fn(),
+}));
+import { callJudge } from '../../src/validation/judge.ts';
+
 /** Minimal config for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -781,10 +786,19 @@ describe('coordinate', () => {
   });
 
   describe('run-level advisory checks (SCH-005)', () => {
-    it('runs SCH-005 span deduplication and pushes findings when span IDs are similar (>0.5 Jaccard)', async () => {
-      // span.myapp.generate.run vs span.myapp.generate.execute:
-      // tokens {span,myapp,generate,run} vs {span,myapp,generate,execute}
-      // Intersection=3, Union=5 → Jaccard=0.6 → script tier catches this
+    const mockTokenUsage: TokenUsage = {
+      inputTokens: 100,
+      outputTokens: 40,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    };
+
+    beforeEach(() => {
+      vi.mocked(callJudge).mockReset();
+    });
+
+    it('produces no SCH-005 findings when no judge client is provided (graceful degradation)', async () => {
+      // Without anthropicClient in deps, SCH-005 degrades gracefully regardless of spans.
       const similarRegistry = {
         groups: [
           { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
@@ -793,6 +807,34 @@ describe('coordinate', () => {
       };
       const deps = makeDeps({
         resolveSchemaForHash: vi.fn().mockResolvedValue(similarRegistry),
+        // no anthropicClient
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const sch005Failures = result.runLevelAdvisory.filter(
+        (r) => r.ruleId === 'SCH-005' && !r.passed,
+      );
+      expect(sch005Failures).toHaveLength(0);
+      expect(result.filesFailed).toBe(0);
+    });
+
+    it('produces SCH-005 finding when judge client provided and callJudge returns duplicate verdict', async () => {
+      vi.mocked(callJudge).mockResolvedValue({
+        verdict: { answer: false, confidence: 0.9 },
+        tokenUsage: mockTokenUsage,
+      });
+
+      // Same-namespace spans that the judge will flag as duplicates
+      const similarRegistry = {
+        groups: [
+          { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
+          { id: 'span.myapp.generate.execute', type: 'span', brief: 'Executes the generator' },
+        ],
+      };
+      const deps = makeDeps({
+        resolveSchemaForHash: vi.fn().mockResolvedValue(similarRegistry),
+        anthropicClient: {} as any,
       });
 
       const result = await coordinate('/project', makeConfig(), undefined, deps);
@@ -805,9 +847,8 @@ describe('coordinate', () => {
       expect(result.filesFailed).toBe(0);
     });
 
-    it('produces no SCH-005 advisory findings when registry spans are distinct', async () => {
-      // span.myapp.api.handle_request vs span.billing.payment.process:
-      // Intersection={span}, Union=8 → Jaccard=0.125 → no finding
+    it('produces no SCH-005 advisory findings when registry spans are in different namespaces', async () => {
+      // Cross-namespace spans are filtered by D-1 pre-filter — no judge call, no finding.
       const distinctRegistry = {
         groups: [
           { id: 'span.myapp.api.handle_request', type: 'span' },
@@ -816,6 +857,7 @@ describe('coordinate', () => {
       };
       const deps = makeDeps({
         resolveSchemaForHash: vi.fn().mockResolvedValue(distinctRegistry),
+        anthropicClient: {} as any,
       });
 
       const result = await coordinate('/project', makeConfig(), undefined, deps);

@@ -1,5 +1,5 @@
 // ABOUTME: Tests for SCH-005 registry span deduplication check.
-// ABOUTME: Covers extractSpanDefinitions, Jaccard script tier, LLM judge tier, and coordinator wiring.
+// ABOUTME: Covers extractSpanDefinitions, graceful degradation, and LLM judge tier.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -96,105 +96,7 @@ describe('extractSpanDefinitions', () => {
 // Fixtures for checkRegistrySpanDuplicates
 // ---------------------------------------------------------------------------
 
-// Two spans with >0.5 Jaccard similarity:
-// tokens {span,myapp,generate,run} vs {span,myapp,generate,execute}
-// intersection=3 (span,myapp,generate), union=5 → 0.60
-const REGISTRY_SIMILAR_PAIR = {
-  groups: [
-    { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
-    { id: 'span.myapp.generate.execute', type: 'span', brief: 'Executes the generator' },
-  ],
-};
-
-// Two clearly distinct spans:
-// tokens {span,myapp,api,handle,request} vs {span,billing,payment,process}
-// intersection=1 (span), union=8 → 0.125
-const REGISTRY_DISTINCT_PAIR = {
-  groups: [
-    { id: 'span.myapp.api.handle_request', type: 'span' },
-    { id: 'span.billing.payment.process', type: 'span' },
-  ],
-};
-
-// Three spans, only one pair overlaps:
-// A vs B: 3/5=0.60 → finding
-// A vs C: 1/7≈0.14 → no finding
-// B vs C: 1/7≈0.14 → no finding
-const REGISTRY_THREE_SPANS_ONE_OVERLAP = {
-  groups: [
-    { id: 'span.myapp.generate.run', type: 'span' },
-    { id: 'span.myapp.generate.execute', type: 'span' },
-    { id: 'span.billing.payment.process', type: 'span' },
-  ],
-};
-
-// Cross-namespace pair with high Jaccard (would score 0.60 without namespace gate):
-// span.orders.process.refund  → tokens: {span,orders,process,refund}
-// span.payments.process.refund → tokens: {span,payments,process,refund}
-// Jaccard = 3/5 = 0.60, but namespaces differ (orders vs payments) → no finding
-const REGISTRY_CROSS_NS_HIGH_JACCARD = {
-  groups: [
-    { id: 'span.orders.process.refund', type: 'span' },
-    { id: 'span.payments.process.refund', type: 'span' },
-  ],
-};
-
-describe('checkRegistrySpanDuplicates (SCH-005 script tier)', () => {
-  it('produces a finding when two span IDs have >0.5 Jaccard similarity', async () => {
-    const { results } = await checkRegistrySpanDuplicates(REGISTRY_SIMILAR_PAIR);
-    const findings = results.filter(r => !r.passed);
-    expect(findings.length).toBeGreaterThanOrEqual(1);
-    expect(findings[0].ruleId).toBe('SCH-005');
-    expect(findings[0].blocking).toBe(false);
-    expect(findings[0].tier).toBe(2);
-  });
-
-  it('produces no findings when two span IDs are clearly distinct', async () => {
-    const { results } = await checkRegistrySpanDuplicates(REGISTRY_DISTINCT_PAIR);
-    const findings = results.filter(r => !r.passed);
-    expect(findings).toHaveLength(0);
-  });
-
-  it('does not flag cross-namespace pairs even when Jaccard >0.5', async () => {
-    const { results } = await checkRegistrySpanDuplicates(REGISTRY_CROSS_NS_HIGH_JACCARD);
-    const findings = results.filter(r => !r.passed);
-    expect(findings).toHaveLength(0);
-  });
-
-  it('produces exactly one finding when three spans have only one overlapping pair', async () => {
-    const { results } = await checkRegistrySpanDuplicates(REGISTRY_THREE_SPANS_ONE_OVERLAP);
-    const findings = results.filter(r => !r.passed);
-    expect(findings).toHaveLength(1);
-  });
-
-  it('produces no findings for a registry with fewer than two spans', async () => {
-    const single = { groups: [{ id: 'span.myapp.api.request', type: 'span' }] };
-    const { results } = await checkRegistrySpanDuplicates(single);
-    const findings = results.filter(r => !r.passed);
-    expect(findings).toHaveLength(0);
-  });
-
-  it('returns empty judgeTokenUsage (no judge calls in script tier)', async () => {
-    const { judgeTokenUsage } = await checkRegistrySpanDuplicates(REGISTRY_SIMILAR_PAIR);
-    expect(judgeTokenUsage).toHaveLength(0);
-  });
-
-  it('finding message includes both span IDs', async () => {
-    const { results } = await checkRegistrySpanDuplicates(REGISTRY_SIMILAR_PAIR);
-    const finding = results.find(r => !r.passed);
-    expect(finding?.message).toContain('span.myapp.generate.run');
-    expect(finding?.message).toContain('span.myapp.generate.execute');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Fixtures for judge tier (Jaccard gap: 0.2 < similarity ≤ 0.5)
-// ---------------------------------------------------------------------------
-
-// Same root namespace pair in the gap:
-// span.billing.process.payment → tokens {span, billing, process, payment}
-// span.billing.handle.charge   → tokens {span, billing, handle, charge}
-// Intersection: {span, billing} = 2, Union: 6 → Jaccard ≈ 0.333
+// Same root namespace pair — both in "billing" namespace
 const REGISTRY_SAME_NS_GAP_PAIR = {
   groups: [
     { id: 'span.billing.process.payment', type: 'span', brief: 'Processes a payment' },
@@ -202,10 +104,7 @@ const REGISTRY_SAME_NS_GAP_PAIR = {
   ],
 };
 
-// Different root namespace pair in the gap:
-// span.auth.request.handle   → tokens {span, auth, request, handle}
-// span.billing.request.process → tokens {span, billing, request, process}
-// Intersection: {span, request} = 2, Union: 6 → Jaccard ≈ 0.333
+// Different root namespace pair — auth vs billing
 const REGISTRY_DIFF_NS_GAP_PAIR = {
   groups: [
     { id: 'span.auth.request.handle', type: 'span', brief: 'Handles an auth request' },
@@ -213,7 +112,7 @@ const REGISTRY_DIFF_NS_GAP_PAIR = {
   ],
 };
 
-describe('checkRegistrySpanDuplicates (SCH-005 judge tier)', () => {
+describe('checkRegistrySpanDuplicates (SCH-005)', () => {
   const mockTokenUsage: TokenUsage = {
     inputTokens: 100,
     outputTokens: 40,
@@ -223,6 +122,22 @@ describe('checkRegistrySpanDuplicates (SCH-005 judge tier)', () => {
 
   beforeEach(() => {
     vi.mocked(callJudge).mockReset();
+  });
+
+  it('returns pass for a registry with fewer than two spans', async () => {
+    const single = { groups: [{ id: 'span.myapp.api.request', type: 'span' }] };
+    const { results } = await checkRegistrySpanDuplicates(single);
+    const findings = results.filter((r) => !r.passed);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('returns pass immediately when no judgeDeps provided (graceful degradation)', async () => {
+    const { results, judgeTokenUsage } = await checkRegistrySpanDuplicates(REGISTRY_SAME_NS_GAP_PAIR);
+    const findings = results.filter((r) => !r.passed);
+    expect(findings).toHaveLength(0);
+    expect(results[0]!.passed).toBe(true);
+    expect(judgeTokenUsage).toHaveLength(0);
+    expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
   });
 
   it('does not call judge for pairs with differing root namespaces', async () => {

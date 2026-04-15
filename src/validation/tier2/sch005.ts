@@ -1,5 +1,5 @@
 // ABOUTME: SCH-005 Tier 2 check — no duplicate span definitions in the registry.
-// ABOUTME: Flags semantically equivalent span definitions using Jaccard similarity + LLM judge.
+// ABOUTME: Flags semantically equivalent span definitions using LLM judge (judge-only, no Jaccard tier).
 
 import type Anthropic from '@anthropic-ai/sdk';
 import type { CheckResult } from '../types.ts';
@@ -55,55 +55,20 @@ export function extractSpanDefinitions(resolvedRegistry: object): SpanDefinition
 }
 
 // ---------------------------------------------------------------------------
-// Tokenize / Jaccard helpers
-// duplicated from sch004.ts — extract in a follow-up
-// ---------------------------------------------------------------------------
-
-/**
- * Tokenize a span ID by splitting on common delimiters (., _, -).
- * Converts to lowercase for case-insensitive comparison.
- */
-function tokenize(name: string): Set<string> {
-  return new Set(
-    name
-      .toLowerCase()
-      .split(/[.\-_]/)
-      .filter((t) => t.length > 0),
-  );
-}
-
-/**
- * Compute Jaccard similarity between two token sets.
- * |A ∩ B| / |A ∪ B|
- */
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 && b.size === 0) return 0;
-
-  let intersection = 0;
-  for (const token of a) {
-    if (b.has(token)) intersection++;
-  }
-
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
-
-// ---------------------------------------------------------------------------
 // Main check
 // ---------------------------------------------------------------------------
 
 /**
  * SCH-005: Flag span definitions in the resolved registry that may be semantic duplicates.
  *
- * Two-tier detection:
- * 1. Script: Jaccard token similarity >0.5 on span IDs catches obvious duplicates
- * 2. Judge (optional, M3): For pairs in the gap (0.2–0.5), an LLM judge evaluates
- *    semantic equivalence with namespace pre-filtering.
+ * Judge-only detection: for all same-namespace pairs, an LLM judge evaluates
+ * semantic equivalence with namespace pre-filtering (D-1).
  *
+ * When no judge client is provided, degrades gracefully and returns pass.
  * This is a run-level advisory check — all findings are non-blocking.
  *
  * @param resolvedRegistry - Raw resolved registry object from `weaver registry resolve -f json`
- * @param judgeDeps - Optional judge dependencies. When absent, runs script-only.
+ * @param judgeDeps - Optional judge dependencies. When absent, returns pass immediately.
  * @returns Sch005Result with check results and judge token usage for cost tracking
  */
 export async function checkRegistrySpanDuplicates(
@@ -119,51 +84,23 @@ export async function checkRegistrySpanDuplicates(
     };
   }
 
-  const scriptFindings: CheckResult[] = [];
-  const jaccardGapPairs: Array<{ a: SpanDefinition; b: SpanDefinition; similarity: number }> = [];
+  if (!judgeDeps) {
+    return {
+      results: [pass('SCH-005 requires a judge client — skipped.')],
+      judgeTokenUsage: [],
+    };
+  }
 
-  // Script tier: compare all pairs
+  const judgeTokenUsage: TokenUsage[] = [];
+  const judgeFindings: CheckResult[] = [];
+
   for (let i = 0; i < spans.length; i++) {
     for (let j = i + 1; j < spans.length; j++) {
       const a = spans[i];
       const b = spans[j];
       if (!a || !b) continue;
 
-      // Namespace gate: skip cross-domain pairs deterministically (D-1)
-      const rootA = getRootNamespace(a.id);
-      const rootB = getRootNamespace(b.id);
-      if (rootA === null || rootB === null || rootA !== rootB) continue;
-
-      const tokensA = tokenize(a.id);
-      const tokensB = tokenize(b.id);
-      const sim = jaccardSimilarity(tokensA, tokensB);
-
-      if (sim > 0.5) {
-        scriptFindings.push({
-          ruleId: 'SCH-005',
-          passed: false,
-          filePath: '<run-level>',
-          lineNumber: null,
-          message:
-            `Span IDs "${a.id}" and "${b.id}" may be semantic duplicates ` +
-            `(${Math.round(sim * 100)}% token overlap). Consider consolidating into a single span definition.`,
-          tier: 2,
-          blocking: false,
-        });
-      } else if (sim > 0.2) {
-        // Jaccard gap — candidates for the judge tier (M3)
-        jaccardGapPairs.push({ a, b, similarity: sim });
-      }
-    }
-  }
-
-  // Judge tier — handled in M3
-  const judgeTokenUsage: TokenUsage[] = [];
-  const judgeFindings: CheckResult[] = [];
-
-  if (judgeDeps && jaccardGapPairs.length > 0) {
-    for (const { a, b } of jaccardGapPairs) {
-      // Pre-filter: skip pairs from different root namespaces (deterministic)
+      // Pre-filter: skip pairs from different root namespaces (deterministic, D-1)
       const rootA = getRootNamespace(a.id);
       const rootB = getRootNamespace(b.id);
       if (rootA === null || rootB === null || rootA !== rootB) continue;
@@ -173,8 +110,8 @@ export async function checkRegistrySpanDuplicates(
           ruleId: 'SCH-005',
           context:
             `Span ID "${a.id}"${a.brief ? ` (brief: "${a.brief}")` : ''} and ` +
-            `span ID "${b.id}"${b.brief ? ` (brief: "${b.brief}")` : ''} have moderate token overlap ` +
-            `and share the root namespace "${rootA}".`,
+            `span ID "${b.id}"${b.brief ? ` (brief: "${b.brief}")` : ''} share ` +
+            `the root namespace "${rootA}".`,
           question:
             `Are span IDs "${a.id}" and "${b.id}" semantically distinct — do they represent different operations? ` +
             `Answer true if they represent clearly different operations. ` +
@@ -217,16 +154,14 @@ export async function checkRegistrySpanDuplicates(
     }
   }
 
-  const allFindings = [...scriptFindings, ...judgeFindings];
-
-  if (allFindings.length === 0) {
+  if (judgeFindings.length === 0) {
     return {
       results: [pass('No potentially duplicate span definitions detected.')],
       judgeTokenUsage,
     };
   }
 
-  return { results: allFindings, judgeTokenUsage };
+  return { results: judgeFindings, judgeTokenUsage };
 }
 
 // ---------------------------------------------------------------------------

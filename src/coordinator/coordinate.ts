@@ -124,7 +124,7 @@ export interface CoordinateDeps {
   writeFileForRollback?: (filePath: string, content: string) => Promise<void>;
   /** Restore schema extensions file from snapshot for end-of-run rollback. */
   restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
-  /** Anthropic client for SCH-005 judge calls. When absent, SCH-005 runs in script-only mode. */
+  /** Anthropic client for SCH-005 judge calls. When absent, SCH-005 degrades gracefully (returns pass). */
   anthropicClient?: Anthropic;
 }
 
