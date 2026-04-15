@@ -34,21 +34,29 @@ The audit closes with a complete, durable record of the rules landscape and leav
 ### What this audit covers
 
 **Advisory rules** (`blocking: false` in `tier2Checks`):
-- CDQ-006
-- COV-004, COV-005
-- NDS-004, NDS-005, NDS-006
-- RST-001, RST-002, RST-003, RST-004, RST-005
-- SCH-004
-- API-001, API-002 (added as advisory in PRD #135, same batch as NDS-006 and RST-005 above)
+- CDQ-006 — expensive attribute computation guarded
+- COV-004 — async operations have spans
+- COV-005 — domain-specific attributes present
+- NDS-004 — exported function signature preservation
+- NDS-005 — control flow preservation
+- NDS-006 — module system preservation
+- RST-001 — no spans on utility functions
+- RST-002 — no spans on trivial accessors
+- RST-003 — no duplicate spans on thin wrappers
+- RST-004 — no spans on internal implementation details
+- RST-005 — no double-instrumentation
+- SCH-004 — no redundant schema entries
+- API-001, API-003, API-004 — forbidden OTel import detection (SDK internals, vendor SDKs, non-API packages; all implemented in `api001.ts`)
+- API-002 — `@opentelemetry/api` dependency placement (added as advisory in PRD #135, same batch as NDS-006 and RST-005 above)
 
 **Conditionally advisory** (advisory only when schema is sparse — worth reviewing the downgrade logic itself):
-- SCH-001, SCH-002
-
-**Shared-file rules** (registered in `tier2Checks`, implemented inside another rule's file):
-- API-003, API-004 — implemented in `api001.ts` alongside API-001; no separate file
+- SCH-001 — span names match registry operations
+- SCH-002 — attribute keys match registry names
 
 **Orphaned implementations** (file exists, not in `tier2Checks`):
-- CDQ-007, CDQ-009, CDQ-010
+- CDQ-007 — attribute data quality (PII names, filesystem paths, nullable access)
+- CDQ-009 — undefined guard on span attribute values
+- CDQ-010 — untyped string method on property access
 
 ### What this audit does NOT cover
 
@@ -162,10 +170,10 @@ Rules in scope: CDQ-006 (advisory), CDQ-007, CDQ-009, CDQ-010 (orphaned — impl
 
 **Apply immediately** (no separate PR needed): any promotions to blocking, deletions, or registration decisions reached in this milestone.
 
-- [ ] CDQ-006 audited, discussed, decision recorded
-- [ ] CDQ-007 audited, discussed, decision recorded
-- [ ] CDQ-009 audited, discussed, decision recorded
-- [ ] CDQ-010 audited, discussed, decision recorded
+- [ ] CDQ-006 (expensive attribute computation guarded) audited, discussed, decision recorded
+- [ ] CDQ-007 (attribute data quality — PII names, filesystem paths, nullable access) audited, discussed, decision recorded
+- [ ] CDQ-009 (undefined guard on span attribute values) audited, discussed, decision recorded
+- [ ] CDQ-010 (untyped string method on property access) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] CDQ section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
@@ -175,8 +183,8 @@ Rules in scope: COV-004, COV-005 (advisory).
 
 Same process as M1.
 
-- [ ] COV-004 audited, discussed, decision recorded
-- [ ] COV-005 audited, discussed, decision recorded
+- [ ] COV-004 (async operations have spans) audited, discussed, decision recorded
+- [ ] COV-005 (domain-specific attributes present) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] COV section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
@@ -186,9 +194,9 @@ Rules in scope: NDS-004, NDS-005, NDS-006 (advisory).
 
 Same process as M1.
 
-- [ ] NDS-004 audited, discussed, decision recorded
-- [ ] NDS-005 audited, discussed, decision recorded
-- [ ] NDS-006 audited, discussed, decision recorded
+- [ ] NDS-004 (exported function signature preservation) audited, discussed, decision recorded
+- [ ] NDS-005 (control flow preservation) audited, discussed, decision recorded
+- [ ] NDS-006 (module system preservation) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] NDS section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
@@ -198,11 +206,11 @@ Rules in scope: RST-001, RST-002, RST-003, RST-004, RST-005 (advisory).
 
 Same process as M1.
 
-- [ ] RST-001 audited, discussed, decision recorded
-- [ ] RST-002 audited, discussed, decision recorded
-- [ ] RST-003 audited, discussed, decision recorded
-- [ ] RST-004 audited, discussed, decision recorded
-- [ ] RST-005 audited, discussed, decision recorded
+- [ ] RST-001 (no spans on utility functions) audited, discussed, decision recorded
+- [ ] RST-002 (no spans on trivial accessors) audited, discussed, decision recorded
+- [ ] RST-003 (no duplicate spans on thin wrappers) audited, discussed, decision recorded
+- [ ] RST-004 (no spans on internal implementation details) audited, discussed, decision recorded
+- [ ] RST-005 (no double-instrumentation) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] RST section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
@@ -214,10 +222,10 @@ For SCH-001/002: evaluate the sparse-registry downgrade logic itself, not just t
 
 Same process as M1 plus the downgrade logic review.
 
-- [ ] SCH-001/002 sparse-registry downgrade logic reviewed and discussed
-- [ ] SCH-001 audited, discussed, decision recorded
-- [ ] SCH-002 audited, discussed, decision recorded
-- [ ] SCH-004 audited, discussed, decision recorded
+- [ ] SCH-001/002 (span names and attribute keys match registry) sparse-registry downgrade logic reviewed and discussed
+- [ ] SCH-001 (span names match registry operations) audited, discussed, decision recorded
+- [ ] SCH-002 (attribute keys match registry names) audited, discussed, decision recorded
+- [ ] SCH-004 (no redundant schema entries) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] SCH section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
@@ -227,10 +235,10 @@ Rules in scope: API-001, API-002, API-003, API-004 (all advisory). API-003 and A
 
 Same process as M1.
 
-- [ ] API-001 audited, discussed, decision recorded
-- [ ] API-002 audited, discussed, decision recorded
-- [ ] API-003 audited, discussed, decision recorded
-- [ ] API-004 audited, discussed, decision recorded
+- [ ] API-001 (forbidden OTel import detection — SDK internals) audited, discussed, decision recorded
+- [ ] API-002 (`@opentelemetry/api` dependency placement) audited, discussed, decision recorded
+- [ ] API-003 (forbidden OTel import detection — vendor SDKs) audited, discussed, decision recorded
+- [ ] API-004 (forbidden OTel import detection — non-API packages) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] API section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
