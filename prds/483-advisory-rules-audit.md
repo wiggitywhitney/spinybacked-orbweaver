@@ -218,7 +218,7 @@ Same process as M1.
 
 Rules in scope: SCH-004 (advisory), SCH-001 and SCH-002 (conditionally advisory — downgraded to advisory when the registry is sparse).
 
-For SCH-001/002: evaluate the sparse-registry downgrade logic itself, not just the rule. Is the `SPARSE_THRESHOLD = 3` heuristic sound? Does downgrading these rules in sparse registries produce the right behavior, or does it mask real problems?
+For SCH-001/002: evaluate the sparse-registry downgrade logic itself, not just the rule. Is the sparse-threshold heuristic sound? (Current value: `SPARSE_THRESHOLD` in `src/fix-loop/instrument-with-retry.ts` — read the source before assessing.) Does downgrading these rules in sparse registries produce the right behavior, or does it mask real problems?
 
 Same process as M1 plus the downgrade logic review.
 
