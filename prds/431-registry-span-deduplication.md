@@ -71,6 +71,7 @@ Running the judge on all O(n²) pairs is expensive. The script tier uses Jaccard
 |----|----------|-----------|------|
 | D-1 | Deterministic namespace filtering before and after judge call | All namespace-based decisions are deterministic — no LLM involved. Two layers: (1) Pre-filter: before calling the judge for a span pair, check deterministically that both span IDs share the same root namespace segment (the segment after `span.`). If they differ, skip the judge call entirely — different root namespaces mean different operational domains. (2) Post-validate: if the judge returns a duplicate verdict, re-confirm namespace compatibility deterministically before emitting. This is the safety net if pre-filtering is ever bypassed. The namespace check is the SCH-005 analog to SCH-004's type check (issue #440). | 2026-04-12 |
 | D-2 | Remove Jaccard tier — use judge-only detection for all same-namespace pairs | Jaccard token similarity was cargo-culted from SCH-004 without questioning fit. Span IDs are semantically rich and short (3–6 segments); "are these the same operation?" is a semantic question, not a structural one. Jaccard inflates scores via guaranteed-shared prefix tokens (D-1 ensures same root namespace, so those tokens always match), and with prefix stripped, the script tier rarely catches anything meaningful at the >0.5 threshold. The judge already does all the real work. Simplifying to judge-only removes `tokenize()`, `jaccardSimilarity()`, the gap-pair tracking, and the threshold tuning problem (issue #472, now closed). When no judge client is provided, the check degrades gracefully and returns no findings — same safe behavior as before. | 2026-04-14 |
+| D-3 | Add `span_kind` as a deterministic pre-filter before judge calls | Two spans that share a root namespace and similar IDs but have different `span_kind` values (e.g. CLIENT vs SERVER, INTERNAL vs PRODUCER) represent structurally distinct operation roles — a CLIENT `span.billing.process` is the caller side; a SERVER `span.billing.process` is the handler side. They are never semantic duplicates. The D-1 namespace check is necessary but not sufficient: it gates on operational domain, but `span_kind` gates on structural role within that domain. Relying on the prompt constraint ("Spans with different structural roles or value semantics are NOT duplicates even if their names share words") is fragile — the LLM can still hallucinate equivalence between structurally different spans. Adding `span_kind` as a deterministic skip condition (when both spans have `span_kind` and they differ, skip the judge) removes this false-positive surface entirely. When one or both spans lack `span_kind`, the filter is not applied and the judge proceeds normally. | 2026-04-15 |
 
 ---
 
@@ -137,6 +138,20 @@ Before writing any code, read the current `src/validation/tier2/sch005.ts` in fu
 - [x] Close GitHub issue #472 (Jaccard threshold tuning — no longer applicable).
 - [x] `npm run typecheck` passes. `npm test` passes.
 - [x] Re-run acceptance gate: `vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run --config vitest.acceptance.config.ts'`. All existing tests pass.
+  - **Note**: M6 acceptance gate runs in CI, not locally. Before merging, push branch and trigger manually: `git push && gh workflow run acceptance-gate.yml --repo wiggitywhitney/spinybacked-orbweaver --ref feature/prd-431-registry-span-deduplication`
+
+### M7: Add `span_kind` deterministic pre-filter (Decision D-3)
+
+Before writing any code, read `src/validation/tier2/registry-types.ts` to confirm the `span_kind` field name on `ResolvedRegistryGroup`. Read `src/validation/tier2/sch005.ts` in full to see where to insert the pre-filter.
+
+**What changes:** `SpanDefinition` gains an optional `span_kind?: string` field. `extractSpanDefinitions` extracts it from registry groups when present. In `checkRegistrySpanDuplicates`, add a gate immediately after the D-1 namespace pre-filter: if `a.span_kind && b.span_kind && a.span_kind !== b.span_kind`, skip the judge call entirely (different structural roles, cannot be semantic duplicates).
+
+- [ ] Add `span_kind?: string` to the `SpanDefinition` interface in `sch005.ts`.
+- [ ] Update `extractSpanDefinitions` to include `span_kind` when present on the registry group (use the same conditional spread pattern as `brief`).
+- [ ] Unit test: `extractSpanDefinitions` returns `span_kind` when present on a registry group, and omits it when absent (mirrors the existing `brief` extraction tests).
+- [ ] In `checkRegistrySpanDuplicates`, add a `span_kind` pre-filter after the D-1 namespace gate: `if (a.span_kind && b.span_kind && a.span_kind !== b.span_kind) continue;`
+- [ ] Unit tests: (1) two same-namespace spans with different `span_kind` values (`CLIENT` vs `SERVER`) do not call the judge; (2) two same-namespace spans where one or both lack `span_kind` still reach the judge normally.
+- [ ] `npm run typecheck` passes. `npm test` passes.
 
 ### M5: Acceptance gate verification
 
@@ -149,7 +164,7 @@ Before writing any code, read the current `src/validation/tier2/sch005.ts` in fu
 
 - Semantically duplicate span definitions in the Weaver registry are surfaced as advisory findings in the PR summary.
 - The check is non-blocking — runs with duplicate spans still succeed and produce a PR.
-- The LLM judge is called for all same-namespace pairs when a client is available.
+- The LLM judge is called for all same-namespace pairs when a client is available, except pairs where both spans have `span_kind` values and those values differ (D-3 pre-filter).
 - When no judge client is provided, the check degrades gracefully and produces no findings.
 - Judge failures degrade gracefully — skipped silently, run continues.
 - All existing tests pass unchanged.
@@ -174,6 +189,7 @@ Before writing any code, read the current `src/validation/tier2/sch005.ts` in fu
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 - This check complements SCH-004 (attribute key deduplication in code). They operate on different artifacts: SCH-004 checks `setAttribute()` calls in instrumented code; SCH-005 checks span definitions in the registry.
 - The Jaccard script tier was removed by D-2. Detection is now judge-only for all same-namespace pairs. See D-2 rationale for why the two-tier design was not appropriate for span IDs.
+- **Deterministic filter chain (as of D-3):** Three deterministic gates govern every judge call: (1) namespace pre-filter (D-1) — skip pairs with different root namespaces; (2) `span_kind` pre-filter (D-3) — skip pairs where both spans have `span_kind` and those values differ; (3) post-validate (D-1 safety net) — after a duplicate verdict, re-confirm namespace match before emitting. The judge only sees same-namespace, structurally compatible pairs.
 - **Judge prompt warning — type-level discrimination:** The SCH-004 judge has a known false positive pattern: it hallucinates semantic equivalence between attributes that share a concept word but have different value types (e.g., a string label like "2026-W09" vs. an integer count, a boolean flag vs. an integer limit). The SCH-004 fix is tracked in issue #440. When writing the SCH-005 judge question in M3, explicitly include a negative constraint: "Spans with different structural roles or value semantics are NOT duplicates even if their names share words." The run-13 SCH-004 false positives are concrete examples of what this constraint must prevent.
 
 ---
