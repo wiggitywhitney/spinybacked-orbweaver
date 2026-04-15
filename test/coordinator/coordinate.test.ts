@@ -816,6 +816,7 @@ describe('coordinate', () => {
         (r) => r.ruleId === 'SCH-005' && !r.passed,
       );
       expect(sch005Failures).toHaveLength(0);
+      expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
       expect(result.filesFailed).toBe(0);
     });
 

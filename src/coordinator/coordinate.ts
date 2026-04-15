@@ -538,6 +538,8 @@ export async function coordinate(
   // Step 7e: SCH-005 registry span deduplication check (advisory, degrade and warn on failure)
   // Runs after dispatch so extensions are committed and reuses the already-resolved registry.
   // Only failing results are pushed — passing "no duplicates found" is not surfaced.
+  // If resolvedRegistryAtEnd is absent (schema hash start failed or no schemaPath configured),
+  // emit a warning when a schema path is configured so the skip is not silent.
   if (resolvedRegistryAtEnd) {
     try {
       const sch005Deps = deps?.anthropicClient ? { client: deps.anthropicClient } : undefined;
@@ -554,6 +556,10 @@ export async function coordinate(
       const message = err instanceof Error ? err.message : String(err);
       runResult.warnings.push(`SCH-005 span deduplication check failed (degraded): ${message}`);
     }
+  } else if (config.schemaPath) {
+    runResult.warnings.push(
+      'SCH-005 span deduplication check skipped: registry not available (schema resolution may have failed at run start).',
+    );
   }
 
   // Step 8: Finalize — SDK init + dependencies (degrade and warn on failure)

@@ -45,7 +45,7 @@ export interface Sch005Result {
  * Returns each span's ID, optional brief, and optional span_kind for use in comparisons.
  *
  * @param resolvedRegistry - Raw resolved registry object from `weaver registry resolve -f json`
- * @returns Array of span definitions (id + optional brief)
+ * @returns Array of span definitions (id, optional brief, optional span_kind)
  */
 export function extractSpanDefinitions(resolvedRegistry: object): SpanDefinition[] {
   const registry = parseResolvedRegistry(resolvedRegistry);
