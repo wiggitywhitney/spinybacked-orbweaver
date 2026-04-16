@@ -69,7 +69,7 @@ The audit characterizes whether a rule's **detection logic** is sound and whethe
 
 ### Audit methodology
 
-For each advisory rule and orphaned implementation:
+For each advisory rule, cross-file rule, and orphaned implementation:
 1. Read the rule implementation
 2. Characterize what it detects and whether the detection logic is sound
 3. Characterize what fix the agent would apply when the rule fires
