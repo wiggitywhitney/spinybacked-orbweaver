@@ -192,15 +192,19 @@ export class JavaScriptProvider implements LanguageProvider {
     });
     const sourceFile = project.createSourceFile('file.js', source);
     const exports: ExportInfo[] = [];
+    const seen = new Set<string>();
 
     // Named function declarations: export function foo() {}
+    // export default function foo() {} — tracked under key 'default' to prevent
+    // getDefaultExportSymbol() from adding a second entry for the same declaration.
     for (const fn of sourceFile.getFunctions()) {
       if (fn.isExported()) {
-        exports.push({
-          name: fn.getName() ?? '<anonymous>',
-          lineNumber: fn.getStartLineNumber(),
-          isDefault: fn.isDefaultExport(),
-        });
+        const name = fn.getName() ?? '<anonymous>';
+        const isDefault = fn.isDefaultExport();
+        const seenKey = isDefault ? 'default' : name;
+        if (seen.has(seenKey)) continue;
+        seen.add(seenKey);
+        exports.push({ name, lineNumber: fn.getStartLineNumber(), isDefault });
       }
     }
 
@@ -208,11 +212,10 @@ export class JavaScriptProvider implements LanguageProvider {
     for (const varStatement of sourceFile.getVariableStatements()) {
       if (varStatement.isExported()) {
         for (const decl of varStatement.getDeclarations()) {
-          exports.push({
-            name: decl.getName(),
-            lineNumber: varStatement.getStartLineNumber(),
-            isDefault: false,
-          });
+          const name = decl.getName();
+          if (seen.has(name)) continue;
+          seen.add(name);
+          exports.push({ name, lineNumber: varStatement.getStartLineNumber(), isDefault: false });
         }
       }
     }
@@ -221,27 +224,26 @@ export class JavaScriptProvider implements LanguageProvider {
     for (const exportDecl of sourceFile.getExportDeclarations()) {
       if (!exportDecl.isNamespaceExport()) {
         for (const named of exportDecl.getNamedExports()) {
-          exports.push({
-            name: named.getNameNode().getText(),
-            lineNumber: exportDecl.getStartLineNumber(),
-            isDefault: false,
-          });
+          const name = named.getNameNode().getText();
+          if (seen.has(name)) continue;
+          seen.add(name);
+          exports.push({ name, lineNumber: exportDecl.getStartLineNumber(), isDefault: false });
         }
       }
     }
 
-    // Default exports: export default ...
-    const defaultExportSymbol = sourceFile.getDefaultExportSymbol();
-    if (defaultExportSymbol !== undefined) {
-      const declarations = defaultExportSymbol.getDeclarations();
-      if (declarations.length > 0) {
-        const decl = declarations[0];
-        if (decl !== undefined) {
-          exports.push({
-            name: 'default',
-            lineNumber: decl.getStartLineNumber(),
-            isDefault: true,
-          });
+    // Default exports: export default <expression>
+    // Skip when getFunctions() already registered the default (e.g. export default function foo() {})
+    if (!seen.has('default')) {
+      const defaultExportSymbol = sourceFile.getDefaultExportSymbol();
+      if (defaultExportSymbol !== undefined) {
+        const declarations = defaultExportSymbol.getDeclarations();
+        if (declarations.length > 0) {
+          const decl = declarations[0];
+          if (decl !== undefined) {
+            seen.add('default');
+            exports.push({ name: 'default', lineNumber: decl.getStartLineNumber(), isDefault: true });
+          }
         }
       }
     }

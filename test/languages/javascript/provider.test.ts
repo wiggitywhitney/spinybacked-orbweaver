@@ -230,6 +230,13 @@ export { foo, bar };`;
       const source = `function internal() {}`;
       expect(provider.findExports(source)).toHaveLength(0);
     });
+
+    it('does not produce duplicate entries for export default function foo() {}', () => {
+      const source = `export default function foo() {}`;
+      const exports = provider.findExports(source);
+      expect(exports).toHaveLength(1);
+      expect(exports[0]).toMatchObject({ name: 'foo', isDefault: true });
+    });
   });
 
   describe('classifyFunction', () => {
