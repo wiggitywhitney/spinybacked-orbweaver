@@ -88,9 +88,9 @@ For orphaned implementations: read the code, understand what it does and why it 
 - **Rebuild** — detection logic uses the wrong algorithm; requires a replacement approach; documented for a downstream PRD
 - **Delete** — rule is not producing useful signal and cannot be salvaged
 
-### Constraint for ghost/orphaned rules
+### Constraint for shared-file and orphaned rules
 
-If a ghost registration or orphaned implementation is brought into active use, it must be built with actionable finding output from the start. There is no "make it advisory for now and fix later" path for rules entering the active set.
+If a shared-file rule or orphaned implementation is brought into active use, it must be built with actionable finding output from the start. There is no "make it advisory for now and fix later" path for rules entering the active set.
 
 ---
 
