@@ -181,7 +181,7 @@ Rules in scope: CDQ-006 (advisory), CDQ-007, CDQ-009, CDQ-010 (orphaned — impl
 
 ### Milestone M2: COV rules
 
-Rules in scope: COV-004, COV-005 (advisory).
+Rules in scope: COV-004 (async operations have spans), COV-005 (domain-specific attributes present) — both advisory.
 
 Same process as M1.
 
@@ -192,7 +192,7 @@ Same process as M1.
 
 ### Milestone M3: NDS rules
 
-Rules in scope: NDS-004, NDS-005, NDS-006 (advisory).
+Rules in scope: NDS-004 (exported function signature preservation), NDS-005 (control flow preservation), NDS-006 (module system preservation) — all advisory.
 
 Same process as M1.
 
@@ -204,7 +204,7 @@ Same process as M1.
 
 ### Milestone M4: RST rules
 
-Rules in scope: RST-001, RST-002, RST-003, RST-004, RST-005 (advisory).
+Rules in scope: RST-001 (no spans on utility functions), RST-002 (no spans on trivial accessors), RST-003 (no duplicate spans on thin wrappers), RST-004 (no spans on internal implementation details), RST-005 (no double-instrumentation) — all advisory.
 
 Same process as M1.
 
