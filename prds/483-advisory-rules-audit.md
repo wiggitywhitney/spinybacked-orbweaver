@@ -49,11 +49,14 @@ The audit closes with a complete, durable record of the rules landscape and leav
 - API-001 — non-API OTel package imports forbidden (e.g., `@opentelemetry/semantic-conventions`; in `api001.ts`)
 - API-003 — vendor-specific OTel SDK imports forbidden (in `api001.ts`)
 - API-004 — OTel SDK internal/implementation package imports forbidden; also flags SDK packages in library dependency manifests (split across `api001.ts` and `api002.ts`)
-- API-002 — `@opentelemetry/api` dependency placement (added as advisory in PRD #135, same batch as NDS-006 and RST-005 above)
+- API-002 — `@opentelemetry/api` dependency placement (added as advisory in PRD #135, same batch as NDS-006 and RST-005 above; in `api002.ts`)
 
 **Conditionally advisory** (advisory only when schema is sparse — worth reviewing the downgrade logic itself):
 - SCH-001 — span names match registry operations
 - SCH-002 — attribute keys match registry names
+
+**Cross-file rule** (in `JS_RULES` for parity tracking; intentionally excluded from `tier2Checks` because cross-file checks run outside the per-file validation chain):
+- CDQ-008 — consistent tracer naming convention (in `src/validation/tier2/cdq008.ts`); audit should evaluate whether this architectural split is correct
 
 **Orphaned implementations** (file exists, not in `tier2Checks`):
 - CDQ-007 — attribute data quality (PII names, filesystem paths, nullable access)
@@ -161,12 +164,12 @@ Human review is required before any decision is recorded. For each rule: the imp
 
 ### Milestone M1: CDQ rules
 
-Rules in scope: CDQ-006 (advisory), CDQ-007, CDQ-009, CDQ-010 (orphaned — implementation files exist but not registered in `tier2Checks`).
+Rules in scope: CDQ-006 (advisory), CDQ-007, CDQ-009, CDQ-010 (orphaned — implementation files exist but not registered in `tier2Checks`), CDQ-008 (cross-file rule — in `JS_RULES` for parity tracking but intentionally excluded from `tier2Checks`; implementation in `src/validation/tier2/cdq008.ts`).
 
 **Process for each rule:**
 1. Read the rule's implementation file in `src/languages/javascript/rules/` (e.g., `cdq006.ts`, `cdq007.ts`). Also search `src/fix-loop/` for where the rule's ID appears to find how its finding is formatted and fed back to the LLM — understanding what the agent actually sees when the rule fires is required to assess whether the finding is actionable.
 2. Characterize: what it detects, whether detection logic is sound, what fix the agent would apply when fired, whether that fix is safe
-3. Present findings to Whitney and discuss. Introduce the rule by its plain-language description alongside its ID — e.g., "COV-001 (entry points have spans)" not just "COV-001." Do this every time, even for rules discussed previously in the session.
+3. Present findings to Whitney and discuss. Introduce the rule by its plain-language description alongside its ID — e.g., "CDQ-006 (expensive attribute computation guarded)" not just "CDQ-006." Do this every time, even for rules discussed previously in the session.
 4. After sign-off: record the decision and rationale in `docs/reviews/advisory-rules-audit-2026-04-15.md` under a CDQ section
 5. For orphaned rules: also assess why the rule was not registered — intentional deferral or oversight?
 
@@ -174,6 +177,7 @@ Rules in scope: CDQ-006 (advisory), CDQ-007, CDQ-009, CDQ-010 (orphaned — impl
 
 - [ ] CDQ-006 (expensive attribute computation guarded) audited, discussed, decision recorded
 - [ ] CDQ-007 (attribute data quality — PII names, filesystem paths, nullable access) audited, discussed, decision recorded
+- [ ] CDQ-008 (consistent tracer naming convention — cross-file rule) audited, discussed, decision recorded
 - [ ] CDQ-009 (undefined guard on span attribute values) audited, discussed, decision recorded
 - [ ] CDQ-010 (untyped string method on property access) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
