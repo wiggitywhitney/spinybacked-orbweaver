@@ -21,7 +21,7 @@ Some advisory rules may also have flawed detection logic — a proxy that misfir
 
 ## Solution
 
-Audit every advisory rule, ghost registration, and orphaned implementation. For each, determine whether it should be kept as-is, promoted to blocking, refactored (small scope change), rebuilt (replacement algorithm), or deleted.
+Audit every advisory rule, shared-file rule, and orphaned implementation. For each, determine whether it should be kept as-is, promoted to blocking, refactored (small scope change), rebuilt (replacement algorithm), or deleted.
 
 Apply simple decisions — promotions to blocking, deletions, registration fixes — immediately within the milestone where the decision is made, while the context is live. Document rebuild and complex-refactor decisions in the audit artifact with enough detail that a downstream PRD can be written from the document alone, without re-auditing the rule.
 
