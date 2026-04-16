@@ -210,10 +210,11 @@ export const bar = () => 2;`;
       expect(exports.some(e => e.name === 'bar' && !e.isDefault)).toBe(true);
     });
 
-    it('identifies default exports', () => {
+    it('identifies anonymous default export as single entry', () => {
       const source = `export default function() {}`;
       const exports = provider.findExports(source);
-      expect(exports.some(e => e.isDefault)).toBe(true);
+      expect(exports).toHaveLength(1);
+      expect(exports[0]).toMatchObject({ isDefault: true });
     });
 
     it('finds re-exported names', () => {
@@ -229,6 +230,13 @@ export { foo, bar };`;
     it('returns empty array for no exports', () => {
       const source = `function internal() {}`;
       expect(provider.findExports(source)).toHaveLength(0);
+    });
+
+    it('does not produce duplicate entries for export default function foo() {}', () => {
+      const source = `export default function foo() {}`;
+      const exports = provider.findExports(source);
+      expect(exports).toHaveLength(1);
+      expect(exports[0]).toMatchObject({ name: 'foo', isDefault: true });
     });
   });
 
