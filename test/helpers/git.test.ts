@@ -22,7 +22,7 @@ describe('makeTestRepo', () => {
     testDir = join(tmpdir(), `spiny-orb-makeTestRepo-${randomUUID()}`);
     const git = await makeTestRepo(testDir);
     const status = await git.status();
-    expect(status).toBeDefined(); // repo is valid and responsive
+    expect(status.isClean()).toBe(true);
   });
 
   it('sets commit.gpgsign to false', async () => {
