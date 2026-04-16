@@ -118,6 +118,15 @@ If `npm-release-test.yml` fails after a release, the package was published but t
 
 To trigger `npm-release-test.yml` manually before a release (e.g., to validate packaging changes), create a PR with the `run-acceptance` label.
 
+## Communicating About Validation Rules
+
+When discussing validation rules with Whitney, always state what the rule checks for in plain English alongside its ID. Never refer to a rule by its code name alone — "COV-001" means nothing in conversation without the description.
+
+**Do**: "COV-001 (entry points have spans) fires here because..."
+**Don't**: "COV-001 fires here because..."
+
+Do NOT use a rule ID without its description in any context: audit findings, failure explanations, design decisions, PRD milestones, or inline code comments.
+
 ## Testing: Weaver CLI
 
 **Never mock the Weaver CLI.** Weaver is installed locally and runs fast (<1s per command except live-check). All tests that exercise Weaver behavior must run against the real binary. Mocking Weaver has hidden real bugs (wrong output format assumptions, deprecated commands, missing flags). Use real registry fixtures instead of fabricating Weaver output.
