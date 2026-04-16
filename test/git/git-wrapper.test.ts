@@ -18,6 +18,7 @@ import {
   resolveAuthenticatedUrl,
   validateCredentials,
 } from '../../src/git/git-wrapper.ts';
+import { makeTestRepo } from '../helpers/git.ts';
 
 /**
  * Create an isolated git repo in a temp directory for testing.
@@ -25,12 +26,7 @@ import {
  */
 async function initTestRepo(): Promise<string> {
   const dir = join(tmpdir(), `spiny-orb-git-test-${randomUUID()}`);
-  await mkdir(dir, { recursive: true });
-  const git = simpleGit(dir);
-  await git.init();
-  await git.addConfig('user.email', 'test@example.com');
-  await git.addConfig('user.name', 'Test');
-  await git.addConfig('commit.gpgsign', 'false');
+  const git = await makeTestRepo(dir);
   // Create initial commit so we have a branch to work from
   const readmePath = join(dir, 'README.md');
   await writeFile(readmePath, '# Test Repo\n');

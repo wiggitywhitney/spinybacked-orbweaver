@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { simpleGit } from 'simple-git';
 import { pushBranch, createBranch, validateCredentials } from '../../src/git/git-wrapper.ts';
 import { createPr } from '../../src/deliverables/git-workflow.ts';
+import { makeTestRepo } from '../helpers/git.ts';
 
 const GITHUB_TOKEN_AVAILABLE = !!process.env.GITHUB_TOKEN;
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
@@ -21,11 +22,9 @@ const REPO_ROOT = join(import.meta.dirname, '..', '..');
 async function cloneTestRepo(): Promise<string> {
   const dir = join(tmpdir(), `spiny-orb-e2e-pr-${randomUUID()}`);
   await mkdir(dir, { recursive: true });
-  const git = simpleGit(dir);
-  await git.clone(REPO_ROOT, dir, ['--depth', '1', '--single-branch']);
-  await git.addConfig('user.email', 'test@example.com');
-  await git.addConfig('user.name', 'E2E Test');
-  await git.addConfig('commit.gpgsign', 'false');
+  await simpleGit(dir).clone(REPO_ROOT, dir, ['--depth', '1', '--single-branch']);
+  // Apply standard test config (makeTestRepo reinits safely on a cloned repo)
+  const git = await makeTestRepo(dir);
 
   // Point the remote to the real GitHub repo for push
   const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: REPO_ROOT })

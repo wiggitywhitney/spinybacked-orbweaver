@@ -16,16 +16,12 @@ import { renderPrSummary } from '../../src/deliverables/pr-summary.ts';
 import type { RunResult, CoordinatorCallbacks } from '../../src/coordinator/types.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
+import { makeTestRepo } from '../helpers/git.ts';
 
 /** Create an isolated git repo with initial commit. */
 async function initTestRepo(): Promise<string> {
   const dir = join(tmpdir(), `spiny-orb-e2e-git-${randomUUID()}`);
-  await mkdir(dir, { recursive: true });
-  const git = simpleGit(dir);
-  await git.init();
-  await git.addConfig('user.email', 'test@example.com');
-  await git.addConfig('user.name', 'Test');
-  await git.addConfig('commit.gpgsign', 'false');
+  const git = await makeTestRepo(dir);
   // Create initial files
   await writeFile(join(dir, 'README.md'), '# Test\n');
   await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'test', version: '1.0.0' }, null, 2));

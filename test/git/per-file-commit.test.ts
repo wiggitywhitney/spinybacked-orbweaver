@@ -9,16 +9,12 @@ import { randomUUID } from 'node:crypto';
 import { simpleGit } from 'simple-git';
 import { commitFileResult } from '../../src/git/per-file-commit.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
+import { makeTestRepo } from '../helpers/git.ts';
 
 /** Create an isolated git repo with an initial commit. */
 async function initTestRepo(): Promise<string> {
   const dir = join(tmpdir(), `spiny-orb-perfile-test-${randomUUID()}`);
-  await mkdir(dir, { recursive: true });
-  const git = simpleGit(dir);
-  await git.init();
-  await git.addConfig('user.email', 'test@example.com');
-  await git.addConfig('user.name', 'Test');
-  await git.addConfig('commit.gpgsign', 'false');
+  const git = await makeTestRepo(dir);
   const readmePath = join(dir, 'README.md');
   await writeFile(readmePath, '# Test Repo\n');
   await git.add('README.md');
