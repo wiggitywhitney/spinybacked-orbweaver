@@ -1,12 +1,12 @@
 // ABOUTME: Tests for instrumentWithRetry — single-attempt, token budget, multi-turn fix, fresh regen, oscillation, function-level fallback.
-// ABOUTME: Milestones 2-6 + milestone 7 — verifies FileResult population, file revert, budget enforcement, retry, oscillation, and fallback flow.
+// ABOUTME: Milestones 2-6 + milestone 7 + NDS-003 repeat escalation (#495).
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, detectMalformedExtensions, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
+import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, detectMalformedExtensions, detectRepeatNds003Lines, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
@@ -3374,5 +3374,232 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     for (const opt of receivedOptions) {
       expect(opt?.maxOutputTokens).toBe(expectedBudget);
     }
+  });
+});
+
+// ─── NDS-003 repeat-line escalation (#495) ────────────────────────────────────
+
+describe('detectRepeatNds003Lines', () => {
+  function makeNds003(lineNumber: number, filePath = 'file.js'): CheckResult {
+    return {
+      ruleId: 'NDS-003',
+      passed: false,
+      filePath,
+      lineNumber,
+      message: `NDS-003: original line ${lineNumber} missing/modified`,
+      tier: 2,
+      blocking: true,
+    };
+  }
+
+  it('returns empty set when fewer than 2 attempts have violations', () => {
+    expect(detectRepeatNds003Lines([])).toEqual(new Set());
+    expect(detectRepeatNds003Lines([[makeNds003(27)]])).toEqual(new Set());
+  });
+
+  it('returns empty set when NDS-003 fires on different lines across attempts', () => {
+    const violations = [
+      [makeNds003(27)],
+      [makeNds003(35)],
+    ];
+    expect(detectRepeatNds003Lines(violations)).toEqual(new Set());
+  });
+
+  it('returns the repeated line number when NDS-003 fires on the same line in last two attempts', () => {
+    const violations = [
+      [makeNds003(27)],
+      [makeNds003(27)],
+    ];
+    expect(detectRepeatNds003Lines(violations)).toEqual(new Set([27]));
+  });
+
+  it('returns multiple repeated lines when several repeat', () => {
+    const violations = [
+      [makeNds003(10), makeNds003(27)],
+      [makeNds003(10), makeNds003(27)],
+    ];
+    expect(detectRepeatNds003Lines(violations)).toEqual(new Set([10, 27]));
+  });
+
+  it('only compares the last two attempts, ignoring earlier ones', () => {
+    // Line 27 repeated in attempts 1+2 but not in attempts 2+3
+    const violations = [
+      [makeNds003(27)],
+      [makeNds003(27)],
+      [makeNds003(99)], // attempt 3: different line
+    ];
+    expect(detectRepeatNds003Lines(violations)).toEqual(new Set());
+  });
+
+  it('returns empty set when last two attempts have no NDS-003 violations', () => {
+    const violations: CheckResult[][] = [[], []];
+    expect(detectRepeatNds003Lines(violations)).toEqual(new Set());
+  });
+});
+
+describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
+  let testDir: string;
+  let testFilePath: string;
+  // originalContent has 30 lines so line 27 is within bounds
+  const originalContent = Array.from({ length: 30 }, (_, i) =>
+    i === 26
+      ? 'const systemContent = `${guidelines}`;'
+      : `const line${i + 1} = ${i + 1};`,
+  ).join('\n') + '\n';
+
+  const mockContext: ConversationContext = {
+    userMessage: 'instrument this file',
+    assistantResponseBlocks: [{ type: 'text', text: '{"instrumentedCode": "..."}' }],
+  };
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-nds003-escalation-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  function makeNds003Validation(filePath: string, lineNumber: number): ValidationResult {
+    const failure: CheckResult = {
+      ruleId: 'NDS-003',
+      passed: false,
+      filePath,
+      lineNumber,
+      message: `NDS-003: original line ${lineNumber} missing/modified: const systemContent`,
+      tier: 2,
+      blocking: true,
+    };
+    return {
+      passed: false,
+      tier1Results: [],
+      tier2Results: [failure],
+      blockingFailures: [failure],
+      advisoryFindings: [],
+    };
+  }
+
+  it('includes original line content in fresh-regen failureHint when NDS-003 repeats on same line', async () => {
+    // Attempts 1 and 2 both fail NDS-003 on line 27; attempt 3 is fresh-regen
+    let attempt = 0;
+    let capturedFailureHint: string | undefined;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+        attempt++;
+        if (attempt === 3) capturedFailureHint = opts?.failureHint;
+        return {
+          success: true,
+          output: makeInstrumentationOutput({ instrumentedCode: originalContent }),
+          conversationContext: mockContext,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => {
+        if (attempt <= 2) return makeNds003Validation(testFilePath, 27);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    expect(capturedFailureHint).toBeDefined();
+    expect(capturedFailureHint).toContain(
+      'IMPORTANT — The following lines triggered NDS-003 in two consecutive attempts. You modified them after receiving NDS-003 feedback. Do NOT modify these lines:',
+    );
+    expect(capturedFailureHint).toContain(
+      'Line 27 must be reproduced exactly: const systemContent = `${guidelines}`;',
+    );
+  });
+
+  it('includes original line content in multi-turn feedbackMessage when NDS-003 repeats on same line (partial overlap)', async () => {
+    // Oscillation fires only on identical error key sets. With PARTIAL overlap
+    // (line 27 repeats but other lines differ), oscillation does NOT fire and
+    // attempt 3 proceeds as multi-turn-fix with the escalated feedbackMessage.
+    let attempt = 0;
+    const capturedMessages: Array<string | undefined> = [];
+
+    function makeNds003Multi(lines: number[]): ValidationResult {
+      const failures = lines.map(ln => ({
+        ruleId: 'NDS-003',
+        passed: false,
+        filePath: testFilePath,
+        lineNumber: ln,
+        message: `NDS-003: original line ${ln} missing/modified`,
+        tier: 2 as const,
+        blocking: true,
+      }));
+      return { passed: false, tier1Results: [], tier2Results: failures, blockingFailures: failures, advisoryFindings: [] };
+    }
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+        attempt++;
+        capturedMessages.push(opts?.feedbackMessage);
+        return {
+          success: true,
+          output: makeInstrumentationOutput({ instrumentedCode: originalContent }),
+          conversationContext: mockContext,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => {
+        // Lines 27+35 on attempt 1, lines 27+10 on attempt 2 → different key sets, no oscillation
+        // but line 27 repeats → escalation should appear in attempt 3 feedbackMessage
+        if (attempt === 1) return makeNds003Multi([27, 35]);
+        if (attempt === 2) return makeNds003Multi([27, 10]);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    // maxFixAttempts=3 → 4 total attempts: initial, multi-turn, multi-turn, fresh-regen
+    // Attempt 3 is multi-turn (not yet fresh-regen), so it gets feedbackMessage
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps },
+    );
+
+    // Attempt 3 (multi-turn-fix): line 27 repeated from attempt 2 → escalation present
+    const attempt3Message = capturedMessages[2];
+    expect(attempt3Message).toBeDefined();
+    expect(attempt3Message).toContain(
+      'IMPORTANT — The following lines triggered NDS-003 in two consecutive attempts. You modified them after receiving NDS-003 feedback. Do NOT modify these lines:',
+    );
+    expect(attempt3Message).toContain(
+      'Line 27 must be reproduced exactly: const systemContent = `${guidelines}`;',
+    );
+  });
+
+  it('does NOT escalate when NDS-003 fires on different lines across attempts', async () => {
+    let attempt = 0;
+    let capturedFailureHint: string | undefined;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+        attempt++;
+        if (attempt === 3) capturedFailureHint = opts?.failureHint;
+        return {
+          success: true,
+          output: makeInstrumentationOutput({ instrumentedCode: originalContent }),
+          conversationContext: mockContext,
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => {
+        // Different lines on each attempt — no repeat
+        if (attempt === 1) return makeNds003Validation(testFilePath, 27);
+        if (attempt === 2) return makeNds003Validation(testFilePath, 10);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+    );
+
+    // Hint should exist (there was an NDS-003 failure) but should NOT contain
+    // the escalation block (only present when lines repeat across attempts)
+    expect(capturedFailureHint).toBeDefined();
+    expect(capturedFailureHint).not.toContain('must be reproduced exactly');
   });
 });
