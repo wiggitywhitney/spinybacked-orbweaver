@@ -57,6 +57,6 @@ A secondary option: detect LangGraph-style files (functions that return state ob
 
 ---
 
-## Follow-on implementation issue needed
+## Follow-on implementation issue
 
-Create an issue for: escalate NDS-003 retry guidance when the same line fails across consecutive attempts — include the exact original line content in the fix prompt and add "reproduce exactly" language.
+**[#495](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/495)** — Escalate NDS-003 retry guidance when the same line fails across consecutive attempts: include the exact original line content in the fix prompt and add "reproduce exactly" language.
