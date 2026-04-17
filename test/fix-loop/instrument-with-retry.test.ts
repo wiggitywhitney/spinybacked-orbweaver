@@ -3507,7 +3507,9 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     );
 
     expect(capturedFailureHint).toBeDefined();
-    expect(capturedFailureHint).toContain('IMPORTANT — The following lines triggered NDS-003');
+    expect(capturedFailureHint).toContain(
+      'IMPORTANT — The following lines triggered NDS-003 in two consecutive attempts. You modified them after receiving NDS-003 feedback. Do NOT modify these lines:',
+    );
     expect(capturedFailureHint).toContain(
       'Line 27 must be reproduced exactly: const systemContent = `${guidelines}`;',
     );
@@ -3561,7 +3563,9 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     // Attempt 3 (multi-turn-fix): line 27 repeated from attempt 2 → escalation present
     const attempt3Message = capturedMessages[2];
     expect(attempt3Message).toBeDefined();
-    expect(attempt3Message).toContain('IMPORTANT — The following lines triggered NDS-003');
+    expect(attempt3Message).toContain(
+      'IMPORTANT — The following lines triggered NDS-003 in two consecutive attempts. You modified them after receiving NDS-003 feedback. Do NOT modify these lines:',
+    );
     expect(attempt3Message).toContain(
       'Line 27 must be reproduced exactly: const systemContent = `${guidelines}`;',
     );
