@@ -3507,10 +3507,10 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     );
 
     expect(capturedFailureHint).toBeDefined();
-    // Must include the original line 27 content
-    expect(capturedFailureHint).toContain('const systemContent = `${guidelines}`');
-    // Must include a preservation directive
-    expect(capturedFailureHint).toContain('27');
+    expect(capturedFailureHint).toContain('IMPORTANT — The following lines triggered NDS-003');
+    expect(capturedFailureHint).toContain(
+      'Line 27 must be reproduced exactly: const systemContent = `${guidelines}`;',
+    );
   });
 
   it('includes original line content in multi-turn feedbackMessage when NDS-003 repeats on same line (partial overlap)', async () => {
@@ -3561,8 +3561,10 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     // Attempt 3 (multi-turn-fix): line 27 repeated from attempt 2 → escalation present
     const attempt3Message = capturedMessages[2];
     expect(attempt3Message).toBeDefined();
-    expect(attempt3Message).toContain('const systemContent = `${guidelines}`');
-    expect(attempt3Message).toContain('27');
+    expect(attempt3Message).toContain('IMPORTANT — The following lines triggered NDS-003');
+    expect(attempt3Message).toContain(
+      'Line 27 must be reproduced exactly: const systemContent = `${guidelines}`;',
+    );
   });
 
   it('does NOT escalate when NDS-003 fires on different lines across attempts', async () => {
