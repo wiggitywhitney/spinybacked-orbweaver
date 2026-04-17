@@ -224,6 +224,8 @@ describe('git-wrapper', () => {
 
   // Tests that hit real github.com need longer timeouts for slow/unstable connections
   const NETWORK_TEST_TIMEOUT = 30_000;
+  // Local git push tests can be slow under full-suite parallel load (I/O contention from other repos)
+  const LOCAL_PUSH_TIMEOUT = 15_000;
 
   describe('pushBranch with GITHUB_TOKEN', () => {
     let bareDir: string;
@@ -244,7 +246,7 @@ describe('git-wrapper', () => {
       await rm(bareDir, { recursive: true, force: true });
     });
 
-    it('logs path=bare-push when no GITHUB_TOKEN is set', async () => {
+    it('logs path=bare-push when no GITHUB_TOKEN is set', { timeout: LOCAL_PUSH_TIMEOUT }, async () => {
       const originalToken = process.env.GITHUB_TOKEN;
       const stderrChunks: string[] = [];
       const originalWrite = process.stderr.write.bind(process.stderr);
