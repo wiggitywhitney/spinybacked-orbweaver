@@ -206,14 +206,70 @@ function buildValidationConfig(
  * Combines a preamble with the structured validation feedback.
  *
  * @param validationFeedback - Formatted validation errors from formatFeedbackForAgent
+ * @param existingSpanNames - Span names already used by other files in this run
+ * @param repeatLineEscalation - Optional escalation block for NDS-003 repeat offenders
  * @returns Complete feedback message for the LLM
  */
-function buildFixPrompt(validationFeedback: string, existingSpanNames?: string[]): string {
+function buildFixPrompt(
+  validationFeedback: string,
+  existingSpanNames?: string[],
+  repeatLineEscalation?: string,
+): string {
   let prompt = `The instrumented file has validation errors. Fix ONLY the failing rules listed below. Do not restructure code that is not related to a failing rule. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
   if (existingSpanNames && existingSpanNames.length > 0) {
     prompt += `\n\nReminder: these span names are already in use by other files — do not reuse them: ${existingSpanNames.join(', ')}`;
   }
+  if (repeatLineEscalation) {
+    prompt += repeatLineEscalation;
+  }
   return prompt;
+}
+
+/**
+ * Detect NDS-003 failures that have occurred on the same source line in the last
+ * two consecutive attempts. These are structural repeat offenders — the agent
+ * modified the same line after receiving NDS-003 feedback, so the standard message
+ * is insufficient.
+ *
+ * @param violations - NDS-003 CheckResult arrays accumulated per attempt
+ * @returns Set of line numbers that appeared in both the last and second-to-last attempt
+ */
+export function detectRepeatNds003Lines(violations: import('../validation/types.ts').CheckResult[][]): Set<number> {
+  if (violations.length < 2) return new Set();
+  const last = violations[violations.length - 1];
+  const prev = violations[violations.length - 2];
+  const prevLines = new Set(
+    prev.map(v => v.lineNumber).filter((n): n is number => n !== null),
+  );
+  const repeated = new Set<number>();
+  for (const v of last) {
+    if (v.lineNumber !== null && prevLines.has(v.lineNumber)) {
+      repeated.add(v.lineNumber);
+    }
+  }
+  return repeated;
+}
+
+/**
+ * Build an escalation block for lines that have triggered NDS-003 across consecutive
+ * attempts. Includes the exact original line content and a strong preservation directive.
+ * Appended to the multi-turn fix prompt or fresh-regen hint when repeats are detected.
+ *
+ * @param repeatLines - Line numbers that have repeated NDS-003 violations
+ * @param originalCode - The unmodified source file content
+ * @returns Escalation text to append, or empty string when no repeats
+ */
+function buildRepeatLineEscalation(repeatLines: Set<number>, originalCode: string): string {
+  if (repeatLines.size === 0) return '';
+  const sourceLines = originalCode.split('\n');
+  const parts: string[] = [
+    '\n\nIMPORTANT — The following lines triggered NDS-003 in two consecutive attempts. You modified them after receiving NDS-003 feedback. Do NOT modify these lines:',
+  ];
+  for (const lineNum of [...repeatLines].sort((a, b) => a - b)) {
+    const content = sourceLines[lineNum - 1] ?? '';
+    parts.push(`  Line ${lineNum} must be reproduced exactly: ${content.trim()}`);
+  }
+  return parts.join('\n');
 }
 
 /**
@@ -472,17 +528,26 @@ async function executeRetryLoop(
     if (plannedStrategy === 'multi-turn-fix' && lastConversationContext && lastValidation) {
       // Multi-turn fix: grow the conversation with validation feedback.
       // Use low effort to constrain thinking — corrections should be targeted, not exploratory.
+      // When NDS-003 fires on the same line in the last two attempts, escalate with the
+      // exact original line content so the agent cannot repeat the same modification.
+      const repeatLines = detectRepeatNds003Lines(nds003ViolationsPerAttempt);
+      const escalation = buildRepeatLineEscalation(repeatLines, originalCode);
       callOptions = {
         conversationContext: lastConversationContext,
-        feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation), existingSpanNames),
+        feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation), existingSpanNames, escalation || undefined),
         maxOutputTokens: outputBudget,
         effortOverride: 'low',
         existingSpanNames,
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
-      // Fresh regeneration: new conversation with failure category hint
+      // Fresh regeneration: new conversation with failure category hint.
+      // Append repeat-line escalation when NDS-003 has fired on the same line
+      // across the last two attempts — the hint anchors the agent on what not to touch.
+      const repeatLines = detectRepeatNds003Lines(nds003ViolationsPerAttempt);
+      const escalation = buildRepeatLineEscalation(repeatLines, originalCode);
+      const baseHint = buildFailureHint(lastValidation) ?? '';
       callOptions = {
-        failureHint: buildFailureHint(lastValidation),
+        failureHint: (baseHint + escalation) || undefined,
         maxOutputTokens: outputBudget,
         existingSpanNames,
       };
