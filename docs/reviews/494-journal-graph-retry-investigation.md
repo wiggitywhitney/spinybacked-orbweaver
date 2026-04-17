@@ -21,7 +21,10 @@ The 3-attempt pattern is structural. The same failure class (NDS-003 Code Preser
 **Run-13** (spiny-orb-output.log):
 - PARTIAL result, 3 spans, 3 attempts
 - `summaryNode` skipped all 3 attempts with the same error:
-  > `NDS-003: original line 27 missing/modified: const systemContent = \`${guidelines}\``
+  > NDS-003: original line 27 missing/modified:
+  > ```javascript
+  > const systemContent = `${guidelines}`
+  > ```
 
 **Run-14** (actionable-fix-output.md, from eval team):
 - SUCCESS, 4 spans, 3 attempts
@@ -29,7 +32,11 @@ The 3-attempt pattern is structural. The same failure class (NDS-003 Code Preser
 
 ### Root cause
 
-The agent consistently modifies `const systemContent = \`${guidelines}\`` (line 27 of `summaryNode`) when instrumenting the function. The variable holds a large template literal built from `guidelines`. The model appears to interact with this variable — possibly trying to capture it as a span attribute or restructure the function body around it — and modifies it rather than leaving it intact.
+The agent consistently modifies this line (line 27 of `summaryNode`) when instrumenting the function:
+
+```javascript
+const systemContent = `${guidelines}`
+``` The variable holds a large template literal built from `guidelines`. The model appears to interact with this variable — possibly trying to capture it as a span attribute or restructure the function body around it — and modifies it rather than leaving it intact.
 
 The NDS-003 fix loop tells the agent which line was modified and asks it not to modify it, but the same violation recurs on the next attempt. The loop's guidance is not strong enough to prevent re-modification of this specific line across whole-file retries.
 
@@ -47,9 +54,12 @@ The failure is on the same line (or same category of line — large template lit
 
 When NDS-003 fires on the same line across two or more consecutive attempts, the retry guidance should include the exact original content of the failing line with an explicit preservation directive:
 
-> "You modified line N in a previous attempt. You MUST reproduce this line character-for-character:  
-> `const systemContent = \`${guidelines}\``  
+> "You modified line N in a previous attempt. You MUST reproduce this line character-for-character.
 > Do not restructure or reference this variable in instrumentation code."
+>
+> ```javascript
+> const systemContent = `${guidelines}`
+> ```
 
 This is a targeted escalation of the NDS-003 fix message for repeat failures. The current message names the line but does not repeat its exact content with an explicit "reproduce exactly" instruction.
 
