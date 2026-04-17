@@ -153,6 +153,7 @@ When the decision is `rebuild`, add a paragraph below the table row with:
 
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
+| 1 | Issue #493 (catch-block consistency validator) absorbed into M2 scope; #493 will be closed after M2 decision | COV-003 currently exempts non-rethrowing catch blocks as "expected condition" catches — the exact pattern LangGraph node functions use when returning degraded state on failure. Whether to modify that exemption or add a new consistency rule is a question M2 is positioned to answer. Eval run-14 surfaced inconsistent error recording across summaryNode vs technicalNode/dialogueNode. Building before auditing risks conflicting work. | 2026-04-17 |
 
 ---
 
@@ -189,6 +190,10 @@ Rules in scope: COV-004 (async operations have spans), COV-005 (domain-specific 
 
 Same process as M1.
 
+**Additional assessment (Decision 1):** Before auditing COV-004 and COV-005, read COV-003 (`src/languages/javascript/rules/cov003.ts`) — specifically its `isExpectedConditionCatch` function. COV-003 is blocking and not an audit target, but its exemption logic directly bears on the #493 question: the function currently treats all non-rethrowing catch blocks as "expected condition" catches (exempt from error recording). Assess whether this exemption is correct for LangGraph-style node functions that return degraded state on genuine LLM failures (e.g., `summaryNode`). Decide: modify COV-003's exemption, add a new consistency rule, or neither. Present findings to Whitney before recording the decision. Issue #493 will be closed after this assessment.
+
+- [ ] COV-003 `isExpectedConditionCatch` logic read and assessed (Decision 1)
+- [ ] Decision on COV-003 exemption vs new consistency rule discussed and recorded (closes #493)
 - [ ] COV-004 (async operations have spans) audited, discussed, decision recorded
 - [ ] COV-005 (domain-specific attributes present) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
