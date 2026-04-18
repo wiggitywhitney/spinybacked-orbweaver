@@ -224,7 +224,7 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
  * - Parameters renamed
  * - Exported functions removed entirely
  *
- * Blocking — parameter list comparison is direct AST equality with no
+ * Blocking — parameter list comparison is direct AST equality with no heuristics or fuzzy matching.
  *
  * @param originalCode - The original source code before instrumentation
  * @param instrumentedCode - The agent's instrumented output
