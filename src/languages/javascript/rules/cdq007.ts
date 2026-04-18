@@ -103,6 +103,8 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
     // Check 2: Filesystem path value — value is an identifier whose name suggests a path.
     // Tokenize by camelCase/underscore/hyphen/dot to avoid substring false positives
     // (e.g., "profileId" contains "file" but is not a path identifier).
+    // OTel file.* semantic convention attributes (e.g., file.path) expect full paths —
+    // exempt these from the privacy/security flag. https://opentelemetry.io/docs/specs/semconv/attributes-registry/file/
     if (Node.isIdentifier(valueArg)) {
       const tokens = valueArg.getText()
         .split(/(?<=[a-z])(?=[A-Z])|[_\-.]/)
@@ -114,6 +116,10 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
         PATH_IDENTIFIER_PATTERNS.some((p) => tokens.includes(p)) ||
         tokens.some((t) => PATH_COMPOUND_TOKENS.has(t))
       ) {
+        // OTel file.* attributes: full path is spec-correct, not a privacy concern.
+        if (Node.isStringLiteral(keyArg) && String(keyArg.getLiteralValue()).startsWith('file.')) {
+          return;
+        }
         findings.push({
           line,
           message:

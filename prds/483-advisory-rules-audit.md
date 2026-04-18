@@ -71,11 +71,12 @@ The audit characterizes whether a rule's **detection logic** is sound and whethe
 
 For each advisory rule, cross-file rule, and orphaned implementation:
 1. Read the rule implementation
-2. Characterize what it detects and whether the detection logic is sound
-3. Characterize what fix the agent would apply when the rule fires
-4. Assess whether that fix is safe (no new blocking failures, no ambiguity)
-5. Present findings to Whitney for discussion and sign-off
-6. Record the agreed decision and rationale in the audit document
+2. **Check OTel spec alignment (Decision 4):** Before characterizing detection logic, consult the OTel specification to determine whether the rule enforces an OTel best practice or is a project-specific quality concern. Key sources: [OTel Trace API](https://opentelemetry.io/docs/specs/otel/trace/api/), [Semantic conventions](https://opentelemetry.io/docs/specs/semconv/), [Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/), [Exceptions spec](https://opentelemetry.io/docs/specs/otel/trace/exceptions/). OTel-spec-grounded rules have a stronger case for blocking promotion than project-specific heuristics.
+3. Characterize what it detects and whether the detection logic is sound
+4. Characterize what fix the agent would apply when the rule fires
+5. Assess whether that fix is safe (no new blocking failures, no ambiguity)
+6. Present findings to Whitney for discussion and sign-off — include OTel spec alignment alongside detection characterization
+7. Record the agreed decision and rationale in the audit document — Rationale should state OTel spec alignment or note the rule is a project-specific concern
 
 **No historical eval data** is introduced at any point. The implementation is the ground truth. Past run findings are not consulted.
 
@@ -160,6 +161,10 @@ When the decision is `rebuild`, add a paragraph below the table row with:
 | 1 | Issue #493 (catch-block consistency validator) absorbed into M2 scope; #493 will be closed after M2 decision | COV-003 currently exempts non-rethrowing catch blocks as "expected condition" catches — the exact pattern LangGraph node functions use when returning degraded state on failure. Whether to modify that exemption or add a new consistency rule is a question M2 is positioned to answer. Eval run-14 surfaced inconsistent error recording across summaryNode vs technicalNode/dialogueNode. Building before auditing risks conflicting work. | 2026-04-17 |
 | 2 | "Advisory" redefined: advisory rules are directed into the fix loop (agent is told to address them) but are non-blocking (file success/failure not affected). The informational-only tier is eliminated — rules where agent-directed action would be unsafe are rebuild or delete candidates, not informational. | Two clean tiers (advisory = directed non-blocking, blocking = gates file) are simpler and leave no permanent limbo. Rebuild covers rules whose fix logic is too risky to direct; delete covers rules without useful signal. The code representation is unchanged (blocking: false, status "advisory" in feedback); only the fix prompt behavior changes, in a separate mechanism PRD. | 2026-04-18 |
 | 3 | Action Items in the audit document must be maintained in real time. When a rule decision produces a code change, rebuild candidate, or cross-cutting concern, the implementing agent adds the item to the appropriate Action Items subsection immediately — not deferred to end of milestone. | Deferring action item capture risks losing context after `/clear`. The audit document is the durable artifact; it should reflect the state of decisions at all times, not just after a milestone wraps. | 2026-04-18 |
+| 4 | Every rule audit must include an OTel specification alignment check before characterizing detection logic. CDQ rules (M1) retroactively assessed — see OTel spec alignment subsection of CDQ section in audit document. | OTel spec check on COV-003 (Decision 5) settled a contested design question immediately and prevented unnecessary code changes. OTel-spec-grounded rules have a stronger case for blocking promotion than project-specific heuristics. Key sources: [OTel Trace API](https://opentelemetry.io/docs/specs/otel/trace/api/), [Semantic conventions](https://opentelemetry.io/docs/specs/semconv/), [Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/), [Exceptions spec](https://opentelemetry.io/docs/specs/otel/trace/exceptions/). State alignment — or note it is a project-specific concern — in the Rationale column. | 2026-04-18 |
+| 5 | COV-003's `isExpectedConditionCatch` exemption (no rethrow = expected condition = no error recording) is correct per OTel spec. Issue #493 closed as working as intended. No changes to COV-003. | OTel Recording Errors spec: "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." And: "It's NOT RECOMMENDED to record exceptions that are handled by the instrumented library." ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)). The eval run-14 finding ("catch-block error recording missing" in `summaryNode`) was framed backwards — graceful-degradation catches correctly produce no span error recording. Over-recording is the actual problem; NDS-005b is the rule that should prevent it. See M3. | 2026-04-18 |
+| 6 | Rule documentation in `docs/rules-reference.md` (this repo) and `docs/research/eval-target-criteria.md` (eval repo at `/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval`) must include each rule's OTel spec relationship — directly spec-grounded with citation, indirectly consistent, or project-specific concern. M7 directly edits both documents; it does not create a GitHub issue for this work. | Users and contributors cannot distinguish OTel-required rules from project-specific design choices. That distinction matters for deployment decisions and blocking promotion assessments. | 2026-04-18 |
+| 7 | CDQ-007's filesystem path sub-check is a refactor: split into two separate sub-checks. (1) Privacy/security check: flag path-like values in attributes whose key is NOT an OTel `file.*` semantic convention — suggest `path.basename()`. (2) OTel file convention exemption: when the attribute key IS `file.*`, a full path is OTel-correct per the `file.path` semantic convention — do not flag. | The current single check produces false positives on spec-correct `file.path` usage. Using `span.setAttribute('file.path', filePath)` with a full path is common in any service touching the filesystem — not a rare edge case. Conflating privacy concern with OTel-correct usage means the message and remediation are wrong for one of the two cases. | 2026-04-18 |
 
 ---
 
@@ -184,7 +189,7 @@ Rules in scope: CDQ-006 (advisory), CDQ-007, CDQ-009, CDQ-010 (orphaned — impl
 **Apply immediately** (no separate PR needed): any promotions to blocking, deletions, or registration decisions reached in this milestone.
 
 - [x] CDQ-006 (expensive attribute computation guarded) audited, discussed, decision recorded
-- [x] CDQ-007 (attribute data quality — PII names, filesystem paths, nullable access) audited, discussed, decision recorded
+- [x] CDQ-007 (attribute data quality — PII names, filesystem paths, nullable access) audited, discussed, decision recorded — **Decision 7: path sub-check is a refactor; split into (1) privacy/security flag for non-`file.*` keys, (2) OTel exemption for `file.*` keys where full path is spec-correct**
 - [x] CDQ-008 (consistent tracer naming convention — cross-file rule) audited, discussed, decision recorded
 - [x] CDQ-009 (undefined guard on span attribute values) audited, discussed, decision recorded
 - [x] CDQ-010 (untyped string method on property access) audited, discussed, decision recorded
@@ -197,10 +202,10 @@ Rules in scope: COV-004 (async operations have spans), COV-005 (domain-specific 
 
 Same process as M1.
 
-**Additional assessment (Decision 1):** Before auditing COV-004 and COV-005, read COV-003 (`src/languages/javascript/rules/cov003.ts`) — specifically its `isExpectedConditionCatch` function. COV-003 is blocking and not an audit target, but its exemption logic directly bears on the #493 question: the function currently treats all non-rethrowing catch blocks as "expected condition" catches (exempt from error recording). Assess whether this exemption is correct for LangGraph-style node functions that return degraded state on genuine LLM failures (e.g., `summaryNode`). Decide: modify COV-003's exemption, add a new consistency rule, or neither. Present findings to Whitney before recording the decision. Issue #493 will be closed after this assessment.
+**Additional assessment (Decision 1, resolved as Decision 5):** COV-003's `isExpectedConditionCatch` exemption is correct per OTel spec — no changes needed. Issue #493 closed as working as intended. The OTel Recording Errors spec states: "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." Graceful-degradation catches (e.g., LangGraph node returns `{ summary: '' }` on LLM failure) correctly produce no span error recording. Over-recording is the actual problem; NDS-005b (audited in M3) is the rule that should prevent it. See Decision 5 for full rationale and citations.
 
-- [ ] COV-003 `isExpectedConditionCatch` logic read and assessed (Decision 1)
-- [ ] Decision on COV-003 exemption vs new consistency rule discussed and recorded (closes #493)
+- [x] COV-003 `isExpectedConditionCatch` logic read and assessed (Decision 1 → resolved as Decision 5)
+- [x] Decision on COV-003 exemption discussed and recorded — working as intended; #493 closed
 - [ ] COV-004 (async operations have spans) audited, discussed, decision recorded
 - [ ] COV-005 (domain-specific attributes present) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
@@ -212,8 +217,14 @@ Rules in scope: NDS-004 (exported function signature preservation), NDS-005 (con
 
 Same process as M1.
 
+**Critical context for NDS-005 (Decision 5):** NDS-005 has a sub-check called NDS-005b (`docs/rules-reference.md`: "The agent didn't add `recordException()`/`setStatus(ERROR)` in catch blocks that handle expected conditions"). NDS-005b is the counterpart to COV-003's `isExpectedConditionCatch` — COV-003 does not *require* error recording in graceful-degradation catches; NDS-005b should *prevent* the agent from adding it anyway. Decision 5 established that over-recording in graceful-degradation catches is the actual consistency problem (#493), not under-recording.
+
+OTel spec basis (verified 2026-04-18): "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." "It's NOT RECOMMENDED to record exceptions that are handled by the instrumented library." ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)). `SpanStatus.ERROR` means the operation failed from the caller's perspective — not that an exception occurred internally. ([OTel errors](https://opentelemetry.io/blog/2024/otel-errors/))
+
+During the NDS-005 audit, confirm: (1) whether NDS-005b is a sub-check within `src/languages/javascript/rules/nds005.ts` or a separate file — it does not appear as a separate key in `tier2Checks`; (2) whether NDS-005b's detection of "expected condition" catches is consistent with COV-003's `isExpectedConditionCatch` (same heuristic — no rethrow = expected condition); (3) whether NDS-005b is currently effective at preventing over-recording in graceful-degradation catches.
+
 - [ ] NDS-004 (exported function signature preservation) audited, discussed, decision recorded
-- [ ] NDS-005 (control flow preservation) audited, discussed, decision recorded
+- [ ] NDS-005 (control flow preservation) audited, discussed, decision recorded — **includes NDS-005b sub-check; see context block above**
 - [ ] NDS-006 (module system preservation) audited, discussed, decision recorded
 - [ ] Simple decisions applied to code
 - [ ] NDS section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
@@ -260,12 +271,23 @@ Same process as M1.
 - [ ] Simple decisions applied to code
 - [ ] API section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
-### Milestone M7: Draft downstream PRDs
+### Milestone M7: Update rule documentation and draft downstream PRDs
 
-Read the completed `docs/reviews/advisory-rules-audit-2026-04-15.md` in full. Group rebuild and complex-refactor decisions by architectural affinity — rules that share a common replacement approach or touch overlapping code belong in the same downstream PRD.
+**Part 1 — Rule documentation update (Decision 6):**
 
-For each group: create a GitHub issue and PRD skeleton with the problem statement and solution drawn directly from the audit document's rebuild narratives. Do not re-audit rules; the audit document is the input.
+Directly edit rule documentation in both locations to reflect all audit decisions and add each rule's OTel spec relationship:
 
+- **This repo:** `docs/rules-reference.md`
+- **Eval repo:** `/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval/docs/research/eval-target-criteria.md`
+
+For each rule, documentation must reflect: (a) audit decisions — deletions, registrations, promotions to blocking, message changes; (b) OTel spec relationship — directly spec-grounded with citation, indirectly consistent, or project-specific concern not mandated by spec. The OTel alignment subsections written during M1–M6 are the input for (b).
+
+**Part 2 — Downstream PRDs (Decision 3):**
+
+Read the completed `docs/reviews/advisory-rules-audit-2026-04-15.md` in full. Group rebuild and complex-refactor decisions by architectural affinity. For each group: create a GitHub issue and PRD skeleton drawn directly from the audit document's rebuild narratives. Do not re-audit rules; the audit document is the input.
+
+- [ ] `docs/rules-reference.md` updated — audit decisions and OTel spec relationships for all rules
+- [ ] `eval-target-criteria.md` updated — audit decisions and OTel spec relationships for all rules
 - [ ] Audit document read in full
 - [ ] Rebuild/complex-refactor decisions grouped by architectural affinity
 - [ ] GitHub issue and PRD skeleton created for each group

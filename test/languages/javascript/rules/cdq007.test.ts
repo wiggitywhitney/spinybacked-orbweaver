@@ -203,6 +203,38 @@ describe('checkAttributeDataQuality (CDQ-007)', () => {
       const results = checkAttributeDataQuality(code, filePath);
       expect(results.every((r) => r.passed)).toBe(true);
     });
+
+    it('does not flag setAttribute where key is an OTel file.* semantic convention attribute', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function readFile(filePath) {',
+        '  return tracer.startActiveSpan("readFile", (span) => {',
+        '    span.setAttribute("file.path", filePath);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, filePath);
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+
+    it('still flags setAttribute where key is NOT a file.* attribute but value is a path', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function readFile(filePath) {',
+        '  return tracer.startActiveSpan("readFile", (span) => {',
+        '    span.setAttribute("config.source", filePath);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, filePath);
+      expect(results.some((r) => !r.passed && r.message.toLowerCase().includes('path'))).toBe(true);
+    });
   });
 
   describe('nullable expression detection', () => {
