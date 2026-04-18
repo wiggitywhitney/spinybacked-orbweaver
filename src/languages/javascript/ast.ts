@@ -123,10 +123,12 @@ export interface OTelImportDetectionResult {
  */
 const KNOWN_FRAMEWORK_PACKAGES = new Set([
   // Database
-  'pg', 'mysql', 'mysql2', 'mongodb', 'redis', 'ioredis',
+  'pg', 'mysql', 'mysql2', 'mongodb', 'mongoose', 'redis', 'ioredis',
+  'cassandra-driver', 'tedious', 'oracledb', 'memcached',
   // HTTP
-  'express', 'fastify', 'koa', 'hapi', '@hapi/hapi',
-  'node:http', 'node:https', 'http', 'https',
+  'express', 'fastify', 'koa', 'hapi', '@hapi/hapi', 'restify', 'connect',
+  '@nestjs/core',
+  'node:http', 'node:https', 'node:net', 'node:dns', 'http', 'https',
   'axios', 'got', 'node-fetch', 'undici',
   // gRPC
   '@grpc/grpc-js',
@@ -136,6 +138,10 @@ const KNOWN_FRAMEWORK_PACKAGES = new Set([
   'graphql', '@apollo/server',
   // ORM
   'knex', 'sequelize', 'typeorm', '@prisma/client',
+  // Logging
+  'winston', 'pino', 'bunyan',
+  // Other instrumented packages
+  'socket.io', 'openai', 'dataloader', 'aws-sdk', '@aws-sdk/client-s3',
 ]);
 
 /**
