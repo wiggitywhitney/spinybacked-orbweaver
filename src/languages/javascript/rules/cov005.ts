@@ -107,22 +107,22 @@ export function checkDomainAttributes(
   }
 
   return gaps.map((g) => {
-    const parts: string[] = [];
-    if (g.missingRequired.length > 0) {
-      parts.push(`required: ${g.missingRequired.join(', ')}`);
-    }
-    if (g.missingRecommended.length > 0) {
-      parts.push(`recommended: ${g.missingRecommended.join(', ')}`);
-    }
+    const requiredPart = g.missingRequired.length > 0
+      ? `Required (must add): ${g.missingRequired.join(', ')}. `
+      : '';
+    const recommendedPart = g.missingRecommended.length > 0
+      ? `Recommended (should add): ${g.missingRecommended.join(', ')}. `
+      : '';
     return {
       ruleId: 'COV-005',
       passed: false,
       filePath,
       lineNumber: g.line,
       message:
-        `Span "${g.spanName}" at line ${g.line} is missing domain-specific attributes: ${parts.join('; ')}. ` +
-        `The telemetry registry defines required and recommended attributes for this span. ` +
-        `Add the missing setAttribute() calls to improve trace quality.`,
+        `Span "${g.spanName}" at line ${g.line} is missing registry-defined attributes. ` +
+        requiredPart +
+        recommendedPart +
+        `Add setAttribute() calls for each listed attribute.`,
       tier: 2,
       blocking: false,
     };
@@ -248,11 +248,6 @@ function extractSetAttributeName(callExpr: CallExpression): string | null {
     return firstArg.getLiteralValue();
   }
   return null;
-}
-
-/** Escape special regex metacharacters in a string for use in new RegExp(...). */
-function escapeForRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** COV-005 ValidationRule — spans must have domain-specific attributes from the registry. */

@@ -206,10 +206,10 @@ Same process as M1.
 
 - [x] COV-003 `isExpectedConditionCatch` logic read and assessed (Decision 1 → resolved as Decision 5)
 - [x] Decision on COV-003 exemption discussed and recorded — working as intended; #493 closed
-- [ ] COV-004 (async operations have spans) audited, discussed, decision recorded
-- [ ] COV-005 (domain-specific attributes present) audited, discussed, decision recorded
-- [ ] Simple decisions applied to code
-- [ ] COV section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
+- [x] COV-004 (async operations have spans) audited, discussed, decision recorded
+- [x] COV-005 (domain-specific attributes present) audited, discussed, decision recorded
+- [x] Simple decisions applied to code
+- [x] COV section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
 ### Milestone M3: NDS rules
 

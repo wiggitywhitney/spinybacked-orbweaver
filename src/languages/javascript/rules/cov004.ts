@@ -145,12 +145,14 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     lineNumber: f.line,
     message: f.exported && fileHasInstrumentation
       ? `"${f.name}" (${f.reason}) at line ${f.line} is exported and async but has no span. ` +
-        `Context propagation is not a valid COV-004 exemption for exported async I/O functions. ` +
-        `The only valid reason to skip this function is RST-001 (synchronous, no I/O). ` +
-        `RST-004 (unexported function) does not apply since this function is exported.`
+        `Add a span wrapping this function's body. ` +
+        `Context propagation is not a valid exemption for exported async functions. ` +
+        `RST-004 (unexported function) does not apply here — this function is exported. ` +
+        `The only RST exemption that applies to exported async functions is RST-001 ` +
+        `(utility function with no meaningful I/O or latency to track).`
       : `"${f.name}" (${f.reason}) at line ${f.line} has no span. ` +
-        `Async functions and await expressions benefit from spans ` +
-        `for latency tracking and error visibility. Consider adding a span.`,
+        `Async functions and await expressions require spans for latency tracking and error visibility. ` +
+        `Add a span wrapping this function's body.`,
     tier: 2,
     blocking: false,
   }));
