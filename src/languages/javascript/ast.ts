@@ -128,7 +128,7 @@ const KNOWN_FRAMEWORK_PACKAGES = new Set([
   // HTTP
   'express', 'fastify', 'koa', 'hapi', '@hapi/hapi', 'restify', 'connect',
   '@nestjs/core',
-  'node:http', 'node:https', 'node:net', 'node:dns', 'http', 'https',
+  'node:http', 'node:https', 'node:net', 'node:dns', 'http', 'https', 'net', 'dns',
   'axios', 'got', 'node-fetch', 'undici',
   // gRPC
   '@grpc/grpc-js',

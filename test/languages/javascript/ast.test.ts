@@ -243,6 +243,33 @@ describe('detectOTelImports', () => {
       const httpImport = result.frameworkImports.find(i => i.moduleSpecifier === 'node:http');
       expect(httpImport).toBeDefined();
     });
+
+    it('detects one representative from each new package category', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        useInMemoryFileSystem: true,
+      });
+      const sf = project.createSourceFile('test.js', [
+        "import mongoose from 'mongoose';",
+        "import restify from 'restify';",
+        "import net from 'net';",
+        "import dns from 'dns';",
+        "import winston from 'winston';",
+        "import { io } from 'socket.io';",
+        "import OpenAI from 'openai';",
+        "import aws from 'aws-sdk';",
+      ].join('\n'));
+      const result = detectOTelImports(sf);
+      const specifiers = result.frameworkImports.map(i => i.moduleSpecifier);
+      expect(specifiers).toContain('mongoose');
+      expect(specifiers).toContain('restify');
+      expect(specifiers).toContain('net');
+      expect(specifiers).toContain('dns');
+      expect(specifiers).toContain('winston');
+      expect(specifiers).toContain('socket.io');
+      expect(specifiers).toContain('openai');
+      expect(specifiers).toContain('aws-sdk');
+    });
   });
 });
 
