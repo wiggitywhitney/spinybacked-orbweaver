@@ -195,6 +195,9 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['RST-003']).toEqual({ enabled: true, blocking: false });
     expect(checks['RST-004']).toEqual({ enabled: true, blocking: false });
     expect(checks['CDQ-006']).toEqual({ enabled: true, blocking: false });
+    expect(checks['CDQ-007']).toEqual({ enabled: true, blocking: false });
+    expect(checks['CDQ-009']).toEqual({ enabled: true, blocking: false });
+    expect(checks['CDQ-010']).toEqual({ enabled: true, blocking: false });
 
     // Phase 5 checks (4) — SCH-001/SCH-002 downgrade to advisory for sparse registries
     // (empty schema has 0 span definitions, below the sparse threshold of 3)
@@ -213,8 +216,8 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['NDS-005']).toEqual({ enabled: true, blocking: false });
     expect(checks['RST-005']).toEqual({ enabled: true, blocking: false });
 
-    // Total: 25 checks
-    expect(Object.keys(checks)).toHaveLength(25);
+    // Total: 28 checks
+    expect(Object.keys(checks)).toHaveLength(28);
 
     // projectRoot is undefined when not provided
     expect(capturedConfig!.projectRoot).toBeUndefined();

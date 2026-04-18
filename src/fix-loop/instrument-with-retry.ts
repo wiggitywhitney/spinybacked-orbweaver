@@ -183,6 +183,9 @@ function buildValidationConfig(
       'RST-003': { enabled: true, blocking: false },
       'RST-004': { enabled: true, blocking: false },
       'CDQ-006': { enabled: true, blocking: false },
+      'CDQ-007': { enabled: true, blocking: false },
+      'CDQ-009': { enabled: true, blocking: false },
+      'CDQ-010': { enabled: true, blocking: false },
       // Phase 5 checks — SCH-001/SCH-002 downgrade to advisory for sparse registries
       'SCH-001': { enabled: true, blocking: !schemaSparse },
       'SCH-002': { enabled: true, blocking: !schemaSparse },

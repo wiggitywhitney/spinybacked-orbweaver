@@ -95,7 +95,7 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
           line,
           message:
             `setAttribute key "${keyText}" at line ${line} may expose PII in telemetry. ` +
-            `Use a non-identifying attribute name or hash/redact the value before setting.`,
+            `Remove this attribute or rename the key to a non-identifying name.`,
         });
         return;
       }

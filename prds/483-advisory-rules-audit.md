@@ -85,15 +85,15 @@ For orphaned implementations: read the code, understand what it does and why it 
 
 ### Decision outcomes
 
-- **Keep as-is** — detection logic is sound, finding is actionable, advisory status is appropriate
-- **Promote to blocking** — detection logic is sound, fix is deterministic and safe, advisory status is an error
+- **Keep (advisory)** — detection logic is sound, finding is actionable; rule stays advisory (non-blocking, directed in fix loop once the mechanism PRD ships)
+- **Promote to blocking** — detection logic is sound, fix is deterministic and safe; advisory status is an error
 - **Refactor** — detection logic is partially sound but needs scope-narrowing or a small fix; change can be made in this PRD
 - **Rebuild** — detection logic uses the wrong algorithm; requires a replacement approach; documented for a downstream PRD
 - **Delete** — rule is not producing useful signal and cannot be salvaged
 
 ### Constraint for shared-file and orphaned rules
 
-If a shared-file rule or orphaned implementation is brought into active use, it must be built with actionable finding output from the start. There is no "make it advisory for now and fix later" path for rules entering the active set.
+If a shared-file rule or orphaned implementation is brought into active use as advisory (directed, non-blocking), its finding message must be actionable from the start — the agent will be directed to act on it. There is no "advisory placeholder" path for rules entering the active set.
 
 ---
 
@@ -101,7 +101,11 @@ If a shared-file rule or orphaned implementation is brought into active use, it 
 
 **Output**: `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
-This document is the durable artifact of the audit. It must be complete enough that a downstream PRD can be written from it without re-reading any rule implementation. Each rule group gets a section with a decision table and, for rebuild decisions, a prescriptive narrative paragraph.
+This document is the durable artifact of the audit. It must be complete enough that a downstream PRD can be written from it without re-reading any rule implementation. It has two top-level parts:
+
+**Action Items** — a running list maintained throughout the audit. Three subsections: "Code changes applied in this PRD" (registrations, fixes, deletions, promotions), "Downstream PRD candidates" (rebuild decisions), and "Cross-cutting concerns" (structural issues affecting all rules). Add entries immediately when they arise — do not defer to end of milestone.
+
+**Rule-group sections** — one section per prefix (CDQ, COV, NDS, RST, SCH, API), each containing a decision table and, for rebuild decisions, a prescriptive narrative paragraph.
 
 ### Decision table format (per rule group)
 
@@ -111,7 +115,7 @@ This document is the durable artifact of the audit. It must be complete enough t
 - **Detection logic**: `sound` / `flawed` / `proxy-misfires`
 - **Agent fix when fired**: plain English description of what the agent would do in response
 - **Safety**: `safe` / `unsafe` / `ambiguous`
-- **Decision**: one of the five outcomes above
+- **Decision**: `keep (advisory)` / `promote to blocking` / `refactor` / `rebuild` / `delete`
 
 ### Rebuild narrative format
 
@@ -122,11 +126,11 @@ When the decision is `rebuild`, add a paragraph below the table row with:
 
 ### Example entries
 
-**Simple decision (keep-as-is):**
+**Simple decision (keep advisory):**
 
 | Rule ID | What it detects | Detection logic | Agent fix when fired | Safety | Decision | Rationale |
 |---------|----------------|-----------------|----------------------|--------|----------|-----------|
-| XYZ-001 | Missing required attribute on spans matching a specific pattern | sound | Agent adds the missing attribute with a value derived from the surrounding code | safe | keep as-is | Fires correctly on real violations; advisory status is appropriate because the correct attribute value requires domain knowledge the agent may not have |
+| XYZ-001 | Missing required attribute on spans matching a specific pattern | sound | Agent adds the missing attribute with a value derived from the surrounding code | safe | keep (advisory) | Fires correctly on real violations; advisory status is appropriate because the correct attribute value requires domain knowledge the agent may not have |
 
 **Rebuild decision:**
 
@@ -140,7 +144,7 @@ When the decision is `rebuild`, add a paragraph below the table row with:
 
 ## Design Notes
 
-- Simple decisions (promotions, deletions, registration fixes) are applied in the same milestone where they are decided — not deferred to a separate cleanup PR.
+- Simple decisions (promotions, deletions, registration fixes) are applied in the same milestone where they are decided — not deferred to a separate cleanup PR. "Keep (advisory)" decisions require no code changes in this PRD; the mechanism that directs the agent to act on advisory findings is a separate downstream PRD.
 - Milestones are grouped by rule prefix (CDQ, COV, NDS, RST, SCH, API) because context is cleared between milestones. Grouping related rules together keeps relevant context in the same session.
 - Rebuild decisions are documented in the audit artifact with prescriptive detail; the downstream PRD is drafted in Milestone M7 once the full picture is available. Waiting until M7 is intentional — architectural affinity across rule groups cannot be assessed until all prefix milestones are complete.
 - No milestone begins with historical eval data. Rule implementations are the only input.
@@ -154,6 +158,8 @@ When the decision is `rebuild`, add a paragraph below the table row with:
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
 | 1 | Issue #493 (catch-block consistency validator) absorbed into M2 scope; #493 will be closed after M2 decision | COV-003 currently exempts non-rethrowing catch blocks as "expected condition" catches — the exact pattern LangGraph node functions use when returning degraded state on failure. Whether to modify that exemption or add a new consistency rule is a question M2 is positioned to answer. Eval run-14 surfaced inconsistent error recording across summaryNode vs technicalNode/dialogueNode. Building before auditing risks conflicting work. | 2026-04-17 |
+| 2 | "Advisory" redefined: advisory rules are directed into the fix loop (agent is told to address them) but are non-blocking (file success/failure not affected). The informational-only tier is eliminated — rules where agent-directed action would be unsafe are rebuild or delete candidates, not informational. | Two clean tiers (advisory = directed non-blocking, blocking = gates file) are simpler and leave no permanent limbo. Rebuild covers rules whose fix logic is too risky to direct; delete covers rules without useful signal. The code representation is unchanged (blocking: false, status "advisory" in feedback); only the fix prompt behavior changes, in a separate mechanism PRD. | 2026-04-18 |
+| 3 | Action Items in the audit document must be maintained in real time. When a rule decision produces a code change, rebuild candidate, or cross-cutting concern, the implementing agent adds the item to the appropriate Action Items subsection immediately — not deferred to end of milestone. | Deferring action item capture risks losing context after `/clear`. The audit document is the durable artifact; it should reflect the state of decisions at all times, not just after a milestone wraps. | 2026-04-18 |
 
 ---
 
@@ -171,18 +177,19 @@ Rules in scope: CDQ-006 (advisory), CDQ-007, CDQ-009, CDQ-010 (orphaned — impl
 1. Read the rule's implementation file in `src/languages/javascript/rules/` (e.g., `cdq006.ts`, `cdq007.ts`). Also search `src/fix-loop/` for where the rule's ID appears to find how its finding is formatted and fed back to the LLM — understanding what the agent actually sees when the rule fires is required to assess whether the finding is actionable.
 2. Characterize: what it detects, whether detection logic is sound, what fix the agent would apply when fired, whether that fix is safe
 3. Present findings to Whitney and discuss. Introduce the rule by its plain-language description alongside its ID — e.g., "CDQ-006 (expensive attribute computation guarded)" not just "CDQ-006." Do this every time, even for rules discussed previously in the session.
-4. After sign-off: record the decision and rationale in `docs/reviews/advisory-rules-audit-2026-04-15.md` under a CDQ section
-5. For orphaned rules: also assess why the rule was not registered — intentional deferral or oversight?
+4. After sign-off: record the decision and rationale in `docs/reviews/advisory-rules-audit-2026-04-15.md` under the relevant rule-group section
+5. **Immediately** add entries to the Action Items section of `docs/reviews/advisory-rules-audit-2026-04-15.md` for any: code change applied (registration, message fix, deletion, promotion), rebuild or complex-refactor candidate, or cross-cutting concern. Do not defer — add at the time the decision is made.
+6. For orphaned rules: also assess why the rule was not registered — intentional deferral or oversight?
 
 **Apply immediately** (no separate PR needed): any promotions to blocking, deletions, or registration decisions reached in this milestone.
 
-- [ ] CDQ-006 (expensive attribute computation guarded) audited, discussed, decision recorded
-- [ ] CDQ-007 (attribute data quality — PII names, filesystem paths, nullable access) audited, discussed, decision recorded
-- [ ] CDQ-008 (consistent tracer naming convention — cross-file rule) audited, discussed, decision recorded
-- [ ] CDQ-009 (undefined guard on span attribute values) audited, discussed, decision recorded
-- [ ] CDQ-010 (untyped string method on property access) audited, discussed, decision recorded
-- [ ] Simple decisions applied to code
-- [ ] CDQ section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
+- [x] CDQ-006 (expensive attribute computation guarded) audited, discussed, decision recorded
+- [x] CDQ-007 (attribute data quality — PII names, filesystem paths, nullable access) audited, discussed, decision recorded
+- [x] CDQ-008 (consistent tracer naming convention — cross-file rule) audited, discussed, decision recorded
+- [x] CDQ-009 (undefined guard on span attribute values) audited, discussed, decision recorded
+- [x] CDQ-010 (untyped string method on property access) audited, discussed, decision recorded
+- [x] Simple decisions applied to code
+- [x] CDQ section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
 ### Milestone M2: COV rules
 
