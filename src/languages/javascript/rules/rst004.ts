@@ -125,9 +125,10 @@ export function checkInternalDetailSpans(code: string, filePath: string): CheckR
     filePath,
     lineNumber: f.line,
     message:
-      `Internal ${f.kind} "${f.name}" at line ${f.line} has a span that may not need observability. ` +
-      `Unexported functions and private methods are implementation details. ` +
-      `Consider removing the span unless it performs I/O or is part of the public API.`,
+      `RST-004: ${f.kind} "${f.name}" at line ${f.line} appears to be an internal implementation detail. ` +
+      `Evaluate whether this function has independent observability value — meaningful latency, external calls, or failure modes worth tracking on its own. ` +
+      `Unexported, non-async functions without I/O are typically covered by their enclosing exported function's span via context propagation. ` +
+      `Explain your reasoning. If confirmed internal detail, remove the \`startActiveSpan\` wrapper from this function.`,
     tier: 2,
     blocking: false,
   }));

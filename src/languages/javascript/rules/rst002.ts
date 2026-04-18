@@ -94,9 +94,9 @@ export function checkTrivialAccessorSpans(code: string, filePath: string): Check
     filePath,
     lineNumber: f.line,
     message:
-      `Trivial accessor "${f.name}" (${f.kind}) at line ${f.line} has a span that adds noise. ` +
-      `Trivial accessors (get/set property accessors, simple getter/setter methods) ` +
-      `do not need spans. Consider removing the span to reduce trace noise.`,
+      `RST-002: "${f.name}" (${f.kind}) at line ${f.line} appears to be a trivial accessor. ` +
+      `Evaluate whether this accessor is truly trivial — returns or sets a single property with no computation or I/O. ` +
+      `Explain your reasoning. If confirmed trivial, remove the \`startActiveSpan\` wrapper from this accessor.`,
     tier: 2,
     blocking: false,
   }));

@@ -164,6 +164,7 @@ When the decision is `rebuild`, add a paragraph below the table row with:
 | 4 | Every rule audit must include an OTel specification alignment check before characterizing detection logic. CDQ rules (M1) retroactively assessed — see OTel spec alignment subsection of CDQ section in audit document. | OTel spec check on COV-003 (Decision 5) settled a contested design question immediately and prevented unnecessary code changes. OTel-spec-grounded rules have a stronger case for blocking promotion than project-specific heuristics. Key sources: [OTel Trace API](https://opentelemetry.io/docs/specs/otel/trace/api/), [Semantic conventions](https://opentelemetry.io/docs/specs/semconv/), [Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/), [Exceptions spec](https://opentelemetry.io/docs/specs/otel/trace/exceptions/). State alignment — or note it is a project-specific concern — in the Rationale column. | 2026-04-18 |
 | 5 | COV-003's `isExpectedConditionCatch` exemption (no rethrow = expected condition = no error recording) is correct per OTel spec. Issue #493 closed as working as intended. No changes to COV-003. | OTel Recording Errors spec: "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." And: "It's NOT RECOMMENDED to record exceptions that are handled by the instrumented library." ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)). The eval run-14 finding ("catch-block error recording missing" in `summaryNode`) was framed backwards — graceful-degradation catches correctly produce no span error recording. Over-recording is the actual problem; NDS-005b is the rule that should prevent it. See M3. | 2026-04-18 |
 | 6 | Rule documentation in `docs/rules-reference.md` (this repo) and `docs/research/eval-target-criteria.md` (eval repo at `~/Documents/Repositories/spinybacked-orbweaver-eval`) must include each rule's OTel spec relationship — directly spec-grounded with citation, indirectly consistent, or project-specific concern. M7 directly edits both documents; it does not create a GitHub issue for this work. | Users and contributors cannot distinguish OTel-required rules from project-specific design choices. That distinction matters for deployment decisions and blocking promotion assessments. | 2026-04-18 |
+| 8 | RST-003 (thin wrapper spans) detection narrowed to same-file delegations only. Cross-file thin wrapper duplicate spans are accepted as a known gap. | spiny-orb instruments one file at a time; the agent cannot see whether an imported function is instrumented in another file. Firing on cross-file delegations produces unfixable advisory findings — the agent cannot verify the delegated function's span status. Narrowed: callee must be a simple identifier (not a method call) declared in the same source file. When the callee is an imported function or method on an object, RST-003 does not fire. | 2026-04-18 |
 | 7 | CDQ-007's filesystem path sub-check is a refactor: split into two separate sub-checks. (1) Privacy/security check: flag path-like values in attributes whose key is NOT an OTel `file.*` semantic convention — suggest `path.basename()`. (2) OTel file convention exemption: when the attribute key IS `file.*`, a full path is OTel-correct per the `file.path` semantic convention — do not flag. | The current single check produces false positives on spec-correct `file.path` usage. Using `span.setAttribute('file.path', filePath)` with a full path is common in any service touching the filesystem — not a rare edge case. Conflating privacy concern with OTel-correct usage means the message and remediation are wrong for one of the two cases. | 2026-04-18 |
 
 ---
@@ -235,13 +236,13 @@ Rules in scope: RST-001 (no spans on utility functions), RST-002 (no spans on tr
 
 Same process as M1.
 
-- [ ] RST-001 (no spans on utility functions) audited, discussed, decision recorded
-- [ ] RST-002 (no spans on trivial accessors) audited, discussed, decision recorded
-- [ ] RST-003 (no duplicate spans on thin wrappers) audited, discussed, decision recorded
-- [ ] RST-004 (no spans on internal implementation details) audited, discussed, decision recorded
-- [ ] RST-005 (no double-instrumentation) audited, discussed, decision recorded
-- [ ] Simple decisions applied to code
-- [ ] RST section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
+- [x] RST-001 (no spans on utility functions) audited, discussed, decision recorded
+- [x] RST-002 (no spans on trivial accessors) audited, discussed, decision recorded
+- [x] RST-003 (no duplicate spans on thin wrappers) audited, discussed, decision recorded
+- [x] RST-004 (no spans on internal implementation details) audited, discussed, decision recorded
+- [x] RST-005 (no double-instrumentation) audited, discussed, decision recorded
+- [x] Simple decisions applied to code
+- [x] RST section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
 ### Milestone M5: SCH rules
 

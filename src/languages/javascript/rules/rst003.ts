@@ -4,6 +4,7 @@
 import { basename } from 'node:path';
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
+import type { SourceFile } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
 
@@ -28,13 +29,14 @@ export function checkThinWrapperSpans(code: string, filePath: string): CheckResu
   });
   const sourceFile = project.createSourceFile(basename(filePath), code);
 
-  const flagged: Array<{ name: string; line: number }> = [];
+  const flagged: Array<{ name: string; line: number; delegatesTo: string }> = [];
 
   // Check function declarations
   for (const fn of sourceFile.getFunctions()) {
     const name = fn.getName() ?? '<anonymous>';
-    if (isThinWrapperWithSpan(fn)) {
-      flagged.push({ name, line: fn.getStartLineNumber() });
+    const callee = getSameFileCallee(fn, sourceFile);
+    if (callee !== null) {
+      flagged.push({ name, line: fn.getStartLineNumber(), delegatesTo: callee });
     }
   }
 
@@ -47,8 +49,9 @@ export function checkThinWrapperSpans(code: string, filePath: string): CheckResu
       const kind = initializer.getKind();
       if (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression) {
         const fn = initializer as import('ts-morph').ArrowFunction | import('ts-morph').FunctionExpression;
-        if (isThinWrapperWithSpan(fn)) {
-          flagged.push({ name: decl.getName(), line: fn.getStartLineNumber() });
+        const callee = getSameFileCallee(fn, sourceFile);
+        if (callee !== null) {
+          flagged.push({ name: decl.getName(), line: fn.getStartLineNumber(), delegatesTo: callee });
         }
       }
     }
@@ -72,44 +75,61 @@ export function checkThinWrapperSpans(code: string, filePath: string): CheckResu
     filePath,
     lineNumber: f.line,
     message:
-      `Thin wrapper "${f.name}" at line ${f.line} has a span that may create duplicate traces. ` +
-      `Functions whose body is a single delegation to another function do not need their own span ` +
-      `since the delegated function likely has its own span. Consider removing the wrapper span.`,
+      `RST-003: "${f.name}" at line ${f.line} appears to be a thin wrapper that delegates to "${f.delegatesTo}", ` +
+      `which is declared in this file. Check whether "${f.delegatesTo}" has a span in the instrumented output. ` +
+      `Explain your reasoning. If it does, this wrapper's span creates duplicate trace data — remove the \`startActiveSpan\` wrapper from this function.`,
     tier: 2,
     blocking: false,
   }));
 }
 
 /**
- * Check if a function is a thin wrapper with a span.
- * A thin wrapper's meaningful body (inside the span callback's try block)
- * is a single return statement that calls another function.
+ * If `fn` is a thin wrapper with a span that delegates to a same-file function,
+ * return the callee name. Otherwise return null.
+ *
+ * A thin wrapper's meaningful body (inside the span callback's try block) is a
+ * single return statement calling another function. Only fires when the callee is
+ * a simple identifier declared in the same source file — cross-file delegations
+ * (imports, method calls) are excluded because the agent cannot see whether the
+ * target function is instrumented in another file.
  */
-function isThinWrapperWithSpan(
+function getSameFileCallee(
   fn: import('ts-morph').FunctionDeclaration | import('ts-morph').ArrowFunction | import('ts-morph').FunctionExpression,
-): boolean {
+  sourceFile: import('ts-morph').SourceFile,
+): string | null {
   const bodyText = fn.getText();
 
-  // Must have a span
   if (!bodyText.includes('.startActiveSpan') && !bodyText.includes('.startSpan')) {
-    return false;
+    return null;
   }
 
-  // Extract the meaningful statements from inside the span callback's try block
   const innerStatements = extractTryBlockStatements(fn);
-  if (innerStatements === null) return false;
+  if (innerStatements === null) return null;
 
-  // Thin wrapper: exactly one statement that is a return with a function call
-  if (innerStatements.length !== 1) return false;
+  if (innerStatements.length !== 1) return null;
 
   const stmt = innerStatements[0];
-  if (!Node.isReturnStatement(stmt)) return false;
+  if (!Node.isReturnStatement(stmt)) return null;
 
   const returnExpr = stmt.getExpression();
-  if (!returnExpr) return false;
+  if (!returnExpr) return null;
 
-  // The return expression must be a call expression (possibly with argument transformation)
-  return Node.isCallExpression(returnExpr);
+  if (!Node.isCallExpression(returnExpr)) return null;
+
+  // Only fire when the callee is a simple identifier (not a method call like obj.method()).
+  // Method calls and property accesses are excluded — the agent cannot determine their
+  // instrumentation status from within this file.
+  const callee = returnExpr.getExpression();
+  if (!Node.isIdentifier(callee)) return null;
+
+  const calleeName = callee.getText();
+
+  // Confirm the callee is declared in this file (function declaration or variable).
+  const isDeclaredLocally =
+    sourceFile.getFunction(calleeName) !== undefined ||
+    sourceFile.getVariableDeclaration(calleeName) !== undefined;
+
+  return isDeclaredLocally ? calleeName : null;
 }
 
 /**

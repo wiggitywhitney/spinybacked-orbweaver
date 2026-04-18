@@ -113,9 +113,9 @@ export function checkUtilityFunctionSpans(code: string, filePath: string): Check
     filePath,
     lineNumber: f.line,
     message:
-      `Utility function "${f.name}" at line ${f.line} has a span that adds noise without observability value. ` +
-      `Utility functions (synchronous, short, unexported, no I/O) typically do not need spans. ` +
-      `Consider removing the span to reduce trace noise, or export the function if it is part of the public API.`,
+      `RST-001: "${f.name}" at line ${f.line} appears to be a utility function (synchronous, short, unexported, no I/O). ` +
+      `Evaluate whether this function has any observability value — meaningful latency, external calls, or failure modes worth tracking. ` +
+      `Explain your reasoning. If it is truly a utility function with no observability value, remove the \`startActiveSpan\` wrapper from this function.`,
     tier: 2,
     blocking: false,
   }));
