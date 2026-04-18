@@ -223,11 +223,11 @@ OTel spec basis (verified 2026-04-18): "Errors that were retried or handled (all
 
 During the NDS-005 audit, confirm: (1) whether NDS-005b is a sub-check within `src/languages/javascript/rules/nds005.ts` or a separate file — it does not appear as a separate key in `tier2Checks`; (2) whether NDS-005b's detection of "expected condition" catches is consistent with COV-003's `isExpectedConditionCatch` (same heuristic — no rethrow = expected condition); (3) whether NDS-005b is currently effective at preventing over-recording in graceful-degradation catches.
 
-- [ ] NDS-004 (exported function signature preservation) audited, discussed, decision recorded
-- [ ] NDS-005 (control flow preservation) audited, discussed, decision recorded — **includes NDS-005b sub-check; see context block above**
-- [ ] NDS-006 (module system preservation) audited, discussed, decision recorded
-- [ ] Simple decisions applied to code
-- [ ] NDS section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
+- [x] NDS-004 (exported function signature preservation) audited, discussed, decision recorded
+- [x] NDS-005 (control flow preservation) audited, discussed, decision recorded — **includes NDS-005b sub-check; see context block above**
+- [x] NDS-006 (module system preservation) audited, discussed, decision recorded
+- [x] Simple decisions applied to code
+- [x] NDS section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
 ### Milestone M4: RST rules
 

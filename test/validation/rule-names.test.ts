@@ -14,7 +14,7 @@ describe('getRuleName', () => {
 
   it('returns the rule ID unchanged for unknown rules', () => {
     expect(getRuleName('UNKNOWN-999')).toBe('UNKNOWN-999');
-    expect(getRuleName('NDS-005b')).toBe('Control Flow Preserved');
+    expect(getRuleName('NDS-007')).toBe('Expected Catch Unmodified');
   });
 });
 
@@ -59,8 +59,8 @@ describe('expandRuleCodesInText', () => {
     expect(expandRuleCodesInText(text)).toBe(text);
   });
 
-  it('handles NDS-005b variant', () => {
-    const text = 'check NDS-005b compliance';
-    expect(expandRuleCodesInText(text)).toBe('check NDS-005b (Control Flow Preserved) compliance');
+  it('expands NDS-007', () => {
+    const text = 'check NDS-007 compliance';
+    expect(expandRuleCodesInText(text)).toBe('check NDS-007 (Expected Catch Unmodified) compliance');
   });
 });

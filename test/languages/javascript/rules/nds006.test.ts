@@ -274,7 +274,7 @@ describe('checkModuleSystemMatch (NDS-006)', () => {
         lineNumber: null,
         message: expect.any(String),
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
     });
 
@@ -288,7 +288,7 @@ describe('checkModuleSystemMatch (NDS-006)', () => {
       expect(failure).toBeDefined();
       expect(failure!.ruleId).toBe('NDS-006');
       expect(failure!.tier).toBe(2);
-      expect(failure!.blocking).toBe(false);
+      expect(failure!.blocking).toBe(true);
       expect(failure!.lineNumber).toBeGreaterThan(0);
       expect(failure!.message).toBeTruthy();
     });

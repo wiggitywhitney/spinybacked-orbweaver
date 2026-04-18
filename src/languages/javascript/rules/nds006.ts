@@ -288,7 +288,7 @@ export function checkModuleSystemMatch(
         `Instrumentation may have removed exports or imports. ` +
         `Preserve the original file's ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} patterns.`,
       tier: 2 as const,
-      blocking: false,
+      blocking: true,
     }];
   }
 
@@ -328,7 +328,7 @@ export function checkModuleSystemMatch(
       `Instrumented code must use the same module system as the original file. ` +
       `Use ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} for instrumentation additions.`,
     tier: 2 as const,
-    blocking: false,
+    blocking: true,
   }));
 }
 
@@ -340,7 +340,7 @@ function passingResult(filePath: string): CheckResult {
     lineNumber: null,
     message: 'Module system preserved. Instrumented code uses the same module system as the original.',
     tier: 2,
-    blocking: false,
+    blocking: true,
   };
 }
 
@@ -348,7 +348,7 @@ function passingResult(filePath: string): CheckResult {
 export const nds006Rule: ValidationRule = {
   ruleId: 'NDS-006',
   dimension: 'Non-destructive',
-  blocking: false,
+  blocking: true,
   applicableTo(language: string): boolean {
     // Module system distinction is only meaningful for JavaScript and TypeScript.
     return language === 'javascript' || language === 'typescript';

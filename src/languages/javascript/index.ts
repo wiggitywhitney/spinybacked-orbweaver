@@ -37,6 +37,7 @@ import { nds003Rule } from './rules/nds003.ts';
 import { nds004Rule } from './rules/nds004.ts';
 import { nds005Rule } from './rules/nds005.ts';
 import { nds006Rule } from './rules/nds006.ts';
+import { nds007Rule } from './rules/nds007.ts';
 import { cdq001Rule } from './rules/cdq001.ts';
 import { cdq006Rule } from './rules/cdq006.ts';
 import { cdq007Rule } from './rules/cdq007.ts';
@@ -52,7 +53,7 @@ import { cdq008Rule } from '../../validation/tier2/cdq008.ts';
 
 /**
  * All ValidationRule instances this provider registers.
- * Covers 29 per-file Tier 2 rules (including API-003/API-004 from api001.ts)
+ * Covers 30 per-file Tier 2 rules (including API-003/API-004 from api001.ts)
  * plus CDQ-008 (shared cross-file rule registered here for parity tracking).
  *
  * NDS-001 (syntax) and LINT are not ValidationRule objects — they are
@@ -62,7 +63,7 @@ import { cdq008Rule } from '../../validation/tier2/cdq008.ts';
 const JS_RULES = [
   cov001Rule, cov002Rule, cov003Rule, cov004Rule, cov005Rule, cov006Rule,
   rst001Rule, rst002Rule, rst003Rule, rst004Rule, rst005Rule,
-  nds003Rule, nds004Rule, nds005Rule, nds006Rule,
+  nds003Rule, nds004Rule, nds005Rule, nds006Rule, nds007Rule,
   cdq001Rule, cdq006Rule, cdq007Rule, cdq008Rule, cdq009Rule, cdq010Rule,
   api001Rule, api002Rule, api003Rule, api004Rule,
   sch001Rule, sch002Rule, sch003Rule, sch004Rule,

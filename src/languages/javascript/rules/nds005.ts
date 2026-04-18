@@ -3,12 +3,8 @@
 
 import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { SourceFile, TryStatement } from 'ts-morph';
-import type Anthropic from '@anthropic-ai/sdk';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
-import type { TokenUsage } from '../../../agent/schema.ts';
-import { callJudge } from '../../../validation/judge.ts';
-import type { JudgeOptions } from '../../../validation/judge.ts';
 
 /**
  * Structural fingerprint of a try/catch/finally block.
@@ -37,27 +33,6 @@ const OTEL_LINE_PATTERNS = [
   /tracer\.startSpan\s*\(/,
 ];
 
-/**
- * Optional judge dependencies for semantic preservation assessment.
- * When provided, structural violations flagged by the script are sent to
- * the LLM judge to determine whether the change preserves error propagation semantics.
- */
-export interface Nds005JudgeDeps {
-  client: Anthropic;
-  options?: JudgeOptions;
-}
-
-/**
- * Result of NDS-005 check including judge token usage for cost tracking.
- */
-export interface Nds005Result {
-  results: CheckResult[];
-  judgeTokenUsage: TokenUsage[];
-}
-
-/** Judge verdicts with confidence below this threshold do not clear script violations. */
-const JUDGE_CONFIDENCE_THRESHOLD = 0.7;
-
 function isOtelLine(line: string): boolean {
   const trimmed = line.trim();
   return OTEL_LINE_PATTERNS.some(pattern => pattern.test(trimmed));
@@ -67,7 +42,7 @@ function isOtelLine(line: string): boolean {
  * Extract a normalized body anchor from the try block's first meaningful statement.
  * Strips OTel lines and whitespace to find the first "real" statement.
  */
-function extractBodyAnchor(tryStmt: TryStatement): string {
+export function extractBodyAnchor(tryStmt: TryStatement): string {
   const tryBlock = tryStmt.getTryBlock();
   const statements = tryBlock.getStatements();
 
@@ -261,22 +236,16 @@ function findBestMatch(
  * New try/finally blocks added for span lifecycle (OTel pattern) are
  * excluded from comparison — they are legitimate instrumentation additions.
  *
- * Advisory-only (blocking: false) — AST diffing for control flow is
- * inherently fuzzy and may produce false positives when instrumentation
- * legitimately restructures code.
- *
  * @param originalCode - The original source code before instrumentation
  * @param instrumentedCode - The agent's instrumented output
  * @param filePath - Path to the file being validated (for CheckResult)
- * @param judgeDeps - Optional judge dependencies (Anthropic client). When absent, runs script-only.
- * @returns Nds005Result with check results and judge token usage for cost tracking
+ * @returns CheckResult[] — one per violation, or a single passing result
  */
-export async function checkControlFlowPreservation(
+export function checkControlFlowPreservation(
   originalCode: string,
   instrumentedCode: string,
   filePath: string,
-  judgeDeps?: Nds005JudgeDeps,
-): Promise<Nds005Result> {
+): CheckResult[] {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
@@ -290,7 +259,7 @@ export async function checkControlFlowPreservation(
 
   // No try/catch blocks in original — nothing to violate
   if (originalBlocks.length === 0) {
-    return { results: [passingResult(filePath)], judgeTokenUsage: [] };
+    return [passingResult(filePath)];
   }
 
   const violations: CheckResult[] = [];
@@ -316,7 +285,7 @@ export async function checkControlFlowPreservation(
           `from instrumented output. Instrumentation must preserve existing error handling ` +
           `structure — do not remove or merge try/catch/finally blocks.`,
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
       continue;
     }
@@ -336,7 +305,7 @@ export async function checkControlFlowPreservation(
           `Original had catch(${origBlock.catchParamName ?? '...'}) but instrumented code ` +
           `does not. Instrumentation must not remove existing catch clauses.`,
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
     }
 
@@ -358,7 +327,7 @@ export async function checkControlFlowPreservation(
               `Original throws \`${origThrow}\` but instrumented code does not. ` +
               `Instrumentation must not modify throw behavior in existing catch blocks.`,
             tier: 2,
-            blocking: false,
+            blocking: true,
           });
         }
       }
@@ -376,7 +345,7 @@ export async function checkControlFlowPreservation(
               `Instrumented code throws \`${instrThrow}\` which was not in the original. ` +
               `Instrumentation must not add throw statements to existing catch blocks.`,
             tier: 2,
-            blocking: false,
+            blocking: true,
           });
         }
       }
@@ -394,75 +363,16 @@ export async function checkControlFlowPreservation(
           `Original had a finally block but instrumented code does not. ` +
           `Instrumentation must not remove existing finally clauses.`,
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
     }
   }
 
   if (violations.length === 0) {
-    return { results: [passingResult(filePath)], judgeTokenUsage: [] };
+    return [passingResult(filePath)];
   }
 
-  // Judge pass — for each violation, ask the judge whether the structural change
-  // preserves error propagation semantics. High-confidence "preserved" verdicts
-  // clear the violation; low-confidence or "not preserved" verdicts keep it.
-  if (judgeDeps) {
-    const judgeTokenUsage: TokenUsage[] = [];
-    const finalViolations: CheckResult[] = [];
-
-    for (const violation of violations) {
-      const result = await callJudge(
-        {
-          ruleId: 'NDS-005',
-          context: violation.message,
-          question:
-            'Does the restructured error handling preserve the original propagation semantics — ' +
-            'exception types, re-throw behavior, and catch clause ordering? ' +
-            'Answer true if semantics are preserved despite the structural change, false if not.',
-          candidates: [],
-        },
-        judgeDeps.client,
-        judgeDeps.options,
-      );
-
-      if (result) {
-        judgeTokenUsage.push(result.tokenUsage);
-
-        if (!result.verdict) {
-          // Parsed output was null — keep script-only violation
-          finalViolations.push(violation);
-          continue;
-        }
-
-        if (result.verdict.answer && result.verdict.confidence >= JUDGE_CONFIDENCE_THRESHOLD) {
-          // Judge says semantics are preserved with sufficient confidence — clear this violation
-          continue;
-        }
-
-        // Judge says semantics are NOT preserved, or low confidence — keep violation with judge context
-        const suggestion = result.verdict.suggestion
-          ? ` ${result.verdict.suggestion}`
-          : '';
-        finalViolations.push({
-          ...violation,
-          message:
-            `${violation.message} Judge assessment (confidence ${Math.round(result.verdict.confidence * 100)}%): ` +
-            `semantics ${result.verdict.answer ? 'possibly preserved (low confidence)' : 'not preserved'}.${suggestion}`,
-        });
-      } else {
-        // Judge failure — keep the script-only violation as-is
-        finalViolations.push(violation);
-      }
-    }
-
-    if (finalViolations.length === 0) {
-      return { results: [passingResult(filePath)], judgeTokenUsage };
-    }
-
-    return { results: finalViolations, judgeTokenUsage };
-  }
-
-  return { results: violations, judgeTokenUsage: [] };
+  return violations;
 }
 
 function passingResult(filePath: string): CheckResult {
@@ -473,7 +383,7 @@ function passingResult(filePath: string): CheckResult {
     lineNumber: null,
     message: 'Control flow structure preserved. All existing try/catch/finally blocks maintain their original structure.',
     tier: 2,
-    blocking: false,
+    blocking: true,
   };
 }
 
@@ -481,16 +391,13 @@ function passingResult(filePath: string): CheckResult {
 export const nds005Rule: ValidationRule = {
   ruleId: 'NDS-005',
   dimension: 'Non-destructive',
-  blocking: false,
+  blocking: true,
   applicableTo(language: string): boolean {
     return language === 'javascript' || language === 'typescript';
   },
   check(input) {
-    const judgeDeps = input.config.anthropicClient
-      ? { client: input.config.anthropicClient }
-      : undefined;
     return checkControlFlowPreservation(
-      input.originalCode, input.instrumentedCode, input.filePath, judgeDeps,
+      input.originalCode, input.instrumentedCode, input.filePath,
     );
   },
 };

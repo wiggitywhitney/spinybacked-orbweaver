@@ -39,8 +39,8 @@ const RULE_NAMES: Record<string, string> = {
   'NDS-003': 'Code Preserved',
   'NDS-004': 'Signatures Preserved',
   'NDS-005': 'Control Flow Preserved',
-  'NDS-005b': 'Control Flow Preserved',
   'NDS-006': 'Module System Match',
+  'NDS-007': 'Expected Catch Unmodified',
 
   // Tier 2 — API
   'API-001': 'OTel API Only',

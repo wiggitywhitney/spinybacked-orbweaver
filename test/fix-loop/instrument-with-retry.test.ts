@@ -161,7 +161,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.errorProgression).toEqual(['0 errors']);
   });
 
-  it('passes all 28 Tier 2 checks to validateFile with correct blocking flags', async () => {
+  it('passes all 29 Tier 2 checks to validateFile with correct blocking flags', async () => {
     const output = makeInstrumentationOutput();
     let capturedConfig: ValidateFileInput['config'] | undefined;
     const deps: InstrumentWithRetryDeps = {
@@ -206,18 +206,19 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['SCH-003']).toEqual({ enabled: true, blocking: true });
     expect(checks['SCH-004']).toEqual({ enabled: true, blocking: false });
 
-    // PRD #135 checks (8) — advisory for initial rollout
+    // PRD #135 checks (8) — advisory for initial rollout; NDS-004/005/007 promoted to blocking
     expect(checks['API-001']).toEqual({ enabled: true, blocking: false });
     expect(checks['API-002']).toEqual({ enabled: true, blocking: false });
     expect(checks['API-003']).toEqual({ enabled: true, blocking: false });
     expect(checks['API-004']).toEqual({ enabled: true, blocking: false });
-    expect(checks['NDS-006']).toEqual({ enabled: true, blocking: false });
-    expect(checks['NDS-004']).toEqual({ enabled: true, blocking: false });
-    expect(checks['NDS-005']).toEqual({ enabled: true, blocking: false });
+    expect(checks['NDS-006']).toEqual({ enabled: true, blocking: true });
+    expect(checks['NDS-004']).toEqual({ enabled: true, blocking: true });
+    expect(checks['NDS-005']).toEqual({ enabled: true, blocking: true });
+    expect(checks['NDS-007']).toEqual({ enabled: true, blocking: true });
     expect(checks['RST-005']).toEqual({ enabled: true, blocking: false });
 
-    // Total: 28 checks
-    expect(Object.keys(checks)).toHaveLength(28);
+    // Total: 29 checks
+    expect(Object.keys(checks)).toHaveLength(29);
 
     // projectRoot is undefined when not provided
     expect(capturedConfig!.projectRoot).toBeUndefined();
