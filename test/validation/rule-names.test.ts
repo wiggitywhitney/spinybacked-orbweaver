@@ -14,7 +14,12 @@ describe('getRuleName', () => {
 
   it('returns the rule ID unchanged for unknown rules', () => {
     expect(getRuleName('UNKNOWN-999')).toBe('UNKNOWN-999');
+    expect(getRuleName('NDS-099')).toBe('NDS-099');
+  });
+
+  it('returns human-readable name for known rules', () => {
     expect(getRuleName('NDS-007')).toBe('Expected Catch Unmodified');
+    expect(getRuleName('NDS-001')).toBe('Syntax Valid');
   });
 });
 
