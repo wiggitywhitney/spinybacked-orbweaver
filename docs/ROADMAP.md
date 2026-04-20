@@ -4,8 +4,8 @@ Dependency-ordered backlog across three sources: the advisory rules audit ([PRD 
 
 ## Short-term (current focus)
 
-- Advisory rules audit — closing out (PRD #483)
-- TypeScript language provider (PRD #372) — branch `feature/prd-372-typescript-provider` exists with 18 commits through Milestone C6; canary test passed 0/27 interface changes; remaining work is rebase + apply prompt guidance from D-7 + run TS eval + PR. Not blocked by the multi-language architecture cleanup below (TS shares the JS abstraction via the explicit `javascript || typescript` guard).
+- Advisory rules audit — closing out ([PRD #483](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/483))
+- TypeScript language provider ([PRD #372](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/372)) — branch `feature/prd-372-typescript-provider` exists with 18 commits through Milestone C6; canary test passed 0/27 interface changes; remaining work is rebase + apply prompt guidance from D-7 + run TS eval + PR. Not blocked by the multi-language architecture cleanup below (TS shares the JS abstraction via the explicit `javascript || typescript` guard).
 - Multi-language rule architecture cleanup ([PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507)) — refactor `src/agent/instrument-file.ts`, `src/agent/prompt.ts`, and `src/fix-loop/index.ts` to route through the `LanguageProvider` interface; consolidate `src/validation/tier2/` SCH duplicates. Prerequisite for PRD #373, PRD #374, and the SCH rebuild PRD.
 - `action.yml` Weaver default `0.21.2` → `0.22.1` (trivial fix; action currently ships stale Weaver relative to CI at v0.22.1)
 - `action.yml` add `branding:` section — **unblocks Marketplace #369**
@@ -15,7 +15,7 @@ Dependency-ordered backlog across three sources: the advisory rules audit ([PRD 
 
 ## Medium-term
 
-- Python language provider (PRD #373) — blocked by multi-language rule architecture PRD.
+- Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — blocked by multi-language rule architecture PRD.
 - SCH-001/002 rebuild + SCH-004 deletion + SCH-005 audit ([PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)) — blocked by multi-language rule architecture PRD.
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 and PRD #508.
 - Canonical tracer name injection ([PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)) — deletes CDQ-008, replaces with per-file blocking check driven by registry manifest name.
@@ -28,7 +28,7 @@ Dependency-ordered backlog across three sources: the advisory rules audit ([PRD 
 
 ## Long-term
 
-- Go language provider (PRD #374) — blocked by multi-language rule architecture PRD.
+- Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)) — blocked by multi-language rule architecture PRD.
 - Publish to GitHub Actions Marketplace ([issue #369](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/369)) — requires the `action.yml` branding leaf issue above.
 - MCP init experience improvements ([issue #47](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/47)).
 
