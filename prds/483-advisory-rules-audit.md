@@ -338,6 +338,37 @@ Agent prompt requirements:
 - Report unmatched items in a table with source, item description, and recommended action (add to ROADMAP, create issue, add to strategic-pending, or confirm "not this repo")
 - The agent's independence matters — it must not assume what was decided in conversation
 
+**Subagent prompt template** (copy-paste when spawning the verification agent via the `Agent` tool; update paths and artifact numbers if they have drifted between this PRD's writing and execution):
+
+> You are performing an independent verification audit. Do not assume anything about this project's state from context you may have inherited. Read these three documents in full and verify against the actual current state of the repository and issue tracker.
+>
+> **Source documents (read in full, no skimming):**
+> 1. `/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver/docs/reviews/advisory-rules-audit-2026-04-15.md` — advisory rules audit output; authoritative record of audit decisions and downstream action items
+> 2. `/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/release-it/run-1/actionable-fix-output.md` — release-it eval run-1 findings. IMPORTANT: eval-infrastructure items (gpgsign workarounds RUN1-1; PAT scope RUN1-3) are NOT this repo's work; only spiny-orb-side findings need tracking
+> 3. `/Users/whitney.lee/Downloads/orbweaver-verified-deep-dive-2026-04-16.md` — 2026-04-16 codebase deep-dive; claims verified at commit `e5593c4`
+>
+> **Artifact inventory to cross-reference against:**
+> - `/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver/docs/ROADMAP.md` — dependency-ordered backlog (short/medium/long-term tiers plus Strategic — pending decision)
+> - PRDs in `/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver/prds/`: new PRDs #507 (multi-language architecture), #508 (SCH rebuild), #509 (human-facing output); updated PRDs #373 (Python provider), #374 (Go provider); tracking PRD #505 (canonical tracer name)
+> - GitHub issues in `wiggitywhitney/spinybacked-orbweaver`: leaf issues #510–#519 (use `gh issue view <number>` to read bodies; use `gh issue list --state open --limit 30` to confirm the range exists). Pre-existing relevant issues: #47, #369, #372, #373, #374, #379, #483, #505
+> - Audit document's Action Items section (Code changes applied, Downstream PRD candidates, Cross-cutting concerns) — many items are cross-linked to the PRDs and issues above
+>
+> **Your task:**
+> For each actionable item in each source document, determine whether it's tracked in one of:
+> - The ROADMAP (any tier including Strategic — pending decision)
+> - A PRD (new or updated)
+> - A GitHub issue
+> - The audit document's link-back annotations
+> - Explicitly triaged as "not this repo's work"
+>
+> Produce a table with columns: **Source document · Item description · Status (tracked / untracked) · Location (if tracked) / Recommended action (if untracked)**.
+>
+> For untracked items, recommend one of: add to ROADMAP, create a new issue, add to strategic-pending, confirm "not this repo's work". For tracked items, note the specific location (PRD #, issue #, ROADMAP tier, or audit-doc annotation) so a human can spot-check.
+>
+> If every actionable item is tracked, say so explicitly. Do not pad the response.
+>
+> **Your independence matters.** The user just finished a long session creating these artifacts. Do not trust that session's claims — verify against the actual files on disk and the actual GitHub issue tracker state. If a file or issue the session claims to have created does not exist, report that as a critical finding.
+
 **Checklist:**
 
 - [x] `docs/rules-reference.md` (spiny-orb, canonical) updated — audit decisions and OTel spec relationships for all rules; `/write-docs` + CodeRabbit review cycle
@@ -353,6 +384,8 @@ Agent prompt requirements:
 - [x] Leaf GitHub issues created (10 items — 9 from original triage plus issue #519 for one-shot prompt audit sweep that emerged during M7). Issues: [#510](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/510), [#511](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/511), [#512](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/512), [#513](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/513), [#514](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/514), [#515](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/515), [#516](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/516), [#517](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/517), [#518](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/518), [#519](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/519). Each issue body run through `/write-prompt` (batch-reviewed for 6 of them, self-applied for the first 3) before `gh issue create`. Each body includes a final checklist item to update `PROGRESS.md` per the new global CLAUDE.md convention.
 - [x] All new PRDs and issues linked from `docs/reviews/advisory-rules-audit-2026-04-15.md` Downstream PRD candidates subsection
 - [ ] Audit verification agent spawned; all findings addressed or explicitly resolved (Decision 11)
+
+**Note for `/prd-next` after the M7 closeout commit lands:** pick the audit verification agent task (Decision 11; subagent prompt template is in M7 Part 4 above). The handoff delivery task is intentionally deferred — it runs at `/prd-done` time (after `docs/rules-reference.md` merges to main), not during `/prd-next` iterations. Do not attempt the handoff delivery until the merge has happened.
 
 ---
 
