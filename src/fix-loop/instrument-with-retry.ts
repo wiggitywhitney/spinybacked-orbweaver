@@ -191,11 +191,12 @@ function buildValidationConfig(
       'SCH-002': { enabled: true, blocking: !schemaSparse },
       'SCH-003': { enabled: true, blocking: true },
       'SCH-004': { enabled: true, blocking: false },
-      // PRD #135 checks (advisory for initial rollout)
-      'API-001': { enabled: true, blocking: false },
+      // API-001/004: blocking — diff-based (agent-added imports only)
+      // API-002: advisory — agent cannot modify package.json
+      // API-003: deleted (advisory rules audit 2026-04-15)
+      'API-001': { enabled: true, blocking: true },
       'API-002': { enabled: true, blocking: false },
-      'API-003': { enabled: true, blocking: false },
-      'API-004': { enabled: true, blocking: false },
+      'API-004': { enabled: true, blocking: true },
       'NDS-006': { enabled: true, blocking: true },
       'NDS-004': { enabled: true, blocking: true },
       'NDS-005': { enabled: true, blocking: true },

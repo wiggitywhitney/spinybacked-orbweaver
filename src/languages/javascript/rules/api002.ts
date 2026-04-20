@@ -160,7 +160,10 @@ export function checkSdkPackagePlacement(
             passed: false,
             filePath,
             lineNumber: null,
-            message: `API-004: ${pkgName} found in ${depSection}. Library projects should not depend on SDK packages — deployers choose the SDK. Remove it or move instrumentation setup to a separate app package.`,
+            message: `API-004: ${pkgName} found in ${depSection}. ` +
+              `This is an OTel project-level recommendation (not an agent error): library projects should not bundle SDK packages — deployers choose the SDK. ` +
+              `See: https://github.com/open-telemetry/opentelemetry-js-contrib/blob/main/GUIDELINES.md. ` +
+              `Remove it or move instrumentation setup to a separate app package.`,
             tier: 2,
             blocking: false,
           });
@@ -211,7 +214,7 @@ function fail(filePath: string, message: string): CheckResult {
   };
 }
 
-/** API-002 ValidationRule — @opentelemetry/api must be in the correct dependency bucket. */
+/** API-002 ValidationRule — @opentelemetry/api placement and library SDK bundling check. */
 export const api002Rule: ValidationRule = {
   ruleId: 'API-002',
   dimension: 'API usage',
@@ -231,6 +234,8 @@ export const api002Rule: ValidationRule = {
         blocking: false,
       };
     }
-    return checkOtelApiDependencyPlacement(input.filePath, input.config.projectRoot);
+    const placementResults = checkOtelApiDependencyPlacement(input.filePath, input.config.projectRoot);
+    const sdkResults = checkSdkPackagePlacement(input.filePath, input.config.projectRoot);
+    return [...placementResults, ...sdkResults];
   },
 };

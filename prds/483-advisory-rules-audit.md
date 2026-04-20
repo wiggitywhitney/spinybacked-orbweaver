@@ -265,12 +265,12 @@ Rules in scope: API-001, API-002, API-003, API-004 (all advisory). API-003 and t
 
 Same process as M1.
 
-- [ ] API-001 (non-API OTel package imports forbidden) audited, discussed, decision recorded
-- [ ] API-002 (`@opentelemetry/api` dependency placement) audited, discussed, decision recorded
-- [ ] API-003 (vendor-specific OTel SDK imports forbidden) audited, discussed, decision recorded
-- [ ] API-004 (SDK internal/implementation packages forbidden — split across `api001.ts` and `api002.ts`) audited, discussed, decision recorded
-- [ ] Simple decisions applied to code
-- [ ] API section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
+- [x] API-001 (non-API OTel package imports forbidden) audited, discussed, decision recorded — **refactor + promote to blocking: diff-based detection (agent-added imports only); pre-existing developer imports ignored**
+- [x] API-002 (`@opentelemetry/api` dependency placement) audited, discussed, decision recorded — **keep advisory: agent cannot modify package.json; manifest SDK check activated (was dead code); message cites OTel guidelines**
+- [x] API-003 (vendor-specific OTel SDK imports forbidden) audited, discussed, decision recorded — **deleted: would never fire with diff-based detection; API-001 covers the conceptual scope**
+- [x] API-004 (SDK internal/implementation packages forbidden — split across `api001.ts` and `api002.ts`) audited, discussed, decision recorded — **import-level: diff-based + promote to blocking; manifest-level moved to API-002**
+- [x] Simple decisions applied to code
+- [x] API section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
 ### Milestone M7: Update rule documentation and draft downstream PRDs
 

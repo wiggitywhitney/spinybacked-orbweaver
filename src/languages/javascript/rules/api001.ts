@@ -1,5 +1,5 @@
-// ABOUTME: API-001/003/004 combined Tier 2 check — forbidden import detection.
-// ABOUTME: Scans for OTel SDK internals, vendor-specific SDKs, and OTel non-API packages.
+// ABOUTME: API-001/004 combined Tier 2 check — forbidden import detection.
+// ABOUTME: Scans agent-added imports only (diff against originalCode) for OTel non-API and SDK-internal packages.
 
 import { basename } from 'node:path';
 
@@ -13,12 +13,16 @@ import type { ValidationRule } from '../../types.ts';
  *
  * API-001: Only import from @opentelemetry/api — no SDK, exporter, or
  *          instrumentation packages.
- * API-003: No vendor-specific tracing SDKs.
  * API-004: No OTel SDK internal imports (same mechanism as API-001).
+ *
+ * API-003 (vendor-specific SDKs) was deleted in the advisory rules audit:
+ * with diff-based detection, the rule would never fire because the agent never
+ * adds vendor SDK imports. Pre-existing vendor imports in original code are
+ * the developer's concern, not the agent's.
  */
 const FORBIDDEN_PATTERNS: Array<{
   pattern: RegExp;
-  ruleId: 'API-001' | 'API-003' | 'API-004';
+  ruleId: 'API-001' | 'API-004';
   category: string;
 }> = [
   // API-001: OTel packages other than @opentelemetry/api
@@ -56,72 +60,79 @@ const FORBIDDEN_PATTERNS: Array<{
     ruleId: 'API-004',
     category: 'OTel SDK internal package',
   },
-
-  // API-003: Vendor-specific SDKs
-  {
-    pattern: /^dd-trace$/,
-    ruleId: 'API-003',
-    category: 'Datadog tracing SDK',
-  },
-  {
-    pattern: /^@newrelic\//,
-    ruleId: 'API-003',
-    category: 'New Relic SDK',
-  },
-  {
-    pattern: /^newrelic$/,
-    ruleId: 'API-003',
-    category: 'New Relic SDK',
-  },
-  {
-    pattern: /^@splunk\/otel/,
-    ruleId: 'API-003',
-    category: 'Splunk OTel SDK',
-  },
-  {
-    pattern: /^@dynatrace\//,
-    ruleId: 'API-003',
-    category: 'Dynatrace SDK',
-  },
-  {
-    pattern: /^elastic-apm-node$/,
-    ruleId: 'API-003',
-    category: 'Elastic APM SDK',
-  },
 ];
 
 /**
- * API-001/003/004: Detect forbidden imports in instrumented code.
- *
- * Scans both ESM `import` declarations and CJS `require()` calls for packages
- * that instrumented application code should never import:
- * - OTel SDK, exporter, and instrumentation packages (API-001/004)
- * - Vendor-specific tracing SDKs (API-003)
- *
- * Only `@opentelemetry/api` is allowed — everything else is the deployer's
- * concern, not the application's.
- *
- * @param code - The instrumented JavaScript code to check
- * @param filePath - Path to the file being validated (for CheckResult)
- * @returns CheckResult[] — one per forbidden import, or a single passing result
+ * Collect all forbidden package specifiers found in a code string.
+ * Returns package specifier strings (not full violation objects) for
+ * use in computing the set of pre-existing imports.
  */
-export function checkForbiddenImports(code: string, filePath: string): CheckResult[] {
+function collectForbiddenPackageSpecifiers(code: string): Set<string> {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile(basename(filePath), code);
+  const sourceFile = project.createSourceFile('_scan.js', code);
+  const found = new Set<string>();
+
+  for (const imp of sourceFile.getImportDeclarations()) {
+    const pkg = imp.getModuleSpecifierValue();
+    if (matchForbiddenPackage(pkg)) found.add(pkg);
+  }
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+    if (node.getExpression().getText() !== 'require') return;
+    const args = node.getArguments();
+    if (args.length === 0) return;
+    const firstArg = args[0];
+    if (!Node.isStringLiteral(firstArg)) return;
+    const pkg = firstArg.getLiteralValue();
+    if (matchForbiddenPackage(pkg)) found.add(pkg);
+  });
+
+  return found;
+}
+
+/**
+ * API-001/004: Detect forbidden imports added by the agent.
+ *
+ * Compares forbidden package specifiers in originalCode against instrumentedCode
+ * and reports only packages that are new in the instrumented output — i.e., added
+ * by the agent. Pre-existing forbidden imports in the original file are the
+ * developer's concern and must not block instrumentation of their code.
+ *
+ * Scans both ESM `import` declarations and CJS `require()` calls.
+ *
+ * @param originalCode - The original (pre-instrumentation) JavaScript code
+ * @param instrumentedCode - The agent's instrumented output
+ * @param filePath - Path to the file being validated (for CheckResult)
+ * @returns CheckResult[] — one per agent-added forbidden import, or a single passing result
+ */
+export function checkForbiddenImports(
+  originalCode: string,
+  instrumentedCode: string,
+  filePath: string,
+): CheckResult[] {
+  const preExisting = collectForbiddenPackageSpecifiers(originalCode);
+
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile(basename(filePath), instrumentedCode);
 
   const violations: Array<{
     line: number;
     pkg: string;
-    ruleId: 'API-001' | 'API-003' | 'API-004';
+    ruleId: 'API-001' | 'API-004';
     category: string;
   }> = [];
 
   // Scan ESM import declarations
   for (const imp of sourceFile.getImportDeclarations()) {
     const pkg = imp.getModuleSpecifierValue();
+    if (preExisting.has(pkg)) continue;
     const match = matchForbiddenPackage(pkg);
     if (match) {
       violations.push({
@@ -145,6 +156,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
     if (!Node.isStringLiteral(firstArg)) return;
 
     const pkg = firstArg.getLiteralValue();
+    if (preExisting.has(pkg)) return;
     const match = matchForbiddenPackage(pkg);
     if (match) {
       violations.push({
@@ -179,7 +191,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
       `SDK configuration, exporters, and vendor SDKs belong in the deployment ` +
       `setup, not in instrumented source files.`,
     tier: 2 as const,
-    blocking: false,
+    blocking: true,
   }));
 }
 
@@ -188,7 +200,7 @@ export function checkForbiddenImports(code: string, filePath: string): CheckResu
  */
 function matchForbiddenPackage(
   pkg: string,
-): { ruleId: 'API-001' | 'API-003' | 'API-004'; category: string } | null {
+): { ruleId: 'API-001' | 'API-004'; category: string } | null {
   for (const fp of FORBIDDEN_PATTERNS) {
     if (fp.pattern.test(pkg)) {
       return { ruleId: fp.ruleId, category: fp.category };
@@ -202,11 +214,14 @@ function matchForbiddenPackage(
  * Returns a passing result when there are no violations for that rule.
  */
 function filterForbiddenImports(
-  code: string,
+  originalCode: string,
+  instrumentedCode: string,
   filePath: string,
-  ruleId: 'API-001' | 'API-003' | 'API-004',
+  ruleId: 'API-001' | 'API-004',
 ): CheckResult[] {
-  const violations = checkForbiddenImports(code, filePath).filter(r => r.ruleId === ruleId);
+  const violations = checkForbiddenImports(originalCode, instrumentedCode, filePath).filter(
+    r => r.ruleId === ruleId,
+  );
   if (violations.length === 0) {
     return [{
       ruleId,
@@ -225,25 +240,12 @@ function filterForbiddenImports(
 export const api001Rule: ValidationRule = {
   ruleId: 'API-001',
   dimension: 'API usage',
-  blocking: false,
+  blocking: true,
   applicableTo(language: string): boolean {
     return language === 'javascript' || language === 'typescript';
   },
   check(input) {
-    return filterForbiddenImports(input.instrumentedCode, input.filePath, 'API-001');
-  },
-};
-
-/** API-003 ValidationRule — no vendor-specific tracing SDK imports. */
-export const api003Rule: ValidationRule = {
-  ruleId: 'API-003',
-  dimension: 'API usage',
-  blocking: false,
-  applicableTo(language: string): boolean {
-    return language === 'javascript' || language === 'typescript';
-  },
-  check(input) {
-    return filterForbiddenImports(input.instrumentedCode, input.filePath, 'API-003');
+    return filterForbiddenImports(input.originalCode, input.instrumentedCode, input.filePath, 'API-001');
   },
 };
 
@@ -251,11 +253,11 @@ export const api003Rule: ValidationRule = {
 export const api004Rule: ValidationRule = {
   ruleId: 'API-004',
   dimension: 'API usage',
-  blocking: false,
+  blocking: true,
   applicableTo(language: string): boolean {
     return language === 'javascript' || language === 'typescript';
   },
   check(input) {
-    return filterForbiddenImports(input.instrumentedCode, input.filePath, 'API-004');
+    return filterForbiddenImports(input.originalCode, input.instrumentedCode, input.filePath, 'API-004');
   },
 };
