@@ -252,12 +252,12 @@ For SCH-001/002: evaluate the sparse-registry downgrade logic itself, not just t
 
 Same process as M1 plus the downgrade logic review.
 
-- [ ] SCH-001/002 (span names and attribute keys match registry) sparse-registry downgrade logic reviewed and discussed
-- [ ] SCH-001 (span names match registry operations) audited, discussed, decision recorded
-- [ ] SCH-002 (attribute keys match registry names) audited, discussed, decision recorded
-- [ ] SCH-004 (no redundant schema entries) audited, discussed, decision recorded
-- [ ] Simple decisions applied to code
-- [ ] SCH section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
+- [x] SCH-001/002 (span names and attribute keys match registry) sparse-registry downgrade logic reviewed and discussed
+- [x] SCH-001 (span names match registry operations) audited, discussed, decision recorded — **rebuild: LLM judge in naming quality fallback replaced with deterministic checks; semantic duplicate detection added to extension acceptance path; `applicableTo` incorrectly returns true (fix in rebuild)**
+- [x] SCH-002 (attribute keys match registry names) audited, discussed, decision recorded — **rebuild: semantic duplicate detection added to extension acceptance path; SCH-004 patterns migrated; `setAttributes(variable)` false negative accepted as-is**
+- [x] SCH-004 (no redundant schema entries) audited, discussed, decision recorded — **delete after SCH-002 rebuild migrates its patterns**
+- [x] Simple decisions applied to code — no immediate code changes; all decisions are rebuild/delete candidates for downstream PRD
+- [x] SCH section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
 ### Milestone M6: API rules
 
