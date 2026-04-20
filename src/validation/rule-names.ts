@@ -24,6 +24,7 @@ const RULE_NAMES: Record<string, string> = {
   'CDQ-001': 'Spans Closed',
   'CDQ-005': 'Async Context Maintained',
   'CDQ-006': 'isRecording Guard',
+  'CDQ-007': 'Attribute Data Quality',
   'CDQ-008': 'Tracer Naming',
   'CDQ-009': 'Null-Safe Guard',
   'CDQ-010': 'String Method Type Safety',

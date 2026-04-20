@@ -210,7 +210,6 @@ Your output is scored against these rules. Violating gate rules causes immediate
 ### API-Only Dependency
 
 - **API-002**: \`@opentelemetry/api\` must be a peerDependency (libraries) or dependency (applications).
-- **API-003**: Do NOT introduce vendor-specific SDKs (\`dd-trace\`, \`@newrelic/*\`, \`@splunk/otel\`).
 - **API-004**: Do NOT import from \`@opentelemetry/sdk-*\`, \`@opentelemetry/exporter-*\`, or \`@opentelemetry/instrumentation-*\` in source files.
 
 ### Schema Fidelity

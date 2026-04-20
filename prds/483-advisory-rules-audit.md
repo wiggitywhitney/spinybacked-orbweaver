@@ -166,6 +166,9 @@ When the decision is `rebuild`, add a paragraph below the table row with:
 | 6 | Rule documentation in `docs/rules-reference.md` (this repo) and `docs/research/eval-target-criteria.md` (eval repo at `~/Documents/Repositories/spinybacked-orbweaver-eval`) must include each rule's OTel spec relationship — directly spec-grounded with citation, indirectly consistent, or project-specific concern. M7 directly edits both documents; it does not create a GitHub issue for this work. | Users and contributors cannot distinguish OTel-required rules from project-specific design choices. That distinction matters for deployment decisions and blocking promotion assessments. | 2026-04-18 |
 | 8 | RST-003 (thin wrapper spans) detection narrowed to same-file delegations only. Cross-file thin wrapper duplicate spans are accepted as a known gap. | spiny-orb instruments one file at a time; the agent cannot see whether an imported function is instrumented in another file. Firing on cross-file delegations produces unfixable advisory findings — the agent cannot verify the delegated function's span status. Narrowed: callee must be a simple identifier (not a method call) declared in the same source file. When the callee is an imported function or method on an object, RST-003 does not fire. | 2026-04-18 |
 | 7 | CDQ-007's filesystem path sub-check is a refactor: split into two separate sub-checks. (1) Privacy/security check: flag path-like values in attributes whose key is NOT an OTel `file.*` semantic convention — suggest `path.basename()`. (2) OTel file convention exemption: when the attribute key IS `file.*`, a full path is OTel-correct per the `file.path` semantic convention — do not flag. | The current single check produces false positives on spec-correct `file.path` usage. Using `span.setAttribute('file.path', filePath)` with a full path is common in any service touching the filesystem — not a rare edge case. Conflating privacy concern with OTel-correct usage means the message and remediation are wrong for one of the two cases. | 2026-04-18 |
+| 9 | M7 adopts a ROADMAP-first strategy. The audit's "Downstream PRD candidates" are integrated with findings from release-it eval run-1 (`~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/release-it/run-1/actionable-fix-output.md`) and the 2026-04-16 deep-dive (`~/Downloads/orbweaver-verified-deep-dive-2026-04-16.md`) into a single deduplicated backlog organized in `docs/ROADMAP.md`. Individual PRDs and issues become children of the ROADMAP. | Three independent sources of actionable changes collided at M7 (audit, eval run-1, deep-dive). Building PRDs from the audit alone would risk re-sequencing against eval-derived or deep-dive items weeks later and creating PRDs that must be rewritten when other findings surface. ROADMAP.md is the orchestration artifact; dependency ordering across all three sources lives there. | 2026-04-20 |
+| 10 | PRD #372 (TypeScript provider) branch `feature/prd-372-typescript-provider` is preserved, not discarded. The multi-language architecture refactor will add new interface members as needed; the TS provider implements them during rebase rather than being rewritten. The PRD itself stays. Downstream PRDs that touch shared architecture — specifically the multi-language rule architecture PRD and the SCH-001/002 rebuild PRD — **must explicitly surface TS-provider integration impact** (how the preserved TS branch work integrates with the refactored interface during rebase). | The multi-language architecture concerns identified in the deep-dive are in hot-path code (`src/agent/instrument-file.ts`, `src/agent/prompt.ts`, `src/fix-loop/index.ts`) that bypasses the `LanguageProvider` interface — not in the interface itself. The TS canary passed legitimately at 0/27 interface members changed; TS shares the JS abstraction via the explicit `javascript \|\| typescript` guard. The architecture refactor targets Python/Go blockers, not TS internals. Throwing away the TS branch would lose ~18 commits of tested work (including the canary test result) for negligible architectural benefit. Branches `feature/493-catch-block-consistency` and `fix/429-findtsexports-dedup` (both 0 commits ahead of main, both underlying issues closed) were deleted during this session. | 2026-04-20 |
+| 11 | M7 includes a mandatory audit verification step. After `docs/ROADMAP.md`, new PRD skeletons, PRD updates, and leaf issues are in place, spawn an audit agent that reads all three supporting documents in full and verifies every actionable item is represented in the ROADMAP, a PRD, an issue, or explicitly triaged as "not this repo's work" or "strategic — pending decision". The agent returns a table of any items not yet tracked. Findings are addressed before M7 closes. | Three sources produced ~30+ findings; a deduplicated backlog is easy to silently drop items from during the rewrite. The cost of the verification pass is low; the cost of losing an actionable finding (and discovering it weeks later) is high. The audit agent reads the supporting documents from scratch with no assumption about what was decided in conversation, providing an independent check. | 2026-04-20 |
 
 ---
 
@@ -272,27 +275,84 @@ Same process as M1.
 - [x] Simple decisions applied to code
 - [x] API section written in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
-### Milestone M7: Update rule documentation and draft downstream PRDs
+### Milestone M7: Update rule documentation, integrate multi-source backlog, and draft downstream PRDs
 
 **Part 1 — Rule documentation update (Decision 6):**
 
 Directly edit rule documentation in both locations to reflect all audit decisions and add each rule's OTel spec relationship:
 
-- **This repo:** `docs/rules-reference.md`
-- **Eval repo:** `~/Documents/Repositories/spinybacked-orbweaver-eval/docs/research/eval-target-criteria.md`
+- **This repo:** `docs/rules-reference.md` — **canonical source of truth** for rule specs, audit decisions, and OTel spec relationships. Full `/write-docs` + CodeRabbit review cycle.
+- **Eval repo:** `docs/research/eval-target-criteria.md` at `~/Documents/Repositories/spinybacked-orbweaver-eval` — **light edits only**: update rule list to match post-audit state (remove deleted rules, add new rules, fix renamed references); add a prominent link to canonical `docs/rules-reference.md` in spiny-orb near the top.
+- **Eval repo:** `README.md` at `~/Documents/Repositories/spinybacked-orbweaver-eval` — add a link to canonical `docs/rules-reference.md` in spiny-orb after the rubric-dimension table in the "How evaluation works" section.
 
-For each rule, documentation must reflect: (a) audit decisions — deletions, registrations, promotions to blocking, message changes; (b) OTel spec relationship — directly spec-grounded with citation, indirectly consistent, or project-specific concern not mandated by spec. The OTel alignment subsections written during M1–M6 are the input for (b).
+Eval-repo changes land in a single feature branch → PR → CodeRabbit review → merge in the eval repo. Rule spec details live only in spiny-orb (no duplication, no sync mechanism, zero drift risk); eval-repo docs link to them.
 
-**Part 2 — Downstream PRDs (Decision 3):**
+For each rule in the canonical `docs/rules-reference.md`, documentation must reflect: (a) audit decisions — deletions, registrations, promotions to blocking, message changes; (b) OTel spec relationship — directly spec-grounded with citation, indirectly consistent, or project-specific concern not mandated by spec. The OTel alignment subsections written during M1–M6 are the input for (b).
 
-Read the completed `docs/reviews/advisory-rules-audit-2026-04-15.md` in full. Group rebuild and complex-refactor decisions by architectural affinity. For each group: create a GitHub issue and PRD skeleton drawn directly from the audit document's rebuild narratives. Do not re-audit rules; the audit document is the input.
+**Part 2 — ROADMAP-first integration (Decision 9):**
 
-- [ ] `docs/rules-reference.md` updated — audit decisions and OTel spec relationships for all rules
-- [ ] `eval-target-criteria.md` updated — audit decisions and OTel spec relationships for all rules
-- [ ] Audit document read in full
-- [ ] Rebuild/complex-refactor decisions grouped by architectural affinity
-- [ ] GitHub issue and PRD skeleton created for each group
-- [ ] Downstream PRDs linked from `docs/reviews/advisory-rules-audit-2026-04-15.md`
+Integrate the audit's "Downstream PRD candidates" with findings from release-it eval run-1 and the 2026-04-16 deep-dive into a single deduplicated backlog organized in `docs/ROADMAP.md`. Individual PRDs and issues are children of the ROADMAP.
+
+**Supporting documents (sources for backlog items):**
+1. `docs/reviews/advisory-rules-audit-2026-04-15.md` — Action Items and Downstream PRD candidates (this audit's output)
+2. `~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/release-it/run-1/actionable-fix-output.md` — spiny-orb-side quality and debuggability findings from release-it eval run-1 (infrastructure items like gpgsign workaround and PAT scope are NOT this repo's work and are excluded)
+3. `~/Downloads/orbweaver-verified-deep-dive-2026-04-16.md` — deep-dive verified at commit e5593c4; 8/8 spot-checks passed during this session; multi-language blockers and deployment polish findings
+
+**ROADMAP structure** follows the existing short-term / medium-term / long-term tiers from the current `docs/ROADMAP.md`. Add a continuous-leaf section for one-commit issues and a strategic-pending section for items that need a decision before work begins. Remove stale references (e.g., closed issue #378).
+
+**Part 3 — Downstream PRDs and leaf issues:**
+
+*New PRDs to skeleton:*
+- **Multi-language rule architecture cleanup** — subsumes deep-dive must-fix items #1-4 (`src/agent/instrument-file.ts` refactor, `src/agent/prompt.ts` parameterization, `src/validation/tier2/` SCH duplicate removal, `src/fix-loop/index.ts` barrel cleanup) and audit Action Item "Multi-language rule architecture — standalone PRD". Blocks PRD #373 (Python), PRD #374 (Go), and the SCH rebuild PRD. **Must surface TS-provider integration impact per Decision 10**: the preserved TS branch work on `feature/prd-372-typescript-provider` integrates with the refactored interface during rebase; any new `LanguageProvider` methods introduced by this PRD must include a TS implementation.
+- **SCH-001/002 rebuild + SCH-004 deletion + SCH-005 audit** — scope from audit's SCH rebuild narratives. Blocked by multi-language rule architecture PRD. **Must surface TS-provider integration impact per Decision 10**: SCH rules are language-agnostic concept; rebuilt rules must interact correctly with `TS_INHERITED_RULE_IDS` on the TS branch (or on merged TS provider if shipped by then).
+- **Human-facing advisory output** — scope from audit's "Human-facing advisory output" Action Item. Not dependent on anything; parallelizable.
+
+*PRD updates (add milestones, not new PRDs):*
+- **PRD #373** — add milestone for Python API-002-equivalent package-hygiene rule (reads `pyproject.toml` / `setup.cfg`). Add blocked-by note referencing the multi-language rule architecture PRD.
+- **PRD #374** — add milestone for Go API-002-equivalent package-hygiene rule (reads `go.mod`). Add blocked-by note referencing the multi-language rule architecture PRD.
+
+*Leaf GitHub issues (one commit each):*
+- COV-005 receiver filter fragility (from audit)
+- `action.yml` Weaver default `0.21.2` → `0.22.1` (from deep-dive)
+- `action.yml` add `branding:` section — unblocks Marketplace #369 (from deep-dive)
+- MCP server version string `0.1.0` → `1.0.0` in `src/interfaces/mcp.ts` (from deep-dive)
+- Anthropic SDK version check + bump (pin `^0.78.0` is months stale per deep-dive)
+- `testCommand` support in `orb.yaml` — eval run-2 unblocker (from release-it run-1 spiny-orb-findings P1)
+- Surface Prettier diff in fix-loop lint failures — bundles eval RUN1-2 (agent-side arrowParens mis-generation) and RUN1-4 (tool-side diff surface)
+- Capture test failure output on checkpoint / end-of-run failure (eval RUN1-5)
+- Fix-loop debuggability sweep — bundles eval RUN1-6 (Weaver shutdown "fetch failed" opacity), RUN1-7 (live-check partial message clarity), RUN1-8 (general check failure message audit)
+
+Each new issue body must be run through `/write-prompt` before `gh issue create` per global CLAUDE.md rule.
+
+*Strategic items — do NOT create issues:* Node.js engine requirement relaxation, multi-LLM support, expose IS-relevant tools through MCP. These are deep-dive strategic items that require a decision before work begins; they are surfaced in the ROADMAP "Strategic — pending decision" section only.
+
+*Items NOT in this repo's scope:* eval-repo infrastructure fixes (gpgsign workaround RUN1-1, PAT scope RUN1-3). These are tracked in the eval repo, not here.
+
+**Part 4 — Audit verification step (Decision 11):**
+
+After Parts 1–3 are complete, spawn an audit agent that reads the three supporting documents in full and verifies every actionable item is represented in `docs/ROADMAP.md`, a PRD (new or updated), an issue, or explicitly triaged as "not this repo's work" or "strategic — pending decision". The agent returns a table of any items not yet tracked. Address findings before closing M7.
+
+Agent prompt requirements:
+- Read each supporting document in full (no skimming)
+- Cross-reference every actionable item against ROADMAP.md, new PRDs, updated PRDs, created issues, and the audit document's link-back section
+- Report unmatched items in a table with source, item description, and recommended action (add to ROADMAP, create issue, add to strategic-pending, or confirm "not this repo")
+- The agent's independence matters — it must not assume what was decided in conversation
+
+**Checklist:**
+
+- [x] `docs/rules-reference.md` (spiny-orb, canonical) updated — audit decisions and OTel spec relationships for all rules; `/write-docs` + CodeRabbit review cycle
+- [x] Eval-team handoff document `docs/reviews/handoff-eval-team-2026-04-20.md` drafted and committed (self-contained instructions for updating eval-repo `README.md` and `docs/research/eval-target-criteria.md`). The handoff is held locally until `docs/rules-reference.md` merges in spiny-orb — delivering it before that point would hand the eval team work blocked on a prerequisite they can't observe. The eval team opens their own feature branch → `/write-docs` → PR → CodeRabbit cycle; this PRD does not touch the eval repo directly.
+- [ ] (Final action at PRD close, after `docs/rules-reference.md` is on main) Deliver `docs/reviews/handoff-eval-team-2026-04-20.md` to the eval team
+- [x] All three supporting documents read in full (audit document, eval run-1 actionable-fix-output, 2026-04-16 deep-dive)
+- [x] `docs/ROADMAP.md` updated with deduplicated backlog — stale issue #378 removed; multi-language architecture PRD added; TS provider position clarified; continuous-leaf and strategic-pending sections added
+- [x] Multi-language rule architecture PRD skeleton created — TS-provider integration surfaced (Decision 10). → [PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507)
+- [x] SCH-001/002 rebuild + SCH-004 deletion + SCH-005 audit PRD skeleton created — TS-provider integration surfaced (Decision 10). → [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)
+- [x] Human-facing advisory output PRD skeleton created. → [PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)
+- [x] PRD #373 updated — API-002-equivalent Python package-hygiene milestone added; blocked-by note added
+- [x] PRD #374 updated — API-002-equivalent Go package-hygiene milestone added; blocked-by note added
+- [x] Leaf GitHub issues created (10 items — 9 from original triage plus issue #519 for one-shot prompt audit sweep that emerged during M7). Issues: [#510](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/510), [#511](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/511), [#512](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/512), [#513](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/513), [#514](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/514), [#515](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/515), [#516](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/516), [#517](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/517), [#518](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/518), [#519](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/519). Each issue body run through `/write-prompt` (batch-reviewed for 6 of them, self-applied for the first 3) before `gh issue create`. Each body includes a final checklist item to update `PROGRESS.md` per the new global CLAUDE.md convention.
+- [x] All new PRDs and issues linked from `docs/reviews/advisory-rules-audit-2026-04-15.md` Downstream PRD candidates subsection
+- [ ] Audit verification agent spawned; all findings addressed or explicitly resolved (Decision 11)
 
 ---
 
