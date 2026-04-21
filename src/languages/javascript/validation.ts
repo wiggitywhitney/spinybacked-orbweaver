@@ -89,6 +89,7 @@ export function checkSyntax(filePath: string): CheckResult {
  */
 function buildPrettierDiff(before: string, after: string): string {
   const CONTEXT = 2;
+  const MAX_DIFF_LINES = 200;
   const beforeLines = before.split('\n');
   const afterLines = after.split('\n');
   const maxLen = Math.max(beforeLines.length, afterLines.length);
@@ -110,6 +111,10 @@ function buildPrettierDiff(before: string, after: string): string {
   let lastIdx = -2;
   for (let i = 0; i < maxLen; i++) {
     if (!include.has(i)) continue;
+    if (output.length >= MAX_DIFF_LINES) {
+      output.push('... (diff truncated)');
+      break;
+    }
     if (lastIdx >= 0 && i > lastIdx + 1) output.push('...');
     if (changed.has(i)) {
       if (i < beforeLines.length) output.push(`-${beforeLines[i]}`);
