@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-21) Started implementing the advisory rule feedback mechanism — the fix loop now explicitly directs the agent to address advisory findings (non-blocking quality issues like unnecessary spans and attribute data quality) alongside blocking failures, rather than silently skipping them. Previously the fix prompt said "Fix ONLY the failing rules," which caused the agent to ignore advisory findings even though they were present in the feedback. The prompt framing has been updated to distinguish blocking failures (must resolve to pass) from advisory findings (should address, won't fail the file). A follow-on advisory-only polish pass for files that already pass blocking validation is next.
+
 - (2026-04-21) Bumped the `action.yml` default Weaver version from `0.21.2` to `0.22.1` to match what CI has been running. Users who rely on the GitHub Action without pinning `weaver-version` explicitly were previously getting a stale Weaver binary that differed from what CI validated against.
 
 - (2026-04-21) Added a `branding:` block (`icon: zap`, `color: orange`) to `action.yml`. The GitHub Actions Marketplace requires a branding entry — without it the action cannot be listed there.

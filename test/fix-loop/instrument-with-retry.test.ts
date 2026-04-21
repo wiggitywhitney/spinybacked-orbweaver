@@ -92,6 +92,27 @@ function makeValidationWithAdvisory(filePath: string): ValidationResult {
   };
 }
 
+/** Validation where a blocking failure and an advisory finding coexist. */
+function makeFailingValidationWithAdvisory(filePath: string): ValidationResult {
+  return {
+    passed: false,
+    tier1Results: [
+      { ruleId: 'ELISION', passed: true, filePath, lineNumber: null, message: 'No elision detected', tier: 1, blocking: true },
+      { ruleId: 'NDS-001', passed: false, filePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+      { ruleId: 'LINT', passed: true, filePath, lineNumber: null, message: 'Lint passed', tier: 1, blocking: true },
+    ],
+    tier2Results: [
+      { ruleId: 'RST-001', passed: false, filePath, lineNumber: 20, message: 'Evaluate whether helper is a utility function', tier: 2, blocking: false },
+    ],
+    blockingFailures: [
+      { ruleId: 'NDS-001', passed: false, filePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+    ],
+    advisoryFindings: [
+      { ruleId: 'RST-001', passed: false, filePath, lineNumber: 20, message: 'Evaluate whether helper is a utility function', tier: 2, blocking: false },
+    ],
+  };
+}
+
 /** Minimal AgentConfig with defaults for testing. */
 function makeConfig(overrides?: Partial<AgentConfig>): AgentConfig {
   return {
@@ -805,7 +826,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     expect(capturedOptions!.effortOverride).toBe('low');
   });
 
-  it('feedback prompt constrains scope to failing rules only', async () => {
+  it('feedback prompt directs agent to fix blocking failures and address advisory findings', async () => {
     let callCount = 0;
     let capturedOptions: InstrumentFileCallOptions | undefined;
     const badOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: attempt1Tokens });
@@ -830,8 +851,101 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
     );
 
-    expect(capturedOptions!.feedbackMessage).toContain('Fix ONLY the failing rules');
-    expect(capturedOptions!.feedbackMessage).toContain('Do not restructure');
+    expect(capturedOptions!.feedbackMessage).toContain('validation errors');
+    expect(capturedOptions!.feedbackMessage).toContain('blocking failures');
+    expect(capturedOptions!.feedbackMessage).toContain('advisory findings');
+    expect(capturedOptions!.feedbackMessage).toContain('minimal, targeted changes');
+  });
+
+  it('feedback prompt contains both blocking and advisory directives', async () => {
+    let callCount = 0;
+    let capturedOptions: InstrumentFileCallOptions | undefined;
+    const badOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: attempt1Tokens });
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+        callCount++;
+        if (callCount === 1) {
+          return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        }
+        capturedOptions = options;
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad;\n') return makeFailingValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    // Prompt must direct agent to fix blocking failures
+    expect(capturedOptions!.feedbackMessage).toMatch(/blocking failure|blocking check|status: fail/i);
+    // Prompt must also direct agent to address advisory findings
+    expect(capturedOptions!.feedbackMessage).toMatch(/advisory finding|advisory check|status: advisory/i);
+  });
+
+  it('feedback prompt includes advisory findings with advisory status label', async () => {
+    let callCount = 0;
+    let capturedOptions: InstrumentFileCallOptions | undefined;
+    const badOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: attempt1Tokens });
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+        callCount++;
+        if (callCount === 1) {
+          return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        }
+        capturedOptions = options;
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad;\n') return makeFailingValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    // Advisory findings from tier2Results must appear with `advisory` status in the feedback
+    expect(capturedOptions!.feedbackMessage).toContain('RST-001 | advisory');
+  });
+
+  it('feedback prompt does not frame advisory findings as blocking failures', async () => {
+    let callCount = 0;
+    let capturedOptions: InstrumentFileCallOptions | undefined;
+    const badOutput = makeInstrumentationOutput({ instrumentedCode: 'bad;\n', tokenUsage: attempt1Tokens });
+    const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+        callCount++;
+        if (callCount === 1) {
+          return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        }
+        capturedOptions = options;
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad;\n') return makeFailingValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+    );
+
+    // The "ONLY" directive frames advisory findings as irrelevant — it must not be present
+    expect(capturedOptions!.feedbackMessage).not.toContain('Fix ONLY');
+    // Advisory findings must be described as non-blocking (not failures that gate the file)
+    expect(capturedOptions!.feedbackMessage).toMatch(/non-blocking|will not fail|advisory/i);
   });
 
   it('reverts file to original between attempts', async () => {

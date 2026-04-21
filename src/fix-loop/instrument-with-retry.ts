@@ -222,7 +222,7 @@ function buildFixPrompt(
   existingSpanNames?: string[],
   repeatLineEscalation?: string,
 ): string {
-  let prompt = `The instrumented file has validation errors. Fix ONLY the failing rules listed below. Do not restructure code that is not related to a failing rule. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
+  let prompt = `The instrumented file has validation errors. Fix the **blocking failures** (status: fail) — these must be resolved for the file to pass. Also address the **advisory findings** (status: advisory) — these are non-blocking quality improvements you should make but will not fail the file if unresolved. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
   if (existingSpanNames && existingSpanNames.length > 0) {
     prompt += `\n\nReminder: these span names are already in use by other files — do not reuse them: ${existingSpanNames.join(', ')}`;
   }
