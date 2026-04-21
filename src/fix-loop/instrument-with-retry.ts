@@ -193,7 +193,7 @@ function buildValidationConfig(
       'SCH-004': { enabled: true, blocking: false },
       // API-001/004: blocking — diff-based (agent-added imports only)
       // API-002: advisory — agent cannot modify package.json
-      // API-003: deleted (advisory rules audit 2026-04-15)
+      // API-003: deleted in the advisory rules audit
       'API-001': { enabled: true, blocking: true },
       'API-002': { enabled: true, blocking: false },
       'API-004': { enabled: true, blocking: true },

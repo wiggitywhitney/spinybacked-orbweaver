@@ -27,10 +27,11 @@ function buildOriginalAnchorMap(source: SourceFile): Map<string, TryStatement> {
 
 /**
  * Returns true if the catch clause's block text contains any error recording call.
- * Checks for recordException() — the primary OTel error recording signal.
+ * Checks for recordException() and setStatus(ERROR) — the OTel error recording signals.
  */
 function catchHasErrorRecording(catchClause: import('ts-morph').CatchClause): boolean {
-  return catchClause.getBlock().getText().includes('recordException(');
+  const text = catchClause.getBlock().getText();
+  return text.includes('recordException(') || text.includes('setStatus(');
 }
 
 /**

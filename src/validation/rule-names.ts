@@ -43,7 +43,7 @@ const RULE_NAMES: Record<string, string> = {
   'NDS-006': 'Module System Match',
   'NDS-007': 'Expected Catch Unmodified',
 
-  // Tier 2 — API (API-003 deleted in advisory rules audit 2026-04-15)
+  // Tier 2 — API (API-003 deleted in the advisory rules audit)
   'API-001': 'OTel API Only',
   'API-002': 'Dependency Placement',
   'API-004': 'SDK Package Placement',
