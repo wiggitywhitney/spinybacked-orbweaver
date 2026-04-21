@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-04-21) Fixed acceptance gate failures on `index.js` (commit-story-v2 fixture, 533 lines): the agent was removing an inner try/catch block at line 489 when wrapping `main()` in a span, triggering NDS-005. Two changes combined: (1) doubled TOKENS_PER_LINE from 50 to 100, giving index.js a 61K output budget instead of 34K — enough headroom for adaptive thinking plus JSON output without truncation; also raised MAX_OUTPUT_TOKENS_PER_FILE from 50K to 100K so complex files can retry without hitting the per-file abort threshold. (2) Added concrete NDS-005 guidance to the agent prompt covering the inner-nested case: when wrapping a function that contains inner try/catch blocks, those blocks must be preserved exactly as nested blocks inside the outer span try — not removed or merged with the span's own catch.
+
 ### Added
 
 - (2026-04-21) Bumped the `action.yml` default Weaver version from `0.21.2` to `0.22.1` to match what CI has been running. Users who rely on the GitHub Action without pinning `weaver-version` explicitly were previously getting a stale Weaver binary that differed from what CI validated against.

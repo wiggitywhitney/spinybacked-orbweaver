@@ -187,7 +187,37 @@ Your output is scored against these rules. Violating gate rules causes immediate
 ### Non-Destructiveness
 
 - **NDS-004**: Do NOT change exported function signatures — parameters, return types, or export declarations.
-- **NDS-005**: Do NOT restructure existing try/catch/finally blocks, reorder catch clauses, or change throw behavior.
+- **NDS-005**: Do NOT restructure existing try/catch/finally blocks, reorder catch clauses, or change throw behavior. When adding a span wrapper, all original try/catch blocks must survive intact — either as the outer structure (with \`span.end()\` added to their finally) or as nested blocks inside the outer span try. Never remove or merge an inner try/catch to simplify the span wrapper structure.
+
+  **Pattern A — original try/catch becomes the outer wrapper** (add \`span.end()\` to its finally):
+  \`\`\`js
+  tracer.startActiveSpan('op', async (span) => {
+    try {
+      // original try body — unchanged
+    } catch (err) {
+      // original catch body — unchanged
+    } finally {
+      span.end(); // only addition
+    }
+  });
+  \`\`\`
+
+  **Pattern B — wrapping a function that has inner try/catch blocks** (keep them nested inside):
+  \`\`\`js
+  tracer.startActiveSpan('op', async (span) => {
+    try {
+      // ... other original code ...
+      try {           // inner try/catch preserved exactly as-is
+        const result = await someOp();
+      } catch (err) {
+        // original catch body — unchanged, even if it's a graceful-degradation catch
+      }
+      // ... more original code ...
+    } finally {
+      span.end();
+    }
+  });
+  \`\`\`
 - **NDS-007**: Do NOT add \`recordException()\` or \`setStatus(ERROR)\` to catch blocks that handle expected conditions gracefully — catch blocks that return a default value, return empty, or swallow the error without propagating it. These are graceful-degradation catches, not failures. Adding error recording to them creates false alerts. When in doubt: if the original catch does not propagate the error (no \`throw\`, no \`next(err)\`, no \`reject(err)\`, no \`return Promise.reject(err)\`), do not add error recording to it.
 
 ### Coverage
