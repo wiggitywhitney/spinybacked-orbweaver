@@ -267,9 +267,11 @@ Following Part 8 checklist, Step 4:
 Following Part 8 checklist, Steps 5 and 6:
 
 **Before running the eval (D-7):**
-- [ ] Rebase this branch on main — pulls in all run-13 fixes (#435–#440: null-safe guards, string coercion, smart rollback, summaryNode NDS-003, partial commit, SCH-004 judge quality)
+- [ ] Verify PRD #546 (advisory rule feedback mechanism) has merged to main — the eval should run with advisory findings directed to the agent, not silently dropped. If #546 has not merged, file it as a blocker before starting C7.
+- [ ] Rebase this branch on main — pulls in all run-13 fixes (#435–#440: null-safe guards, string coercion, smart rollback, summaryNode NDS-003, partial commit, SCH-004 judge quality) and any subsequent prompt guidance added to the JS prompt (apply each to `src/languages/typescript/prompt.ts` as described below)
 - [ ] Apply null-guard guidance to `src/languages/typescript/prompt.ts`: when accessing a property on a guarded value, use `!= null` not `!== undefined` (matching the JS prompt fix from #435)
 - [ ] Apply string coercion guidance to `src/languages/typescript/prompt.ts`: when extracting a date string from a timestamp field, use `new Date(value).toISOString().split('T')[0]` (matching the JS prompt fix from #436)
+- [ ] Apply NDS-005 try/catch preservation guidance to `src/languages/typescript/prompt.ts`: when wrapping code that already contains a try/catch in a span callback, preserve the try/catch intact inside the callback — never remove it to simplify the span wrapper structure (matching the JS prompt fix from PR #542, 2026-04-21)
 
 - [ ] Identify a real open-source TypeScript project to use as evaluation target (not a fixture — a real project)
 - [ ] Instrument 20+ files using `spiny-orb instrument`
