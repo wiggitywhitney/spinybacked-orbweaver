@@ -46,7 +46,7 @@ function catchHasErrorRecording(catchClause: import('ts-morph').CatchClause): bo
  * false alerts (the caller sees success; the OTel spec says such errors SHOULD NOT be
  * recorded on spans).
  *
- * For each instrumented try/catch that contains recordException():
+ * For each instrumented try/catch that contains recordException() or setStatus(...ERROR...):
  * - Finds the corresponding original try block by body anchor
  * - Checks whether the original catch was expected-condition (no rethrow)
  * - Skips if the original catch already had error recording (pre-existing, not agent-introduced)
@@ -62,7 +62,8 @@ export function checkNoErrorRecordingInExpectedConditionCatches(
   instrumentedCode: string,
   filePath: string,
 ): CheckResult[] {
-  const ext = /\.(ts|tsx|mts|cts)$/i.test(filePath) ? 'ts' : 'js';
+  const extMatch = filePath.match(/\.(tsx|ts|mts|cts|jsx|js|mjs|cjs)$/i);
+  const ext = (extMatch?.[1] ?? 'js').toLowerCase();
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,

@@ -59,7 +59,7 @@ if err != nil {
 }
 ```
 
-COV-003 (error recording) must detect `if err != nil` blocks that either (a) return without recording the error on the span, or (b) propagate the error in a way that makes it invisible to OTel. This is a completely different AST pattern from `try/catch` or `try/except`.
+COV-003 (error recording) must detect `if err != nil` blocks that propagate the error to the caller (i.e., `return ..., err`) without recording it on the span. Blocks that swallow the error and return a default/zero value must NOT be flagged — that is Go's graceful-degradation pattern, equivalent to an expected-condition catch. See Milestone E4 for the full rule spec. This is a completely different AST pattern from `try/catch` or `try/except`.
 
 **What stays the same:**
 - Weaver schema contract (language-agnostic)
