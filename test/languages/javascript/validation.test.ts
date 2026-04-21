@@ -240,6 +240,46 @@ describe('checkLint', () => {
     });
   });
 
+  describe('diff in failure message', () => {
+    it('includes Prettier diff in message when agent introduced arrowParens violation', async () => {
+      writeFileSync(
+        join(tempDir, '.prettierrc'),
+        JSON.stringify({ arrowParens: 'avoid' }),
+        'utf-8',
+      );
+
+      const filePath = join(tempDir, 'arrow-parens.js');
+      // Original is compliant with arrowParens: "avoid" (no parens around single arg)
+      const original = 'const fn = async span => {\n  span.end();\n};\n';
+      // Agent added parens, violating arrowParens: "avoid"
+      const instrumented = 'const fn = async (span) => {\n  span.end();\n};\n';
+
+      const result = await checkLint(original, instrumented, filePath);
+
+      expect(result.passed).toBe(false);
+      // Diff shows the agent's line (before) and Prettier's correction (after)
+      expect(result.message).toContain('async (span) => {');
+      expect(result.message).toContain('async span => {');
+    });
+
+    it('includes .prettierrc path in failure message when non-default config is used', async () => {
+      writeFileSync(
+        join(tempDir, '.prettierrc'),
+        JSON.stringify({ arrowParens: 'avoid' }),
+        'utf-8',
+      );
+
+      const filePath = join(tempDir, 'with-config-path.js');
+      const original = 'const fn = async span => {\n  span.end();\n};\n';
+      const instrumented = 'const fn = async (span) => {\n  span.end();\n};\n';
+
+      const result = await checkLint(original, instrumented, filePath);
+
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('.prettierrc');
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure for passing check', async () => {
       const filePath = join(tempDir, 'structure.js');
