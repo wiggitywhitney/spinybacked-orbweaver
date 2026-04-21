@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-04-21) Strengthened NDS-005 (Control Flow Preserved) agent prompt guidance to close a gap where the agent was removing existing try/catch blocks when wrapping code in spans. The previous guidance said "do not restructure" but didn't give the correct structural pattern for code that already has a try/catch inside it. Added the explicit pattern: preserve the original try/catch intact inside the span callback and place `span.end()` in the existing `finally` block (or add one). This fixed a consistent acceptance gate failure on `commit-story-v2/src/index.js` line 489 where the agent removed a graceful-degradation try/catch during span wrapping.
+
 ### Added
 
 - (2026-04-21) Bumped the `action.yml` default Weaver version from `0.21.2` to `0.22.1` to match what CI has been running. Users who rely on the GitHub Action without pinning `weaver-version` explicitly were previously getting a stale Weaver binary that differed from what CI validated against.

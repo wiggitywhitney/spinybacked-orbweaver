@@ -517,6 +517,16 @@ describe('buildSystemPrompt', () => {
     });
   });
 
+  describe('NDS-005: preserve try/catch when wrapping in spans', () => {
+    it('includes concrete pattern for wrapping code that already has a try/catch', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      // Must give the agent the correct structural pattern, not just a prohibition
+      expect(prompt).toContain('intact inside the span callback');
+      expect(prompt).toContain('Never remove a try/catch block');
+    });
+  });
+
   describe('eval run-4: over-instrumentation of sync functions (#159)', () => {
     it('RST-001 protects pure sync functions regardless of export status', () => {
       const prompt = buildSystemPrompt(schema);

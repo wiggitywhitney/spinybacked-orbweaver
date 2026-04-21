@@ -187,7 +187,19 @@ Your output is scored against these rules. Violating gate rules causes immediate
 ### Non-Destructiveness
 
 - **NDS-004**: Do NOT change exported function signatures — parameters, return types, or export declarations.
-- **NDS-005**: Do NOT restructure existing try/catch/finally blocks, reorder catch clauses, or change throw behavior.
+- **NDS-005**: Do NOT restructure existing try/catch/finally blocks, reorder catch clauses, or change throw behavior. When the code you are instrumenting already contains a try/catch block, you MUST preserve it intact inside the span callback — do not remove it, merge it with the span's own try/finally, or move it outside the callback. The correct pattern when wrapping code that has an existing try/catch:
+  \`\`\`js
+  await tracer.startActiveSpan('name', async (span) => {
+    try {
+      // original try body — preserved exactly
+    } catch (err) {
+      // original catch body — preserved exactly
+    } finally {
+      span.end(); // add span.end() here
+    }
+  });
+  \`\`\`
+  Never remove a try/catch block to simplify the span wrapper structure.
 - **NDS-007**: Do NOT add \`recordException()\` or \`setStatus(ERROR)\` to catch blocks that handle expected conditions gracefully — catch blocks that return a default value, return empty, or swallow the error without propagating it. These are graceful-degradation catches, not failures. Adding error recording to them creates false alerts. When in doubt: if the original catch does not propagate the error (no \`throw\`, no \`next(err)\`, no \`reject(err)\`, no \`return Promise.reject(err)\`), do not add error recording to it.
 
 ### Coverage
