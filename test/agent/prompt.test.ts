@@ -524,6 +524,8 @@ describe('buildSystemPrompt', () => {
       // Must give the agent the correct structural pattern, not just a prohibition
       expect(prompt).toContain('intact inside the span callback');
       expect(prompt).toContain('Never remove a try/catch block');
+      expect(prompt).toContain('span.end()');
+      expect(prompt).toContain('finally');
     });
   });
 
