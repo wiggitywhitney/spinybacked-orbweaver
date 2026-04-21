@@ -2121,8 +2121,8 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
 
   it('does not fire advisory pass when output token budget is exhausted', async () => {
     let instrumentCallCount = 0;
-    // outputTokens > MAX_OUTPUT_TOKENS_PER_FILE (50_000)
-    const exhaustedTokens: TokenUsage = { inputTokens: 1000, outputTokens: 51_000, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+    // outputTokens > MAX_OUTPUT_TOKENS_PER_FILE (100_000)
+    const exhaustedTokens: TokenUsage = { inputTokens: 1000, outputTokens: 105_000, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async () => {
         instrumentCallCount++;
