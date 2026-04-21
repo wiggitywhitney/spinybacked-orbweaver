@@ -546,6 +546,19 @@ describe('buildSystemPrompt', () => {
     });
   });
 
+  describe('NDS-005: preserve try/catch when wrapping in spans', () => {
+    it('includes concrete patterns for both outer-wrap and inner-nested try/catch cases', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      // Must cover the inner-nested case (function wrapping where try/catch is inside)
+      expect(prompt).toContain('inner try/catch preserved exactly');
+      // Must cover the outer-wrap case (add span.end() to existing finally)
+      expect(prompt).toContain('span.end(); // only addition');
+      // Must prohibit removing inner try/catch to simplify span wrapper
+      expect(prompt).toContain('Never remove or merge an inner try/catch');
+    });
+  });
+
   // Claude 4.x prompt hygiene checks
   describe('Claude 4.x prompt hygiene', () => {
     it('does NOT contain anti-laziness directives', () => {

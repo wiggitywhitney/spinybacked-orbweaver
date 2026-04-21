@@ -93,8 +93,10 @@ const ZERO_TOKENS: TokenUsage = {
   cacheReadInputTokens: 0,
 };
 
-/** Per-file output token limit to prevent one partial from consuming disproportionate cost. */
-const MAX_OUTPUT_TOKENS_PER_FILE = 50_000;
+/** Per-file output token limit to prevent one partial from consuming disproportionate cost.
+ *  Raised from 50K to 100K: complex files (500+ lines) need multiple retry attempts at
+ *  ~30-60K output tokens each; the old limit caused premature abort after just one retry. */
+const MAX_OUTPUT_TOKENS_PER_FILE = 100_000;
 
 /**
  * Count the number of startActiveSpan calls in instrumented code.
