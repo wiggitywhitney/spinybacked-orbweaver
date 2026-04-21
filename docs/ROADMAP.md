@@ -6,10 +6,6 @@ Dependency-ordered backlog across three sources: the advisory rules audit ([PRD 
 
 - TypeScript language provider ([PRD #372](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/372)) — branch `feature/prd-372-typescript-provider` exists with 18 commits through Milestone C6; canary test passed 0/27 interface changes; remaining work is rebase + apply prompt guidance from D-7 + run TS eval + PR. Not blocked by the multi-language architecture cleanup below (TS shares the JS abstraction via the explicit `javascript || typescript` guard).
 - Multi-language rule architecture cleanup ([PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507)) — refactor `src/agent/instrument-file.ts`, `src/agent/prompt.ts`, and `src/fix-loop/index.ts` to route through the `LanguageProvider` interface; consolidate `src/validation/tier2/` SCH duplicates. Prerequisite for PRD #373, PRD #374, and the SCH rebuild PRD.
-- `action.yml` Weaver default `0.21.2` → `0.22.1` (trivial fix; action currently ships stale Weaver relative to CI at v0.22.1)
-- `action.yml` add `branding:` section — **unblocks Marketplace #369**
-- MCP server version string `0.1.0` → `1.0.0` in `src/interfaces/mcp.ts` (user-visible inconsistency with published `spiny-orb@1.0.0`)
-- `testCommand` support in `orb.yaml` — **unblocks release-it eval run-2**
 - Surface Prettier diff in fix-loop lint failures — **unblocks release-it eval run-2 quality baseline** (covers agent-side arrowParens mis-generation and tool-side diff surface)
 
 ## Medium-term
