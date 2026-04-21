@@ -3147,10 +3147,10 @@ describe('instrumentWithRetry — output token budget', () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it('aborts retries when cumulative output tokens exceed 50K', async () => {
+  it('aborts retries when cumulative output tokens exceed 100K', async () => {
     const expensiveTokens: TokenUsage = {
       inputTokens: 5000,
-      outputTokens: 55_000,
+      outputTokens: 105_000,
       cacheCreationInputTokens: 0,
       cacheReadInputTokens: 0,
     };
@@ -3168,9 +3168,12 @@ describe('instrumentWithRetry — output token budget', () => {
       validateFile: async () => makeFailingValidation(testFilePath),
     };
 
+    // maxTokensPerFile must be large enough that totalTokens (inputTokens + outputTokens = 110K)
+    // doesn't trigger the per-run budgetExceeded check first — we want the per-file output
+    // token guard (MAX_OUTPUT_TOKENS_PER_FILE = 100K) to fire on attempt 2 instead.
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {},
-      makeConfig({ maxFixAttempts: 2 }),
+      makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 200_000 }),
       { deps },
     );
 

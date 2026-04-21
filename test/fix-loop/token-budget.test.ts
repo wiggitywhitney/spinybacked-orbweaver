@@ -125,66 +125,67 @@ describe('estimateOutputBudget — deterministic output token sizing (#210)', ()
   });
 
   it('returns MIN_OUTPUT_BUDGET for small files below the floor', () => {
-    // 100 lines × 50 tokens/line + 8000 overhead = 13000 < 16384
-    expect(estimateOutputBudget(100)).toBe(MIN_OUTPUT_BUDGET);
+    // 50 lines × 100 tokens/line + 8000 overhead = 13000 < 16384
+    expect(estimateOutputBudget(50)).toBe(MIN_OUTPUT_BUDGET);
   });
 
   it('returns MIN_OUTPUT_BUDGET at the exact floor boundary', () => {
-    // (MIN_OUTPUT_BUDGET - THINKING_OVERHEAD) / TOKENS_PER_LINE = (16384 - 8000) / 50 = 167.68
-    // At 167 lines: 167 × 50 + 8000 = 16350 < 16384 → MIN
-    expect(estimateOutputBudget(167)).toBe(MIN_OUTPUT_BUDGET);
+    // (MIN_OUTPUT_BUDGET - THINKING_OVERHEAD) / TOKENS_PER_LINE = (16384 - 8000) / 100 = 83.84
+    // At 83 lines: 83 × 100 + 8000 = 16300 < 16384 → MIN
+    expect(estimateOutputBudget(83)).toBe(MIN_OUTPUT_BUDGET);
   });
 
   it('exceeds MIN_OUTPUT_BUDGET just above the floor boundary', () => {
-    // At 168 lines: 168 × 50 + 8000 = 16400 > 16384
-    expect(estimateOutputBudget(168)).toBe(168 * TOKENS_PER_LINE + THINKING_OVERHEAD);
-    expect(estimateOutputBudget(168)).toBeGreaterThan(MIN_OUTPUT_BUDGET);
+    // At 84 lines: 84 × 100 + 8000 = 16400 > 16384
+    expect(estimateOutputBudget(84)).toBe(84 * TOKENS_PER_LINE + THINKING_OVERHEAD);
+    expect(estimateOutputBudget(84)).toBeGreaterThan(MIN_OUTPUT_BUDGET);
   });
 
   it('scales linearly for medium files', () => {
-    // 400 lines: 400 × 50 + 8000 = 28000
-    expect(estimateOutputBudget(400)).toBe(28000);
-    // 600 lines: 600 × 50 + 8000 = 38000
-    expect(estimateOutputBudget(600)).toBe(38000);
+    // 200 lines: 200 × 100 + 8000 = 28000
+    expect(estimateOutputBudget(200)).toBe(28000);
+    // 400 lines: 400 × 100 + 8000 = 48000
+    expect(estimateOutputBudget(400)).toBe(48000);
   });
 
   it('caps at MAX_OUTPUT_BUDGET for very large files', () => {
-    // 2000 lines: 2000 × 50 + 8000 = 108000 > 65536
+    // 2000 lines: 2000 × 100 + 8000 = 208000 > 65536
     expect(estimateOutputBudget(2000)).toBe(MAX_OUTPUT_BUDGET);
   });
 
   it('caps at MAX_OUTPUT_BUDGET at the exact ceiling boundary', () => {
-    // (MAX_OUTPUT_BUDGET - THINKING_OVERHEAD) / TOKENS_PER_LINE = (65536 - 8000) / 50 = 1150.72
-    // At 1151 lines: 1151 × 50 + 8000 = 65550 > 65536 → capped
-    expect(estimateOutputBudget(1151)).toBe(MAX_OUTPUT_BUDGET);
-    // At 1150 lines: 1150 × 50 + 8000 = 65500 < 65536 → not capped
-    expect(estimateOutputBudget(1150)).toBe(65500);
-    expect(estimateOutputBudget(1150)).toBeLessThan(MAX_OUTPUT_BUDGET);
+    // (MAX_OUTPUT_BUDGET - THINKING_OVERHEAD) / TOKENS_PER_LINE = (65536 - 8000) / 100 = 575.36
+    // At 576 lines: 576 × 100 + 8000 = 65600 > 65536 → capped
+    expect(estimateOutputBudget(576)).toBe(MAX_OUTPUT_BUDGET);
+    // At 575 lines: 575 × 100 + 8000 = 65500 < 65536 → not capped
+    expect(estimateOutputBudget(575)).toBe(65500);
+    expect(estimateOutputBudget(575)).toBeLessThan(MAX_OUTPUT_BUDGET);
   });
 
   it('matches calibration data from run-5 session', () => {
-    // Calibration: output tokens range from 7K (small) to 26K (large at 21K limit).
-    // The budget should provide headroom above observed output sizes.
+    // Budget should provide headroom above observed output token sizes.
+    // Files >= 576 lines hit MAX_OUTPUT_BUDGET (65536) with TOKENS_PER_LINE=100.
 
     // journal-manager.js: 422 lines, observed output 8,402 tokens
     const jmBudget = estimateOutputBudget(422);
-    expect(jmBudget).toBeGreaterThan(8402); // headroom above observed output
-    expect(jmBudget).toBe(422 * TOKENS_PER_LINE + THINKING_OVERHEAD); // 29100
+    expect(jmBudget).toBeGreaterThan(8402);
+    expect(jmBudget).toBe(422 * TOKENS_PER_LINE + THINKING_OVERHEAD); // 50200
 
-    // index.js: 533 lines, observed output at 16K truncated
+    // index.js: 533 lines — was truncating with old 34,650 budget (50 tokens/line).
+    // With 100 tokens/line: budget is 61,300 — sufficient headroom for heavy-thinking runs.
     const idxBudget = estimateOutputBudget(533);
-    expect(idxBudget).toBeGreaterThan(16384); // must exceed the old 16K limit
-    expect(idxBudget).toBe(533 * TOKENS_PER_LINE + THINKING_OVERHEAD); // 34650
+    expect(idxBudget).toBeGreaterThan(34650); // must exceed old budget that caused truncation
+    expect(idxBudget).toBe(533 * TOKENS_PER_LINE + THINKING_OVERHEAD); // 61300
 
-    // journal-graph.js: 631 lines, observed output 14,471 tokens at 32K
+    // journal-graph.js: 631 lines — hits ceiling with 100 tokens/line
     const jgBudget = estimateOutputBudget(631);
     expect(jgBudget).toBeGreaterThan(14471);
-    expect(jgBudget).toBe(631 * TOKENS_PER_LINE + THINKING_OVERHEAD); // 39550
+    expect(jgBudget).toBe(MAX_OUTPUT_BUDGET); // 65536 (capped)
 
-    // summary-graph.js: ~700 lines, observed output 29,835 at 32K
+    // summary-graph.js: ~700 lines — also hits ceiling
     const sgBudget = estimateOutputBudget(700);
     expect(sgBudget).toBeGreaterThan(29835);
-    expect(sgBudget).toBe(700 * TOKENS_PER_LINE + THINKING_OVERHEAD); // 43000
+    expect(sgBudget).toBe(MAX_OUTPUT_BUDGET); // 65536 (capped)
   });
 
   it('is monotonically increasing with file size', () => {
@@ -197,7 +198,7 @@ describe('estimateOutputBudget — deterministic output token sizing (#210)', ()
   });
 
   it('exports the calibration constants', () => {
-    expect(TOKENS_PER_LINE).toBe(50);
+    expect(TOKENS_PER_LINE).toBe(100);
     expect(THINKING_OVERHEAD).toBe(8000);
     expect(MIN_OUTPUT_BUDGET).toBe(16384);
     expect(MAX_OUTPUT_BUDGET).toBe(65536);

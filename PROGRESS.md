@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-04-21) Fixed acceptance gate failures on `index.js` (commit-story-v2) caused by adaptive thinking consuming too large a fraction of the per-call output token budget. `TOKENS_PER_LINE` doubled from 50 to 100 so complex 500+ line files get a 61K token budget instead of 35K, leaving sufficient headroom after thinking tokens for the JSON instrumented output. `MAX_OUTPUT_TOKENS_PER_FILE` raised from 50K to 100K to allow complex files the retry budget they need when validation failures require multiple attempts.
+
 ### Added
 
 - (2026-04-21) Bumped the `action.yml` default Weaver version from `0.21.2` to `0.22.1` to match what CI has been running. Users who rely on the GitHub Action without pinning `weaver-version` explicitly were previously getting a stale Weaver binary that differed from what CI validated against.

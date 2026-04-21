@@ -65,10 +65,14 @@ export function estimateMinTokens(sourceCodeLength: number): number {
 
 /**
  * Calibration constants for deterministic output token sizing.
- * Derived from run-5 session data: output tokens range from 7K (small files)
- * to 26K (large files at 21K limit), roughly linear with file size.
+ * Derived from run-5 session data and acceptance gate failures:
+ * - TOKENS_PER_LINE raised from 50 to 100 after CI showed adaptive thinking on
+ *   complex files (533-line index.js) consuming 30K+ tokens, starving JSON output.
+ *   With 50 tokens/line, index.js budget was 34,650; ~30K thinking left only ~4K
+ *   for JSON, producing truncated responses. 100 tokens/line gives 61,300, which
+ *   provides adequate headroom for heavy-thinking runs on large files.
  */
-export const TOKENS_PER_LINE = 50;
+export const TOKENS_PER_LINE = 100;
 export const THINKING_OVERHEAD = 8_000;
 export const MIN_OUTPUT_BUDGET = 16_384;
 export const MAX_OUTPUT_BUDGET = 65_536;
