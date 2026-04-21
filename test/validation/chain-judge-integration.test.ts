@@ -1,5 +1,5 @@
-// ABOUTME: Integration test for the full validation pipeline with all three judge-enhanced rules.
-// ABOUTME: Exercises SCH-004, SCH-001, and NDS-005 judge paths through validateFile().
+// ABOUTME: Integration test for the full validation pipeline with judge-enhanced rules.
+// ABOUTME: Exercises SCH-004 and SCH-001 judge paths through validateFile().
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -52,7 +52,7 @@ function makeParseResponse(verdict: { answer: boolean; suggestion: string | null
   };
 }
 
-// Original code: has try/catch with throw (NDS-005 will detect removal)
+// Original code: has try/catch with throw
 // Also uses a vague span name "doStuff" (SCH-001 judge catches)
 // Also adds a novel attribute "http.request.latency" (SCH-004 judge catches)
 const originalCode = [
@@ -72,7 +72,7 @@ const originalCode = [
 // - Adds novel attribute "http.request.latency" not in registry (triggers SCH-004 judge).
 //   Uses "http" namespace so the namespace pre-filter passes same-namespace registry candidates.
 //   Jaccard vs "http.request.duration" = 0.5 (not > 0.5) → reaches judge tier.
-// - Removes the `throw err` in catch block (triggers NDS-005 script + judge)
+// - Removes the `throw err` in catch block
 const instrumentedCode = [
   'import { trace } from "@opentelemetry/api";',
   'const tracer = trace.getTracer("myapp");',
@@ -93,7 +93,7 @@ const instrumentedCode = [
   '}',
 ].join('\n');
 
-describe('full pipeline with all three judge-enhanced rules', () => {
+describe('full pipeline with judge-enhanced rules', () => {
   let tempDir: string;
 
   beforeEach(() => {
@@ -105,14 +105,13 @@ describe('full pipeline with all three judge-enhanced rules', () => {
   });
 
   /**
-   * Build a ValidationConfig that enables only the three judge-enhanced rules
-   * plus the minimum needed for Tier 1 to pass.
+   * Build a ValidationConfig that enables only the two judge-enhanced rules
+   * (SCH-001 and SCH-004) plus the minimum needed for Tier 1 to pass.
    */
   function buildConfig(mockClient: unknown): ValidationConfig {
     return {
       enableWeaver: false,
       tier2Checks: {
-        'NDS-005': { enabled: true, blocking: false },
         'SCH-001': { enabled: true, blocking: true },
         'SCH-004': { enabled: true, blocking: false },
       },
@@ -121,13 +120,8 @@ describe('full pipeline with all three judge-enhanced rules', () => {
     };
   }
 
-  it('calls judge for all three rules and collects token usage', async () => {
+  it('calls judge for both rules and collects token usage', async () => {
     const parseFn = vi.fn()
-      // NDS-005 judge call: throw removal flagged, judge says semantics NOT preserved
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'The removed throw statement changes error propagation.', confidence: 0.88 },
-        { input: 100, output: 40 },
-      ))
       // SCH-001 judge call: vague span name "doStuff"
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Use "myapp.request.process" instead of "doStuff".', confidence: 0.85 },
@@ -153,14 +147,14 @@ describe('full pipeline with all three judge-enhanced rules', () => {
 
     const result = await validateFile(input);
 
-    // Judge was called for all three rules
+    // Judge was called for both rules
     expect(parseFn).toHaveBeenCalled();
     const callCount = parseFn.mock.calls.length;
-    expect(callCount).toBeGreaterThanOrEqual(3);
+    expect(callCount).toBe(2);
 
     // Token usage from judge calls is collected
     expect(result.judgeTokenUsage).toBeDefined();
-    expect(result.judgeTokenUsage!.length).toBeGreaterThanOrEqual(3);
+    expect(result.judgeTokenUsage).toHaveLength(2);
 
     // Each judge call contributed token usage
     for (const usage of result.judgeTokenUsage!) {
@@ -169,22 +163,15 @@ describe('full pipeline with all three judge-enhanced rules', () => {
     }
 
     // Verify rule-specific results exist
-    const nds005Results = result.tier2Results.filter(r => r.ruleId === 'NDS-005');
     const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
     const sch004Results = result.tier2Results.filter(r => r.ruleId === 'SCH-004');
 
-    expect(nds005Results.length).toBeGreaterThan(0);
     expect(sch001Results.length).toBeGreaterThan(0);
     expect(sch004Results.length).toBeGreaterThan(0);
   });
 
   it('judge verdicts appear in advisory findings and blocking failures', async () => {
     const parseFn = vi.fn()
-      // NDS-005: semantics not preserved (advisory — NDS-005 is non-blocking)
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Throw removal changes propagation.', confidence: 0.88 },
-        { input: 100, output: 40 },
-      ))
       // SCH-001: vague name (blocking — SCH-001 is blocking)
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Use structured naming.', confidence: 0.85 },
@@ -214,9 +201,8 @@ describe('full pipeline with all three judge-enhanced rules', () => {
     const sch001Failures = result.blockingFailures.filter(r => r.ruleId === 'SCH-001');
     expect(sch001Failures.length).toBeGreaterThanOrEqual(1);
 
-    // NDS-005 and SCH-004 failures are advisory
+    // SCH-004 failure is advisory
     const advisoryRuleIds = result.advisoryFindings.map(r => r.ruleId);
-    expect(advisoryRuleIds).toContain('NDS-005');
     expect(advisoryRuleIds).toContain('SCH-004');
 
     // Overall: fails because SCH-001 is blocking
@@ -247,12 +233,10 @@ describe('full pipeline with all three judge-enhanced rules', () => {
     expect(judgeTokens).toHaveLength(0);
 
     // Pipeline did NOT crash — script-only results are present
-    const nds005Results = result.tier2Results.filter(r => r.ruleId === 'NDS-005');
     const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
     const sch004Results = result.tier2Results.filter(r => r.ruleId === 'SCH-004');
 
-    // All three rules still produced results from their script portions
-    expect(nds005Results.length).toBeGreaterThan(0);
+    // Both rules still produced results from their script portions
     expect(sch001Results.length).toBeGreaterThan(0);
     expect(sch004Results.length).toBeGreaterThan(0);
   });
@@ -268,7 +252,6 @@ describe('full pipeline with all three judge-enhanced rules', () => {
       config: {
         enableWeaver: false,
         tier2Checks: {
-          'NDS-005': { enabled: true, blocking: false },
           'SCH-001': { enabled: true, blocking: true },
           'SCH-004': { enabled: true, blocking: false },
         },
@@ -282,23 +265,16 @@ describe('full pipeline with all three judge-enhanced rules', () => {
     // No judge token usage since no client was provided
     expect(result.judgeTokenUsage).toBeUndefined();
 
-    // All three rules still ran (script-only mode)
-    const nds005Results = result.tier2Results.filter(r => r.ruleId === 'NDS-005');
+    // Both rules still ran (script-only mode)
     const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
     const sch004Results = result.tier2Results.filter(r => r.ruleId === 'SCH-004');
 
-    expect(nds005Results.length).toBeGreaterThan(0);
     expect(sch001Results.length).toBeGreaterThan(0);
     expect(sch004Results.length).toBeGreaterThan(0);
   });
 
   it('judge suggestions appear in result messages', async () => {
     const parseFn = vi.fn()
-      // NDS-005
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'The removed throw changes error propagation semantics.', confidence: 0.88 },
-        { input: 100, output: 40 },
-      ))
       // SCH-001
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Use "myapp.request.process" instead of "doStuff".', confidence: 0.85 },
@@ -341,11 +317,6 @@ describe('full pipeline with all three judge-enhanced rules', () => {
 
   it('low-confidence SCH-001 verdict message indicates advisory downgrade', async () => {
     const parseFn = vi.fn()
-      // NDS-005 (just pass it)
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: true, suggestion: null, confidence: 0.9 },
-        { input: 100, output: 40 },
-      ))
       // SCH-001: low confidence — internally marked blocking: false by sch001.ts
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Maybe use a better name.', confidence: 0.5 },

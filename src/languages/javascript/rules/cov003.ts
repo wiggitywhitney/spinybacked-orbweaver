@@ -199,7 +199,7 @@ const EXPECTED_CONDITION_PATTERNS = [
  * - Error-code checks: `if (err.code === 'ENOENT')` patterns
  * - Loop control flow: `catch (e) { continue; }`
  */
-function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): boolean {
+export function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): boolean {
   const block = catchClause.getBlock();
   const statements = block.getStatements();
 

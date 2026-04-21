@@ -223,7 +223,7 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
   });
 });
 
-describe('checkSdkPackagePlacement (API-004)', () => {
+describe('checkSdkPackagePlacement (API-002)', () => {
   const filePath = '/tmp/test-file.js';
   let projectRoot: string;
 
@@ -251,7 +251,7 @@ describe('checkSdkPackagePlacement (API-004)', () => {
     const failures = results.filter(r => !r.passed);
 
     expect(failures).toHaveLength(1);
-    expect(failures[0].ruleId).toBe('API-004');
+    expect(failures[0].ruleId).toBe('API-002');
     expect(failures[0].message).toContain('sdk-node');
   });
 

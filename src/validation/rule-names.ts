@@ -24,6 +24,7 @@ const RULE_NAMES: Record<string, string> = {
   'CDQ-001': 'Spans Closed',
   'CDQ-005': 'Async Context Maintained',
   'CDQ-006': 'isRecording Guard',
+  'CDQ-007': 'Attribute Data Quality',
   'CDQ-008': 'Tracer Naming',
   'CDQ-009': 'Null-Safe Guard',
   'CDQ-010': 'String Method Type Safety',
@@ -39,13 +40,12 @@ const RULE_NAMES: Record<string, string> = {
   'NDS-003': 'Code Preserved',
   'NDS-004': 'Signatures Preserved',
   'NDS-005': 'Control Flow Preserved',
-  'NDS-005b': 'Control Flow Preserved',
   'NDS-006': 'Module System Match',
+  'NDS-007': 'Expected Catch Unmodified',
 
-  // Tier 2 — API
+  // Tier 2 — API (API-003 deleted in the advisory rules audit)
   'API-001': 'OTel API Only',
   'API-002': 'Dependency Placement',
-  'API-003': 'No Vendor SDKs',
   'API-004': 'SDK Package Placement',
 
   // Tier 2 — Schema

@@ -45,10 +45,13 @@ describe('checkThinWrapperSpans (RST-003)', () => {
   });
 
   describe('thin wrappers with spans', () => {
-    it('flags function that just delegates to another function', () => {
+    it('flags function that delegates to another function declared in the same file', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
+        'function fetchUser(id) {',
+        '  return db.query("SELECT * FROM users WHERE id = ?", [id]);',
+        '}',
         'function getUser(id) {',
         '  return tracer.startActiveSpan("getUser", (span) => {',
         '    try {',
@@ -61,16 +64,18 @@ describe('checkThinWrapperSpans (RST-003)', () => {
       ].join('\n');
 
       const results = checkThinWrapperSpans(code, filePath);
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
-      expect(results[0].ruleId).toBe('RST-003');
-      expect(results[0].message).toContain('getUser');
+      const failure = results.find(r => !r.passed);
+      expect(failure).toBeDefined();
+      expect(failure?.ruleId).toBe('RST-003');
+      expect(failure?.message).toContain('getUser');
+      expect(failure?.message).toContain('fetchUser');
     });
 
-    it('flags arrow function thin wrapper', () => {
+    it('flags arrow function thin wrapper delegating to same-file function', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
+        'function fetchUser(id) { return db.query(id); }',
         'const getUser = (id) => {',
         '  return tracer.startActiveSpan("getUser", (span) => {',
         '    try {',
@@ -83,11 +88,13 @@ describe('checkThinWrapperSpans (RST-003)', () => {
       ].join('\n');
 
       const results = checkThinWrapperSpans(code, filePath);
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
+      const failure = results.find(r => !r.passed);
+      expect(failure).toBeDefined();
+      expect(failure?.ruleId).toBe('RST-003');
+      expect(failure?.message).toContain('getUser');
     });
 
-    it('flags wrapper with argument transformation', () => {
+    it('does not flag wrapper delegating to method call (obj.method — cross-file)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -104,7 +111,48 @@ describe('checkThinWrapperSpans (RST-003)', () => {
 
       const results = checkThinWrapperSpans(code, filePath);
       expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag wrapper delegating to an aliased import (const local = require(...).fn)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'const fetchUser = require("./userService").fetchUser;',
+        'function getUser(id) {',
+        '  return tracer.startActiveSpan("getUser", (span) => {',
+        '    try {',
+        '      return fetchUser(id);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkThinWrapperSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag wrapper delegating to function not declared in this file', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getUser(id) {',
+        '  return tracer.startActiveSpan("getUser", (span) => {',
+        '    try {',
+        '      return fetchUser(id);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkThinWrapperSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('does not flag function with multiple statements', () => {

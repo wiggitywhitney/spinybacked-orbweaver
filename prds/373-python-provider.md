@@ -1,11 +1,12 @@
 # PRD #373: Python language provider
 
-**Status**: Draft — refine after PRD #372 (TypeScript provider) is complete  
-**Priority**: Medium  
-**GitHub Issue**: [#373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)  
-**Blocked by**: PRD #372 (TypeScript provider) must be merged first  
-**Blocks**: PRD #374 (Go provider)  
+**Status**: Draft — refine after PRD #372 (TypeScript provider) and PRD #507 (multi-language rule architecture cleanup) are both complete
+**Priority**: Medium
+**GitHub Issue**: [#373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)
+**Blocked by**: Two hard prerequisites — (1) [PRD #372](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/372) (TypeScript provider) must merge first; the TypeScript canary test must pass at ≤20% interface touch. (2) [PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507) (multi-language rule architecture cleanup) must merge first; the refactored `LanguageProvider` interface from #507 is the contract this PRD implements against. Starting Python before #507 merges means implementing against a leaky interface that bypasses the provider layer in hot-path modules (`src/agent/instrument-file.ts`, `src/agent/prompt.ts`, etc.) — Python would surface those leaks at runtime rather than at the clean seam #507 establishes.
+**Blocks**: PRD #374 (Go provider)
 **Created**: 2026-04-06
+**Updated**: 2026-04-20 — added PRD #507 blocker and Milestone D4 for Python API-002-equivalent package-hygiene rule, per PRD #483 audit's Downstream PRD candidates. See `docs/reviews/advisory-rules-audit-2026-04-15.md` Action Items → "Package-hygiene rules for Python and Go providers."
 
 ---
 
@@ -161,6 +162,23 @@ Three sub-decisions:
 
 **This decision requires a research spike — see pre-implementation gate.**
 
+### OD-9: Python API-002-equivalent package-hygiene rule — manifest scope and rule ID
+
+The PRD #483 audit requires a Python package-hygiene rule equivalent to JavaScript's API-002. API-002 in JavaScript reads `package.json` to verify that `@opentelemetry/api` is declared in the correct dependency bucket for the project type (library → `peerDependencies`; app → `dependencies`) and that libraries do not bundle `@opentelemetry/sdk-*` packages. The OTel spec basis is the same in Python: libraries should depend on `opentelemetry-api` only; the SDK is the deployer's choice ([OTel Libraries guidance](https://opentelemetry.io/docs/concepts/instrumentation/libraries/)).
+
+Three sub-decisions:
+
+**OD-9a: Which manifest file(s) does the Python rule read?** Python has two common dependency declaration formats: `pyproject.toml` (PEP 518/621 — modern) and `requirements.txt` (legacy). Some projects also use `setup.cfg` or `setup.py`. Recommendation: auto-detect `pyproject.toml` first; fall back to `requirements.txt` and `setup.cfg`; skip `setup.py` (requires executing Python code, out of scope for structural parsing). Record in Decision Log.
+
+**OD-9b: Library vs. app classification.** JavaScript API-002 classifies a project as a library if `private: false` in `package.json` AND it has `main`/`exports`/`module`/`types`. The Python equivalent: a project is a library if `pyproject.toml` has a `[project]` table (PEP 621) OR a `setup.cfg` with a `[metadata]` section, AND it is not installed as an application (no CLI entry points in `[project.scripts]` OR the package has exports other than a CLI). This heuristic needs confirmation against real Python libraries and applications during the research spike. Record in Decision Log.
+
+**OD-9c: Rule ID — reuse API-002 or assign a new ID?** Two options:
+
+- **Option A (reuse API-002):** Python's package-hygiene rule is `api002.ts` in `src/languages/python/rules/`, with the same rule ID. `applicableTo('python') === true` in the Python implementation. This matches the cross-language convention used by `cov001.ts`, `nds004.ts`, `nds006.ts`, etc., where the same rule ID is implemented in each language provider.
+- **Option B (new rule ID):** Python gets a distinct ID (e.g., API-005) because the manifest format and detection mechanism are substantively different from `package.json`-based API-002. The PRD #483 audit's wording ("These are new rules, not extensions of API-002") was informal — clarify here whether that meant "new implementation" or "new ID."
+
+Recommendation: Option A (reuse API-002). The OTel spec basis is identical; the cross-language rule ID convention is already established by `cov001.ts` et al.; and the `applicableTo` gate already exists to scope the rule per language. A new ID would be a stylistic choice that breaks the existing convention without adding user value. Record in Decision Log.
+
 ---
 
 ## Decision Log
@@ -246,7 +264,39 @@ Following Part 8 checklist, Step 3:
 - [ ] Feature parity assertion test passes for Python
 - [ ] Add Python cases to `test/validation/cross-language-consistency.test.ts` (created in PRD #372 C4): for each shared-concept rule with a Python implementation, add a test that the same violation caught by the JS checker is also caught by the Python checker (e.g., COV-001 catches missing span on Flask route the same way it catches missing span on Express handler)
 
-### Milestone D4: Golden file tests
+### Milestone D4: Python API-002-equivalent package-hygiene rule
+
+Required by PRD #483 audit Action Items → "Package-hygiene rules for Python and Go providers". The check verifies that Python library projects depend on `opentelemetry-api` correctly (not `opentelemetry-sdk`, not `opentelemetry-exporter-*`, not `opentelemetry-instrumentation-*` — these are deployer concerns, not library concerns). The OTel spec basis is identical to JavaScript API-002 ([OTel Libraries guidance](https://opentelemetry.io/docs/concepts/instrumentation/libraries/)); the detection mechanism is Python-specific (reads `pyproject.toml` / `requirements.txt` / `setup.cfg` rather than `package.json`).
+
+This check is **advisory**, not blocking — matching JavaScript API-002's disposition per PRD #483's audit. Reason: the agent cannot modify dependency manifests. A pre-existing misconfiguration (e.g., `opentelemetry-sdk` in a library's install requires) would make the check permanently fail for that codebase if blocking, regardless of instrumentation quality.
+
+**Before writing code:**
+- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the API section's rebuild narratives and the Action Items entry on Python/Go package-hygiene
+- [ ] Resolve OD-9a (manifest scope — `pyproject.toml` / `requirements.txt` / `setup.cfg` detection order) and record the decision in the Decision Log
+- [ ] Resolve OD-9b (library vs. app classification for Python projects) and record the decision in the Decision Log
+- [ ] Resolve OD-9c (rule ID — reuse API-002 or assign new ID) and record the decision in the Decision Log
+- [ ] If tree-sitter-based parsing is used: confirm the parser can read TOML and INI-style formats, or plan to use a stdlib approach (`tomllib` in Python 3.11+, `configparser` for `setup.cfg`, line-based parsing for `requirements.txt`)
+
+**Implementation:**
+- [ ] Create the Python package-hygiene rule file at the location determined by OD-9c (either `src/languages/python/rules/api002.ts` or a new path per OD-9c's decision)
+- [ ] Detection logic reads the manifest(s) detected per OD-9a
+- [ ] Library vs. app classification per OD-9b determines the check's expected dependency placement
+- [ ] For libraries: verify `opentelemetry-api` is in the expected declaration bucket (e.g., `[project.optional-dependencies]` or a relevant runtime dependency list per the research spike) and that no `opentelemetry-sdk`, `opentelemetry-exporter-*`, or `opentelemetry-instrumentation-*` package is pinned
+- [ ] Message references the OTel Libraries guidance URL (same style as JavaScript API-002 after PRD #483 audit)
+- [ ] `applicableTo` gates the rule to Python only (or per OD-9c's decision if a new ID is chosen that applies to multiple languages)
+- [ ] Register the rule in the Python provider's rule registry and `hasImplementation()` returns `true` for it
+
+**Tests:**
+- [ ] Unit tests cover: library project correctly declares `opentelemetry-api` (passes); library project pins `opentelemetry-sdk` (fails); app project declares `opentelemetry-api` as runtime dep (passes); project with no `opentelemetry-*` dependency at all (passes — nothing to check); project with `pyproject.toml` only; project with `requirements.txt` only; project with both
+- [ ] Integration test verifies the rule fires end-to-end through the coordinator/fix-loop pipeline for Python files
+- [ ] `npm test` passes; `npm run typecheck` passes
+
+**Prompt verification (per project CLAUDE.md Rules-related work conventions):**
+- [ ] Grep `src/agent/prompt.ts` for `API-002` and verify any existing guidance still matches the rule's behavior. The prompt's API-002 bullet is currently JavaScript-centric (`package.json`); if Python's API-002 implementation diverges from JS in a way the agent needs to know about (e.g., different dependency-declaration idioms), add Python-specific guidance. If the agent's Python instrumentation prompt is a separate file (e.g., `src/languages/python/prompt.ts`), apply the same verification there.
+- [ ] If OD-9c resolved to a new rule ID (not API-002), confirm the new ID is added to the prompt with appropriate guidance, and the rule ID is also added to `src/validation/rule-names.ts`.
+- [ ] Record the prompt verification outcome in the milestone's PR description (either "prompt updated with Python-specific API-002 guidance" or "no prompt changes required — JS API-002 bullet still accurate").
+
+### Milestone D5: Golden file tests
 
 Following Part 8 checklist, Step 4:
 
@@ -257,7 +307,7 @@ Following Part 8 checklist, Step 4:
 - [ ] Write `test/languages/python/golden.test.ts` — full pipeline against each fixture
 - [ ] All golden tests pass
 
-### Milestone D5: Real-world evaluation
+### Milestone D6: Real-world evaluation
 
 Following Part 8 checklist, Steps 5 and 6:
 

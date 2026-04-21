@@ -7,6 +7,22 @@ import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
 
 /**
+ * Read and parse package.json at the given project root.
+ * Returns null if the file is missing, unreadable, or not a JSON object.
+ */
+function readPackageJson(projectRoot: string): Record<string, unknown> | null {
+  const packagePath = join(projectRoot, 'package.json');
+  try {
+    const raw = readFileSync(packagePath, 'utf-8');
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Determine whether a package.json represents a library or an application.
  *
  * Heuristic:
@@ -45,17 +61,8 @@ export function checkOtelApiDependencyPlacement(
   filePath: string,
   projectRoot: string,
 ): CheckResult[] {
-  const packagePath = join(projectRoot, 'package.json');
-
-  let pkg: Record<string, unknown>;
-  try {
-    const raw = readFileSync(packagePath, 'utf-8');
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return [pass(filePath, 'Skipped: package.json is not a JSON object.')];
-    }
-    pkg = parsed as Record<string, unknown>;
-  } catch {
+  const pkg = readPackageJson(projectRoot);
+  if (pkg === null) {
     return [pass(filePath, 'Skipped: package.json could not be read. Pre-flight check validates this.')];
   }
 
@@ -127,23 +134,14 @@ export function checkSdkPackagePlacement(
   filePath: string,
   projectRoot: string,
 ): CheckResult[] {
-  const packagePath = join(projectRoot, 'package.json');
-
-  let pkg: Record<string, unknown>;
-  try {
-    const raw = readFileSync(packagePath, 'utf-8');
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return [pass004(filePath, 'Skipped: package.json is not a JSON object.')];
-    }
-    pkg = parsed as Record<string, unknown>;
-  } catch {
-    return [pass004(filePath, 'Skipped: package.json could not be read.')];
+  const pkg = readPackageJson(projectRoot);
+  if (pkg === null) {
+    return [passApi002(filePath, 'Skipped: package.json could not be read.')];
   }
 
   // Only flag for library projects — apps legitimately depend on SDK packages
   if (!isLibrary(pkg)) {
-    return [pass004(filePath, 'App project — SDK packages in dependencies are expected.')];
+    return [passApi002(filePath, 'App project — SDK packages in dependencies are expected.')];
   }
 
   const sdkPattern = /^@opentelemetry\/sdk-/;
@@ -156,11 +154,14 @@ export function checkSdkPackagePlacement(
       for (const pkgName of Object.keys(depObj)) {
         if (sdkPattern.test(pkgName)) {
           results.push({
-            ruleId: 'API-004',
+            ruleId: 'API-002',
             passed: false,
             filePath,
             lineNumber: null,
-            message: `API-004: ${pkgName} found in ${depSection}. Library projects should not depend on SDK packages — deployers choose the SDK. Remove it or move instrumentation setup to a separate app package.`,
+            message: `API-002 (SDK in manifest): ${pkgName} found in ${depSection}. ` +
+              `This is an OTel project-level recommendation (not an agent error): library projects should not bundle SDK packages — deployers choose the SDK. ` +
+              `See: https://github.com/open-telemetry/opentelemetry-js-contrib/blob/main/GUIDELINES.md. ` +
+              `Remove it or move instrumentation setup to a separate app package.`,
             tier: 2,
             blocking: false,
           });
@@ -170,14 +171,14 @@ export function checkSdkPackagePlacement(
   }
 
   if (results.length === 0) {
-    return [pass004(filePath, 'No SDK packages found in library project dependencies.')];
+    return [passApi002(filePath, 'No SDK packages found in library project dependencies.')];
   }
   return results;
 }
 
-function pass004(filePath: string, message: string): CheckResult {
+function passApi002(filePath: string, message: string): CheckResult {
   return {
-    ruleId: 'API-004',
+    ruleId: 'API-002',
     passed: true,
     filePath,
     lineNumber: null,
@@ -211,7 +212,7 @@ function fail(filePath: string, message: string): CheckResult {
   };
 }
 
-/** API-002 ValidationRule — @opentelemetry/api must be in the correct dependency bucket. */
+/** API-002 ValidationRule — @opentelemetry/api placement and library SDK bundling check. */
 export const api002Rule: ValidationRule = {
   ruleId: 'API-002',
   dimension: 'API usage',
@@ -231,6 +232,8 @@ export const api002Rule: ValidationRule = {
         blocking: false,
       };
     }
-    return checkOtelApiDependencyPlacement(input.filePath, input.config.projectRoot);
+    const placementResults = checkOtelApiDependencyPlacement(input.filePath, input.config.projectRoot);
+    const sdkResults = checkSdkPackagePlacement(input.filePath, input.config.projectRoot);
+    return [...placementResults, ...sdkResults];
   },
 };

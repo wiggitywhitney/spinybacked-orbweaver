@@ -143,7 +143,7 @@ function summarizeErrors(validation: ValidationResult): string {
  * @param config - Agent configuration
  * @param projectRoot - Optional project root for checks that need package.json access (API-002)
  * @param resolvedSchema - Weaver registry for SCH-001 through SCH-004 checks
- * @param anthropicClient - Anthropic client for LLM judge calls (SCH-001, SCH-004, NDS-005)
+ * @param anthropicClient - Anthropic client for LLM judge calls (SCH-001, SCH-004)
  */
 function buildValidationConfig(
   config: AgentConfig,
@@ -183,19 +183,24 @@ function buildValidationConfig(
       'RST-003': { enabled: true, blocking: false },
       'RST-004': { enabled: true, blocking: false },
       'CDQ-006': { enabled: true, blocking: false },
+      'CDQ-007': { enabled: true, blocking: false },
+      'CDQ-009': { enabled: true, blocking: false },
+      'CDQ-010': { enabled: true, blocking: false },
       // Phase 5 checks — SCH-001/SCH-002 downgrade to advisory for sparse registries
       'SCH-001': { enabled: true, blocking: !schemaSparse },
       'SCH-002': { enabled: true, blocking: !schemaSparse },
       'SCH-003': { enabled: true, blocking: true },
       'SCH-004': { enabled: true, blocking: false },
-      // PRD #135 checks (advisory for initial rollout)
-      'API-001': { enabled: true, blocking: false },
+      // API-001/004: blocking — diff-based (agent-added imports only)
+      // API-002: advisory — agent cannot modify package.json
+      // API-003: deleted in the advisory rules audit
+      'API-001': { enabled: true, blocking: true },
       'API-002': { enabled: true, blocking: false },
-      'API-003': { enabled: true, blocking: false },
-      'API-004': { enabled: true, blocking: false },
-      'NDS-006': { enabled: true, blocking: false },
-      'NDS-004': { enabled: true, blocking: false },
-      'NDS-005': { enabled: true, blocking: false },
+      'API-004': { enabled: true, blocking: true },
+      'NDS-006': { enabled: true, blocking: true },
+      'NDS-004': { enabled: true, blocking: true },
+      'NDS-005': { enabled: true, blocking: true },
+      'NDS-007': { enabled: true, blocking: true },
       'RST-005': { enabled: true, blocking: false },
     },
   };

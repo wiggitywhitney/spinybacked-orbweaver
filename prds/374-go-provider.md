@@ -1,10 +1,11 @@
 # PRD #374: Go language provider
 
-**Status**: Draft — refine after PRD #373 (Python provider) is complete  
-**Priority**: Medium  
-**GitHub Issue**: [#374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)  
-**Blocked by**: PRD #373 (Python provider) must be merged first  
+**Status**: Draft — refine after PRD #373 (Python provider) and PRD #507 (multi-language rule architecture cleanup) are both complete
+**Priority**: Medium
+**GitHub Issue**: [#374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)
+**Blocked by**: Two hard prerequisites — (1) [PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373) (Python provider) must merge first; Python is the primary interface stress test and must succeed before Go (which is the hardest case). (2) [PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507) (multi-language rule architecture cleanup) must merge first; the refactored `LanguageProvider` interface from #507 is the contract this PRD implements against. PRD #373 is already blocked by PRD #507, so this transitive chain is honored automatically — #507 → #373 → #374.
 **Created**: 2026-04-06
+**Updated**: 2026-04-20 — added PRD #507 blocker and Milestone E4 for Go API-002-equivalent package-hygiene rule, per PRD #483 audit's Downstream PRD candidates. See `docs/reviews/advisory-rules-audit-2026-04-15.md` Action Items → "Package-hygiene rules for Python and Go providers."
 
 ---
 
@@ -18,7 +19,7 @@ Spiny-orb cannot instrument Go files. Go is the primary language for infrastruct
 
 Implement `GoProvider` in `src/languages/go/` following the `LanguageProvider` interface. Before any code is written, resolve the NDS-004/context.Context policy conflict. The interface will need to accommodate Go's context requirement without breaking the contract for other languages.
 
-**This PRD must not begin implementation until PRD #373 is merged.**
+**This PRD must not begin implementation until PRD #507 (multi-language architecture) and PRD #373 (Python provider) are both merged, in that order.**
 
 ---
 
@@ -58,7 +59,7 @@ if err != nil {
 }
 ```
 
-COV-003 (error recording) must detect `if err != nil` blocks that either (a) return without recording the error on the span, or (b) propagate the error in a way that makes it invisible to OTel. This is a completely different AST pattern from `try/catch` or `try/except`.
+COV-003 (error recording) must detect `if err != nil` blocks that propagate the error to the caller (i.e., `return ..., err`) without recording it on the span. Blocks that swallow the error and return a default/zero value must NOT be flagged — that is Go's graceful-degradation pattern, equivalent to an expected-condition catch. See Milestone E4 for the full rule spec. This is a completely different AST pattern from `try/catch` or `try/except`.
 
 **What stays the same:**
 - Weaver schema contract (language-agnostic)
@@ -185,6 +186,20 @@ Three sub-decisions:
 
 **This decision requires a research spike — see pre-implementation gate.**
 
+### OD-9: Go API-002-equivalent package-hygiene rule — manifest scope and rule ID
+
+The PRD #483 audit requires a Go package-hygiene rule equivalent to JavaScript's API-002. API-002 in JavaScript reads `package.json` to verify that `@opentelemetry/api` is declared in the correct dependency bucket for the project type (library → `peerDependencies`; app → `dependencies`) and that libraries do not bundle `@opentelemetry/sdk-*` packages. The OTel spec basis is identical in Go: libraries should depend on `go.opentelemetry.io/otel` (the API) only; the SDK (`go.opentelemetry.io/otel/sdk`), exporters (`go.opentelemetry.io/otel/exporters/*`), and auto-instrumentation contrib packages (`go.opentelemetry.io/contrib/instrumentation/*`) are deployer concerns and do not belong in library `go.mod` files.
+
+Three sub-decisions:
+
+**OD-9a: Manifest scope.** Go has a single canonical dependency manifest: `go.mod`. `go.sum` is a lock file (not a dependency declaration). `go.work` is the workspace file covered by OD-7. Recommendation: read `go.mod` only; ignore `go.sum`; for `go.work` projects, scope the check to each member module's own `go.mod` per OD-7's directory-scoping recommendation. Record in Decision Log.
+
+**OD-9b: Library vs. app classification.** Go's convention is that a module containing a `package main` declaration is an application; a module without `package main` is a library. Detection: scan the module's Go files for any file declaring `package main` in the package-level declaration. If found, the project is classified as an app; otherwise a library. Edge case: some projects have `cmd/` subdirectories with `package main` for CLI tools alongside a library-style root package — these should be treated as hybrid (the library is a library; the CLI under `cmd/` is an app). Recommendation: for the initial implementation, treat a module with any `package main` as an app; defer hybrid handling until a real-world example forces it. Record in Decision Log.
+
+**OD-9c: Rule ID — reuse API-002 or assign a new ID?** Same question as Python OD-9c. Recommendation: match whatever was decided for Python in PRD #373 OD-9c to keep the cross-language convention consistent. If Python chose Option A (reuse API-002), Go does the same; if Python chose Option B (new ID), Go follows. Record in Decision Log with a reference to PRD #373's decision.
+
+**Interaction with OD-7 (go.work):** when a Go workspace is detected, the package-hygiene check runs independently against each member module's `go.mod`. A workspace member that is a library must still pass the rule regardless of the workspace root's configuration. Document this behavior in the rule's implementation.
+
 ---
 
 ## Decision Log
@@ -201,6 +216,7 @@ Three sub-decisions:
 | OD-6 | (pending) | | |
 | OD-7 | (pending) | | |
 | OD-8 | (pending) | | |
+| OD-9 | (pending) | | |
 
 ---
 
@@ -275,7 +291,7 @@ Following Part 8 checklist, Step 3:
 - [ ] For each shared-concept rule, implement Go-specific version:
   - `cov001.ts` — entry points: `http.HandleFunc`, `http.Handler` implementations, Gin/Echo route handlers, gRPC service methods
   - `cov002.ts` — outbound calls: `http.Client.Get/Post/Do`, gRPC client calls, database calls
-  - `cov003.ts` — error recording: `if err != nil` blocks that return without `span.RecordError(err)`
+  - `cov003.ts` — error recording: `if err != nil` blocks that **return the error to the caller** without `span.RecordError(err)`. **Do NOT flag `if err != nil` blocks that swallow the error and return a default/zero value** — this is Go's equivalent of graceful degradation. Per the OTel spec (verified 2026-04-18 during PRD #483 audit, Decision 5): "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)). **Implementing agent: verify this spec clause still holds when you begin — spec language may have been refined.** The distinction matters: `if err != nil { return nil, err }` must be flagged (error propagates to caller); `if err != nil { return defaultResult, nil }` must NOT be flagged (error swallowed, caller sees success).
   - `cov004.ts` — async operations: per OD-6 (resolved in pre-implementation gate), `applicableTo('go') = false` for goroutines in the initial implementation; `isAsync` is always `false` for Go functions
   - `cov006.ts` — per OD-5: `applicableTo('go') = false` initially
   - `cdq001.ts` — spans closed: `defer span.End()` is the correct pattern; flag `tracer.Start()` calls without a corresponding `defer span.End()` in the same function
@@ -288,7 +304,41 @@ Following Part 8 checklist, Step 3:
 - [ ] Feature parity assertion test passes for Go
 - [ ] Add Go cases to `test/validation/cross-language-consistency.test.ts` (created in PRD #372 C4): for each shared-concept rule with a Go implementation, add a test verifying the same semantic violation is caught as in JS/TS/Python
 
-### Milestone E4: Golden file tests
+### Milestone E4: Go API-002-equivalent package-hygiene rule
+
+Required by PRD #483 audit Action Items → "Package-hygiene rules for Python and Go providers". The check verifies that Go library modules depend on `go.opentelemetry.io/otel` (the API) correctly and do not pin SDK, exporter, or auto-instrumentation contrib packages (those are deployer concerns, not library concerns). The OTel spec basis is identical to JavaScript API-002 ([OTel Libraries guidance](https://opentelemetry.io/docs/concepts/instrumentation/libraries/)); the detection mechanism is Go-specific (reads `go.mod` rather than `package.json`).
+
+This check is **advisory**, not blocking — matching JavaScript API-002's disposition per PRD #483's audit. Reason: the agent cannot modify `go.mod`. A pre-existing misconfiguration would make the check permanently fail for that codebase if blocking, regardless of instrumentation quality.
+
+**Before writing code:**
+- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the API section and the Action Items entry on Python/Go package-hygiene
+- [ ] Resolve OD-9a (manifest scope — `go.mod` only; `go.work` member modules scoped per OD-7) and record the decision in the Decision Log
+- [ ] Resolve OD-9b (library vs. app classification via `package main` detection) and record the decision in the Decision Log
+- [ ] Resolve OD-9c (rule ID — reuse API-002 or assign new ID, matching Python's PRD #373 OD-9c decision for cross-language consistency) and record the decision in the Decision Log
+- [ ] Check PRD #373 OD-9 resolutions as a reference — the Go implementation should mirror Python's approach where the concepts align (classification method, registry location, test coverage style)
+
+**Implementation:**
+- [ ] Create the Go package-hygiene rule file at the location determined by OD-9c (either `src/languages/go/rules/api002.ts` or a new path per OD-9c's decision)
+- [ ] Parse `go.mod` to extract declared dependencies from `require` blocks only — `replace` directives are resolution overrides, not dependency declarations; do not count them as requiring OTel packages
+- [ ] Library vs. app classification per OD-9b — scan the module's Go files for any `package main` declaration; if absent, the module is a library
+- [ ] For libraries: verify `go.opentelemetry.io/otel` is in the `require` block (the API is always acceptable in libraries) and that no `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/*`, or `go.opentelemetry.io/contrib/instrumentation/*` package appears in `require` (those are deployer concerns)
+- [ ] For apps: the rule passes trivially — apps can depend on anything they need
+- [ ] Workspace handling per OD-7: when `go.work` is present, apply the rule to each member `go.mod` independently; a library member must pass regardless of the workspace root's configuration
+- [ ] Message references the OTel Libraries guidance URL (same style as JavaScript API-002 after PRD #483 audit)
+- [ ] `applicableTo` gates the rule to Go only (or per OD-9c's decision if a new ID is chosen)
+- [ ] Register the rule in the Go provider's rule registry and `hasImplementation()` returns `true` for it
+
+**Tests:**
+- [ ] Unit tests cover: library module correctly declares `go.opentelemetry.io/otel` (passes); library module pins `go.opentelemetry.io/otel/sdk` (fails); library module pins an exporter package (fails); library module pins a contrib instrumentation package (fails); app module pins the SDK (passes — apps are exempt); library module with no OTel API dependency (fails — library must declare go.opentelemetry.io/otel); app module with no OTel dependency at all (passes — apps are not required to declare the API); workspace with one library member pinning the SDK and one app member pinning the SDK (library fails; app passes)
+- [ ] Integration test verifies the rule fires end-to-end through the coordinator/fix-loop pipeline for Go files
+- [ ] `npm test` passes; `npm run typecheck` passes
+
+**Prompt verification (per project CLAUDE.md Rules-related work conventions):**
+- [ ] Grep `src/agent/prompt.ts` for `API-002` and verify any existing guidance still matches the rule's behavior. The prompt's API-002 bullet is currently JavaScript-centric (`package.json`); if Go's API-002 implementation diverges from JS in a way the agent needs to know about (e.g., `go.mod` vs `package.json`, library detection via `package main`), add Go-specific guidance. If the agent's Go instrumentation prompt is a separate file (e.g., `src/languages/go/prompt.ts`), apply the same verification there.
+- [ ] If OD-9c resolved to a new rule ID (not API-002), confirm the new ID is added to the prompt with appropriate guidance, and the rule ID is also added to `src/validation/rule-names.ts`.
+- [ ] Record the prompt verification outcome in the milestone's PR description (either "prompt updated with Go-specific API-002 guidance" or "no prompt changes required — JS API-002 bullet still accurate").
+
+### Milestone E5: Golden file tests
 
 Following Part 8 checklist, Step 4:
 
@@ -299,7 +349,7 @@ Following Part 8 checklist, Step 4:
 - [ ] Write `test/languages/go/golden.test.ts` — full pipeline against each fixture
 - [ ] All golden tests pass
 
-### Milestone E5: Real-world evaluation
+### Milestone E6: Real-world evaluation
 
 Following Part 8 checklist, Steps 5 and 6:
 
@@ -346,7 +396,7 @@ If the interface survived with only additive changes (new optional methods or ne
 
 - **Risk: OD-1 Option B (skip functions without `ctx`) produces low coverage on real-world Go code**
   - Impact: Most Go functions lack `ctx context.Context` in older codebases; the agent instruments almost nothing
-  - Mitigation: Run the real-world evaluation (E5) early in the development cycle. If coverage is too low (<50% of entry points), reassess Option C (two-pass instrumentation) before declaring the provider complete. Document the coverage findings in PROGRESS.md.
+  - Mitigation: Run the real-world evaluation (E6) early in the development cycle. If coverage is too low (<50% of entry points), reassess Option C (two-pass instrumentation) before declaring the provider complete. Document the coverage findings in PROGRESS.md.
 
 - **Risk: `defer span.End()` is emitted but the function also has early returns that bypass it**
   - Impact: `defer` runs on all returns in Go, so this is actually fine — but the agent may add redundant `span.End()` calls before early returns, double-closing the span

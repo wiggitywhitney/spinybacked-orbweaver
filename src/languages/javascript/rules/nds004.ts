@@ -224,8 +224,7 @@ function extractExportedSignatures(sourceFile: SourceFile): ExportedSignature[] 
  * - Parameters renamed
  * - Exported functions removed entirely
  *
- * Advisory-only (blocking: false) — AST diffing may produce false positives
- * when instrumentation legitimately restructures code.
+ * Blocking — parameter list comparison is direct AST equality with no heuristics or fuzzy matching.
  *
  * @param originalCode - The original source code before instrumentation
  * @param instrumentedCode - The agent's instrumented output
@@ -276,7 +275,7 @@ export function checkExportedSignaturePreservation(
           `Original signature: ${origSig.name}(${origSig.params.join(', ')}). ` +
           `Instrumentation must preserve all exported functions and their signatures.`,
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
       continue;
     }
@@ -298,7 +297,7 @@ export function checkExportedSignaturePreservation(
           `instrumented: ${origSig.name}(${instrParams.join(', ')}). ` +
           `Instrumentation must not add, remove, or rename parameters on exported functions.`,
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
     }
   }
@@ -318,7 +317,7 @@ function passingResult(filePath: string): CheckResult {
     lineNumber: null,
     message: 'Exported function signatures preserved. All exported functions maintain their original parameter lists.',
     tier: 2,
-    blocking: false,
+    blocking: true,
   };
 }
 
@@ -326,7 +325,7 @@ function passingResult(filePath: string): CheckResult {
 export const nds004Rule: ValidationRule = {
   ruleId: 'NDS-004',
   dimension: 'Non-destructive',
-  blocking: false,
+  blocking: true,
   applicableTo(language: string): boolean {
     return language === 'javascript' || language === 'typescript';
   },

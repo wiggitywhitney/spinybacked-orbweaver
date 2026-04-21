@@ -287,7 +287,7 @@ describe('checkExportedSignaturePreservation (NDS-004)', () => {
         lineNumber: null,
         message: expect.any(String),
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
     });
 
@@ -301,7 +301,7 @@ describe('checkExportedSignaturePreservation (NDS-004)', () => {
       expect(failure).toBeDefined();
       expect(failure!.ruleId).toBe('NDS-004');
       expect(failure!.tier).toBe(2);
-      expect(failure!.blocking).toBe(false);
+      expect(failure!.blocking).toBe(true);
       expect(failure!.lineNumber).toBeGreaterThan(0);
       expect(failure!.message).toBeTruthy();
     });

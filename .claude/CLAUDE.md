@@ -99,6 +99,14 @@ Where N is the phase number (1-7). The skill reads the spec, tech stack, recomme
 
 Do not invent tasks outside the PRD structure. When a PRD exists, follow it. Do not commit manually during PRD work — `/prd-update-progress` handles commits, PRD updates, and journaling together.
 
+### Rules-related work conventions
+
+These conventions apply to any PRD or GitHub issue that adds, removes, modifies, rebuilds, or otherwise changes the behavior of any validation rule. When uncertain whether a change qualifies, treat it as rules-related — the cost of reading the audit and keeping documentation and the agent prompt in sync is low; the cost of missing a drift case is high.
+
+- **First step of any rules-related work (PRD milestone zero, or the opening of a rule-changing issue): read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full** (or its successor if a future rules audit is published). The audit is the durable record of every rule's decision, rationale, and OTel spec alignment. Context is cleared between milestones and between issue sessions; re-reading the whole audit document prevents decisions from being inadvertently reverted by a fresh session that lacks context. Reading the whole document leaves less room for error than relying on section-by-section recall.
+- **Final step: update `docs/rules-reference.md` via `/write-docs`** to reflect any rule additions, deletions, registration changes, promotion-to-blocking changes, or message changes introduced by the work. `docs/rules-reference.md` is the canonical user-facing rule reference. Closing rules-related work without this step introduces documentation drift between the codebase's rule behavior and the published reference.
+- **Final step: update `src/agent/prompt.ts`** to match any rule ID or description changes introduced by the work. The prompt instructs the LLM agent using rule IDs (e.g., `- **RST-001**: Do NOT add spans to pure synchronous data transformations...`); orphaned references — a rule ID no longer in `src/validation/rule-names.ts`, or a description that no longer matches the rule's current behavior — will confuse the agent. After making rule changes, grep the prompt for the rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every match still corresponds to a registered rule with accurate guidance. If a rule was deleted, remove the prompt bullet; if a rule's behavior or scope changed, update the prompt's directive phrasing to match.
+
 ## Acceptance Gate Tests
 
 **Check the most recent acceptance gate run before every push.** Run `gh run list --workflow=acceptance-gate.yml --limit=1 --repo wiggitywhitney/spinybacked-orbweaver` before pushing. If the most recent run passed, or if no runs exist yet, proceed. If one is in progress, proceed. If the most recent run failed — on any branch — stop, investigate, and fix the failures before pushing.
