@@ -83,6 +83,51 @@ export function checkSyntax(filePath: string): CheckResult {
 // ─── lint (checkLint) ─────────────────────────────────────────────────────────
 
 /**
+ * Compute a compact context diff between two strings.
+ * Compares lines positionally — best for small, targeted formatting changes
+ * where line counts are the same or very similar (e.g., arrowParens, quotes).
+ */
+function buildPrettierDiff(before: string, after: string): string {
+  const CONTEXT = 2;
+  const MAX_DIFF_LINES = 200;
+  const beforeLines = before.split('\n');
+  const afterLines = after.split('\n');
+  const maxLen = Math.max(beforeLines.length, afterLines.length);
+
+  const changed = new Set<number>();
+  for (let i = 0; i < maxLen; i++) {
+    if (beforeLines[i] !== afterLines[i]) changed.add(i);
+  }
+  if (changed.size === 0) return '';
+
+  const include = new Set<number>();
+  for (const idx of changed) {
+    for (let c = Math.max(0, idx - CONTEXT); c <= Math.min(maxLen - 1, idx + CONTEXT); c++) {
+      include.add(c);
+    }
+  }
+
+  const output: string[] = [];
+  let lastIdx = -2;
+  for (let i = 0; i < maxLen; i++) {
+    if (!include.has(i)) continue;
+    if (output.length >= MAX_DIFF_LINES) {
+      output.push('... (diff truncated)');
+      break;
+    }
+    if (lastIdx >= 0 && i > lastIdx + 1) output.push('...');
+    if (changed.has(i)) {
+      if (i < beforeLines.length) output.push(`-${beforeLines[i]}`);
+      if (i < afterLines.length) output.push(`+${afterLines[i]}`);
+    } else {
+      output.push(` ${beforeLines[i] ?? afterLines[i] ?? ''}`);
+    }
+    lastIdx = i;
+  }
+  return output.join('\n');
+}
+
+/**
  * Check if code matches the project's Prettier configuration.
  * Resolves config from the file path to respect .prettierrc.
  *
@@ -124,15 +169,35 @@ export async function checkLint(
 
     // Only fail when agent introduced a formatting violation
     if (originalCompliant && !outputCompliant) {
+      // Build a diff showing what Prettier expects — best-effort, failure produces no diff section
+      let diffSection = '';
+      let configNote = '';
+      try {
+        const config = await prettier.resolveConfig(filePath);
+        const configFilePath = await prettier.resolveConfigFile(filePath);
+        const formatted = await prettier.format(instrumentedCode, { ...config, filepath: filePath });
+        const diff = buildPrettierDiff(instrumentedCode, formatted);
+        if (diff) {
+          diffSection =
+            `\n\nPrettier would reformat your output as follows — regenerate the file with these changes applied:\n` +
+            `\`\`\`diff\n${diff}\n\`\`\``;
+        }
+        if (configFilePath) {
+          configNote = ` Prettier config: ${configFilePath}.`;
+        }
+      } catch {
+        // Diff generation is best-effort; a failure here does not affect the check result
+      }
+
       return {
         ruleId: 'LINT',
         passed: false,
         filePath,
         lineNumber: null,
         message:
-          `LINT check failed: the original file was Prettier-compliant but the instrumented output is not. ` +
-          `The agent introduced formatting violations. ` +
-          `Run Prettier on the output to match the project's formatting configuration.`,
+          `LINT check failed: the original file was Prettier-compliant but the instrumented output is not.${configNote} ` +
+          `The agent introduced formatting violations.` +
+          diffSection,
         tier: 1,
         blocking: true,
       };
