@@ -492,7 +492,7 @@ Only `schemaPath` and `sdkInitFile` are required — everything else has default
 | `agentModel` | string | `claude-sonnet-4-6` | Claude model to use for code generation |
 | `agentEffort` | `low` \| `medium` \| `high` | `medium` | Thinking depth — higher means more thorough but slower |
 | `autoApproveLibraries` | boolean | `true` | Automatically install instrumentation libraries the agent discovers |
-| `testCommand` | string | `npm test` | Command to run for end-of-run test validation |
+| `testCommand` | string | `npm test` | Command to run checkpoint and end-of-run test validation. Supports any test runner and inline env vars — e.g., `GIT_CONFIG_GLOBAL=/tmp/test.gitconfig npm test` for repos where global git config conflicts with the test suite |
 | `dependencyStrategy` | `dependencies` \| `peerDependencies` | `dependencies` | Where to add instrumentation packages — `dependencies` for services, `peerDependencies` for libraries |
 | `maxFilesPerRun` | number | `50` | Maximum files to process in one run |
 | `maxFixAttempts` | number | `2` | Retry attempts per file after initial generation (total attempts = 1 + this value) |

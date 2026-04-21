@@ -112,6 +112,35 @@ describe('AgentConfigSchema', () => {
     });
   });
 
+  describe('testCommand validation', () => {
+    it('accepts a custom test command verbatim', () => {
+      const customCommand = 'GIT_CONFIG_GLOBAL=/tmp/release-it-test.gitconfig npm test';
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        testCommand: customCommand,
+      });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.testCommand).toBe(customCommand);
+    });
+
+    it('rejects empty string testCommand', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        testCommand: '',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects whitespace-only testCommand', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        testCommand: '   ',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('enum validation', () => {
     it('rejects invalid agentEffort value', () => {
       const result = AgentConfigSchema.safeParse({
