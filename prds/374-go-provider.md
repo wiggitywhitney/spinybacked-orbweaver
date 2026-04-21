@@ -329,7 +329,7 @@ This check is **advisory**, not blocking — matching JavaScript API-002's dispo
 - [ ] Register the rule in the Go provider's rule registry and `hasImplementation()` returns `true` for it
 
 **Tests:**
-- [ ] Unit tests cover: library module correctly declares `go.opentelemetry.io/otel` (passes); library module pins `go.opentelemetry.io/otel/sdk` (fails); library module pins an exporter package (fails); library module pins a contrib instrumentation package (fails); app module pins the SDK (passes — apps are exempt); module with no OTel dependency at all (passes — nothing to check); workspace with one library member pinning the SDK and one app member pinning the SDK (library fails; app passes)
+- [ ] Unit tests cover: library module correctly declares `go.opentelemetry.io/otel` (passes); library module pins `go.opentelemetry.io/otel/sdk` (fails); library module pins an exporter package (fails); library module pins a contrib instrumentation package (fails); app module pins the SDK (passes — apps are exempt); library module with no OTel API dependency (fails — library must declare go.opentelemetry.io/otel); app module with no OTel dependency at all (passes — apps are not required to declare the API); workspace with one library member pinning the SDK and one app member pinning the SDK (library fails; app passes)
 - [ ] Integration test verifies the rule fires end-to-end through the coordinator/fix-loop pipeline for Go files
 - [ ] `npm test` passes; `npm run typecheck` passes
 
@@ -396,7 +396,7 @@ If the interface survived with only additive changes (new optional methods or ne
 
 - **Risk: OD-1 Option B (skip functions without `ctx`) produces low coverage on real-world Go code**
   - Impact: Most Go functions lack `ctx context.Context` in older codebases; the agent instruments almost nothing
-  - Mitigation: Run the real-world evaluation (E5) early in the development cycle. If coverage is too low (<50% of entry points), reassess Option C (two-pass instrumentation) before declaring the provider complete. Document the coverage findings in PROGRESS.md.
+  - Mitigation: Run the real-world evaluation (E6) early in the development cycle. If coverage is too low (<50% of entry points), reassess Option C (two-pass instrumentation) before declaring the provider complete. Document the coverage findings in PROGRESS.md.
 
 - **Risk: `defer span.End()` is emitted but the function also has early returns that bypass it**
   - Impact: `defer` runs on all returns in Go, so this is actually fine — but the agent may add redundant `span.End()` calls before early returns, double-closing the span

@@ -52,7 +52,7 @@ function makeParseResponse(verdict: { answer: boolean; suggestion: string | null
   };
 }
 
-// Original code: has try/catch with throw (NDS-005 will detect removal)
+// Original code: has try/catch with throw
 // Also uses a vague span name "doStuff" (SCH-001 judge catches)
 // Also adds a novel attribute "http.request.latency" (SCH-004 judge catches)
 const originalCode = [
@@ -72,7 +72,7 @@ const originalCode = [
 // - Adds novel attribute "http.request.latency" not in registry (triggers SCH-004 judge).
 //   Uses "http" namespace so the namespace pre-filter passes same-namespace registry candidates.
 //   Jaccard vs "http.request.duration" = 0.5 (not > 0.5) → reaches judge tier.
-// - Removes the `throw err` in catch block (triggers NDS-005 script + judge)
+// - Removes the `throw err` in catch block
 const instrumentedCode = [
   'import { trace } from "@opentelemetry/api";',
   'const tracer = trace.getTracer("myapp");',

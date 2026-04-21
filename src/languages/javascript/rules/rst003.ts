@@ -77,7 +77,7 @@ export function checkThinWrapperSpans(code: string, filePath: string): CheckResu
     message:
       `RST-003: "${f.name}" at line ${f.line} appears to be a thin wrapper that delegates to "${f.delegatesTo}", ` +
       `which is declared in this file. Check whether "${f.delegatesTo}" has a span in the instrumented output. ` +
-      `Explain your reasoning. If it does, this wrapper's span creates duplicate trace data — remove the \`startActiveSpan\` wrapper from this function.`,
+      `Explain your reasoning. If it does, this wrapper's span creates duplicate trace data — remove the span wrapper (\`startActiveSpan\`/\`startSpan\`) from this function.`,
     tier: 2,
     blocking: false,
   }));

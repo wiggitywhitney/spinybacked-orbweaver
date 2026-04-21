@@ -223,7 +223,7 @@ describe('checkOtelApiDependencyPlacement (API-002)', () => {
   });
 });
 
-describe('checkSdkPackagePlacement (API-004)', () => {
+describe('checkSdkPackagePlacement (API-002)', () => {
   const filePath = '/tmp/test-file.js';
   let projectRoot: string;
 

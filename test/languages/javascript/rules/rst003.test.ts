@@ -114,6 +114,27 @@ describe('checkThinWrapperSpans (RST-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('does not flag wrapper delegating to an aliased import (const local = require(...).fn)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'const fetchUser = require("./userService").fetchUser;',
+        'function getUser(id) {',
+        '  return tracer.startActiveSpan("getUser", (span) => {',
+        '    try {',
+        '      return fetchUser(id);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkThinWrapperSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('does not flag wrapper delegating to function not declared in this file', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',

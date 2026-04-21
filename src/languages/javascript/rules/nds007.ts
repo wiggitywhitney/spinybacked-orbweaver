@@ -10,28 +10,32 @@ import { extractBodyAnchor } from './nds005.ts';
 
 /**
  * Build a map of original try blocks indexed by body anchor for fast lookup.
- * Only the first try block for a given anchor is stored — duplicate anchors
- * are unlikely in well-formed code and would only arise if the agent merged blocks.
+ * Collects all try blocks per anchor — anchors with multiple matches are
+ * ambiguous (e.g., two identical loop bodies) and are skipped during comparison.
  */
-function buildOriginalAnchorMap(source: SourceFile): Map<string, TryStatement> {
-  const map = new Map<string, TryStatement>();
+function buildOriginalAnchorMap(source: SourceFile): Map<string, TryStatement[]> {
+  const map = new Map<string, TryStatement[]>();
   source.forEachDescendant((node) => {
     if (!Node.isTryStatement(node)) return;
     const anchor = extractBodyAnchor(node);
-    if (anchor && !map.has(anchor)) {
-      map.set(anchor, node);
-    }
+    if (!anchor) return;
+    const existing = map.get(anchor) ?? [];
+    existing.push(node);
+    map.set(anchor, existing);
   });
   return map;
 }
 
 /**
  * Returns true if the catch clause's block text contains any error recording call.
- * Checks for recordException() and setStatus() calls that indicate ERROR status.
+ * Checks for recordException() and setStatus() calls with ERROR status codes.
  */
 function catchHasErrorRecording(catchClause: import('ts-morph').CatchClause): boolean {
   const text = catchClause.getBlock().getText();
-  return text.includes('recordException(') || /setStatus\([^)]*ERROR/.test(text);
+  return (
+    text.includes('recordException(') ||
+    /setStatus\s*\(\s*(?:\{\s*code\s*:\s*)?(?:SpanStatusCode|StatusCode)?\.?ERROR\b/.test(text)
+  );
 }
 
 /**
@@ -45,6 +49,7 @@ function catchHasErrorRecording(catchClause: import('ts-morph').CatchClause): bo
  * For each instrumented try/catch that contains recordException():
  * - Finds the corresponding original try block by body anchor
  * - Checks whether the original catch was expected-condition (no rethrow)
+ * - Skips if the original catch already had error recording (pre-existing, not agent-introduced)
  * - If so, the agent added error recording it should not have — violation
  *
  * @param originalCode - The original source code before instrumentation
@@ -57,13 +62,14 @@ export function checkNoErrorRecordingInExpectedConditionCatches(
   instrumentedCode: string,
   filePath: string,
 ): CheckResult[] {
+  const ext = /\.(ts|tsx|mts|cts)$/i.test(filePath) ? 'ts' : 'js';
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
 
-  const originalSource = project.createSourceFile('original.js', originalCode);
-  const instrumentedSource = project.createSourceFile('instrumented.js', instrumentedCode);
+  const originalSource = project.createSourceFile(`original.${ext}`, originalCode);
+  const instrumentedSource = project.createSourceFile(`instrumented.${ext}`, instrumentedCode);
 
   const originalByAnchor = buildOriginalAnchorMap(originalSource);
 
@@ -85,13 +91,16 @@ export function checkNoErrorRecordingInExpectedConditionCatches(
     const anchor = extractBodyAnchor(node);
     if (!anchor) return;
 
-    const origTry = originalByAnchor.get(anchor);
-    if (!origTry) return;
+    const origTries = originalByAnchor.get(anchor);
+    // Skip ambiguous anchors — multiple originals with the same anchor cannot be resolved
+    if (!origTries || origTries.length !== 1) return;
+    const origTry = origTries[0];
 
     const origCatch = origTry.getCatchClause();
     if (!origCatch) return;
 
-    if (isExpectedConditionCatch(origCatch)) {
+    // Only flag when the error recording is new — original catch may have had it already
+    if (isExpectedConditionCatch(origCatch) && !catchHasErrorRecording(origCatch)) {
       violations.push({
         ruleId: 'NDS-007',
         passed: false,
