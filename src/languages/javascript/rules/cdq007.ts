@@ -117,7 +117,10 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
         tokens.some((t) => PATH_COMPOUND_TOKENS.has(t))
       ) {
         // OTel file.* attributes: full path is spec-correct, not a privacy concern.
-        if (Node.isStringLiteral(keyArg) && String(keyArg.getLiteralValue()).startsWith('file.')) {
+        if (
+          (Node.isStringLiteral(keyArg) || Node.isNoSubstitutionTemplateLiteral(keyArg)) &&
+          String(keyArg.getLiteralValue()).startsWith('file.')
+        ) {
           return;
         }
         findings.push({

@@ -188,7 +188,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **NDS-004**: Do NOT change exported function signatures — parameters, return types, or export declarations.
 - **NDS-005**: Do NOT restructure existing try/catch/finally blocks, reorder catch clauses, or change throw behavior.
-- **NDS-007**: Do NOT add \`recordException()\` or \`setStatus(ERROR)\` to catch blocks that swallow errors gracefully — catch blocks that return a default value, return empty, or handle an expected condition without rethrowing. These are graceful-degradation catches, not errors. Adding error recording to them creates false alerts. When in doubt: if the original catch has no \`throw\`, do not add error recording to it.
+- **NDS-007**: Do NOT add \`recordException()\` or \`setStatus(ERROR)\` to catch blocks that handle expected conditions gracefully — catch blocks that return a default value, return empty, or swallow the error without propagating it. These are graceful-degradation catches, not failures. Adding error recording to them creates false alerts. When in doubt: if the original catch does not propagate the error (no \`throw\`, no \`next(err)\`, no \`reject(err)\`, no \`return Promise.reject(err)\`), do not add error recording to it.
 
 ### Coverage
 

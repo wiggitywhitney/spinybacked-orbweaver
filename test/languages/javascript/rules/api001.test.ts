@@ -278,7 +278,7 @@ describe('checkForbiddenImports (API-001/004)', () => {
         lineNumber: null,
         message: expect.any(String),
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
     });
 

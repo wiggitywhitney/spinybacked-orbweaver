@@ -110,6 +110,39 @@ describe('checkNoErrorRecordingInExpectedConditionCatches (NDS-007)', () => {
       expect(results[0].passed).toBe(false);
       expect(results[0].ruleId).toBe('NDS-007');
     });
+
+    it('fires when expected-condition catch gains only setStatus(ERROR) without recordException', () => {
+      const original = [
+        'async function tryLoad(id) {',
+        '  try {',
+        '    return await loadItem(id);',
+        '  } catch (err) {',
+        '    return null;',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'const { trace, SpanStatusCode } = require("@opentelemetry/api");',
+        'async function tryLoad(id) {',
+        '  return trace.getTracer("app").startActiveSpan("tryLoad", async (span) => {',
+        '    try {',
+        '      return await loadItem(id);',
+        '    } catch (err) {',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      return null;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNoErrorRecordingInExpectedConditionCatches(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('NDS-007');
+    });
   });
 
   describe('passing cases', () => {

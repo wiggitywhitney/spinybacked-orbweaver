@@ -67,12 +67,12 @@ const FORBIDDEN_PATTERNS: Array<{
  * Returns package specifier strings (not full violation objects) for
  * use in computing the set of pre-existing imports.
  */
-function collectForbiddenPackageSpecifiers(code: string): Set<string> {
+function collectForbiddenPackageSpecifiers(code: string, filePath: string): Set<string> {
   const project = new Project({
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('_scan.js', code);
+  const sourceFile = project.createSourceFile(basename(filePath), code);
   const found = new Set<string>();
 
   for (const imp of sourceFile.getImportDeclarations()) {
@@ -114,7 +114,7 @@ export function checkForbiddenImports(
   instrumentedCode: string,
   filePath: string,
 ): CheckResult[] {
-  const preExisting = collectForbiddenPackageSpecifiers(originalCode);
+  const preExisting = collectForbiddenPackageSpecifiers(originalCode, filePath);
 
   const project = new Project({
     compilerOptions: { allowJs: true },
@@ -176,7 +176,7 @@ export function checkForbiddenImports(
       lineNumber: null,
       message: 'No forbidden imports found. Only @opentelemetry/api is used.',
       tier: 2,
-      blocking: false,
+      blocking: true,
     }];
   }
 

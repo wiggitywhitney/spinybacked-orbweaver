@@ -319,7 +319,7 @@ This check is **advisory**, not blocking — matching JavaScript API-002's dispo
 
 **Implementation:**
 - [ ] Create the Go package-hygiene rule file at the location determined by OD-9c (either `src/languages/go/rules/api002.ts` or a new path per OD-9c's decision)
-- [ ] Parse `go.mod` to extract declared dependencies (require blocks; version-pinned replacements for OD-7 workspace members)
+- [ ] Parse `go.mod` to extract declared dependencies from `require` blocks only — `replace` directives are resolution overrides, not dependency declarations; do not count them as requiring OTel packages
 - [ ] Library vs. app classification per OD-9b — scan the module's Go files for any `package main` declaration; if absent, the module is a library
 - [ ] For libraries: verify `go.opentelemetry.io/otel` is in the `require` block (the API is always acceptable in libraries) and that no `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/*`, or `go.opentelemetry.io/contrib/instrumentation/*` package appears in `require` (those are deployer concerns)
 - [ ] For apps: the rule passes trivially — apps can depend on anything they need

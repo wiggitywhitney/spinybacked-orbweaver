@@ -88,7 +88,10 @@ describe('checkThinWrapperSpans (RST-003)', () => {
       ].join('\n');
 
       const results = checkThinWrapperSpans(code, filePath);
-      expect(results.some(r => !r.passed)).toBe(true);
+      const failure = results.find(r => !r.passed);
+      expect(failure).toBeDefined();
+      expect(failure?.ruleId).toBe('RST-003');
+      expect(failure?.message).toContain('getUser');
     });
 
     it('does not flag wrapper delegating to method call (obj.method — cross-file)', () => {

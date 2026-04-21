@@ -150,11 +150,11 @@ describe('full pipeline with judge-enhanced rules', () => {
     // Judge was called for both rules
     expect(parseFn).toHaveBeenCalled();
     const callCount = parseFn.mock.calls.length;
-    expect(callCount).toBeGreaterThanOrEqual(2);
+    expect(callCount).toBe(2);
 
     // Token usage from judge calls is collected
     expect(result.judgeTokenUsage).toBeDefined();
-    expect(result.judgeTokenUsage!.length).toBeGreaterThanOrEqual(2);
+    expect(result.judgeTokenUsage).toHaveLength(2);
 
     // Each judge call contributed token usage
     for (const usage of result.judgeTokenUsage!) {

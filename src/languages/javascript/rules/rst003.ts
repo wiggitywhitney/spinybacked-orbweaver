@@ -124,10 +124,14 @@ function getSameFileCallee(
 
   const calleeName = callee.getText();
 
-  // Confirm the callee is declared in this file (function declaration or variable).
+  // Confirm the callee is a locally defined function — not an imported variable alias.
+  const fnDecl = sourceFile.getFunction(calleeName);
+  const varDecl = sourceFile.getVariableDeclaration(calleeName);
+  const varInit = varDecl?.getInitializer();
   const isDeclaredLocally =
-    sourceFile.getFunction(calleeName) !== undefined ||
-    sourceFile.getVariableDeclaration(calleeName) !== undefined;
+    fnDecl !== undefined ||
+    (varDecl !== undefined &&
+      (Node.isFunctionExpression(varInit) || Node.isArrowFunction(varInit)));
 
   return isDeclaredLocally ? calleeName : null;
 }
