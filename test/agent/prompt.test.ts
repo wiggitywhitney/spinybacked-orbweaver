@@ -682,5 +682,44 @@ describe('buildUserMessage', () => {
       expect(message).not.toContain('Span names already in use');
     });
   });
+
+  describe('prettierConstraint', () => {
+    it('injects Formatting section when constraint is provided', () => {
+      const constraint = "This project's Prettier config enforces: arrowParens: avoid. Write all arrow functions without parentheses around single parameters.";
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        undefined, undefined, constraint,
+      );
+      expect(message).toContain('**Formatting**:');
+      expect(message).toContain('arrowParens: avoid');
+    });
+
+    it('omits Formatting section when constraint is empty string', () => {
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        undefined, undefined, '',
+      );
+      expect(message).not.toContain('**Formatting**:');
+    });
+
+    it('omits Formatting section when constraint is undefined', () => {
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+      );
+      expect(message).not.toContain('**Formatting**:');
+    });
+
+    it('Formatting section appears before source_file tag', () => {
+      const constraint = "This project's Prettier config enforces: semi: false.";
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        undefined, undefined, constraint,
+      );
+      const formattingPos = message.indexOf('**Formatting**:');
+      const sourceFilePos = message.indexOf('<source_file>');
+      expect(formattingPos).toBeGreaterThan(0);
+      expect(formattingPos).toBeLessThan(sourceFilePos);
+    });
+  });
 });
 

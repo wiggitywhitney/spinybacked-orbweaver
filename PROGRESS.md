@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-21) Injected project Prettier config constraints into the per-file instrumentation prompt so the agent generates formatting-compliant code on the first attempt rather than relying on fix-loop corrections. When a non-default Prettier config is detected (`.prettierrc*` or `prettier` field in `package.json`), a compact prose constraint is prepended to the file prompt — covering `arrowParens`, `printWidth`, `semi`, `singleQuote`, and `trailingComma`. The arrowParens and printWidth options get explicit behavioral instructions (e.g., "write all arrow functions without parentheses around single parameters" and "keep generated lines under 100 characters"). Options that don't affect agent-generated code (`tabWidth`, `useTabs`, `bracketSpacing`) are never injected. This addresses the pattern from the release-it eval run where `arrowParens: avoid` violations persisted across all 3 attempts because the generation prompt had no knowledge of the repo's formatting config.
+
 - (2026-04-21) Bumped the `action.yml` default Weaver version from `0.21.2` to `0.22.1` to match what CI has been running. Users who rely on the GitHub Action without pinning `weaver-version` explicitly were previously getting a stale Weaver binary that differed from what CI validated against.
 
 - (2026-04-21) Added a `branding:` block (`icon: zap`, `color: orange`) to `action.yml`. The GitHub Actions Marketplace requires a branding entry — without it the action cannot be listed there.

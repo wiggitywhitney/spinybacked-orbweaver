@@ -251,3 +251,68 @@ export async function formatCode(source: string, configDir: string): Promise<str
     return source;
   }
 }
+
+/**
+ * Prettier option defaults (v3). Used to detect non-default settings that
+ * affect agent-generated code and should be injected into the prompt.
+ */
+const PRETTIER_DEFAULTS: Record<string, unknown> = {
+  arrowParens: 'always',
+  printWidth: 80,
+  semi: true,
+  singleQuote: false,
+  trailingComma: 'all',
+};
+
+/**
+ * Build a compact prose constraint string describing non-default Prettier
+ * formatting rules for a file. Injected into the instrumentation prompt so
+ * the agent generates compliant code on the first attempt rather than
+ * relying on fix-loop corrections.
+ *
+ * Returns an empty string when no config exists or all relevant options
+ * match Prettier defaults — no noise for default-config projects.
+ *
+ * Only covers options that affect agent-generated code (arrow functions,
+ * line length, semicolons, quotes, trailing commas). Options like tabWidth
+ * and useTabs are excluded — the agent wraps existing code in spans and
+ * does not control indentation.
+ *
+ * @param filePath - Absolute path to the file being instrumented
+ * @returns Constraint prose string, or empty string if nothing to inject
+ */
+export async function buildPrettierConstraint(filePath: string): Promise<string> {
+  let config: Record<string, unknown> | null;
+  try {
+    config = await prettier.resolveConfig(filePath) as Record<string, unknown> | null;
+  } catch {
+    return '';
+  }
+
+  if (!config) return '';
+
+  const nonDefault: string[] = [];
+
+  for (const [key, defaultValue] of Object.entries(PRETTIER_DEFAULTS)) {
+    if (key in config && config[key] !== defaultValue) {
+      nonDefault.push(`${key}: ${config[key]}`);
+    }
+  }
+
+  if (nonDefault.length === 0) return '';
+
+  const rules = nonDefault.join(', ');
+  const parts: string[] = [`This project's Prettier config enforces: ${rules}.`];
+
+  const arrowParens = config['arrowParens'];
+  if (arrowParens === 'avoid') {
+    parts.push('Write all arrow functions without parentheses around single parameters (e.g., `async span => {` not `async (span) => {`).');
+  }
+
+  const printWidth = config['printWidth'];
+  if (typeof printWidth === 'number' && printWidth !== PRETTIER_DEFAULTS['printWidth']) {
+    parts.push(`Keep generated lines under ${printWidth} characters to avoid Prettier line-wrap reformatting.`);
+  }
+
+  return parts.join(' ');
+}

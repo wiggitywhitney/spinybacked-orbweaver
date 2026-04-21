@@ -311,6 +311,7 @@ export function buildUserMessage(
   config: AgentConfig,
   detectionResult?: OTelImportDetectionResult,
   existingSpanNames?: string[],
+  prettierConstraint?: string,
 ): string {
   const lineCount = originalCode.split('\n').length;
   const isLargeFile = lineCount > config.largeFileThresholdLines;
@@ -341,6 +342,12 @@ ${patternDescriptions.join('\n')}`;
 
 **Span names already in use**: The following span names were declared by earlier files in this run. Do NOT reuse these names for different operations — invent unique names instead.
 ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
+  }
+
+  if (prettierConstraint) {
+    message += `
+
+**Formatting**: ${prettierConstraint}`;
   }
 
   message += `
