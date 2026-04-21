@@ -4,6 +4,10 @@
 name: 'Spinybacked Orbweaver'
 description: 'AI-powered OpenTelemetry instrumentation for JavaScript applications'
 
+branding:
+  icon: 'zap'
+  color: 'orange'
+
 inputs:
   path:
     description: 'Path to instrument (relative to repository root)'
@@ -13,7 +17,7 @@ inputs:
     default: '24'
   weaver-version:
     description: 'Weaver CLI version to install'
-    default: '0.21.2'
+    default: '0.22.1'
 
 outputs:
   result:
