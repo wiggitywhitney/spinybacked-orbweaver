@@ -48,7 +48,7 @@ export const AgentConfigSchema = z.strictObject({
 
   // Agent behavior
   autoApproveLibraries: z.boolean().default(true),
-  testCommand: z.string().default('npm test'),
+  testCommand: z.string().min(1).default('npm test'),
 
   // Target application lifecycle
   targetType: TargetType.default('long-lived'),
