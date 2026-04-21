@@ -19,7 +19,7 @@ Spiny-orb cannot instrument Go files. Go is the primary language for infrastruct
 
 Implement `GoProvider` in `src/languages/go/` following the `LanguageProvider` interface. Before any code is written, resolve the NDS-004/context.Context policy conflict. The interface will need to accommodate Go's context requirement without breaking the contract for other languages.
 
-**This PRD must not begin implementation until PRD #373 is merged.**
+**This PRD must not begin implementation until PRD #507 (multi-language architecture) and PRD #373 (Python provider) are both merged, in that order.**
 
 ---
 
@@ -291,7 +291,7 @@ Following Part 8 checklist, Step 3:
 - [ ] For each shared-concept rule, implement Go-specific version:
   - `cov001.ts` — entry points: `http.HandleFunc`, `http.Handler` implementations, Gin/Echo route handlers, gRPC service methods
   - `cov002.ts` — outbound calls: `http.Client.Get/Post/Do`, gRPC client calls, database calls
-  - `cov003.ts` — error recording: `if err != nil` blocks that **return the error to the caller** without `span.RecordError(err)`. **Do NOT flag `if err != nil` blocks that swallow the error and return a default/zero value** — this is Go's equivalent of graceful degradation. Per the OTel spec (verified 2026-04-18 during PRD #483 audit, Decision 4): "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)). **Implementing agent: verify this spec clause still holds when you begin — spec language may have been refined.** The distinction matters: `if err != nil { return nil, err }` must be flagged (error propagates to caller); `if err != nil { return defaultResult, nil }` must NOT be flagged (error swallowed, caller sees success).
+  - `cov003.ts` — error recording: `if err != nil` blocks that **return the error to the caller** without `span.RecordError(err)`. **Do NOT flag `if err != nil` blocks that swallow the error and return a default/zero value** — this is Go's equivalent of graceful degradation. Per the OTel spec (verified 2026-04-18 during PRD #483 audit, Decision 5): "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)). **Implementing agent: verify this spec clause still holds when you begin — spec language may have been refined.** The distinction matters: `if err != nil { return nil, err }` must be flagged (error propagates to caller); `if err != nil { return defaultResult, nil }` must NOT be flagged (error swallowed, caller sees success).
   - `cov004.ts` — async operations: per OD-6 (resolved in pre-implementation gate), `applicableTo('go') = false` for goroutines in the initial implementation; `isAsync` is always `false` for Go functions
   - `cov006.ts` — per OD-5: `applicableTo('go') = false` initially
   - `cdq001.ts` — spans closed: `defer span.End()` is the correct pattern; flag `tracer.Start()` calls without a corresponding `defer span.End()` in the same function

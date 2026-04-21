@@ -1,7 +1,7 @@
 // ABOUTME: NDS-007 Tier 2 check — expected-condition catch blocks must not gain error recording.
 // ABOUTME: Fires when the agent adds recordException()/setStatus(ERROR) to a catch that gracefully swallows errors.
 
-import { Project, Node } from 'ts-morph';
+import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { SourceFile, TryStatement } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
@@ -27,15 +27,18 @@ function buildOriginalAnchorMap(source: SourceFile): Map<string, TryStatement[]>
 }
 
 /**
- * Returns true if the catch clause's block text contains any error recording call.
- * Checks for recordException() and setStatus() calls with ERROR status codes.
+ * Returns true if the catch clause contains a real recordException() or setStatus(ERROR) call.
+ * Uses AST traversal to avoid false positives from comments or string literals.
  */
 function catchHasErrorRecording(catchClause: import('ts-morph').CatchClause): boolean {
-  const text = catchClause.getBlock().getText();
-  return (
-    text.includes('recordException(') ||
-    /setStatus\s*\(\s*(?:\{\s*code\s*:\s*)?(?:SpanStatusCode|StatusCode)?\.?ERROR\b/.test(text)
-  );
+  const calls = catchClause.getBlock().getDescendantsOfKind(SyntaxKind.CallExpression);
+  return calls.some((call) => {
+    const callee = call.getExpression().getText();
+    if (/(\.|^)recordException$/.test(callee)) return true;
+    if (!(/(\.|^)setStatus$/.test(callee))) return false;
+    const firstArg = call.getArguments()[0];
+    return firstArg ? /\bERROR\b/.test(firstArg.getText()) : false;
+  });
 }
 
 /**
