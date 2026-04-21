@@ -177,7 +177,9 @@ export async function instrumentFile(
   }
 
   const systemPrompt = buildSystemPrompt(resolvedSchema);
-  const prettierConstraint = await buildPrettierConstraint(filePath);
+  // Skip Prettier config resolution on feedback-only turns — feedbackMessage replaces
+  // userMessage entirely, so the constraint would never be read.
+  const prettierConstraint = options?.feedbackMessage ? undefined : await buildPrettierConstraint(filePath);
   const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult, options?.existingSpanNames, prettierConstraint);
 
   // Build messages: multi-turn (with prior conversation) or standard (initial generation)

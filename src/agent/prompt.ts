@@ -336,6 +336,8 @@ You are returning structured JSON via the output schema. Fill in each field:
  * @param originalCode - File contents before instrumentation
  * @param config - Validated agent configuration (used for large file threshold)
  * @param detectionResult - Optional OTel detection result from AST analysis
+ * @param existingSpanNames - Optional span names already declared by earlier files; agent must not reuse them
+ * @param prettierConstraint - Optional prose constraint derived from the project's non-default Prettier config
  * @returns The user message string
  */
 export function buildUserMessage(

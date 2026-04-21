@@ -410,6 +410,19 @@ describe('buildPrettierConstraint', () => {
     expect(result).toContain('singleQuote: true');
   });
 
+  it('includes trailingComma when non-default (es5)', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ trailingComma: 'es5' }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'trailing-comma.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toContain('trailingComma: es5');
+  });
+
   it('combines multiple non-default options', async () => {
     writeFileSync(
       join(tempDir, '.prettierrc'),
