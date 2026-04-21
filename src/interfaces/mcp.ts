@@ -345,8 +345,9 @@ export async function handleInstrumentTool(
  * @returns Configured McpServer ready to connect to a transport
  */
 export function createMcpServer(deps: McpDeps): McpServer {
+  // TODO: read version from package.json at startup to avoid drift with the published npm artifact
   const mcpServer = new McpServer(
-    { name: 'spiny-orb', version: '0.1.0' },
+    { name: 'spiny-orb', version: '1.0.0' },
     { capabilities: { logging: {} } },
   );
 
