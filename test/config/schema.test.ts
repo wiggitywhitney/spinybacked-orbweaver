@@ -131,6 +131,14 @@ describe('AgentConfigSchema', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it('rejects whitespace-only testCommand', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        testCommand: '   ',
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('enum validation', () => {
