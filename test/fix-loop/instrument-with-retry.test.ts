@@ -2060,6 +2060,157 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
   });
 });
 
+describe('instrumentWithRetry — advisory-only pass (M3)', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+  // Has startActiveSpan so countSpansInCode returns > 0 — required for advisory pass to fire
+  const passingInstrumentedContent = 'const tracer = trace.getTracer("test"); export function greet() { return tracer.startActiveSpan("greet", (span) => { try { return hello; } finally { span.end(); } }); }\n';
+  const advisoryImprovedContent = 'const tracer = trace.getTracer("test"); export function greet() { return tracer.startActiveSpan("greet.improved", (span) => { try { return hello; } finally { span.end(); } }); }\n';
+
+  const baseTokens: TokenUsage = {
+    inputTokens: 1000,
+    outputTokens: 500,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+  };
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-advisory-pass-test-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('fires advisory pass when file passes with advisory findings', async () => {
+    let instrumentCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        const code = instrumentCallCount === 1 ? passingInstrumentedContent : advisoryImprovedContent;
+        return { success: true, output: makeInstrumentationOutput({ instrumentedCode: code, tokenUsage: baseTokens }) } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.originalCode === originalContent) return makeValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+
+    expect(instrumentCallCount).toBe(2);
+  });
+
+  it('does not fire advisory pass when file passes with no advisory findings', async () => {
+    let instrumentCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        return { success: true, output: makeInstrumentationOutput({ instrumentedCode: passingInstrumentedContent, tokenUsage: baseTokens }) } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+
+    expect(instrumentCallCount).toBe(1);
+  });
+
+  it('does not fire advisory pass when output token budget is exhausted', async () => {
+    let instrumentCallCount = 0;
+    // outputTokens > MAX_OUTPUT_TOKENS_PER_FILE (50_000)
+    const exhaustedTokens: TokenUsage = { inputTokens: 1000, outputTokens: 51_000, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        return { success: true, output: makeInstrumentationOutput({ instrumentedCode: passingInstrumentedContent, tokenUsage: exhaustedTokens }) } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.originalCode === originalContent) return makeValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+
+    expect(instrumentCallCount).toBe(1);
+  });
+
+  it('file status remains success regardless of blocking revalidation outcome after advisory pass', async () => {
+    let instrumentCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        const code = instrumentCallCount === 1 ? passingInstrumentedContent : advisoryImprovedContent;
+        return { success: true, output: makeInstrumentationOutput({ instrumentedCode: code, tokenUsage: baseTokens }) } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.originalCode === originalContent) return makeValidationWithAdvisory(testFilePath);
+        // Advisory blocking revalidation fails
+        return makeFailingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+
+    expect(result.status).toBe('success');
+  });
+
+  it('advisory pass calls instrumentFile with passing instrumented code and advisory-only feedbackMessage', async () => {
+    let instrumentCallCount = 0;
+    let capturedOriginalCode: string | undefined;
+    let capturedFeedbackMessage: string | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, origCode, _rs, _cfg, opts) => {
+        instrumentCallCount++;
+        if (instrumentCallCount === 2) {
+          capturedOriginalCode = origCode;
+          capturedFeedbackMessage = opts?.feedbackMessage;
+        }
+        const code = instrumentCallCount === 1 ? passingInstrumentedContent : advisoryImprovedContent;
+        return { success: true, output: makeInstrumentationOutput({ instrumentedCode: code, tokenUsage: baseTokens }) } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.originalCode === originalContent) return makeValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+
+    // Must be called with passing instrumented code, not the original source
+    expect(capturedOriginalCode).toBe(passingInstrumentedContent);
+    expect(capturedOriginalCode).not.toBe(originalContent);
+    // feedbackMessage must contain advisory status label and not contain blocking directive
+    expect(capturedFeedbackMessage).toContain('NDS-003 | advisory');
+    expect(capturedFeedbackMessage).not.toContain('| fail |');
+  });
+
+  it('reverts to pre-advisory passing code on disk if blocking revalidation fails after advisory pass', async () => {
+    let instrumentCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        const code = instrumentCallCount === 1 ? passingInstrumentedContent : advisoryImprovedContent;
+        return { success: true, output: makeInstrumentationOutput({ instrumentedCode: code, tokenUsage: baseTokens }) } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.originalCode === originalContent) return makeValidationWithAdvisory(testFilePath);
+        // Advisory blocking revalidation fails
+        return makeFailingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+
+    // File on disk must be the pre-advisory passing code, not the failed advisory output
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(passingInstrumentedContent);
+  });
+});
+
 describe('instrumentWithRetry — agentVersion population', () => {
   let testDir: string;
   let testFilePath: string;

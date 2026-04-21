@@ -663,7 +663,10 @@ async function executeRetryLoop(
       }
 
       const extensionWarnings = detectMalformedExtensions(output.schemaExtensions);
-      return {
+      const buildSuccessResult = (
+        advisoryAnnotations: FileResult['advisoryAnnotations'],
+        tokens: TokenUsage,
+      ): FileResult => ({
         path: filePath,
         status: 'success',
         spansAdded,
@@ -675,12 +678,86 @@ async function executeRetryLoop(
         errorProgression,
         spanCategories: output.spanCategories,
         notes: [...output.notes, ...extensionWarnings],
-        advisoryAnnotations: validation.advisoryFindings.length > 0
-          ? validation.advisoryFindings
-          : undefined,
+        advisoryAnnotations,
         agentVersion: AGENT_VERSION,
-        tokenUsage: cumulativeTokens,
-      };
+        tokenUsage: tokens,
+      });
+
+      // Advisory-only pass: when file passes but has advisory findings and budget allows.
+      // Uses Option B (Decision 5): fresh call with the passing instrumented code as input —
+      // gives the agent the correct starting point without re-instrumenting from scratch
+      // or carrying blocking-failure conversation history. Followed by mandatory blocking
+      // revalidation (Decision 6) — advisory pass modifies code and could introduce regressions.
+      if (
+        spansAdded > 0 &&
+        validation.advisoryFindings.length > 0 &&
+        cumulativeTokens.outputTokens <= MAX_OUTPUT_TOKENS_PER_FILE
+      ) {
+        const passingCode = output.instrumentedCode;
+        const advisoryFeedback = formatFeedbackFn({
+          passed: true,
+          tier1Results: [],
+          tier2Results: validation.advisoryFindings,
+          blockingFailures: [],
+          advisoryFindings: validation.advisoryFindings,
+        });
+        const advisoryMessage =
+          `The instrumented file passed validation but has advisory findings — ` +
+          `non-blocking quality improvements to address. Review each finding and fix ` +
+          `it where appropriate. Make minimal, targeted changes. Return the complete file.\n\n` +
+          advisoryFeedback;
+
+        const advisoryInstrumentResult = await instrumentFileFn(
+          filePath,
+          passingCode,
+          resolvedSchema,
+          config,
+          { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames },
+        );
+
+        if (advisoryInstrumentResult.success) {
+          const advisoryOutput = advisoryInstrumentResult.output;
+          cumulativeTokens = addTokenUsage(cumulativeTokens, advisoryOutput.tokenUsage);
+
+          let advisoryCode = advisoryOutput.instrumentedCode;
+          if (provider.id === 'javascript' || provider.id === 'typescript') {
+            advisoryCode = ensureTracerAfterImports(advisoryCode);
+          }
+          await writeFile(filePath, advisoryCode, 'utf-8');
+
+          const advisoryValidation = await validateFileFn({
+            originalCode: passingCode,
+            instrumentedCode: advisoryCode,
+            filePath,
+            config: advisoryOutput.schemaExtensions.length > 0
+              ? { ...validationConfig, declaredSpanExtensions: advisoryOutput.schemaExtensions }
+              : validationConfig,
+            provider,
+          });
+
+          if (advisoryValidation.passed) {
+            return buildSuccessResult(
+              advisoryValidation.advisoryFindings.length > 0 ? advisoryValidation.advisoryFindings : undefined,
+              cumulativeTokens,
+            );
+          }
+
+          // Blocking revalidation failed — revert to the pre-advisory passing code
+          await writeFile(filePath, passingCode, 'utf-8');
+        } else {
+          cumulativeTokens = addTokenUsage(cumulativeTokens, advisoryInstrumentResult.tokenUsage ?? ZERO_TOKENS);
+        }
+
+        return buildSuccessResult(
+          validation.advisoryFindings.length > 0 ? validation.advisoryFindings : undefined,
+          cumulativeTokens,
+        );
+      }
+
+      return buildSuccessResult(
+        validation.advisoryFindings.length > 0 ? validation.advisoryFindings : undefined,
+        cumulativeTokens,
+      );
     }
 
     // Validation failed — restore original code from memory before next attempt
