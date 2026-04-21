@@ -1,6 +1,6 @@
 # PRD #483: Advisory Rules Audit
 
-**Status**: Active  
+**Status**: Complete (merged 2026-04-21)  
 **Priority**: High  
 **GitHub Issue**: [#483](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/483)  
 **Created**: 2026-04-15
