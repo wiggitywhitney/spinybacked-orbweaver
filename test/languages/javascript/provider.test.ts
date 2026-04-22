@@ -108,7 +108,7 @@ describe('JavaScriptProvider', () => {
     // NDS-001 (syntax) and LINT are Tier 1 provider methods, not ValidationRules.
     const RULE_IDS = [
       'COV-001', 'COV-002', 'COV-003', 'COV-004', 'COV-005', 'COV-006',
-      'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005',
+      'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005', 'RST-006',
       'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006', 'NDS-007',
       'CDQ-001', 'CDQ-006', 'CDQ-007', 'CDQ-008', 'CDQ-009', 'CDQ-010',
       'API-001', 'API-002', 'API-004',
