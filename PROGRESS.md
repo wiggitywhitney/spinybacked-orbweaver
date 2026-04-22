@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- (2026-04-22) Starting work on COV-004/RST-006 rule changes: COV-004 (async function span coverage) will gain a narrow exemption for functions that call `process.exit()` directly in their body — those functions cannot be safely spanned because `process.exit()` bypasses `finally` blocks. A new advisory rule RST-006 will catch any agent-added spans on such functions as a safety net. Audit confirmed COV-004 has no such exemption today and no existing rule covers this gap.
+
 ### Fixed
 
 - (2026-04-21) Fixed acceptance gate failures on `index.js` (commit-story-v2 fixture, 533 lines): the agent was removing an inner try/catch block at line 489 when wrapping `main()` in a span, triggering NDS-005. Two changes combined: (1) doubled TOKENS_PER_LINE from 50 to 100, giving index.js a 61K output budget instead of 34K — enough headroom for adaptive thinking plus JSON output without truncation; also raised MAX_OUTPUT_TOKENS_PER_FILE from 50K to 100K so complex files can retry without hitting the per-file abort threshold. (2) Added concrete NDS-005 guidance to the agent prompt covering the inner-nested case: when wrapping a function that contains inner try/catch blocks, those blocks must be preserved exactly as nested blocks inside the outer span try — not removed or merged with the span's own catch.
