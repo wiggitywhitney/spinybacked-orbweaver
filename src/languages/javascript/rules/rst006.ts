@@ -8,6 +8,21 @@ import type { ValidationRule } from '../../types.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 
 /**
+ * Extract the export name from a direct `module.exports.foo` or `exports.foo`
+ * assignment left-hand side using AST node types rather than regex, so nested
+ * paths like `module.exports.foo.bar` are rejected rather than misidentified.
+ * Mirrors the pattern used in nds004.ts.
+ */
+function getDirectCommonJsExportName(left: import('ts-morph').Node): string | undefined {
+  if (!Node.isPropertyAccessExpression(left)) return undefined;
+  const receiver = left.getExpression().getText();
+  if (receiver === 'exports' || receiver === 'module.exports') {
+    return left.getName();
+  }
+  return undefined;
+}
+
+/**
  * Derive a stable key for a function node during ancestor walk-up traversal.
  *
  * Returns `{ stop: true, key }` when `ancestor` is a recognized function boundary
@@ -41,10 +56,7 @@ function getFunctionKey(ancestor: import('ts-morph').Node): { stop: boolean; key
       return { stop: true, key: parent.getName() };
     }
     if (Node.isBinaryExpression(parent)) {
-      // module.exports.foo = async function() {}
-      const left = parent.getLeft().getText();
-      const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
-      return { stop: true, key: nameMatch?.[1] };
+      return { stop: true, key: getDirectCommonJsExportName(parent.getLeft()) };
     }
     if (Node.isPropertyAssignment(parent)) {
       // module.exports = { foo: async () => {} }
@@ -76,9 +88,7 @@ function getClassContainerName(classNode: import('ts-morph').Node): string | und
     return parent.getName();
   }
   if (Node.isBinaryExpression(parent)) {
-    const left = parent.getLeft().getText();
-    const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
-    return nameMatch?.[1];
+    return getDirectCommonJsExportName(parent.getLeft());
   }
   return undefined;
 }
