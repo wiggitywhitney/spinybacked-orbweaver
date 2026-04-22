@@ -691,8 +691,8 @@ async function executeRetryLoop(
       if (
         spansAdded > 0 &&
         validation.advisoryFindings.length > 0 &&
-        cumulativeTokens.outputTokens <= MAX_OUTPUT_TOKENS_PER_FILE &&
-        totalTokens(cumulativeTokens) <= config.maxTokensPerFile
+        cumulativeTokens.outputTokens < MAX_OUTPUT_TOKENS_PER_FILE &&
+        totalTokens(cumulativeTokens) < config.maxTokensPerFile
       ) {
         const passingCode = output.instrumentedCode;
         const advisoryFeedback = formatFeedbackFn({

@@ -2160,6 +2160,26 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
     expect(instrumentCallCount).toBe(1);
   });
 
+  it('does not fire advisory pass when total token budget is exactly at the limit', async () => {
+    let instrumentCallCount = 0;
+    // totalTokens = 30K + 50K = 80K exactly equals maxTokensPerFile — strict < means skip
+    const exactBudgetTokens: TokenUsage = { inputTokens: 30_000, outputTokens: 50_000, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        return { success: true, output: makeInstrumentationOutput({ instrumentedCode: passingInstrumentedContent, tokenUsage: exactBudgetTokens }) } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.originalCode === originalContent) return makeValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 80_000 }), { deps });
+
+    expect(instrumentCallCount).toBe(1);
+  });
+
   it('file status remains success regardless of blocking revalidation outcome after advisory pass', async () => {
     let instrumentCallCount = 0;
     const deps: InstrumentWithRetryDeps = {
