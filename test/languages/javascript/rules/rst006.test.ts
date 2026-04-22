@@ -205,6 +205,40 @@ describe('checkProcessExitSpan (RST-006)', () => {
     });
   });
 
+  describe('TypeScript fixtures', () => {
+    it('fires for a TypeScript async function with typed parameters that calls process.exit()', () => {
+      const original = [
+        'async function main(args: string[]): Promise<void> {',
+        '  if (args.includes("--help")) process.exit(0);',
+        '  const result: string = await doWork(args);',
+        '  console.log(result);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        tracer,
+        'async function main(args: string[]): Promise<void> {',
+        '  if (args.includes("--help")) process.exit(0);',
+        '  return tracer.startActiveSpan("main", async (span: Span) => {',
+        '    try {',
+        '      const result: string = await doWork(args);',
+        '      console.log(result);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkProcessExitSpan(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('RST-006');
+      expect(results[0].message).toContain('main');
+      expect(results[0].message).toContain('process.exit()');
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure on passing result', () => {
       const code = 'const x = 1;\n';
