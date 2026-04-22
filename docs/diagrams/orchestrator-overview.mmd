@@ -1,0 +1,16 @@
+---
+title: "System Architecture"
+---
+%% ABOUTME: Orchestrator-centered architecture — deterministic orchestrator coordinating AI agent, validator, and Weaver schema
+flowchart LR
+    SCHEMA["Weaver Schema"]
+    ORCH["Orchestrator\n(deterministic)"]
+    AGENT["AI Agent\n(instrumentation only)"]
+    VAL["Validator"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file contents + resolved schema"| AGENT
+    AGENT -->|"instrumented output + reasoning"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA

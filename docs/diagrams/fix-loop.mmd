@@ -1,0 +1,25 @@
+---
+title: "Fix Loop"
+---
+%% ABOUTME: Fix loop retry escalation — same agent retry, fresh agent handoff, function-level fallback
+flowchart TD
+    FAIL["Validation fails"]
+    R1["Retry: same agent\n+ failure report"]
+    D1{"Pass?"}
+    R2["Fresh agent\n+ failure-category hint\n(not broken output)"]
+    D2{"Pass?"}
+    R3["Function-by-function\nfallback"]
+    D3{"Pass?"}
+    ACCEPT(["File accepted"])
+    PARTIAL(["Partial result\nor file skipped"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL

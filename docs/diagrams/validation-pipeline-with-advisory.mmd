@@ -1,0 +1,28 @@
+---
+title: "Validation Pipeline with Advisory Polish Pass"
+---
+%% ABOUTME: Validation pipeline showing that blocking and advisory checks always run together; advisory findings are included in failure reports and in the polish pass
+flowchart TD
+    IN["Instrumented output"]
+    G["Structural gate checks (all blocking)\nSyntax · Elision · Lint · Weaver static check"]
+    B["Blocking quality checks\nSchema fidelity · Coverage · Code quality\nAPI-only · LLM judge (if new names)"]
+    A["Advisory quality checks\n(always run, findings always collected)"]
+    GFAIL(["Structural fail — file rejected"])
+    DEC{"Any blocking\nfailures?"}
+    SFAIL(["Fail — all findings returned\nblocking failures + advisory"])
+    AGENT["Agent: one improvement pass\n(advisory findings only)"]
+    RECHECK["Blocking validation re-runs"]
+    IMPROVED(["Improved version committed"])
+    PRIOR(["Prior passing version committed"])
+
+    IN --> G
+    G -->|all pass| B
+    G -->|all pass| A
+    G -->|any fail| GFAIL
+    B --> DEC
+    A --> DEC
+    DEC -->|yes| SFAIL
+    DEC -->|no| AGENT
+    AGENT --> RECHECK
+    RECHECK -->|pass| IMPROVED
+    RECHECK -->|fail| PRIOR
