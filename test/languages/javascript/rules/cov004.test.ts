@@ -264,6 +264,24 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('does not exempt async function with process.exit() only in finally block', () => {
+      const code = [
+        'async function withFinallyOnly(args) {',
+        '  try {',
+        '    const result = await doWork(args);',
+        '    return result;',
+        '  } finally {',
+        '    process.exit(1);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('withFinallyOnly');
+    });
+
     it('does not exempt async function with process.exit() only in catch block', () => {
       const code = [
         'async function safe(args) {',
