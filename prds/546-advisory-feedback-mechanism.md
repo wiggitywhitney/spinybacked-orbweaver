@@ -97,7 +97,7 @@ The advisory-only pass must:
   - File `status` remains `"success"` in all cases (Decision 2).
   Add unit tests: (a) advisory pass fires when file passes with advisory findings; (b) advisory pass does NOT fire when file passes with no advisory findings; (c) advisory pass does NOT fire when output token budget is exhausted; (d) file `status` remains `"success"` after the advisory pass regardless of blocking revalidation outcome; (e) `instrumentFile` is called with the passing instrumented code (not original source) and a `feedbackMessage` containing only advisory findings; (f) if blocking revalidation fails after advisory pass, the pre-advisory passing code is restored and the original success result is returned. All tests pass.
 
-- [ ] **M4 — Acceptance gate and PROGRESS.md**: Verify acceptance gates pass. Update `PROGRESS.md` with a dated entry describing what changed and why — specifically that advisory rules now produce agent-directed feedback rather than dead signal.
+- [x] **M4 — Acceptance gate and PROGRESS.md**: Verify acceptance gates pass. Update `PROGRESS.md` with a dated entry describing what changed and why — specifically that advisory rules now produce agent-directed feedback rather than dead signal.
 
 ---
 

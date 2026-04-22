@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-22) Shipped the advisory rule feedback mechanism. Advisory validation findings (COV-004, RST-001–005, CDQ-006–010 and others) now produce agent-directed feedback rather than dead signal. Core and coordinator acceptance gates passed; run-5-coverage failure is a pre-existing index.js instrumentation issue tracked separately in PRD #553.
+
 - (2026-04-21) Added an advisory-only polish pass to the fix loop: when a file passes blocking validation but still has advisory findings (non-blocking quality issues like unnecessary spans or attribute data quality problems), the agent now gets one additional attempt to clean them up. The pass uses the already-passing instrumented code as its starting point — not the original source — so the agent only needs to address the advisory issues rather than re-doing all the instrumentation from scratch. Blocking validation runs again after the advisory pass; if it introduces a regression, the pre-advisory passing code is restored automatically.
 
 - (2026-04-21) Updated the fix loop to explicitly direct the agent to address advisory findings (non-blocking quality issues like unnecessary spans and attribute data quality) alongside blocking failures, rather than silently skipping them. Previously the fix prompt said "Fix ONLY the failing rules," which caused the agent to ignore advisory findings even though they appeared in the feedback. The prompt framing now distinguishes blocking failures (must resolve to pass) from advisory findings (should address, won't fail the file).
