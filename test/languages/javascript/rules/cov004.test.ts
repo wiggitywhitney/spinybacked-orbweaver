@@ -247,6 +247,77 @@ describe('checkAsyncOperationSpans (COV-004)', () => {
     });
   });
 
+  describe('process.exit() exemption', () => {
+    it('exempts async function with top-level process.exit() call', () => {
+      const code = [
+        'async function main(args) {',
+        '  if (args.help) {',
+        '    process.exit(0);',
+        '  }',
+        '  const result = await doWork(args);',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not exempt async function with process.exit() only in catch block', () => {
+      const code = [
+        'async function safe(args) {',
+        '  try {',
+        '    const result = await doWork(args);',
+        '    return result;',
+        '  } catch (err) {',
+        '    process.exit(1);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('safe');
+    });
+
+    it('does not exempt async function with process.exit() only in nested function', () => {
+      const code = [
+        'async function withNested() {',
+        '  const handleExit = () => { process.exit(1); };',
+        '  const result = await doWork();',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('withNested');
+    });
+
+    it('exempts async function with process.exit() at top level and also in catch block', () => {
+      const code = [
+        'async function main(args) {',
+        '  if (args.help) {',
+        '    process.exit(0);',
+        '  }',
+        '  try {',
+        '    const result = await doWork(args);',
+        '    return result;',
+        '  } catch (err) {',
+        '    process.exit(1);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const code = 'const x = 1;\n';

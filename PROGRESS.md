@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-04-22) COV-004 (async function span coverage check) now exempts async functions that call `process.exit()` directly in their top-level body. These functions cannot be safely spanned — `process.exit()` bypasses `finally` blocks, which would cause the span to leak and never export. The exemption is intentionally narrow: functions where `process.exit()` appears only inside catch blocks or nested callbacks are NOT exempt, because the happy path can still be safely spanned. This fix eliminates the root cause of the `index.js` acceptance gate failure, where COV-004 was directing the agent to wrap `main()` in a span, causing a cascading NDS-005 violation.
+
 - (2026-04-22) Starting work on COV-004/RST-006 rule changes: COV-004 (async function span coverage) will gain a narrow exemption for functions that call `process.exit()` directly in their body — those functions cannot be safely spanned because `process.exit()` bypasses `finally` blocks. A new advisory rule RST-006 will catch any agent-added spans on such functions as a safety net. Audit confirmed COV-004 has no such exemption today and no existing rule covers this gap.
 
 ### Fixed

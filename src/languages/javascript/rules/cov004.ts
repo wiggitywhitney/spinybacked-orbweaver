@@ -39,6 +39,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     const bodyText = fn.getText();
 
     if (hasSpanCall(bodyText)) continue;
+    if (hasDirectProcessExit(fn)) continue;
 
     // Only flag async functions or functions containing await.
     // Pure sync functions should not be flagged even if they call I/O-looking
@@ -65,6 +66,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
       const bodyText = fn.getText();
 
       if (hasSpanCall(bodyText)) continue;
+      if (hasDirectProcessExit(fn)) continue;
 
       if (fn.isAsync()) {
         flagged.push({ name, line: fn.getStartLineNumber(), reason: 'async function', exported: isExported });
@@ -82,6 +84,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     const bodyText = node.getText();
 
     if (hasSpanCall(bodyText)) return;
+    if (hasDirectProcessExit(node)) return;
 
     if (node.isAsync()) {
       flagged.push({ name, line: node.getStartLineNumber(), reason: 'async class method', exported: false });
@@ -103,7 +106,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
     if (nameMatch) {
       const name = nameMatch[1];
       if (Node.isFunctionExpression(right) || Node.isArrowFunction(right)) {
-        if (right.isAsync() && !hasSpanCall(right.getText())) {
+        if (right.isAsync() && !hasSpanCall(right.getText()) && !hasDirectProcessExit(right)) {
           flagged.push({ name, line: node.getStartLineNumber(), reason: 'async function', exported: true });
         }
       }
@@ -117,7 +120,7 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
         const init = prop.getInitializer();
         if (!init) continue;
         if ((Node.isArrowFunction(init) || Node.isFunctionExpression(init)) && init.isAsync()) {
-          if (!hasSpanCall(init.getText())) {
+          if (!hasSpanCall(init.getText()) && !hasDirectProcessExit(init)) {
             const name = prop.getNameNode().getText();
             flagged.push({ name, line: prop.getStartLineNumber(), reason: 'async function', exported: true });
           }
@@ -163,6 +166,50 @@ export function checkAsyncOperationSpans(code: string, filePath: string): CheckR
  */
 function hasSpanCall(text: string): boolean {
   return text.includes('.startActiveSpan') || text.includes('.startSpan');
+}
+
+/**
+ * Check if a function node has a direct process.exit() call at its own scope level.
+ * Stops descending into nested function scopes so that process.exit() inside nested
+ * callbacks does not trigger the exemption on the outer function.
+ * Also stops descending into catch clauses — process.exit() only inside a catch block
+ * does not exempt the function, because the happy path can still be safely spanned.
+ * For TryStatements, only the try block is scanned (not catch or finally).
+ * Exported so RST-006 can import it without duplicating the scope-stopping logic.
+ */
+export function hasDirectProcessExit(fn: import('ts-morph').Node): boolean {
+  let found = false;
+  fn.forEachDescendant((node, traversal) => {
+    if (found) {
+      traversal.stop();
+      return;
+    }
+    if (
+      Node.isArrowFunction(node) ||
+      Node.isFunctionDeclaration(node) ||
+      Node.isFunctionExpression(node) ||
+      Node.isMethodDeclaration(node)
+    ) {
+      traversal.skip();
+      return;
+    }
+    if (Node.isCatchClause(node)) {
+      traversal.skip();
+      return;
+    }
+    if (Node.isTryStatement(node)) {
+      traversal.skip();
+      if (hasDirectProcessExit(node.getTryBlock())) {
+        found = true;
+      }
+      return;
+    }
+    if (Node.isCallExpression(node) && node.getExpression().getText() === 'process.exit') {
+      found = true;
+      traversal.stop();
+    }
+  });
+  return found;
 }
 
 /**
