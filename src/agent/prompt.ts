@@ -236,7 +236,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
 - **RST-004**: Do NOT add spans to unexported internal functions. **RST-004 takes precedence over COV-004**: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation. Only instrument an unexported I/O function when no exported orchestrator span covers that execution path.
 - **RST-005**: Do NOT add instrumentation to functions that already have spans (\`startActiveSpan\`, \`startSpan\`, \`tracer.\`).
-- **RST-006**: Do NOT add a span to an async function that calls \`process.exit()\` directly in its body. \`process.exit()\` bypasses the span's \`finally\` block, causing the span to leak at runtime and never export. Instrument the async sub-operations inside such functions instead. (Exception: if \`process.exit()\` appears only inside a \`catch\` block, the function is not exempt from COV-004 and should still be spanned on the happy path.)
+- **RST-006**: Do NOT add a span to an async function that calls \`process.exit()\` directly in its body. \`process.exit()\` bypasses the span's \`finally\` block, causing the span to leak at runtime and never export. Instrument the async sub-operations inside such functions instead. (Exception: if \`process.exit()\` appears only inside a \`catch\` or \`finally\` block, the function is not exempt from COV-004 and should still be spanned on the happy path.)
 
 ### API-Only Dependency
 

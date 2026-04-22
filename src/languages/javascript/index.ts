@@ -54,8 +54,8 @@ import { cdq008Rule } from '../../validation/tier2/cdq008.ts';
 
 /**
  * All ValidationRule instances this provider registers.
- * Covers 30 per-file Tier 2 rules (including API-004 from api001.ts; API-003 deleted;
- * CDQ-008 is a shared cross-file rule registered here for parity tracking and counts in the 30).
+ * Covers 30 rules total: 29 per-file Tier 2 rules (including API-004 from api001.ts; API-003 deleted)
+ * plus CDQ-008 (shared cross-file rule registered here for parity tracking).
  *
  * NDS-001 (syntax) and LINT are not ValidationRule objects — they are
  * dispatched directly through provider.checkSyntax() and provider.lintCheck()
