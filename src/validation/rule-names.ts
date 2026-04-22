@@ -35,6 +35,7 @@ const RULE_NAMES: Record<string, string> = {
   'RST-003': 'No Thin Wrapper Spans',
   'RST-004': 'No Internal Detail Spans',
   'RST-005': 'No Double Instrumentation',
+  'RST-006': 'No Spans on process.exit() Functions',
 
   // Tier 2 — Non-destructive
   'NDS-003': 'Code Preserved',
