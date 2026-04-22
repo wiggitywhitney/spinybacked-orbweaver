@@ -52,25 +52,25 @@ async function main(): Promise<void> {
 
   try {
     writeFileSync(filePath, originalCode, 'utf-8');
-    console.log(`Fixture: ${FIXTURE_PATH}`);
-    console.log(`Temp file: ${filePath}`);
-    console.log('Calling instrumentWithRetry with real API...');
+    console.log(`Fixture: ${FIXTURE_PATH}`); // eslint-disable-line no-console
+    console.log(`Temp file: ${filePath}`); // eslint-disable-line no-console
+    console.log('Calling instrumentWithRetry with real API...'); // eslint-disable-line no-console
 
     const result = await instrumentWithRetry(filePath, originalCode, {}, makeConfig());
 
-    console.log('\n--- Result ---');
-    console.log(`status:             ${result.status}`);
-    console.log(`spansAdded:         ${result.spansAdded}`);
-    console.log(`validationAttempts: ${result.validationAttempts}`);
-    console.log(`errorProgression:   ${JSON.stringify(result.errorProgression)}`);
+    console.log('\n--- Result ---'); // eslint-disable-line no-console
+    console.log(`status:             ${result.status}`); // eslint-disable-line no-console
+    console.log(`spansAdded:         ${result.spansAdded}`); // eslint-disable-line no-console
+    console.log(`validationAttempts: ${result.validationAttempts}`); // eslint-disable-line no-console
+    console.log(`errorProgression:   ${JSON.stringify(result.errorProgression)}`); // eslint-disable-line no-console
 
     if (result.advisoryAnnotations && result.advisoryAnnotations.length > 0) {
-      console.log('\nAdvisory findings:');
+      console.log('\nAdvisory findings:'); // eslint-disable-line no-console
       for (const a of result.advisoryAnnotations) {
-        console.log(`  [${a.ruleId}] ${a.message.slice(0, 120)}`);
+        console.log(`  [${a.ruleId}] ${a.message.slice(0, 120)}`); // eslint-disable-line no-console
       }
     } else {
-      console.log('advisoryAnnotations: none');
+      console.log('advisoryAnnotations: none'); // eslint-disable-line no-console
     }
 
     // Check 1: instrumentation succeeded
@@ -99,10 +99,10 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    console.log('\nPASS: fix is working correctly');
-    console.log('  - Instrumentation succeeded');
-    console.log(`  - ${result.spansAdded} span(s) added (gatherData and/or saveResult)`);
-    console.log('  - COV-004 did not fire for main() (process.exit() exemption active)');
+    console.log('\nPASS: fix is working correctly'); // eslint-disable-line no-console
+    console.log('  - Instrumentation succeeded'); // eslint-disable-line no-console
+    console.log(`  - ${result.spansAdded} span(s) added (gatherData and/or saveResult)`); // eslint-disable-line no-console
+    console.log('  - COV-004 did not fire for main() (process.exit() exemption active)'); // eslint-disable-line no-console
   } finally {
     if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
   }
