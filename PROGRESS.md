@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-04-22) Updated the rules reference documentation (`docs/rules-reference.md`) with two changes from this work: COV-004 now documents both exemptions (RST-001 utility functions and direct `process.exit()` calls), and RST-006 has its own entry explaining the diff-based detection, the runtime span-leakage mechanism, and the catch-block exception. The smoke test confirmed the fix is working: the agent instrumented `gatherData` and `saveResult` correctly, skipped `main()` without a COV-004 finding, and succeeded in one attempt.
+
 - (2026-04-22) Added a targeted smoke test script (`scripts/smoke-test-process-exit.ts`) that validates the process.exit() fix with a single real API call in 3-5 minutes, versus the ~55-minute full acceptance gate suite. The accompanying fixture (`test/fixtures/smoke/process-exit-instrumentation.js`) mirrors the exact failure pattern: a `main()` function with a top-level `process.exit()` call and an inner try/catch, plus two async sub-operations (`gatherData`, `saveResult`) that are the correct instrumentation targets. The script exits 0 only when: instrumentation succeeds, at least 2 spans are added, and COV-004 does not fire for `main()`.
 
 - (2026-04-22) Updated the agent prompt to teach the LLM about the `process.exit()` instrumentation constraint. COV-004's description now has a clearly marked exception sentence so the agent knows not to span `process.exit()` functions even when they are exported async functions. RST-006 is added to the scoring checklist with the correct catch-block exception: functions where `process.exit()` appears only in a catch block are not exempt from COV-004 and should still be spanned.
