@@ -204,6 +204,7 @@ function buildValidationConfig(
       'NDS-005': { enabled: true, blocking: true },
       'NDS-007': { enabled: true, blocking: true },
       'RST-005': { enabled: true, blocking: false },
+      'RST-006': { enabled: true, blocking: false },
     },
   };
 }
