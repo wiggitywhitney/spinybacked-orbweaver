@@ -52,7 +52,7 @@ function getFunctionKey(ancestor: import('ts-morph').Node): { stop: boolean; key
       if (Node.isObjectLiteralExpression(grandparent)) {
         const ggparent = grandparent.getParent();
         if (Node.isBinaryExpression(ggparent) && ggparent.getLeft().getText() === 'module.exports') {
-          return { stop: true, key: parent.getNameNode().getText() };
+          return { stop: true, key: parent.getName() };
         }
       }
     }
