@@ -370,6 +370,56 @@ describe('checkProcessExitSpan (RST-006)', () => {
       expect(failures[0].ruleId).toBe('RST-006');
       expect(failures[0].message).toContain('ClassB.handleRequest');
     });
+
+    it('fires on Bar.handle when Foo class expression (in module.exports object) has a pre-existing span', () => {
+      // module.exports = { Foo: class { ... }, Bar: class { ... } }
+      // ClassExpression parent is PropertyAssignment, so getClassContainerName must handle it.
+      const original = [
+        tracer,
+        'module.exports = {',
+        '  Foo: class {',
+        '    async handle() {',
+        '      return tracer.startActiveSpan("Foo.handle", async (span) => {',
+        '        try { await doWork(); } finally { span.end(); }',
+        '      });',
+        '    }',
+        '  },',
+        '  Bar: class {',
+        '    async handle() {',
+        '      if (process.argv.includes("--shutdown")) process.exit(1);',
+        '      await doWork();',
+        '    }',
+        '  }',
+        '};',
+      ].join('\n');
+
+      const instrumented = [
+        tracer,
+        'module.exports = {',
+        '  Foo: class {',
+        '    async handle() {',
+        '      return tracer.startActiveSpan("Foo.handle", async (span) => {',
+        '        try { await doWork(); } finally { span.end(); }',
+        '      });',
+        '    }',
+        '  },',
+        '  Bar: class {',
+        '    async handle() {',
+        '      if (process.argv.includes("--shutdown")) process.exit(1);',
+        '      return tracer.startActiveSpan("Bar.handle", async (span) => {',
+        '        try { await doWork(); } finally { span.end(); }',
+        '      });',
+        '    }',
+        '  }',
+        '};',
+      ].join('\n');
+
+      const results = checkProcessExitSpan(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('RST-006');
+      expect(failures[0].message).toContain('Bar.handle');
+    });
   });
 
   describe('CJS export patterns', () => {

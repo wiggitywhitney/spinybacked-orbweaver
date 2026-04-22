@@ -71,6 +71,10 @@ function getClassContainerName(classNode: import('ts-morph').Node): string | und
   if (Node.isVariableDeclaration(parent)) {
     return parent.getName();
   }
+  if (Node.isPropertyAssignment(parent)) {
+    // module.exports = { Foo: class { ... } } — parent is the PropertyAssignment "Foo: ..."
+    return parent.getName();
+  }
   if (Node.isBinaryExpression(parent)) {
     const left = parent.getLeft().getText();
     const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
