@@ -3,7 +3,7 @@ title: "Per-File Processing Sequence"
 ---
 %% ABOUTME: Per-file processing sequence — full data flow from orchestrator loading a file through commit and schema update
 flowchart TD
-    START(["Next file"])
+    START(["Next single file"])
     LOAD["Load file contents\n+ re-resolve schema"]
     AGENT["AI Agent\nfile contents + resolved schema"]
     OUT["Instrumented output\n+ reasoning"]
@@ -13,7 +13,7 @@ flowchart TD
     ADVISORY["Advisory pass\n(improvement attempt)"]
     COMMIT["Commit instrumented file\n+ write reasoning report"]
     SCHEMA["Update + re-resolve\nWeaver schema"]
-    NEXT(["Next file"])
+    NEXT(["Next single file"])
 
     START --> LOAD
     LOAD --> AGENT
