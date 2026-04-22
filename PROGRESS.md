@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-04-22) Added a targeted smoke test script (`scripts/smoke-test-process-exit.ts`) that validates the process.exit() fix with a single real API call in 3-5 minutes, versus the ~55-minute full acceptance gate suite. The accompanying fixture (`test/fixtures/smoke/process-exit-instrumentation.js`) mirrors the exact failure pattern: a `main()` function with a top-level `process.exit()` call and an inner try/catch, plus two async sub-operations (`gatherData`, `saveResult`) that are the correct instrumentation targets. The script exits 0 only when: instrumentation succeeds, at least 2 spans are added, and COV-004 does not fire for `main()`.
+
 - (2026-04-22) Updated the agent prompt to teach the LLM about the `process.exit()` instrumentation constraint. COV-004's description now has a clearly marked exception sentence so the agent knows not to span `process.exit()` functions even when they are exported async functions. RST-006 is added to the scoring checklist with the correct catch-block exception: functions where `process.exit()` appears only in a catch block are not exempt from COV-004 and should still be spanned.
 
 - (2026-04-22) Added RST-006, a new advisory validation rule that fires when the instrumentation agent adds a `startActiveSpan` wrapper to a function that calls `process.exit()` directly in its body. This is a diff-based safety net: it only fires on spans the agent added (not pre-existing spans), and it does not fire when `process.exit()` appears only in catch blocks or nested callbacks. Together with the COV-004 exemption, this closes the gap where the agent was being directed to instrument an uninstrumentable `main()` function.
