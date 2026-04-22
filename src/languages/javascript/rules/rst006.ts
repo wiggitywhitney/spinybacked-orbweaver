@@ -8,6 +8,24 @@ import type { ValidationRule } from '../../types.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 
 /**
+ * Resolve a class name for an anonymous ClassExpression by inspecting the surrounding
+ * assignment. Handles `const Foo = class {}` (VariableDeclaration parent) and
+ * `module.exports.Foo = class {}` (BinaryExpression parent).
+ */
+function getClassContainerName(classNode: import('ts-morph').Node): string | undefined {
+  const parent = classNode.getParent();
+  if (Node.isVariableDeclaration(parent)) {
+    return parent.getName();
+  }
+  if (Node.isBinaryExpression(parent)) {
+    const left = parent.getLeft().getText();
+    const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
+    return nameMatch?.[1];
+  }
+  return undefined;
+}
+
+/**
  * Collect names of functions that contain startActiveSpan calls in the given source.
  * Used to identify pre-existing spans so RST-006 only fires on agent-added ones.
  */
@@ -30,7 +48,7 @@ function getFunctionsWithSpans(sourceFile: SourceFile): Set<string> {
         const methodName = ancestor.getName();
         const classParent = ancestor.getParent();
         if (Node.isClassDeclaration(classParent) || Node.isClassExpression(classParent)) {
-          const className = classParent.getName();
+          const className = classParent.getName() ?? getClassContainerName(classParent);
           names.add(className ? `${className}.${methodName}` : methodName);
         } else {
           names.add(methodName);
@@ -118,7 +136,7 @@ export function checkProcessExitSpan(
         const methodName = ancestor.getName();
         const classParent = ancestor.getParent();
         if (Node.isClassDeclaration(classParent) || Node.isClassExpression(classParent)) {
-          const className = classParent.getName();
+          const className = classParent.getName() ?? getClassContainerName(classParent);
           fnName = className ? `${className}.${methodName}` : methodName;
         } else {
           fnName = methodName;

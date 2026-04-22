@@ -323,6 +323,53 @@ describe('checkProcessExitSpan (RST-006)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('fires on ClassB.handleRequest when ClassA is an anonymous class expression with a pre-existing span', () => {
+      // const ClassA = class { ... } — getName() on the ClassExpression returns undefined.
+      // Without falling back to the surrounding VariableDeclaration name, both classes key
+      // as bare "handleRequest" and the false-negative collision recurs.
+      const original = [
+        tracer,
+        'const ClassA = class {',
+        '  async handleRequest() {',
+        '    return tracer.startActiveSpan("ClassA.handleRequest", async (span) => {',
+        '      try { await doWork(); } finally { span.end(); }',
+        '    });',
+        '  }',
+        '};',
+        'const ClassB = class {',
+        '  async handleRequest() {',
+        '    if (process.argv.includes("--shutdown")) process.exit(1);',
+        '    await doWork();',
+        '  }',
+        '};',
+      ].join('\n');
+
+      const instrumented = [
+        tracer,
+        'const ClassA = class {',
+        '  async handleRequest() {',
+        '    return tracer.startActiveSpan("ClassA.handleRequest", async (span) => {',
+        '      try { await doWork(); } finally { span.end(); }',
+        '    });',
+        '  }',
+        '};',
+        'const ClassB = class {',
+        '  async handleRequest() {',
+        '    if (process.argv.includes("--shutdown")) process.exit(1);',
+        '    return tracer.startActiveSpan("ClassB.handleRequest", async (span) => {',
+        '      try { await doWork(); } finally { span.end(); }',
+        '    });',
+        '  }',
+        '};',
+      ].join('\n');
+
+      const results = checkProcessExitSpan(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(1);
+      expect(failures[0].ruleId).toBe('RST-006');
+      expect(failures[0].message).toContain('ClassB.handleRequest');
+    });
   });
 
   describe('CJS export patterns', () => {
