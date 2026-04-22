@@ -26,11 +26,36 @@ function getFunctionsWithSpans(sourceFile: SourceFile): Set<string> {
         break;
       }
       if (Node.isMethodDeclaration(ancestor)) {
-        names.add(ancestor.getName());
+        // Use ClassName.methodName to prevent collision when two classes share a method name
+        const methodName = ancestor.getName();
+        const classParent = ancestor.getParent();
+        if (Node.isClassDeclaration(classParent) || Node.isClassExpression(classParent)) {
+          const className = classParent.getName();
+          names.add(className ? `${className}.${methodName}` : methodName);
+        } else {
+          names.add(methodName);
+        }
         break;
       }
-      if (Node.isVariableDeclaration(ancestor)) {
-        names.add(ancestor.getName());
+      if (Node.isArrowFunction(ancestor) || Node.isFunctionExpression(ancestor)) {
+        const parent = ancestor.getParent();
+        if (Node.isVariableDeclaration(parent)) {
+          names.add(parent.getName());
+        } else if (Node.isBinaryExpression(parent)) {
+          // module.exports.foo = async function() {}
+          const left = parent.getLeft().getText();
+          const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
+          if (nameMatch) names.add(nameMatch[1]);
+        } else if (Node.isPropertyAssignment(parent)) {
+          // module.exports = { foo: async () => {} }
+          const grandparent = parent.getParent();
+          if (Node.isObjectLiteralExpression(grandparent)) {
+            const ggparent = grandparent.getParent();
+            if (Node.isBinaryExpression(ggparent) && ggparent.getLeft().getText() === 'module.exports') {
+              names.add(parent.getNameNode().getText());
+            }
+          }
+        }
         break;
       }
       ancestor = ancestor.getParent();
@@ -89,7 +114,15 @@ export function checkProcessExitSpan(
       }
       if (Node.isMethodDeclaration(ancestor)) {
         fnNode = ancestor;
-        fnName = ancestor.getName();
+        // Use ClassName.methodName to match the key used in getFunctionsWithSpans
+        const methodName = ancestor.getName();
+        const classParent = ancestor.getParent();
+        if (Node.isClassDeclaration(classParent) || Node.isClassExpression(classParent)) {
+          const className = classParent.getName();
+          fnName = className ? `${className}.${methodName}` : methodName;
+        } else {
+          fnName = methodName;
+        }
         break;
       }
       if (Node.isArrowFunction(ancestor) || Node.isFunctionExpression(ancestor)) {
@@ -97,6 +130,20 @@ export function checkProcessExitSpan(
         const parent = ancestor.getParent();
         if (Node.isVariableDeclaration(parent)) {
           fnName = parent.getName();
+        } else if (Node.isBinaryExpression(parent)) {
+          // module.exports.foo = async function() {}
+          const left = parent.getLeft().getText();
+          const nameMatch = /(?:module\.exports|exports)\.(\w+)/.exec(left);
+          if (nameMatch) fnName = nameMatch[1];
+        } else if (Node.isPropertyAssignment(parent)) {
+          // module.exports = { foo: async () => {} }
+          const grandparent = parent.getParent();
+          if (Node.isObjectLiteralExpression(grandparent)) {
+            const ggparent = grandparent.getParent();
+            if (Node.isBinaryExpression(ggparent) && ggparent.getLeft().getText() === 'module.exports') {
+              fnName = parent.getNameNode().getText();
+            }
+          }
         }
         break;
       }
