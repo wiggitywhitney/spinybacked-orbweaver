@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-04-22) Added four Mermaid source diagrams to `docs/diagrams/` for the solution document: an orchestrator architecture overview showing the deterministic orchestrator coordinating the AI agent, validator, and Weaver schema; a per-file processing sequence covering the full file lifecycle from schema load through commit and schema update; a fix loop diagram showing the retry escalation path (same-agent retry with failure report → fresh agent with failure-category hint → function-by-function fallback); and a validation pipeline diagram showing that blocking and advisory quality checks always run together, with the advisory findings feeding a post-pass polish attempt that reverts on regression. Rendered PNGs saved to the Journal vault and referenced in the solution document at the relevant sections.
+
 ### Changed
 
 - (2026-04-22) Bumped `@anthropic-ai/sdk` from `^0.78.0` to `^0.90.0`. CHANGELOG reviewed across the 12 versions: no breaking changes affect spiny-orb's call sites (`messages.stream()`, `zodOutputFormat`, `output_config` structured output parameter, or extended thinking). All 2154 tests and typecheck pass at the new version.
