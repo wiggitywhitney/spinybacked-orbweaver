@@ -22,10 +22,7 @@ export async function getUserById(req, res) {
 export async function createUser(req, res) {
   try {
     const { name, email } = req.body;
-    const result = await pool.query(
-      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-      [name, email]
-    );
+    const result = await pool.query('INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *', [name, email]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
     if (error.code === '23505') {
