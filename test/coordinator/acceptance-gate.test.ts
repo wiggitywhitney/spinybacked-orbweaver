@@ -199,6 +199,24 @@ function createTestSubscriber(): { callbacks: CoordinatorCallbacks; events: Even
   return { callbacks, events };
 }
 
+/** Log full RunResult diagnostics so CI failures are actionable without a re-run. */
+function logRunResult(label: string, result: import('../../src/coordinator/types.ts').RunResult): void {
+  console.log(`\n[coordinator diagnostics] ${label}`);
+  for (const r of result.fileResults) {
+    console.log(JSON.stringify({
+      path: r.path.split('/').slice(-2).join('/'),
+      status: r.status,
+      spansAdded: r.spansAdded,
+      validationAttempts: r.validationAttempts,
+      validationStrategyUsed: r.validationStrategyUsed,
+      reason: r.reason,
+      lastError: r.lastError,
+      errorProgression: r.errorProgression,
+    }));
+  }
+  console.log(`[coordinator diagnostics] totals: succeeded=${result.filesSucceeded} failed=${result.filesFailed} skipped=${result.filesSkipped} partial=${result.filesPartial}`);
+}
+
 describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', () => {
   const resolvedSchema = API_KEY_AVAILABLE ? loadResolvedSchema() : {};
   let tempDir: string;
@@ -219,6 +237,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const config = makeConfig({ confirmEstimate: true });
 
     const result: RunResult = await coordinate(tempDir, config, callbacks, deps);
+    logRunResult('P4-1 full end-to-end', result);
 
     // (a) All discoverable files processed — 5 JS files in src/ (minus SDK init)
     expect(result.filesProcessed).toBe(5);
@@ -312,6 +331,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P4-2 spansAdded diagnostics', result);
 
     const succeeded = result.fileResults.filter(r => r.status === 'success');
     expect(succeeded.length).toBeGreaterThanOrEqual(1);
@@ -339,6 +359,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P4-3 SDK init libraries', result);
 
     // If any files succeeded with library needs, SDK init should be updated
     const succeeded = result.fileResults.filter(r => r.status === 'success');
@@ -366,6 +387,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P4-4 advisory annotations', result);
 
     // Collect all advisory annotations from all file results
     const allAdvisory = result.fileResults
@@ -387,6 +409,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P4-5 error progression', result);
 
     // Files that went through the fix loop should have error progression
     const nonSkipped = result.fileResults.filter(r => r.status !== 'skipped');
@@ -526,6 +549,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     const config = makeConfig();
 
     const result: RunResult = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P5-a schema fields', result);
 
     // Schema hash fields are valid SHA-256 hashes
     expect(result.schemaHashStart).toMatch(/^[0-9a-f]{64}$/);
@@ -564,6 +588,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P5-b schema lifecycle', result);
 
     // createBaselineSnapshot was called at run start
     expect(deps.createBaselineSnapshot).toHaveBeenCalled();
@@ -591,6 +616,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P5-d live-check hashes', result);
 
     // Live-check was invoked
     expect(deps.runLiveCheck).toHaveBeenCalled();
@@ -635,6 +661,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     const config = makeConfig();
 
     const result = await coordinate(tempDir, config, undefined, deps);
+    logRunResult('P5-f no warnings', result);
 
     // Schema-related warnings should be absent when everything succeeds
     const schemaWarnings = result.warnings.filter(

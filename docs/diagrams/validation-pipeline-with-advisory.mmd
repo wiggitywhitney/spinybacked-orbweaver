@@ -1,0 +1,41 @@
+---
+title: "Validation Pipeline with Advisory Polish Pass"
+---
+%% ABOUTME: Validation pipeline — blocking and advisory checks run in parallel; fail paths branch to the side; advisory findings feed the polish pass
+flowchart TD
+    IN["Instrumented file"]
+    G["`Blocking structural gate checks
+*Syntax · Elision · Lint · Weaver static check*`"]
+    J(( ))
+    B["`Blocking quality checks
+*Schema fidelity · Coverage · Code quality
+API-only · LLM judge (if new names)*`"]
+    A["`Non-blocking advisory gate checks
+*No Utility Spans · Async Operation Spans
+Attribute Data Quality · etc.*`"]
+    GFAIL(["Structural fail — file rejected"])
+    SFAIL(["Fail — findings returned
+blocking failures + advisory"])
+    AGENT["Agent: one improvement pass
+(passing file + advisory findings)"]
+    RECHECK["Full validation re-run"]
+    IMPROVED(["Improved file committed"])
+    PRIOR(["Prior passing file committed"])
+
+    IN --> G
+    G -->|all pass| J
+    G -->|any fail| GFAIL
+    J --> B
+    J --> A
+    B -->|any fail| SFAIL
+    B -->|"all pass — passing file"| AGENT
+    A -->|advisory findings| SFAIL
+    A -->|advisory findings| AGENT
+    AGENT --> RECHECK
+    RECHECK -->|all blocking checks pass| IMPROVED
+    RECHECK -->|any blocking checks fail| PRIOR
+
+    style J fill:#9370DB,stroke:#9370DB,width:10px,height:10px
+    linkStyle 0,7,8,9 stroke:#000000
+    linkStyle 1,3,4,6,10 stroke:#006400
+    linkStyle 2,5,11 stroke:#8B0000

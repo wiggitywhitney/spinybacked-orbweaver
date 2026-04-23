@@ -8,6 +8,92 @@ import type { ValidationRule } from '../../types.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 
 /**
+ * Extract the export name from a direct `module.exports.foo` or `exports.foo`
+ * assignment left-hand side using AST node types rather than regex, so nested
+ * paths like `module.exports.foo.bar` are rejected rather than misidentified.
+ * Mirrors the pattern used in nds004.ts.
+ */
+function getDirectCommonJsExportName(left: import('ts-morph').Node): string | undefined {
+  if (!Node.isPropertyAccessExpression(left)) return undefined;
+  const receiver = left.getExpression().getText();
+  if (receiver === 'exports' || receiver === 'module.exports') {
+    return left.getName();
+  }
+  return undefined;
+}
+
+/**
+ * Derive a stable key for a function node during ancestor walk-up traversal.
+ *
+ * Returns `{ stop: true, key }` when `ancestor` is a recognized function boundary
+ * (caller should break the loop). `key` is undefined for anonymous/unresolvable
+ * functions — callers that require a name should skip those.
+ *
+ * Returns `{ stop: false, key: undefined }` when `ancestor` is not a function
+ * boundary (caller should continue walking up).
+ *
+ * Both getFunctionsWithSpans and checkProcessExitSpan use this helper so the key
+ * format is identical in both passes — a prerequisite for pre-existing span detection
+ * to work correctly.
+ */
+function getFunctionKey(ancestor: import('ts-morph').Node): { stop: boolean; key: string | undefined } {
+  if (Node.isFunctionDeclaration(ancestor)) {
+    return { stop: true, key: ancestor.getName() ?? undefined };
+  }
+  if (Node.isMethodDeclaration(ancestor)) {
+    const methodName = ancestor.getName();
+    const classParent = ancestor.getParent();
+    if (Node.isClassDeclaration(classParent) || Node.isClassExpression(classParent)) {
+      // For anonymous class expressions, fall back to the surrounding variable/export name
+      const className = classParent.getName() ?? getClassContainerName(classParent);
+      return { stop: true, key: className ? `${className}.${methodName}` : methodName };
+    }
+    return { stop: true, key: methodName };
+  }
+  if (Node.isArrowFunction(ancestor) || Node.isFunctionExpression(ancestor)) {
+    const parent = ancestor.getParent();
+    if (Node.isVariableDeclaration(parent)) {
+      return { stop: true, key: parent.getName() };
+    }
+    if (Node.isBinaryExpression(parent)) {
+      return { stop: true, key: getDirectCommonJsExportName(parent.getLeft()) };
+    }
+    if (Node.isPropertyAssignment(parent)) {
+      // module.exports = { foo: async () => {} }
+      const grandparent = parent.getParent();
+      if (Node.isObjectLiteralExpression(grandparent)) {
+        const ggparent = grandparent.getParent();
+        if (Node.isBinaryExpression(ggparent) && ggparent.getLeft().getText() === 'module.exports') {
+          return { stop: true, key: parent.getName() };
+        }
+      }
+    }
+    return { stop: true, key: undefined };
+  }
+  return { stop: false, key: undefined };
+}
+
+/**
+ * Resolve a class name for an anonymous ClassExpression by inspecting the surrounding
+ * assignment. Handles `const Foo = class {}` (VariableDeclaration parent) and
+ * `module.exports.Foo = class {}` (BinaryExpression parent).
+ */
+function getClassContainerName(classNode: import('ts-morph').Node): string | undefined {
+  const parent = classNode.getParent();
+  if (Node.isVariableDeclaration(parent)) {
+    return parent.getName();
+  }
+  if (Node.isPropertyAssignment(parent)) {
+    // module.exports = { Foo: class { ... } } — parent is the PropertyAssignment "Foo: ..."
+    return parent.getName();
+  }
+  if (Node.isBinaryExpression(parent)) {
+    return getDirectCommonJsExportName(parent.getLeft());
+  }
+  return undefined;
+}
+
+/**
  * Collect names of functions that contain startActiveSpan calls in the given source.
  * Used to identify pre-existing spans so RST-006 only fires on agent-added ones.
  */
@@ -20,17 +106,9 @@ function getFunctionsWithSpans(sourceFile: SourceFile): Set<string> {
 
     let ancestor = node.getParent();
     while (ancestor) {
-      if (Node.isFunctionDeclaration(ancestor)) {
-        const name = ancestor.getName();
-        if (name) names.add(name);
-        break;
-      }
-      if (Node.isMethodDeclaration(ancestor)) {
-        names.add(ancestor.getName());
-        break;
-      }
-      if (Node.isVariableDeclaration(ancestor)) {
-        names.add(ancestor.getName());
+      const { stop, key } = getFunctionKey(ancestor);
+      if (stop) {
+        if (key) names.add(key);
         break;
       }
       ancestor = ancestor.getParent();
@@ -76,28 +154,16 @@ export function checkProcessExitSpan(
     if (node.getKind() !== SyntaxKind.CallExpression) return;
     if (!node.getText().includes('.startActiveSpan(')) return;
 
-    // Walk up to find the nearest enclosing function node and its name
+    // Walk up to find the nearest enclosing function node and its key
     let fnNode: import('ts-morph').Node | undefined;
     let fnName: string | undefined;
     let ancestor = node.getParent();
 
     while (ancestor) {
-      if (Node.isFunctionDeclaration(ancestor)) {
+      const { stop, key } = getFunctionKey(ancestor);
+      if (stop) {
         fnNode = ancestor;
-        fnName = ancestor.getName() ?? undefined;
-        break;
-      }
-      if (Node.isMethodDeclaration(ancestor)) {
-        fnNode = ancestor;
-        fnName = ancestor.getName();
-        break;
-      }
-      if (Node.isArrowFunction(ancestor) || Node.isFunctionExpression(ancestor)) {
-        fnNode = ancestor;
-        const parent = ancestor.getParent();
-        if (Node.isVariableDeclaration(parent)) {
-          fnName = parent.getName();
-        }
+        fnName = key;
         break;
       }
       ancestor = ancestor.getParent();

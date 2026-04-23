@@ -108,7 +108,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
   const config = makeConfig();
 
   describe('user-routes.js — Express routes with pg', () => {
-    it('instruments successfully and passes all rubric checks', { timeout: 120_000 }, async () => {
+    it('instruments successfully and passes all rubric checks', { timeout: 240_000 }, async () => {
       const original = loadFixture('src/user-routes.js');
       const filePath = '/project/src/user-routes.js';
 

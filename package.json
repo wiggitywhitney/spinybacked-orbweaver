@@ -59,7 +59,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.90.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "prettier": "^3.8.1",
     "simple-git": "^3.33.0",

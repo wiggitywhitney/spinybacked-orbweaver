@@ -6,7 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-04-22) Added four Mermaid source diagrams to `docs/diagrams/` for the solution document: an orchestrator architecture overview showing the deterministic orchestrator coordinating the AI agent, validator, and Weaver schema; a per-file processing sequence covering the full file lifecycle from schema load through commit and schema update; a fix loop diagram showing the retry escalation path (same-agent retry with failure report → fresh agent with failure-category hint → function-by-function fallback); and a validation pipeline diagram showing that blocking and advisory quality checks always run together, with the advisory findings feeding a post-pass polish attempt that reverts on regression. Rendered PNGs saved to the Journal vault and referenced in the solution document at the relevant sections.
+
 ### Changed
+
+- (2026-04-22) Bumped `@anthropic-ai/sdk` from `^0.78.0` to `^0.90.0`. CHANGELOG reviewed across the 12 versions: no breaking changes affect spiny-orb's call sites (`messages.stream()`, `zodOutputFormat`, `output_config` structured output parameter, or extended thinking). All 2154 tests and typecheck pass at the new version.
+
+- (2026-04-22) Extended RST-006 (no agent-added spans on `process.exit()` functions) to use container-aware function keys in both the pre-existing-span detection pass (`getFunctionsWithSpans`) and the main traversal (`checkProcessExitSpan`). Class methods now key by `ClassName.methodName` instead of bare method name, preventing false negatives when two classes share a method name and one already has a span. CJS export patterns — `module.exports.foo = async function(){}` and `module.exports = { foo: async () => {} }` — are now detected and properly keyed; previously they produced `fnName = undefined` and were silently skipped. Detection for `FunctionDeclaration` and variable-assigned functions is unchanged.
 
 - (2026-04-22) Updated the rules reference documentation (`docs/rules-reference.md`) with two changes from this work: COV-004 now documents both exemptions (RST-001 utility functions and direct `process.exit()` calls), and RST-006 has its own entry explaining the diff-based detection, the runtime span-leakage mechanism, and the catch-block exception. The smoke test confirmed the fix is working: the agent instrumented `gatherData` and `saveResult` correctly, skipped `main()` without a COV-004 finding, and succeeded in one attempt.
 

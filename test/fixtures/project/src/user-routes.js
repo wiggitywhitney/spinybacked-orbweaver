@@ -1,6 +1,6 @@
 // ABOUTME: Test fixture — Express routes with pg database queries.
 // ABOUTME: Tests service entry points (COV-001) and external calls (COV-002).
-import express from 'express'; // Intentional: triggers auto-instrumentation library detection
+import express from 'express';
 import { Pool } from 'pg';
 
 const pool = new Pool();
@@ -22,10 +22,7 @@ export async function getUserById(req, res) {
 export async function createUser(req, res) {
   try {
     const { name, email } = req.body;
-    const result = await pool.query(
-      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
-      [name, email]
-    );
+    const result = await pool.query('INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *', [name, email]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
     if (error.code === '23505') {
