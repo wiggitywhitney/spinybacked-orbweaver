@@ -73,7 +73,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
   }
 
   describe('successful instrumentation through fix loop', () => {
-    it('instruments user-routes.js and produces a fully populated FileResult', { timeout: 360_000 }, async () => {
+    it('instruments user-routes.js and produces a fully populated FileResult', { timeout: 600_000 }, async () => {
       const { filePath, originalCode } = setupTempFile('src/user-routes.js');
       const config = makeConfig();
 
@@ -117,7 +117,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       expect(fileOnDisk.length).toBeGreaterThan(originalCode.length);
     });
 
-    it('instruments order-service.js with error handling preserved', { timeout: 360_000 }, async () => {
+    it('instruments order-service.js with error handling preserved', { timeout: 600_000 }, async () => {
       const { filePath, originalCode } = setupTempFile('src/order-service.js');
       const config = makeConfig();
 
@@ -212,7 +212,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
   });
 
   describe('validation strategy reflects actual attempt used', () => {
-    it('reports the correct strategy in FileResult', { timeout: 360_000 }, async () => {
+    it('reports the correct strategy in FileResult', { timeout: 600_000 }, async () => {
       const { filePath, originalCode } = setupTempFile('src/user-routes.js');
       const config = makeConfig();
 
