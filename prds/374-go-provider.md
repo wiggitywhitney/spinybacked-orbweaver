@@ -275,6 +275,7 @@ Following Part 8 checklist, Step 2:
 - [ ] Tracer acquisition: `otel.Tracer("service-name")` or via `trace.NewTracerProvider()`
 - [ ] Span creation idioms: `ctx, span := tracer.Start(ctx, "operation-name"); defer span.End()`
 - [ ] Error handling: `if err != nil { span.RecordError(err); span.SetStatus(codes.Error, err.Error()); return ..., err }`
+- [ ] **Attribute priority section (PRD #581):** The Go prompt's attribute priority must follow the registry-first + pattern inference approach established in PRD #581 — not the old OTel-first ordering. (1) Check the registry for semantic equivalents (including any imported semconv). (2) If nothing equivalent exists, observe and follow the naming patterns of existing registered attributes (namespace, casing, structure) rather than reaching for raw OTel convention names. Add an explicit negative constraint: do NOT apply OTel attribute names from training data that are not present in the resolved registry.
 - [ ] At least 5 before/after Go examples:
   - HTTP handler with `http.Request` context extraction
   - Function already accepting `context.Context` (the straightforward case)

@@ -180,6 +180,7 @@ Following Part 8 checklist, Step 2:
 - [ ] Span creation idioms: same as JavaScript (`tracer.startActiveSpan()`, `tracer.startSpan()`)
 - [ ] Error handling: `try/catch` — same as JavaScript; TypeScript catch binding is `unknown` type, may need type narrowing (`if (err instanceof Error)`)
 - [ ] Semconv constants guidance: using findings from `docs/research/typescript-semconv-constants.md`, add prompt instructions covering the correct import path, naming prefix, and how to distinguish stable from incubating attributes. This replaces the raw string approach used in the JavaScript prompt.
+- [ ] **Attribute priority section (PRD #581):** The TypeScript prompt's attribute priority must follow the registry-first + pattern inference approach established in PRD #581 — not the old OTel-first ordering used in the JavaScript prompt. If PRD #581 has not yet merged when this milestone begins, apply the new approach directly: (1) check the registry for semantic equivalents (including any imported semconv), (2) if nothing equivalent exists, observe and follow the naming patterns of existing registered attributes (namespace, casing, structure) rather than reaching for raw OTel convention names. Add an explicit negative constraint: do NOT apply OTel attribute names from training data that are not present in the resolved registry.
 - [ ] At least 5 before/after TypeScript examples:
   - Async function with type annotations
   - Class method with decorator
