@@ -237,6 +237,7 @@ Following Part 8 checklist, Step 2:
 - [ ] Tracer acquisition: `trace.get_tracer("service-name")` (snake_case)
 - [ ] Span creation idioms: `with tracer.start_as_current_span("name") as span:` — the `with` block is the span scope; no explicit `span.end()` needed
 - [ ] Error handling: `try/except Exception as e: span.record_exception(e); span.set_status(Status(StatusCode.ERROR, str(e)))`
+- [ ] **Attribute priority section (PRD #581):** The Python prompt's attribute priority must follow the registry-first + pattern inference approach established in PRD #581 — not the old OTel-first ordering. (1) Check the registry for semantic equivalents (including any imported semconv). (2) If nothing equivalent exists, observe and follow the naming patterns of existing registered attributes (namespace, casing, structure) rather than reaching for raw OTel convention names. Add an explicit negative constraint: do NOT apply OTel attribute names from training data that are not present in the resolved registry.
 - [ ] At least 5 before/after Python examples:
   - Flask route handler (decorator-based entry point)
   - FastAPI async endpoint (`async def`)
