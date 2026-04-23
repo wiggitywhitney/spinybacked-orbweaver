@@ -199,11 +199,18 @@ function createTestSubscriber(): { callbacks: CoordinatorCallbacks; events: Even
   return { callbacks, events };
 }
 
-/** Log full RunResult diagnostics so CI failures are actionable without a re-run. */
+/** Log full RunResult diagnostics only when the run has unexpected results.
+ * Silent on clean runs so CI output stays quiet on pass. */
 function logRunResult(label: string, result: import('../../src/coordinator/types.ts').RunResult): void {
-  console.log(`\n[coordinator diagnostics] ${label}`);
+  const hasProblems =
+    result.filesFailed > 0 ||
+    result.filesPartial > 0 ||
+    result.fileResults.filter(r => r.status === 'success').every(r => r.spansAdded === 0);
+  if (!hasProblems) return;
+
+  console.error(`\n[coordinator diagnostics — UNEXPECTED] ${label}`);
   for (const r of result.fileResults) {
-    console.log(JSON.stringify({
+    console.error(JSON.stringify({
       path: r.path.split('/').slice(-2).join('/'),
       status: r.status,
       spansAdded: r.spansAdded,
@@ -214,7 +221,7 @@ function logRunResult(label: string, result: import('../../src/coordinator/types
       errorProgression: r.errorProgression,
     }));
   }
-  console.log(`[coordinator diagnostics] totals: succeeded=${result.filesSucceeded} failed=${result.filesFailed} skipped=${result.filesSkipped} partial=${result.filesPartial}`);
+  console.error(`[coordinator diagnostics] totals: succeeded=${result.filesSucceeded} failed=${result.filesFailed} skipped=${result.filesSkipped} partial=${result.filesPartial}`);
 }
 
 describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', () => {
