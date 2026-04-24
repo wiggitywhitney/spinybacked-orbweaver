@@ -320,7 +320,7 @@ function passingResult(filePath: string): CheckResult {
 export const nds006TsRule: ValidationRule = {
   ruleId: 'NDS-006',
   dimension: 'Non-destructive',
-  blocking: false,
+  blocking: true,
   applicableTo(language: string): boolean {
     return language === 'typescript';
   },
