@@ -575,8 +575,14 @@ export async function dispatchFiles(
                     const { display, truncated } = formatTestOutput(testResult.output);
                     if (truncated) {
                       const logPath = join(projectDir, 'spiny-orb-test-failure.log');
-                      warningMsg += `\n\nTest output (truncated — full output at ${logPath}):\n${display}`;
-                      writeLogFn(logPath, testResult.output).catch(() => { /* best effort */ });
+                      let logRef = '';
+                      try {
+                        await writeLogFn(logPath, testResult.output);
+                        logRef = ` — full output at ${logPath}`;
+                      } catch {
+                        // best effort — no path advertised if write fails
+                      }
+                      warningMsg += `\n\nTest output (truncated${logRef}):\n${display}`;
                     } else {
                       warningMsg += `\n\nTest output:\n${display}`;
                     }
