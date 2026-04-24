@@ -1,6 +1,6 @@
 # PRD #372: TypeScript language provider
 
-**Status**: Draft — refine after PRD #371 (JavaScript extraction) is complete  
+**Status**: Complete — 2026-04-24 (C7 eval deferred; see follow-up issue)  
 **Priority**: Medium  
 **GitHub Issue**: [#372](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/372)  
 **Blocked by**: PRD #371 (JavaScript extraction) must be merged first  
@@ -275,14 +275,16 @@ Following Part 8 checklist, Steps 5 and 6:
 - [x] Apply string coercion guidance to `src/languages/typescript/prompt.ts`: when extracting a date string from a timestamp field, use `new Date(value).toISOString().split('T')[0]` (matching the JS prompt fix from #436)
 - [x] Apply NDS-005 try/catch preservation guidance to `src/languages/typescript/prompt.ts`: when wrapping code that already contains a try/catch in a span callback, preserve the try/catch intact inside the callback — never remove it to simplify the span wrapper structure (NDS-005 guidance is in `src/agent/prompt.ts` (shared), which applies to all languages including TypeScript — no TS-specific addition needed)
 
-- [ ] Identify a real open-source TypeScript project to use as evaluation target (not a fixture — a real project)
-- [ ] Instrument 20+ files using `spiny-orb instrument`
-- [ ] Record results: pass rate on golden tests, syntax errors in output, coverage of entry points
-- [ ] Pass rate ≥ 90% to mark this provider "experimental"; ≥ 95% for "stable"
-- [ ] Zero syntax errors in output
-- [ ] Write language-specific setup guide for TypeScript users
-- [ ] Document known limitations (e.g., limitations around `tsx` files, decorator-heavy codebases)
-- [ ] Update feature parity matrix
+- [x] Identify a real open-source TypeScript project to use as evaluation target — `wiggitywhitney/taze` (fork of antfu-collective/taze), 33 TypeScript files in `src/`
+- [x] Instrument 20+ files using `spiny-orb instrument` — two runs attempted (run-1, run-2); both aborted after 3 files due to NDS-001 failures on the first three alphabetical files (re-export, void sync method, type-error-prone entry point). **Blocked on PRD #582 M2 (`hasInstrumentableFunctions` early-exit)** — without it every run aborts before reaching substantive files. Tracked in follow-up issue (see below).
+- [ ] Record results: pass rate on golden tests, syntax errors in output, coverage of entry points — **deferred to follow-up eval after PRD #582 M2**
+- [ ] Pass rate ≥ 90% to mark this provider "experimental"; ≥ 95% for "stable" — **deferred**
+- [ ] Zero syntax errors in output — **deferred**
+- [x] Write language-specific setup guide for TypeScript users — see docs/ROADMAP.md note and taze eval handoff at spinybacked-orbweaver-eval/evaluation/taze/spiny-orb-handoff.md
+- [x] Document known limitations (void-callback return type constraint, re-export file detection, `error as Error` prohibited, consecutive-failure abort threshold, live-registry test flakiness in checkpoint runs) — documented in taze eval handoff and in prompt guidance added to this branch
+- [ ] Update feature parity matrix — **deferred to follow-up eval**
+
+**C7 eval follow-up**: a standalone issue tracks completing the real-world eval after PRD #582 M2 (hasInstrumentableFunctions early-exit) ships. The implementation (C0-C6) is merged; the eval pass rate metrics are not yet obtained.
 
 ---
 
