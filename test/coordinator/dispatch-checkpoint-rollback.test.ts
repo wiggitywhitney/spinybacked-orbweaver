@@ -380,6 +380,85 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
     });
   });
 
+  describe('test failure output surfacing', () => {
+    it('inlines short test output (<=50 lines) in checkpoint warning', async () => {
+      const files = await Promise.all([
+        createFile('a.js'),
+        createFile('b.js'),
+      ]);
+
+      const shortOutput = Array.from({ length: 10 }, (_, i) => `test line ${i + 1}`).join('\n');
+      const warnings: string[] = [];
+      const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+      await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDepsWithDiskWrite(),
+        checkpoint: passingCheckpointConfig,
+        schemaExtensionWarnings: warnings,
+        runTestCommand: async () => ({ passed: false, error: 'tests failed', output: shortOutput }),
+        baselineTestPassed: true,
+      });
+
+      const checkpointWarning = warnings.find(w => w.includes('Checkpoint test run failed'));
+      expect(checkpointWarning).toBeDefined();
+      expect(checkpointWarning).toContain('test line 1');
+      expect(checkpointWarning).toContain('test line 10');
+    });
+
+    it('includes log file path in checkpoint warning for long output (>50 lines)', async () => {
+      const files = await Promise.all([
+        createFile('a.js'),
+        createFile('b.js'),
+      ]);
+
+      const longOutput = Array.from({ length: 60 }, (_, i) => `test line ${i + 1}`).join('\n');
+      const warnings: string[] = [];
+      const writtenFiles = new Map<string, string>();
+      const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+      await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDepsWithDiskWrite(),
+        checkpoint: passingCheckpointConfig,
+        schemaExtensionWarnings: warnings,
+        runTestCommand: async () => ({ passed: false, error: 'tests failed', output: longOutput }),
+        baselineTestPassed: true,
+        writeFailureLog: async (path, content) => { writtenFiles.set(path, content); },
+      });
+
+      const checkpointWarning = warnings.find(w => w.includes('Checkpoint test run failed'));
+      expect(checkpointWarning).toBeDefined();
+      // Should reference the log file
+      expect(checkpointWarning).toContain('spiny-orb-test-failure.log');
+      // Log file should be written with full output
+      expect(writtenFiles.size).toBe(1);
+      const logContent = [...writtenFiles.values()][0];
+      expect(logContent).toContain('test line 60');
+    });
+
+    it('does not include log file reference when no output is provided', async () => {
+      const files = await Promise.all([
+        createFile('a.js'),
+        createFile('b.js'),
+      ]);
+
+      const warnings: string[] = [];
+      const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'npm test' });
+
+      await dispatchFiles(files, tmpDir, config, undefined, {
+        deps: makeDepsWithDiskWrite(),
+        checkpoint: passingCheckpointConfig,
+        schemaExtensionWarnings: warnings,
+        runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
+        baselineTestPassed: true,
+      });
+
+      const checkpointWarning = warnings.find(w => w.includes('Checkpoint test run failed'));
+      expect(checkpointWarning).toBeDefined();
+      expect(checkpointWarning).not.toContain('spiny-orb-test-failure.log');
+      expect(checkpointWarning).not.toContain('test line');
+    });
+  });
+
   describe('rollback warning surfacing', () => {
     it('adds rollback information to schema extension warnings', async () => {
       const files = await Promise.all([

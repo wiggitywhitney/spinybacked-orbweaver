@@ -471,7 +471,8 @@ export async function coordinate(
         runResult.warnings.push(
           `Live-check partial: ${runResult.filesFailed} file(s) failed instrumentation ` +
           `(${failedPaths.join(', ')}${runResult.filesFailed > 5 ? '...' : ''}). ` +
-          `Compliance report may be incomplete — spans from failed files are missing.`,
+          `Compliance report may be incomplete — spans from failed files are missing. ` +
+          `To get full coverage, review the failed files above and re-run spiny-orb on them.`,
         );
       }
     } catch (err) {
