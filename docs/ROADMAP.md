@@ -4,10 +4,9 @@ Dependency-ordered backlog across three sources: the advisory rules audit ([PRD 
 
 ## Short-term (current focus)
 
-- TypeScript language provider ([PRD #372](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/372)) — branch `feature/prd-372-typescript-provider` exists with 18 commits through Milestone C6; canary test passed 0/27 interface changes; remaining work is rebase + apply prompt guidance from D-7 + run TS eval + PR. Not blocked by the multi-language architecture cleanup below (TS shares the JS abstraction via the explicit `javascript || typescript` guard).
-- Config documentation and init flow fixes ([issue #577](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/577)) — adds `targetType` to init and README, removes dead `autoApproveLibraries` field, adds sample config, documents what the agent writes vs. what it recommends, adds ordered setup sequence.
 - Multi-language rule architecture cleanup ([PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507)) — refactor `src/agent/instrument-file.ts`, `src/agent/prompt.ts`, and `src/fix-loop/index.ts` to route through the `LanguageProvider` interface; consolidate `src/validation/tier2/` SCH duplicates. Prerequisite for PRD #373, PRD #374, and the SCH rebuild PRD.
-- Pre-instrumentation analysis pass ([PRD #582](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/582)) — deterministic AST scan before LLM call injects proactive guidance; fixes index.js acceptance gate failure and reduces retry-loop non-determinism across all files. Sequenced after #507 — both touch `LanguageProvider` and `instrument-file.ts`.
+- Pre-instrumentation analysis pass ([PRD #582](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/582)) — deterministic AST scan before LLM call injects proactive guidance; fixes index.js acceptance gate failure and reduces retry-loop non-determinism. M2 adds `hasInstrumentableFunctions` early-exit so files with no instrumentable functions bypass the LLM entirely (required to unblock TypeScript eval). Sequenced after #507.
+- TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable". Blocked by PRD #582 M2.
 
 ## Medium-term
 
