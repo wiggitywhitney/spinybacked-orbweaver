@@ -224,6 +224,7 @@ Following Part 8 checklist, Step 1:
 - [ ] `otelSemconvPackage: 'opentelemetry-semconv'` — per OD-8 resolution
 - [ ] `packageManager: 'pip'`, `installCommand(['opentelemetry-api', 'opentelemetry-semconv'])` returns `'pip install opentelemetry-api opentelemetry-semconv'` (if OD-8b resolves to yes), `dependencyFile` per OD-3 resolution
 - [ ] Register `PythonProvider` in `src/languages/registry.ts` for `.py`
+- [ ] **Extend the `language` config enum (PRD #372 D-8):** Add `'python'` to the `z.enum` in `src/config/schema.ts` — e.g., `z.enum(['javascript', 'typescript', 'python']).default('javascript')`. This is the stopgap until PRD #507 routes hot-path modules through the LanguageProvider interface automatically. Convention from PRD #372 D-8: (1) add the language ID to the enum; (2) bulk-add `language: 'javascript'` is already present in all test helpers from the TypeScript implementation — no further bulk update needed; (3) write one new coordinator test asserting that `language: 'python'` causes `discoverFiles` to receive a provider with `displayName === 'Python'` (mirror the pattern in `test/coordinator/coordinate.test.ts` under "language provider routing"). The `coordinate.ts` dispatch logic requires no changes — `getProviderByLanguage(config.language)` already looks up by ID.
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes
 

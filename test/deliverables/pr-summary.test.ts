@@ -72,6 +72,7 @@ function _makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
     targetType: 'long-lived',
+    language: 'javascript',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 80000,
