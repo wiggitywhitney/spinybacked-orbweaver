@@ -33,6 +33,9 @@ import type { FileContent } from '../validation/tier2/cdq008.ts';
 import { checkRegistrySpanDuplicates } from '../validation/tier2/sch005.ts';
 import type Anthropic from '@anthropic-ai/sdk';
 import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
+import { getProviderByLanguage } from '../languages/registry.ts';
+import { JavaScriptProvider } from '../languages/javascript/index.ts';
+import type { LanguageProvider } from '../languages/types.ts';
 
 /**
  * Run a project's test suite without OTLP overrides.
@@ -200,6 +203,10 @@ export async function coordinate(
   const schemaDiffWarnings: string[] = [];
   const checkpointTestWarnings: string[] = [];
 
+  // Resolve language provider from config — stopgap until PRD #507 routes all callers
+  const languageProvider: LanguageProvider =
+    getProviderByLanguage(config.language ?? 'javascript') ?? new JavaScriptProvider();
+
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;
   try {
@@ -244,6 +251,7 @@ export async function coordinate(
       sdkInitFile: config.sdkInitFile,
       maxFilesPerRun: config.maxFilesPerRun,
       targetPath,
+      provider: languageProvider,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -341,6 +349,7 @@ export async function coordinate(
       },
       registryDir,
       schemaExtensionWarnings,
+      provider: languageProvider,
       ...(config.dryRun ? { dryRun: true } : {}),
       ...(checkpointTestRunner ? { runTestCommand: checkpointTestRunner } : {}),
       ...(baselineTestPassed !== undefined ? { baselineTestPassed } : {}),

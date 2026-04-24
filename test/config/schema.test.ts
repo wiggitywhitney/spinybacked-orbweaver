@@ -22,6 +22,7 @@ function makeFullConfig() {
     autoApproveLibraries: true,
     testCommand: 'npm test',
     targetType: 'long-lived',
+    language: 'javascript',
     dependencyStrategy: 'dependencies',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
@@ -350,6 +351,7 @@ describe('AgentConfigSchema', () => {
       const result = AgentConfigSchema.safeParse({
         ...makeMinimalConfig(),
         targetType: 'long-lived',
+    language: 'javascript',
       });
       expect(result.success).toBe(true);
       if (result.success) {

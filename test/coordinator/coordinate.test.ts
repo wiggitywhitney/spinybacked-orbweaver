@@ -28,6 +28,7 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
     targetType: 'long-lived',
+    language: 'javascript',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 80000,
@@ -1347,6 +1348,36 @@ describe('coordinate', () => {
       // Files still marked as failed even if restore fails
       expect(result.fileResults.every(fr => fr.status === 'failed')).toBe(true);
       expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
+    });
+  });
+
+  describe('language provider routing', () => {
+    it('passes typescript provider to discoverFiles when language is typescript', async () => {
+      let capturedProviderName: string | undefined;
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockImplementation(async (_dir: string, opts: { provider?: { displayName: string } }) => {
+          capturedProviderName = opts.provider?.displayName;
+          return ['/project/src/a.ts'];
+        }),
+      });
+
+      await coordinate('/project', makeConfig({ language: 'typescript' }), undefined, deps);
+
+      expect(capturedProviderName).toBe('TypeScript');
+    });
+
+    it('passes javascript provider to discoverFiles by default', async () => {
+      let capturedProviderName: string | undefined;
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockImplementation(async (_dir: string, opts: { provider?: { displayName: string } }) => {
+          capturedProviderName = opts.provider?.displayName;
+          return ['/project/src/a.js'];
+        }),
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(capturedProviderName).toBe('JavaScript');
     });
   });
 });
