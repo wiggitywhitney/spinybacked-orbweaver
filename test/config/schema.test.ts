@@ -78,6 +78,7 @@ describe('AgentConfigSchema', () => {
       expect(config.confirmEstimate).toBe(true);
       expect(config.exclude).toEqual([]);
       expect(config.targetType).toBe('long-lived');
+      expect(config.language).toBe('javascript');
     });
   });
 

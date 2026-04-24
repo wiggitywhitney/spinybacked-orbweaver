@@ -1351,32 +1351,44 @@ describe('coordinate', () => {
   });
 
   describe('language provider routing', () => {
-    it('passes typescript provider to discoverFiles when language is typescript', async () => {
-      let capturedProviderName: string | undefined;
+    it('passes typescript provider to both discoverFiles and dispatchFiles when language is typescript', async () => {
+      let capturedDiscoverName: string | undefined;
+      let capturedDispatchName: string | undefined;
       const deps = makeDeps({
         discoverFiles: vi.fn().mockImplementation(async (_dir: string, opts: { provider?: { displayName: string } }) => {
-          capturedProviderName = opts.provider?.displayName;
+          capturedDiscoverName = opts.provider?.displayName;
           return ['/project/src/a.ts'];
+        }),
+        dispatchFiles: vi.fn().mockImplementation(async (_paths: string[], _dir: string, _cfg: unknown, _cb: unknown, opts: { provider?: { displayName: string } }) => {
+          capturedDispatchName = opts?.provider?.displayName;
+          return ['/project/src/a.ts'].map(fp => makeSuccessResult(fp));
         }),
       });
 
       await coordinate('/project', makeConfig({ language: 'typescript' }), undefined, deps);
 
-      expect(capturedProviderName).toBe('TypeScript');
+      expect(capturedDiscoverName).toBe('TypeScript');
+      expect(capturedDispatchName).toBe('TypeScript');
     });
 
-    it('passes javascript provider to discoverFiles by default', async () => {
-      let capturedProviderName: string | undefined;
+    it('passes javascript provider to both discoverFiles and dispatchFiles by default', async () => {
+      let capturedDiscoverName: string | undefined;
+      let capturedDispatchName: string | undefined;
       const deps = makeDeps({
         discoverFiles: vi.fn().mockImplementation(async (_dir: string, opts: { provider?: { displayName: string } }) => {
-          capturedProviderName = opts.provider?.displayName;
+          capturedDiscoverName = opts.provider?.displayName;
           return ['/project/src/a.js'];
+        }),
+        dispatchFiles: vi.fn().mockImplementation(async (_paths: string[], _dir: string, _cfg: unknown, _cb: unknown, opts: { provider?: { displayName: string } }) => {
+          capturedDispatchName = opts?.provider?.displayName;
+          return ['/project/src/a.js'].map(fp => makeSuccessResult(fp));
         }),
       });
 
       await coordinate('/project', makeConfig(), undefined, deps);
 
-      expect(capturedProviderName).toBe('JavaScript');
+      expect(capturedDiscoverName).toBe('JavaScript');
+      expect(capturedDispatchName).toBe('JavaScript');
     });
   });
 });
