@@ -29,10 +29,19 @@ export function getSystemPromptSections(): LanguagePromptSections {
   // WRONG — entries?.length may be undefined
   span.setAttribute('result.count', entries?.length);
 
-  // CORRECT — guard optional values
-  if (entries !== undefined) {
+  // CORRECT — guard optional values with != null (covers both null and undefined)
+  if (entries != null) {
     span.setAttribute('result.count', entries.length);
   }
+  \`\`\`
+- When guarding a variable before accessing its properties, always use \`!= null\` (loose inequality), not \`!== undefined\` (strict). \`!== undefined\` passes when the value is \`null\`, causing a TypeError on property access at runtime.
+- **Do not call string methods directly on property-access expressions.** When extracting a value for a span attribute, never assume an object field holds a string. Calling \`.split()\`, \`.slice()\`, \`.replace()\`, or similar string methods directly on \`obj.field\` will crash at runtime if the field is a \`Date\`, number, or other non-string type. When extracting a date string from a timestamp field, use \`new Date(value).toISOString().split('T')[0]\` — this handles both \`Date\` objects and ISO string inputs safely. For other fields, use \`String(value)\` to coerce explicitly.
+  \`\`\`typescript
+  // WRONG — crashes if commit.timestamp is a Date object
+  span.setAttribute('date', commit.timestamp.split('T')[0]);
+
+  // CORRECT — handles both Date objects and ISO strings
+  span.setAttribute('date', new Date(commit.timestamp).toISOString().split('T')[0]);
   \`\`\`
 - **Return-value capture is allowed.** When you need to call \`setAttribute\` on a return value, you may extract the expression to a \`const\`:
   \`\`\`typescript
