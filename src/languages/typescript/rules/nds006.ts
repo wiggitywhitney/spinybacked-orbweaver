@@ -268,7 +268,7 @@ export function checkModuleSystemMatchTs(
     }];
   }
 
-  const violations: Array<{ line: number; description: string }> = [];
+  const violations: Array<{ line: number | null; description: string }> = [];
 
   if (originalSystem === 'esm') {
     const newCjsLines = findNewCjsPatterns(originalSource, instrumentedSource);
@@ -276,7 +276,7 @@ export function checkModuleSystemMatchTs(
       violations.push({ line, description: 'CJS require() or module.exports in ESM file' });
     }
     if (violations.length === 0) {
-      violations.push({ line: 0, description: 'CJS patterns introduced in ESM file' });
+      violations.push({ line: null, description: 'CJS patterns introduced in ESM file' });
     }
   } else if (originalSystem === 'cjs') {
     const newEsmLines = findNewEsmPatterns(originalSource, instrumentedSource);
@@ -284,7 +284,7 @@ export function checkModuleSystemMatchTs(
       violations.push({ line, description: 'ESM import or export in CJS file' });
     }
     if (violations.length === 0) {
-      violations.push({ line: 0, description: 'ESM patterns introduced in CJS file' });
+      violations.push({ line: null, description: 'ESM patterns introduced in CJS file' });
     }
   }
 
@@ -292,11 +292,11 @@ export function checkModuleSystemMatchTs(
     ruleId: 'NDS-006',
     passed: false as const,
     filePath,
-    lineNumber: v.line > 0 ? v.line : null,
+    lineNumber: v.line != null && v.line > 0 ? v.line : null,
     message:
       `NDS-006: Module system mismatch — original uses ${originalSystem.toUpperCase()}, ` +
       `but instrumented code introduces ${originalSystem === 'esm' ? 'CJS' : 'ESM'} patterns. ` +
-      `${v.description}${v.line > 0 ? ` at line ${v.line}` : ''}. ` +
+      `${v.description}${v.line != null && v.line > 0 ? ` at line ${v.line}` : ''}. ` +
       `Instrumented code must use the same module system as the original file. ` +
       `Use ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} for instrumentation additions.`,
     tier: 2 as const,
