@@ -15,6 +15,7 @@ import type { LanguagePromptSections, Example } from '../types.ts';
 export function getSystemPromptSections(): LanguagePromptSections {
   return {
     constraints: `- Your ONLY job is to add instrumentation. Do not refactor, rename, or restructure existing code.
+- **Files with only re-exports and no local definitions** — If the file contains ONLY import statements and re-export expressions (\`export { foo } from './foo'\`, \`export * from './bar'\`, \`export const X = imported\`) with no locally defined functions, classes, or async logic, return the original file unchanged. Do NOT add tracer imports, spans, or any instrumentation code. Files that mix re-exports with local function definitions should still be instrumented for the local functions — this rule applies only to files that are entirely pass-through.
 - **HARD CONSTRAINT — type annotations**: Do not strip, remove, or simplify any TypeScript type annotation. Every parameter type, return type, generic type parameter, and type assertion must be preserved exactly as-is.
 - **HARD CONSTRAINT — import type**: Do not convert \`import type { Foo }\` to \`import { Foo }\`. Type-only imports must remain type-only. If you need to import a runtime value from the same module, add a separate \`import\` statement.
 - **HARD CONSTRAINT — no \`any\`**: Do not introduce \`any\` as a type. If a type is unclear, use \`unknown\` and narrow it.
@@ -60,8 +61,13 @@ export function getSystemPromptSections(): LanguagePromptSections {
 
     tracerAcquisition: `Add \`const tracer = trace.getTracer('service-name');\` at module scope if not already present, replacing \`'service-name'\` with a stable identifier for this service. Use exactly this tracer name in every file — do not vary it. If a tracer variable is already declared, reuse it.`,
 
-    spanCreation: `Wrap function bodies with \`tracer.startActiveSpan()\`:
+    spanCreation: `**Critical TypeScript constraint — match the callback's async keyword to the function being wrapped:**
+- \`async function\` → use \`async (span) => { ... }\` — callback returns \`Promise<T>\`, matches.
+- Synchronous \`function\` → use \`(span) => { ... }\` — callback is NOT async, returns \`T\` directly.
 
+Do NOT use \`async (span) => { ... }\` for a synchronous function. TypeScript will reject it: \`async\` makes the callback return \`Promise<void>\` while the function signature expects \`void\`, producing a type error that fails \`tsc\`.
+
+Correct form for an async entry point:
 \`\`\`typescript
 export async function myFunction(params: ParamType): Promise<ReturnType> {
   return tracer.startActiveSpan('my_service.operation_name', async (span) => {
@@ -79,6 +85,44 @@ export async function myFunction(params: ParamType): Promise<ReturnType> {
   });
 }
 \`\`\`
+
+Correct form for a synchronous entry point that returns a value:
+\`\`\`typescript
+export function processItems(items: Item[]): ProcessResult {
+  return tracer.startActiveSpan('my_service.process', (span) => {
+    try {
+      // original body
+      return result;
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)));
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+\`\`\`
+
+Correct form for a synchronous \`void\` entry point:
+\`\`\`typescript
+export function handleEvent(event: Event): void {
+  tracer.startActiveSpan('my_service.handle_event', (span) => {
+    try {
+      // original body
+    } catch (error) {
+      span.recordException(error instanceof Error ? error : new Error(String(error)));
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+  // void functions do not return the span result — the startActiveSpan call stands alone
+}
+\`\`\`
+
+For synchronous functions that return \`void\` AND perform only pure in-memory computation (no I/O, no network, no database calls) — RST-001 (No Utility Spans) applies. Skip them; do not instrument.
 
 For functions with existing try/catch blocks, wrap the entire function body — preserve the existing error handling inside the try block and add OTel error recording at the top of the catch block.`,
 
