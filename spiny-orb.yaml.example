@@ -1,0 +1,91 @@
+# spiny-orb.yaml.example — copy to spiny-orb.yaml and fill in the required fields.
+# Run `spiny-orb init` to auto-detect schemaPath, sdkInitFile, dependencyStrategy, and targetType.
+
+# ── Required ──────────────────────────────────────────────────────────────────
+
+# Relative path to your Weaver semantic conventions registry directory.
+schemaPath: semconv/
+
+# Relative path to your OTel SDK initialization file.
+sdkInitFile: src/instrumentation.js
+
+# ── Process lifecycle ──────────────────────────────────────────────────────────
+
+# long-lived (default): web servers, workers, daemons — BatchSpanProcessor works fine.
+# short-lived: CLIs, scripts, Lambda, batch jobs — BatchSpanProcessor drops all spans
+#   before the 5-second flush timer fires. Switch to SimpleSpanProcessor and add
+#   process.exit() interception in your SDK init file before running the agent.
+# targetType: long-lived
+
+# ── Dependency strategy ────────────────────────────────────────────────────────
+
+# dependencies (default): services that own their dependency tree.
+# peerDependencies: libraries and distributed packages — multiple copies of
+#   @opentelemetry/api in node_modules cause silent trace loss via no-op fallbacks.
+# These two fields are independent: a CLI tool is short-lived AND dependencies.
+# dependencyStrategy: dependencies
+
+# ── Agent behavior ─────────────────────────────────────────────────────────────
+
+# Claude model used for code generation.
+# agentModel: claude-sonnet-4-6
+
+# Thinking depth: low (fast), medium (default, balanced), high (thorough, slower).
+# agentEffort: medium
+
+# Command to run after instrumenting each file and at the end of the run.
+# Supports any test runner and inline env vars.
+# testCommand: npm test
+
+# ── Limits and guardrails ──────────────────────────────────────────────────────
+
+# Maximum files to process in one run.
+# maxFilesPerRun: 50
+
+# Retry attempts per file after initial generation (total = 1 + this value).
+# maxFixAttempts: 2
+
+# Soft token budget per file.
+# maxTokensPerFile: 100000
+
+# Files above this line count get special large-file handling in the prompt.
+# largeFileThresholdLines: 500
+
+# Run `weaver registry check` every N files during processing.
+# schemaCheckpointInterval: 5
+
+# Optional: also run a schema checkpoint when cumulative changed LOC exceeds this threshold.
+# checkpointLocThreshold: 200
+
+# Advisory threshold for new attributes created per file (informational only, never blocks).
+# attributesPerFileThreshold: 30
+
+# Advisory threshold for spans added per file (informational only, never blocks).
+# spansPerFileThreshold: 20
+
+# Optional per-file processing timeout in milliseconds.
+# maxTimePerFile: 300000
+
+# Minimum Weaver CLI version required.
+# weaverMinVersion: 0.21.2
+
+# ── Review ─────────────────────────────────────────────────────────────────────
+
+# PR annotation strictness: strict (flag tier 3+), moderate (outliers only), off.
+# reviewSensitivity: moderate
+
+# ── Execution mode ─────────────────────────────────────────────────────────────
+
+# Preview mode — run analysis but revert all changes.
+# dryRun: false
+
+# Prompt for cost ceiling approval before processing (CLI only).
+# confirmEstimate: true
+
+# ── File filtering ─────────────────────────────────────────────────────────────
+
+# Glob patterns for files to skip.
+# exclude:
+#   - "test/**"
+#   - "*.spec.js"
+#   - "generated/**"

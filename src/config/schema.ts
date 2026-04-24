@@ -47,7 +47,6 @@ export const AgentConfigSchema = z.strictObject({
   agentEffort: AgentEffort.default('medium'),
 
   // Agent behavior
-  autoApproveLibraries: z.boolean().default(true),
   testCommand: z.string().refine(
     (value) => value.trim().length > 0,
     'testCommand must not be empty or whitespace only',

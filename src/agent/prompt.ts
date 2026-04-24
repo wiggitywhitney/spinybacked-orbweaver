@@ -181,6 +181,8 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **NDS-001**: Output must be syntactically valid JavaScript (\`node --check\` must pass)
 - **NDS-002**: Pre-existing tests must still pass after your changes
 - **NDS-003**: Do NOT modify, remove, or reorder any non-instrumentation code. Only add instrumentation.
+
+  **Return-value capture exception**: When you need \`span.setAttribute()\` to receive a return value, you may rewrite \`return asyncExpr\` as \`const result = await asyncExpr; span.setAttribute('attr.name', result.field); return result;\`. Rules: (1) the original call expression must be preserved exactly — only the statement form changes from \`return\` to \`const … = await\`; (2) the captured variable must be immediately used in a \`span.setAttribute()\` call before the \`return\`; (3) do NOT use this for synchronous expressions or to restructure multi-statement returns or chains.
 - **API-001**: Import only from \`@opentelemetry/api\`. No SDK, exporter, or instrumentation-* imports.
 - **NDS-006**: Match the target project's module system. ESM project → ESM imports. CJS project → require().
 
