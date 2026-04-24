@@ -36,11 +36,16 @@ function detectModuleSignals(sourceFile: SourceFile): ModuleSignals {
 
   // ESM exports: explicit export declarations, export assignments, and
   // functions/classes/variables with the export keyword.
+  // Note: getExportAssignments() also captures `export =` (CJS-style TS), so
+  // filter to non-export-equals only to avoid misclassifying CJS as ESM.
   if (
     sourceFile.getExportDeclarations().length > 0 ||
-    sourceFile.getExportAssignments().length > 0
+    sourceFile.getExportAssignments().some(ea => !ea.isExportEquals())
   ) {
     signals.hasEsmExport = true;
+  }
+  if (sourceFile.getExportAssignments().some(ea => ea.isExportEquals())) {
+    signals.hasCjsExports = true;
   }
 
   sourceFile.forEachChild((node) => {
@@ -176,7 +181,7 @@ function findNewEsmPatterns(
 
   const originalExportTexts = new Set([
     ...originalSource.getExportDeclarations().map(e => e.getText()),
-    ...originalSource.getExportAssignments().map(e => e.getText()),
+    ...originalSource.getExportAssignments().filter(e => !e.isExportEquals()).map(e => e.getText()),
   ]);
 
   for (const exp of instrumentedSource.getExportDeclarations()) {
@@ -185,6 +190,7 @@ function findNewEsmPatterns(
     }
   }
   for (const exp of instrumentedSource.getExportAssignments()) {
+    if (exp.isExportEquals()) continue; // export = is CJS, not ESM
     if (!originalExportTexts.has(exp.getText())) {
       newEsmLines.push(exp.getStartLineNumber());
     }
@@ -264,7 +270,7 @@ export function checkModuleSystemMatchTs(
         `Instrumentation may have removed exports or imports. ` +
         `Preserve the original file's ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} patterns.`,
       tier: 2 as const,
-      blocking: false,
+      blocking: true,
     }];
   }
 
@@ -300,7 +306,7 @@ export function checkModuleSystemMatchTs(
       `Instrumented code must use the same module system as the original file. ` +
       `Use ${originalSystem === 'esm' ? 'import/export' : 'require/module.exports'} for instrumentation additions.`,
     tier: 2 as const,
-    blocking: false,
+    blocking: true,
   }));
 }
 
