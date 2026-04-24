@@ -2,7 +2,8 @@
 // ABOUTME: Includes already-instrumented detection, schema re-resolution per file, and sequential dispatch to instrumentWithRetry.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve, basename } from 'node:path';
+import { resolve, join, basename } from 'node:path';
+import { formatTestOutput } from './test-output.ts';
 import { execFile } from 'node:child_process';
 import type { LanguageProvider } from '../languages/types.ts';
 import { JavaScriptProvider } from '../languages/javascript/index.ts';
@@ -204,6 +205,8 @@ interface DispatchFilesOptions {
   runTestCommand?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean; error?: string; output?: string }>;
   /** Whether baseline tests passed before instrumentation. When false, checkpoint test failure does not trigger rollback. */
   baselineTestPassed?: boolean;
+  /** Injectable log writer for test failure output — defaults to writing spiny-orb-test-failure.log in projectDir. */
+  writeFailureLog?: (filePath: string, content: string) => Promise<void>;
   /** Mutable output — populated at end of dispatch with checkpoint window state for end-of-run rollback. */
   checkpointWindowRef?: {
     files: { path: string; originalContent: string; resultIndex: number }[];
@@ -255,6 +258,7 @@ export async function dispatchFiles(
   const extWarnings = options?.schemaExtensionWarnings;
   const isDryRun = options?.dryRun === true;
   const provider: LanguageProvider = options?.provider ?? new JavaScriptProvider();
+  const writeLogFn = options?.writeFailureLog ?? ((p: string, c: string) => writeFile(p, c, 'utf-8'));
 
   const total = filePaths.length;
   const results: FileResult[] = [];
@@ -565,10 +569,25 @@ export async function dispatchFiles(
                   const failureSummary = failingSources.length > 0
                     ? `changes to ${displayNames.join(', ')} broke tests`
                     : 'tests failed';
-                  extWarnings.push(
-                    `Checkpoint test run failed at file ${i + 1}/${total} ` +
-                    `(${filePath}): ${failureSummary}`,
-                  );
+                  let warningMsg = `Checkpoint test run failed at file ${i + 1}/${total} ` +
+                    `(${filePath}): ${failureSummary}`;
+                  if (testResult.output) {
+                    const { display, truncated } = formatTestOutput(testResult.output);
+                    if (truncated) {
+                      const logPath = join(projectDir, 'spiny-orb-test-failure.log');
+                      let logRef = '';
+                      try {
+                        await writeLogFn(logPath, testResult.output);
+                        logRef = ` — full output at ${logPath}`;
+                      } catch {
+                        // best effort — no path advertised if write fails
+                      }
+                      warningMsg += `\n\nTest output (truncated${logRef}):\n${display}`;
+                    } else {
+                      warningMsg += `\n\nTest output:\n${display}`;
+                    }
+                  }
+                  extWarnings.push(warningMsg);
                 }
               }
             } catch (testErr) {
