@@ -253,7 +253,10 @@ export async function runLiveCheck(
     complianceReport = await stopResponse.text();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    warnings.push(`Failed to stop Weaver gracefully via /stop endpoint: ${message}`);
+    warnings.push(
+      `Weaver shutdown failed during compliance report collection at http://localhost:${adminPort}/stop: ${message}. ` +
+      `To recover: re-run the instrumentation or check network connectivity to the Weaver admin port (${adminPort}).`,
+    );
     // Force kill the process
     try {
       weaverProcess.kill('SIGTERM');

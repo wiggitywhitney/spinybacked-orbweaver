@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-24) When a checkpoint test fails during instrumentation, the CLI failure message now includes the test output directly (for output up to 50 lines) or writes the full output to `spiny-orb-test-failure.log` in the project directory and references the path (for longer output). Previously the message only said "tests failed" with no way to see what actually broke without re-running `npm test` manually.
+
+### Changed
+
+- (2026-04-24) Improved three fix-loop failure messages: (1) Weaver shutdown failure now reports the admin endpoint URL and recovery action ("re-run instrumentation or check port availability") instead of the bare error string; (2) Live-check partial result now adds "review the failed files above and re-run spiny-orb on them" to give users a concrete next step; (3) Checkpoint test failure warning now surfaces subprocess stdout/stderr so the error is visible without a separate manual test run.
+
+### Added
+
 - (2026-04-22) Added four Mermaid source diagrams to `docs/diagrams/` for the solution document: an orchestrator architecture overview showing the deterministic orchestrator coordinating the AI agent, validator, and Weaver schema; a per-file processing sequence covering the full file lifecycle from schema load through commit and schema update; a fix loop diagram showing the retry escalation path (same-agent retry with failure report → fresh agent with failure-category hint → function-by-function fallback); and a validation pipeline diagram showing that blocking and advisory quality checks always run together, with the advisory findings feeding a post-pass polish attempt that reverts on regression. Rendered PNGs saved to the Journal vault and referenced in the solution document at the relevant sections.
 
 ### Changed
