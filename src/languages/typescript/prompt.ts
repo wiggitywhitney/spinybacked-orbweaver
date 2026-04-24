@@ -137,6 +137,8 @@ catch (error) {
 }
 \`\`\`
 
+**HARD CONSTRAINT — never use \`error as Error\` or \`error as Exception\`.** In TypeScript strict mode (\`useUnknownInCatchVariables: true\`), \`error\` is typed as \`unknown\`. Type assertions with \`as\` on \`unknown\` in some strict configurations produce a tsc error. Always use the \`instanceof\` ternary form above — it narrows the type correctly and passes \`tsc --noEmit\` in all strict-mode configurations.
+
 Every catch block inside a span MUST have both \`span.recordException\` AND \`span.setStatus({ code: SpanStatusCode.ERROR })\`. One without the other is incomplete:
 - \`setStatus\` alone marks the span as errored but loses the stack trace.
 - \`recordException\` alone attaches the exception event but doesn't change the span's status code.
