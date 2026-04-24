@@ -39,7 +39,6 @@ function makeConfig(): AgentConfig {
     sdkInitFile: 'src/instrumentation.ts',
     agentModel: 'claude-sonnet-4-6',
     agentEffort: 'medium',
-    autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
     targetType: 'long-lived',

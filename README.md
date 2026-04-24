@@ -163,7 +163,7 @@ If you have the [CLI installed](#installation), run from your project directory:
 spiny-orb init
 ```
 
-This scans your project, auto-detects the schema directory and SDK init file, validates prerequisites, detects project type (service vs. distributable package), and writes `spiny-orb.yaml`. Use `--yes` to skip the confirmation prompt.
+This scans your project, auto-detects the schema directory and SDK init file, validates prerequisites, detects project type (service vs. distributable package), asks about your process lifecycle, and writes `spiny-orb.yaml`. Use `--yes` to skip prompts and accept all defaults.
 
 ```text
 $ spiny-orb init
@@ -174,6 +174,16 @@ Detecting SDK init file...
 Detecting Weaver schema...
 Validating Weaver schema...
 Detected project type: service (dependencyStrategy: dependencies)
+Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)?
+BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [long-lived]
+
+Configuration summary:
+  schemaPath: semconv/
+  sdkInitFile: src/instrumentation.js
+  dependencyStrategy: dependencies
+  targetType: long-lived
+
+Create spiny-orb.yaml with these settings? [y/N] y
 Writing spiny-orb.yaml...
 Created /path/to/your-project/spiny-orb.yaml
 ```
@@ -195,15 +205,48 @@ schemaPath: semconv/          # relative path to your Weaver registry directory
 sdkInitFile: src/instrumentation.js  # relative path to your OTel SDK init file
 ```
 
-If your project is a distributable package (a library, CLI tool, or anything published to npm), add:
+Two fields matter most beyond the required pair. They are **independent axes** — set both based on what your project actually is:
+
+**`targetType`** — how long your process lives:
+- `long-lived` (default) — web servers, workers, daemons. `BatchSpanProcessor` works fine.
+- `short-lived` — CLIs, scripts, Lambda, batch jobs. `BatchSpanProcessor` drops all spans before the 5-second flush timer fires. Switch to `SimpleSpanProcessor` and intercept `process.exit()`.
+
+**`dependencyStrategy`** — where packages are installed:
+- `dependencies` (default) — services that own their dependency tree.
+- `peerDependencies` — libraries or distributed packages. Multiple copies of `@opentelemetry/api` in `node_modules` cause silent trace loss via no-op fallbacks; `peerDependencies` prevents that.
+
+Example: a CLI tool is `short-lived` **and** `dependencies` — these are orthogonal:
 
 ```yaml
-dependencyStrategy: peerDependencies
+schemaPath: semconv/
+sdkInitFile: src/telemetry.js
+targetType: short-lived
+dependencyStrategy: dependencies
 ```
 
-This controls where the agent adds instrumentation packages in your `package.json`. Services (backend APIs, workers, apps) use `dependencies` (the default) — the service owns its dependency tree. Distributable packages use `peerDependencies` so consumers control which version is installed, avoiding duplicate instances that cause silent trace loss.
-
 All other fields have sensible defaults — see [Configuration Reference](#configuration-reference) for the full list.
+
+### What the agent does automatically vs. what it only recommends
+
+When the agent runs, it directly modifies two things without asking:
+- **Source files** — adds span wrappers, `setAttribute` calls, and imports to each instrumented file.
+- **SDK init file** — adds `import` statements and `new InstrumentationClass()` entries to the `NodeSDK` `instrumentations` array for any auto-instrumentation libraries it discovers.
+
+Everything else appears as **guidance in the PR summary only**. The agent never touches:
+- Span processor selection (`SimpleSpanProcessor` vs `BatchSpanProcessor`)
+- `process.exit()` interception for short-lived processes
+
+If your `targetType` is `short-lived`, configure these in your SDK init file **before** running the agent, otherwise spans from the first run will be silently dropped.
+
+### Setup sequence
+
+Follow this order:
+
+1. **Create your OTel SDK init file** (e.g., `src/instrumentation.js`) and register it with Node.js `--require` or `--import`.
+2. **For short-lived targets**: switch to `SimpleSpanProcessor` and add `process.exit()` interception in the SDK init file now, before the agent runs.
+3. **Set up your Weaver schema directory** with your semantic convention definitions.
+4. **Run `spiny-orb init`** (or create `spiny-orb.yaml` manually) — this detects your schema dir, SDK init file, and project type.
+5. **Run `spiny-orb instrument`** — the agent adds spans and updates your SDK init file with discovered libraries.
 
 Once `spiny-orb.yaml` exists, follow the setup for your interface: [CLI](#cli), [MCP](#mcp-integration), or [GitHub Action](#github-action).
 
@@ -491,9 +534,9 @@ Only `schemaPath` and `sdkInitFile` are required — everything else has default
 | `sdkInitFile` | string | *(required)* | Relative path to your OTel SDK init file |
 | `agentModel` | string | `claude-sonnet-4-6` | Claude model to use for code generation |
 | `agentEffort` | `low` \| `medium` \| `high` | `medium` | Thinking depth — higher means more thorough but slower |
-| `autoApproveLibraries` | boolean | `true` | Automatically install instrumentation libraries the agent discovers |
 | `testCommand` | string | `npm test` | Command to run checkpoint and end-of-run test validation. Supports any test runner and inline env vars — e.g., `GIT_CONFIG_GLOBAL=/tmp/test.gitconfig npm test` for repos where global git config conflicts with the test suite |
-| `dependencyStrategy` | `dependencies` \| `peerDependencies` | `dependencies` | Where to add instrumentation packages — `dependencies` for services, `peerDependencies` for libraries |
+| `targetType` | `long-lived` \| `short-lived` | `long-lived` | Process lifecycle. `long-lived` (web servers, workers, daemons) uses `BatchSpanProcessor` — no extra setup. `short-lived` (CLIs, scripts, Lambda, batch jobs) needs `SimpleSpanProcessor` and `process.exit()` interception, otherwise `BatchSpanProcessor` drops all spans before the 5-second flush timer fires. Set during `spiny-orb init` or add manually. |
+| `dependencyStrategy` | `dependencies` \| `peerDependencies` | `dependencies` | Multiple copies of `@opentelemetry/api` in `node_modules` cause silent trace loss via no-op fallbacks. Use `dependencies` for services (backend APIs, workers, apps) — they own their dependency tree. Use `peerDependencies` for distributable packages (libraries, anything published to npm) — consumers control which version is installed. These two fields are independent: a CLI tool is both `short-lived` and `dependencies`. |
 | `maxFilesPerRun` | number | `50` | Maximum files to process in one run |
 | `maxFixAttempts` | number | `2` | Retry attempts per file after initial generation (total attempts = 1 + this value) |
 | `maxTokensPerFile` | number | `100000` | Soft token budget per file — pre-flight estimate is a hard gate; post-hoc check stops further retries but never discards a passing result |

@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-04-24) Added `targetType` to `spiny-orb init`: the interactive flow now asks whether the process is short-lived (CLI, Lambda, batch) or long-lived (server, worker), explains the BatchSpanProcessor flush consequence, and writes the answer to `spiny-orb.yaml`. `--yes` mode defaults to `long-lived`. Added `spiny-orb.yaml.example` with all config fields as commented-out YAML with inline explanations. Updated README with `targetType` in the config table (including the WHY — BatchSpanProcessor drops spans on process exit), a note that `targetType` and `dependencyStrategy` are independent axes, an explanation of what the agent modifies automatically vs. what appears only in the PR summary, and an ordered setup sequence.
+
+- (2026-04-24) Added NDS-003 (no unrelated code changes) return-value capture carve-out to the agent's instrumentation prompt. The agent may now rewrite `return asyncExpr` as `const result = await asyncExpr; span.setAttribute(...); return result;` when accessing a return value for span attributes — but only when the captured variable is immediately used in `setAttribute` and the original call expression is unchanged.
+
+### Changed
+
+- (2026-04-24) Removed `autoApproveLibraries` from the config schema. The field was wired but never read — the agent always installed discovered libraries regardless of its value, making it a misleading no-op. Removed from the schema, README config table, and all test fixtures.
+
+### Added
+
 - (2026-04-22) Added four Mermaid source diagrams to `docs/diagrams/` for the solution document: an orchestrator architecture overview showing the deterministic orchestrator coordinating the AI agent, validator, and Weaver schema; a per-file processing sequence covering the full file lifecycle from schema load through commit and schema update; a fix loop diagram showing the retry escalation path (same-agent retry with failure report → fresh agent with failure-category hint → function-by-function fallback); and a validation pipeline diagram showing that blocking and advisory quality checks always run together, with the advisory findings feeding a post-pass polish attempt that reverts on regression. Rendered PNGs saved to the Journal vault and referenced in the solution document at the relevant sections.
 
 ### Changed

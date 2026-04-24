@@ -29,7 +29,6 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     sdkInitFile: './src/telemetry.ts',
     agentModel: 'claude-sonnet-4-6',
     agentEffort: 'medium',
-    autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
     targetType: 'long-lived',

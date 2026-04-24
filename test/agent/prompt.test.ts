@@ -28,7 +28,6 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     sdkInitFile: './src/instrumentation.ts',
     agentModel: 'claude-sonnet-4-6',
     agentEffort: 'medium',
-    autoApproveLibraries: true,
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
     targetType: 'long-lived',
@@ -438,6 +437,15 @@ describe('buildSystemPrompt', () => {
       // The most common NDS-003-blocking pattern: expression to const extraction
       expect(prompt).toContain('const');
       expect(prompt).toContain('setAttribute');
+    });
+
+    it('NDS-003 includes return-value capture carve-out', () => {
+      const prompt = buildSystemPrompt(schema);
+
+      // Permitted: rewriting `return asyncExpr` as `const result = await asyncExpr; setAttribute; return result`
+      expect(prompt).toContain('asyncExpr');
+      // Constraint: only the statement form changes — call expression must be unchanged
+      expect(prompt).toContain('statement form');
     });
   });
 

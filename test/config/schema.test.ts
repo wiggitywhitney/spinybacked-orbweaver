@@ -19,7 +19,6 @@ function makeFullConfig() {
     sdkInitFile: './src/telemetry/setup.js',
     agentModel: 'claude-sonnet-4-6',
     agentEffort: 'medium',
-    autoApproveLibraries: true,
     testCommand: 'npm test',
     targetType: 'long-lived',
     dependencyStrategy: 'dependencies',
@@ -63,7 +62,6 @@ describe('AgentConfigSchema', () => {
       const config = result.data;
       expect(config.agentModel).toBe('claude-sonnet-4-6');
       expect(config.agentEffort).toBe('medium');
-      expect(config.autoApproveLibraries).toBe(true);
       expect(config.testCommand).toBe('npm test');
       expect(config.dependencyStrategy).toBe('dependencies');
       expect(config.maxFilesPerRun).toBe(50);
@@ -202,14 +200,6 @@ describe('AgentConfigSchema', () => {
       const result = AgentConfigSchema.safeParse({
         ...makeMinimalConfig(),
         schemaPath: 42,
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it('rejects non-boolean autoApproveLibraries', () => {
-      const result = AgentConfigSchema.safeParse({
-        ...makeMinimalConfig(),
-        autoApproveLibraries: 'yes',
       });
       expect(result.success).toBe(false);
     });

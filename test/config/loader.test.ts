@@ -45,7 +45,6 @@ schemaPath: ./telemetry/registry
 sdkInitFile: ./src/telemetry/setup.js
 agentModel: claude-sonnet-4-6
 agentEffort: high
-autoApproveLibraries: false
 testCommand: "vitest run"
 dependencyStrategy: peerDependencies
 maxFilesPerRun: 100
@@ -65,7 +64,6 @@ exclude:
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.config.agentEffort).toBe('high');
-      expect(result.config.autoApproveLibraries).toBe(false);
       expect(result.config.testCommand).toBe('vitest run');
       expect(result.config.dependencyStrategy).toBe('peerDependencies');
       expect(result.config.maxFilesPerRun).toBe(100);

@@ -389,6 +389,73 @@ describe('handleInit', () => {
     });
   });
 
+  describe('targetType detection', () => {
+    it('writes targetType to config in --yes mode (defaults to long-lived)', async () => {
+      const deps = makeDeps();
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: long-lived');
+    });
+
+    it('does not prompt for targetType in --yes mode', async () => {
+      const deps = makeDeps();
+
+      await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(deps.prompt).not.toHaveBeenCalled();
+    });
+
+    it('prompts for targetType in interactive mode', async () => {
+      const promptCalls: string[] = [];
+      const deps = makeDeps({
+        prompt: vi.fn(async (question: string) => {
+          promptCalls.push(question);
+          return promptCalls.length === 1 ? '' : 'y';
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: false }, deps);
+
+      expect(result.success).toBe(true);
+      expect(promptCalls[0]).toMatch(/short-lived|long-lived/i);
+    });
+
+    it('writes targetType: short-lived when user selects it', async () => {
+      let callCount = 0;
+      const deps = makeDeps({
+        prompt: vi.fn(async () => {
+          callCount++;
+          return callCount === 1 ? 'short-lived' : 'y';
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: false }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: short-lived');
+    });
+
+    it('defaults to long-lived when user enters empty input', async () => {
+      let callCount = 0;
+      const deps = makeDeps({
+        prompt: vi.fn(async () => {
+          callCount++;
+          return callCount === 1 ? '' : 'y';
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: false }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: long-lived');
+    });
+  });
+
   describe('globSync scoping', () => {
     it('passes projectDir as cwd to globSync', async () => {
       const globSyncMock = vi.fn(() => ['src/instrumentation.ts']);

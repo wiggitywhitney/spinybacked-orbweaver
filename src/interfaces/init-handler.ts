@@ -263,6 +263,18 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
 
   deps.stderr(`Detected project type: ${projectType} (dependencyStrategy: ${dependencyStrategy})`);
 
+  // Ask for targetType in interactive mode; default to long-lived in --yes mode
+  let targetType: 'short-lived' | 'long-lived' = 'long-lived';
+  if (!yes) {
+    const answer = await deps.prompt(
+      'Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)? ' +
+      'BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [long-lived] ',
+    );
+    if (answer.trim() === 'short-lived') {
+      targetType = 'short-lived';
+    }
+  }
+
   // Interactive confirmation
   if (!yes) {
     deps.stderr('');
@@ -270,6 +282,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     deps.stderr(`  schemaPath: ${schemaPath}`);
     deps.stderr(`  sdkInitFile: ${sdkInitFile}`);
     deps.stderr(`  dependencyStrategy: ${dependencyStrategy}`);
+    deps.stderr(`  targetType: ${targetType}`);
     deps.stderr('');
 
     const answer = await deps.prompt('Create spiny-orb.yaml with these settings? [y/N] ');
@@ -285,6 +298,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     schemaPath,
     sdkInitFile,
     dependencyStrategy,
+    targetType,
   };
 
   const yamlContent = stringifyYaml(config);

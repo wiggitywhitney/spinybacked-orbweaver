@@ -28,7 +28,6 @@ const baseConfig = {
   sdkInitFile: './sdk-init.ts',
   agentModel: 'claude-sonnet-4-6',
   agentEffort: 'medium' as const,
-  autoApproveLibraries: true,
   testCommand: 'npm test',
   dependencyStrategy: 'dependencies' as const,
     targetType: 'long-lived' as const,
