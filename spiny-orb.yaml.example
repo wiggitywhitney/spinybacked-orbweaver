@@ -54,6 +54,18 @@ sdkInitFile: src/instrumentation.js
 # Run `weaver registry check` every N files during processing.
 # schemaCheckpointInterval: 5
 
+# Optional: also run a schema checkpoint when cumulative changed LOC exceeds this threshold.
+# checkpointLocThreshold: 200
+
+# Advisory threshold for new attributes created per file (informational only, never blocks).
+# attributesPerFileThreshold: 30
+
+# Advisory threshold for spans added per file (informational only, never blocks).
+# spansPerFileThreshold: 20
+
+# Optional per-file processing timeout in milliseconds.
+# maxTimePerFile: 300000
+
 # Minimum Weaver CLI version required.
 # weaverMinVersion: 0.21.2
 

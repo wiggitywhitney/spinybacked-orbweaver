@@ -270,8 +270,11 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
       'Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)? ' +
       'BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [long-lived] ',
     );
-    if (answer.trim() === 'short-lived') {
+    const normalized = answer.trim().toLowerCase();
+    if (normalized === 'short-lived') {
       targetType = 'short-lived';
+    } else if (normalized !== '' && normalized !== 'long-lived') {
+      warnings.push(`Unrecognized targetType "${answer.trim()}"; defaulting to long-lived.`);
     }
   }
 
