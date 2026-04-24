@@ -146,7 +146,7 @@ export function checkExportedSignaturePreservationTs(
           `Original signature: ${origSig.name}(${origSig.params.join(', ')}). ` +
           `Instrumentation must preserve all exported functions and their signatures.`,
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
       continue;
     }
@@ -167,7 +167,7 @@ export function checkExportedSignaturePreservationTs(
           `instrumented: ${origSig.name}(${instrParams.join(', ')}). ` +
           `Instrumentation must not add, remove, or rename parameters on exported functions.`,
         tier: 2,
-        blocking: false,
+        blocking: true,
       });
     }
   }
@@ -195,7 +195,7 @@ function passingResult(filePath: string): CheckResult {
 export const nds004TsRule: ValidationRule = {
   ruleId: 'NDS-004',
   dimension: 'Non-destructive',
-  blocking: false,
+  blocking: true,
   applicableTo(language: string): boolean {
     return language === 'typescript';
   },

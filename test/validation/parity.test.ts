@@ -161,6 +161,6 @@ describe('feature parity matrix', () => {
     }
 
     // Check unique rule vocabulary (multiple providers may register the same ruleId)
-    expect(ruleIds.size, `Expected exactly 27 unique rule IDs, got: ${[...ruleIds].join(', ')}`).toBe(expected.length);
+    expect(ruleIds.size, `Expected exactly ${expected.length} unique rule IDs, got: ${[...ruleIds].join(', ')}`).toBe(expected.length);
   });
 });
