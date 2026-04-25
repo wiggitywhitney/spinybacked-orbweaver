@@ -10,14 +10,12 @@ Dependency-ordered backlog across three sources: the advisory rules audit ([PRD 
 
 ## Medium-term
 
-- Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — blocked by multi-language rule architecture PRD.
+- Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — blocked by PRD #507 (multi-language rule architecture). TypeScript canary prerequisite ✓ cleared (0/27 interface changes).
 - SCH-001/002 rebuild + SCH-004 deletion + SCH-005 audit ([PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)) — blocked by multi-language rule architecture PRD.
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 and PRD #508.
 - Canonical tracer name injection ([PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)) — deletes CDQ-008, replaces with per-file blocking check driven by registry manifest name.
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
 - Anthropic SDK version check + bump — pin `^0.78.0` is months stale.
-- Capture test failure output on checkpoint / end-of-run failure — fix-loop debuggability.
-- Fix-loop debuggability sweep — Weaver shutdown messages, live-check partial text, check-failure message clarity.
 - COV-005 receiver filter fragility — `extractSetAttributeName` misses non-standard span variable names; latent bug, accepted as-is in the audit.
 - Audit `src/agent/prompt.ts` for orphan rule references ([issue #519](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/519)) — one-shot sweep to reconcile the prompt against the rule catalog. Sequence-dependent: run after PRD #505, PRD #508, and PRD #509 merge so the rule catalog is stable. Prevention for future drift is covered by the rules-related work conventions in project CLAUDE.md.
 - Fix agent attribute invention strategy — registry-first, pattern inference, empty schema gate ([PRD #581](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/581)) — removes OTel semconv as a separate fallback, replaces with registry-first lookup and pattern inference from existing registry entries.
