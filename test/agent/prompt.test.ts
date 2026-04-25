@@ -4,6 +4,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildSystemPrompt, buildUserMessage } from '../../src/agent/prompt.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+import { TypeScriptProvider } from '../../src/languages/typescript/index.ts';
 
 /** Minimal valid resolved schema for testing. */
 function makeSchema(overrides: Record<string, unknown> = {}): object {
@@ -50,9 +52,10 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
 
 describe('buildSystemPrompt', () => {
   const schema = makeSchema();
+  const jsProvider = new JavaScriptProvider();
 
   it('includes role and constraints section', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('instrumentation engineer');
     expect(prompt).toContain('Your ONLY job is to add instrumentation');
@@ -60,7 +63,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes the resolved schema', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('<schema>');
     expect(prompt).toContain('</schema>');
@@ -69,7 +72,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes transformation rules', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('startActiveSpan');
     expect(prompt).toContain('span.end()');
@@ -79,21 +82,21 @@ describe('buildSystemPrompt', () => {
   });
 
   it('uses namespace-qualified placeholder in span example, not span. prefix', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain("'my_service.operation_name'");
     expect(prompt).not.toContain("'span.name'");
   });
 
   it('prohibits undefined guards around setAttribute calls', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('Do not add null/undefined checks around');
     expect(prompt).toContain('span.setAttribute()');
   });
 
   it('has dedicated error handling section emphasizing recordException + setStatus pairing', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Extract the Error Handling section specifically
     const sectionStart = prompt.indexOf('### Error Handling');
@@ -110,7 +113,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('specifies a concrete tracer name derived from schema namespace', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Should contain the exact tracer name, not a placeholder or derivation instruction
     expect(prompt).toContain('trace.getTracer("test_service")');
@@ -120,42 +123,42 @@ describe('buildSystemPrompt', () => {
 
   it('uses the schema namespace as the tracer name for different namespaces', () => {
     const customSchema = makeSchema({ namespace: 'my_app' });
-    const prompt = buildSystemPrompt(customSchema);
+    const prompt = buildSystemPrompt(customSchema, undefined, jsProvider);
 
     expect(prompt).toContain('trace.getTracer("my_app")');
   });
 
   it('falls back to unknown_service when namespace is missing', () => {
     const noNamespace = makeSchema({ namespace: undefined });
-    const prompt = buildSystemPrompt(noNamespace);
+    const prompt = buildSystemPrompt(noNamespace, undefined, jsProvider);
 
     expect(prompt).toContain('trace.getTracer("unknown_service")');
   });
 
   it('falls back to unknown_service when namespace is empty string', () => {
     const emptyNamespace = makeSchema({ namespace: '' });
-    const prompt = buildSystemPrompt(emptyNamespace);
+    const prompt = buildSystemPrompt(emptyNamespace, undefined, jsProvider);
 
     expect(prompt).toContain('trace.getTracer("unknown_service")');
   });
 
   it('falls back to unknown_service when namespace is non-string', () => {
     const numericNamespace = makeSchema({ namespace: 42 });
-    const prompt = buildSystemPrompt(numericNamespace);
+    const prompt = buildSystemPrompt(numericNamespace, undefined, jsProvider);
 
     expect(prompt).toContain('trace.getTracer("unknown_service")');
   });
 
   it('safely escapes namespace with special characters', () => {
     const specialNamespace = makeSchema({ namespace: 'my"service' });
-    const prompt = buildSystemPrompt(specialNamespace);
+    const prompt = buildSystemPrompt(specialNamespace, undefined, jsProvider);
 
     // JSON.stringify escapes the double quote
     expect(prompt).toContain('trace.getTracer("my\\"service")');
   });
 
   it('includes instrumentation priority hierarchy', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('External calls');
     expect(prompt).toContain('Schema-defined spans');
@@ -163,7 +166,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes span naming guidance that prioritizes schema-defined names', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Must instruct the agent to check schema span groups and strip the span. prefix
     expect(prompt).toContain('"type": "span"');
@@ -172,14 +175,14 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes span naming convention for new spans', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // When no schema span matches, use namespace.category.operation convention
     expect(prompt).toContain('<namespace>.<category>.<operation>');
   });
 
   it('enforces namespace prefix as a constraint, not guidance (#158)', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Must be a constraint (MUST), not guidance (Follow)
     expect(prompt).toContain('MUST start with');
@@ -188,7 +191,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('requires new span names to be reported as schema extensions', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('schemaExtensions');
     expect(prompt).toContain('not already in the schema');
@@ -207,7 +210,7 @@ describe('buildSystemPrompt', () => {
         },
       ],
     });
-    const prompt = buildSystemPrompt(schemaWithAttrs);
+    const prompt = buildSystemPrompt(schemaWithAttrs, undefined, jsProvider);
 
     expect(prompt).toContain('Registered attribute keys');
     expect(prompt).toContain('http.request.method');
@@ -216,13 +219,13 @@ describe('buildSystemPrompt', () => {
 
   it('omits attribute key list when schema has no attributes (#214)', () => {
     const schemaNoAttrs = makeSchema({ groups: [] });
-    const prompt = buildSystemPrompt(schemaNoAttrs);
+    const prompt = buildSystemPrompt(schemaNoAttrs, undefined, jsProvider);
 
     expect(prompt).not.toContain('Registered attribute keys');
   });
 
   it('requires exhaustive registry search before inventing attribute keys', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Must instruct to check ALL registered keys for semantic equivalence
     expect(prompt).toContain('semantic equivalence');
@@ -233,7 +236,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('guides adding contextual attributes for schema-uncovered files (#184)', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Must instruct agent to derive attributes from function parameters and return values
     expect(prompt).toContain('Function parameters');
@@ -241,7 +244,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('instructs converting Date objects to ISO strings before setAttribute (#184)', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('Date');
     expect(prompt).toContain('toISOString');
@@ -249,7 +252,7 @@ describe('buildSystemPrompt', () => {
 
   describe('scoring checklist', () => {
     it('includes all 6 evaluation dimensions', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('NDS-');
       expect(prompt).toContain('COV-');
@@ -260,7 +263,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('includes gate checks', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('NDS-001');
       expect(prompt).toContain('NDS-003');
@@ -269,14 +272,14 @@ describe('buildSystemPrompt', () => {
     });
 
     it('includes restraint rules', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('RST-001');
       expect(prompt).toContain('RST-004');
     });
 
     it('includes code quality rules', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('CDQ-001');
       expect(prompt).toContain('CDQ-003');
@@ -285,7 +288,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes auto-instrumentation library allowlist', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Core libraries
     expect(prompt).toContain('pg');
@@ -299,7 +302,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('maps OpenLLMetry libraries to individual instrumentation packages, not the mega-bundle', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Must NOT reference the mega-bundle
     expect(prompt).not.toContain('@traceloop/node-server-sdk');
@@ -327,7 +330,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('pairs each framework import with its instrumentation package', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Each framework should appear near its instrumentation package
     // so the LLM knows which package to recommend for which import
@@ -355,7 +358,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes diverse examples (at least 3)', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Count example blocks
     const exampleCount = (prompt.match(/<example /g) || []).length;
@@ -364,7 +367,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes examples covering required scenarios', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     // Happy path instrumentation
     expect(prompt).toContain('Basic');
@@ -380,7 +383,7 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes output format specification', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('instrumentedCode');
     expect(prompt).toContain('librariesNeeded');
@@ -391,14 +394,14 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes count attribute type guidance in SCH-003', () => {
-    const prompt = buildSystemPrompt(makeSchema());
+    const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
     expect(prompt).toContain('Count attributes');
     expect(prompt).toContain('type: int');
     expect(prompt).toContain('String()');
   });
 
   it('includes notes brevity guidance', () => {
-    const prompt = buildSystemPrompt(makeSchema());
+    const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
     expect(prompt).toContain('3-5 judgment call');
     expect(prompt).toContain('non-obvious');
     expect(prompt).toContain('empty array if there are no non-obvious');
@@ -407,14 +410,14 @@ describe('buildSystemPrompt', () => {
 
   describe('suggested refactors guidance', () => {
     it('instructs LLM to report transforms blocked by NDS-003', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('suggestedRefactors');
       expect(prompt).toContain('NDS-003');
     });
 
     it('explains when to report suggested refactors', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       // Should explain the trigger: when instrumentation requires a code change
       // that would violate non-destructiveness
@@ -422,7 +425,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('specifies the fields to include in each refactor', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('description');
       expect(prompt).toContain('diff');
@@ -433,7 +436,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('uses example of const extraction pattern', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       // The most common NDS-003-blocking pattern: expression to const extraction
       expect(prompt).toContain('const');
@@ -441,7 +444,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('NDS-003 includes return-value capture carve-out', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       // Permitted: rewriting `return asyncExpr` as `const result = await asyncExpr; setAttribute; return result`
       expect(prompt).toContain('asyncExpr');
@@ -451,34 +454,34 @@ describe('buildSystemPrompt', () => {
   });
 
   it('includes variable shadowing guidance', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('otelSpan');
     expect(prompt).toContain('otelTracer');
   });
 
   it('includes ratio-based backstop guidance', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('20%');
   });
 
   it('includes already-instrumented detection guidance', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('already');
     expect(prompt).toContain('skip');
   });
 
   it('requires imports only from @opentelemetry/api', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('@opentelemetry/api');
     expect(prompt).toContain('Do not import from');
   });
 
   it('specifies complete file output (no diffs, no placeholders)', () => {
-    const prompt = buildSystemPrompt(schema);
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
     expect(prompt).toContain('complete');
     expect(prompt).toContain('placeholder');
@@ -490,7 +493,7 @@ describe('buildSystemPrompt', () => {
   describe('eval run-4: tracer name fallback (#154)', () => {
     it('uses projectName as tracer name when namespace is missing', () => {
       const noNamespace = makeSchema({ namespace: undefined });
-      const prompt = buildSystemPrompt(noNamespace, 'my-cool-project');
+      const prompt = buildSystemPrompt(noNamespace, 'my-cool-project', jsProvider);
 
       expect(prompt).toContain('trace.getTracer("my-cool-project")');
       expect(prompt).not.toContain('unknown_service');
@@ -498,7 +501,7 @@ describe('buildSystemPrompt', () => {
 
     it('prefers schema namespace over projectName', () => {
       const withNamespace = makeSchema({ namespace: 'from_schema' });
-      const prompt = buildSystemPrompt(withNamespace, 'from_package_json');
+      const prompt = buildSystemPrompt(withNamespace, 'from_package_json', jsProvider);
 
       expect(prompt).toContain('trace.getTracer("from_schema")');
       expect(prompt).not.toContain('from_package_json');
@@ -506,7 +509,7 @@ describe('buildSystemPrompt', () => {
 
     it('falls back to unknown_service when both namespace and projectName are missing', () => {
       const noNamespace = makeSchema({ namespace: undefined });
-      const prompt = buildSystemPrompt(noNamespace);
+      const prompt = buildSystemPrompt(noNamespace, undefined, jsProvider);
 
       expect(prompt).toContain('trace.getTracer("unknown_service")');
     });
@@ -514,7 +517,7 @@ describe('buildSystemPrompt', () => {
 
   describe('eval run-4: expected-condition catch blocks (#157)', () => {
     it('distinguishes expected-condition catches from error catches', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       const sectionStart = prompt.indexOf('### Error Handling');
       const sectionEnd = prompt.indexOf('###', sectionStart + 1);
@@ -528,7 +531,7 @@ describe('buildSystemPrompt', () => {
 
   describe('eval run-4: over-instrumentation of sync functions (#159)', () => {
     it('RST-001 protects pure sync functions regardless of export status', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       // RST-001 should NOT be limited to unexported functions
       expect(prompt).not.toContain('RST-001**: Do NOT add spans to utility functions (synchronous, <5 lines, no I/O, unexported)');
@@ -539,7 +542,7 @@ describe('buildSystemPrompt', () => {
 
   describe('eval run-4: missing root span guidance (#162)', () => {
     it('COV-001 includes CLI entry points', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       const cov001Start = prompt.indexOf('COV-001');
       const cov001End = prompt.indexOf('\n- **COV-002');
@@ -549,7 +552,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('includes root span guidance', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('root span');
     });
@@ -557,7 +560,7 @@ describe('buildSystemPrompt', () => {
 
   describe('NDS-005: preserve try/catch when wrapping in spans', () => {
     it('includes concrete patterns for both outer-wrap and inner-nested try/catch cases', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       // Must cover the inner-nested case (function wrapping where try/catch is inside)
       expect(prompt).toContain('inner try/catch preserved exactly');
@@ -571,7 +574,7 @@ describe('buildSystemPrompt', () => {
   // Claude 4.x prompt hygiene checks
   describe('Claude 4.x prompt hygiene', () => {
     it('does NOT contain anti-laziness directives', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       // These should NOT be in the prompt
       expect(prompt.toLowerCase()).not.toContain('be thorough');
@@ -581,7 +584,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('does NOT contain emotional/motivational language', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt.toLowerCase()).not.toMatch(/\$\d+.*tip|\ba tip\b|tipping/);
       expect(prompt.toLowerCase()).not.toContain('important to');
@@ -589,7 +592,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('does NOT contain chain-of-thought instructions', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt.toLowerCase()).not.toContain('think step by step');
       expect(prompt.toLowerCase()).not.toContain('let\'s think');
@@ -597,7 +600,7 @@ describe('buildSystemPrompt', () => {
     });
 
     it('uses format specifications instead of motivational nudges', () => {
-      const prompt = buildSystemPrompt(schema);
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       // Should have format specs like "will be rejected" not "please be careful"
       expect(prompt).toContain('will be rejected');
@@ -607,16 +610,17 @@ describe('buildSystemPrompt', () => {
 
 describe('buildUserMessage', () => {
   const config = makeConfig();
+  const jsProvider = new JavaScriptProvider();
 
   it('includes the file path', () => {
-    const message = buildUserMessage('/app/src/routes/users.js', 'const x = 1;', config);
+    const message = buildUserMessage('/app/src/routes/users.js', 'const x = 1;', config, jsProvider);
 
     expect(message).toContain('/app/src/routes/users.js');
   });
 
   it('includes the source code in tagged block', () => {
     const code = 'export function hello() { return "world"; }';
-    const message = buildUserMessage('/app/src/hello.js', code, config);
+    const message = buildUserMessage('/app/src/hello.js', code, config, jsProvider);
 
     expect(message).toContain('<source_file>');
     expect(message).toContain('</source_file>');
@@ -625,28 +629,28 @@ describe('buildUserMessage', () => {
 
   it('includes large file warning when file exceeds threshold', () => {
     const longCode = Array(600).fill('const x = 1;').join('\n');
-    const message = buildUserMessage('/app/src/big.js', longCode, config);
+    const message = buildUserMessage('/app/src/big.js', longCode, config, jsProvider);
 
     expect(message).toContain('large file');
   });
 
   it('does NOT include large file warning for small files', () => {
     const shortCode = 'const x = 1;\nconst y = 2;';
-    const message = buildUserMessage('/app/src/small.js', shortCode, config);
+    const message = buildUserMessage('/app/src/small.js', shortCode, config, jsProvider);
 
     expect(message.toLowerCase()).not.toContain('large file');
   });
 
   it('includes the line count', () => {
     const code = 'line1\nline2\nline3';
-    const message = buildUserMessage('/app/src/test.js', code, config);
+    const message = buildUserMessage('/app/src/test.js', code, config, jsProvider);
 
     expect(message).toContain('3 lines');
   });
 
   describe('prompt hygiene', () => {
     it('does NOT contain anti-laziness directives in user message', () => {
-      const message = buildUserMessage('/test.js', 'const x = 1;', config);
+      const message = buildUserMessage('/test.js', 'const x = 1;', config, jsProvider);
       const lower = message.toLowerCase();
 
       expect(lower).not.toContain('be thorough');
@@ -655,7 +659,7 @@ describe('buildUserMessage', () => {
     });
 
     it('does NOT contain emotional/motivational language in user message', () => {
-      const message = buildUserMessage('/test.js', 'const x = 1;', config);
+      const message = buildUserMessage('/test.js', 'const x = 1;', config, jsProvider);
       const lower = message.toLowerCase();
 
       expect(lower).not.toContain('important to');
@@ -665,7 +669,7 @@ describe('buildUserMessage', () => {
 
     it('large file warning uses format specification not motivational language', () => {
       const longCode = Array(600).fill('const x = 1;').join('\n');
-      const message = buildUserMessage('/test.js', longCode, config);
+      const message = buildUserMessage('/test.js', longCode, config, jsProvider);
       const lower = message.toLowerCase();
 
       // Should reference concrete requirements, not emotional nudges
@@ -679,7 +683,7 @@ describe('buildUserMessage', () => {
     it('includes existing span names section when provided', () => {
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
-        undefined,
+        jsProvider, undefined,
         ['commit_story.journal.generate_summary', 'commit_story.graph.build'],
       );
       expect(message).toContain('Span names already in use');
@@ -691,7 +695,7 @@ describe('buildUserMessage', () => {
     it('omits existing span names section when empty', () => {
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
-        undefined,
+        jsProvider, undefined,
         [],
       );
       expect(message).not.toContain('Span names already in use');
@@ -700,6 +704,7 @@ describe('buildUserMessage', () => {
     it('omits existing span names section when undefined', () => {
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
+        jsProvider,
       );
       expect(message).not.toContain('Span names already in use');
     });
@@ -710,7 +715,7 @@ describe('buildUserMessage', () => {
       const constraint = "This project's Prettier config enforces: arrowParens: avoid. Write all arrow functions without parentheses around single parameters.";
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
-        undefined, undefined, constraint,
+        jsProvider, undefined, undefined, constraint,
       );
       expect(message).toContain('**Formatting**:');
       expect(message).toContain('arrowParens: avoid');
@@ -719,7 +724,7 @@ describe('buildUserMessage', () => {
     it('omits Formatting section when constraint is empty string', () => {
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
-        undefined, undefined, '',
+        jsProvider, undefined, undefined, '',
       );
       expect(message).not.toContain('**Formatting**:');
     });
@@ -727,6 +732,7 @@ describe('buildUserMessage', () => {
     it('omits Formatting section when constraint is undefined', () => {
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
+        jsProvider,
       );
       expect(message).not.toContain('**Formatting**:');
     });
@@ -735,12 +741,64 @@ describe('buildUserMessage', () => {
       const constraint = "This project's Prettier config enforces: semi: false.";
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
-        undefined, undefined, constraint,
+        jsProvider, undefined, undefined, constraint,
       );
       const formattingPos = message.indexOf('**Formatting**:');
       const sourceFilePos = message.indexOf('<source_file>');
       expect(formattingPos).toBeGreaterThan(0);
       expect(formattingPos).toBeLessThan(sourceFilePos);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Language parameterization — provider.displayName replaces hardcoded strings
+// ---------------------------------------------------------------------------
+
+describe('language parameterization', () => {
+  const schema = makeSchema();
+  const config = makeConfig();
+  const jsProvider = new JavaScriptProvider();
+  const tsProvider = new TypeScriptProvider();
+
+  describe('buildSystemPrompt language injection', () => {
+    it('NDS-001 rule text uses the provider displayName, not hardcoded JavaScript', () => {
+      const jsPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const tsPrompt = buildSystemPrompt(schema, undefined, tsProvider);
+
+      expect(jsPrompt).toContain('syntactically valid JavaScript');
+      expect(tsPrompt).toContain('syntactically valid TypeScript');
+      expect(tsPrompt).not.toContain('syntactically valid JavaScript');
+    });
+
+    it('instrumentedCode output format description uses the provider displayName', () => {
+      const jsPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const tsPrompt = buildSystemPrompt(schema, undefined, tsProvider);
+
+      expect(jsPrompt).toContain('instrumented JavaScript file');
+      expect(tsPrompt).toContain('instrumented TypeScript file');
+      expect(tsPrompt).not.toContain('instrumented JavaScript file');
+    });
+
+    it('opening sentence names the provider language', () => {
+      const tsPrompt = buildSystemPrompt(schema, undefined, tsProvider);
+
+      expect(tsPrompt).toContain('TypeScript source file');
+    });
+  });
+
+  describe('buildUserMessage language injection', () => {
+    it('opens with the provider language name for JavaScript', () => {
+      const message = buildUserMessage('/app/src/routes/users.js', 'const x = 1;', config, jsProvider);
+
+      expect(message).toContain('Instrument the following JavaScript file.');
+    });
+
+    it('opens with the provider language name for TypeScript', () => {
+      const message = buildUserMessage('/app/src/routes/users.ts', 'const x = 1;', config, tsProvider);
+
+      expect(message).toContain('Instrument the following TypeScript file.');
+      expect(message).not.toContain('Instrument the following JavaScript file.');
     });
   });
 });

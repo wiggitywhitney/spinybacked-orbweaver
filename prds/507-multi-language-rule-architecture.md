@@ -99,14 +99,14 @@ Remove direct ts-morph and JS-ast imports from `src/agent/instrument-file.ts`. A
 
 Remove the hardcoded "JavaScript" strings, the `new JavaScriptProvider()` default, and the JS-specific type import. The prompt builder must accept a provider parameter and pull language name, file extension hints, and detection-result type from it.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
 - [x] `src/agent/prompt.ts` no longer imports `OTelImportDetectionResult` from `src/languages/javascript/ast.ts`; it uses the language-agnostic type from M1
-- [ ] No `new JavaScriptProvider()` default in this file — callers must pass a provider
-- [ ] Output schema description uses a language name injected from the provider (e.g., `provider.displayName`) rather than hardcoding "JavaScript"
-- [ ] User message uses the provider's language name rather than hardcoding "Instrument the following JavaScript file."
-- [ ] If `LanguageProvider` doesn't expose a `displayName` field, add one in this milestone (both JS and TS providers updated)
-- [ ] Golden-file prompt tests cover both JS and TS — verify the generated prompt says "JavaScript" for JS and "TypeScript" for TS
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] No `new JavaScriptProvider()` default in this file — callers must pass a provider
+- [x] Output schema description uses a language name injected from the provider (e.g., `provider.displayName`) rather than hardcoding "JavaScript"
+- [x] User message uses the provider's language name rather than hardcoding "Instrument the following JavaScript file."
+- [x] If `LanguageProvider` doesn't expose a `displayName` field, add one in this milestone (both JS and TS providers updated)
+- [x] Golden-file prompt tests cover both JS and TS — verify the generated prompt says "JavaScript" for JS and "TypeScript" for TS
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M4: Remove `new JavaScriptProvider()` defaults from shared pipeline
 
