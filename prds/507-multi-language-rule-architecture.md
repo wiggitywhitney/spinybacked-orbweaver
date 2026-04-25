@@ -53,6 +53,7 @@ Route all hot-path modules through the `LanguageProvider` interface. Add a riche
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
 | D-1 | PRD #372 (TypeScript provider) branch `feature/prd-372-typescript-provider` is preserved, not discarded. This PRD must include TS integration as first-class work. | Established in PRD #483 Decision 10. The TS canary passed 0/27 interface members changed; the hot-path leaks this PRD addresses are in non-interface code. Throwing away the TS branch would lose 18 commits of tested work (including canary test) for no architectural benefit. | 2026-04-20 |
+| D-2 | **Option B (modified)**: `tier2/` keeps `registry-types.ts` (shared registry parsing infrastructure, already imported by `javascript/rules/`), `sch005.ts` (run-level coordinator check), and `cdq008.ts` (tracked for deletion in PRD #505). The stale per-file rule implementations `tier2/sch001.ts`, `tier2/sch002.ts`, `tier2/sch003.ts`, `tier2/sch004.ts` are deleted. `javascript/rules/sch001–004.ts` are the canonical copies. | `tier2/registry-types.ts` IS the shared matching logic — it exports `getSpanDefinitions`, `getAllAttributeNames` etc. and is already imported directly by `javascript/rules/`. The stale `tier2/sch001–004.ts` files have identical public APIs but diverged internals (esp. `sch004.ts`, missing type inference). They add no architectural value and create a dual-copy maintenance hazard. Deleting them collapses the duplicate surface without blocking future Python/Go providers, which will import `tier2/registry-types.ts` directly via their own `languages/<lang>/rules/` implementations. | 2026-04-25 |
 
 ---
 
@@ -65,6 +66,7 @@ Route all hot-path modules through the `LanguageProvider` interface. Add a riche
 - **PRD #372 coordination**: if PRD #372 merges to main before this PRD reaches the TS integration milestone, the TS provider updates happen on main during this PRD's work. If PRD #372 is still on its feature branch when this PRD finalizes the interface, the TS branch rebases on the new main and applies interface updates during rebase. Either way, the TS provider must ship with the refactored interface.
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 - **`src/fix-loop/function-instrumentation.ts` is dead production code**: it imports JS-specific symbols (`SourceFile` from ts-morph, `ExtractedFunction` from `extraction.ts`) but no production code imports it — only test files do. Discovered during M5. Its cleanup is not in scope for any specific milestone here; if the overall PRD success criteria grep must be clean, delete or refactor this file in M7 before the final check.
+- **SCH-005 stays in `src/validation/tier2/sch005.ts`**: SCH-005 (no duplicate span definitions) is a run-level coordinator check with a fundamentally different lifecycle from per-file checks — it runs after all files are instrumented, has cross-file visibility, and outputs to `runLevelAdvisory` (not per-file feedback). It has no `javascript/rules/` equivalent and is deliberately excluded from D-2's consolidation scope. Its fate (keep, convert to per-file, or delete) is audited as the first milestone of PRD #508.
 
 ---
 
@@ -143,12 +145,12 @@ Decide between A and B — the SCH rebuild PRD (blocked by this milestone) canno
 
 **Escalation path**: If the A vs. B decision requires extended discussion or investigation (e.g., unclear how Python/Go AST extraction would integrate with a shared `tier2/` module), file a standalone design issue immediately and notify Whitney rather than letting M6 stall. Do not let an unresolved architectural question block the rest of PRD #507's milestones — M1–M5 are independent of M6 and can proceed in parallel.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH section and the Action Items
-- [ ] Decision recorded in this PRD's Decision Log: Option A or Option B (or a third option if one emerges during implementation), with rationale
-- [ ] Decision executed: stale duplicate copies removed or unified; `tier2/sch004.ts` divergence resolved
-- [ ] `test/coordinator/acceptance-gate.test.ts` imports updated to reference the canonical location
-- [ ] SCH-005's `tier2/sch005.ts` location documented in a Design Note in this PRD, stating explicitly that it stays in `tier2/` because it is a run-level coordinator check with a different lifecycle from per-file checks, and therefore out of scope for this PRD's consolidation decision
-- [ ] `npm test` passes; `npm run typecheck` passes; acceptance gate tests pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH section and the Action Items
+- [x] Decision recorded in this PRD's Decision Log: Option A or Option B (or a third option if one emerges during implementation), with rationale — recorded as D-2 (Option B modified)
+- [x] Decision executed: stale duplicate copies removed or unified; `tier2/sch004.ts` divergence resolved — `tier2/sch001-004.ts` deleted; canonical copies remain in `javascript/rules/`
+- [x] `test/coordinator/acceptance-gate.test.ts` imports updated to reference the canonical location — all 10 `require('tier2/sch00X.ts')` calls redirected to `javascript/rules/sch00X.ts`
+- [x] SCH-005's `tier2/sch005.ts` location documented in a Design Note in this PRD, stating explicitly that it stays in `tier2/` because it is a run-level coordinator check with a different lifecycle from per-file checks, and therefore out of scope for this PRD's consolidation decision
+- [x] `npm test` passes; `npm run typecheck` passes; acceptance gate tests pass
 
 ### Milestone M7: Update documentation and close out
 

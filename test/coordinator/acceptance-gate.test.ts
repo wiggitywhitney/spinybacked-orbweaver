@@ -687,7 +687,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   const resolvedSchema = loadResolvedSchema();
 
   it('(g) SCH-001 passes for span names matching registry definitions', async () => {
-    const { checkSpanNamesMatchRegistry } = require('../../src/validation/tier2/sch001.ts');
+    const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -712,7 +712,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   });
 
   it('(g) SCH-001 fails for span names NOT in registry', async () => {
-    const { checkSpanNamesMatchRegistry } = require('../../src/validation/tier2/sch001.ts');
+    const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -735,7 +735,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   });
 
   it('(g) SCH-002 passes for attribute keys present in registry', () => {
-    const { checkAttributeKeysMatchRegistry } = require('../../src/validation/tier2/sch002.ts');
+    const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -758,7 +758,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   });
 
   it('(g) SCH-002 fails for attribute keys NOT in registry', () => {
-    const { checkAttributeKeysMatchRegistry } = require('../../src/validation/tier2/sch002.ts');
+    const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -782,7 +782,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   });
 
   it('(g) SCH-003 passes for values conforming to registry types', () => {
-    const { checkAttributeValuesConformToTypes } = require('../../src/validation/tier2/sch003.ts');
+    const { checkAttributeValuesConformToTypes } = require('../../src/languages/javascript/rules/sch003.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -805,7 +805,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   });
 
   it('(g) SCH-004 produces advisory results (non-blocking)', async () => {
-    const { checkNoRedundantSchemaEntries } = require('../../src/validation/tier2/sch004.ts');
+    const { checkNoRedundantSchemaEntries } = require('../../src/languages/javascript/rules/sch004.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -828,10 +828,10 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   });
 
   it('(g) all four SCH checkers produce CheckResult with standard format', async () => {
-    const { checkSpanNamesMatchRegistry } = require('../../src/validation/tier2/sch001.ts');
-    const { checkAttributeKeysMatchRegistry } = require('../../src/validation/tier2/sch002.ts');
-    const { checkAttributeValuesConformToTypes } = require('../../src/validation/tier2/sch003.ts');
-    const { checkNoRedundantSchemaEntries } = require('../../src/validation/tier2/sch004.ts');
+    const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
+    const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
+    const { checkAttributeValuesConformToTypes } = require('../../src/languages/javascript/rules/sch003.ts');
+    const { checkNoRedundantSchemaEntries } = require('../../src/languages/javascript/rules/sch004.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
