@@ -20,7 +20,7 @@ import type { FunctionResult } from '../../fix-loop/types.ts';
 import { classifyFunctions, detectOTelImports } from './ast.ts';
 import { checkSyntax, checkLint, formatCode } from './validation.ts';
 import { extractExportedFunctions } from './extraction.ts';
-import { reassembleFunctions as reassembleFunctionsImpl } from './reassembly.ts';
+import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from './reassembly.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
 import { cov001Rule } from './rules/cov001.ts';
@@ -333,6 +333,10 @@ export class JavaScriptProvider implements LanguageProvider {
       sourceText: fn.sourceText,
     })) as unknown as JsExtracted;
     return reassembleFunctionsImpl(original, adapted, results);
+  }
+
+  ensureTracerAfterImports(code: string): string {
+    return ensureTracerAfterImportsImpl(code);
   }
 
   // ── LLM prompt context ────────────────────────────────────────────────────

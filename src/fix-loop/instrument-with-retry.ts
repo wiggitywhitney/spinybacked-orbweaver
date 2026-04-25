@@ -14,7 +14,6 @@ import type { LanguageProvider } from '../languages/types.ts';
 import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
-import { ensureTracerAfterImports } from '../languages/javascript/reassembly.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
@@ -623,10 +622,7 @@ async function executeRetryLoop(
     const budgetExceeded = totalTokens(cumulativeTokens) > config.maxTokensPerFile;
 
     // Fix tracer init placement: ensure it's after all imports, not between them.
-    // Only applies to JS/TS — ensureTracerAfterImports parses JS/TS import syntax.
-    if (provider.id === 'javascript' || provider.id === 'typescript') {
-      output.instrumentedCode = ensureTracerAfterImports(output.instrumentedCode);
-    }
+    output.instrumentedCode = provider.ensureTracerAfterImports(output.instrumentedCode);
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -720,10 +716,7 @@ async function executeRetryLoop(
           const advisoryOutput = advisoryInstrumentResult.output;
           cumulativeTokens = addTokenUsage(cumulativeTokens, advisoryOutput.tokenUsage);
 
-          let advisoryCode = advisoryOutput.instrumentedCode;
-          if (provider.id === 'javascript' || provider.id === 'typescript') {
-            advisoryCode = ensureTracerAfterImports(advisoryCode);
-          }
+          let advisoryCode = provider.ensureTracerAfterImports(advisoryOutput.instrumentedCode);
           await writeFile(filePath, advisoryCode, 'utf-8');
 
           const advisoryValidation = await validateFileFn({

@@ -26,7 +26,7 @@ import {
   extractTsFunctions,
 } from './ast.ts';
 import { checkSyntax, checkLint, formatCode } from './validation.ts';
-import { reassembleFunctions as reassembleFunctionsImpl } from '../javascript/reassembly.ts';
+import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from '../javascript/reassembly.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
 import { cov001TsRule } from './rules/cov001.ts';
@@ -185,6 +185,10 @@ export class TypeScriptProvider implements LanguageProvider {
       sourceText: fn.sourceText,
     })) as unknown as JsExtracted;
     return reassembleFunctionsImpl(original, adapted, results);
+  }
+
+  ensureTracerAfterImports(code: string): string {
+    return ensureTracerAfterImportsImpl(code);
   }
 
   // ── LLM prompt context ────────────────────────────────────────────────────

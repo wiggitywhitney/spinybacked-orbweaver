@@ -414,6 +414,21 @@ export interface LanguageProvider {
     results: FunctionResult[],
   ): string;
 
+  /**
+   * Ensure tracer initialization (`const tracer = trace.getTracer(...)`) appears
+   * after all import statements, not between them.
+   *
+   * The LLM sometimes places the tracer init between import lines. For languages
+   * with module-level import blocks (JS/TS: ES modules, Python: top-level imports,
+   * Go: import declarations), having non-import statements between imports may be
+   * a syntax error or style violation. Providers that do not need this fixup
+   * should return the code unchanged.
+   *
+   * @param code - Instrumented code that may have misplaced tracer init
+   * @returns Code with tracer init moved after the last import (or unchanged)
+   */
+  ensureTracerAfterImports(code: string): string;
+
   // -------------------------------------------------------------------------
   // LLM prompt context
   // -------------------------------------------------------------------------

@@ -368,6 +368,39 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
     });
   });
 
+  describe('ensureTracerAfterImports', () => {
+    it('returns code unchanged when tracer init is already after imports', () => {
+      const code = [
+        `import { trace } from '@opentelemetry/api';`,
+        ``,
+        `const tracer = trace.getTracer('my-service');`,
+        ``,
+        `export function doWork(): number { return 1; }`,
+      ].join('\n');
+      expect(provider.ensureTracerAfterImports(code)).toBe(code);
+    });
+
+    it('moves tracer init that appears between imports to after last import', () => {
+      const code = [
+        `import { trace } from '@opentelemetry/api';`,
+        `const tracer = trace.getTracer('my-service');`,
+        `import { context } from '@opentelemetry/api';`,
+        ``,
+        `export function doWork(): number { return 1; }`,
+      ].join('\n');
+      const result = provider.ensureTracerAfterImports(code);
+      const lines = result.split('\n');
+      const tracerIdx = lines.findIndex(l => l.includes('getTracer'));
+      const lastImportIdx = lines.reduce((max, l, i) => l.startsWith('import ') ? i : max, -1);
+      expect(tracerIdx).toBeGreaterThan(lastImportIdx);
+    });
+
+    it('returns code unchanged when no tracer init present', () => {
+      const code = `import { trace } from '@opentelemetry/api';\nexport function doWork(): number { return 1; }`;
+      expect(provider.ensureTracerAfterImports(code)).toBe(code);
+    });
+  });
+
   // ─── Prompt sections ────────────────────────────────────────────────────
 
   describe('getSystemPromptSections', () => {

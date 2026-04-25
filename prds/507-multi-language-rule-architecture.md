@@ -123,11 +123,11 @@ Four remaining modules default to `new JavaScriptProvider()` when no provider is
 
 The `src/fix-loop/index.ts` barrel re-exports JS-specific symbols (`extractExportedFunctions`, `reassembleFunctions`, `deduplicateImports`, `ensureTracerAfterImports`). Stop exporting them — the actual call sites in `instrument-with-retry.ts` already use `provider.extractFunctions()` and `provider.reassembleFunctions()`, so these re-exports are a leaky API surface only. Also resolve the `ensureTracerAfterImports` JS-only guard at `src/fix-loop/instrument-with-retry.ts` lines 555-557 — either move the function behind the `LanguageProvider` interface or explicitly scope it as language-specific.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/fix-loop/index.ts` barrel no longer re-exports JS-specific symbols
-- [ ] Any consumer that imported from the barrel for these symbols now imports from the provider (or the decision is made to keep the direct JS import and document why)
-- [ ] `ensureTracerAfterImports` either moved behind a provider method (`provider.ensureTracerAfterImports` or similar) with a TS implementation, or kept JS-specific with a clearly documented reason — not silently guarded
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `src/fix-loop/index.ts` barrel no longer re-exports JS-specific symbols
+- [x] Any consumer that imported from the barrel for these symbols now imports from the provider (or the decision is made to keep the direct JS import and document why) — no external consumers existed; all barrel re-exports were dead leaks with no callers
+- [x] `ensureTracerAfterImports` either moved behind a provider method (`provider.ensureTracerAfterImports` or similar) with a TS implementation, or kept JS-specific with a clearly documented reason — not silently guarded — moved to `LanguageProvider` interface; both JS and TS providers implement it; the `provider.id` guard in `instrument-with-retry.ts` replaced with unconditional `provider.ensureTracerAfterImports()` calls
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M6: Resolve the `tier2/` architecture and consolidate SCH rule duplicates
 
