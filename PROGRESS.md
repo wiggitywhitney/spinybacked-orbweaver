@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- (2026-04-25) Added a unit test that exercises `updateSdkInitFile` with a `getNodeAutoInstrumentations()` call expression already in the `instrumentations` array — the exact pattern used in the coordinator acceptance gate test fixture. The test confirms that the function correctly appends new instrumentation entries (array element + ESM import) without being blocked by the existing call expression. This closes issue #590's gap in unit-level coverage; the coordinator acceptance gate P4-3 passed in the companion live-API smoke test.
+- (2026-04-25) Added a unit test that exercises `updateSdkInitFile` when the `instrumentations` array already contains a `getNodeAutoInstrumentations()` call expression — the exact pattern used in the coordinator acceptance gate fixture project. The test confirms that the function correctly appends new instrumentation entries (both the array `new X()` element and the ESM import statement) without being blocked by the existing call expression or falling back to the separate fallback file.
 
 ### Added
 
