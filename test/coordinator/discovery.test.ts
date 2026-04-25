@@ -5,6 +5,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { discoverFiles } from '../../src/coordinator/discovery.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const TEST_DIR = join(import.meta.dirname, '..', '..', '.tmp-discovery-test');
 
@@ -48,6 +51,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       // Should find all .js files except node_modules (auto-excluded)
@@ -69,6 +73,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       for (const file of files) {
@@ -83,6 +88,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(files).not.toContain(join(TEST_DIR, 'README.md'));
@@ -96,6 +102,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       const sorted = [...files].sort();
@@ -111,6 +118,7 @@ describe('discoverFiles', () => {
         exclude: ['**/*.test.js', '**/*.spec.js'],
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(files).not.toContain(join(TEST_DIR, 'src/app.test.js'));
@@ -128,6 +136,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(files).not.toContain(join(TEST_DIR, 'node_modules/express/index.js'));
@@ -140,6 +149,7 @@ describe('discoverFiles', () => {
         exclude: ['test/**'],
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(files).not.toContain(join(TEST_DIR, 'test/e2e.test.js'));
@@ -157,6 +167,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: 'sdk-init.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(files).not.toContain(join(TEST_DIR, 'sdk-init.js'));
@@ -172,6 +183,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: 'src/telemetry/setup.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(files).not.toContain(join(TEST_DIR, 'src/telemetry/setup.js'));
@@ -186,6 +198,7 @@ describe('discoverFiles', () => {
         exclude: [],
         sdkInitFile: './src/telemetry/setup.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(files).not.toContain(join(TEST_DIR, 'src/telemetry/setup.js'));
@@ -201,6 +214,7 @@ describe('discoverFiles', () => {
           exclude: ['**/*.test.js', '**/*.spec.js'],
           sdkInitFile: 'sdk-init.js',
           maxFilesPerRun: 2,
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/exceeds.*maxFilesPerRun/i);
     });
@@ -213,6 +227,7 @@ describe('discoverFiles', () => {
           exclude: ['**/*.test.js', '**/*.spec.js'],
           sdkInitFile: 'sdk-init.js',
           maxFilesPerRun: 2,
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/4.*files.*2/);
     });
@@ -226,6 +241,7 @@ describe('discoverFiles', () => {
         exclude: ['**/*.test.js', '**/*.spec.js'],
         sdkInitFile: 'sdk-init.js',
         maxFilesPerRun: 4,
+        provider: jsProvider,
       });
 
       expect(files).toHaveLength(4);
@@ -241,6 +257,7 @@ describe('discoverFiles', () => {
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
         targetPath: 'src/routes',
+        provider: jsProvider,
       });
 
       expect(files).toContain(join(TEST_DIR, 'src/routes/users.js'));
@@ -259,6 +276,7 @@ describe('discoverFiles', () => {
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
         targetPath: 'src/app.js',
+        provider: jsProvider,
       });
 
       expect(files).toEqual([join(TEST_DIR, 'src/app.js')]);
@@ -272,6 +290,7 @@ describe('discoverFiles', () => {
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
         targetPath: join(TEST_DIR, 'src/app.js'),
+        provider: jsProvider,
       });
 
       expect(files).toEqual([join(TEST_DIR, 'src/app.js')]);
@@ -286,6 +305,7 @@ describe('discoverFiles', () => {
           sdkInitFile: 'nonexistent.js',
           maxFilesPerRun: 50,
           targetPath: 'src/missing.js',
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/not found/i);
     });
@@ -299,6 +319,7 @@ describe('discoverFiles', () => {
           sdkInitFile: 'nonexistent.js',
           maxFilesPerRun: 50,
           targetPath: 'README.md',
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/\.js/);
     });
@@ -312,6 +333,7 @@ describe('discoverFiles', () => {
           sdkInitFile: 'sdk-init.js',
           maxFilesPerRun: 50,
           targetPath: 'sdk-init.js',
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/sdk init/i);
     });
@@ -324,6 +346,7 @@ describe('discoverFiles', () => {
         sdkInitFile: 'nonexistent.js',
         maxFilesPerRun: 50,
         targetPath: 'src',
+        provider: jsProvider,
       });
 
       expect(files).toContain(join(TEST_DIR, 'src/app.js'));
@@ -338,12 +361,14 @@ describe('discoverFiles', () => {
         sdkInitFile: 'sdk-init.js',
         maxFilesPerRun: 50,
         targetPath: '.',
+        provider: jsProvider,
       });
 
       const filesWithout = await discoverFiles(TEST_DIR, {
         exclude: ['**/*.test.js', '**/*.spec.js'],
         sdkInitFile: 'sdk-init.js',
         maxFilesPerRun: 50,
+        provider: jsProvider,
       });
 
       expect(filesWithDot).toEqual(filesWithout);
@@ -359,6 +384,7 @@ describe('discoverFiles', () => {
           sdkInitFile: 'nonexistent.js',
           maxFilesPerRun: 50,
           targetPath: 'empty-dir',
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/no.*javascript.*files/i);
     });
@@ -375,6 +401,7 @@ describe('discoverFiles', () => {
           exclude: [],
           sdkInitFile: 'nonexistent.js',
           maxFilesPerRun: 50,
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/no.*javascript.*files/i);
     });
@@ -388,6 +415,7 @@ describe('discoverFiles', () => {
           exclude: ['**/*.test.js'],
           sdkInitFile: 'nonexistent.js',
           maxFilesPerRun: 50,
+          provider: jsProvider,
         }),
       ).rejects.toThrow(/no.*javascript.*files/i);
     });
@@ -400,6 +428,7 @@ describe('discoverFiles', () => {
           exclude: [],
           sdkInitFile: 'nonexistent.js',
           maxFilesPerRun: 50,
+          provider: jsProvider,
         }),
       ).rejects.toThrow(TEST_DIR);
     });

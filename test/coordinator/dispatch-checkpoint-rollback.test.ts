@@ -10,6 +10,9 @@ import type { AgentConfig } from '../../src/config/schema.ts';
 
 import { dispatchFiles, parseFailingSourceFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks, DispatchCheckpointConfig } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
 
@@ -109,6 +112,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'ReferenceError: tracer is not defined' }),
         baselineTestPassed: true,
@@ -131,6 +135,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
         baselineTestPassed: true,
@@ -156,6 +161,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => {
           testCallCount++;
@@ -187,6 +193,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
         baselineTestPassed: false,
@@ -214,6 +221,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
         // No baselineTestPassed — unknown baseline should NOT trigger rollback
@@ -268,6 +276,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
         registryDir,
         runTestCommand: async () => {
@@ -306,6 +315,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
         baselineTestPassed: true,
@@ -332,6 +342,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: true }),
         baselineTestPassed: true,
@@ -360,6 +371,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => {
           testCallCount++;
@@ -394,6 +406,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         schemaExtensionWarnings: warnings,
         runTestCommand: async () => ({ passed: false, error: 'tests failed', output: shortOutput }),
@@ -419,6 +432,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         schemaExtensionWarnings: warnings,
         runTestCommand: async () => ({ passed: false, error: 'tests failed', output: longOutput }),
@@ -447,6 +461,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         schemaExtensionWarnings: warnings,
         runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
@@ -472,6 +487,7 @@ describe('dispatchFiles — checkpoint test failure rollback', () => {
 
       await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDepsWithDiskWrite(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         schemaExtensionWarnings: warnings,
         runTestCommand: async () => ({ passed: false, error: 'ReferenceError: tracer is not defined' }),
@@ -617,6 +633,7 @@ describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => 
     let callCount = 0;
     await dispatchFiles(files, tmpDir, config, undefined, {
       deps: makeDepsWithDiskWrite(),
+      provider: jsProvider,
       checkpoint: passingCheckpointConfig,
       runTestCommand: async () => {
         callCount++;
@@ -653,6 +670,7 @@ describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => 
     let callCount = 0;
     const results = await dispatchFiles(files, tmpDir, config, undefined, {
       deps: makeDepsWithDiskWrite(),
+      provider: jsProvider,
       checkpoint: passingCheckpointConfig,
       runTestCommand: async () => {
         callCount++;
@@ -686,6 +704,7 @@ describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => 
     let callCount = 0;
     const results = await dispatchFiles(files, tmpDir, config, undefined, {
       deps: makeDepsWithDiskWrite(),
+      provider: jsProvider,
       checkpoint: passingCheckpointConfig,
       runTestCommand: async () => {
         callCount++;
@@ -721,6 +740,7 @@ describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => 
 
     const results = await dispatchFiles(files, tmpDir, config, undefined, {
       deps: makeDepsWithDiskWrite(),
+      provider: jsProvider,
       checkpoint: passingCheckpointConfig,
       runTestCommand: async () => ({
         passed: false,
@@ -750,6 +770,7 @@ describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => 
 
     const results = await dispatchFiles(files, tmpDir, config, undefined, {
       deps: makeDepsWithDiskWrite(),
+      provider: jsProvider,
       checkpoint: passingCheckpointConfig,
       runTestCommand: async () => ({
         passed: false,
@@ -790,6 +811,7 @@ describe('dispatchFiles — smart checkpoint rollback (targeted revert)', () => 
     let callCount = 0;
     await dispatchFiles(files, tmpDir, config, undefined, {
       deps: { resolveSchema: vi.fn().mockResolvedValue({ resolved: true }), instrumentWithRetry },
+      provider: jsProvider,
       checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
       registryDir,
       runTestCommand: async () => {

@@ -111,12 +111,12 @@ describe('MCP server', () => {
 
       await handleGetCostCeiling({ projectDir: '/project' }, deps);
 
-      expect(deps.discoverFiles).toHaveBeenCalledWith('/project', {
+      expect(deps.discoverFiles).toHaveBeenCalledWith('/project', expect.objectContaining({
         exclude: ['**/*.test.js'],
         sdkInitFile: 'src/instrumentation.js',
         maxFilesPerRun: 10,
         targetPath: undefined,
-      });
+      }));
     });
 
     it('uses maxTokensPerFile from config for ceiling calculation', async () => {
@@ -199,12 +199,12 @@ describe('MCP server', () => {
       // Config overrides should be applied
       const configResult = await deps.loadConfig('/project/spiny-orb.yaml');
       const baseConfig = (configResult as { config: AgentConfig }).config;
-      expect(deps.discoverFiles).toHaveBeenCalledWith('/project', {
+      expect(deps.discoverFiles).toHaveBeenCalledWith('/project', expect.objectContaining({
         exclude: ['**/vendor/**'],
         sdkInitFile: baseConfig.sdkInitFile,
         maxFilesPerRun: 5,
         targetPath: undefined,
-      });
+      }));
     });
 
     it('threads path parameter to discoverFiles as targetPath', async () => {

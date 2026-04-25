@@ -12,6 +12,9 @@ import type { WriteSchemaExtensionsResult } from '../../src/coordinator/schema-e
 
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const ZERO_TOKENS: TokenUsage = {
   inputTokens: 0,
@@ -150,6 +153,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -173,6 +177,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -195,6 +200,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -218,6 +224,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -236,6 +243,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -263,6 +271,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -296,6 +305,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1, file2], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -324,6 +334,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -349,7 +360,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
     const config = makeConfig();
 
     // No registryDir provided
-    await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+    await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
     expect(writeSchemaExtensions).not.toHaveBeenCalled();
   });
@@ -377,6 +388,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
       });
 
@@ -401,6 +413,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir: join(tmpDir, 'registry'),
       });
 
@@ -433,6 +446,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
       });
 
@@ -466,6 +480,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
       });
 
@@ -491,6 +506,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
       });
 
@@ -525,6 +541,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1, file2], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -554,6 +571,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
       schemaExtensionWarnings,
     });
@@ -587,6 +605,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
       schemaExtensionWarnings,
     });
@@ -619,6 +638,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
       schemaExtensionWarnings,
     });
@@ -648,6 +668,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
       });
 
@@ -670,6 +691,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir: join(tmpDir, 'registry'),
       });
 
@@ -703,6 +725,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
         schemaExtensionWarnings,
       });
@@ -749,6 +772,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
       });
 
@@ -788,6 +812,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
       });
 
@@ -831,6 +856,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
         schemaExtensionWarnings,
       });
@@ -862,6 +888,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
       await dispatchFiles([file1], tmpDir, config, undefined, {
         deps,
+        provider: jsProvider,
         registryDir,
         schemaExtensionWarnings: [],
       });
@@ -893,6 +920,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -939,6 +967,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -974,6 +1003,7 @@ describe('dispatchFiles — per-file schema extension writing', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 

@@ -112,12 +112,12 @@ Remove the hardcoded "JavaScript" strings, the `new JavaScriptProvider()` defaul
 
 Four remaining modules default to `new JavaScriptProvider()` when no provider is passed: `src/validation/chain.ts`, `src/coordinator/dispatch.ts`, `src/coordinator/discovery.ts`, and `src/fix-loop/instrument-with-retry.ts` (two call sites). Remove all of them. Callers must pass a provider explicitly; the code should fail loudly (throw) rather than silently default.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] No `new JavaScriptProvider()` default in any shared pipeline module (search the codebase to confirm: `rg 'new JavaScriptProvider'` returns only the provider's own test file and JS-specific rule files)
-- [ ] Call sites that previously relied on the default now explicitly pass a provider sourced from the registry or a parameter
-- [ ] Functions that accepted an optional `provider` now require one — TypeScript's type system enforces this at compile time
-- [ ] Unit and integration tests updated to pass providers explicitly where needed
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] No `new JavaScriptProvider()` default in any shared pipeline module (search the codebase to confirm: `rg 'new JavaScriptProvider'` returns only the provider's own test file and JS-specific rule files)
+- [x] Call sites that previously relied on the default now explicitly pass a provider sourced from the registry or a parameter
+- [x] Functions that accepted an optional `provider` now require one — TypeScript's type system enforces this at compile time
+- [x] Unit and integration tests updated to pass providers explicitly where needed
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M5: Clean up `src/fix-loop/index.ts` barrel and the `ensureTracerAfterImports` JS-only guard
 

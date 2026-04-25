@@ -11,7 +11,6 @@ import type { TokenUsage } from '../agent/schema.ts';
 import type { ExtractedFunction } from '../languages/javascript/extraction.ts';
 import type { FunctionResult } from './types.ts';
 import type { LanguageProvider } from '../languages/types.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
 
 const ZERO_TOKENS: TokenUsage = {
   inputTokens: 0,
@@ -43,8 +42,8 @@ interface InstrumentFunctionsOptions {
   deps?: FunctionInstrumentationDeps;
   /** Directory for temporary validation files. Defaults to os.tmpdir(). */
   tmpDir?: string;
-  /** Language provider used for AST operations in instrumentFile. Defaults to JavaScriptProvider. */
-  provider?: LanguageProvider;
+  /** Language provider used for AST operations in instrumentFile. Required. */
+  provider: LanguageProvider;
 }
 
 /**
@@ -117,15 +116,15 @@ export async function instrumentFunctions(
   filePath: string,
   resolvedSchema: object,
   config: AgentConfig,
-  options?: InstrumentFunctionsOptions,
+  options: InstrumentFunctionsOptions,
 ): Promise<FunctionResult[]> {
   if (functions.length === 0) return [];
 
-  const deps = options?.deps;
+  const deps = options.deps;
   const instrumentFileFn = deps?.instrumentFile ?? (await import('../agent/index.ts')).instrumentFile;
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
-  const tmpDirPath = options?.tmpDir ?? (await import('node:os')).tmpdir();
-  const provider: LanguageProvider = options?.provider ?? new JavaScriptProvider();
+  const tmpDirPath = options.tmpDir ?? (await import('node:os')).tmpdir();
+  const provider: LanguageProvider = options.provider;
 
   const validationConfig = buildTier1OnlyValidationConfig();
   const results: FunctionResult[] = [];
@@ -188,6 +187,7 @@ async function instrumentSingleFunction(
       instrumentedCode: output.instrumentedCode,
       filePath: tmpFilePath,
       config: validationConfig,
+      provider,
     });
 
     if (!validation.passed) {

@@ -34,7 +34,6 @@ import { checkRegistrySpanDuplicates } from '../validation/tier2/sch005.ts';
 import type Anthropic from '@anthropic-ai/sdk';
 import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
 import { getProviderByLanguage } from '../languages/registry.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
 import type { LanguageProvider } from '../languages/types.ts';
 
 /**
@@ -203,9 +202,11 @@ export async function coordinate(
   const schemaDiffWarnings: string[] = [];
   const checkpointTestWarnings: string[] = [];
 
-  // Resolve language provider from config — stopgap until PRD #507 routes all callers
-  const languageProvider: LanguageProvider =
-    getProviderByLanguage(config.language ?? 'javascript') ?? new JavaScriptProvider();
+  const language = config.language ?? 'javascript';
+  const languageProvider: LanguageProvider | undefined = getProviderByLanguage(language);
+  if (!languageProvider) {
+    throw new CoordinatorAbortError(`Unsupported language: "${language}". No provider registered for this language.`);
+  }
 
   // Step 1: Check prerequisites (abort on failure)
   let prereqs: PrerequisitesResult;

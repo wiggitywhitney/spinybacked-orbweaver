@@ -11,10 +11,6 @@ import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import type { LanguageProvider } from '../languages/types.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
-
-/** Default provider used when no provider is passed in InstrumentWithRetryOptions. */
-const DEFAULT_PROVIDER: LanguageProvider = new JavaScriptProvider();
 import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
@@ -82,9 +78,9 @@ interface InstrumentWithRetryOptions {
    * Language provider for the file being instrumented.
    * Passed to the validation chain (checkSyntax, lintCheck) and used to determine
    * the temp file extension for function-level fallback.
-   * Defaults to the JavaScript provider when not specified.
+   * Required — callers must supply a provider explicitly.
    */
-  provider?: LanguageProvider;
+  provider: LanguageProvider;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -390,22 +386,23 @@ export async function instrumentWithRetry(
   originalCode: string,
   resolvedSchema: object,
   config: AgentConfig,
-  options?: InstrumentWithRetryOptions,
+  options: InstrumentWithRetryOptions,
 ): Promise<FileResult> {
-  const deps = options?.deps;
+  const deps = options.deps;
   const instrumentFileFn = deps?.instrumentFile ?? (await import('../agent/index.ts')).instrumentFile;
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
   const formatFeedbackFn = (await import('../validation/feedback.ts')).formatFeedbackForAgent;
-  const anthropicClient = options?.anthropicClient ?? new Anthropic();
-  const provider = options?.provider ?? DEFAULT_PROVIDER;
+  const anthropicClient = options.anthropicClient ?? new Anthropic();
+  const provider = options.provider;
 
   let wholeFileResult: FileResult;
   try {
     wholeFileResult = await executeRetryLoop(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
-      options?.projectRoot, anthropicClient, options?.clock,
-      options?.existingSpanNames, provider,
+      provider,
+      options.projectRoot, anthropicClient, options.clock,
+      options.existingSpanNames,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -426,7 +423,7 @@ export async function instrumentWithRetry(
   }
 
   // Skip function-level fallback for recursive per-function calls (prevents infinite recursion)
-  if (options?._skipFunctionFallback) {
+  if (options._skipFunctionFallback) {
     return wholeFileResult;
   }
 
@@ -451,11 +448,11 @@ async function executeRetryLoop(
   instrumentFileFn: InstrumentWithRetryDeps['instrumentFile'],
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
   formatFeedbackFn: (result: ValidationResult) => string,
+  provider: LanguageProvider,
   projectRoot?: string,
   anthropicClient?: Anthropic,
   clock?: () => number,
   existingSpanNames?: string[],
-  provider: LanguageProvider = DEFAULT_PROVIDER,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -844,9 +841,9 @@ async function functionLevelFallback(
   config: AgentConfig,
   wholeFileResult: FileResult,
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
-  retryOptions?: InstrumentWithRetryOptions,
+  retryOptions: InstrumentWithRetryOptions,
 ): Promise<FileResult | null> {
-  const fnProvider = retryOptions?.provider ?? DEFAULT_PROVIDER;
+  const fnProvider = retryOptions.provider;
 
   // Extract functions via provider (language-agnostic interface)
   const extractedFunctions = fnProvider.extractFunctions(originalCode);
@@ -977,8 +974,8 @@ async function functionLevelFallback(
   // Recompute successful after syntax check may have marked additional functions as failed
   successful = fnResults.filter(r => r.success);
 
-  const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
-  const fallbackProvider = retryOptions?.provider ?? DEFAULT_PROVIDER;
+  const validationConfig = buildValidationConfig(config, retryOptions.projectRoot, resolvedSchema, retryOptions.anthropicClient);
+  const fallbackProvider = retryOptions.provider;
   // Collect schema extensions from successful functions so SCH-001 accepts
   // span names the agent declared as extensions (not just base registry names).
   const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);

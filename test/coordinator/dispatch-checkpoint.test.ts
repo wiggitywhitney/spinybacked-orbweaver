@@ -10,6 +10,9 @@ import type { AgentConfig } from '../../src/config/schema.ts';
 
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks, DispatchCheckpointConfig } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
 
@@ -116,6 +119,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -136,6 +140,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -152,7 +157,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       const deps = makeDeps();
       const config = makeConfig({ schemaCheckpointInterval: 1 });
 
-      await dispatchFiles(files, tmpDir, config, callbacks, { deps });
+      await dispatchFiles(files, tmpDir, config, callbacks, { deps, provider: jsProvider });
 
       expect(onSchemaCheckpoint).not.toHaveBeenCalled();
     });
@@ -173,6 +178,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       // 3 files: 1 skipped + 2 processed → 1 checkpoint at the 2nd processed file
       await dispatchFiles([instrumentedFile, file1, file2], tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -191,6 +197,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -213,6 +220,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: failingCheckCheckpointConfig,
       });
 
@@ -234,6 +242,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: failingDiffCheckpointConfig,
       });
 
@@ -255,6 +264,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: failingCheckCheckpointConfig,
       });
 
@@ -281,6 +291,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -303,6 +314,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: failingCheckCheckpointConfig,
       });
 
@@ -327,6 +339,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: failingDiffCheckpointConfig,
       });
 
@@ -355,6 +368,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       const warnings: string[] = [];
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         checkpointDeps,
         schemaExtensionWarnings: warnings,
@@ -392,6 +406,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       const warnings: string[] = [];
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         checkpointDeps,
         schemaExtensionWarnings: warnings,
@@ -450,6 +465,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
         registryDir,
       });
@@ -494,6 +510,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps,
+        provider: jsProvider,
         checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
         registryDir,
       });
@@ -538,6 +555,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       // extension writing uses the valid writable registry
       const results = await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps,
+        provider: jsProvider,
         checkpoint: failingCheckCheckpointConfig,
         registryDir,
       });
@@ -582,6 +600,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps,
+        provider: jsProvider,
         checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
         registryDir,
       });
@@ -616,6 +635,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -641,6 +661,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -665,6 +686,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, callbacks, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -682,6 +704,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDeps(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => {
           testRunCount.value++;
@@ -703,6 +726,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDeps(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => {
           testRunCount.value++;
@@ -729,6 +753,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDeps(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => {
           testRunCount.value++;
@@ -755,6 +780,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
 
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDeps(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => {
           testRunCount.value++;
@@ -773,6 +799,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       // No runTestCommand in options — should just run schema checkpoint
       const results = await dispatchFiles(files, tmpDir, config, undefined, {
         deps: makeDeps(),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 

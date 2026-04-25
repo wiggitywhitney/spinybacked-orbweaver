@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'no
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import {
@@ -17,6 +18,7 @@ import {
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'commit-story-v2');
 const API_KEY_AVAILABLE = !!process.env.ANTHROPIC_API_KEY;
+const jsProvider = new JavaScriptProvider();
 
 /** Load a fixture file relative to the commit-story-v2 fixtures root. */
 function loadFixture(relativePath: string): string {
@@ -122,7 +124,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments successfully with no oscillation or NDS-005b violations', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/commands/summarize.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('summarize.js', result);
 
       expect(result.status).toBe('success');
@@ -147,7 +149,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments successfully with no oscillation or NDS-005b violations', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/index.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('index.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
@@ -172,7 +174,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments exported function and internal nodes', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/generators/journal-graph.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('journal-graph.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
@@ -196,7 +198,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments all nodes including weeklySummaryNode without NDS-005b violations', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/generators/summary-graph.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('summary-graph.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
@@ -220,7 +222,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments without crashing and correctly adds 0 spans for pure sync transforms', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/integrators/filters/sensitive-filter.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('sensitive-filter.js', result);
 
       // Sync-only pre-screening returns success with 0 spans — no LLM call needed
@@ -247,7 +249,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments both async targets without NDS-005b violations on filesystem catches', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/managers/journal-manager.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('journal-manager.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
@@ -272,7 +274,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments async generation functions without NDS-005b violations', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/managers/summary-manager.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('summary-manager.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
@@ -296,7 +298,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     it('instruments all 4 exported async functions without NDS-005b violations', { timeout: 1_800_000 }, async () => {
       const { filePath, originalCode } = setupFile('src/utils/summary-detector.js');
 
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig());
+      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('summary-detector.js', result);
 
       expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');

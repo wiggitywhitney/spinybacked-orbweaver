@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os';
 import { Project } from 'ts-morph';
 import type { SourceFile } from 'ts-morph';
 import { instrumentFunctions } from '../../src/fix-loop/function-instrumentation.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
 import type { FunctionResult } from '../../src/fix-loop/types.ts';
 import type { TokenUsage } from '../../src/agent/schema.ts';
 import type { InstrumentFileResult } from '../../src/agent/instrument-file.ts';
@@ -15,6 +17,8 @@ import type { ValidationResult, ValidateFileInput } from '../../src/validation/t
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { ExtractedFunction } from '../../src/languages/javascript/extraction.ts';
 import type { FunctionInstrumentationDeps } from '../../src/fix-loop/function-instrumentation.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const sampleTokens: TokenUsage = {
   inputTokens: 500,
@@ -156,7 +160,7 @@ describe('instrumentFunctions', () => {
     };
 
     const results = await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(results).toHaveLength(2);
@@ -177,7 +181,7 @@ describe('instrumentFunctions', () => {
     };
 
     const results = await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(results[0].tokenUsage).toEqual(sampleTokens);
@@ -192,7 +196,7 @@ describe('instrumentFunctions', () => {
     };
 
     const results = await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(results[0].success).toBe(false);
@@ -209,7 +213,7 @@ describe('instrumentFunctions', () => {
     };
 
     const results = await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(results[0].success).toBe(false);
@@ -235,7 +239,7 @@ describe('instrumentFunctions', () => {
     };
 
     const results = await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(results).toHaveLength(2);
@@ -260,7 +264,7 @@ describe('instrumentFunctions', () => {
     };
 
     await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(capturedCode).toBe(contextCode);
@@ -279,7 +283,7 @@ describe('instrumentFunctions', () => {
     };
 
     await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     // Verify all Tier 2 checks are disabled
@@ -310,7 +314,7 @@ describe('instrumentFunctions', () => {
     };
 
     const results = await instrumentFunctions(
-      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      functions, dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(results[0].spansAdded).toBe(3); // 2 + 1 + 0
@@ -324,7 +328,7 @@ describe('instrumentFunctions', () => {
     };
 
     const results = await instrumentFunctions(
-      [], dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir },
+      [], dummySourceFile, '/test/file.js', {}, baseConfig, { deps, tmpDir, provider: jsProvider },
     );
 
     expect(results).toEqual([]);

@@ -15,6 +15,9 @@ import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.t
 import type { InstrumentFileResult } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import { validateFile } from '../../src/validation/chain.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const sampleTokens: TokenUsage = {
   inputTokens: 1000,
@@ -171,7 +174,7 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
     // maxFixAttempts: 1 → 2 total attempts. Both produce the same NDS-003 violations
     // at the same lines, triggering persistent violation detection.
     const result = await instrumentWithRetry(
-      testFilePath, originalCode, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true },
+      testFilePath, originalCode, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider, _skipFunctionFallback: true },
     );
 
     // File should fail — NDS-003 blocks instrumentation
@@ -215,6 +218,7 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
           'NDS-003': { enabled: true, blocking: true },
         },
       },
+      provider: jsProvider,
     });
 
     expect(validation.passed).toBe(false);
@@ -272,7 +276,7 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalCode, {}, makeConfig(), { deps },
+      testFilePath, originalCode, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     // File passes validation — no recommendations needed

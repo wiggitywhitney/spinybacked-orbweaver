@@ -6,10 +6,12 @@ import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'project');
+const jsProvider = new JavaScriptProvider();
 const EVAL_REPO = '/Users/whitney.lee/Documents/Repositories/commit-story-v2-eval';
 const API_KEY_AVAILABLE = !!process.env.ANTHROPIC_API_KEY;
 
@@ -260,7 +262,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Evaluation Validation — PRD-106 Function-
       const config = makeConfig();
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // Capture the instrumented code before temp cleanup
@@ -310,7 +312,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Evaluation Validation — PRD-106 Function-
       const config = makeConfig();
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // Capture the instrumented code before temp cleanup
@@ -361,7 +363,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Evaluation Validation — PRD-106 Function-
       const config = makeConfig();
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // Token budget: cumulative should not exceed config limit

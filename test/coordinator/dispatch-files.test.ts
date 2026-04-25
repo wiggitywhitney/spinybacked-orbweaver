@@ -12,6 +12,9 @@ import type { TokenUsage } from '../../src/agent/schema.ts';
 // Import the function under test
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const ZERO_TOKENS: TokenUsage = {
   inputTokens: 0,
@@ -128,7 +131,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ resolveSchema, instrumentWithRetry });
       const config = makeConfig();
 
-      await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps });
+      await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       // Schema resolved once per file
       expect(resolveSchema).toHaveBeenCalledTimes(3);
@@ -147,7 +150,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ resolveSchema });
       const config = makeConfig({ schemaPath: 'custom/schemas' });
 
-      await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+      await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(resolveSchema).toHaveBeenCalledWith(tmpDir, 'custom/schemas');
     });
@@ -163,7 +166,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps();
       const config = makeConfig();
 
-      await dispatchFiles([file1, file2], tmpDir, config, callbacks, { deps });
+      await dispatchFiles([file1, file2], tmpDir, config, callbacks, { deps, provider: jsProvider });
 
       expect(onFileStart).toHaveBeenCalledTimes(2);
       expect(onFileStart).toHaveBeenCalledWith(file1, 0, 2);
@@ -179,7 +182,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps();
       const config = makeConfig();
 
-      const results = await dispatchFiles([file1, file2], tmpDir, config, callbacks, { deps });
+      const results = await dispatchFiles([file1, file2], tmpDir, config, callbacks, { deps, provider: jsProvider });
 
       expect(onFileComplete).toHaveBeenCalledTimes(2);
       expect(onFileComplete).toHaveBeenCalledWith(results[0], 0, 2);
@@ -197,7 +200,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps();
       const config = makeConfig();
 
-      await dispatchFiles([file1], tmpDir, config, callbacks, { deps });
+      await dispatchFiles([file1], tmpDir, config, callbacks, { deps, provider: jsProvider });
 
       expect(callOrder).toEqual(['start', 'complete']);
     });
@@ -208,7 +211,7 @@ describe('dispatchFiles', () => {
       const config = makeConfig();
 
       // Should not throw
-      const results = await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
       expect(results).toHaveLength(1);
     });
   });
@@ -225,7 +228,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ instrumentWithRetry, resolveSchema });
       const config = makeConfig();
 
-      const results = await dispatchFiles([instrumentedFile], tmpDir, config, undefined, { deps });
+      const results = await dispatchFiles([instrumentedFile], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(instrumentWithRetry).not.toHaveBeenCalled();
       expect(results).toHaveLength(1);
@@ -243,7 +246,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ resolveSchema });
       const config = makeConfig();
 
-      await dispatchFiles([instrumentedFile], tmpDir, config, undefined, { deps });
+      await dispatchFiles([instrumentedFile], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(resolveSchema).not.toHaveBeenCalled();
     });
@@ -260,7 +263,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps();
       const config = makeConfig();
 
-      await dispatchFiles([instrumentedFile], tmpDir, config, callbacks, { deps });
+      await dispatchFiles([instrumentedFile], tmpDir, config, callbacks, { deps, provider: jsProvider });
 
       expect(onFileStart).toHaveBeenCalledWith(instrumentedFile, 0, 1);
       expect(onFileComplete).toHaveBeenCalledTimes(1);
@@ -283,7 +286,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig();
 
-      await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps });
+      await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(callOrder).toEqual([file1, file2, file3]);
     });
@@ -301,7 +304,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig();
 
-      const results = await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps });
+      const results = await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(results).toHaveLength(3);
       expect(results[0].status).toBe('success');
@@ -325,7 +328,7 @@ describe('dispatchFiles', () => {
       const config = makeConfig();
 
       const results = await dispatchFiles(
-        [instrumentedFile, goodFile, badFile], tmpDir, config, undefined, { deps },
+        [instrumentedFile, goodFile, badFile], tmpDir, config, undefined, { deps, provider: jsProvider },
       );
 
       expect(results).toHaveLength(3);
@@ -347,7 +350,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig();
 
-      await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+      await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(instrumentWithRetry).toHaveBeenCalledWith(
         file1, content, expect.any(Object), config,
@@ -365,7 +368,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig({ maxFixAttempts: 1 });
 
-      await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+      await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(instrumentWithRetry.mock.calls[0][3]).toBe(config);
     });
@@ -383,7 +386,7 @@ describe('dispatchFiles', () => {
         });
 
       const deps = makeDeps({ instrumentWithRetry });
-      await dispatchFiles([file1, file2], tmpDir, makeConfig(), undefined, { deps });
+      await dispatchFiles([file1, file2], tmpDir, makeConfig(), undefined, { deps, provider: jsProvider });
 
       // Second file should receive accumulated span names from first file
       const secondCallOptions = instrumentWithRetry.mock.calls[1]?.[4];
@@ -397,7 +400,7 @@ describe('dispatchFiles', () => {
       const deps = makeDeps();
       const config = makeConfig();
 
-      const results = await dispatchFiles([], tmpDir, config, undefined, { deps });
+      const results = await dispatchFiles([], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(results).toEqual([]);
     });
@@ -412,7 +415,7 @@ describe('dispatchFiles', () => {
       });
       const config = makeConfig();
 
-      const results = await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+      const results = await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       expect(results).toHaveLength(1);
       expect(results[0].status).toBe('failed');

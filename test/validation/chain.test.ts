@@ -8,6 +8,9 @@ import { tmpdir } from 'node:os';
 
 import { validateFile, collectCheckResults } from '../../src/validation/chain.ts';
 import type { ValidateFileInput, ValidationConfig, CheckResult } from '../../src/validation/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const validRegistry = join(import.meta.dirname, '../fixtures/weaver-registry/valid');
 
@@ -42,6 +45,7 @@ describe('validateFile', () => {
         instrumentedCode: instrumented,
         filePath,
         config: defaultConfig,
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -64,6 +68,7 @@ describe('validateFile', () => {
         instrumentedCode: instrumented,
         filePath,
         config: defaultConfig,
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -89,6 +94,7 @@ describe('validateFile', () => {
         instrumentedCode: instrumented,
         filePath,
         config: defaultConfig,
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -121,6 +127,7 @@ describe('validateFile', () => {
             'NDS-003': { enabled: true, blocking: true },
           },
         },
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -146,6 +153,7 @@ describe('validateFile', () => {
           enableWeaver: true,
           registryPath: validRegistry,
         },
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -166,6 +174,7 @@ describe('validateFile', () => {
         instrumentedCode: instrumented,
         filePath,
         config: defaultConfig,
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -209,6 +218,7 @@ describe('validateFile', () => {
             'NDS-003': { enabled: true, blocking: true },
           },
         },
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -249,6 +259,7 @@ describe('validateFile', () => {
             'NDS-003': { enabled: true, blocking: true },
           },
         },
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -313,6 +324,7 @@ describe('validateFile', () => {
         instrumentedCode: instrumented,
         filePath,
         config: defaultConfig,
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);
@@ -333,6 +345,7 @@ describe('validateFile', () => {
         instrumentedCode: instrumented,
         filePath,
         config: defaultConfig,
+        provider: jsProvider,
       };
 
       const result = await validateFile(input);

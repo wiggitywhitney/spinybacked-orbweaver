@@ -11,6 +11,9 @@ import type { TokenUsage } from '../../src/agent/schema.ts';
 
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const ZERO_TOKENS: TokenUsage = {
   inputTokens: 0,
@@ -116,7 +119,7 @@ describe('dispatchFiles early abort', () => {
       .mockImplementation(async (filePath: string) => makeFailedResult(filePath, 'NDS-001'));
 
     const deps = makeDeps({ instrumentWithRetry });
-    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps });
+    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps, provider: jsProvider });
 
     // Should process 3 files then abort — remaining 2 skipped
     expect(instrumentWithRetry).toHaveBeenCalledTimes(3);
@@ -140,7 +143,7 @@ describe('dispatchFiles early abort', () => {
       });
 
     const deps = makeDeps({ instrumentWithRetry });
-    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps });
+    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps, provider: jsProvider });
 
     // All 4 processed — no consecutive same-ruleId streak of 3
     expect(instrumentWithRetry).toHaveBeenCalledTimes(4);
@@ -166,7 +169,7 @@ describe('dispatchFiles early abort', () => {
       });
 
     const deps = makeDeps({ instrumentWithRetry });
-    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps });
+    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps, provider: jsProvider });
 
     // All 5 processed — success at position 3 resets the counter
     expect(instrumentWithRetry).toHaveBeenCalledTimes(5);
@@ -190,7 +193,7 @@ describe('dispatchFiles early abort', () => {
       });
 
     const deps = makeDeps({ instrumentWithRetry });
-    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps });
+    const results = await dispatchFiles(files, tmpDir, makeConfig(), undefined, { deps, provider: jsProvider });
 
     // File 1 succeeds, files 2-4 fail with WEAVER → abort after file 4
     expect(instrumentWithRetry).toHaveBeenCalledTimes(4);
@@ -215,7 +218,7 @@ describe('dispatchFiles early abort', () => {
     const onFileComplete = vi.fn();
     const callbacks: CoordinatorCallbacks = { onFileComplete };
     const deps = makeDeps({ instrumentWithRetry });
-    const results = await dispatchFiles(files, tmpDir, makeConfig(), callbacks, { deps });
+    const results = await dispatchFiles(files, tmpDir, makeConfig(), callbacks, { deps, provider: jsProvider });
 
     // 3 files processed, abort skips the 4th
     expect(onFileComplete).toHaveBeenCalledTimes(3);

@@ -15,6 +15,9 @@ import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import { finalizeResults } from '../../src/coordinator/aggregate.ts';
 import { readdirSync } from 'node:fs';
 import { instrumentWithRetry } from '../../src/fix-loop/index.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 import { stat } from 'node:fs/promises';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
@@ -149,6 +152,7 @@ function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
           resolveSchema: async () => resolvedSchema,
           instrumentWithRetry,
         },
+        provider: jsProvider,
       });
     },
     finalizeResults: (runResult, projectDir, sdkInitPath, depStrategy, _deps) => {
@@ -507,6 +511,7 @@ function makePhase5Deps(resolvedSchema: object, tempDir: string): CoordinateDeps
           resolveSchema: async () => resolvedSchema,
           instrumentWithRetry,
         },
+        provider: jsProvider,
       });
     }),
     finalizeResults: (runResult, projectDir, sdkInitPath, depStrategy, _deps) => {
@@ -1001,7 +1006,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
 
     const results = await dispatchFiles(
       [file1, file2, file3], tempDir, config, undefined,
-      { deps, registryDir },
+      { deps, provider: jsProvider, registryDir },
     );
 
     // All three files processed successfully
@@ -1069,7 +1074,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
 
     const results = await dispatchFiles(
       [file1, file2, file3], tempDir, config, undefined,
-      { deps, registryDir },
+      { deps, provider: jsProvider, registryDir },
     );
 
     expect(results).toHaveLength(3);
@@ -1143,6 +1148,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
       files, tempDir, config, { onSchemaCheckpoint },
       {
         deps,
+        provider: jsProvider,
         registryDir,
         schemaExtensionWarnings: warnings,
         checkpoint: { registryDir, baselineSnapshotDir: baselineDir },
@@ -1190,6 +1196,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
       files, tempDir, config, { onSchemaCheckpoint },
       {
         deps,
+        provider: jsProvider,
         registryDir,
         schemaExtensionWarnings: warnings,
         checkpoint: { registryDir, baselineSnapshotDir: join(WEAVER_FIXTURES, 'valid') },
@@ -1240,7 +1247,7 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
 
     const results = await dispatchFiles(
       [file1, file2], tempDir, config, undefined,
-      { deps, registryDir, schemaExtensionWarnings: warnings },
+      { deps, provider: jsProvider, registryDir, schemaExtensionWarnings: warnings },
     );
 
     // File A failed due to validation, file B succeeded

@@ -9,6 +9,9 @@ import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 /** Minimal config for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -96,7 +99,7 @@ describe('dispatchFiles — dry-run mode', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig({ dryRun: true });
 
-      await dispatchFiles([file1], tmpDir, config, undefined, { deps, dryRun: true });
+      await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider, dryRun: true });
 
       // File should be restored to original content
       const afterContent = await readFile(file1, 'utf-8');
@@ -119,7 +122,7 @@ describe('dispatchFiles — dry-run mode', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig({ dryRun: true });
 
-      await dispatchFiles([file1], tmpDir, config, undefined, { deps, dryRun: true });
+      await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider, dryRun: true });
 
       const afterContent = await readFile(file1, 'utf-8');
       expect(afterContent).toBe(originalContent);
@@ -137,7 +140,7 @@ describe('dispatchFiles — dry-run mode', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig({ dryRun: false });
 
-      await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+      await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
       // File should remain modified
       const afterContent = await readFile(file1, 'utf-8');
@@ -161,7 +164,7 @@ describe('dispatchFiles — dry-run mode', () => {
       const deps = makeDeps({ instrumentWithRetry });
       const config = makeConfig({ dryRun: true });
 
-      await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps, dryRun: true });
+      await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps, provider: jsProvider, dryRun: true });
 
       expect(await readFile(file1, 'utf-8')).toBe(content1);
       expect(await readFile(file2, 'utf-8')).toBe(content2);
@@ -188,6 +191,7 @@ describe('dispatchFiles — dry-run mode', () => {
         callbacks,
         {
           deps,
+          provider: jsProvider,
           dryRun: true,
           checkpoint: {
             registryDir: join(tmpDir, 'schemas/registry'),
@@ -208,7 +212,7 @@ describe('dispatchFiles — dry-run mode', () => {
       const deps = makeDeps();
       const config = makeConfig({ dryRun: true });
 
-      const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, { deps, dryRun: true });
+      const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, { deps, provider: jsProvider, dryRun: true });
 
       expect(results).toHaveLength(2);
       expect(results[0].status).toBe('success');
@@ -222,7 +226,7 @@ describe('dispatchFiles — dry-run mode', () => {
       const deps = makeDeps();
       const config = makeConfig({ dryRun: true });
 
-      await dispatchFiles([file1], tmpDir, config, callbacks, { deps, dryRun: true });
+      await dispatchFiles([file1], tmpDir, config, callbacks, { deps, provider: jsProvider, dryRun: true });
 
       expect(onFileComplete).toHaveBeenCalledTimes(1);
     });
@@ -257,7 +261,7 @@ describe('dispatchFiles — dry-run mode', () => {
         tmpDir,
         config,
         undefined,
-        { deps, dryRun: true, registryDir: join(tmpDir, 'schemas/registry') },
+        { deps, provider: jsProvider, dryRun: true, registryDir: join(tmpDir, 'schemas/registry') },
       );
 
       // Extensions are still written during dry-run (for schema diff)

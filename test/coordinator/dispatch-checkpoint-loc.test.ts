@@ -10,6 +10,9 @@ import type { AgentConfig } from '../../src/config/schema.ts';
 
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks, DispatchCheckpointConfig } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
 
@@ -116,6 +119,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps: makeDepsWithLocExpansion(30),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -139,6 +143,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       await dispatchFiles(files, tmpDir, config, callbacks, {
         deps: makeDepsWithLocExpansion(5),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -162,6 +167,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps: makeDepsWithLocExpansion(30),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -187,6 +193,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps: makeDepsWithLocExpansion(5),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -209,6 +216,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps: makeDepsWithLocExpansion(15),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -229,6 +237,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps: makeDepsWithLocExpansion(100),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -271,6 +280,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps,
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
       });
 
@@ -294,6 +304,7 @@ describe('dispatchFiles LOC-aware checkpoint cadence', () => {
 
       const results = await dispatchFiles(files, tmpDir, config, { onSchemaCheckpoint }, {
         deps: makeDepsWithLocExpansion(30),
+        provider: jsProvider,
         checkpoint: passingCheckpointConfig,
         runTestCommand: async () => ({ passed: false, error: 'tests failed' }),
         baselineTestPassed: true,
