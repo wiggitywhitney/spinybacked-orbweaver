@@ -670,7 +670,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, _options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, _options?) => {
         callCount++;
         if (callCount === 1) {
           return {
@@ -772,7 +772,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -805,7 +805,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -834,7 +834,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -865,7 +865,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -896,7 +896,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -925,7 +925,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -1249,7 +1249,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt3Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
         if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
@@ -1295,7 +1295,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
         if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
@@ -1625,7 +1625,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
         if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
@@ -1911,7 +1911,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     const capturedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         capturedOptions.push(options);
         const output = makeInstrumentationOutput({
@@ -2023,7 +2023,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     };
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         capturedOptions.push(options);
         // 3rd call is the fresh-regen (attempt 4 after skipping 3) — return good output
@@ -2206,7 +2206,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
     let capturedOriginalCode: string | undefined;
     let capturedFeedbackMessage: string | undefined;
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, origCode, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, origCode, _rs, _cfg, _provider, opts) => {
         instrumentCallCount++;
         if (instrumentCallCount === 2) {
           capturedOriginalCode = origCode;
@@ -3559,7 +3559,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options) => {
         receivedOptions.push(options);
         return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
       },
@@ -3582,7 +3582,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options) => {
         instrumentCallCount++;
         receivedOptions.push(options);
         if (instrumentCallCount === 1) {
@@ -3662,7 +3662,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options) => {
         instrumentCallCount++;
         receivedOptions.push(options);
         // Return null parsed_output but with end_turn (not max_tokens)
@@ -3800,7 +3800,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     let capturedFailureHint: string | undefined;
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, _provider, opts) => {
         attempt++;
         if (attempt === 3) capturedFailureHint = opts?.failureHint;
         return {
@@ -3849,7 +3849,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     }
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, _provider, opts) => {
         attempt++;
         capturedMessages.push(opts?.feedbackMessage);
         return {
@@ -3889,7 +3889,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     let capturedFailureHint: string | undefined;
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, _provider, opts) => {
         attempt++;
         if (attempt === 3) capturedFailureHint = opts?.failureHint;
         return {

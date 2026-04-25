@@ -5,6 +5,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { instrumentFile, MAX_OUTPUT_TOKENS_PER_CALL } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { LlmOutput } from '../../src/agent/schema.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+import { TypeScriptProvider } from '../../src/languages/typescript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
+const tsProvider = new TypeScriptProvider();
 
 /** Helper to create a minimal valid AgentConfig for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -132,6 +137,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         config,
+        jsProvider,
         { client: client as any },
       );
 
@@ -156,6 +162,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         config,
+        jsProvider,
         { client: client as any },
       );
 
@@ -177,6 +184,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -199,6 +207,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -225,6 +234,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -245,6 +255,7 @@ describe('instrumentFile', () => {
         longOriginal,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -270,6 +281,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -312,6 +324,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -335,6 +348,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -359,6 +373,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         config,
+        jsProvider,
         { client: client as any },
       );
 
@@ -377,6 +392,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig({ maxTokensPerFile: 80000 }),
+        jsProvider,
         { client: client1 as any },
       );
 
@@ -385,6 +401,7 @@ describe('instrumentFile', () => {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig({ maxTokensPerFile: 16000 }),
+        jsProvider,
         { client: client2 as any },
       );
 
@@ -445,6 +462,30 @@ export async function createUser(req, res) {
   res.json(user);
 }`;
 
+    const FULLY_INSTRUMENTED_TS = `import { trace, SpanStatusCode } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-service');
+
+export async function handleRequest(req: Request, res: Response): Promise<void> {
+  return tracer.startActiveSpan('handleRequest', async (span) => {
+    try {
+      const result = await processData(req.body as string[]);
+      span.setAttribute('result.count', result.length);
+      res.json(result);
+    } catch (error) {
+      span.recordException(error as Error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+}
+
+async function processData(data: string[]): Promise<string[]> {
+  return data.map(item => item.trim());
+}`;
+
     it('returns early without LLM call when all exported functions are already instrumented', async () => {
       const client = makeMockClient(makeValidLlmOutput());
 
@@ -453,6 +494,7 @@ export async function createUser(req, res) {
         FULLY_INSTRUMENTED_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -477,6 +519,27 @@ export async function createUser(req, res) {
       expect(result.output.spanCategories).toBeNull();
     });
 
+    it('returns early without LLM call when all TS exported functions are already instrumented', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+
+      const result = await instrumentFile(
+        '/project/src/handler.ts',
+        FULLY_INSTRUMENTED_TS,
+        SAMPLE_SCHEMA,
+        makeConfig({ language: 'typescript' }),
+        tsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(client.messages.stream).not.toHaveBeenCalled();
+      expect(result.output.instrumentedCode).toBe(FULLY_INSTRUMENTED_TS);
+      expect(result.output.tokenUsage.inputTokens).toBe(0);
+      expect(result.output.notes.some(n => n.toLowerCase().includes('already instrumented'))).toBe(true);
+    });
+
     it('includes already-instrumented context in user message for partially instrumented files', async () => {
       const llmOutput = makeValidLlmOutput({
         instrumentedCode: PARTIALLY_INSTRUMENTED_JS.replace(
@@ -492,6 +555,7 @@ export async function createUser(req, res) {
         PARTIALLY_INSTRUMENTED_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -515,6 +579,7 @@ export async function createUser(req, res) {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -549,6 +614,14 @@ export function formatData(data) {
   return data.map(d => d.name);
 }`;
 
+    const SYNC_ONLY_TS = `export function formatItems(items: string[]): string[] {
+  return items.map(item => item.trim());
+}
+
+export function filterActive(users: { isActive: boolean }[]): { isActive: boolean }[] {
+  return users.filter(u => u.isActive);
+}`;
+
     it('returns early without LLM call when all exported functions are synchronous', async () => {
       const client = makeMockClient(makeValidLlmOutput());
 
@@ -557,6 +630,7 @@ export function formatData(data) {
         SYNC_ONLY_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -583,6 +657,27 @@ export function formatData(data) {
       expect(result.output.attributesCreated).toBe(0);
     });
 
+    it('returns early without LLM call when all TS exported functions are synchronous', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+
+      const result = await instrumentFile(
+        '/project/src/utils/format.ts',
+        SYNC_ONLY_TS,
+        SAMPLE_SCHEMA,
+        makeConfig({ language: 'typescript' }),
+        tsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      expect(client.messages.stream).not.toHaveBeenCalled();
+      expect(result.output.instrumentedCode).toBe(SYNC_ONLY_TS);
+      expect(result.output.tokenUsage.inputTokens).toBe(0);
+      expect(result.output.notes.some(n => n.toLowerCase().includes('sync'))).toBe(true);
+    });
+
     it('calls the LLM when at least one exported function is async', async () => {
       const client = makeMockClient(makeValidLlmOutput());
 
@@ -591,6 +686,7 @@ export function formatData(data) {
         MIXED_ASYNC_SYNC_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -612,6 +708,7 @@ export function formatData(data) {
         noExportsJs,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 

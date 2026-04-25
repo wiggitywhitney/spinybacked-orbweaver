@@ -10,6 +10,8 @@ import type { ValidateFileInput, ValidationResult } from '../validation/types.ts
 import type { TokenUsage } from '../agent/schema.ts';
 import type { ExtractedFunction } from '../languages/javascript/extraction.ts';
 import type { FunctionResult } from './types.ts';
+import type { LanguageProvider } from '../languages/types.ts';
+import { JavaScriptProvider } from '../languages/javascript/index.ts';
 
 const ZERO_TOKENS: TokenUsage = {
   inputTokens: 0,
@@ -28,6 +30,7 @@ export interface FunctionInstrumentationDeps {
     originalCode: string,
     resolvedSchema: object,
     config: AgentConfig,
+    provider: LanguageProvider,
     options?: object,
   ) => Promise<InstrumentFileResult>;
   validateFile: (input: ValidateFileInput) => Promise<ValidationResult>;
@@ -40,6 +43,8 @@ interface InstrumentFunctionsOptions {
   deps?: FunctionInstrumentationDeps;
   /** Directory for temporary validation files. Defaults to os.tmpdir(). */
   tmpDir?: string;
+  /** Language provider used for AST operations in instrumentFile. Defaults to JavaScriptProvider. */
+  provider?: LanguageProvider;
 }
 
 /**
@@ -120,6 +125,7 @@ export async function instrumentFunctions(
   const instrumentFileFn = deps?.instrumentFile ?? (await import('../agent/index.ts')).instrumentFile;
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
   const tmpDirPath = options?.tmpDir ?? (await import('node:os')).tmpdir();
+  const provider: LanguageProvider = options?.provider ?? new JavaScriptProvider();
 
   const validationConfig = buildTier1OnlyValidationConfig();
   const results: FunctionResult[] = [];
@@ -128,7 +134,7 @@ export async function instrumentFunctions(
     const functionContext = fn.buildContext(sourceFile);
     const result = await instrumentSingleFunction(
       fn, functionContext, filePath, resolvedSchema, config,
-      instrumentFileFn, validateFileFn, validationConfig, tmpDirPath,
+      instrumentFileFn, validateFileFn, validationConfig, tmpDirPath, provider,
     );
     results.push(result);
   }
@@ -149,10 +155,11 @@ async function instrumentSingleFunction(
   validateFileFn: FunctionInstrumentationDeps['validateFile'],
   validationConfig: ReturnType<typeof buildTier1OnlyValidationConfig>,
   tmpDir: string,
+  provider: LanguageProvider,
 ): Promise<FunctionResult> {
   // Call instrumentFile with the function context as the "file"
   const instrumentResult = await instrumentFileFn(
-    filePath, functionContext, resolvedSchema, config,
+    filePath, functionContext, resolvedSchema, config, provider,
   );
 
   if (!instrumentResult.success) {

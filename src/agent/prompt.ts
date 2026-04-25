@@ -2,8 +2,7 @@
 // ABOUTME: Follows the spec's 7-section structure with Claude 4.x prompt hygiene.
 
 import type { AgentConfig } from '../config/schema.ts';
-import type { OTelImportDetectionResult } from '../languages/javascript/ast.ts';
-import type { LanguageProvider, Example } from '../languages/types.ts';
+import type { LanguageProvider, Example, InstrumentationDetectionResult } from '../languages/types.ts';
 import { JavaScriptProvider } from '../languages/javascript/index.ts';
 
 /** Default provider used when buildSystemPrompt is called without a provider. */
@@ -344,7 +343,7 @@ export function buildUserMessage(
   filePath: string,
   originalCode: string,
   config: AgentConfig,
-  detectionResult?: OTelImportDetectionResult,
+  detectionResult?: InstrumentationDetectionResult,
   existingSpanNames?: string[],
   prettierConstraint?: string,
 ): string {
@@ -360,10 +359,10 @@ export function buildUserMessage(
     message += `\n\n**Warning**: This is a large file (${lineCount} lines, threshold: ${config.largeFileThresholdLines}). Pay extra attention to returning the complete file. Every line of the original must be present in the output.`;
   }
 
-  if (detectionResult && detectionResult.existingSpanPatterns.length > 0) {
-    const patternDescriptions = detectionResult.existingSpanPatterns.map(p => {
+  if (detectionResult && detectionResult.spanPatterns.length > 0) {
+    const patternDescriptions = detectionResult.spanPatterns.map(p => {
       const fn = p.enclosingFunction ? ` in \`${p.enclosingFunction}\`` : '';
-      return `- \`${p.pattern}\`${fn} (line ${p.lineNumber})`;
+      return `- \`${p.patternName}\`${fn} (line ${p.lineNumber})`;
     });
 
     message += `

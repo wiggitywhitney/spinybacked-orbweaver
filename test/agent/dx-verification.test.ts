@@ -4,6 +4,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { instrumentFile } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 import type { LlmOutput } from '../../src/agent/schema.ts';
 import {
   checkPackageJson,
@@ -147,6 +150,7 @@ export function formatResponse(data) {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -210,6 +214,7 @@ export async function handleRequest(req, res) {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -255,6 +260,7 @@ export function formatResponse(data) {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -291,6 +297,7 @@ export function formatResponse(data) {
         longOriginal,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -326,6 +333,7 @@ export function formatResponse(data) {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -356,6 +364,7 @@ export function formatResponse(data) {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -400,6 +409,7 @@ export function formatResponse(data) {
         SAMPLE_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 
@@ -452,6 +462,7 @@ export async function handleRequest(req, res) {
         FULLY_INSTRUMENTED_JS,
         SAMPLE_SCHEMA,
         makeConfig(),
+        jsProvider,
         { client: client as any },
       );
 

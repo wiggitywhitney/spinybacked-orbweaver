@@ -56,6 +56,7 @@ export interface InstrumentWithRetryDeps {
     originalCode: string,
     resolvedSchema: object,
     config: AgentConfig,
+    provider: LanguageProvider,
     options?: InstrumentFileCallOptions,
   ) => Promise<InstrumentFileResult>;
   validateFile: (input: ValidateFileInput) => Promise<ValidationResult>;
@@ -573,7 +574,7 @@ async function executeRetryLoop(
 
     // Call instrumentFile
     const instrumentResult = await instrumentFileFn(
-      filePath, originalCode, resolvedSchema, config, callOptions,
+      filePath, originalCode, resolvedSchema, config, provider, callOptions,
     );
 
     if (!instrumentResult.success) {
@@ -714,6 +715,7 @@ async function executeRetryLoop(
           passingCode,
           resolvedSchema,
           config,
+          provider,
           { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames },
         );
 

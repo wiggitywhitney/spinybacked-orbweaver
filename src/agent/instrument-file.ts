@@ -3,9 +3,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { Project } from 'ts-morph';
 import type { AgentConfig } from '../config/schema.ts';
-import { detectOTelImports, classifyFunctions } from '../languages/javascript/ast.ts';
+import type { LanguageProvider } from '../languages/types.ts';
 import { LlmOutputSchema } from './schema.ts';
 import type { InstrumentationOutput, TokenUsage } from './schema.ts';
 import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
@@ -115,22 +114,20 @@ export async function instrumentFile(
   originalCode: string,
   resolvedSchema: object,
   config: AgentConfig,
+  provider: LanguageProvider,
   options?: InstrumentFileOptions,
 ): Promise<InstrumentFileResult> {
   const client = options?.client ?? new Anthropic();
 
   // Detect existing OTel instrumentation before calling the LLM
-  const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
-  const sourceFile = project.createSourceFile('input.js', originalCode);
-  const detectionResult = detectOTelImports(sourceFile);
-
-  const functions = classifyFunctions(sourceFile);
+  const detectionResult = provider.detectOTelInstrumentation(originalCode);
+  const functions = provider.findFunctions(originalCode);
   const exportedFunctions = functions.filter(f => f.isExported);
 
   // If all exported functions are already instrumented, skip the LLM call entirely
-  if (detectionResult.existingSpanPatterns.length > 0) {
+  if (detectionResult.hasExistingInstrumentation) {
     const instrumentedFunctionNames = new Set(
-      detectionResult.existingSpanPatterns
+      detectionResult.spanPatterns
         .map(p => p.enclosingFunction)
         .filter((name): name is string => name !== undefined),
     );

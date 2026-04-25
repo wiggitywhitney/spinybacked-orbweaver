@@ -87,20 +87,20 @@ Replace `OTelImportDetectionResult` (currently in `src/languages/javascript/ast.
 
 Remove direct ts-morph and JS-ast imports from `src/agent/instrument-file.ts`. All AST operations in this file route through the provider passed in by the caller. The module becomes language-agnostic.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/agent/instrument-file.ts` no longer imports `Project` from `ts-morph` or any symbol from `src/languages/javascript/ast.ts`
-- [ ] All AST and detection operations route through `provider.*` methods (including the new method from M1)
-- [ ] The file accepts a `provider: LanguageProvider` parameter — no default; callers must pass one explicitly
-- [ ] Existing call sites in coordinator and fix-loop modules updated to pass the provider
-- [ ] Unit tests for `instrument-file.ts` cover both JS and TS providers (the file is now language-agnostic, so it must be tested with both)
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `src/agent/instrument-file.ts` no longer imports `Project` from `ts-morph` or any symbol from `src/languages/javascript/ast.ts`
+- [x] All AST and detection operations route through `provider.*` methods (including the new method from M1)
+- [x] The file accepts a `provider: LanguageProvider` parameter — no default; callers must pass one explicitly
+- [x] Existing call sites in coordinator and fix-loop modules updated to pass the provider
+- [x] Unit tests for `instrument-file.ts` cover both JS and TS providers (the file is now language-agnostic, so it must be tested with both)
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M3: Refactor `src/agent/prompt.ts` to parameterize language
 
 Remove the hardcoded "JavaScript" strings, the `new JavaScriptProvider()` default, and the JS-specific type import. The prompt builder must accept a provider parameter and pull language name, file extension hints, and detection-result type from it.
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/agent/prompt.ts` no longer imports `OTelImportDetectionResult` from `src/languages/javascript/ast.ts`; it uses the language-agnostic type from M1
+- [x] `src/agent/prompt.ts` no longer imports `OTelImportDetectionResult` from `src/languages/javascript/ast.ts`; it uses the language-agnostic type from M1
 - [ ] No `new JavaScriptProvider()` default in this file — callers must pass a provider
 - [ ] Output schema description uses a language name injected from the provider (e.g., `provider.displayName`) rather than hardcoding "JavaScript"
 - [ ] User message uses the provider's language name rather than hardcoding "Instrument the following JavaScript file."

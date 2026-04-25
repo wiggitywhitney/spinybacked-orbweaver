@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { instrumentFile } from '../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../src/config/schema.ts';
+import { JavaScriptProvider } from '../src/languages/javascript/index.ts';
 import {
   checkSyntaxValid,
   checkNonInstrumentationLinesUnchanged,
@@ -112,7 +113,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
       const original = loadFixture('src/user-routes.js');
       const filePath = '/project/src/user-routes.js';
 
-      const result = await instrumentFile(filePath, original, resolvedSchema, config);
+      const result = await instrumentFile(filePath, original, resolvedSchema, config, new JavaScriptProvider());
 
       // Instrumentation should succeed
       expect(result.success).toBe(true);
@@ -152,7 +153,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
       const original = loadFixture('src/format-helpers.js');
       const filePath = '/project/src/format-helpers.js';
 
-      const result = await instrumentFile(filePath, original, resolvedSchema, config);
+      const result = await instrumentFile(filePath, original, resolvedSchema, config, new JavaScriptProvider());
 
       expect(result.success).toBe(true);
       if (!result.success) {
@@ -178,7 +179,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
       const original = loadFixture('src/already-instrumented.js');
       const filePath = '/project/src/already-instrumented.js';
 
-      const result = await instrumentFile(filePath, original, resolvedSchema, config);
+      const result = await instrumentFile(filePath, original, resolvedSchema, config, new JavaScriptProvider());
 
       // Should succeed (skip is a success, not a failure)
       expect(result.success).toBe(true);
