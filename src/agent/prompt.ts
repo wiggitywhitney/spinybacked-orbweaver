@@ -379,10 +379,15 @@ ${patternDescriptions.join('\n')}`;
 ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
   }
 
-  if (prettierConstraint) {
+  const sanitizedPrettierConstraint = prettierConstraint
+    ?.replace(/[\r\n]+/g, ' ')
+    .replace(/[<>]/g, '')
+    .trim();
+
+  if (sanitizedPrettierConstraint) {
     message += `
 
-**Formatting**: ${prettierConstraint}`;
+**Formatting**: ${sanitizedPrettierConstraint}`;
   }
 
   message += `
