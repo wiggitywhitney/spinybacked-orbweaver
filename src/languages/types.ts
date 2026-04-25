@@ -371,9 +371,10 @@ export interface LanguageProvider {
    * ```typescript
    * const result = provider.detectOTelInstrumentation(source);
    * if (result.hasExistingInstrumentation) {
-   *   for (const p of result.spanPatterns) {
-   *     console.log(`Found ${p.patternName} in ${p.enclosingFunction ?? '<module>'} at line ${p.lineNumber}`);
-   *   }
+   *   const names = result.spanPatterns.map(
+   *     p => `${p.patternName} in ${p.enclosingFunction ?? '<module>'} at line ${p.lineNumber}`
+   *   );
+   *   // names: ["startActiveSpan in handleRequest at line 12", ...]
    * }
    * ```
    *
