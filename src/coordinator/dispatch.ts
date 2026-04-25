@@ -325,7 +325,7 @@ export async function dispatchFiles(
       const fileContent = await readFile(filePath, 'utf-8');
 
       // Check if already instrumented — skip without schema resolution or LLM call
-      if (isAlreadyInstrumented(fileContent)) {
+      if (provider.detectExistingInstrumentation(fileContent)) {
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
         abortTracker.record(skipped);
