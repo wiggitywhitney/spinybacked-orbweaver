@@ -57,8 +57,8 @@ describe('updateSdkInitFile', () => {
       expect(result.fallbackWritten).toBe(false);
 
       const content = await readFile(sdkFile, 'utf-8');
-      expect(content).toContain('ExpressInstrumentation');
-      expect(content).toContain('@opentelemetry/instrumentation-express');
+      expect(content).toContain("import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express'");
+      expect(content).toContain('new ExpressInstrumentation()');
       // Original call expression must be preserved
       expect(content).toContain('getNodeAutoInstrumentations()');
     });
