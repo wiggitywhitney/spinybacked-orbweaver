@@ -758,6 +758,7 @@ describe('buildUserMessage', () => {
 describe('language parameterization', () => {
   const schema = makeSchema();
   const config = makeConfig();
+  const tsConfig = makeConfig({ language: 'typescript' });
   const jsProvider = new JavaScriptProvider();
   const tsProvider = new TypeScriptProvider();
 
@@ -795,7 +796,7 @@ describe('language parameterization', () => {
     });
 
     it('opens with the provider language name for TypeScript', () => {
-      const message = buildUserMessage('/app/src/routes/users.ts', 'const x = 1;', config, tsProvider);
+      const message = buildUserMessage('/app/src/routes/users.ts', 'const x = 1;', tsConfig, tsProvider);
 
       expect(message).toContain('Instrument the following TypeScript file.');
       expect(message).not.toContain('Instrument the following JavaScript file.');
