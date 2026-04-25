@@ -1,9 +1,10 @@
 # PRD #373: Python language provider
 
-**Status**: Draft — refine after PRD #372 (TypeScript provider) and PRD #507 (multi-language rule architecture cleanup) are both complete
+**Status**: Draft — refine after PRD #507 (multi-language rule architecture cleanup) is complete
 **Priority**: Medium
 **GitHub Issue**: [#373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)
-**Blocked by**: Two hard prerequisites — (1) [PRD #372](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/372) (TypeScript provider) must merge first; the TypeScript canary test must pass at ≤20% interface touch. (2) [PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507) (multi-language rule architecture cleanup) must merge first; the refactored `LanguageProvider` interface from #507 is the contract this PRD implements against. Starting Python before #507 merges means implementing against a leaky interface that bypasses the provider layer in hot-path modules (`src/agent/instrument-file.ts`, `src/agent/prompt.ts`, etc.) — Python would surface those leaks at runtime rather than at the clean seam #507 establishes.
+**Blocked by**: [PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507) (multi-language rule architecture cleanup) — the refactored `LanguageProvider` interface from #507 is the contract this PRD implements against. Starting Python before #507 merges means implementing against a leaky interface that bypasses the provider layer in hot-path modules. PRD #372 (TypeScript canary prerequisite) is merged ✓ — canary passed at 0/27 interface changes.
+**Design sync**: This PRD's OD decisions (parser choice, formatter, dependency file format, rule IDs) directly inform PRD #374 (Go). Complete Python M1 research spikes and record decisions in this PRD's Decision Log before Go's pre-implementation gate is finalized. PRD #374 explicitly cross-references several of these decisions (e.g., OD-9c rule ID choice).
 **Blocks**: PRD #374 (Go provider)
 **Created**: 2026-04-06
 **Updated**: 2026-04-20 — added PRD #507 blocker and Milestone D4 for Python API-002-equivalent package-hygiene rule, per PRD #483 audit's Downstream PRD candidates. See `docs/reviews/advisory-rules-audit-2026-04-15.md` Action Items → "Package-hygiene rules for Python and Go providers."

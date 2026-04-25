@@ -2,6 +2,19 @@
 
 Dependency-ordered backlog across three sources: the advisory rules audit ([PRD #483](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/483)), release-it evaluation run-1, and the 2026-04-16 codebase deep-dive. Individual PRDs and issues are the children of this roadmap — this document sequences them.
 
+## Language Provider Status Classifications
+
+When a real-world eval run completes for a language provider, mark it using these thresholds:
+
+- **Experimental** (≥ 90% pass rate, zero syntax errors, known limitations documented)
+- **Stable** (≥ 95% pass rate, zero syntax errors, known limitations documented)
+
+Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
+
+**Current status**: TypeScript — *pending eval run-3* (blocked on PRD #582 M2).
+
+---
+
 ## Short-term (current focus)
 
 - Multi-language rule architecture cleanup ([PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507)) — refactor `src/agent/instrument-file.ts`, `src/agent/prompt.ts`, and `src/fix-loop/index.ts` to route through the `LanguageProvider` interface; consolidate `src/validation/tier2/` SCH duplicates. Prerequisite for PRD #373, PRD #374, and the SCH rebuild PRD.
