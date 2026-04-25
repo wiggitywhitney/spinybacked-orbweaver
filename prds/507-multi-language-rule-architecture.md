@@ -64,6 +64,7 @@ Route all hot-path modules through the `LanguageProvider` interface. Add a riche
 - **The PRD #483 audit document** (`docs/reviews/advisory-rules-audit-2026-04-15.md`) contains relevant context in the Action Items section (specifically: "Multi-language rule architecture — standalone PRD" and "SCH-001/SCH-002 rebuild + SCH-004 deletion"), the SCH section's decision table, and the SCH-001/002 rebuild narratives. Read these sections when working on the `tier2/` consolidation milestone especially.
 - **PRD #372 coordination**: if PRD #372 merges to main before this PRD reaches the TS integration milestone, the TS provider updates happen on main during this PRD's work. If PRD #372 is still on its feature branch when this PRD finalizes the interface, the TS branch rebases on the new main and applies interface updates during rebase. Either way, the TS provider must ship with the refactored interface.
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
+- **`src/fix-loop/function-instrumentation.ts` is dead production code**: it imports JS-specific symbols (`SourceFile` from ts-morph, `ExtractedFunction` from `extraction.ts`) but no production code imports it — only test files do. Discovered during M5. Its cleanup is not in scope for any specific milestone here; if the overall PRD success criteria grep must be clean, delete or refactor this file in M7 before the final check.
 
 ---
 
