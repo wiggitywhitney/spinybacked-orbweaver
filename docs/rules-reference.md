@@ -33,6 +33,15 @@ The PRD #483 advisory rules audit ([issue #483](https://github.com/wiggitywhitne
 - **API-004 split**: the import-level check is blocking; the manifest-level check moved into API-002 (which activated previously dead code and remains advisory).
 - **Pending deletion** (kept documented with a flag until the deletion lands): CDQ-008 via [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505); SCH-004 via [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508); SCH-005's fate is being decided as PRD #508 Milestone M1.
 
+### TypeScript provider (2026-04-24)
+
+PRD #372 shipped `TypeScriptProvider`, which implements language-specific versions of four rules. The corresponding JavaScript rules now apply to JavaScript only (`applicableTo('javascript') === true`; `applicableTo('typescript') === false`):
+
+- **COV-001 (TypeScript)** — Entry-point detection adds NestJS class decorator recognition (`@Controller`, `@Get`, `@Post`) alongside the existing Express/Fastify handler patterns.
+- **COV-003 (TypeScript)** — Error recording detection handles TypeScript's `catch (err: unknown)` binding; the `instanceof Error` type-narrowing guard is recognized as instrumentation (not a code modification).
+- **NDS-004 (TypeScript)** — Signature preservation comparison uses ts-morph's TypeScript-aware AST, correctly handling type annotations, generics, and `import type` dependencies on parameter types.
+- **NDS-006 (TypeScript)** — Module system match detection uses TypeScript parsing; both ESM (`import`/`export`) and CJS (`require`/`module.exports`) patterns are detected correctly in `.ts` files. **Blocking**, matching the JavaScript version.
+
 ---
 
 ## Tier 1: Structural gate checks

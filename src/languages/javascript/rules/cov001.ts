@@ -288,7 +288,9 @@ export const cov001Rule: ValidationRule = {
   dimension: 'Coverage',
   blocking: true,
   applicableTo(language: string): boolean {
-    return language === 'javascript' || language === 'typescript';
+    // TypeScript has a dedicated cov001 implementation in typescript/rules/cov001.ts
+    // that adds NestJS decorator detection. The JS implementation covers JavaScript only.
+    return language === 'javascript';
   },
   check(input: RuleInput): CheckResult[] {
     return checkEntryPointSpans(input.instrumentedCode, input.filePath);

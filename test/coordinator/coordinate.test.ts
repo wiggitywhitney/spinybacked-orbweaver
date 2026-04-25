@@ -27,6 +27,7 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',
     targetType: 'long-lived',
+    language: 'javascript',
     maxFilesPerRun: 50,
     maxFixAttempts: 2,
     maxTokensPerFile: 80000,
@@ -1346,6 +1347,48 @@ describe('coordinate', () => {
       // Files still marked as failed even if restore fails
       expect(result.fileResults.every(fr => fr.status === 'failed')).toBe(true);
       expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
+    });
+  });
+
+  describe('language provider routing', () => {
+    it('passes typescript provider to both discoverFiles and dispatchFiles when language is typescript', async () => {
+      let capturedDiscoverName: string | undefined;
+      let capturedDispatchName: string | undefined;
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockImplementation(async (_dir: string, opts: { provider?: { displayName: string } }) => {
+          capturedDiscoverName = opts.provider?.displayName;
+          return ['/project/src/a.ts'];
+        }),
+        dispatchFiles: vi.fn().mockImplementation(async (_paths: string[], _dir: string, _cfg: unknown, _cb: unknown, opts: { provider?: { displayName: string } }) => {
+          capturedDispatchName = opts?.provider?.displayName;
+          return ['/project/src/a.ts'].map(fp => makeSuccessResult(fp));
+        }),
+      });
+
+      await coordinate('/project', makeConfig({ language: 'typescript' }), undefined, deps);
+
+      expect(capturedDiscoverName).toBe('TypeScript');
+      expect(capturedDispatchName).toBe('TypeScript');
+    });
+
+    it('passes javascript provider to both discoverFiles and dispatchFiles by default', async () => {
+      let capturedDiscoverName: string | undefined;
+      let capturedDispatchName: string | undefined;
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockImplementation(async (_dir: string, opts: { provider?: { displayName: string } }) => {
+          capturedDiscoverName = opts.provider?.displayName;
+          return ['/project/src/a.js'];
+        }),
+        dispatchFiles: vi.fn().mockImplementation(async (_paths: string[], _dir: string, _cfg: unknown, _cb: unknown, opts: { provider?: { displayName: string } }) => {
+          capturedDispatchName = opts?.provider?.displayName;
+          return ['/project/src/a.js'].map(fp => makeSuccessResult(fp));
+        }),
+      });
+
+      await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(capturedDiscoverName).toBe('JavaScript');
+      expect(capturedDispatchName).toBe('JavaScript');
     });
   });
 });

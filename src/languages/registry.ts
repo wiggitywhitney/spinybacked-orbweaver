@@ -3,6 +3,7 @@
 
 import type { LanguageProvider } from './types.ts';
 import { JavaScriptProvider } from './javascript/index.ts';
+import { TypeScriptProvider } from './typescript/index.ts';
 
 /** Map from file extension (e.g. '.js') to the registered LanguageProvider. */
 const byExtension = new Map<string, LanguageProvider>();
@@ -67,6 +68,7 @@ export function _resetForTest(): void {
   byLanguage.clear();
 }
 
-// Pre-register the JavaScript provider so coordinators that import from
-// this module get JS support without any explicit registration call.
+// Pre-register built-in language providers so coordinators that import from
+// this module get JS and TS support without any explicit registration call.
 registerProvider(new JavaScriptProvider());
+registerProvider(new TypeScriptProvider());

@@ -262,6 +262,7 @@ Following Part 8 checklist, Step 1:
 - [ ] `otelSemconvPackage: 'go.opentelemetry.io/otel/semconv'` — per OD-8 resolution (exact versioned import path, e.g., `go.opentelemetry.io/otel/semconv/v1.26.0`, determined by research spike)
 - [ ] `packageManager: 'go'`, `installCommand(['go.opentelemetry.io/otel', 'go.opentelemetry.io/otel/semconv/vX.Y.Z'])` returns the `go get` command (version per OD-8b resolution), `dependencyFile: 'go.mod'`
 - [ ] Register `GoProvider` in `src/languages/registry.ts` for `.go`
+- [ ] **Extend the `language` config enum (PRD #372 D-8):** Add `'go'` to the `z.enum` in `src/config/schema.ts` — e.g., `z.enum(['javascript', 'typescript', 'python', 'go']).default('javascript')`. Convention from PRD #372 D-8: (1) add the language ID to the enum; (2) test helpers already have `language: 'javascript'` from PRD #372's bulk update — no further bulk update needed; (3) write one new coordinator test asserting that `language: 'go'` causes `discoverFiles` to receive a provider with `displayName === 'Go'` (mirror the pattern in `test/coordinator/coordinate.test.ts` under "language provider routing"). The `coordinate.ts` dispatch logic requires no changes — `getProviderByLanguage(config.language)` already looks up by ID.
 - [ ] `npm run typecheck` passes
 - [ ] `npm test` passes
 

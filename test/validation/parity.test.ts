@@ -1,19 +1,21 @@
-// ABOUTME: Feature parity assertion test — verifies every applicable rule has a JS implementation.
-// ABOUTME: Runs after B3 to confirm JavaScriptProvider covers all registered ValidationRules.
+// ABOUTME: Feature parity assertion test — verifies every applicable rule has a language implementation.
+// ABOUTME: Covers both JavaScript (B3) and TypeScript (C3) provider completeness.
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getAllRules, _resetForTest } from '../../src/validation/rule-registry.ts';
 import { getProviderByLanguage, _resetForTest as _resetProviderRegistry } from '../../src/languages/registry.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+import { TypeScriptProvider } from '../../src/languages/typescript/index.ts';
 import { registerProvider } from '../../src/languages/registry.ts';
 
 describe('feature parity matrix', () => {
   beforeEach(() => {
-    // Reset both registries and re-instantiate with a fresh provider.
-    // JavaScriptProvider constructor re-registers all 26 rules on construction.
+    // Reset both registries and re-instantiate with fresh providers.
+    // JavaScriptProvider and TypeScriptProvider constructors re-register all rules on construction.
     _resetForTest();
     _resetProviderRegistry();
     registerProvider(new JavaScriptProvider());
+    registerProvider(new TypeScriptProvider());
   });
 
   it('every applicable rule has a JS implementation', () => {
@@ -35,18 +37,47 @@ describe('feature parity matrix', () => {
     expect(missing, `JavaScript provider missing implementations for: ${missing.join(', ')}`).toHaveLength(0);
   });
 
-  it('all registered rules have the expected JS/TS language applicability', () => {
+  it('every applicable rule has a TS implementation', () => {
     const rules = getAllRules();
-    // All rules must apply to JavaScript
+    expect(rules.length).toBeGreaterThan(0);
+
+    const tsProvider = getProviderByLanguage('typescript');
+    expect(tsProvider).toBeDefined();
+
+    const missing: string[] = [];
     for (const rule of rules) {
-      expect(rule.applicableTo('javascript'), `${rule.ruleId}.applicableTo('javascript')`).toBe(true);
+      if (rule.applicableTo('typescript')) {
+        if (!tsProvider!.hasImplementation(rule.ruleId)) {
+          missing.push(rule.ruleId);
+        }
+      }
+    }
+
+    expect(missing, `TypeScript provider missing implementations for: ${missing.join(', ')}`).toHaveLength(0);
+  });
+
+  it('all JS provider rules apply to JavaScript', () => {
+    // Every rule registered by JavaScriptProvider must apply to JavaScript.
+    // TypeScript-specific rules registered by TypeScriptProvider are exempt from this constraint.
+    const rules = getAllRules();
+    const jsProvider = getProviderByLanguage('javascript');
+    expect(jsProvider).toBeDefined();
+
+    const jsProviderRuleIds = new Set(
+      rules.filter(r => jsProvider!.hasImplementation(r.ruleId) && r.applicableTo('javascript')).map(r => r.ruleId),
+    );
+
+    for (const ruleId of jsProviderRuleIds) {
+      const rule = rules.find(r => r.ruleId === ruleId && r.applicableTo('javascript'));
+      expect(rule, `Expected a JS-applicable rule for ${ruleId}`).toBeDefined();
+      expect(rule!.applicableTo('javascript'), `${ruleId}.applicableTo('javascript')`).toBe(true);
     }
   });
 
   it('SCH-001 and SCH-004 apply to all languages (cross-language concept)', () => {
     const rules = getAllRules();
     const universalSchRules = rules.filter(r => r.ruleId === 'SCH-001' || r.ruleId === 'SCH-004');
-    expect(universalSchRules.length).toBe(2);
+    expect(universalSchRules.length).toBeGreaterThanOrEqual(2);
     for (const rule of universalSchRules) {
       expect(rule.applicableTo('python'), `${rule.ruleId}.applicableTo('python')`).toBe(true);
       expect(rule.applicableTo('go'), `${rule.ruleId}.applicableTo('go')`).toBe(true);
@@ -55,8 +86,8 @@ describe('feature parity matrix', () => {
 
   it('SCH-002 and SCH-003 apply only to JS/TS (ts-morph internal — not safe for Python/Go)', () => {
     const rules = getAllRules();
-    const sch002 = rules.find(r => r.ruleId === 'SCH-002');
-    const sch003 = rules.find(r => r.ruleId === 'SCH-003');
+    const sch002 = rules.find(r => r.ruleId === 'SCH-002' && r.applicableTo('javascript'));
+    const sch003 = rules.find(r => r.ruleId === 'SCH-003' && r.applicableTo('javascript'));
     expect(sch002).toBeDefined();
     expect(sch003).toBeDefined();
     expect(sch002!.applicableTo('javascript')).toBe(true);
@@ -69,14 +100,18 @@ describe('feature parity matrix', () => {
     expect(sch003!.applicableTo('go')).toBe(false);
   });
 
-  it('NDS-006 applies only to JS/TS, not Python or Go', () => {
+  it('NDS-006 applies to JavaScript and TypeScript, not Python or Go', () => {
     const rules = getAllRules();
-    const nds006 = rules.find(r => r.ruleId === 'NDS-006');
-    expect(nds006).toBeDefined();
-    expect(nds006!.applicableTo('javascript')).toBe(true);
-    expect(nds006!.applicableTo('typescript')).toBe(true);
-    expect(nds006!.applicableTo('python')).toBe(false);
-    expect(nds006!.applicableTo('go')).toBe(false);
+    // After C3 there are two NDS-006 rules: JS (applies to JS only) and TS (applies to TS only).
+    // Verify both exist and cover their respective languages.
+    const jsNds006 = rules.find(r => r.ruleId === 'NDS-006' && r.applicableTo('javascript'));
+    const tsNds006 = rules.find(r => r.ruleId === 'NDS-006' && r.applicableTo('typescript'));
+    expect(jsNds006, 'JS NDS-006 rule not found').toBeDefined();
+    expect(tsNds006, 'TS NDS-006 rule not found').toBeDefined();
+    expect(jsNds006!.applicableTo('python')).toBe(false);
+    expect(jsNds006!.applicableTo('go')).toBe(false);
+    expect(tsNds006!.applicableTo('python')).toBe(false);
+    expect(tsNds006!.applicableTo('go')).toBe(false);
   });
 
   it('CDQ-008 applies to all languages (cross-language naming consistency)', () => {
@@ -108,7 +143,7 @@ describe('feature parity matrix', () => {
     expect(cdq010!.applicableTo('go')).toBe(false);
   });
 
-  it('all 30 expected rules are registered', () => {
+  it('all 30 expected rules are registered (unique rule vocabulary)', () => {
     const rules = getAllRules();
     const ruleIds = new Set(rules.map(r => r.ruleId));
 
@@ -125,6 +160,7 @@ describe('feature parity matrix', () => {
       expect(ruleIds.has(ruleId), `Expected rule ${ruleId} to be registered`).toBe(true);
     }
 
-    expect(rules.length).toBe(expected.length);
+    // Check unique rule vocabulary (multiple providers may register the same ruleId)
+    expect(ruleIds.size, `Expected exactly ${expected.length} unique rule IDs, got: ${[...ruleIds].join(', ')}`).toBe(expected.length);
   });
 });

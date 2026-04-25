@@ -317,7 +317,9 @@ export const cov003Rule: ValidationRule = {
   dimension: 'Coverage',
   blocking: true,
   applicableTo(language: string): boolean {
-    return language === 'javascript' || language === 'typescript';
+    // TypeScript has a dedicated cov003 implementation in typescript/rules/cov003.ts
+    // that uses TypeScript parsing (handles catch (err: unknown) correctly).
+    return language === 'javascript';
   },
   check(input: RuleInput): CheckResult[] {
     return checkErrorVisibility(input.instrumentedCode, input.filePath);

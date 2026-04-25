@@ -350,8 +350,9 @@ export const nds006Rule: ValidationRule = {
   dimension: 'Non-destructive',
   blocking: true,
   applicableTo(language: string): boolean {
-    // Module system distinction is only meaningful for JavaScript and TypeScript.
-    return language === 'javascript' || language === 'typescript';
+    // TypeScript has a dedicated nds006 implementation in typescript/rules/nds006.ts
+    // that uses TypeScript parsing. The JS implementation covers JavaScript only.
+    return language === 'javascript';
   },
   check(input) {
     return checkModuleSystemMatch(input.originalCode, input.instrumentedCode, input.filePath);
