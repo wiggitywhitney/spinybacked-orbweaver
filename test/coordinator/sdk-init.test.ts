@@ -33,6 +33,36 @@ function makeLibrary(pkg: string, importName: string): LibraryRequirement {
 
 describe('updateSdkInitFile', () => {
   describe('NodeSDK pattern detection with ES imports', () => {
+    it('appends new instrumentations when array contains a call expression like getNodeAutoInstrumentations()', async () => {
+      // Exact SDK_INIT_CONTENT used in the coordinator acceptance gate test
+      await writeFile(join(testDir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf-8');
+      const sdkFile = await createSdkInitFile(
+        `import { NodeSDK } from '@opentelemetry/sdk-node';\n` +
+        `import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';\n\n` +
+        `const sdk = new NodeSDK({\n` +
+        `  instrumentations: [\n` +
+        `    getNodeAutoInstrumentations(),\n` +
+        `  ],\n` +
+        `});\n\n` +
+        `sdk.start();\n`,
+      );
+
+      const libraries: LibraryRequirement[] = [
+        makeLibrary('@opentelemetry/instrumentation-express', 'ExpressInstrumentation'),
+      ];
+
+      const result = await updateSdkInitFile(sdkFile, libraries, testDir);
+
+      expect(result.updated).toBe(true);
+      expect(result.fallbackWritten).toBe(false);
+
+      const content = await readFile(sdkFile, 'utf-8');
+      expect(content).toContain('ExpressInstrumentation');
+      expect(content).toContain('@opentelemetry/instrumentation-express');
+      // Original call expression must be preserved
+      expect(content).toContain('getNodeAutoInstrumentations()');
+    });
+
     it('appends new instrumentations to an existing NodeSDK instrumentations array', async () => {
       const sdkFile = await createSdkInitFile(`
 import { NodeSDK } from '@opentelemetry/sdk-node';
