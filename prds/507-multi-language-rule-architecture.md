@@ -75,13 +75,13 @@ Route all hot-path modules through the `LanguageProvider` interface. Add a riche
 
 Replace `OTelImportDetectionResult` (currently in `src/languages/javascript/ast.ts`) with a language-agnostic equivalent that lives in `src/languages/types.ts`. The type must preserve the information the caller actually needs: the span patterns found, the enclosing function name for each span pattern, and the line number. Add a method to the `LanguageProvider` interface — e.g., `detectOTelInstrumentation(source: string): LanguageAgnosticDetectionResult` — that returns this new type. Update the interface JSDoc with the field contract and an example usage.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] New type `LanguageAgnosticDetectionResult` (or similar — pick a name that does not imply JS) added to `src/languages/types.ts` with a JSDoc block describing each field's contract
-- [ ] New `LanguageProvider` method added to the interface with a JSDoc block including an example of calling it and interpreting the result
-- [ ] `JavaScriptProvider` implements the new method, delegating to (or wrapping) the existing `detectOTelImports` function
-- [ ] `TypeScriptProvider` (on `feature/prd-372-typescript-provider` or on main if merged) implements the new method
-- [ ] Unit tests cover the new method for both JS and TS providers — inputs covering: no instrumentation, partial instrumentation, fully instrumented, unusual indent/format edge cases
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] New type `LanguageAgnosticDetectionResult` (or similar — pick a name that does not imply JS) added to `src/languages/types.ts` with a JSDoc block describing each field's contract — named `InstrumentationDetectionResult` with `DetectedSpanPattern` sub-type
+- [x] New `LanguageProvider` method added to the interface with a JSDoc block including an example of calling it and interpreting the result — `detectOTelInstrumentation(source: string): InstrumentationDetectionResult`
+- [x] `JavaScriptProvider` implements the new method, delegating to (or wrapping) the existing `detectOTelImports` function
+- [x] `TypeScriptProvider` implements the new method — added `detectTsOTelInstrumentation` helper to `src/languages/typescript/ast.ts`
+- [x] Unit tests cover the new method for both JS and TS providers — inputs covering: no instrumentation, partial instrumentation, fully instrumented, unusual indent/format edge cases
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M2: Refactor `src/agent/instrument-file.ts` to use the interface
 

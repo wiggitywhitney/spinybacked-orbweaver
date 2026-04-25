@@ -13,6 +13,7 @@ import type {
   FunctionClassification,
   LanguagePromptSections,
   Example,
+  InstrumentationDetectionResult,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -270,6 +271,23 @@ export class JavaScriptProvider implements LanguageProvider {
     const sourceFile = project.createSourceFile('file.js', source);
     const result = detectOTelImports(sourceFile);
     return result.hasOTelImports || result.existingSpanPatterns.length > 0;
+  }
+
+  detectOTelInstrumentation(source: string): InstrumentationDetectionResult {
+    const project = new Project({
+      compilerOptions: { allowJs: true },
+      useInMemoryFileSystem: true,
+    });
+    const sourceFile = project.createSourceFile('file.js', source);
+    const result = detectOTelImports(sourceFile);
+    return {
+      hasExistingInstrumentation: result.existingSpanPatterns.length > 0,
+      spanPatterns: result.existingSpanPatterns.map(p => ({
+        patternName: p.pattern,
+        lineNumber: p.lineNumber,
+        enclosingFunction: p.enclosingFunction,
+      })),
+    };
   }
 
   // ── Function-level fallback ────────────────────────────────────────────────

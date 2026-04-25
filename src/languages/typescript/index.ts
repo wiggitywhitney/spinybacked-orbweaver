@@ -12,6 +12,7 @@ import type {
   FunctionClassification,
   LanguagePromptSections,
   Example,
+  InstrumentationDetectionResult,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -21,6 +22,7 @@ import {
   findTsExports,
   classifyTsFunction,
   detectTsExistingInstrumentation,
+  detectTsOTelInstrumentation,
   extractTsFunctions,
 } from './ast.ts';
 import { checkSyntax, checkLint, formatCode } from './validation.ts';
@@ -156,6 +158,10 @@ export class TypeScriptProvider implements LanguageProvider {
 
   detectExistingInstrumentation(source: string): boolean {
     return detectTsExistingInstrumentation(source);
+  }
+
+  detectOTelInstrumentation(source: string): InstrumentationDetectionResult {
+    return detectTsOTelInstrumentation(source);
   }
 
   // ── Function-level fallback ────────────────────────────────────────────────
