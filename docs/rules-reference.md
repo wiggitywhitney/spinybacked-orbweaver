@@ -2,7 +2,7 @@
 
 Spinybacked Orbweaver validates every instrumented file against a two-tier rubric. This document lists every rule: what it checks, whether it blocks file success or is advisory, and how it relates to the OpenTelemetry specification.
 
-The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/`; a small set of cross-file and run-level rules live in `src/validation/tier2/`. When rule details and this document disagree, the source of truth is the code — please open an issue.
+The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/`. Run-level and cross-file checks (CDQ-008, SCH-005) plus shared registry parsing infrastructure live in `src/validation/tier2/` — no per-file rule implementations live there. When rule details and this document disagree, the source of truth is the code — please open an issue.
 
 ## How rules work
 
@@ -41,6 +41,14 @@ PRD #372 shipped `TypeScriptProvider`, which implements language-specific versio
 - **COV-003 (TypeScript)** — Error recording detection handles TypeScript's `catch (err: unknown)` binding; the `instanceof Error` type-narrowing guard is recognized as instrumentation (not a code modification).
 - **NDS-004 (TypeScript)** — Signature preservation comparison uses ts-morph's TypeScript-aware AST, correctly handling type annotations, generics, and `import type` dependencies on parameter types.
 - **NDS-006 (TypeScript)** — Module system match detection uses TypeScript parsing; both ESM (`import`/`export`) and CJS (`require`/`module.exports`) patterns are detected correctly in `.ts` files. **Blocking**, matching the JavaScript version.
+
+### Multi-language rule architecture (2026-04-25)
+
+PRD #507 cleaned up the rule file architecture to unblock future Python and Go language providers. No rule behavior changed; this is a provider-architecture change.
+
+- **Stale SCH-001–004 duplicates removed**: `src/validation/tier2/sch001.ts`, `sch002.ts`, `sch003.ts`, and `sch004.ts` — copies that had drifted from the canonical implementations in `src/languages/javascript/rules/` (notably `tier2/sch004.ts` was missing type inference and pre-filter logic present in the canonical copy) — were deleted. The canonical copies in `javascript/rules/` are the single authoritative source.
+- **`tier2/` scope narrowed**: `src/validation/tier2/` now holds only `registry-types.ts` (shared registry parsing infrastructure imported directly by `javascript/rules/`), `sch005.ts` (run-level coordinator check with a different lifecycle from per-file checks), and `cdq008.ts` (pending deletion via [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)). No per-file rule implementations live in `tier2/`.
+- **LanguageProvider interface**: all hot-path pipeline modules (`src/agent/instrument-file.ts`, `src/agent/prompt.ts`, coordinator and fix-loop modules) now route through the `LanguageProvider` interface rather than importing JavaScript-specific symbols directly.
 
 ---
 

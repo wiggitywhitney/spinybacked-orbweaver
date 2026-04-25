@@ -156,11 +156,11 @@ Decide between A and B — the SCH rebuild PRD (blocked by this milestone) canno
 
 Capture all architectural changes in `docs/rules-reference.md` — this PRD changes where SCH rule matching logic lives and how rule files are organized, which affects the rule reference's navigation and any file-path references. Also update any other docs that reference the old paths.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `docs/rules-reference.md` updated via `/write-docs` to reflect any rule additions, deletions, registration changes, promotion-to-blocking changes, message changes, or reorganization of rule file locations introduced by this PRD
-- [ ] `docs/ROADMAP.md` updated to reflect PRD #507 complete and unblock downstream PRDs
-- [ ] PRD #483 audit document's Action Items section updated to mark the "Multi-language rule architecture — standalone PRD" item as complete with a link to this PRD
-- [ ] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every reference still matches a rule in `src/validation/rule-names.ts`. Confirm this PRD's refactoring did not break any rule-ID references in the prompt. If no prompt changes are needed, record that explicitly in the milestone completion note so the next reviewer knows the prompt was checked.
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `docs/rules-reference.md` updated via `/write-docs` to reflect any rule additions, deletions, registration changes, promotion-to-blocking changes, message changes, or reorganization of rule file locations introduced by this PRD
+- [x] `docs/ROADMAP.md` updated to reflect PRD #507 complete and unblock downstream PRDs
+- [x] PRD #483 audit document's Action Items section updated to mark the "Multi-language rule architecture — standalone PRD" item as complete with a link to this PRD
+- [x] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every reference still matches a rule in `src/validation/rule-names.ts`. Confirm this PRD's refactoring did not break any rule-ID references in the prompt. If no prompt changes are needed, record that explicitly in the milestone completion note so the next reviewer knows the prompt was checked. **Result**: PRD #507's refactoring did not add or remove any rule IDs. No prompt changes needed. CDQ-002, CDQ-003, and NDS-002 appear in the prompt as numbered guidelines (not registered per-file checks) — pre-existing, not introduced by this PRD.
 
 ---
 

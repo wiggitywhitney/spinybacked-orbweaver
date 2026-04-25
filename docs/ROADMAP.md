@@ -17,14 +17,13 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Short-term (current focus)
 
-- Multi-language rule architecture cleanup ([PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507)) — refactor `src/agent/instrument-file.ts`, `src/agent/prompt.ts`, and `src/fix-loop/index.ts` to route through the `LanguageProvider` interface; consolidate `src/validation/tier2/` SCH duplicates. Prerequisite for PRD #373, PRD #374, and the SCH rebuild PRD.
-- Pre-instrumentation analysis pass ([PRD #582](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/582)) — deterministic AST scan before LLM call injects proactive guidance; fixes index.js acceptance gate failure and reduces retry-loop non-determinism. M2 adds `hasInstrumentableFunctions` early-exit so files with no instrumentable functions bypass the LLM entirely (required to unblock TypeScript eval). Sequenced after #507.
+- Pre-instrumentation analysis pass ([PRD #582](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/582)) — deterministic AST scan before LLM call injects proactive guidance; fixes index.js acceptance gate failure and reduces retry-loop non-determinism. M2 adds `hasInstrumentableFunctions` early-exit so files with no instrumentable functions bypass the LLM entirely (required to unblock TypeScript eval).
 - TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable". Blocked by PRD #582 M2.
 
 ## Medium-term
 
-- Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — blocked by PRD #507 (multi-language rule architecture). TypeScript canary prerequisite ✓ cleared (0/27 interface changes).
-- SCH-001/002 rebuild + SCH-004 deletion + SCH-005 audit ([PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)) — blocked by multi-language rule architecture PRD.
+- Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
+- SCH-001/002 rebuild + SCH-004 deletion + SCH-005 audit ([PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)) — multi-language rule architecture ✓ cleared (PRD #507 merged).
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 and PRD #508.
 - Canonical tracer name injection ([PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)) — deletes CDQ-008, replaces with per-file blocking check driven by registry manifest name.
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
@@ -35,7 +34,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Long-term
 
-- Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)) — blocked by multi-language rule architecture PRD.
+- Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)) — multi-language rule architecture ✓ cleared (PRD #507 merged).
 - Publish to GitHub Actions Marketplace ([issue #369](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/369)).
 - MCP init experience improvements ([issue #47](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/47)).
 
