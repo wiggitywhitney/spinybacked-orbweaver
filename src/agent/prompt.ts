@@ -336,6 +336,8 @@ You are returning structured JSON via the output schema. Fill in each field:
  * @param originalCode - File contents before instrumentation
  * @param config - Validated agent configuration (used for large file threshold)
  * @param detectionResult - Optional OTel detection result from AST analysis
+ * @param existingSpanNames - Optional span names already declared by earlier files; agent must not reuse them
+ * @param prettierConstraint - Optional prose constraint derived from the project's non-default Prettier config
  * @returns The user message string
  */
 export function buildUserMessage(
@@ -344,6 +346,7 @@ export function buildUserMessage(
   config: AgentConfig,
   detectionResult?: OTelImportDetectionResult,
   existingSpanNames?: string[],
+  prettierConstraint?: string,
 ): string {
   const lineCount = originalCode.split('\n').length;
   const isLargeFile = lineCount > config.largeFileThresholdLines;
@@ -374,6 +377,17 @@ ${patternDescriptions.join('\n')}`;
 
 **Span names already in use**: The following span names were declared by earlier files in this run. Do NOT reuse these names for different operations — invent unique names instead.
 ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
+  }
+
+  const sanitizedPrettierConstraint = prettierConstraint
+    ?.replace(/[\r\n]+/g, ' ')
+    .replace(/[<>]/g, '')
+    .trim();
+
+  if (sanitizedPrettierConstraint) {
+    message += `
+
+**Formatting**: ${sanitizedPrettierConstraint}`;
   }
 
   message += `

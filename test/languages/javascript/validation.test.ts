@@ -5,8 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkSyntax } from '../../../src/languages/javascript/validation.ts';
-import { checkLint } from '../../../src/languages/javascript/validation.ts';
+import { checkSyntax, checkLint, buildPrettierConstraint } from '../../../src/languages/javascript/validation.ts';
 
 // ─── checkSyntax ──────────────────────────────────────────────────────────────
 
@@ -319,5 +318,138 @@ describe('checkLint', () => {
       expect(result.passed).toBe(false);
       expect(result.message.length).toBeGreaterThan(20);
     });
+  });
+});
+
+// ─── buildPrettierConstraint ──────────────────────────────────────────────────
+
+describe('buildPrettierConstraint', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'spiny-orb-prettier-constraint-'));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns empty string when no Prettier config exists', async () => {
+    const filePath = join(tempDir, 'no-config.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toBe('');
+  });
+
+  it('returns empty string when all options match Prettier defaults', async () => {
+    // Prettier defaults: arrowParens: "always", printWidth: 80, semi: true, singleQuote: false, trailingComma: "all"
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ arrowParens: 'always', printWidth: 80, semi: true, singleQuote: false, trailingComma: 'all' }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'defaults.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toBe('');
+  });
+
+  it('includes arrowParens when non-default (avoid)', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ arrowParens: 'avoid' }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'arrow-parens.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toContain('arrowParens: avoid');
+    expect(result).toContain('without parentheses');
+  });
+
+  it('includes printWidth when non-default', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ printWidth: 100 }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'print-width.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toContain('printWidth: 100');
+    expect(result).toContain('100 characters');
+  });
+
+  it('includes semi when false (non-default)', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ semi: false }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'semi.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toContain('semi: false');
+  });
+
+  it('includes singleQuote when true (non-default)', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ singleQuote: true }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'quotes.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toContain('singleQuote: true');
+  });
+
+  it('includes trailingComma when non-default (es5)', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ trailingComma: 'es5' }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'trailing-comma.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toContain('trailingComma: es5');
+  });
+
+  it('combines multiple non-default options', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ arrowParens: 'avoid', printWidth: 100, semi: false }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'multi.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).toContain('arrowParens: avoid');
+    expect(result).toContain('printWidth: 100');
+    expect(result).toContain('semi: false');
+  });
+
+  it('does not include tabWidth, useTabs, or bracketSpacing', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ tabWidth: 4, useTabs: true, bracketSpacing: false }),
+      'utf-8',
+    );
+    const filePath = join(tempDir, 'ignored-options.js');
+    writeFileSync(filePath, 'const x = 1;\n', 'utf-8');
+
+    const result = await buildPrettierConstraint(filePath);
+    expect(result).not.toContain('tabWidth');
+    expect(result).not.toContain('useTabs');
+    expect(result).not.toContain('bracketSpacing');
   });
 });
