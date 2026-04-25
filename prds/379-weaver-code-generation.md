@@ -1,9 +1,9 @@
 # PRD #379: Weaver code generation for domain-specific constants
 
-**Status**: Draft — refine after PRD #371 (JavaScript extraction) is complete  
+**Status**: Draft — refine after PRD #507 (multi-language architecture) is complete  
 **Priority**: Medium  
 **GitHub Issue**: [#379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)  
-**Blocked by**: PRD #371 (JavaScript extraction) — the coordinator must dispatch through `LanguageProvider` before this can wire in cleanly  
+**Blocked by**: PRD #507 (multi-language rule architecture cleanup) — `LanguageProvider` must be wired into `dispatchFiles` (PRD #507 M3/M4) before this can wire in cleanly. PRD #371 (JavaScript extraction) is already merged ✓.  
 **Does NOT block**: PRDs #372–#374 — those providers ship without this enhancement and benefit retroactively  
 **Created**: 2026-04-06
 

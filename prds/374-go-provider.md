@@ -3,7 +3,8 @@
 **Status**: Draft — refine after PRD #373 (Python provider) and PRD #507 (multi-language rule architecture cleanup) are both complete
 **Priority**: Medium
 **GitHub Issue**: [#374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)
-**Blocked by**: Two hard prerequisites — (1) [PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373) (Python provider) must merge first; Python is the primary interface stress test and must succeed before Go (which is the hardest case). (2) [PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507) (multi-language rule architecture cleanup) must merge first; the refactored `LanguageProvider` interface from #507 is the contract this PRD implements against. PRD #373 is already blocked by PRD #507, so this transitive chain is honored automatically — #507 → #373 → #374.
+**Blocked by**: [PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373) (Python provider) and [PRD #507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507) (multi-language rule architecture cleanup). PRD #373 is already blocked by PRD #507, so the transitive chain is honored automatically — #507 → #373 → #374.
+**Design sync**: Several OD decisions in this PRD (OD-9b library/app classification, OD-9c rule ID choice) explicitly match whatever Python decided in PRD #373. Before finalizing Go's pre-implementation gate, read PRD #373's completed Decision Log and mirror the relevant decisions here. Do not resolve OD-9c independently — cross-reference PRD #373 OD-9c explicitly.
 **Created**: 2026-04-06
 **Updated**: 2026-04-20 — added PRD #507 blocker and Milestone E4 for Go API-002-equivalent package-hygiene rule, per PRD #483 audit's Downstream PRD candidates. See `docs/reviews/advisory-rules-audit-2026-04-15.md` Action Items → "Package-hygiene rules for Python and Go providers."
 

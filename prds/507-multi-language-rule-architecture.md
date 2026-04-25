@@ -140,6 +140,8 @@ This milestone opens with a **design decision**: where does language-agnostic SC
 
 Decide between A and B — the SCH rebuild PRD (blocked by this milestone) cannot begin until this question is answered. Record the decision in this PRD's Decision Log, then execute it.
 
+**Escalation path**: If the A vs. B decision requires extended discussion or investigation (e.g., unclear how Python/Go AST extraction would integrate with a shared `tier2/` module), file a standalone design issue immediately and notify Whitney rather than letting M6 stall. Do not let an unresolved architectural question block the rest of PRD #507's milestones — M1–M5 are independent of M6 and can proceed in parallel.
+
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH section and the Action Items
 - [ ] Decision recorded in this PRD's Decision Log: Option A or Option B (or a third option if one emerges during implementation), with rationale
 - [ ] Decision executed: stale duplicate copies removed or unified; `tier2/sch004.ts` divergence resolved

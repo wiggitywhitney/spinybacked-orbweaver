@@ -40,6 +40,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-04-21) Improved fix-loop LINT failure feedback: when the agent introduces a Prettier formatting violation, the check now computes a diff between the agent's output and the Prettier-reformatted version and includes it in the feedback message, so the agent can self-correct on the next attempt. When the target repo uses a non-default Prettier config (`.prettierrc*` or similar), the config file path is also included in the message so the agent knows which rule source to consult. Previously the message only said "Run Prettier on the output" with no specifics — causing the arrowParens violation to repeat across three attempts in the release-it eval run before oscillation detection gave up.
 
+### Fixed
+
+- (2026-04-25) Added a unit test that exercises `updateSdkInitFile` when the `instrumentations` array already contains a `getNodeAutoInstrumentations()` call expression — the exact pattern used in the coordinator acceptance gate fixture project. The test confirms that the function correctly appends new instrumentation entries (both the array `new X()` element and the ESM import statement) without being blocked by the existing call expression or falling back to the separate fallback file.
+
 ### Changed
 
 - (2026-04-24) Improved three fix-loop failure messages: (1) Weaver shutdown failure now reports the admin endpoint URL and recovery action ("re-run instrumentation or check port availability") instead of the bare error string; (2) Live-check partial result now adds "review the failed files above and re-run spiny-orb on them" to give users a concrete next step; (3) Checkpoint test failure warning now surfaces subprocess stdout/stderr so the error is visible without a separate manual test run.
