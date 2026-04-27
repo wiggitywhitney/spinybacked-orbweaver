@@ -369,28 +369,6 @@ export async function dispatchFiles(
       // Track whether the extension block already handled rollback
       let extensionRollbackDone = false;
 
-      // M6: Update cross-file manifest after a successful instrumentation.
-      // Read the written file and detect which functions now have spans — these become
-      // available to the pre-scan of subsequent files that import from this one.
-      if ((result.status === 'success' || result.status === 'partial') && result.spansAdded > 0) {
-        try {
-          const instrumentedCode = await readFile(filePath, 'utf-8');
-          const detection = provider.detectOTelInstrumentation(instrumentedCode);
-          const functionNames = [
-            ...new Set(
-              detection.spanPatterns
-                .map(p => p.enclosingFunction)
-                .filter((name): name is string => name !== undefined),
-            ),
-          ];
-          if (functionNames.length > 0) {
-            processedFilesManifest.set(filePath, functionNames);
-          }
-        } catch {
-          // Best-effort — manifest absence for this file is non-fatal
-        }
-      }
-
       // Track schema extensions for cross-file span name collision prevention
       if ((result.status === 'success' || result.status === 'partial') && result.schemaExtensions.length > 0) {
         for (const ext of result.schemaExtensions) {
@@ -522,6 +500,28 @@ export async function dispatchFiles(
         } catch (restoreErr) {
           const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
           extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
+        }
+      }
+
+      // M6: Update cross-file manifest AFTER extension processing so the manifest
+      // only includes files whose instrumented content is definitively committed.
+      // !isDryRun: dry-run reverts the file below — manifest must not include reverted content.
+      if (!isDryRun && (result.status === 'success' || result.status === 'partial') && result.spansAdded > 0) {
+        try {
+          const instrumentedCode = await readFile(filePath, 'utf-8');
+          const detection = provider.detectOTelInstrumentation(instrumentedCode);
+          const functionNames = [
+            ...new Set(
+              detection.spanPatterns
+                .map(p => p.enclosingFunction)
+                .filter((name): name is string => name !== undefined),
+            ),
+          ];
+          if (functionNames.length > 0) {
+            processedFilesManifest.set(filePath, functionNames);
+          }
+        } catch {
+          // Best-effort — manifest absence for this file is non-fatal
         }
       }
 
@@ -673,6 +673,9 @@ export async function dispatchFiles(
                   results[tracked.resultIndex].status = 'failed';
                   results[tracked.resultIndex].reason =
                     `Smart rollback: identified as failing file in checkpoint test at file ${i + 1}/${total}`;
+                  // M6: reverted — remove from manifest so downstream files don't
+                  // treat its exports as already instrumented
+                  processedFilesManifest.delete(tracked.path);
                 }
               }
 
@@ -733,6 +736,8 @@ export async function dispatchFiles(
                     results[tracked.resultIndex].status = 'failed';
                     results[tracked.resultIndex].reason =
                       `Rolled back: checkpoint test failure (smart rollback fallback) at file ${i + 1}/${total}`;
+                    // M6: reverted — remove from manifest
+                    processedFilesManifest.delete(tracked.path);
                   }
                 }
               }
@@ -747,6 +752,8 @@ export async function dispatchFiles(
                 results[tracked.resultIndex].status = 'failed';
                 results[tracked.resultIndex].reason =
                   `Rolled back: checkpoint test failure at file ${i + 1}/${total}`;
+                // M6: reverted — remove from manifest
+                processedFilesManifest.delete(tracked.path);
               }
             }
 
