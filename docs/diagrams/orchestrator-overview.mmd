@@ -9,7 +9,7 @@ flowchart LR
     VAL["Validator\n(mostly deterministic)"]
 
     SCHEMA -->|resolved schema| ORCH
-    ORCH -->|"file contents + resolved schema"| AGENT
+    ORCH -->|"file contents + resolved schema\n+ pre-scan findings"| AGENT
     AGENT -->|"instrumented output + reasoning"| ORCH
     ORCH -->|instrumented output| VAL
     VAL -->|result + findings| ORCH
