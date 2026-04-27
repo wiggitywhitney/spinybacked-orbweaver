@@ -131,7 +131,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
   });
 
   it('does not call snapshotExtensionsFile for skipped (already instrumented) files', async () => {
-    const file1 = await createFile('a.js', `import { trace } from '@opentelemetry/api';`);
+    const file1 = await createFile('a.js', `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`);
 
     const snapshotExtensionsFile = vi.fn().mockResolvedValue(null);
     const deps = makeDeps({ snapshotExtensionsFile });

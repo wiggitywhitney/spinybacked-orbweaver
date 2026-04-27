@@ -107,6 +107,10 @@ These conventions apply to any PRD or GitHub issue that adds, removes, modifies,
 - **Final step: update `docs/rules-reference.md` via `/write-docs`** to reflect any rule additions, deletions, registration changes, promotion-to-blocking changes, or message changes introduced by the work. `docs/rules-reference.md` is the canonical user-facing rule reference. Closing rules-related work without this step introduces documentation drift between the codebase's rule behavior and the published reference.
 - **Final step: update `src/agent/prompt.ts`** to match any rule ID or description changes introduced by the work. The prompt instructs the LLM agent using rule IDs (e.g., `- **RST-001**: Do NOT add spans to pure synchronous data transformations...`); orphaned references — a rule ID no longer in `src/validation/rule-names.ts`, or a description that no longer matches the rule's current behavior — will confuse the agent. After making rule changes, grep the prompt for the rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every match still corresponds to a registered rule with accurate guidance. If a rule was deleted, remove the prompt bullet; if a rule's behavior or scope changed, update the prompt's directive phrasing to match.
 
+## Code Review Triage
+
+When triaging CodeRabbit or `/code-review` findings during a PR, **never defer findings to a GitHub issue**. Fix every non-Skip finding inline in the PR, even if it requires additional files or interface changes. The Defer disposition in the global `git-workflow.md` does not apply to this project — deferred findings rarely ship; inline fixes do.
+
 ## Acceptance Gate Tests
 
 **Check the most recent acceptance gate run before every push.** Run `gh run list --workflow=acceptance-gate.yml --limit=1 --repo wiggitywhitney/spinybacked-orbweaver` before pushing. If the most recent run passed, or if no runs exist yet, proceed. If one is in progress, proceed. If the most recent run failed — on any branch — stop, investigate, and fix the failures before pushing.

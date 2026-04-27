@@ -56,6 +56,13 @@ export function getAllProviders(): LanguageProvider[] {
 }
 
 /**
+ * Return all registered language IDs (e.g. `['javascript', 'typescript']`).
+ */
+export function getSupportedLanguageIds(): string[] {
+  return [...byLanguage.keys()];
+}
+
+/**
  * Reset the registry to empty state.
  *
  * Only for use in tests — clears all registered providers so each test

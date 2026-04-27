@@ -8,7 +8,6 @@ import type { LanguageProvider } from '../languages/types.ts';
 import { LlmOutputSchema } from './schema.ts';
 import type { InstrumentationOutput, TokenUsage } from './schema.ts';
 import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
-import { buildPrettierConstraint } from '../languages/javascript/validation.ts';
 import { detectElision } from './elision.ts';
 
 /**
@@ -177,7 +176,7 @@ export async function instrumentFile(
   const systemPrompt = buildSystemPrompt(resolvedSchema, undefined, provider);
   // Skip Prettier config resolution on feedback-only turns — feedbackMessage replaces
   // userMessage entirely, so the constraint would never be read.
-  const prettierConstraint = options?.feedbackMessage ? undefined : await buildPrettierConstraint(filePath);
+  const prettierConstraint = options?.feedbackMessage ? undefined : await provider.getFormatterConstraint(filePath);
   const userMessage = buildUserMessage(filePath, originalCode, config, provider, detectionResult, options?.existingSpanNames, prettierConstraint);
 
   // Build messages: multi-turn (with prior conversation) or standard (initial generation)

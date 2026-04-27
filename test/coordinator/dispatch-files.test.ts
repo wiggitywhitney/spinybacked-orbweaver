@@ -239,7 +239,7 @@ describe('dispatchFiles', () => {
     it('does not resolve schema for skipped files', async () => {
       const instrumentedFile = await createFile(
         'already.js',
-        `import { trace } from '@opentelemetry/api';\nconsole.log('hi');`,
+        `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`,
       );
 
       const resolveSchema = vi.fn().mockResolvedValue({});
@@ -254,7 +254,7 @@ describe('dispatchFiles', () => {
     it('fires callbacks for skipped files', async () => {
       const instrumentedFile = await createFile(
         'already.js',
-        `import { trace } from '@opentelemetry/api';\nconsole.log('hi');`,
+        `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`,
       );
 
       const onFileStart = vi.fn();
@@ -315,7 +315,7 @@ describe('dispatchFiles', () => {
     it('returns correct results for a mix of skipped, success, and failed files', async () => {
       const instrumentedFile = await createFile(
         'already.js',
-        `import { trace } from '@opentelemetry/api';\nconsole.log('hi');`,
+        `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`,
       );
       const goodFile = await createFile('good.js', 'function good() {}');
       const badFile = await createFile('bad.js', 'function bad() {}');

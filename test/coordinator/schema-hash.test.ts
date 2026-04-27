@@ -191,7 +191,7 @@ describe('dispatchFiles — schema hash per file', () => {
   it('does not set schema hash on skipped files', async () => {
     const instrumentedFile = await createFile(
       'already.js',
-      `import { trace } from '@opentelemetry/api';\nconsole.log('hi');`,
+      `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`,
     );
 
     const deps = makeDeps();

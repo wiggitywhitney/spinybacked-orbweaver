@@ -26,7 +26,8 @@ import {
   extractTsFunctions,
 } from './ast.ts';
 import { checkSyntax, checkLint, formatCode } from './validation.ts';
-import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from '../javascript/reassembly.ts';
+import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from '../shared/reassembly.ts';
+import { buildPrettierConstraint } from '../javascript/validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
 import { cov001TsRule } from './rules/cov001.ts';
@@ -189,6 +190,10 @@ export class TypeScriptProvider implements LanguageProvider {
 
   ensureTracerAfterImports(code: string): string {
     return ensureTracerAfterImportsImpl(code);
+  }
+
+  getFormatterConstraint(filePath: string): Promise<string> {
+    return buildPrettierConstraint(filePath);
   }
 
   // ── LLM prompt context ────────────────────────────────────────────────────

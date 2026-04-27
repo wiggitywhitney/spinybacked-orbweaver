@@ -165,7 +165,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
     it('skips skipped files in checkpoint counter', async () => {
       const instrumentedFile = await createFile(
         'already.js',
-        `import { trace } from '@opentelemetry/api';\nconsole.log('hi');`,
+        `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`,
       );
       const file1 = await createFile('a.js');
       const file2 = await createFile('b.js');

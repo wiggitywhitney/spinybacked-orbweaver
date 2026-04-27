@@ -23,15 +23,15 @@ export interface DiscoverFilesOptions {
 }
 
 /**
- * Discover JavaScript files in a project directory for instrumentation.
+ * Discover source files in a project directory for instrumentation.
  *
- * Finds all **\/*.js files, applies exclude patterns, auto-excludes
- * node_modules and the SDK init file, enforces the file limit, and
- * returns sorted absolute paths.
+ * Uses the supplied LanguageProvider's glob pattern to find matching files,
+ * applies exclude patterns, auto-excludes node_modules and the SDK init file,
+ * enforces the file limit, and returns sorted absolute paths.
  *
  * @param projectDir - Absolute path to the project root directory.
- * @param options - Discovery options (exclude patterns, SDK init file, file limit).
- * @returns Sorted array of absolute paths to discovered JS files.
+ * @param options - Discovery options (provider, exclude patterns, SDK init file, file limit).
+ * @returns Sorted array of absolute paths to discovered source files.
  * @throws When zero files are discovered or file count exceeds maxFilesPerRun.
  */
 export async function discoverFiles(

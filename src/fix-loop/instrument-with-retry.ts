@@ -968,7 +968,6 @@ async function functionLevelFallback(
   successful = fnResults.filter(r => r.success);
 
   const validationConfig = buildValidationConfig(config, retryOptions.projectRoot, resolvedSchema, retryOptions.anthropicClient);
-  const fallbackProvider = retryOptions.provider;
   // Collect schema extensions from successful functions so SCH-001 accepts
   // span names the agent declared as extensions (not just base registry names).
   const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
@@ -979,7 +978,7 @@ async function functionLevelFallback(
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,
-    provider: fallbackProvider,
+    provider: fnProvider,
   });
 
   // Calculate cumulative token usage (whole-file attempts + function-level)
@@ -1058,7 +1057,7 @@ async function functionLevelFallback(
   const partialResults = fnResults.map(r =>
     r.success ? r : { ...r, instrumentedCode: undefined },
   );
-  const partialCode = fallbackProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
+  const partialCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
 
   await writeFile(filePath, partialCode, 'utf-8');
   const partialValidation = await validateFileFn({
@@ -1068,7 +1067,7 @@ async function functionLevelFallback(
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,
-    provider: fallbackProvider,
+    provider: fnProvider,
   });
 
   // Commit the partial code regardless of whether blocking rules fire on the assembly.

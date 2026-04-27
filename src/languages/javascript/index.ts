@@ -18,7 +18,7 @@ import type {
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
 import { classifyFunctions, detectOTelImports } from './ast.ts';
-import { checkSyntax, checkLint, formatCode } from './validation.ts';
+import { checkSyntax, checkLint, formatCode, buildPrettierConstraint } from './validation.ts';
 import { extractExportedFunctions } from './extraction.ts';
 import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from './reassembly.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
@@ -337,6 +337,10 @@ export class JavaScriptProvider implements LanguageProvider {
 
   ensureTracerAfterImports(code: string): string {
     return ensureTracerAfterImportsImpl(code);
+  }
+
+  getFormatterConstraint(filePath: string): Promise<string> {
+    return buildPrettierConstraint(filePath);
   }
 
   // ── LLM prompt context ────────────────────────────────────────────────────

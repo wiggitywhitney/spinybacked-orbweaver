@@ -430,6 +430,18 @@ export interface LanguageProvider {
    */
   ensureTracerAfterImports(code: string): string;
 
+  /**
+   * Return a language-specific formatter constraint string for the LLM prompt.
+   *
+   * For JavaScript and TypeScript, reads the project's Prettier config from
+   * `package.json` and returns formatting directives. For other languages,
+   * returns an empty string.
+   *
+   * @param filePath - Absolute path to the file being instrumented
+   * @returns Formatter constraint text, or empty string if none applies
+   */
+  getFormatterConstraint(filePath: string): Promise<string>;
+
   // -------------------------------------------------------------------------
   // LLM prompt context
   // -------------------------------------------------------------------------

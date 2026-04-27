@@ -10,7 +10,7 @@ import { isAbsolute, join } from 'node:path';
 import { loadConfig as defaultLoadConfig } from '../config/loader.ts';
 import { discoverFiles as defaultDiscoverFiles } from '../coordinator/discovery.ts';
 import { coordinate as defaultCoordinate } from '../coordinator/coordinate.ts';
-import { getProviderByLanguage } from '../languages/registry.ts';
+import { getProviderByLanguage, getSupportedLanguageIds } from '../languages/registry.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { DiscoverFilesOptions } from '../coordinator/discovery.ts';
 import type { CostCeiling, RunResult, CoordinatorCallbacks } from '../coordinator/types.ts';
@@ -127,8 +127,9 @@ export async function handleGetCostCeiling(
   const language = config.language ?? 'javascript';
   const discoveryProvider = getProviderByLanguage(language);
   if (!discoveryProvider) {
+    const supported = getSupportedLanguageIds().join(', ');
     return {
-      content: [{ type: 'text', text: `Unsupported language: "${language}"` }],
+      content: [{ type: 'text', text: `Unsupported language: "${language}". Supported: ${supported}` }],
       isError: true,
     };
   }
