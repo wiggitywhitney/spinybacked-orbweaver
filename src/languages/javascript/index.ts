@@ -14,6 +14,7 @@ import type {
   LanguagePromptSections,
   Example,
   InstrumentationDetectionResult,
+  PreScanResult,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -23,6 +24,7 @@ import { extractExportedFunctions } from './extraction.ts';
 import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from './reassembly.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
+import { hasDirectProcessExit } from './rules/cov004.ts';
 import { cov001Rule } from './rules/cov001.ts';
 import { cov002Rule } from './rules/cov002.ts';
 import { cov003Rule } from './rules/cov003.ts';
@@ -375,6 +377,55 @@ export class JavaScriptProvider implements LanguageProvider {
       }
       throw error;
     }
+  }
+
+  // ── Pre-instrumentation analysis ──────────────────────────────────────────
+
+  preInstrumentationAnalysis(originalCode: string): PreScanResult {
+    const project = new Project({
+      compilerOptions: { allowJs: true },
+      useInMemoryFileSystem: true,
+    });
+    const sourceFile = project.createSourceFile('file.js', originalCode);
+
+    // classifyFunctions returns metadata only (no ts-morph nodes).
+    // sourceFile.getFunctions() returns the actual FunctionDeclaration nodes
+    // needed by hasDirectProcessExit.
+    const classified = classifyFunctions(sourceFile);
+    const fnNodes = sourceFile.getFunctions();
+
+    // Build a name → node map for classified functions that are function declarations.
+    const fnNodeByName = new Map<string, ReturnType<typeof sourceFile.getFunctions>[number]>();
+    for (const node of fnNodes) {
+      const name = node.getName();
+      if (name) fnNodeByName.set(name, node);
+    }
+
+    const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
+    const processExitEntryPoints: PreScanResult['processExitEntryPoints'] = [];
+
+    for (const fn of classified) {
+      // COV-001: exported async functions and functions named 'main' are entry points.
+      const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
+      if (!isEntryPoint) continue;
+
+      entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+
+      // RST-006 conflict check: does this entry point call process.exit() directly?
+      const fnNode = fnNodeByName.get(fn.name);
+      if (fnNode && hasDirectProcessExit(fnNode)) {
+        const constraintNote =
+          `Entry point \`${fn.name}\` (line ${fn.startLine}) requires a span — COV-001. ` +
+          `Has direct process.exit() calls: use minimal wrapper only ` +
+          `(startActiveSpan → try { original body } finally { span.end() }). ` +
+          `Do NOT add span.end() before process.exit() calls — the finally block handles ` +
+          `normal paths; process.exit() paths leak the span at runtime (known limitation). ` +
+          `Use only variables already in scope for setAttribute.`;
+        processExitEntryPoints.push({ name: fn.name, startLine: fn.startLine, constraintNote });
+      }
+    }
+
+    return { entryPointsNeedingSpans, processExitEntryPoints };
   }
 
   // ── Feature parity check ──────────────────────────────────────────────────

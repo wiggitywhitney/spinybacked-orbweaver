@@ -2,7 +2,7 @@
 // ABOUTME: Follows the spec's 7-section structure with Claude 4.x prompt hygiene.
 
 import type { AgentConfig } from '../config/schema.ts';
-import type { LanguageProvider, Example, InstrumentationDetectionResult } from '../languages/types.ts';
+import type { LanguageProvider, Example, InstrumentationDetectionResult, PreScanResult } from '../languages/types.ts';
 
 /**
  * Format a list of instrumentation examples into the XML block used in the system prompt.
@@ -218,7 +218,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Coverage
 
-- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span.
+- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span. **COV-001 takes priority over RST-006** — when a function is both an async entry point and calls \`process.exit()\` directly, add the span. Use the minimal wrapper only: \`startActiveSpan → try { original body } finally { span.end() }\`. Do NOT add \`span.end()\` before individual \`process.exit()\` calls (NDS-005 violation). Do NOT declare new intermediate variables for \`setAttribute\` (NDS-003 violation). Use only variables already in scope.
 - **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
 - **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`).
 - **COV-004**: Long-running or async I/O operations should have spans. When multiple sibling functions share the same structure (e.g., async functions that receive state, call an LLM, and return state), instrument ALL of them consistently — do not instrument some and skip others. **Context propagation is NOT a valid COV-004 exemption for exported async functions.** Each exported async function must have its own span, even if called from within an instrumented parent. The only valid reason to skip an exported async function under COV-004 is RST-001 (it is synchronous with no I/O). **Exception — \`process.exit()\` functions: if the function calls \`process.exit()\` directly in its body (not only inside catch or finally blocks), do not add a span — \`process.exit()\` bypasses the span's \`finally\` block; instrument the async sub-operations inside it instead (RST-006).** RST-004 applies only to unexported functions and does not exempt exported ones.
@@ -232,7 +232,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
 - **RST-004**: Do NOT add spans to unexported internal functions. **RST-004 takes precedence over COV-004**: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation. Only instrument an unexported I/O function when no exported orchestrator span covers that execution path.
 - **RST-005**: Do NOT add instrumentation to functions that already have spans (\`startActiveSpan\`, \`startSpan\`, \`tracer.\`).
-- **RST-006**: Do NOT add a span to an async function that calls \`process.exit()\` directly in its body. \`process.exit()\` bypasses the span's \`finally\` block, causing the span to leak at runtime and never export. Instrument the async sub-operations inside such functions instead. (Exception: if \`process.exit()\` appears only inside a \`catch\` or \`finally\` block, the function is not exempt from COV-004 and should still be spanned on the happy path.)
+- **RST-006**: Do NOT add a span to an async function that calls \`process.exit()\` directly in its body. \`process.exit()\` bypasses the span's \`finally\` block, causing the span to leak at runtime and never export. Instrument the async sub-operations inside such functions instead. (Exception: if \`process.exit()\` appears only inside a \`catch\` or \`finally\` block, the function is not exempt from COV-004 and should still be spanned on the happy path.) **When RST-006 conflicts with COV-001 (the function is an async entry point), COV-001 wins — see COV-001.**
 
 ### API-Only Dependency
 
@@ -248,7 +248,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Code Quality
 
-- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT add span instrumentation around \`process.exit()\` calls — leave \`process.exit()\` untouched (modifying control flow violates NDS-003). If a function contains \`process.exit()\`, skip instrumentation of that call site and report it in advisory notes as a refactor suggestion (e.g., extract the logic before the exit into an instrumented wrapper).
+- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT add \`span.end()\` immediately before \`process.exit()\` calls — the \`finally\` block handles normal exit paths; \`process.exit()\` paths leak the span at runtime (known limitation). Report leaked span paths in \`notes\` as a known limitation.
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
 - **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
@@ -333,6 +333,7 @@ You are returning structured JSON via the output schema. Fill in each field:
  * @param detectionResult - Optional OTel detection result from AST analysis
  * @param existingSpanNames - Optional span names already declared by earlier files; agent must not reuse them
  * @param prettierConstraint - Optional prose constraint derived from the project's non-default Prettier config
+ * @param preScanResult - Optional pre-instrumentation analysis findings from the deterministic AST pass
  * @returns The user message string
  */
 export function buildUserMessage(
@@ -343,6 +344,7 @@ export function buildUserMessage(
   detectionResult?: InstrumentationDetectionResult,
   existingSpanNames?: string[],
   prettierConstraint?: string,
+  preScanResult?: PreScanResult,
 ): string {
   const lineCount = originalCode.split('\n').length;
   const isLargeFile = lineCount > config.largeFileThresholdLines;
@@ -384,6 +386,37 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
     message += `
 
 **Formatting**: ${sanitizedPrettierConstraint}`;
+  }
+
+  // Inject pre-instrumentation analysis directives when findings are present.
+  // This section appears before the source file block so the agent reads the
+  // constraints before seeing the code.
+  const hasPreScanFindings = preScanResult && (
+    preScanResult.entryPointsNeedingSpans.length > 0 ||
+    preScanResult.processExitEntryPoints.length > 0
+  );
+  if (hasPreScanFindings) {
+    const directives: string[] = [];
+
+    // Build a set of process.exit() entry point names for fast lookup.
+    const processExitNames = new Set(preScanResult.processExitEntryPoints.map(f => f.name));
+
+    for (const ep of preScanResult.entryPointsNeedingSpans) {
+      if (processExitNames.has(ep.name)) {
+        // Use the pre-formatted constraint note (includes minimal-wrapper directive).
+        const constraint = preScanResult.processExitEntryPoints.find(f => f.name === ep.name);
+        if (constraint) directives.push(`- ${constraint.constraintNote}`);
+      } else {
+        directives.push(`- Entry point \`${ep.name}\` (line ${ep.startLine}) requires a span — COV-001.`);
+      }
+    }
+
+    if (directives.length > 0) {
+      message += `
+
+**Pre-instrumentation analysis** (deterministic findings — apply before reading the source):
+${directives.join('\n')}`;
+    }
   }
 
   message += `

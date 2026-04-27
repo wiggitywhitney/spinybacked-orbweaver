@@ -749,6 +749,70 @@ describe('buildUserMessage', () => {
       expect(formattingPos).toBeLessThan(sourceFilePos);
     });
   });
+
+  describe('preScanResult injection', () => {
+    it('injects Pre-instrumentation analysis section when entry points are present', () => {
+      const preScan = {
+        entryPointsNeedingSpans: [{ name: 'handleRequest', startLine: 5 }],
+        processExitEntryPoints: [],
+      };
+      const message = buildUserMessage(
+        '/app/src/handler.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).toContain('**Pre-instrumentation analysis**');
+      expect(message).toContain('handleRequest');
+      expect(message).toContain('COV-001');
+    });
+
+    it('uses constraintNote for process.exit() entry points', () => {
+      const constraintNote = 'Entry point `main` (line 1) requires a span — COV-001. Has direct process.exit() calls: use minimal wrapper only.';
+      const preScan = {
+        entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
+        processExitEntryPoints: [{ name: 'main', startLine: 1, constraintNote }],
+      };
+      const message = buildUserMessage(
+        '/app/src/main.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).toContain(constraintNote);
+    });
+
+    it('omits Pre-instrumentation analysis section when preScanResult is undefined', () => {
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        jsProvider,
+      );
+      expect(message).not.toContain('Pre-instrumentation analysis');
+    });
+
+    it('omits Pre-instrumentation analysis section when entry points are empty', () => {
+      const preScan = {
+        entryPointsNeedingSpans: [],
+        processExitEntryPoints: [],
+      };
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).not.toContain('Pre-instrumentation analysis');
+    });
+
+    it('Pre-instrumentation analysis section appears before source_file tag', () => {
+      const preScan = {
+        entryPointsNeedingSpans: [{ name: 'run', startLine: 3 }],
+        processExitEntryPoints: [],
+      };
+      const message = buildUserMessage(
+        '/app/src/runner.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      const preScanPos = message.indexOf('**Pre-instrumentation analysis**');
+      const sourceFilePos = message.indexOf('<source_file>');
+      expect(preScanPos).toBeGreaterThan(0);
+      expect(preScanPos).toBeLessThan(sourceFilePos);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

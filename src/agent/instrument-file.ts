@@ -4,7 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { AgentConfig } from '../config/schema.ts';
-import type { LanguageProvider } from '../languages/types.ts';
+import type { LanguageProvider, PreScanResult } from '../languages/types.ts';
 import { LlmOutputSchema } from './schema.ts';
 import type { InstrumentationOutput, TokenUsage } from './schema.ts';
 import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
@@ -184,7 +184,20 @@ export async function instrumentFile(
   // Skip Prettier config resolution on feedback-only turns — feedbackMessage replaces
   // userMessage entirely, so the constraint would never be read.
   const prettierConstraint = options?.feedbackMessage ? undefined : await provider.getFormatterConstraint(filePath);
-  const userMessage = buildUserMessage(filePath, originalCode, config, provider, detectionResult, options?.existingSpanNames, prettierConstraint);
+
+  // Run deterministic pre-instrumentation analysis if the provider supports it.
+  // Only on initial call and fresh regeneration — multi-turn fix carries the original
+  // user message in conversation context so re-injection is not needed.
+  let preScanResult: PreScanResult | undefined;
+  if (!options?.feedbackMessage && provider.preInstrumentationAnalysis) {
+    try {
+      preScanResult = provider.preInstrumentationAnalysis(originalCode);
+    } catch {
+      // Pre-scan failure is non-fatal — continue without annotation.
+    }
+  }
+
+  const userMessage = buildUserMessage(filePath, originalCode, config, provider, detectionResult, options?.existingSpanNames, prettierConstraint, preScanResult);
 
   // Build messages: multi-turn (with prior conversation) or standard (initial generation)
   // feedbackMessage replaces the user message (multi-turn fix);

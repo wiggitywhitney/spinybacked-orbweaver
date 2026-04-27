@@ -213,6 +213,50 @@ export interface InstrumentationDetectionResult {
 }
 
 /**
+ * An entry point function identified by the pre-instrumentation analysis pass.
+ */
+export interface PreScanEntryPoint {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * An entry point with a direct process.exit() call, identified by the pre-scan.
+ *
+ * These functions are both COV-001 entry points AND have RST-006 constraint.
+ * COV-001 wins: the function still needs a span. The constraintNote provides
+ * the exact per-function directive to inject into the LLM user message.
+ */
+export interface ProcessExitEntryPoint {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+  /** Pre-formatted directive string to inject into the user message for this function. */
+  constraintNote: string;
+}
+
+/**
+ * Results from the pre-instrumentation analysis pass.
+ *
+ * Returned by `LanguageProvider.preInstrumentationAnalysis()`. Callers inject
+ * these findings into the LLM user message before the instrumentation call.
+ */
+export interface PreScanResult {
+  /** Async entry-point functions that require spans (COV-001). */
+  entryPointsNeedingSpans: PreScanEntryPoint[];
+  /**
+   * Async entry-point functions with direct process.exit() calls (COV-001 vs RST-006).
+   * COV-001 wins — these functions still need spans. The constraintNote contains
+   * the minimal-wrapper directive for each function.
+   * These functions also appear in entryPointsNeedingSpans.
+   */
+  processExitEntryPoints: ProcessExitEntryPoint[];
+}
+
+/**
  * The full contract every language provider must implement.
  *
  * Providers are registered with the coordinator and selected by file extension.
@@ -581,6 +625,25 @@ export interface LanguageProvider {
    * @returns `true` if the provider implements this rule; `false` if explicitly not-applicable
    */
   hasImplementation(ruleId: string): boolean;
+
+  // -------------------------------------------------------------------------
+  // Pre-instrumentation analysis (optional)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Run a deterministic AST pre-scan on the original source before the LLM call.
+   *
+   * Computes what should and shouldn't be instrumented from the original source
+   * and returns findings for injection into the user message. Providers that do
+   * not implement this method are treated as returning no findings — the pipeline
+   * proceeds unchanged.
+   *
+   * The analysis uses only the source text passed in. No file system reads.
+   *
+   * @param originalCode - Source code text before instrumentation
+   * @returns Pre-scan findings, or `undefined` if the provider does not implement this method
+   */
+  preInstrumentationAnalysis?(originalCode: string): PreScanResult;
 }
 
 /**
