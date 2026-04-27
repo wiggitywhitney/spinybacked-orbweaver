@@ -714,5 +714,32 @@ export function filterActive(users: { isActive: boolean }[]): { isActive: boolea
 
       expect(client.messages.stream).toHaveBeenCalledTimes(1);
     });
+
+    it('calls the LLM when only sync exports exist but pre-scan identifies async main() as entry point', async () => {
+      // A file may export only synchronous helpers but contain an unexported
+      // async main() that is the CLI entry point and needs a root span (COV-001).
+      // The "all sync exports → skip" heuristic must not fire in this case.
+      const syncExportsWithAsyncMain = `export function transform(x) {
+  return x * 2;
+}
+
+async function main() {
+  const data = await loadData();
+  console.log(transform(data));
+}`;
+      const client = makeMockClient(makeValidLlmOutput());
+
+      await instrumentFile(
+        '/project/src/cli.js',
+        syncExportsWithAsyncMain,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      // Should have called the LLM — pre-scan identifies async main() as an entry point
+      expect(client.messages.stream).toHaveBeenCalledTimes(1);
+    });
   });
 });

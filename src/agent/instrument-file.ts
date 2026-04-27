@@ -131,7 +131,23 @@ export async function instrumentFile(
   }
   const exportedFunctions = functions.filter(f => f.isExported);
 
-  // If all exported functions are already instrumented, skip the LLM call entirely
+  // Run deterministic pre-instrumentation analysis before the early-return heuristics.
+  // The pre-scan can identify entry points (e.g., unexported async main()) that the
+  // heuristics would miss — running it first lets those findings veto an early skip.
+  // Only on initial call and fresh regeneration; multi-turn fix carries the original
+  // user message in conversation context so re-injection is not needed.
+  let preScanResult: PreScanResult | undefined;
+  if (!options?.feedbackMessage && provider.preInstrumentationAnalysis) {
+    try {
+      preScanResult = provider.preInstrumentationAnalysis(originalCode);
+    } catch {
+      // Pre-scan failure is non-fatal — continue without annotation.
+    }
+  }
+
+  // If all exported functions are already instrumented, skip the LLM call entirely.
+  // Guard: a file with all-instrumented exports but an uninstrumented async main()
+  // still needs an LLM call — check the pre-scan for entry points not yet covered.
   if (detectionResult.hasExistingInstrumentation) {
     const instrumentedFunctionNames = new Set(
       detectionResult.spanPatterns
@@ -142,28 +158,39 @@ export async function instrumentFile(
       && exportedFunctions.every(f => instrumentedFunctionNames.has(f.name));
 
     if (allExportedInstrumented) {
-      const skippedNames = exportedFunctions.map(f => f.name).join(', ');
-      return {
-        success: true,
-        output: {
-          instrumentedCode: originalCode,
-          librariesNeeded: [],
-          schemaExtensions: [],
-          attributesCreated: 0,
-          spanCategories: null,
-          notes: [`File already instrumented — all exported functions (${skippedNames}) have existing span patterns. No LLM call made.`],
-          suggestedRefactors: [],
-          tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
-        },
-      };
+      // Check whether the pre-scan found any entry points not already covered by spans.
+      // An unexported async main() would be in entryPointsNeedingSpans but absent from
+      // instrumentedFunctionNames — that means the file still needs an LLM call.
+      const uninstrumentedEntryPoints = preScanResult?.entryPointsNeedingSpans.filter(
+        ep => !instrumentedFunctionNames.has(ep.name),
+      ) ?? [];
+
+      if (uninstrumentedEntryPoints.length === 0) {
+        const skippedNames = exportedFunctions.map(f => f.name).join(', ');
+        return {
+          success: true,
+          output: {
+            instrumentedCode: originalCode,
+            librariesNeeded: [],
+            schemaExtensions: [],
+            attributesCreated: 0,
+            spanCategories: null,
+            notes: [`File already instrumented — all exported functions (${skippedNames}) have existing span patterns. No LLM call made.`],
+            suggestedRefactors: [],
+            tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+          },
+        };
+      }
     }
   }
 
-  // If the file has exported functions but none are async, skip the LLM call.
-  // Pure synchronous transforms (filters, formatters, validators) don't warrant
-  // OTel spans — there's no I/O, no latency, nothing to trace. Sending them to
-  // the LLM wastes tokens and produces spurious instrumentation attempts.
-  if (exportedFunctions.length > 0 && !exportedFunctions.some(f => f.isAsync)) {
+  // If the file has exported functions but none are async AND the pre-scan found no
+  // entry points needing spans, skip the LLM call. Pure synchronous transforms
+  // (filters, formatters, validators) don't warrant OTel spans.
+  // Guard: a file with only sync exports but an unexported async main() still needs
+  // instrumentation — pre-scan's entryPointsNeedingSpans overrides the heuristic.
+  if (exportedFunctions.length > 0 && !exportedFunctions.some(f => f.isAsync)
+      && !preScanResult?.entryPointsNeedingSpans.length) {
     const skippedNames = exportedFunctions.map(f => f.name).join(', ');
     return {
       success: true,
@@ -184,18 +211,6 @@ export async function instrumentFile(
   // Skip Prettier config resolution on feedback-only turns — feedbackMessage replaces
   // userMessage entirely, so the constraint would never be read.
   const prettierConstraint = options?.feedbackMessage ? undefined : await provider.getFormatterConstraint(filePath);
-
-  // Run deterministic pre-instrumentation analysis if the provider supports it.
-  // Only on initial call and fresh regeneration — multi-turn fix carries the original
-  // user message in conversation context so re-injection is not needed.
-  let preScanResult: PreScanResult | undefined;
-  if (!options?.feedbackMessage && provider.preInstrumentationAnalysis) {
-    try {
-      preScanResult = provider.preInstrumentationAnalysis(originalCode);
-    } catch {
-      // Pre-scan failure is non-fatal — continue without annotation.
-    }
-  }
 
   const userMessage = buildUserMessage(filePath, originalCode, config, provider, detectionResult, options?.existingSpanNames, prettierConstraint, preScanResult);
 
