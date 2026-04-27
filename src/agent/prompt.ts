@@ -392,6 +392,12 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
   // This section appears before the source file block so the agent reads the
   // constraints before seeing the code.
   if (preScanResult) {
+    // Normalize source-derived strings before embedding in directives. Source
+    // file identifiers and module paths are trusted as valid JS/TS tokens but
+    // may contain edge-case characters (newlines in template expressions, path
+    // separators) that could break directive line structure.
+    const sanitize = (s: string): string => s.replace(/[\r\n]+/g, ' ').trim();
+
     const directives: string[] = [];
 
     // COV-001 entry points (+ RST-006 process.exit() constraint when applicable)
@@ -401,43 +407,43 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
         const constraint = preScanResult.processExitEntryPoints.find(f => f.name === ep.name);
         if (constraint) directives.push(`- ${constraint.constraintNote}`);
       } else {
-        directives.push(`- Entry point \`${ep.name}\` (line ${ep.startLine}) requires a span — COV-001.`);
+        directives.push(`- Entry point \`${sanitize(ep.name)}\` (line ${ep.startLine}) requires a span — COV-001.`);
       }
     }
 
     // COV-004: async non-entry-point functions needing spans
     for (const fn of preScanResult.asyncFunctionsNeedingSpans) {
-      directives.push(`- \`${fn.name}\` (line ${fn.startLine}) is async — add a span (COV-004).`);
+      directives.push(`- \`${sanitize(fn.name)}\` (line ${fn.startLine}) is async — add a span (COV-004).`);
     }
 
     // COV-002: outbound calls needing enclosing spans
     for (const group of preScanResult.outboundCallsNeedingSpans) {
-      const callList = group.calls.map(c => c.callText).join(', ');
-      directives.push(`- \`${group.functionName}\` makes outbound calls (${callList}) — ensure they are covered by spans (COV-002).`);
+      const callList = group.calls.map(c => sanitize(c.callText)).join(', ');
+      directives.push(`- \`${sanitize(group.functionName)}\` makes outbound calls (${callList}) — ensure they are covered by spans (COV-002).`);
     }
 
     // RST-001: pure sync functions to skip
     if (preScanResult.pureSyncFunctions.length > 0) {
-      const names = preScanResult.pureSyncFunctions.map(f => `\`${f.name}\``).join(', ');
+      const names = preScanResult.pureSyncFunctions.map(f => `\`${sanitize(f.name)}\``).join(', ');
       directives.push(`- Synchronous functions — skip, no I/O to trace (RST-001): ${names}.`);
     }
 
     // RST-004: unexported functions to skip
     if (preScanResult.unexportedFunctions.length > 0) {
-      const names = preScanResult.unexportedFunctions.map(f => `\`${f.name}\``).join(', ');
+      const names = preScanResult.unexportedFunctions.map(f => `\`${sanitize(f.name)}\``).join(', ');
       directives.push(`- Unexported — skip unless no exported orchestrator covers this execution path (RST-004): ${names}.`);
     }
 
     // M3: per-entry-point sub-operation breakdown (local vs. imported)
     for (const group of preScanResult.entryPointSubOperations) {
       const localPart = group.localSubOperations.length > 0
-        ? `local: ${group.localSubOperations.map(n => `\`${n}\``).join(', ')}`
+        ? `local: ${group.localSubOperations.map(n => `\`${sanitize(n)}\``).join(', ')}`
         : null;
       const importedPart = group.importedSubOperations.length > 0
-        ? `imported (handled elsewhere): ${group.importedSubOperations.map(s => `\`${s.name}\` from \`${s.sourceModule}\``).join(', ')}`
+        ? `imported (handled elsewhere): ${group.importedSubOperations.map(s => `\`${sanitize(s.name)}\` from \`${sanitize(s.sourceModule)}\``).join(', ')}`
         : null;
       const parts = [localPart, importedPart].filter(Boolean).join('; ');
-      directives.push(`- In \`${group.entryPointName}()\`, async sub-operations — ${parts}.`);
+      directives.push(`- In \`${sanitize(group.entryPointName)}()\`, async sub-operations — ${parts}.`);
     }
 
     if (directives.length > 0) {
