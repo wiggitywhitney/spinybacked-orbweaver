@@ -113,8 +113,12 @@ export interface FileResult {
   reason?: string;
   /** Raw error output from the final attempt, for debugging. */
   lastError?: string;
+  /** The last instrumented code produced by the agent (before file restore), for debugging. */
+  lastInstrumentedCode?: string;
   /** Tier 2 advisory findings for PR display. */
   advisoryAnnotations?: CheckResult[];
+  /** Thinking blocks captured from the LLM, grouped by attempt (index 0 = attempt 1). */
+  thinkingBlocksByAttempt?: string[][];
   /** Cumulative token usage across all attempts. */
   tokenUsage: TokenUsage;
   /** Number of functions successfully instrumented (present when status is 'partial'). */

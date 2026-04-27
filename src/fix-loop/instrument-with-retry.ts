@@ -483,6 +483,7 @@ async function executeRetryLoop(
 
   let cumulativeTokens: TokenUsage = { ...ZERO_TOKENS };
   const errorProgression: string[] = [];
+  const thinkingBlocksByAttempt: string[][] = [];
   let lastOutput: InstrumentationOutput | undefined;
   let lastValidation: ValidationResult | undefined;
   let previousValidation: ValidationResult | undefined;
@@ -516,6 +517,7 @@ async function executeRetryLoop(
           attempt - 1, lastStrategy, errorProgression, lastOutput,
           undefined,
           refactors.length > 0 ? refactors : undefined,
+          thinkingBlocksByAttempt,
         );
       }
     }
@@ -531,6 +533,7 @@ async function executeRetryLoop(
         attempt - 1, lastStrategy, errorProgression, lastOutput,
         undefined,
         refactors.length > 0 ? refactors : undefined,
+        thinkingBlocksByAttempt,
       );
     }
     const plannedStrategy = strategyForAttempt(attempt, maxAttempts);
@@ -585,6 +588,7 @@ async function executeRetryLoop(
       const failTokens = instrumentResult.tokenUsage ?? ZERO_TOKENS;
       cumulativeTokens = addTokenUsage(cumulativeTokens, failTokens);
       errorProgression.push(instrumentResult.error);
+      thinkingBlocksByAttempt.push([]);
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
         // Budget escalation: stop_reason: max_tokens means the model hit the output token ceiling.
@@ -598,6 +602,7 @@ async function executeRetryLoop(
           return buildFailedResult(
             filePath, instrumentResult.error, instrumentResult.error,
             cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+            undefined, undefined, thinkingBlocksByAttempt,
           );
         }
         // Retryable failure — continue to next attempt
@@ -612,12 +617,14 @@ async function executeRetryLoop(
         cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
         undefined,
         refactors.length > 0 ? refactors : undefined,
+        thinkingBlocksByAttempt,
       );
     }
 
     const output = instrumentResult.output;
     lastOutput = output;
     cumulativeTokens = addTokenUsage(cumulativeTokens, output.tokenUsage);
+    thinkingBlocksByAttempt.push(output.thinkingBlocks ?? []);
 
     // Capture conversation context for potential next attempt
     if (instrumentResult.conversationContext) {
@@ -684,6 +691,7 @@ async function executeRetryLoop(
         advisoryAnnotations,
         agentVersion: AGENT_VERSION,
         tokenUsage: tokens,
+        thinkingBlocksByAttempt: thinkingBlocksByAttempt.some(b => b.length > 0) ? thinkingBlocksByAttempt : undefined,
       });
 
       // Advisory-only pass: when file passes but has advisory findings and budget allows.
@@ -783,6 +791,7 @@ async function executeRetryLoop(
             attempt, actualStrategy, errorProgression, lastOutput,
             validation.blockingFailures[0]?.ruleId,
             refactors.length > 0 ? refactors : undefined,
+            thinkingBlocksByAttempt,
           );
         }
         // Not yet on fresh regen — jump to the final attempt (fresh-regeneration)
@@ -819,6 +828,7 @@ async function executeRetryLoop(
     completedAttempts, lastStrategy, errorProgression, lastOutput,
     lastValidation!.blockingFailures[0]?.ruleId,
     suggestedRefactors.length > 0 ? suggestedRefactors : undefined,
+    thinkingBlocksByAttempt,
   );
 }
 
@@ -1218,6 +1228,7 @@ function buildFailedResult(
   output?: InstrumentationOutput,
   firstBlockingRuleId?: string,
   suggestedRefactors?: SuggestedRefactor[],
+  thinkingBlocksByAttempt?: string[][],
 ): FileResult {
   return {
     path: filePath,
@@ -1234,8 +1245,10 @@ function buildFailedResult(
     firstBlockingRuleId,
     reason,
     lastError,
+    lastInstrumentedCode: output?.instrumentedCode,
     agentVersion: AGENT_VERSION,
     tokenUsage,
     suggestedRefactors,
+    thinkingBlocksByAttempt: thinkingBlocksByAttempt?.some(b => b.length > 0) ? thinkingBlocksByAttempt : undefined,
   };
 }

@@ -69,6 +69,7 @@ export const TokenUsageSchema = z.strictObject({
 /**
  * Complete result of a single instrumentation attempt (one LLM call).
  * Combines the LLM's structured output with token usage from the API response.
+ * `thinkingBlocks` carries raw thinking content from the response when present.
  */
 export const InstrumentationOutputSchema = z.strictObject({
   instrumentedCode: z.string(),
@@ -79,6 +80,7 @@ export const InstrumentationOutputSchema = z.strictObject({
   notes: z.array(z.string()),
   suggestedRefactors: z.array(LlmSuggestedRefactorSchema).default([]),
   tokenUsage: TokenUsageSchema,
+  thinkingBlocks: z.array(z.string()).optional(),
 });
 
 export type LibraryRequirement = z.infer<typeof LibraryRequirementSchema>;

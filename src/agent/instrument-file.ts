@@ -278,6 +278,11 @@ export async function instrumentFile(
 
     tokenUsage = extractTokenUsage(response.usage);
 
+    const thinkingBlocks = response.content
+      ?.filter(b => b.type === 'thinking')
+      .map(b => ('thinking' in b ? (b as { thinking: string }).thinking : ''))
+      .filter(Boolean);
+
     if (response.parsed_output == null) {
       // Extract diagnostics to help identify why structured output failed.
       // Common causes: JSON parsing failures (e.g., backslash-heavy regex), output truncation,
@@ -324,6 +329,7 @@ export async function instrumentFile(
       notes: llmOutput.notes,
       suggestedRefactors: llmOutput.suggestedRefactors,
       tokenUsage,
+      thinkingBlocks: thinkingBlocks && thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
     };
 
     // Capture conversation context for multi-turn threading

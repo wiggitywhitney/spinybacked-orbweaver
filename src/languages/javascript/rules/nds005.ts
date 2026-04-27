@@ -57,8 +57,13 @@ export function extractBodyAnchor(tryStmt: TryStatement): string {
       if (nestedAnchor) return nestedAnchor;
       continue;
     }
-    // Return first meaningful line (truncated for matching)
-    return text.slice(0, 80);
+    // Use only the first line of the statement text as the anchor.
+    // Multi-line statements (e.g. function calls with object arguments) have
+    // different internal indentation when wrapped in a span callback —
+    // the 80-char slice would cross the first newline and capture that
+    // indentation difference, causing false mismatches.
+    const firstLine = text.split('\n')[0];
+    return firstLine.slice(0, 80);
   }
   return '';
 }

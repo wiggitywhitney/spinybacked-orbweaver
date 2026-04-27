@@ -105,8 +105,42 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     return { filePath, originalCode };
   }
 
-  /** Dump result diagnostics to stdout for every test run. */
+  /** Dump result diagnostics to stdout for every test run.
+   *
+   * Five diagnostic dimensions (per CLAUDE.md):
+   *   1. History — git log in CI
+   *   2. Instrumented code — written to /tmp/spiny-orb-debug-{label}.js
+   *   3. Validator error messages — result.lastError (full messages with NDS-005 block previews)
+   *   4. Agent notes — result.notes
+   *   5. Agent thinking — result.thinkingBlocksByAttempt (all attempts)
+   */
   function dumpDiagnostics(label: string, result: FileResult): void {
+    // Dimension 2: write the agent's last instrumented code to a stable /tmp path.
+    // Uses result.lastInstrumentedCode (captured before file restore at line 774 of instrument-with-retry.ts)
+    // rather than result.path, which may have been restored to the original after validation failure.
+    const debugFilePath = `/tmp/spiny-orb-debug-${label}`;
+    const codeToCapture = result.lastInstrumentedCode ??
+      (existsSync(result.path) ? readFileSync(result.path, 'utf-8') : undefined);
+    if (codeToCapture) {
+      try {
+        writeFileSync(debugFilePath, codeToCapture, 'utf-8');
+        console.log(`[${label} instrumented file] ${debugFilePath}`);
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    // Dimension 5: log per-attempt thinking (up to 2000 chars; note truncation if longer)
+    if (result.thinkingBlocksByAttempt) {
+      result.thinkingBlocksByAttempt.forEach((blocks, idx) => {
+        if (blocks.length > 0) {
+          const text = blocks[0];
+          const preview = text.length > 2000 ? `${text.slice(0, 2000)}\n[... truncated at 2000 chars; full thinking in result.thinkingBlocksByAttempt[${idx}]]` : text;
+          console.log(`[${label} thinking attempt ${idx + 1}]`, preview);
+        }
+      });
+    }
+
     console.log(`[${label} diagnostics]`, JSON.stringify({
       status: result.status,
       reason: result.reason,
@@ -114,6 +148,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       schemaExtensions: result.schemaExtensions,
       validationAttempts: result.validationAttempts,
       errorProgression: result.errorProgression,
+      lastError: result.lastError,
       notes: result.notes,
       tokenUsage: result.tokenUsage,
     }, null, 2));

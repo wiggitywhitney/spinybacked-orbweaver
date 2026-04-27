@@ -634,6 +634,54 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
       });
     });
 
+    it('matches try blocks whose first statement spans multiple lines despite indentation differences from span wrapping', () => {
+      // Body anchor is the first line only — multi-line statements have different
+      // internal indentation when wrapped in a startActiveSpan callback (extra nesting),
+      // so the anchor must not include content past the first newline.
+      const original = [
+        'async function main() {',
+        '  if (cfg) {',
+        '    try {',
+        "      const result = await doWork('.', {",
+        '        onProgress: (msg) => log(msg),',
+        '      });',
+        '    } catch (err) {',
+        '      log(err.message);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function main() {',
+        '  return tracer.startActiveSpan("main", async (span) => {',
+        '    try {',
+        '      if (cfg) {',
+        '        try {',
+        "          const result = await doWork('.', {",
+        '            onProgress: (msg) => log(msg),',
+        '          });',
+        '        } catch (err) {',
+        '          log(err.message);',
+        '        }',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('returns correct CheckResult fields for failing check', () => {
       const original = [
         'function foo() {',

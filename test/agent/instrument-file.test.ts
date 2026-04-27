@@ -45,13 +45,18 @@ function makeMockClient(llmOutput: LlmOutput, usage?: {
   output_tokens?: number;
   cache_creation_input_tokens?: number | null;
   cache_read_input_tokens?: number | null;
-}) {
+}, thinkingBlocks?: string[]) {
+  const thinkingContent = (thinkingBlocks ?? []).map(thinking => ({
+    type: 'thinking' as const,
+    thinking,
+  }));
   const response = {
     id: 'msg_test_123',
     type: 'message' as const,
     role: 'assistant' as const,
     model: 'claude-sonnet-4-6',
     content: [
+      ...thinkingContent,
       {
         type: 'text' as const,
         text: JSON.stringify(llmOutput),
@@ -740,6 +745,49 @@ async function main() {
 
       // Should have called the LLM — pre-scan identifies async main() as an entry point
       expect(client.messages.stream).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('thinking block extraction', () => {
+    it('extracts thinking blocks when present in response', async () => {
+      const client = makeMockClient(
+        makeValidLlmOutput(),
+        undefined,
+        ['I should add a span to handleRequest since it is an async entry point.', 'Second thinking block here.'],
+      );
+
+      const result = await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.output.thinkingBlocks).toEqual([
+        'I should add a span to handleRequest since it is an async entry point.',
+        'Second thinking block here.',
+      ]);
+    });
+
+    it('does not include thinkingBlocks when no thinking blocks in response', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+
+      const result = await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.output.thinkingBlocks).toBeUndefined();
     });
   });
 });
