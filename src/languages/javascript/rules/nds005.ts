@@ -294,10 +294,10 @@ export function checkControlFlowPreservation(
         filePath,
         lineNumber: null,
         message:
-          `NDS-005: Original ${structure} block (line ${origBlock.lineNumber}) is missing ` +
-          `from instrumented output. You removed this block — it must survive intact, ` +
+          `NDS-005: Original ${structure} block is missing from instrumented output. ` +
+          `You removed this block — it must survive intact, ` +
           `nested inside the outer span wrapper. Do NOT remove, merge, or hoist it.\n` +
-          `Removed block (starting line ${origBlock.lineNumber}):\n${blockPreview}`,
+          `Removed block:\n${blockPreview}`,
         tier: 2,
         blocking: true,
       });
