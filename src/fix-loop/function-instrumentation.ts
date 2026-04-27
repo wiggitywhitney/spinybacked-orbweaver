@@ -107,7 +107,7 @@ function countSpansInCode(instrumentedCode: string): number {
  * @param filePath - Original file path (for logging/context)
  * @param resolvedSchema - Weaver schema for instrumentation
  * @param config - Agent configuration
- * @param options - Optional deps and tmpDir for testing
+ * @param options - Required: language provider, plus optional deps and tmpDir for testing
  * @returns Per-function results
  */
 export async function instrumentFunctions(

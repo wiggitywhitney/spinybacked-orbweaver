@@ -102,10 +102,11 @@ function extractTokenUsage(usage: {
  * validates the response with basic elision rejection, and returns a structured result.
  * No validation beyond elision rejection — Phase 2 adds the formal validation chain.
  *
- * @param filePath - Absolute path to the JavaScript file
+ * @param filePath - Absolute path to the source file
  * @param originalCode - File contents before instrumentation
  * @param resolvedSchema - Weaver schema (already resolved via `weaver registry resolve`)
  * @param config - Validated agent configuration
+ * @param provider - Language provider for AST operations and detection
  * @param options - Optional: injected Anthropic client for testing
  * @returns Structured result — success with InstrumentationOutput, or failure with diagnostics
  */

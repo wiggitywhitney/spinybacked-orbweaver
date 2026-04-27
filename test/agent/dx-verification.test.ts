@@ -5,8 +5,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { instrumentFile } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
-
-const jsProvider = new JavaScriptProvider();
 import type { LlmOutput } from '../../src/agent/schema.ts';
 import {
   checkPackageJson,
@@ -19,6 +17,8 @@ import { detectElision } from '../../src/agent/elision.ts';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+const jsProvider = new JavaScriptProvider();
 
 /** Helper to create a minimal valid AgentConfig for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
