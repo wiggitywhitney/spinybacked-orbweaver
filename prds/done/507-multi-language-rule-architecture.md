@@ -1,6 +1,6 @@
 # PRD #507: Multi-language rule architecture cleanup
 
-**Status**: Active
+**Status**: Complete (2026-04-25)
 **Priority**: High
 **GitHub Issue**: [#507](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/507)
 **Created**: 2026-04-20
@@ -53,6 +53,7 @@ Route all hot-path modules through the `LanguageProvider` interface. Add a riche
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
 | D-1 | PRD #372 (TypeScript provider) branch `feature/prd-372-typescript-provider` is preserved, not discarded. This PRD must include TS integration as first-class work. | Established in PRD #483 Decision 10. The TS canary passed 0/27 interface members changed; the hot-path leaks this PRD addresses are in non-interface code. Throwing away the TS branch would lose 18 commits of tested work (including canary test) for no architectural benefit. | 2026-04-20 |
+| D-2 | **Option B (modified)**: `tier2/` keeps `registry-types.ts` (shared registry parsing infrastructure, already imported by `javascript/rules/`), `sch005.ts` (run-level coordinator check), and `cdq008.ts` (tracked for deletion in PRD #505). The stale per-file rule implementations `tier2/sch001.ts`, `tier2/sch002.ts`, `tier2/sch003.ts`, `tier2/sch004.ts` are deleted. `javascript/rules/sch001–004.ts` are the canonical copies. | `tier2/registry-types.ts` IS the shared matching logic — it exports `getSpanDefinitions`, `getAllAttributeNames` etc. and is already imported directly by `javascript/rules/`. The stale `tier2/sch001–004.ts` files have identical public APIs but diverged internals (esp. `sch004.ts`, missing type inference). They add no architectural value and create a dual-copy maintenance hazard. Deleting them collapses the duplicate surface without blocking future Python/Go providers, which will import `tier2/registry-types.ts` directly via their own `languages/<lang>/rules/` implementations. | 2026-04-25 |
 
 ---
 
@@ -64,6 +65,8 @@ Route all hot-path modules through the `LanguageProvider` interface. Add a riche
 - **The PRD #483 audit document** (`docs/reviews/advisory-rules-audit-2026-04-15.md`) contains relevant context in the Action Items section (specifically: "Multi-language rule architecture — standalone PRD" and "SCH-001/SCH-002 rebuild + SCH-004 deletion"), the SCH section's decision table, and the SCH-001/002 rebuild narratives. Read these sections when working on the `tier2/` consolidation milestone especially.
 - **PRD #372 coordination**: if PRD #372 merges to main before this PRD reaches the TS integration milestone, the TS provider updates happen on main during this PRD's work. If PRD #372 is still on its feature branch when this PRD finalizes the interface, the TS branch rebases on the new main and applies interface updates during rebase. Either way, the TS provider must ship with the refactored interface.
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
+- **`src/fix-loop/function-instrumentation.ts` is dead production code**: it imports JS-specific symbols (`SourceFile` from ts-morph, `ExtractedFunction` from `extraction.ts`) but no production code imports it — only test files do. Discovered during M5. Its cleanup is not in scope for any specific milestone here; if the overall PRD success criteria grep must be clean, delete or refactor this file in M7 before the final check.
+- **SCH-005 stays in `src/validation/tier2/sch005.ts`**: SCH-005 (no duplicate span definitions) is a run-level coordinator check with a fundamentally different lifecycle from per-file checks — it runs after all files are instrumented, has cross-file visibility, and outputs to `runLevelAdvisory` (not per-file feedback). It has no `javascript/rules/` equivalent and is deliberately excluded from D-2's consolidation scope. Its fate (keep, convert to per-file, or delete) is audited as the first milestone of PRD #508.
 
 ---
 
@@ -75,59 +78,59 @@ Route all hot-path modules through the `LanguageProvider` interface. Add a riche
 
 Replace `OTelImportDetectionResult` (currently in `src/languages/javascript/ast.ts`) with a language-agnostic equivalent that lives in `src/languages/types.ts`. The type must preserve the information the caller actually needs: the span patterns found, the enclosing function name for each span pattern, and the line number. Add a method to the `LanguageProvider` interface — e.g., `detectOTelInstrumentation(source: string): LanguageAgnosticDetectionResult` — that returns this new type. Update the interface JSDoc with the field contract and an example usage.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] New type `LanguageAgnosticDetectionResult` (or similar — pick a name that does not imply JS) added to `src/languages/types.ts` with a JSDoc block describing each field's contract
-- [ ] New `LanguageProvider` method added to the interface with a JSDoc block including an example of calling it and interpreting the result
-- [ ] `JavaScriptProvider` implements the new method, delegating to (or wrapping) the existing `detectOTelImports` function
-- [ ] `TypeScriptProvider` (on `feature/prd-372-typescript-provider` or on main if merged) implements the new method
-- [ ] Unit tests cover the new method for both JS and TS providers — inputs covering: no instrumentation, partial instrumentation, fully instrumented, unusual indent/format edge cases
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] New type `LanguageAgnosticDetectionResult` (or similar — pick a name that does not imply JS) added to `src/languages/types.ts` with a JSDoc block describing each field's contract — named `InstrumentationDetectionResult` with `DetectedSpanPattern` sub-type
+- [x] New `LanguageProvider` method added to the interface with a JSDoc block including an example of calling it and interpreting the result — `detectOTelInstrumentation(source: string): InstrumentationDetectionResult`
+- [x] `JavaScriptProvider` implements the new method, delegating to (or wrapping) the existing `detectOTelImports` function
+- [x] `TypeScriptProvider` implements the new method — added `detectTsOTelInstrumentation` helper to `src/languages/typescript/ast.ts`
+- [x] Unit tests cover the new method for both JS and TS providers — inputs covering: no instrumentation, partial instrumentation, fully instrumented, unusual indent/format edge cases
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M2: Refactor `src/agent/instrument-file.ts` to use the interface
 
 Remove direct ts-morph and JS-ast imports from `src/agent/instrument-file.ts`. All AST operations in this file route through the provider passed in by the caller. The module becomes language-agnostic.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/agent/instrument-file.ts` no longer imports `Project` from `ts-morph` or any symbol from `src/languages/javascript/ast.ts`
-- [ ] All AST and detection operations route through `provider.*` methods (including the new method from M1)
-- [ ] The file accepts a `provider: LanguageProvider` parameter — no default; callers must pass one explicitly
-- [ ] Existing call sites in coordinator and fix-loop modules updated to pass the provider
-- [ ] Unit tests for `instrument-file.ts` cover both JS and TS providers (the file is now language-agnostic, so it must be tested with both)
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `src/agent/instrument-file.ts` no longer imports `Project` from `ts-morph` or any symbol from `src/languages/javascript/ast.ts`
+- [x] All AST and detection operations route through `provider.*` methods (including the new method from M1)
+- [x] The file accepts a `provider: LanguageProvider` parameter — no default; callers must pass one explicitly
+- [x] Existing call sites in coordinator and fix-loop modules updated to pass the provider
+- [x] Unit tests for `instrument-file.ts` cover both JS and TS providers (the file is now language-agnostic, so it must be tested with both)
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M3: Refactor `src/agent/prompt.ts` to parameterize language
 
 Remove the hardcoded "JavaScript" strings, the `new JavaScriptProvider()` default, and the JS-specific type import. The prompt builder must accept a provider parameter and pull language name, file extension hints, and detection-result type from it.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/agent/prompt.ts` no longer imports `OTelImportDetectionResult` from `src/languages/javascript/ast.ts`; it uses the language-agnostic type from M1
-- [ ] No `new JavaScriptProvider()` default in this file — callers must pass a provider
-- [ ] Output schema description uses a language name injected from the provider (e.g., `provider.displayName`) rather than hardcoding "JavaScript"
-- [ ] User message uses the provider's language name rather than hardcoding "Instrument the following JavaScript file."
-- [ ] If `LanguageProvider` doesn't expose a `displayName` field, add one in this milestone (both JS and TS providers updated)
-- [ ] Golden-file prompt tests cover both JS and TS — verify the generated prompt says "JavaScript" for JS and "TypeScript" for TS
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `src/agent/prompt.ts` no longer imports `OTelImportDetectionResult` from `src/languages/javascript/ast.ts`; it uses the language-agnostic type from M1
+- [x] No `new JavaScriptProvider()` default in this file — callers must pass a provider
+- [x] Output schema description uses a language name injected from the provider (e.g., `provider.displayName`) rather than hardcoding "JavaScript"
+- [x] User message uses the provider's language name rather than hardcoding "Instrument the following JavaScript file."
+- [x] If `LanguageProvider` doesn't expose a `displayName` field, add one in this milestone (both JS and TS providers updated)
+- [x] Golden-file prompt tests cover both JS and TS — verify the generated prompt says "JavaScript" for JS and "TypeScript" for TS
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M4: Remove `new JavaScriptProvider()` defaults from shared pipeline
 
 Four remaining modules default to `new JavaScriptProvider()` when no provider is passed: `src/validation/chain.ts`, `src/coordinator/dispatch.ts`, `src/coordinator/discovery.ts`, and `src/fix-loop/instrument-with-retry.ts` (two call sites). Remove all of them. Callers must pass a provider explicitly; the code should fail loudly (throw) rather than silently default.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] No `new JavaScriptProvider()` default in any shared pipeline module (search the codebase to confirm: `rg 'new JavaScriptProvider'` returns only the provider's own test file and JS-specific rule files)
-- [ ] Call sites that previously relied on the default now explicitly pass a provider sourced from the registry or a parameter
-- [ ] Functions that accepted an optional `provider` now require one — TypeScript's type system enforces this at compile time
-- [ ] Unit and integration tests updated to pass providers explicitly where needed
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] No `new JavaScriptProvider()` default in any shared pipeline module (search the codebase to confirm: `rg 'new JavaScriptProvider'` returns only the provider's own test file and JS-specific rule files)
+- [x] Call sites that previously relied on the default now explicitly pass a provider sourced from the registry or a parameter
+- [x] Functions that accepted an optional `provider` now require one — TypeScript's type system enforces this at compile time
+- [x] Unit and integration tests updated to pass providers explicitly where needed
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M5: Clean up `src/fix-loop/index.ts` barrel and the `ensureTracerAfterImports` JS-only guard
 
 The `src/fix-loop/index.ts` barrel re-exports JS-specific symbols (`extractExportedFunctions`, `reassembleFunctions`, `deduplicateImports`, `ensureTracerAfterImports`). Stop exporting them — the actual call sites in `instrument-with-retry.ts` already use `provider.extractFunctions()` and `provider.reassembleFunctions()`, so these re-exports are a leaky API surface only. Also resolve the `ensureTracerAfterImports` JS-only guard at `src/fix-loop/instrument-with-retry.ts` lines 555-557 — either move the function behind the `LanguageProvider` interface or explicitly scope it as language-specific.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/fix-loop/index.ts` barrel no longer re-exports JS-specific symbols
-- [ ] Any consumer that imported from the barrel for these symbols now imports from the provider (or the decision is made to keep the direct JS import and document why)
-- [ ] `ensureTracerAfterImports` either moved behind a provider method (`provider.ensureTracerAfterImports` or similar) with a TS implementation, or kept JS-specific with a clearly documented reason — not silently guarded
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `src/fix-loop/index.ts` barrel no longer re-exports JS-specific symbols
+- [x] Any consumer that imported from the barrel for these symbols now imports from the provider (or the decision is made to keep the direct JS import and document why) — no external consumers existed; all barrel re-exports were dead leaks with no callers
+- [x] `ensureTracerAfterImports` either moved behind a provider method (`provider.ensureTracerAfterImports` or similar) with a TS implementation, or kept JS-specific with a clearly documented reason — not silently guarded — moved to `LanguageProvider` interface; both JS and TS providers implement it; the `provider.id` guard in `instrument-with-retry.ts` replaced with unconditional `provider.ensureTracerAfterImports()` calls
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M6: Resolve the `tier2/` architecture and consolidate SCH rule duplicates
 
@@ -142,22 +145,22 @@ Decide between A and B — the SCH rebuild PRD (blocked by this milestone) canno
 
 **Escalation path**: If the A vs. B decision requires extended discussion or investigation (e.g., unclear how Python/Go AST extraction would integrate with a shared `tier2/` module), file a standalone design issue immediately and notify Whitney rather than letting M6 stall. Do not let an unresolved architectural question block the rest of PRD #507's milestones — M1–M5 are independent of M6 and can proceed in parallel.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH section and the Action Items
-- [ ] Decision recorded in this PRD's Decision Log: Option A or Option B (or a third option if one emerges during implementation), with rationale
-- [ ] Decision executed: stale duplicate copies removed or unified; `tier2/sch004.ts` divergence resolved
-- [ ] `test/coordinator/acceptance-gate.test.ts` imports updated to reference the canonical location
-- [ ] SCH-005's `tier2/sch005.ts` location documented in a Design Note in this PRD, stating explicitly that it stays in `tier2/` because it is a run-level coordinator check with a different lifecycle from per-file checks, and therefore out of scope for this PRD's consolidation decision
-- [ ] `npm test` passes; `npm run typecheck` passes; acceptance gate tests pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH section and the Action Items
+- [x] Decision recorded in this PRD's Decision Log: Option A or Option B (or a third option if one emerges during implementation), with rationale — recorded as D-2 (Option B modified)
+- [x] Decision executed: stale duplicate copies removed or unified; `tier2/sch004.ts` divergence resolved — `tier2/sch001-004.ts` deleted; canonical copies remain in `javascript/rules/`
+- [x] `test/coordinator/acceptance-gate.test.ts` imports updated to reference the canonical location — all 10 `require('tier2/sch00X.ts')` calls redirected to `javascript/rules/sch00X.ts`
+- [x] SCH-005's `tier2/sch005.ts` location documented in a Design Note in this PRD, stating explicitly that it stays in `tier2/` because it is a run-level coordinator check with a different lifecycle from per-file checks, and therefore out of scope for this PRD's consolidation decision
+- [x] `npm test` passes; `npm run typecheck` passes; acceptance gate tests pass
 
 ### Milestone M7: Update documentation and close out
 
 Capture all architectural changes in `docs/rules-reference.md` — this PRD changes where SCH rule matching logic lives and how rule files are organized, which affects the rule reference's navigation and any file-path references. Also update any other docs that reference the old paths.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `docs/rules-reference.md` updated via `/write-docs` to reflect any rule additions, deletions, registration changes, promotion-to-blocking changes, message changes, or reorganization of rule file locations introduced by this PRD
-- [ ] `docs/ROADMAP.md` updated to reflect PRD #507 complete and unblock downstream PRDs
-- [ ] PRD #483 audit document's Action Items section updated to mark the "Multi-language rule architecture — standalone PRD" item as complete with a link to this PRD
-- [ ] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every reference still matches a rule in `src/validation/rule-names.ts`. Confirm this PRD's refactoring did not break any rule-ID references in the prompt. If no prompt changes are needed, record that explicitly in the milestone completion note so the next reviewer knows the prompt was checked.
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `docs/rules-reference.md` updated via `/write-docs` to reflect any rule additions, deletions, registration changes, promotion-to-blocking changes, message changes, or reorganization of rule file locations introduced by this PRD
+- [x] `docs/ROADMAP.md` updated to reflect PRD #507 complete and unblock downstream PRDs
+- [x] PRD #483 audit document's Action Items section updated to mark the "Multi-language rule architecture — standalone PRD" item as complete with a link to this PRD
+- [x] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every reference still matches a rule in `src/validation/rule-names.ts`. Confirm this PRD's refactoring did not break any rule-ID references in the prompt. If no prompt changes are needed, record that explicitly in the milestone completion note so the next reviewer knows the prompt was checked. **Result**: PRD #507's refactoring did not add or remove any rule IDs. No prompt changes needed. CDQ-002, CDQ-003, and NDS-002 appear in the prompt as numbered guidelines (not registered per-file checks) — pre-existing, not introduced by this PRD.
 
 ---
 

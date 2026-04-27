@@ -77,7 +77,7 @@ export interface DispatchFilesDeps {
     originalCode: string,
     resolvedSchema: object,
     config: AgentConfig,
-    options?: { projectRoot?: string; existingSpanNames?: string[]; provider?: LanguageProvider },
+    options: { projectRoot?: string; existingSpanNames?: string[]; provider: LanguageProvider },
   ) => Promise<FileResult>;
   writeSchemaExtensions?: (
     registryDir: string,

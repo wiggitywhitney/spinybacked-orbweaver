@@ -8,6 +8,9 @@ import { tmpdir } from 'node:os';
 import { validateFile } from '../../src/validation/chain.ts';
 import { formatFeedbackForAgent } from '../../src/validation/feedback.ts';
 import type { ValidateFileInput, ValidationConfig } from '../../src/validation/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 describe('Phase 2 acceptance gate', () => {
   let tempDir: string;
@@ -74,6 +77,7 @@ describe('Phase 2 acceptance gate', () => {
       instrumentedCode: instrumented,
       filePath,
       config: fullConfig,
+      provider: jsProvider,
     };
 
     const result = await validateFile(input);
@@ -117,6 +121,7 @@ describe('Phase 2 acceptance gate', () => {
       instrumentedCode: instrumented,
       filePath,
       config: fullConfig,
+      provider: jsProvider,
     });
 
     expect(result.passed).toBe(false);
@@ -156,6 +161,7 @@ describe('Phase 2 acceptance gate', () => {
       instrumentedCode: instrumented,
       filePath,
       config: fullConfig,
+      provider: jsProvider,
     });
 
     expect(result.passed).toBe(false);
@@ -197,6 +203,7 @@ describe('Phase 2 acceptance gate', () => {
       instrumentedCode: instrumented,
       filePath,
       config: fullConfig,
+      provider: jsProvider,
     });
 
     expect(result.passed).toBe(false);
@@ -220,6 +227,7 @@ describe('Phase 2 acceptance gate', () => {
       instrumentedCode: instrumented,
       filePath,
       config: fullConfig,
+      provider: jsProvider,
     });
 
     for (const failure of result.blockingFailures) {
@@ -291,6 +299,7 @@ describe('Phase 2 acceptance gate', () => {
       instrumentedCode: instrumented,
       filePath,
       config: fullConfig,
+      provider: jsProvider,
     });
 
     expect(result.passed).toBe(true);

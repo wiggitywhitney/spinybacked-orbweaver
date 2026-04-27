@@ -11,6 +11,9 @@ import type { WriteSchemaExtensionsResult } from '../../src/coordinator/schema-e
 
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import type { DispatchFilesDeps } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -119,6 +122,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1, file2], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -127,7 +131,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
   });
 
   it('does not call snapshotExtensionsFile for skipped (already instrumented) files', async () => {
-    const file1 = await createFile('a.js', `import { trace } from '@opentelemetry/api';`);
+    const file1 = await createFile('a.js', `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`);
 
     const snapshotExtensionsFile = vi.fn().mockResolvedValue(null);
     const deps = makeDeps({ snapshotExtensionsFile });
@@ -136,6 +140,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -149,7 +154,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
     const deps = makeDeps({ snapshotExtensionsFile });
     const config = makeConfig();
 
-    await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+    await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
     expect(snapshotExtensionsFile).not.toHaveBeenCalled();
   });
@@ -170,6 +175,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -191,6 +197,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -212,6 +219,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -245,6 +253,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -285,6 +294,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1, file2], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -309,6 +319,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     await dispatchFiles([file1], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -336,6 +347,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 
@@ -363,6 +375,7 @@ describe('dispatchFiles — schema state revert on file failure', () => {
 
     const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, {
       deps,
+      provider: jsProvider,
       registryDir,
     });
 

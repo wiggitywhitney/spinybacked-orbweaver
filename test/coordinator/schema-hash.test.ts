@@ -9,6 +9,9 @@ import { computeSchemaHash } from '../../src/coordinator/schema-hash.ts';
 import { dispatchFiles } from '../../src/coordinator/dispatch.ts';
 import { coordinate } from '../../src/coordinator/coordinate.ts';
 import type { DispatchFilesDeps, CoordinatorCallbacks } from '../../src/coordinator/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
@@ -141,7 +144,7 @@ describe('dispatchFiles — schema hash per file', () => {
     });
     const config = makeConfig();
 
-    const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, { deps });
+    const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, { deps, provider: jsProvider });
 
     const expectedHash = computeSchemaHash(schema);
     expect(results[0].schemaHashBefore).toBe(expectedHash);
@@ -157,7 +160,7 @@ describe('dispatchFiles — schema hash per file', () => {
     });
     const config = makeConfig();
 
-    const results = await dispatchFiles([file1], tmpDir, config, undefined, { deps });
+    const results = await dispatchFiles([file1], tmpDir, config, undefined, { deps, provider: jsProvider });
 
     expect(results[0].schemaHashBefore).toBe(results[0].schemaHashAfter);
   });
@@ -176,7 +179,7 @@ describe('dispatchFiles — schema hash per file', () => {
     const deps = makeDeps({ resolveSchema });
     const config = makeConfig();
 
-    const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, { deps });
+    const results = await dispatchFiles([file1, file2], tmpDir, config, undefined, { deps, provider: jsProvider });
 
     // File 1 sees schemaV1
     expect(results[0].schemaHashBefore).toBe(computeSchemaHash(schemaV1));
@@ -188,13 +191,13 @@ describe('dispatchFiles — schema hash per file', () => {
   it('does not set schema hash on skipped files', async () => {
     const instrumentedFile = await createFile(
       'already.js',
-      `import { trace } from '@opentelemetry/api';\nconsole.log('hi');`,
+      `import { trace } from '@opentelemetry/api';\ntracer.startActiveSpan('op', (span) => { span.end(); });`,
     );
 
     const deps = makeDeps();
     const config = makeConfig();
 
-    const results = await dispatchFiles([instrumentedFile], tmpDir, config, undefined, { deps });
+    const results = await dispatchFiles([instrumentedFile], tmpDir, config, undefined, { deps, provider: jsProvider });
 
     expect(results[0].status).toBe('skipped');
     expect(results[0].schemaHashBefore).toBeUndefined();
@@ -217,7 +220,7 @@ describe('dispatchFiles — schema hash per file', () => {
     const deps = makeDeps({ resolveSchema });
     const config = makeConfig();
 
-    const results = await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps });
+    const results = await dispatchFiles([file1, file2, file3], tmpDir, config, undefined, { deps, provider: jsProvider });
 
     // File 1 and file 2 have different hashes — change happened between file 1 and file 2
     expect(results[0].schemaHashBefore).not.toBe(results[1].schemaHashBefore);

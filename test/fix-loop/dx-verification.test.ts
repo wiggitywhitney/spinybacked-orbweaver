@@ -6,12 +6,15 @@ import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult } from '../../src/validation/types.ts';
 import type { InstrumentFileResult, ConversationContext } from '../../src/agent/instrument-file.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { InstrumentWithRetryDeps } from '../../src/fix-loop/instrument-with-retry.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 const ZERO_TOKENS: TokenUsage = {
   inputTokens: 0,
@@ -158,7 +161,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       assertRequiredFields(result, testFilePath);
@@ -206,7 +209,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       expect(result.status).toBe('success');
@@ -240,7 +243,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       expect(result.status).toBe('success');
@@ -273,7 +276,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
       );
 
       assertRequiredFields(result, testFilePath);
@@ -321,7 +324,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
       );
 
       assertRequiredFields(result, testFilePath);
@@ -385,7 +388,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
       );
 
       expect(result.status).toBe('failed');
@@ -416,7 +419,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps, provider: jsProvider },
       );
 
       assertRequiredFields(result, testFilePath);
@@ -461,7 +464,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       // Budget 8000: attempt 1 uses 5500, attempt 2 uses 5500 → cumulative 11000 > 8000
       // Attempt 2 still validates (fails), then budget prevents further retries
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1, maxTokensPerFile: 8000 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1, maxTokensPerFile: 8000 }), { deps, provider: jsProvider },
       );
 
       expect(result.status).toBe('failed');
@@ -514,7 +517,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
       );
 
       assertRequiredFields(result, testFilePath);
@@ -554,7 +557,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       assertRequiredFields(result, testFilePath);
@@ -593,7 +596,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       expect(result.status).toBe('failed');
@@ -616,7 +619,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       assertRequiredFields(result, testFilePath);
@@ -649,7 +652,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       expect(result.status).toBe('failed');
@@ -712,7 +715,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
         // Re-create the file for each scenario
         writeFileSync(testFilePath, originalContent, 'utf-8');
         const result = await instrumentWithRetry(
-          testFilePath, originalContent, {}, scenario.config, { deps: scenario.deps },
+          testFilePath, originalContent, {}, scenario.config, { deps: scenario.deps, provider: jsProvider },
         );
 
         expect(result.tokenUsage, `tokenUsage should be defined for scenario: ${scenario.name}`).toBeDefined();
@@ -765,7 +768,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       for (const scenario of failureScenarios) {
         writeFileSync(testFilePath, originalContent, 'utf-8');
         const result = await instrumentWithRetry(
-          testFilePath, originalContent, {}, scenario.config, { deps: scenario.deps },
+          testFilePath, originalContent, {}, scenario.config, { deps: scenario.deps, provider: jsProvider },
         );
 
         expect(result.status, `should be failed for: ${scenario.name}`).toBe('failed');
@@ -788,7 +791,7 @@ describe('DX verification — FileResult field content for all exit paths', () =
       };
 
       const result = await instrumentWithRetry(
-        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
       );
 
       expect(result.status).toBe('success');

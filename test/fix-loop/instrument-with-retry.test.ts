@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, detectMalformedExtensions, detectRepeatNds003Lines, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
@@ -16,6 +17,8 @@ import type { InstrumentWithRetryDeps, InstrumentFileCallOptions } from '../../s
 
 const require = createRequire(import.meta.url);
 const { version: PACKAGE_VERSION } = require('../../package.json') as { version: string };
+
+const jsProvider = new JavaScriptProvider();
 
 const zeroTokens: TokenUsage = {
   inputTokens: 0,
@@ -163,7 +166,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -194,7 +197,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(capturedConfig).toBeDefined();
@@ -257,7 +260,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps, projectRoot: '/tmp/my-project' },
+      testFilePath, originalContent, {}, makeConfig(), { deps, projectRoot: '/tmp/my-project' , provider: jsProvider },
     );
 
     expect(capturedConfig).toBeDefined();
@@ -277,7 +280,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, schema, makeConfig(), { deps },
+      testFilePath, originalContent, schema, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(capturedConfig).toBeDefined();
@@ -297,7 +300,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps, anthropicClient: mockClient },
+      testFilePath, originalContent, {}, makeConfig(), { deps, anthropicClient: mockClient , provider: jsProvider },
     );
 
     expect(capturedConfig).toBeDefined();
@@ -312,7 +315,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -340,7 +343,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -363,7 +366,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -382,7 +385,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -405,7 +408,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(fileContentDuringValidation).toBe(instrumentedCode);
@@ -420,7 +423,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(readFileSync(testFilePath, 'utf-8')).toBe(codeWithSpan);
@@ -437,7 +440,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     // 3 startActiveSpan calls in code, not 30 from spanCategories
@@ -455,7 +458,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.spansAdded).toBe(0);
@@ -494,7 +497,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
     // Set budget to 5000 — total tokens are 10500, exceeding the budget.
     // But the LLM already returned code and validation passes, so use the result.
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -512,7 +515,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
 
     // sampleTokens total = 1000+500+200+100 = 1800, well under 80000
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -537,7 +540,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
     // Budget is 9999 — total is 10000, exceeds budget.
     // But validation passes so the result is used.
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 9999 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 9999 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -561,7 +564,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
 
     // Budget 5000, total tokens 10500 — above pre-flight threshold (4000) but under actual usage
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps, provider: jsProvider },
     );
 
     // Budget exceeded but validation passed — result is used, file has instrumented code
@@ -589,7 +592,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
 
     // Budget 5000, total tokens 10500 — above pre-flight threshold (4000) but under actual usage
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 5000 }), { deps, provider: jsProvider },
     );
 
     // Validation runs even when budget exceeded — tokens already spent
@@ -616,7 +619,7 @@ describe('instrumentWithRetry — token budget tracking', () => {
 
     // Budget above fixed overhead (4000) but below the 50K tokens from the mock
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 10000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 10000 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -670,7 +673,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, _options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, _options?) => {
         callCount++;
         if (callCount === 1) {
           return {
@@ -690,7 +693,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -727,7 +730,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.errorProgression).toEqual(['1 blocking error (NDS-001 (Syntax Valid):1)', '0 errors']);
@@ -753,7 +756,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     // Cumulative: attempt1Tokens + attempt2Tokens
@@ -772,7 +775,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -787,7 +790,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(capturedOptions).toBeDefined();
@@ -805,7 +808,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -820,7 +823,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(capturedOptions).toBeDefined();
@@ -834,7 +837,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -849,7 +852,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(capturedOptions!.feedbackMessage).toContain('validation errors');
@@ -865,7 +868,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -880,7 +883,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     // Prompt must direct agent to fix blocking failures
@@ -896,7 +899,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -911,7 +914,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     // Advisory findings from tier2Results must appear with `advisory` status in the feedback
@@ -925,7 +928,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt2Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) {
           return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
@@ -940,7 +943,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     // The "ONLY" directive frames advisory findings as irrelevant — it must not be present
@@ -972,7 +975,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     // File should have been reverted to original before attempt 2
@@ -996,7 +999,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1044,7 +1047,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     // Budget 8000: attempt 1 uses 5000, attempt 2 uses 5000 → cumulative 10000 > 8000
     // But attempt 2 passes validation, so the result is used despite budget exceeded
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1, maxTokensPerFile: 8000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1, maxTokensPerFile: 8000 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1064,7 +1067,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1088,7 +1091,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1120,7 +1123,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1160,7 +1163,7 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1232,7 +1235,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1249,7 +1252,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     const goodOutput = makeInstrumentationOutput({ instrumentedCode: 'good;\n', tokenUsage: attempt3Tokens });
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
         if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
@@ -1263,7 +1266,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Attempt 3 should NOT have conversationContext (fresh start)
@@ -1295,7 +1298,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
         if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
@@ -1309,7 +1312,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Failure hint should contain the ruleId and first sentence of the message
@@ -1336,7 +1339,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1370,7 +1373,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.tokenUsage).toEqual({
@@ -1408,7 +1411,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1440,7 +1443,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(fileContentAtAttempt3).toBe(originalContent);
@@ -1470,7 +1473,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     // attempt 3 uses 5000 (cumulative 15000 > 12000) — validation still runs on attempt 3
     // but fails, and budget prevents further retries. Result is failed due to validation.
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 12000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 12000 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1495,7 +1498,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1541,7 +1544,7 @@ describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1625,7 +1628,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         if (callCount === 1) return { success: true, output: badOutput1, conversationContext: mockConversationContext } as InstrumentFileResult;
         if (callCount === 2) return { success: true, output: badOutput2 } as InstrumentFileResult;
@@ -1642,7 +1645,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1699,7 +1702,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1738,7 +1741,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Duplicate errors detected after attempt 2 → skip to fresh regen (attempt 3).
@@ -1784,7 +1787,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Normal flow — attempt 2 had fewer errors, so no oscillation. Attempt 3 succeeds.
@@ -1816,7 +1819,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     // Attempt 2 still runs validation (fails), then budget prevents further retries.
     // Without budget, oscillation detection would jump to fresh-regen (attempt 3).
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 10000 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 10000 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1853,7 +1856,7 @@ describe('instrumentWithRetry — oscillation detection (Milestone 6)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -1911,7 +1914,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     const capturedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         capturedOptions.push(options);
         const output = makeInstrumentationOutput({
@@ -1928,7 +1931,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -1982,7 +1985,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -2023,7 +2026,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     };
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options?) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options?) => {
         callCount++;
         capturedOptions.push(options);
         // 3rd call is the fresh-regen (attempt 4 after skipping 3) — return good output
@@ -2042,7 +2045,7 @@ describe('instrumentWithRetry — maxFixAttempts > 2 strategy assignment', () =>
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -2100,7 +2103,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       },
     };
 
-    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(instrumentCallCount).toBe(2);
   });
@@ -2115,7 +2118,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       validateFile: async () => makePassingValidation(testFilePath),
     };
 
-    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(instrumentCallCount).toBe(1);
   });
@@ -2135,7 +2138,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       },
     };
 
-    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(instrumentCallCount).toBe(1);
   });
@@ -2156,7 +2159,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       },
     };
 
-    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 80_000 }), { deps });
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 80_000 }), { deps, provider: jsProvider });
 
     expect(instrumentCallCount).toBe(1);
   });
@@ -2176,7 +2179,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       },
     };
 
-    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 80_000 }), { deps });
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig({ maxTokensPerFile: 80_000 }), { deps, provider: jsProvider });
 
     expect(instrumentCallCount).toBe(1);
   });
@@ -2196,7 +2199,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       },
     };
 
-    const result = await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(result.status).toBe('success');
   });
@@ -2206,7 +2209,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
     let capturedOriginalCode: string | undefined;
     let capturedFeedbackMessage: string | undefined;
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, origCode, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, origCode, _rs, _cfg, _provider, opts) => {
         instrumentCallCount++;
         if (instrumentCallCount === 2) {
           capturedOriginalCode = origCode;
@@ -2221,7 +2224,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       },
     };
 
-    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider });
 
     // Must be called with passing instrumented code, not the original source
     expect(capturedOriginalCode).toBe(passingInstrumentedContent);
@@ -2246,7 +2249,7 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
       },
     };
 
-    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps });
+    await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider });
 
     // File on disk must be the pre-advisory passing code, not the failed advisory output
     expect(readFileSync(testFilePath, 'utf-8')).toBe(passingInstrumentedContent);
@@ -2276,7 +2279,7 @@ describe('instrumentWithRetry — agentVersion population', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -2292,7 +2295,7 @@ describe('instrumentWithRetry — agentVersion population', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -2307,7 +2310,7 @@ describe('instrumentWithRetry — agentVersion population', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -2354,7 +2357,7 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -2384,7 +2387,7 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -2412,7 +2415,7 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -2440,7 +2443,7 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
     );
 
     expect(result.errorProgression).toBeDefined();
@@ -2465,7 +2468,7 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -2489,7 +2492,7 @@ describe('instrumentWithRetry — retryable instrumentFile failures', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -2633,7 +2636,7 @@ describe('early abort on stop_reason: max_tokens skips remaining whole-file retr
 
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
-      { deps, _skipFunctionFallback: true },
+      { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     // Should have called instrumentFile TWICE: initial at estimated budget + escalated to MAX
@@ -2663,7 +2666,7 @@ describe('early abort on stop_reason: max_tokens skips remaining whole-file retr
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Should have attempted all 3 times (1 initial + 2 retries) — no early abort
@@ -2800,7 +2803,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // All functions passed validation → success (not partial) per all-functions-pass fix
     expect(result.status).toBe('success');
@@ -2827,7 +2830,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(result.status).toBe('success');
     expect(result.functionsInstrumented).toBeUndefined();
@@ -2851,7 +2854,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, trivialCode, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, trivialCode, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(result.status).toBe('failed');
     expect(result.functionsInstrumented).toBeUndefined();
@@ -2888,7 +2891,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // The whole-file syntax check should catch the module-level imimport corruption.
     // When it does, the culprit is excluded and the result is partial.
@@ -2911,7 +2914,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // All functions fail → fallback returns null → whole-file failure bubbles up
     expect(result.status).toBe('failed');
@@ -2934,7 +2937,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // All functions passed validation → success per all-functions-pass fix
     expect(result.status).toBe('success');
@@ -2971,7 +2974,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // All functions passed validation → success per all-functions-pass fix
     expect(result.status).toBe('success');
@@ -3001,7 +3004,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(result.status).toBe('partial');
     // Notes should mention instrumented and skipped functions
@@ -3045,7 +3048,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       },
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // Should produce a partial result via the fallback-to-partial path
     expect(result.status).toBe('partial');
@@ -3083,7 +3086,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       },
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // N passing functions are committed even when partial assembly validation fails
     expect(result.status).toBe('partial');
@@ -3113,7 +3116,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     expect(result.status).toBe('partial');
     // The fixture has 2 extractable functions (fetchWithRetry, saveData)
@@ -3140,7 +3143,7 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       validateFile: async (input) => makePassingValidation(input.filePath),
     };
 
-    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps });
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
 
     // All functions passed validation → success (not partial) per all-functions-pass fix
     expect(result.status).toBe('success');
@@ -3204,7 +3207,7 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -3242,7 +3245,7 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, _skipFunctionFallback: true },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -3275,7 +3278,7 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -3301,7 +3304,7 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -3327,7 +3330,7 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -3354,7 +3357,7 @@ describe('instrumentWithRetry — suggestedRefactors collection', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, _skipFunctionFallback: true },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -3399,7 +3402,7 @@ describe('instrumentWithRetry — time budget', () => {
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {},
       makeConfig({ maxFixAttempts: 2, maxTimePerFile: 5 }),
-      { deps, clock },
+      { deps, clock, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -3430,7 +3433,7 @@ describe('instrumentWithRetry — time budget', () => {
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {},
       makeConfig({ maxFixAttempts: 2, maxTimePerFile: 60 }),
-      { deps, clock },
+      { deps, clock, provider: jsProvider },
     );
 
     // Both attempts ran — the budget check fired at attempt 2 and did not abort
@@ -3481,7 +3484,7 @@ describe('instrumentWithRetry — output token budget', () => {
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {},
       makeConfig({ maxFixAttempts: 2, maxTokensPerFile: 200_000 }),
-      { deps },
+      { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('failed');
@@ -3519,7 +3522,7 @@ describe('instrumentWithRetry — supplementSchemaExtensions', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(result.status).toBe('success');
@@ -3559,7 +3562,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options) => {
         receivedOptions.push(options);
         return { success: true, output: makeInstrumentationOutput() } as InstrumentFileResult;
       },
@@ -3567,7 +3570,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig(), { deps },
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
     );
 
     expect(receivedOptions.length).toBe(1);
@@ -3582,7 +3585,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options) => {
         instrumentCallCount++;
         receivedOptions.push(options);
         if (instrumentCallCount === 1) {
@@ -3596,7 +3599,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Should have called instrumentFile TWICE: initial + escalated retry
@@ -3621,7 +3624,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     };
 
     const result = await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Should have called instrumentFile exactly TWICE: estimated + escalated (then abort)
@@ -3648,7 +3651,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
 
     const result = await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
-      { deps, _skipFunctionFallback: true },
+      { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     // Both max_tokens errors should be in errorProgression
@@ -3662,7 +3665,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
     const receivedOptions: (InstrumentFileCallOptions | undefined)[] = [];
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _code, _schema, _config, options) => {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, options) => {
         instrumentCallCount++;
         receivedOptions.push(options);
         // Return null parsed_output but with end_turn (not max_tokens)
@@ -3677,7 +3680,7 @@ describe('budget escalation on stop_reason: max_tokens (#210)', () => {
 
     await instrumentWithRetry(
       testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }),
-      { deps, _skipFunctionFallback: true },
+      { deps, _skipFunctionFallback: true, provider: jsProvider },
     );
 
     // All 3 attempts should use the same estimated budget (no escalation)
@@ -3800,7 +3803,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     let capturedFailureHint: string | undefined;
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, _provider, opts) => {
         attempt++;
         if (attempt === 3) capturedFailureHint = opts?.failureHint;
         return {
@@ -3816,7 +3819,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     expect(capturedFailureHint).toBeDefined();
@@ -3849,7 +3852,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     }
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, _provider, opts) => {
         attempt++;
         capturedMessages.push(opts?.feedbackMessage);
         return {
@@ -3870,7 +3873,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     // maxFixAttempts=3 → 4 total attempts: initial, multi-turn, multi-turn, fresh-regen
     // Attempt 3 is multi-turn (not yet fresh-regen), so it gets feedbackMessage
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 3 }), { deps, provider: jsProvider },
     );
 
     // Attempt 3 (multi-turn-fix): line 27 repeated from attempt 2 → escalation present
@@ -3889,7 +3892,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     let capturedFailureHint: string | undefined;
 
     const deps: InstrumentWithRetryDeps = {
-      instrumentFile: async (_fp, _oc, _rs, _cfg, opts) => {
+      instrumentFile: async (_fp, _oc, _rs, _cfg, _provider, opts) => {
         attempt++;
         if (attempt === 3) capturedFailureHint = opts?.failureHint;
         return {
@@ -3907,7 +3910,7 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     };
 
     await instrumentWithRetry(
-      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps },
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 2 }), { deps, provider: jsProvider },
     );
 
     // Hint should exist (there was an NDS-003 failure) but should NOT contain

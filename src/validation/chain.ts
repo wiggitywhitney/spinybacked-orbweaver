@@ -3,14 +3,10 @@
 
 import { checkElision } from './tier1/elision.ts';
 import { checkWeaver } from './tier1/weaver.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
 import { getRulesForLanguage } from './rule-registry.ts';
 import type { RuleInput, RuleCheckResult } from '../languages/types.ts';
 import type { TokenUsage } from '../agent/schema.ts';
 import type { CheckResult, ValidateFileInput, ValidationResult } from './types.ts';
-
-/** Default provider used when no provider is passed in ValidateFileInput. */
-const DEFAULT_PROVIDER = new JavaScriptProvider();
 
 /**
  * Run the full validation chain (Tier 1 + Tier 2) on instrumented output.
@@ -27,7 +23,7 @@ const DEFAULT_PROVIDER = new JavaScriptProvider();
  */
 export async function validateFile(input: ValidateFileInput): Promise<ValidationResult> {
   const { originalCode, instrumentedCode, filePath, config } = input;
-  const provider = input.provider ?? DEFAULT_PROVIDER;
+  const provider = input.provider;
   const tier1Results: CheckResult[] = [];
   const tier2Results: CheckResult[] = [];
   const judgeTokenUsage: TokenUsage[] = [];
@@ -65,8 +61,7 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   }
 
   // --- Tier 2: Semantic checks (all Tier 1 passed) ---
-  // Rules are dispatched through the rule registry. JavaScriptProvider registers
-  // all JS rules on construction (DEFAULT_PROVIDER above). Each rule's check()
+  // Rules are dispatched through the rule registry. Each rule's check()
   // method receives a RuleInput that extends ValidateFileInput with language context.
 
   const ruleInput: RuleInput = { ...input, language: provider.id, provider };

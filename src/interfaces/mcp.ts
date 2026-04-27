@@ -10,6 +10,7 @@ import { isAbsolute, join } from 'node:path';
 import { loadConfig as defaultLoadConfig } from '../config/loader.ts';
 import { discoverFiles as defaultDiscoverFiles } from '../coordinator/discovery.ts';
 import { coordinate as defaultCoordinate } from '../coordinator/coordinate.ts';
+import { getProviderByLanguage, getSupportedLanguageIds } from '../languages/registry.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { DiscoverFilesOptions } from '../coordinator/discovery.ts';
 import type { CostCeiling, RunResult, CoordinatorCallbacks } from '../coordinator/types.ts';
@@ -123,6 +124,16 @@ export async function handleGetCostCeiling(
   const maxTokensPerFile = input.maxTokensPerFile ?? config.maxTokensPerFile;
   const exclude = input.exclude ?? config.exclude;
 
+  const language = config.language ?? 'javascript';
+  const discoveryProvider = getProviderByLanguage(language);
+  if (!discoveryProvider) {
+    const supported = getSupportedLanguageIds().join(', ');
+    return {
+      content: [{ type: 'text', text: `Unsupported language: "${language}". Supported: ${supported}` }],
+      isError: true,
+    };
+  }
+
   // Discover files
   let filePaths: string[];
   try {
@@ -131,6 +142,7 @@ export async function handleGetCostCeiling(
       sdkInitFile: config.sdkInitFile,
       maxFilesPerRun,
       targetPath: input.path,
+      provider: discoveryProvider,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -13,13 +13,14 @@ import type {
   FunctionClassification,
   LanguagePromptSections,
   Example,
+  InstrumentationDetectionResult,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
 import { classifyFunctions, detectOTelImports } from './ast.ts';
-import { checkSyntax, checkLint, formatCode } from './validation.ts';
+import { checkSyntax, checkLint, formatCode, buildPrettierConstraint } from './validation.ts';
 import { extractExportedFunctions } from './extraction.ts';
-import { reassembleFunctions as reassembleFunctionsImpl } from './reassembly.ts';
+import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from './reassembly.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
 import { cov001Rule } from './rules/cov001.ts';
@@ -272,6 +273,23 @@ export class JavaScriptProvider implements LanguageProvider {
     return result.hasOTelImports || result.existingSpanPatterns.length > 0;
   }
 
+  detectOTelInstrumentation(source: string): InstrumentationDetectionResult {
+    const project = new Project({
+      compilerOptions: { allowJs: true },
+      useInMemoryFileSystem: true,
+    });
+    const sourceFile = project.createSourceFile('file.js', source);
+    const result = detectOTelImports(sourceFile);
+    return {
+      hasExistingInstrumentation: result.existingSpanPatterns.length > 0,
+      spanPatterns: result.existingSpanPatterns.map(p => ({
+        patternName: p.pattern,
+        lineNumber: p.lineNumber,
+        enclosingFunction: p.enclosingFunction,
+      })),
+    };
+  }
+
   // ── Function-level fallback ────────────────────────────────────────────────
 
   extractFunctions(source: string): ExtractedFunction[] {
@@ -315,6 +333,14 @@ export class JavaScriptProvider implements LanguageProvider {
       sourceText: fn.sourceText,
     })) as unknown as JsExtracted;
     return reassembleFunctionsImpl(original, adapted, results);
+  }
+
+  ensureTracerAfterImports(code: string): string {
+    return ensureTracerAfterImportsImpl(code);
+  }
+
+  getFormatterConstraint(filePath: string): Promise<string> {
+    return buildPrettierConstraint(filePath);
   }
 
   // ── LLM prompt context ────────────────────────────────────────────────────

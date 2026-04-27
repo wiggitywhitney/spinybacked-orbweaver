@@ -368,6 +368,39 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
     });
   });
 
+  describe('ensureTracerAfterImports', () => {
+    it('returns code unchanged when tracer init is already after imports', () => {
+      const code = [
+        `import { trace } from '@opentelemetry/api';`,
+        ``,
+        `const tracer = trace.getTracer('my-service');`,
+        ``,
+        `export function doWork(): number { return 1; }`,
+      ].join('\n');
+      expect(provider.ensureTracerAfterImports(code)).toBe(code);
+    });
+
+    it('moves tracer init that appears between imports to after last import', () => {
+      const code = [
+        `import { trace } from '@opentelemetry/api';`,
+        `const tracer = trace.getTracer('my-service');`,
+        `import { context } from '@opentelemetry/api';`,
+        ``,
+        `export function doWork(): number { return 1; }`,
+      ].join('\n');
+      const result = provider.ensureTracerAfterImports(code);
+      const lines = result.split('\n');
+      const tracerIdx = lines.findIndex(l => l.includes('getTracer'));
+      const lastImportIdx = lines.reduce((max, l, i) => l.startsWith('import ') ? i : max, -1);
+      expect(tracerIdx).toBeGreaterThan(lastImportIdx);
+    });
+
+    it('returns code unchanged when no tracer init present', () => {
+      const code = `import { trace } from '@opentelemetry/api';\nexport function doWork(): number { return 1; }`;
+      expect(provider.ensureTracerAfterImports(code)).toBe(code);
+    });
+  });
+
   // ─── Prompt sections ────────────────────────────────────────────────────
 
   describe('getSystemPromptSections', () => {
@@ -450,6 +483,75 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
       } finally {
         await rm(tmpDir, { recursive: true });
       }
+    });
+  });
+
+  // ─── detectOTelInstrumentation ────────────────────────────────────────────
+
+  describe('detectOTelInstrumentation', () => {
+    it('returns no patterns for uninstrumented TypeScript files', () => {
+      const source = `export function greet(name: string): string { return name; }`;
+      const result = provider.detectOTelInstrumentation(source);
+      expect(result.hasExistingInstrumentation).toBe(false);
+      expect(result.spanPatterns).toEqual([]);
+    });
+
+    it('detects startActiveSpan with enclosing function name and line number', () => {
+      const source = `import { trace } from '@opentelemetry/api';
+const tracer = trace.getTracer('my-service');
+export async function fetchUser(id: string): Promise<{ id: string }> {
+  return tracer.startActiveSpan('fetchUser', async (span) => {
+    span.end();
+    return { id };
+  });
+}`;
+      const result = provider.detectOTelInstrumentation(source);
+      expect(result.hasExistingInstrumentation).toBe(true);
+      expect(result.spanPatterns).toHaveLength(1);
+      expect(result.spanPatterns[0]?.patternName).toBe('startActiveSpan');
+      expect(result.spanPatterns[0]?.enclosingFunction).toBe('fetchUser');
+      expect(result.spanPatterns[0]?.lineNumber).toBeGreaterThanOrEqual(4);
+    });
+
+    it('detects startSpan pattern in TypeScript', () => {
+      const source = `const span = tracer.startSpan('ts-op');
+span.end();`;
+      const result = provider.detectOTelInstrumentation(source);
+      expect(result.hasExistingInstrumentation).toBe(true);
+      expect(result.spanPatterns).toHaveLength(1);
+      expect(result.spanPatterns[0]?.patternName).toBe('startSpan');
+    });
+
+    it('detects multiple span patterns in partially instrumented TypeScript file', () => {
+      const source = `export async function handleRequest(req: Request): Promise<Response> {
+  return tracer.startActiveSpan('handleRequest', async (span) => {
+    span.end();
+    return new Response();
+  });
+}
+export async function processData(data: unknown): Promise<unknown> {
+  return data;
+}`;
+      const result = provider.detectOTelInstrumentation(source);
+      expect(result.hasExistingInstrumentation).toBe(true);
+      expect(result.spanPatterns).toHaveLength(1);
+      expect(result.spanPatterns[0]?.enclosingFunction).toBe('handleRequest');
+    });
+
+    it('handles TypeScript generics and type annotations without breaking detection', () => {
+      const source = `export async function query<T extends Record<string, unknown>>(
+  sql: string,
+  params: T[],
+): Promise<T[]> {
+  return tracer.startActiveSpan('db.query', async (span) => {
+    span.end();
+    return params;
+  });
+}`;
+      const result = provider.detectOTelInstrumentation(source);
+      expect(result.hasExistingInstrumentation).toBe(true);
+      expect(result.spanPatterns).toHaveLength(1);
+      expect(result.spanPatterns[0]?.enclosingFunction).toBe('query');
     });
   });
 });

@@ -2,12 +2,7 @@
 // ABOUTME: Follows the spec's 7-section structure with Claude 4.x prompt hygiene.
 
 import type { AgentConfig } from '../config/schema.ts';
-import type { OTelImportDetectionResult } from '../languages/javascript/ast.ts';
-import type { LanguageProvider, Example } from '../languages/types.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
-
-/** Default provider used when buildSystemPrompt is called without a provider. */
-const DEFAULT_PROVIDER: LanguageProvider = new JavaScriptProvider();
+import type { LanguageProvider, Example, InstrumentationDetectionResult } from '../languages/types.ts';
 
 /**
  * Format a list of instrumentation examples into the XML block used in the system prompt.
@@ -71,16 +66,15 @@ function extractAttributeNames(schema: object): string[] {
  *
  * @param resolvedSchema - The resolved Weaver schema object (from `weaver registry resolve`)
  * @param projectName - Optional project name used as tracer name fallback when schema namespace is absent
- * @param provider - Language provider supplying language-specific prompt sections and examples.
- *   Defaults to JavaScript. Pass the active provider when instrumenting non-JS files.
+ * @param provider - Language provider supplying language-specific prompt sections and examples
  * @returns The complete system prompt string
  */
 export function buildSystemPrompt(
   resolvedSchema: object,
-  projectName?: string,
-  provider?: LanguageProvider,
+  projectName: string | undefined,
+  provider: LanguageProvider,
 ): string {
-  const activeProvider = provider ?? DEFAULT_PROVIDER;
+  const activeProvider = provider;
   const sections = activeProvider.getSystemPromptSections();
   const examples = activeProvider.getInstrumentationExamples();
 
@@ -178,7 +172,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Gate Rules (violation = rejection)
 
-- **NDS-001**: Output must be syntactically valid JavaScript (\`node --check\` must pass)
+- **NDS-001**: Output must be syntactically valid ${activeProvider.displayName}
 - **NDS-002**: Pre-existing tests must still pass after your changes
 - **NDS-003**: Do NOT modify, remove, or reorder any non-instrumentation code. Only add instrumentation.
 
@@ -301,7 +295,7 @@ Return an empty array if no refactors are needed.
 
 You are returning structured JSON via the output schema. Fill in each field:
 
-- \`instrumentedCode\`: The complete instrumented JavaScript file. Must be syntactically valid JavaScript. Must contain ALL original code plus instrumentation additions. No markdown fences, no explanations, no partial output. Files containing placeholder comments (\`// ...\`, \`// existing code\`, \`// rest of function\`, \`/* ... */\`) will be rejected by validation.
+- \`instrumentedCode\`: The complete instrumented ${activeProvider.displayName} file. Must be syntactically valid ${activeProvider.displayName}. Must contain ALL original code plus instrumentation additions. No markdown fences, no explanations, no partial output. Files containing placeholder comments (\`// ...\`, \`// existing code\`, \`// rest of function\`, \`/* ... */\`) will be rejected by validation.
 - \`librariesNeeded\`: Array of \`{ package, importName }\` for auto-instrumentation libraries detected. Empty array if none.
 - \`schemaExtensions\`: Array of dot-separated string IDs for any new schema entries created (attribute keys or span names not already in the schema). Empty array if none. Format: \`<namespace>.<category>.<name>\` for attributes, \`span.<namespace>.<category>.<name>\` for spans. Use dots as separators — NOT colons, hyphens, or slashes. Example: \`span.commit_story.summary.generate_daily\`, NOT \`span:commit_story.summary.generate_daily\`. Each extension MUST have a corresponding note in \`notes\` explaining why no existing key was a semantic match and what data the new key captures.
 - \`attributesCreated\`: Count of new span attributes added that were not in the existing schema. 0 if none.
@@ -332,9 +326,10 @@ You are returning structured JSON via the output schema. Fill in each field:
  * When OTel detection results are provided, includes already-instrumented context
  * so the LLM knows which functions to skip.
  *
- * @param filePath - Absolute path to the JavaScript file
+ * @param filePath - Absolute path to the source file
  * @param originalCode - File contents before instrumentation
  * @param config - Validated agent configuration (used for large file threshold)
+ * @param provider - Language provider used to name the language in the message
  * @param detectionResult - Optional OTel detection result from AST analysis
  * @param existingSpanNames - Optional span names already declared by earlier files; agent must not reuse them
  * @param prettierConstraint - Optional prose constraint derived from the project's non-default Prettier config
@@ -344,14 +339,15 @@ export function buildUserMessage(
   filePath: string,
   originalCode: string,
   config: AgentConfig,
-  detectionResult?: OTelImportDetectionResult,
+  provider: LanguageProvider,
+  detectionResult?: InstrumentationDetectionResult,
   existingSpanNames?: string[],
   prettierConstraint?: string,
 ): string {
   const lineCount = originalCode.split('\n').length;
   const isLargeFile = lineCount > config.largeFileThresholdLines;
 
-  let message = `Instrument the following JavaScript file.
+  let message = `Instrument the following ${provider.displayName} file.
 
 **File**: \`${filePath}\`
 **Size**: ${lineCount} lines`;
@@ -360,10 +356,10 @@ export function buildUserMessage(
     message += `\n\n**Warning**: This is a large file (${lineCount} lines, threshold: ${config.largeFileThresholdLines}). Pay extra attention to returning the complete file. Every line of the original must be present in the output.`;
   }
 
-  if (detectionResult && detectionResult.existingSpanPatterns.length > 0) {
-    const patternDescriptions = detectionResult.existingSpanPatterns.map(p => {
+  if (detectionResult && detectionResult.spanPatterns.length > 0) {
+    const patternDescriptions = detectionResult.spanPatterns.map(p => {
       const fn = p.enclosingFunction ? ` in \`${p.enclosingFunction}\`` : '';
-      return `- \`${p.pattern}\`${fn} (line ${p.lineNumber})`;
+      return `- \`${p.patternName}\`${fn} (line ${p.lineNumber})`;
     });
 
     message += `

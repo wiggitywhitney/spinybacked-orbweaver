@@ -4,7 +4,6 @@
 import { glob, stat } from 'node:fs/promises';
 import { isAbsolute, join, normalize, relative } from 'node:path';
 import type { LanguageProvider } from '../languages/types.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
 
 /** Options controlling which files are discovered. */
 export interface DiscoverFilesOptions {
@@ -18,21 +17,21 @@ export interface DiscoverFilesOptions {
   targetPath?: string;
   /**
    * Language provider used to determine glob pattern, file extensions, and default excludes.
-   * Defaults to the JavaScript provider when not specified.
+   * Required — callers must supply a provider explicitly.
    */
-  provider?: LanguageProvider;
+  provider: LanguageProvider;
 }
 
 /**
- * Discover JavaScript files in a project directory for instrumentation.
+ * Discover source files in a project directory for instrumentation.
  *
- * Finds all **\/*.js files, applies exclude patterns, auto-excludes
- * node_modules and the SDK init file, enforces the file limit, and
- * returns sorted absolute paths.
+ * Uses the supplied LanguageProvider's glob pattern to find matching files,
+ * applies exclude patterns, auto-excludes node_modules and the SDK init file,
+ * enforces the file limit, and returns sorted absolute paths.
  *
  * @param projectDir - Absolute path to the project root directory.
- * @param options - Discovery options (exclude patterns, SDK init file, file limit).
- * @returns Sorted array of absolute paths to discovered JS files.
+ * @param options - Discovery options (provider, exclude patterns, SDK init file, file limit).
+ * @returns Sorted array of absolute paths to discovered source files.
  * @throws When zero files are discovered or file count exceeds maxFilesPerRun.
  */
 export async function discoverFiles(
@@ -40,7 +39,7 @@ export async function discoverFiles(
   options: DiscoverFilesOptions,
 ): Promise<string[]> {
   const { exclude, sdkInitFile, maxFilesPerRun, targetPath } = options;
-  const provider: LanguageProvider = options.provider ?? new JavaScriptProvider();
+  const provider: LanguageProvider = options.provider;
 
   // Normalize the SDK init file path for comparison (strip leading ./)
   const normalizedSdkInit = normalize(sdkInitFile);

@@ -6,10 +6,12 @@ import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, copyFileS
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'project');
+const jsProvider = new JavaScriptProvider();
 const API_KEY_AVAILABLE = !!process.env.ANTHROPIC_API_KEY;
 
 /** Load a fixture file. */
@@ -78,7 +80,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const config = makeConfig();
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // The fix loop should eventually succeed (possibly after retries)
@@ -122,7 +124,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const config = makeConfig();
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       expect(result.status).toBe('success');
@@ -142,7 +144,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const config = makeConfig({ maxTokensPerFile: 1000 });
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // Should fail due to budget (pre-flight estimate or post-hoc check)
@@ -176,7 +178,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const config = makeConfig({ maxFixAttempts: 0, maxTokensPerFile: 80000 });
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // Whether success or failure, verify the contract:
@@ -217,7 +219,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const config = makeConfig();
 
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // The strategy must match the attempt number
@@ -245,7 +247,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
 
       // Count files in os.tmpdir() that match our pattern before/after
       const result: FileResult = await instrumentWithRetry(
-        filePath, originalCode, resolvedSchema, config,
+        filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
 
       // Whether success or failure, the snapshot file should be cleaned up.

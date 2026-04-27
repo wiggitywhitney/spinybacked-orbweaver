@@ -2,7 +2,7 @@
 // ABOUTME: Delegates to the shared JS ast helpers (ts-morph handles TypeScript natively) with TypeScript compiler options.
 
 import { Project } from 'ts-morph';
-import type { FunctionInfo, ImportInfo, ExportInfo, FunctionClassification, ExtractedFunction } from '../types.ts';
+import type { FunctionInfo, ImportInfo, ExportInfo, FunctionClassification, ExtractedFunction, InstrumentationDetectionResult } from '../types.ts';
 import { classifyFunctions, detectOTelImports } from '../javascript/ast.ts';
 import { extractExportedFunctions } from '../javascript/extraction.ts';
 
@@ -195,6 +195,28 @@ export function detectTsExistingInstrumentation(source: string): boolean {
   const sourceFile = createTsSourceFile(project, source);
   const result = detectOTelImports(sourceFile);
   return result.hasOTelImports || result.existingSpanPatterns.length > 0;
+}
+
+/**
+ * Detect existing OTel instrumentation in TypeScript source and return detailed span-pattern data.
+ *
+ * Delegates to `detectOTelImports` from the JS ast module — ts-morph handles TypeScript
+ * natively, so the same span-pattern detection logic applies.
+ *
+ * @param source - TypeScript source code text
+ */
+export function detectTsOTelInstrumentation(source: string): InstrumentationDetectionResult {
+  const project = createTsProject();
+  const sourceFile = createTsSourceFile(project, source);
+  const result = detectOTelImports(sourceFile);
+  return {
+    hasExistingInstrumentation: result.existingSpanPatterns.length > 0,
+    spanPatterns: result.existingSpanPatterns.map(p => ({
+      patternName: p.pattern,
+      lineNumber: p.lineNumber,
+      enclosingFunction: p.enclosingFunction,
+    })),
+  };
 }
 
 /**

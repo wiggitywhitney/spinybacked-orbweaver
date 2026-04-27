@@ -8,6 +8,9 @@ import { tmpdir } from 'node:os';
 
 import { validateFile } from '../../src/validation/chain.ts';
 import type { ValidateFileInput, ValidationConfig } from '../../src/validation/types.ts';
+import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+
+const jsProvider = new JavaScriptProvider();
 
 /**
  * Schema with attribute groups but NO span definitions.
@@ -143,6 +146,7 @@ describe('full pipeline with judge-enhanced rules', () => {
       instrumentedCode,
       filePath,
       config: buildConfig(mockClient),
+      provider: jsProvider,
     };
 
     const result = await validateFile(input);
@@ -193,6 +197,7 @@ describe('full pipeline with judge-enhanced rules', () => {
       instrumentedCode,
       filePath,
       config: buildConfig(mockClient),
+      provider: jsProvider,
     };
 
     const result = await validateFile(input);
@@ -222,6 +227,7 @@ describe('full pipeline with judge-enhanced rules', () => {
       instrumentedCode,
       filePath,
       config: buildConfig(mockClient),
+      provider: jsProvider,
     };
 
     const result = await validateFile(input);
@@ -258,6 +264,7 @@ describe('full pipeline with judge-enhanced rules', () => {
         resolvedSchema: schemaNoSpanDefs,
         // No anthropicClient — judge won't run
       },
+      provider: jsProvider,
     };
 
     const result = await validateFile(input);
@@ -296,6 +303,7 @@ describe('full pipeline with judge-enhanced rules', () => {
       instrumentedCode,
       filePath,
       config: buildConfig(mockClient),
+      provider: jsProvider,
     };
 
     const result = await validateFile(input);
@@ -338,6 +346,7 @@ describe('full pipeline with judge-enhanced rules', () => {
       instrumentedCode,
       filePath,
       config: buildConfig(mockClient),
+      provider: jsProvider,
     };
 
     const result = await validateFile(input);

@@ -6,7 +6,6 @@ import { resolve, join, basename } from 'node:path';
 import { formatTestOutput } from './test-output.ts';
 import { execFile } from 'node:child_process';
 import type { LanguageProvider } from '../languages/types.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';
@@ -214,9 +213,9 @@ interface DispatchFilesOptions {
   };
   /**
    * Language provider used for project name reading, validation, and function-level fallback.
-   * Defaults to the JavaScript provider when not specified.
+   * Required — callers must supply a provider explicitly.
    */
-  provider?: LanguageProvider;
+  provider: LanguageProvider;
 }
 
 /**
@@ -247,24 +246,27 @@ export async function dispatchFiles(
   callbacks?: CoordinatorCallbacks,
   options?: DispatchFilesOptions,
 ): Promise<FileResult[]> {
-  const resolveFn = options?.deps?.resolveSchema ?? resolveSchema;
-  const instrumentFn = options?.deps?.instrumentWithRetry
+  if (!options || !options.provider) {
+    throw new Error('dispatchFiles requires a language provider — pass provider in options');
+  }
+  const resolveFn = options.deps?.resolveSchema ?? resolveSchema;
+  const instrumentFn = options.deps?.instrumentWithRetry
     ?? (await import('../fix-loop/index.ts')).instrumentWithRetry;
-  const writeExtFn = options?.deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
-  const snapshotFn = options?.deps?.snapshotExtensionsFile ?? defaultSnapshotExtensionsFile;
-  const restoreFn = options?.deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
-  const validateFn = options?.deps?.validateRegistry ?? validateRegistryCheck;
-  const registryDir = options?.registryDir;
-  const extWarnings = options?.schemaExtensionWarnings;
-  const isDryRun = options?.dryRun === true;
-  const provider: LanguageProvider = options?.provider ?? new JavaScriptProvider();
-  const writeLogFn = options?.writeFailureLog ?? ((p: string, c: string) => writeFile(p, c, 'utf-8'));
+  const writeExtFn = options.deps?.writeSchemaExtensions ?? defaultWriteSchemaExtensions;
+  const snapshotFn = options.deps?.snapshotExtensionsFile ?? defaultSnapshotExtensionsFile;
+  const restoreFn = options.deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
+  const validateFn = options.deps?.validateRegistry ?? validateRegistryCheck;
+  const registryDir = options.registryDir;
+  const extWarnings = options.schemaExtensionWarnings;
+  const isDryRun = options.dryRun === true;
+  const provider: LanguageProvider = options.provider;
+  const writeLogFn = options.writeFailureLog ?? ((p: string, c: string) => writeFile(p, c, 'utf-8'));
 
   const total = filePaths.length;
   const results: FileResult[] = [];
   const interval = config.schemaCheckpointInterval;
   const locThreshold = config.checkpointLocThreshold;
-  const checkpointConfig = options?.checkpoint;
+  const checkpointConfig = options.checkpoint;
   let filesSinceLastCheckpoint = 0;
   let locSinceLastCheckpoint = 0;
   let lastCheckpointResultIndex = 0;
@@ -295,7 +297,7 @@ export async function dispatchFiles(
   }
 
   // Take initial checkpoint window snapshot for rollback capability
-  if (registryDir && !isDryRun && options?.runTestCommand) {
+  if (registryDir && !isDryRun && options.runTestCommand) {
     try {
       checkpointExtensionsSnapshot = await snapshotFn(registryDir);
       checkpointAccumulatorLength = accumulatedExtensions.length;
@@ -323,7 +325,7 @@ export async function dispatchFiles(
       const fileContent = await readFile(filePath, 'utf-8');
 
       // Check if already instrumented — skip without schema resolution or LLM call
-      if (isAlreadyInstrumented(fileContent)) {
+      if (provider.detectOTelInstrumentation(fileContent).hasExistingInstrumentation) {
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
         abortTracker.record(skipped);
@@ -509,7 +511,7 @@ export async function dispatchFiles(
           } catch { /* LOC tracking degrades gracefully — re-read failure is non-fatal */ }
         }
 
-        if (!isDryRun && options?.runTestCommand) {
+        if (!isDryRun && options.runTestCommand) {
           checkpointWindowFiles.push({
             path: filePath,
             originalContent: fileContent,
@@ -542,7 +544,7 @@ export async function dispatchFiles(
             checkpointConfig.baselineSnapshotDir,
             filePath,
             filesSinceLastCheckpoint,
-            options?.checkpointDeps,
+            options.checkpointDeps,
             resultsSinceCheckpoint,
           );
 
@@ -551,7 +553,7 @@ export async function dispatchFiles(
           let checkpointPassed = checkpointResult.passed;
           let testFailedAtCheckpoint = false;
           let lastTestOutput: string | undefined;
-          if (checkpointResult.passed && options?.runTestCommand && await hasTestSuite(config.testCommand, projectDir)) {
+          if (checkpointResult.passed && options.runTestCommand && await hasTestSuite(config.testCommand, projectDir)) {
             try {
               const testResult = await options.runTestCommand(projectDir, config.testCommand);
               if (!testResult.passed) {
@@ -625,7 +627,7 @@ export async function dispatchFiles(
             filesSinceLastCheckpoint = 0;
             locSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
-          } else if (testFailedAtCheckpoint && options?.baselineTestPassed === true) {
+          } else if (testFailedAtCheckpoint && options.baselineTestPassed === true) {
             // Test failure with passing baseline — attempt smart (targeted) rollback first.
             // Parse stack trace to identify which window files caused the failure.
             // Only revert those files and re-run; fall back to full rollback on re-run failure
@@ -817,7 +819,7 @@ export async function dispatchFiles(
   }
 
   // Expose checkpoint window state for end-of-run rollback in coordinate()
-  if (options?.checkpointWindowRef) {
+  if (options.checkpointWindowRef) {
     options.checkpointWindowRef.files = [...checkpointWindowFiles];
     options.checkpointWindowRef.extensionsSnapshot = checkpointExtensionsSnapshot;
   }

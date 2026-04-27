@@ -11,14 +11,9 @@ import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
 import type { LanguageProvider } from '../languages/types.ts';
-import { JavaScriptProvider } from '../languages/javascript/index.ts';
-
-/** Default provider used when no provider is passed in InstrumentWithRetryOptions. */
-const DEFAULT_PROVIDER: LanguageProvider = new JavaScriptProvider();
 import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
-import { ensureTracerAfterImports } from '../languages/javascript/reassembly.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
@@ -56,6 +51,7 @@ export interface InstrumentWithRetryDeps {
     originalCode: string,
     resolvedSchema: object,
     config: AgentConfig,
+    provider: LanguageProvider,
     options?: InstrumentFileCallOptions,
   ) => Promise<InstrumentFileResult>;
   validateFile: (input: ValidateFileInput) => Promise<ValidationResult>;
@@ -81,9 +77,9 @@ interface InstrumentWithRetryOptions {
    * Language provider for the file being instrumented.
    * Passed to the validation chain (checkSyntax, lintCheck) and used to determine
    * the temp file extension for function-level fallback.
-   * Defaults to the JavaScript provider when not specified.
+   * Required — callers must supply a provider explicitly.
    */
-  provider?: LanguageProvider;
+  provider: LanguageProvider;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -99,18 +95,16 @@ const ZERO_TOKENS: TokenUsage = {
 const MAX_OUTPUT_TOKENS_PER_FILE = 100_000;
 
 /**
- * Count the number of startActiveSpan calls in instrumented code.
+ * Count the number of spans in instrumented code via the provider's detection.
  * This is the authoritative span count — it reflects what's actually
  * in the committed code, not the LLM's self-reported spanCategories.
  *
- * @param instrumentedCode - The instrumented JavaScript code
- * @returns Number of startActiveSpan calls found
+ * @param provider - Language provider used to detect span patterns
+ * @param instrumentedCode - The instrumented source code
+ * @returns Number of span patterns found
  */
-function countSpansInCode(instrumentedCode: string): number {
-  const pattern = /\.startActiveSpan\s*\(/g;
-  let count = 0;
-  while (pattern.exec(instrumentedCode)) count++;
-  return count;
+function countSpansInCode(provider: LanguageProvider, instrumentedCode: string): number {
+  return provider.detectOTelInstrumentation(instrumentedCode).spanPatterns.length;
 }
 
 /**
@@ -389,22 +383,23 @@ export async function instrumentWithRetry(
   originalCode: string,
   resolvedSchema: object,
   config: AgentConfig,
-  options?: InstrumentWithRetryOptions,
+  options: InstrumentWithRetryOptions,
 ): Promise<FileResult> {
-  const deps = options?.deps;
+  const deps = options.deps;
   const instrumentFileFn = deps?.instrumentFile ?? (await import('../agent/index.ts')).instrumentFile;
   const validateFileFn = deps?.validateFile ?? (await import('../validation/chain.ts')).validateFile;
   const formatFeedbackFn = (await import('../validation/feedback.ts')).formatFeedbackForAgent;
-  const anthropicClient = options?.anthropicClient ?? new Anthropic();
-  const provider = options?.provider ?? DEFAULT_PROVIDER;
+  const anthropicClient = options.anthropicClient ?? new Anthropic();
+  const provider = options.provider;
 
   let wholeFileResult: FileResult;
   try {
     wholeFileResult = await executeRetryLoop(
       filePath, originalCode, resolvedSchema, config,
       instrumentFileFn, validateFileFn, formatFeedbackFn,
-      options?.projectRoot, anthropicClient, options?.clock,
-      options?.existingSpanNames, provider,
+      provider,
+      options.projectRoot, anthropicClient, options.clock,
+      options.existingSpanNames,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -425,7 +420,7 @@ export async function instrumentWithRetry(
   }
 
   // Skip function-level fallback for recursive per-function calls (prevents infinite recursion)
-  if (options?._skipFunctionFallback) {
+  if (options._skipFunctionFallback) {
     return wholeFileResult;
   }
 
@@ -450,11 +445,11 @@ async function executeRetryLoop(
   instrumentFileFn: InstrumentWithRetryDeps['instrumentFile'],
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
   formatFeedbackFn: (result: ValidationResult) => string,
+  provider: LanguageProvider,
   projectRoot?: string,
   anthropicClient?: Anthropic,
   clock?: () => number,
   existingSpanNames?: string[],
-  provider: LanguageProvider = DEFAULT_PROVIDER,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -573,7 +568,7 @@ async function executeRetryLoop(
 
     // Call instrumentFile
     const instrumentResult = await instrumentFileFn(
-      filePath, originalCode, resolvedSchema, config, callOptions,
+      filePath, originalCode, resolvedSchema, config, provider, callOptions,
     );
 
     if (!instrumentResult.success) {
@@ -625,10 +620,7 @@ async function executeRetryLoop(
     const budgetExceeded = totalTokens(cumulativeTokens) > config.maxTokensPerFile;
 
     // Fix tracer init placement: ensure it's after all imports, not between them.
-    // Only applies to JS/TS — ensureTracerAfterImports parses JS/TS import syntax.
-    if (provider.id === 'javascript' || provider.id === 'typescript') {
-      output.instrumentedCode = ensureTracerAfterImports(output.instrumentedCode);
-    }
+    output.instrumentedCode = provider.ensureTracerAfterImports(output.instrumentedCode);
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -655,7 +647,7 @@ async function executeRetryLoop(
     llmRefactorsPerAttempt.push(output.suggestedRefactors ?? []);
 
     if (validation.passed) {
-      const spansAdded = countSpansInCode(output.instrumentedCode);
+      const spansAdded = countSpansInCode(provider, output.instrumentedCode);
 
       // When the agent adds 0 spans but leaves OTel imports/tracer init behind,
       // restore the original file so it's byte-identical to the input.
@@ -714,6 +706,7 @@ async function executeRetryLoop(
           passingCode,
           resolvedSchema,
           config,
+          provider,
           { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames },
         );
 
@@ -721,10 +714,7 @@ async function executeRetryLoop(
           const advisoryOutput = advisoryInstrumentResult.output;
           cumulativeTokens = addTokenUsage(cumulativeTokens, advisoryOutput.tokenUsage);
 
-          let advisoryCode = advisoryOutput.instrumentedCode;
-          if (provider.id === 'javascript' || provider.id === 'typescript') {
-            advisoryCode = ensureTracerAfterImports(advisoryCode);
-          }
+          let advisoryCode = provider.ensureTracerAfterImports(advisoryOutput.instrumentedCode);
           await writeFile(filePath, advisoryCode, 'utf-8');
 
           const advisoryValidation = await validateFileFn({
@@ -842,9 +832,9 @@ async function functionLevelFallback(
   config: AgentConfig,
   wholeFileResult: FileResult,
   validateFileFn: InstrumentWithRetryDeps['validateFile'],
-  retryOptions?: InstrumentWithRetryOptions,
+  retryOptions: InstrumentWithRetryOptions,
 ): Promise<FileResult | null> {
-  const fnProvider = retryOptions?.provider ?? DEFAULT_PROVIDER;
+  const fnProvider = retryOptions.provider;
 
   // Extract functions via provider (language-agnostic interface)
   const extractedFunctions = fnProvider.extractFunctions(originalCode);
@@ -975,8 +965,7 @@ async function functionLevelFallback(
   // Recompute successful after syntax check may have marked additional functions as failed
   successful = fnResults.filter(r => r.success);
 
-  const validationConfig = buildValidationConfig(config, retryOptions?.projectRoot, resolvedSchema, retryOptions?.anthropicClient);
-  const fallbackProvider = retryOptions?.provider ?? DEFAULT_PROVIDER;
+  const validationConfig = buildValidationConfig(config, retryOptions.projectRoot, resolvedSchema, retryOptions.anthropicClient);
   // Collect schema extensions from successful functions so SCH-001 accepts
   // span names the agent declared as extensions (not just base registry names).
   const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
@@ -987,7 +976,7 @@ async function functionLevelFallback(
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,
-    provider: fallbackProvider,
+    provider: fnProvider,
   });
 
   // Calculate cumulative token usage (whole-file attempts + function-level)
@@ -1066,7 +1055,7 @@ async function functionLevelFallback(
   const partialResults = fnResults.map(r =>
     r.success ? r : { ...r, instrumentedCode: undefined },
   );
-  const partialCode = fallbackProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
+  const partialCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
 
   await writeFile(filePath, partialCode, 'utf-8');
   const partialValidation = await validateFileFn({
@@ -1076,7 +1065,7 @@ async function functionLevelFallback(
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,
-    provider: fallbackProvider,
+    provider: fnProvider,
   });
 
   // Commit the partial code regardless of whether blocking rules fire on the assembly.

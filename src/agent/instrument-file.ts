@@ -3,13 +3,11 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { Project } from 'ts-morph';
 import type { AgentConfig } from '../config/schema.ts';
-import { detectOTelImports, classifyFunctions } from '../languages/javascript/ast.ts';
+import type { LanguageProvider } from '../languages/types.ts';
 import { LlmOutputSchema } from './schema.ts';
 import type { InstrumentationOutput, TokenUsage } from './schema.ts';
 import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
-import { buildPrettierConstraint } from '../languages/javascript/validation.ts';
 import { detectElision } from './elision.ts';
 
 /**
@@ -103,10 +101,11 @@ function extractTokenUsage(usage: {
  * validates the response with basic elision rejection, and returns a structured result.
  * No validation beyond elision rejection — Phase 2 adds the formal validation chain.
  *
- * @param filePath - Absolute path to the JavaScript file
+ * @param filePath - Absolute path to the source file
  * @param originalCode - File contents before instrumentation
  * @param resolvedSchema - Weaver schema (already resolved via `weaver registry resolve`)
  * @param config - Validated agent configuration
+ * @param provider - Language provider for AST operations and detection
  * @param options - Optional: injected Anthropic client for testing
  * @returns Structured result — success with InstrumentationOutput, or failure with diagnostics
  */
@@ -115,22 +114,27 @@ export async function instrumentFile(
   originalCode: string,
   resolvedSchema: object,
   config: AgentConfig,
+  provider: LanguageProvider,
   options?: InstrumentFileOptions,
 ): Promise<InstrumentFileResult> {
   const client = options?.client ?? new Anthropic();
 
   // Detect existing OTel instrumentation before calling the LLM
-  const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
-  const sourceFile = project.createSourceFile('input.js', originalCode);
-  const detectionResult = detectOTelImports(sourceFile);
-
-  const functions = classifyFunctions(sourceFile);
+  let detectionResult: ReturnType<typeof provider.detectOTelInstrumentation>;
+  let functions: ReturnType<typeof provider.findFunctions>;
+  try {
+    detectionResult = provider.detectOTelInstrumentation(originalCode);
+    functions = provider.findFunctions(originalCode);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Language provider analysis failed: ${message}` };
+  }
   const exportedFunctions = functions.filter(f => f.isExported);
 
   // If all exported functions are already instrumented, skip the LLM call entirely
-  if (detectionResult.existingSpanPatterns.length > 0) {
+  if (detectionResult.hasExistingInstrumentation) {
     const instrumentedFunctionNames = new Set(
-      detectionResult.existingSpanPatterns
+      detectionResult.spanPatterns
         .map(p => p.enclosingFunction)
         .filter((name): name is string => name !== undefined),
     );
@@ -176,11 +180,11 @@ export async function instrumentFile(
     };
   }
 
-  const systemPrompt = buildSystemPrompt(resolvedSchema);
+  const systemPrompt = buildSystemPrompt(resolvedSchema, undefined, provider);
   // Skip Prettier config resolution on feedback-only turns — feedbackMessage replaces
   // userMessage entirely, so the constraint would never be read.
-  const prettierConstraint = options?.feedbackMessage ? undefined : await buildPrettierConstraint(filePath);
-  const userMessage = buildUserMessage(filePath, originalCode, config, detectionResult, options?.existingSpanNames, prettierConstraint);
+  const prettierConstraint = options?.feedbackMessage ? undefined : await provider.getFormatterConstraint(filePath);
+  const userMessage = buildUserMessage(filePath, originalCode, config, provider, detectionResult, options?.existingSpanNames, prettierConstraint);
 
   // Build messages: multi-turn (with prior conversation) or standard (initial generation)
   // feedbackMessage replaces the user message (multi-turn fix);

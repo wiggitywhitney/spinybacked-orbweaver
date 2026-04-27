@@ -181,6 +181,38 @@ export interface Example {
 }
 
 /**
+ * A single span creation pattern detected in a source file.
+ *
+ * Language-agnostic: `patternName` is the actual OTel API call found in the source,
+ * which is language-specific (e.g., 'startActiveSpan' or 'startSpan' for JS/TS).
+ */
+export interface DetectedSpanPattern {
+  /** OTel span creation call name found in the source (e.g., 'startActiveSpan', 'startSpan'). */
+  patternName: string;
+  /** Line number where the pattern appears (1-based). */
+  lineNumber: number;
+  /** Name of the enclosing function, if identifiable. */
+  enclosingFunction: string | undefined;
+}
+
+/**
+ * Result of richer OTel instrumentation detection.
+ *
+ * Language-agnostic replacement for the JS-specific `OTelImportDetectionResult`
+ * for callers that need span-pattern details (line numbers, enclosing function names).
+ * Returned by `LanguageProvider.detectOTelInstrumentation()`.
+ *
+ * The existing `detectExistingInstrumentation()` method (returns `boolean`) remains
+ * for callers that only need a presence check.
+ */
+export interface InstrumentationDetectionResult {
+  /** Whether any OTel span patterns were detected in the source file. */
+  hasExistingInstrumentation: boolean;
+  /** All span creation patterns found, with location and enclosing function data. */
+  spanPatterns: DetectedSpanPattern[];
+}
+
+/**
  * The full contract every language provider must implement.
  *
  * Providers are registered with the coordinator and selected by file extension.
@@ -327,6 +359,29 @@ export interface LanguageProvider {
    */
   detectExistingInstrumentation(source: string): boolean;
 
+  /**
+   * Detect existing OTel instrumentation and return detailed span-pattern information.
+   *
+   * Returns a richer result than `detectExistingInstrumentation()` — includes the
+   * line number and enclosing function name for each pattern found. Callers that need
+   * to build context-aware LLM prompts or make precise per-function skip decisions
+   * should use this method.
+   *
+   * Example:
+   * ```typescript
+   * const result = provider.detectOTelInstrumentation(source);
+   * if (result.hasExistingInstrumentation) {
+   *   const names = result.spanPatterns.map(
+   *     p => `${p.patternName} in ${p.enclosingFunction ?? '<module>'} at line ${p.lineNumber}`
+   *   );
+   *   // names: ["startActiveSpan in handleRequest at line 12", ...]
+   * }
+   * ```
+   *
+   * @param source - Source code text
+   */
+  detectOTelInstrumentation(source: string): InstrumentationDetectionResult;
+
   // -------------------------------------------------------------------------
   // Function-level fallback
   // -------------------------------------------------------------------------
@@ -359,6 +414,33 @@ export interface LanguageProvider {
     extracted: ExtractedFunction[],
     results: FunctionResult[],
   ): string;
+
+  /**
+   * Ensure tracer initialization (`const tracer = trace.getTracer(...)`) appears
+   * after all import statements, not between them.
+   *
+   * The LLM sometimes places the tracer init between import lines. For languages
+   * with module-level import blocks (JS/TS: ES modules, Python: top-level imports,
+   * Go: import declarations), having non-import statements between imports may be
+   * a syntax error or style violation. Providers that do not need this fixup
+   * should return the code unchanged.
+   *
+   * @param code - Instrumented code that may have misplaced tracer init
+   * @returns Code with tracer init moved after the last import (or unchanged)
+   */
+  ensureTracerAfterImports(code: string): string;
+
+  /**
+   * Return a language-specific formatter constraint string for the LLM prompt.
+   *
+   * For JavaScript and TypeScript, reads the project's Prettier config from
+   * `package.json` and returns formatting directives. For other languages,
+   * returns an empty string.
+   *
+   * @param filePath - Absolute path to the file being instrumented
+   * @returns Formatter constraint text, or empty string if none applies
+   */
+  getFormatterConstraint(filePath: string): Promise<string>;
 
   // -------------------------------------------------------------------------
   // LLM prompt context
