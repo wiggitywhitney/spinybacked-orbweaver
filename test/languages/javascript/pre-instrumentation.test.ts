@@ -7,10 +7,9 @@ import { JavaScriptProvider } from '../../../src/languages/javascript/index.ts';
 describe('JavaScriptProvider.preInstrumentationAnalysis()', () => {
   const provider = new JavaScriptProvider();
 
-  it('returns undefined when method does not exist on provider', () => {
-    // Verify the method is optional — callers must check before using.
-    // This test passes vacuously once the method is implemented; it guards
-    // the caller-side contract before the method exists.
+  it('exposes preInstrumentationAnalysis as a callable method', () => {
+    // The method is optional on the LanguageProvider interface — callers must check existence.
+    // This test confirms JavaScriptProvider implements it.
     expect(typeof provider.preInstrumentationAnalysis).toBe('function');
   });
 

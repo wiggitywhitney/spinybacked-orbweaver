@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- (2026-04-27) Completed the pre-instrumentation analysis pass feature (cross-file manifest, rules reference, README) — all planned milestones for this feature are now done except the diagnostic infrastructure enhancements in M8.
+- (2026-04-27) Completed the pre-instrumentation analysis pass feature (cross-file manifest, rules reference, README, and diagnostic infrastructure) — all planned milestones for this feature are now done.
 
 - (2026-04-27) Added cross-file instrumentation awareness to the pre-scan pass. When the coordinator instruments a codebase file-by-file, the agent working on each subsequent file now knows which functions from earlier files have already received spans. Previously, if file B called an async function imported from file A, the agent working on B had no way to know whether that imported function was already instrumented — it could either add a redundant span, skip it, or make a confused attempt. Now the coordinator builds a manifest of instrumented function names as it completes each file, and that manifest reaches the pre-scan before the LLM call. The user message gains a directive like "Already instrumented in `./services/orders.js`: `handleOrder`, `processPayment`. Do not re-instrument these." — turning a non-deterministic inference problem into an explicit fact.
 

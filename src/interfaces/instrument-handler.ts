@@ -1,9 +1,9 @@
 // ABOUTME: Handler for the `spiny-orb instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
@@ -170,12 +170,17 @@ export async function handleInstrument(
       deps.stderr(`Processing file ${index + 1} of ${total}: ${toDisplayPath(path, options.projectDir)}`);
     },
     onFileComplete: (result, _index, _total) => {
-      // Debug dump: write lastInstrumentedCode to debugDumpDir when set (runs regardless of verbose mode)
+      // Debug dump: write lastInstrumentedCode to debugDumpDir when set (runs regardless of verbose mode).
+      // Preserves relative path within debugDumpDir to avoid basename collisions (e.g., src/a/index.js
+      // and src/b/index.js are both named "index.js" but must not overwrite each other).
       if (options.debugDumpDir && result.lastInstrumentedCode) {
         try {
-          writeFileSync(join(options.debugDumpDir, basename(result.path)), result.lastInstrumentedCode, 'utf-8');
-        } catch {
-          // Non-fatal — debug dump failure should not affect the run
+          const rel = toDisplayPath(result.path, options.projectDir);
+          const outPath = join(options.debugDumpDir, rel.startsWith('..') ? basename(result.path) : rel);
+          mkdirSync(dirname(outPath), { recursive: true });
+          writeFileSync(outPath, result.lastInstrumentedCode, 'utf-8');
+        } catch (err) {
+          deps.stderr(`Warning: failed to write debug dump for ${toDisplayPath(result.path, options.projectDir)}: ${String(err)}`);
         }
       }
 

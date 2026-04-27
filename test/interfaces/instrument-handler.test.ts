@@ -941,8 +941,9 @@ describe('handleInstrument', () => {
       const deps = makeDeps({ coordinate: coordinateMock });
       await handleInstrument(makeOptions({ debugDumpDir: dumpDir }), deps);
 
-      // The failed file's lastInstrumentedCode should be written to dumpDir/app.js
-      const dumpedPath = join(dumpDir, 'app.js');
+      // The failed file's lastInstrumentedCode should be written preserving relative path
+      // (/test/project/src/app.js relative to projectDir /test/project → src/app.js)
+      const dumpedPath = join(dumpDir, 'src', 'app.js');
       expect(existsSync(dumpedPath)).toBe(true);
       expect(fsRead(dumpedPath, 'utf-8')).toBe('const x = 1; // agent output');
     });
