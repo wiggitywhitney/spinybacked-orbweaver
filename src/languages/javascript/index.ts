@@ -435,13 +435,30 @@ export class JavaScriptProvider implements LanguageProvider {
 
       const fnNode = fnNodeByName.get(fn.name);
       if (fnNode && hasDirectProcessExit(fnNode)) {
-        const constraintNote =
-          `Entry point \`${fn.name}\` (line ${fn.startLine}) requires a span — COV-001. ` +
-          `Has direct process.exit() calls: use minimal wrapper only ` +
-          `(startActiveSpan → try { original body } finally { span.end() }). ` +
-          `Do NOT add span.end() before process.exit() calls — the finally block handles ` +
-          `normal paths; process.exit() paths leak the span at runtime (known limitation). ` +
-          `Use only variables already in scope for setAttribute.`;
+        // Detect inner try/catch blocks that must be preserved when the function is wrapped.
+        const innerTryStatements = fnNode.getDescendantsOfKind(SyntaxKind.TryStatement);
+        let constraintNote: string;
+        if (innerTryStatements.length > 0) {
+          const blockWord = innerTryStatements.length === 1 ? 'block' : 'blocks';
+          const lineWord = innerTryStatements.length === 1 ? 'line' : 'lines';
+          const lineList = innerTryStatements.map(t => t.getStartLineNumber()).join(', ');
+          const preserveWord = innerTryStatements.length === 1 ? 'it' : 'them';
+          // Process-first: CRITICAL constraint up front, then how-to, then don'ts.
+          constraintNote =
+            `CRITICAL: \`${fn.name}\` (line ${fn.startLine}) contains ${innerTryStatements.length} inner try/catch ${blockWord} at ${lineWord} ${lineList} — preserve ${preserveWord} exactly. ` +
+            `Wrap the function by placing ALL original lines unchanged between \`try {\` and \`} finally { span.end(); }\`. ` +
+            `Do NOT remove, merge, hoist, or omit any original line including the inner try/catch. ` +
+            `Requires a span — COV-001. Has direct process.exit() calls: ` +
+            `do NOT add span.end() before individual process.exit() calls. ` +
+            `Do NOT add intermediate variables for setAttribute.`;
+        } else {
+          constraintNote =
+            `Entry point \`${fn.name}\` (line ${fn.startLine}) requires a span — COV-001. ` +
+            `Has direct process.exit() calls: place all original lines unchanged inside ` +
+            `the try block (startActiveSpan → try { [all original lines here] } finally { span.end() }). ` +
+            `Do NOT add span.end() before individual process.exit() calls — the finally block handles all exit paths. ` +
+            `Do NOT add intermediate variables for setAttribute — use only variables already in scope.`;
+        }
         processExitEntryPoints.push({ name: fn.name, startLine: fn.startLine, constraintNote });
       }
     }
@@ -451,8 +468,13 @@ export class JavaScriptProvider implements LanguageProvider {
       if (entryPointNames.has(fn.name)) continue;
 
       if (fn.isAsync) {
-        // COV-004: async non-entry-point functions need spans
-        asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+        // COV-004: async non-entry-point functions need spans — but apply the same
+        // process.exit() exception as the prompt rule: if the function calls
+        // process.exit() directly in its body, skip it (instrument sub-ops instead).
+        const fnNode = fnNodeByName.get(fn.name);
+        if (!fnNode || !hasDirectProcessExit(fnNode)) {
+          asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+        }
       } else {
         // RST-001: pure sync functions — no I/O to trace
         pureSyncFunctions.push({ name: fn.name, startLine: fn.startLine });

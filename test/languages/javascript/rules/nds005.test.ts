@@ -297,6 +297,36 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
       expect(failures[0].ruleId).toBe('NDS-005');
     });
 
+    it('missing-block message includes a preview of the original try/catch lines', () => {
+      // When NDS-005 fires for a removed try/catch, the error message must include
+      // the original block's source so the agent knows exactly what to restore.
+      const original = [
+        'async function processOrder(id) {',
+        '  try {',
+        '    const result = await fetchOrder(id);',
+        '    return result;',
+        '  } catch (err) {',
+        '    logger.warn("fetch failed, continuing");',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Agent removed the try/catch wrapper (kept content, dropped structure)
+      const instrumented = [
+        'async function processOrder(id) {',
+        '  const result = await fetchOrder(id);',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failure = results.find(r => !r.passed && r.ruleId === 'NDS-005');
+      expect(failure).toBeDefined();
+      // Message must include a preview of the original block's lines
+      expect(failure!.message).toMatch(/try \{/);
+      expect(failure!.message).toMatch(/fetchOrder/);
+    });
+
     it('detects when existing try/catch blocks are merged', () => {
       const original = [
         'function twoStep() {',

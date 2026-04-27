@@ -151,6 +151,34 @@ export async function main() {
       expect(names).toContain('main');
     });
 
+    it('constraintNote starts with CRITICAL and includes line number when inner try/catch is present', () => {
+      const source = `
+async function main() {
+  const result = await doWork();
+  try {
+    await triggerAutoSummaries();
+  } catch (err) {
+    console.log('auto-summarize failed, continuing');
+  }
+  process.exit(result.code);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+      const note = result.processExitEntryPoints[0]?.constraintNote ?? '';
+
+      // CRITICAL must appear first — not buried at the end
+      expect(note.startsWith('CRITICAL')).toBe(true);
+      // Must include the inner try/catch count
+      expect(note).toContain('inner try/catch');
+      // Must include a specific line number
+      expect(note).toMatch(/at line \d+/);
+      // Must instruct placing ALL original lines (not "original body" placeholder)
+      expect(note).toMatch(/ALL original lines/);
+      // Must include the explicit do-not-omit constraint
+      expect(note).toMatch(/do NOT.*omit/i);
+    });
+
     it('does not flag process.exit() only inside a catch block', () => {
       // process.exit() in catch does not exempt the function from spanning.
       const source = `
@@ -218,6 +246,31 @@ export const main = async () => {
   });
 
   describe('COV-004: async non-entry-point functions needing spans', () => {
+    it('does not include async functions with direct process.exit() in asyncFunctionsNeedingSpans', () => {
+      // COV-004 exception: process.exit() functions should not get spans (same rule as in prompt).
+      // This prevents the pre-scan from contradicting the prompt's COV-004 exception.
+      const source = `
+async function handleSummarize(args) {
+  const result = await runSummarize(args);
+  if (result.error) {
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+export async function main() {
+  await handleSummarize(process.argv.slice(2));
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      // handleSummarize has direct process.exit() — must NOT appear in COV-004 list
+      expect(result.asyncFunctionsNeedingSpans.every(f => f.name !== 'handleSummarize')).toBe(true);
+      // main is the entry point and should still appear
+      expect(result.entryPointsNeedingSpans.some(f => f.name === 'main')).toBe(true);
+    });
+
     it('reports an unexported async function in asyncFunctionsNeedingSpans', () => {
       const source = `
 async function fetchData(id) {

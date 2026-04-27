@@ -311,6 +311,15 @@ export const RETRYABLE_NULL_OUTPUT = 'null parsed_output';
 export const RETRYABLE_ELISION = 'elision detected';
 
 /**
+ * Substring that signals a structured output JSON parse failure (retryable).
+ * Thrown by the Anthropic SDK when stream.finalMessage() receives a truncated or
+ * malformed JSON response — a transport-layer failure, not a code quality failure.
+ * Coupling: this substring originates from the Anthropic SDK error message thrown
+ * during zodOutputFormat parsing and propagated through instrumentFile()'s catch block.
+ */
+export const RETRYABLE_PARSE_ERROR = 'Failed to parse structured output';
+
+/**
  * Substring that signals stop_reason: max_tokens — the model hit the output token ceiling.
  * Retrying won't help because the same file will truncate at the same limit.
  * The token budget is shared between adaptive thinking and JSON output, so the
@@ -325,6 +334,7 @@ export const EARLY_ABORT_MAX_TOKENS = 'stop_reason: max_tokens';
 export function isRetryableInstrumentError(error: string): boolean {
   if (error.includes(RETRYABLE_NULL_OUTPUT)) return true;
   if (error.includes(RETRYABLE_ELISION)) return true;
+  if (error.includes(RETRYABLE_PARSE_ERROR)) return true;
   return false;
 }
 

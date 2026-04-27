@@ -275,6 +275,14 @@ export function checkControlFlowPreservation(
       if (origBlock.hasFinally) parts.push('finally');
       const structure = parts.length > 0 ? `try/${parts.join('/')}` : 'try';
 
+      // Include a preview of the original block so the agent knows exactly what
+      // it removed and must restore. 8 lines is enough to show the try/catch
+      // structure and first few content lines.
+      const originalLines = originalCode.split('\n');
+      const startIdx = origBlock.lineNumber - 1;
+      const previewLines = originalLines.slice(startIdx, Math.min(startIdx + 8, originalLines.length));
+      const blockPreview = previewLines.join('\n');
+
       violations.push({
         ruleId: 'NDS-005',
         passed: false,
@@ -282,8 +290,9 @@ export function checkControlFlowPreservation(
         lineNumber: null,
         message:
           `NDS-005: Original ${structure} block (line ${origBlock.lineNumber}) is missing ` +
-          `from instrumented output. Instrumentation must preserve existing error handling ` +
-          `structure — do not remove or merge try/catch/finally blocks.`,
+          `from instrumented output. You removed this block — it must survive intact, ` +
+          `nested inside the outer span wrapper. Do NOT remove, merge, or hoist it.\n` +
+          `Removed block (starting line ${origBlock.lineNumber}):\n${blockPreview}`,
         tier: 2,
         blocking: true,
       });
