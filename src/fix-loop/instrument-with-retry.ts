@@ -95,18 +95,16 @@ const ZERO_TOKENS: TokenUsage = {
 const MAX_OUTPUT_TOKENS_PER_FILE = 100_000;
 
 /**
- * Count the number of startActiveSpan calls in instrumented code.
+ * Count the number of spans in instrumented code via the provider's detection.
  * This is the authoritative span count — it reflects what's actually
  * in the committed code, not the LLM's self-reported spanCategories.
  *
- * @param instrumentedCode - The instrumented JavaScript code
- * @returns Number of startActiveSpan calls found
+ * @param provider - Language provider used to detect span patterns
+ * @param instrumentedCode - The instrumented source code
+ * @returns Number of span patterns found
  */
-function countSpansInCode(instrumentedCode: string): number {
-  const pattern = /\.startActiveSpan\s*\(/g;
-  let count = 0;
-  while (pattern.exec(instrumentedCode)) count++;
-  return count;
+function countSpansInCode(provider: LanguageProvider, instrumentedCode: string): number {
+  return provider.detectOTelInstrumentation(instrumentedCode).spanPatterns.length;
 }
 
 /**
@@ -649,7 +647,7 @@ async function executeRetryLoop(
     llmRefactorsPerAttempt.push(output.suggestedRefactors ?? []);
 
     if (validation.passed) {
-      const spansAdded = countSpansInCode(output.instrumentedCode);
+      const spansAdded = countSpansInCode(provider, output.instrumentedCode);
 
       // When the agent adds 0 spans but leaves OTel imports/tracer init behind,
       // restore the original file so it's byte-identical to the input.

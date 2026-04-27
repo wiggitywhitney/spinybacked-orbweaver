@@ -120,8 +120,15 @@ export async function instrumentFile(
   const client = options?.client ?? new Anthropic();
 
   // Detect existing OTel instrumentation before calling the LLM
-  const detectionResult = provider.detectOTelInstrumentation(originalCode);
-  const functions = provider.findFunctions(originalCode);
+  let detectionResult: ReturnType<typeof provider.detectOTelInstrumentation>;
+  let functions: ReturnType<typeof provider.findFunctions>;
+  try {
+    detectionResult = provider.detectOTelInstrumentation(originalCode);
+    functions = provider.findFunctions(originalCode);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Language provider analysis failed: ${message}` };
+  }
   const exportedFunctions = functions.filter(f => f.isExported);
 
   // If all exported functions are already instrumented, skip the LLM call entirely
