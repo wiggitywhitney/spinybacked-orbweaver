@@ -410,6 +410,147 @@ export async function noOp() {
     });
   });
 
+  describe('M3: local import analysis — entryPointSubOperations', () => {
+    it('resolves all-imported sub-operations to importedSubOperations', () => {
+      const source = `
+import { handleSummarize, handleReport } from './handlers.js';
+
+export async function main() {
+  await handleSummarize();
+  await handleReport();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const group = result.entryPointSubOperations.find(g => g.entryPointName === 'main');
+      expect(group).toBeDefined();
+      expect(group!.localSubOperations).toHaveLength(0);
+      const importedNames = group!.importedSubOperations.map(s => s.name);
+      expect(importedNames).toContain('handleSummarize');
+      expect(importedNames).toContain('handleReport');
+    });
+
+    it('records the source module for imported sub-operations', () => {
+      const source = `
+import { fetchData } from './data-access.js';
+
+export async function processRequest(req) {
+  const data = await fetchData(req.id);
+  return data;
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const group = result.entryPointSubOperations.find(g => g.entryPointName === 'processRequest');
+      expect(group).toBeDefined();
+      const fetchDataEntry = group!.importedSubOperations.find(s => s.name === 'fetchData');
+      expect(fetchDataEntry).toBeDefined();
+      expect(fetchDataEntry!.sourceModule).toBe('./data-access.js');
+    });
+
+    it('resolves mixed local and imported sub-operations', () => {
+      const source = `
+import { externalService } from './external.js';
+
+async function localHelper(x) {
+  return x * 2;
+}
+
+export async function main() {
+  const result = await localHelper(42);
+  return await externalService(result);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const group = result.entryPointSubOperations.find(g => g.entryPointName === 'main');
+      expect(group).toBeDefined();
+      expect(group!.localSubOperations).toContain('localHelper');
+      const importedNames = group!.importedSubOperations.map(s => s.name);
+      expect(importedNames).toContain('externalService');
+    });
+
+    it('returns empty lists when entry point has no resolvable function calls', () => {
+      const source = `
+export async function main() {
+  const res = await fetch('/api');
+  return res.json();
+}
+`.trim();
+
+      // fetch is a global, not imported or locally defined — omitted from both lists
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const group = result.entryPointSubOperations.find(g => g.entryPointName === 'main');
+      // Group may be absent or present with empty lists
+      if (group) {
+        expect(group.localSubOperations).toHaveLength(0);
+        expect(group.importedSubOperations).toHaveLength(0);
+      }
+    });
+
+    it('does not include method calls (PropertyAccessExpression callees) in sub-operations', () => {
+      const source = `
+export async function processOrder(order) {
+  await order.validate();
+  await db.save(order);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const group = result.entryPointSubOperations.find(g => g.entryPointName === 'processOrder');
+      // Method calls like order.validate() and db.save() should not appear
+      if (group) {
+        expect(group.localSubOperations).toHaveLength(0);
+        expect(group.importedSubOperations).toHaveLength(0);
+      }
+    });
+
+    it('returns an empty entryPointSubOperations array when there are no entry points', () => {
+      const source = `
+function transform(x) { return x * 2; }
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.entryPointSubOperations).toHaveLength(0);
+    });
+
+    it('handles multiple entry points each with their own sub-operations', () => {
+      const source = `
+import { serviceA } from './a.js';
+import { serviceB } from './b.js';
+
+async function localHelper() { return 1; }
+
+export async function handlerA() {
+  await serviceA();
+  await localHelper();
+}
+
+export async function handlerB() {
+  await serviceB();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const groupA = result.entryPointSubOperations.find(g => g.entryPointName === 'handlerA');
+      const groupB = result.entryPointSubOperations.find(g => g.entryPointName === 'handlerB');
+
+      expect(groupA).toBeDefined();
+      expect(groupA!.importedSubOperations.map(s => s.name)).toContain('serviceA');
+      expect(groupA!.localSubOperations).toContain('localHelper');
+
+      expect(groupB).toBeDefined();
+      expect(groupB!.importedSubOperations.map(s => s.name)).toContain('serviceB');
+    });
+  });
+
   describe('hasInstrumentableFunctions', () => {
     it('returns true when there are async entry points', () => {
       const source = `

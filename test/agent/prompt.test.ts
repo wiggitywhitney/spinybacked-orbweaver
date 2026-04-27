@@ -760,6 +760,7 @@ describe('buildUserMessage', () => {
         pureSyncFunctions: [],
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
       };
       const message = buildUserMessage(
         '/app/src/handler.js', 'const x = 1;', config,
@@ -780,6 +781,7 @@ describe('buildUserMessage', () => {
         pureSyncFunctions: [],
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
       };
       const message = buildUserMessage(
         '/app/src/main.js', 'const x = 1;', config,
@@ -805,6 +807,7 @@ describe('buildUserMessage', () => {
         pureSyncFunctions: [],
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
       };
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
@@ -822,6 +825,7 @@ describe('buildUserMessage', () => {
         pureSyncFunctions: [],
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
       };
       const message = buildUserMessage(
         '/app/src/runner.js', 'const x = 1;', config,

@@ -428,6 +428,18 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
       directives.push(`- Unexported — skip unless no exported orchestrator covers this execution path (RST-004): ${names}.`);
     }
 
+    // M3: per-entry-point sub-operation breakdown (local vs. imported)
+    for (const group of preScanResult.entryPointSubOperations) {
+      const localPart = group.localSubOperations.length > 0
+        ? `local: ${group.localSubOperations.map(n => `\`${n}\``).join(', ')}`
+        : null;
+      const importedPart = group.importedSubOperations.length > 0
+        ? `imported (handled elsewhere): ${group.importedSubOperations.map(s => `\`${s.name}\` from \`${s.sourceModule}\``).join(', ')}`
+        : null;
+      const parts = [localPart, importedPart].filter(Boolean).join('; ');
+      directives.push(`- In \`${group.entryPointName}()\`, async sub-operations — ${parts}.`);
+    }
+
     if (directives.length > 0) {
       message += `
 

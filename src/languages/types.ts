@@ -301,6 +301,34 @@ export interface PreScanOutboundCallGroup {
 }
 
 /**
+ * An async sub-operation call imported from another module, found in an entry
+ * point's body (M3 import analysis).
+ */
+export interface PreScanImportedSubOperation {
+  /** The function name being called. */
+  name: string;
+  /** The import source module path (e.g., `'./handlers.js'`). */
+  sourceModule: string;
+}
+
+/**
+ * Per-entry-point breakdown of async sub-operation calls (M3 import analysis).
+ *
+ * For each async entry-point function, lists which function calls within its body
+ * are locally defined in this file vs. imported from other modules. Helps the agent
+ * understand the instrumentation boundary: local sub-operations may need spans here;
+ * imported ones will be handled in their source files.
+ */
+export interface PreScanSubOperationGroup {
+  /** The entry point function name. */
+  entryPointName: string;
+  /** Names of functions called in this entry point that are defined locally in this file. */
+  localSubOperations: string[];
+  /** Functions called in this entry point that are imported from other modules. */
+  importedSubOperations: PreScanImportedSubOperation[];
+}
+
+/**
  * Results from the pre-instrumentation analysis pass.
  *
  * Returned by `LanguageProvider.preInstrumentationAnalysis()`. Callers inject
@@ -356,6 +384,15 @@ export interface PreScanResult {
    * HTTP requests, database queries, and messaging calls without span coverage.
    */
   outboundCallsNeedingSpans: PreScanOutboundCallGroup[];
+
+  /**
+   * Per-entry-point sub-operation call analysis (M3 import analysis).
+   *
+   * For each async entry-point, lists which function calls in its body are locally
+   * defined vs. imported from other modules. Empty array when no entry points have
+   * resolvable sub-operation calls.
+   */
+  entryPointSubOperations: PreScanSubOperationGroup[];
 }
 
 /**

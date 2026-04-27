@@ -15,6 +15,7 @@ import type {
   Example,
   InstrumentationDetectionResult,
   PreScanResult,
+  PreScanSubOperationGroup,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -494,6 +495,77 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
+    // M3: Local import analysis — per-entry-point sub-operation breakdown.
+    // Build a map of imported name → source module from all import declarations.
+    const namedImportMap = new Map<string, string>();
+    for (const importDecl of sourceFile.getImportDeclarations()) {
+      const moduleSpecifier = importDecl.getModuleSpecifierValue();
+      for (const namedImport of importDecl.getNamedImports()) {
+        namedImportMap.set(namedImport.getName(), moduleSpecifier);
+      }
+      const defaultImport = importDecl.getDefaultImport();
+      if (defaultImport) {
+        namedImportMap.set(defaultImport.getText(), moduleSpecifier);
+      }
+    }
+
+    // Build a set of locally-defined function names (function declarations +
+    // variable-assigned arrow/function expressions at file scope).
+    const localFunctionNames = new Set<string>();
+    for (const fn of sourceFile.getFunctions()) {
+      const name = fn.getName();
+      if (name) localFunctionNames.add(name);
+    }
+    for (const varStatement of sourceFile.getVariableStatements()) {
+      for (const decl of varStatement.getDeclarations()) {
+        const initializer = decl.getInitializer();
+        if (!initializer) continue;
+        const kind = initializer.getKind();
+        if (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression) {
+          localFunctionNames.add(decl.getName());
+        }
+      }
+    }
+
+    // For each entry-point function, walk its call expressions to find identifier-callee
+    // calls (not method calls). Categorize each as local or imported.
+    const entryPointSubOperations: PreScanSubOperationGroup[] = [];
+    for (const ep of entryPointsNeedingSpans) {
+      const fnNode = fnNodeByName.get(ep.name);
+      if (!fnNode) continue;
+
+      const localSubOperations: string[] = [];
+      const importedSubOperationMap = new Map<string, string>(); // name → sourceModule
+
+      const callExprs = fnNode.getDescendantsOfKind(SyntaxKind.CallExpression);
+      for (const callExpr of callExprs) {
+        const callee = callExpr.getExpression();
+        // Only plain identifier calls (e.g., `foo()`) — skip method calls like `obj.method()`
+        if (callee.getKind() !== SyntaxKind.Identifier) continue;
+        const calleeName = callee.getText();
+        // Skip self-calls
+        if (calleeName === ep.name) continue;
+        // Skip if already seen
+        if (localSubOperations.includes(calleeName) || importedSubOperationMap.has(calleeName)) continue;
+
+        if (namedImportMap.has(calleeName)) {
+          importedSubOperationMap.set(calleeName, namedImportMap.get(calleeName)!);
+        } else if (localFunctionNames.has(calleeName)) {
+          localSubOperations.push(calleeName);
+        }
+        // If neither local nor imported, omit per scope constraint.
+      }
+
+      const importedSubOperations = Array.from(importedSubOperationMap.entries()).map(
+        ([name, sourceModule]) => ({ name, sourceModule }),
+      );
+
+      // Only emit a group when there is something to report.
+      if (localSubOperations.length > 0 || importedSubOperations.length > 0) {
+        entryPointSubOperations.push({ entryPointName: ep.name, localSubOperations, importedSubOperations });
+      }
+    }
+
     return {
       hasInstrumentableFunctions,
       entryPointsNeedingSpans,
@@ -502,6 +574,7 @@ export class JavaScriptProvider implements LanguageProvider {
       pureSyncFunctions,
       unexportedFunctions,
       outboundCallsNeedingSpans,
+      entryPointSubOperations,
     };
   }
 
