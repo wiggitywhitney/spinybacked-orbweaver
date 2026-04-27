@@ -395,6 +395,12 @@ export class JavaScriptProvider implements LanguageProvider {
     const fnNodes = sourceFile.getFunctions();
 
     // Build a name → node map for classified functions that are function declarations.
+    // NOTE: sourceFile.getFunctions() only returns FunctionDeclaration nodes — it does
+    // not include variable-assigned arrow/function expressions (e.g., `export const foo =
+    // async () => {}`). Those are classified by classifyFunctions() so they appear in
+    // entryPointsNeedingSpans, but hasDirectProcessExit is only called when the node is
+    // found here. M2 must extend this to also walk getVariableStatements() for arrow
+    // functions so process.exit() detection is complete for all entry point forms.
     const fnNodeByName = new Map<string, ReturnType<typeof sourceFile.getFunctions>[number]>();
     for (const node of fnNodes) {
       const name = node.getName();
