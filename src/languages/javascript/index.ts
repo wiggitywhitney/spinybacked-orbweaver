@@ -3,7 +3,7 @@
 
 import { Project, SyntaxKind } from 'ts-morph';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import type {
   LanguageProvider,
   FunctionInfo,
@@ -16,6 +16,7 @@ import type {
   InstrumentationDetectionResult,
   PreScanResult,
   PreScanSubOperationGroup,
+  PreScanAlreadyInstrumentedImport,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -382,7 +383,7 @@ export class JavaScriptProvider implements LanguageProvider {
 
   // ── Pre-instrumentation analysis ──────────────────────────────────────────
 
-  preInstrumentationAnalysis(originalCode: string): PreScanResult {
+  preInstrumentationAnalysis(originalCode: string, processedFilesManifest?: Map<string, string[]>, filePath?: string): PreScanResult {
     const project = new Project({
       compilerOptions: { allowJs: true },
       useInMemoryFileSystem: true,
@@ -588,6 +589,33 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
+    // M6: Cross-file manifest lookup — identify imported functions already instrumented
+    // in previously-processed files. Requires both the manifest and the current file path
+    // to resolve relative import specifiers to absolute paths for manifest lookup.
+    const alreadyInstrumentedImports: PreScanAlreadyInstrumentedImport[] = [];
+    if (processedFilesManifest && filePath && processedFilesManifest.size > 0) {
+      const fileDir = dirname(filePath);
+      const seen = new Set<string>(); // deduplicate across multiple entry points
+
+      for (const group of entryPointSubOperations) {
+        for (const imported of group.importedSubOperations) {
+          const dedupeKey = `${imported.name}:${imported.sourceModule}`;
+          if (seen.has(dedupeKey)) continue;
+
+          const resolvedPath = resolve(fileDir, imported.sourceModule);
+          const instrumentedNames = processedFilesManifest.get(resolvedPath);
+          if (instrumentedNames?.includes(imported.name)) {
+            alreadyInstrumentedImports.push({
+              name: imported.name,
+              sourceModule: imported.sourceModule,
+              sourceFile: resolvedPath,
+            });
+            seen.add(dedupeKey);
+          }
+        }
+      }
+    }
+
     return {
       hasInstrumentableFunctions,
       entryPointsNeedingSpans,
@@ -597,6 +625,7 @@ export class JavaScriptProvider implements LanguageProvider {
       unexportedFunctions,
       outboundCallsNeedingSpans,
       entryPointSubOperations,
+      alreadyInstrumentedImports,
     };
   }
 

@@ -312,6 +312,19 @@ export interface PreScanImportedSubOperation {
 }
 
 /**
+ * An imported function identified as already instrumented in a previously-processed
+ * file (M6 cross-file manifest lookup).
+ */
+export interface PreScanAlreadyInstrumentedImport {
+  /** The function name being called in this file. */
+  name: string;
+  /** The import source module path as written in this file (e.g., `'./handlers.js'`). */
+  sourceModule: string;
+  /** The absolute file path where this function was instrumented. */
+  sourceFile: string;
+}
+
+/**
  * Per-entry-point breakdown of async sub-operation calls (M3 import analysis).
  *
  * For each async entry-point function, lists which function calls within its body
@@ -393,6 +406,15 @@ export interface PreScanResult {
    * resolvable sub-operation calls.
    */
   entryPointSubOperations: PreScanSubOperationGroup[];
+
+  /**
+   * Imported functions already instrumented in a previously-processed file (M6 cross-file lookup).
+   *
+   * Populated when the coordinator passes a processed-files manifest and the pre-scan
+   * finds imported call targets that match functions instrumented in earlier files.
+   * Empty when no manifest is provided or no matches are found.
+   */
+  alreadyInstrumentedImports: PreScanAlreadyInstrumentedImport[];
 }
 
 /**
@@ -782,7 +804,7 @@ export interface LanguageProvider {
    * @param originalCode - Source code text before instrumentation
    * @returns Pre-scan findings, or `undefined` if the provider does not implement this method
    */
-  preInstrumentationAnalysis?(originalCode: string): PreScanResult;
+  preInstrumentationAnalysis?(originalCode: string, processedFilesManifest?: Map<string, string[]>, filePath?: string): PreScanResult;
 }
 
 /**

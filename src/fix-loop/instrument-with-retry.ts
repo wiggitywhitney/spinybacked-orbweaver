@@ -39,6 +39,8 @@ export interface InstrumentFileCallOptions {
   effortOverride?: AgentConfig['agentEffort'];
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
+  /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
+  processedFilesManifest?: Map<string, string[]>;
 }
 
 /**
@@ -73,6 +75,8 @@ interface InstrumentWithRetryOptions {
   anthropicClient?: Anthropic;
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
+  /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
+  processedFilesManifest?: Map<string, string[]>;
   /**
    * Language provider for the file being instrumented.
    * Passed to the validation chain (checkSyntax, lintCheck) and used to determine
@@ -410,6 +414,7 @@ export async function instrumentWithRetry(
       provider,
       options.projectRoot, anthropicClient, options.clock,
       options.existingSpanNames,
+      options.processedFilesManifest,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -460,6 +465,7 @@ async function executeRetryLoop(
   anthropicClient?: Anthropic,
   clock?: () => number,
   existingSpanNames?: string[],
+  processedFilesManifest?: Map<string, string[]>,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -566,16 +572,17 @@ async function executeRetryLoop(
         failureHint: (baseHint + escalation) || undefined,
         maxOutputTokens: outputBudget,
         existingSpanNames,
+        processedFilesManifest,
       };
     } else if (plannedStrategy !== 'initial-generation') {
       // No conversation context or validation available — this is a retry
       // of initial generation triggered by a retryable failure, not a real
       // multi-turn fix or fresh regeneration.
       actualStrategy = 'retry-initial';
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest };
     } else {
       // Initial generation
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest };
     }
     lastStrategy = actualStrategy;
 

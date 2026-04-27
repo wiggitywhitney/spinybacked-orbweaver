@@ -74,6 +74,8 @@ interface InstrumentFileOptions {
   effortOverride?: AgentConfig['agentEffort'];
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
+  /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
+  processedFilesManifest?: Map<string, string[]>;
 }
 
 /**
@@ -139,7 +141,7 @@ export async function instrumentFile(
   let preScanResult: PreScanResult | undefined;
   if (!options?.feedbackMessage && provider.preInstrumentationAnalysis) {
     try {
-      preScanResult = provider.preInstrumentationAnalysis(originalCode);
+      preScanResult = provider.preInstrumentationAnalysis(originalCode, options?.processedFilesManifest, filePath);
     } catch {
       // Pre-scan failure is non-fatal — continue without annotation.
     }

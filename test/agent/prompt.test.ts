@@ -761,6 +761,7 @@ describe('buildUserMessage', () => {
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
         entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
       };
       const message = buildUserMessage(
         '/app/src/handler.js', 'const x = 1;', config,
@@ -782,6 +783,7 @@ describe('buildUserMessage', () => {
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
         entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
       };
       const message = buildUserMessage(
         '/app/src/main.js', 'const x = 1;', config,
@@ -808,6 +810,7 @@ describe('buildUserMessage', () => {
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
         entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
       };
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
@@ -826,6 +829,7 @@ describe('buildUserMessage', () => {
         unexportedFunctions: [],
         outboundCallsNeedingSpans: [],
         entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
       };
       const message = buildUserMessage(
         '/app/src/runner.js', 'const x = 1;', config,
@@ -835,6 +839,50 @@ describe('buildUserMessage', () => {
       const sourceFilePos = message.indexOf('<source_file>');
       expect(preScanPos).toBeGreaterThan(0);
       expect(preScanPos).toBeLessThan(sourceFilePos);
+    });
+
+    it('injects already-instrumented imports from M6 cross-file lookup', () => {
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [
+          { name: 'handleOrder', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js' },
+          { name: 'processPayment', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js' },
+        ],
+      };
+      const message = buildUserMessage(
+        '/app/index.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).toContain('Already instrumented');
+      expect(message).toContain('handleOrder');
+      expect(message).toContain('processPayment');
+      expect(message).toContain('./services/orders.js');
+    });
+
+    it('does not emit already-instrumented directive when list is empty', () => {
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
+      };
+      const message = buildUserMessage(
+        '/app/index.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).not.toContain('Already instrumented');
     });
   });
 });

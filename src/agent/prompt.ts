@@ -446,6 +446,20 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
       directives.push(`- In \`${sanitize(group.entryPointName)}()\`, async sub-operations — ${parts}.`);
     }
 
+    // M6: already-instrumented imports from cross-file manifest lookup
+    if (preScanResult.alreadyInstrumentedImports.length > 0) {
+      const byModule = new Map<string, string[]>();
+      for (const imp of preScanResult.alreadyInstrumentedImports) {
+        const existing = byModule.get(imp.sourceModule) ?? [];
+        existing.push(imp.name);
+        byModule.set(imp.sourceModule, existing);
+      }
+      for (const [sourceModule, names] of byModule) {
+        const nameList = names.map(n => `\`${sanitize(n)}\``).join(', ');
+        directives.push(`- Already instrumented in \`${sanitize(sourceModule)}\`: ${nameList}. Do not re-instrument these.`);
+      }
+    }
+
     if (directives.length > 0) {
       message += `
 

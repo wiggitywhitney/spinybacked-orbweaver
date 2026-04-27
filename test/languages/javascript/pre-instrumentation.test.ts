@@ -669,4 +669,128 @@ export { bar } from './bar.js';
       expect(result.hasInstrumentableFunctions).toBe(false);
     });
   });
+
+  describe('M6: cross-file manifest lookup', () => {
+    const fileWithImports = `
+import { handleOrder, processPayment } from '/abs/services/orders.js';
+
+export async function main() {
+  await handleOrder({ id: 1 });
+  await processPayment({ amount: 100 });
+}
+`.trim();
+
+    it('returns empty alreadyInstrumentedImports when no manifest is provided', () => {
+      const result = provider.preInstrumentationAnalysis!(fileWithImports);
+
+      expect(result.alreadyInstrumentedImports).toHaveLength(0);
+    });
+
+    it('returns empty alreadyInstrumentedImports when manifest is empty', () => {
+      const manifest = new Map<string, string[]>();
+
+      const result = provider.preInstrumentationAnalysis!(
+        fileWithImports,
+        manifest,
+        '/abs/app/index.js',
+      );
+
+      expect(result.alreadyInstrumentedImports).toHaveLength(0);
+    });
+
+    it('identifies imported functions that appear in the manifest as already instrumented', () => {
+      const manifest = new Map<string, string[]>([
+        ['/abs/services/orders.js', ['handleOrder', 'processPayment']],
+      ]);
+
+      const result = provider.preInstrumentationAnalysis!(
+        fileWithImports,
+        manifest,
+        '/abs/app/index.js',
+      );
+
+      expect(result.alreadyInstrumentedImports).toHaveLength(2);
+      const names = result.alreadyInstrumentedImports.map(i => i.name);
+      expect(names).toContain('handleOrder');
+      expect(names).toContain('processPayment');
+    });
+
+    it('resolves the source module path relative to the current file path', () => {
+      const sourceWithRelativeImport = `
+import { fetchUser } from './utils/users.js';
+
+export async function main() {
+  const user = await fetchUser(1);
+}
+`.trim();
+
+      const manifest = new Map<string, string[]>([
+        ['/abs/app/utils/users.js', ['fetchUser']],
+      ]);
+
+      const result = provider.preInstrumentationAnalysis!(
+        sourceWithRelativeImport,
+        manifest,
+        '/abs/app/index.js',
+      );
+
+      expect(result.alreadyInstrumentedImports).toHaveLength(1);
+      expect(result.alreadyInstrumentedImports[0].name).toBe('fetchUser');
+      expect(result.alreadyInstrumentedImports[0].sourceModule).toBe('./utils/users.js');
+    });
+
+    it('only marks functions that appear in the manifest — not all imports', () => {
+      const manifest = new Map<string, string[]>([
+        ['/abs/services/orders.js', ['handleOrder']],
+        // processPayment is NOT in the manifest for this file
+      ]);
+
+      const result = provider.preInstrumentationAnalysis!(
+        fileWithImports,
+        manifest,
+        '/abs/app/index.js',
+      );
+
+      const names = result.alreadyInstrumentedImports.map(i => i.name);
+      expect(names).toContain('handleOrder');
+      expect(names).not.toContain('processPayment');
+    });
+
+    it('does not duplicate entries when the same imported function appears in multiple entry points', () => {
+      const sourceWithTwoEntryPoints = `
+import { sharedHelper } from '/abs/services/helpers.js';
+
+export async function entryA() {
+  await sharedHelper();
+}
+
+export async function entryB() {
+  await sharedHelper();
+}
+`.trim();
+
+      const manifest = new Map<string, string[]>([
+        ['/abs/services/helpers.js', ['sharedHelper']],
+      ]);
+
+      const result = provider.preInstrumentationAnalysis!(
+        sourceWithTwoEntryPoints,
+        manifest,
+        '/abs/app/index.js',
+      );
+
+      expect(result.alreadyInstrumentedImports).toHaveLength(1);
+      expect(result.alreadyInstrumentedImports[0].name).toBe('sharedHelper');
+    });
+
+    it('is unaffected by manifest when filePath is not provided', () => {
+      const manifest = new Map<string, string[]>([
+        ['/abs/services/orders.js', ['handleOrder']],
+      ]);
+
+      const result = provider.preInstrumentationAnalysis!(fileWithImports, manifest);
+
+      expect(result.alreadyInstrumentedImports).toHaveLength(0);
+    });
+  });
 });
