@@ -393,6 +393,25 @@ export async function handleRequest(req) {
       expect(result.unexportedFunctions.every(f => f.name !== 'handleRequest')).toBe(true);
     });
 
+    it('does not report unexported async functions in unexportedFunctions (they appear in COV-004 instead)', () => {
+      const source = `
+async function fetchData(id) {
+  return await fetch('/api/' + id);
+}
+
+export async function handleRequest(req) {
+  const data = await fetchData(req.id);
+  return data;
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      // fetchData is unexported and async — COV-004 takes precedence; RST-004 must not also claim it
+      expect(result.asyncFunctionsNeedingSpans.some(f => f.name === 'fetchData')).toBe(true);
+      expect(result.unexportedFunctions.every(f => f.name !== 'fetchData')).toBe(true);
+    });
+
     it('does not report main in unexportedFunctions (main is treated as entry point)', () => {
       const source = `
 async function main() {

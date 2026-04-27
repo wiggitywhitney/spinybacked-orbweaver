@@ -481,8 +481,10 @@ export class JavaScriptProvider implements LanguageProvider {
         pureSyncFunctions.push({ name: fn.name, startLine: fn.startLine });
       }
 
-      // RST-004: unexported functions are internal implementation details
-      if (!fn.isExported) {
+      // RST-004: unexported non-async functions are internal implementation details.
+      // Async unexported functions are already in asyncFunctionsNeedingSpans (COV-004);
+      // including them here would create conflicting skip/instrument guidance.
+      if (!fn.isExported && !fn.isAsync) {
         unexportedFunctions.push({ name: fn.name, startLine: fn.startLine });
       }
     }
