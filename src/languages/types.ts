@@ -239,14 +239,86 @@ export interface ProcessExitEntryPoint {
 }
 
 /**
+ * An async non-entry-point function identified by the pre-scan (COV-004).
+ *
+ * These functions are async but not exported entry points. They typically
+ * need spans too (COV-004 advisory rule).
+ */
+export interface PreScanAsyncFunction {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * A pure synchronous function identified by the pre-scan (RST-001).
+ *
+ * These functions are not async and contain no await expressions.
+ * Spans on them provide no observability value and should be skipped.
+ */
+export interface PreScanSyncFunction {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * An unexported function identified by the pre-scan (RST-004).
+ *
+ * These functions are not exported and are typically covered by context
+ * propagation from their caller. Spans on them are usually unnecessary.
+ */
+export interface PreScanUnexportedFunction {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * A single outbound call site detected in a function body (COV-002).
+ */
+export interface PreScanOutboundCall {
+  /** Human-readable label for the call (e.g., 'fetch', 'db.query'). */
+  callText: string;
+  /** Line number where the call appears (1-based). */
+  line: number;
+}
+
+/**
+ * Outbound calls detected in an async function body (COV-002).
+ *
+ * These call sites (HTTP, DB, messaging) need enclosing spans for latency
+ * and error visibility.
+ */
+export interface PreScanOutboundCallGroup {
+  /** Name of the async function containing the calls. */
+  functionName: string;
+  /** Individual outbound call sites found in the function body. */
+  calls: PreScanOutboundCall[];
+}
+
+/**
  * Results from the pre-instrumentation analysis pass.
  *
  * Returned by `LanguageProvider.preInstrumentationAnalysis()`. Callers inject
  * these findings into the LLM user message before the instrumentation call.
  */
 export interface PreScanResult {
+  /**
+   * Whether the file contains any functions worth instrumenting.
+   *
+   * `false` when the file has no function definitions at all, or when every
+   * function in the file is synchronous (no async, no await). When `false`,
+   * callers may skip the LLM call entirely — there is nothing to trace.
+   */
+  hasInstrumentableFunctions: boolean;
+
   /** Async entry-point functions that require spans (COV-001). */
   entryPointsNeedingSpans: PreScanEntryPoint[];
+
   /**
    * Async entry-point functions with direct process.exit() calls (COV-001 vs RST-006).
    * COV-001 wins — these functions still need spans. The constraintNote contains
@@ -254,6 +326,36 @@ export interface PreScanResult {
    * These functions also appear in entryPointsNeedingSpans.
    */
   processExitEntryPoints: ProcessExitEntryPoint[];
+
+  /**
+   * Async non-entry-point functions that need spans (COV-004).
+   *
+   * These are async but not exported entry points. They do not appear in
+   * entryPointsNeedingSpans.
+   */
+  asyncFunctionsNeedingSpans: PreScanAsyncFunction[];
+
+  /**
+   * Pure synchronous functions that should be skipped (RST-001).
+   *
+   * Not async, no await expressions. Spans on these provide no observability value.
+   */
+  pureSyncFunctions: PreScanSyncFunction[];
+
+  /**
+   * Unexported functions that should be skipped (RST-004).
+   *
+   * Internal implementation details covered by context propagation from callers.
+   * Does not include entry points (which may be unexported but are special-cased).
+   */
+  unexportedFunctions: PreScanUnexportedFunction[];
+
+  /**
+   * Outbound calls in async function bodies that need enclosing spans (COV-002).
+   *
+   * HTTP requests, database queries, and messaging calls without span coverage.
+   */
+  outboundCallsNeedingSpans: PreScanOutboundCallGroup[];
 }
 
 /**

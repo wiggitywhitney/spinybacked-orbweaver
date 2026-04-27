@@ -753,8 +753,13 @@ describe('buildUserMessage', () => {
   describe('preScanResult injection', () => {
     it('injects Pre-instrumentation analysis section when entry points are present', () => {
       const preScan = {
+        hasInstrumentableFunctions: true,
         entryPointsNeedingSpans: [{ name: 'handleRequest', startLine: 5 }],
         processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
       };
       const message = buildUserMessage(
         '/app/src/handler.js', 'const x = 1;', config,
@@ -768,8 +773,13 @@ describe('buildUserMessage', () => {
     it('uses constraintNote for process.exit() entry points', () => {
       const constraintNote = 'Entry point `main` (line 1) requires a span — COV-001. Has direct process.exit() calls: use minimal wrapper only.';
       const preScan = {
+        hasInstrumentableFunctions: true,
         entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
         processExitEntryPoints: [{ name: 'main', startLine: 1, constraintNote }],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
       };
       const message = buildUserMessage(
         '/app/src/main.js', 'const x = 1;', config,
@@ -788,8 +798,13 @@ describe('buildUserMessage', () => {
 
     it('omits Pre-instrumentation analysis section when entry points are empty', () => {
       const preScan = {
+        hasInstrumentableFunctions: false,
         entryPointsNeedingSpans: [],
         processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
       };
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
@@ -800,8 +815,13 @@ describe('buildUserMessage', () => {
 
     it('Pre-instrumentation analysis section appears before source_file tag', () => {
       const preScan = {
+        hasInstrumentableFunctions: true,
         entryPointsNeedingSpans: [{ name: 'run', startLine: 3 }],
         processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
       };
       const message = buildUserMessage(
         '/app/src/runner.js', 'const x = 1;', config,

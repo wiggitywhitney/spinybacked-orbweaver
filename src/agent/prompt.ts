@@ -391,24 +391,41 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
   // Inject pre-instrumentation analysis directives when findings are present.
   // This section appears before the source file block so the agent reads the
   // constraints before seeing the code.
-  const hasPreScanFindings = preScanResult && (
-    preScanResult.entryPointsNeedingSpans.length > 0 ||
-    preScanResult.processExitEntryPoints.length > 0
-  );
-  if (hasPreScanFindings) {
+  if (preScanResult) {
     const directives: string[] = [];
 
-    // Build a set of process.exit() entry point names for fast lookup.
+    // COV-001 entry points (+ RST-006 process.exit() constraint when applicable)
     const processExitNames = new Set(preScanResult.processExitEntryPoints.map(f => f.name));
-
     for (const ep of preScanResult.entryPointsNeedingSpans) {
       if (processExitNames.has(ep.name)) {
-        // Use the pre-formatted constraint note (includes minimal-wrapper directive).
         const constraint = preScanResult.processExitEntryPoints.find(f => f.name === ep.name);
         if (constraint) directives.push(`- ${constraint.constraintNote}`);
       } else {
         directives.push(`- Entry point \`${ep.name}\` (line ${ep.startLine}) requires a span — COV-001.`);
       }
+    }
+
+    // COV-004: async non-entry-point functions needing spans
+    for (const fn of preScanResult.asyncFunctionsNeedingSpans) {
+      directives.push(`- \`${fn.name}\` (line ${fn.startLine}) is async — add a span (COV-004).`);
+    }
+
+    // COV-002: outbound calls needing enclosing spans
+    for (const group of preScanResult.outboundCallsNeedingSpans) {
+      const callList = group.calls.map(c => c.callText).join(', ');
+      directives.push(`- \`${group.functionName}\` makes outbound calls (${callList}) — ensure they are covered by spans (COV-002).`);
+    }
+
+    // RST-001: pure sync functions to skip
+    if (preScanResult.pureSyncFunctions.length > 0) {
+      const names = preScanResult.pureSyncFunctions.map(f => `\`${f.name}\``).join(', ');
+      directives.push(`- Synchronous functions — skip, no I/O to trace (RST-001): ${names}.`);
+    }
+
+    // RST-004: unexported functions to skip
+    if (preScanResult.unexportedFunctions.length > 0) {
+      const names = preScanResult.unexportedFunctions.map(f => `\`${f.name}\``).join(', ');
+      directives.push(`- Unexported — skip unless no exported orchestrator covers this execution path (RST-004): ${names}.`);
     }
 
     if (directives.length > 0) {

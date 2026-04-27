@@ -1,7 +1,7 @@
 // ABOUTME: JavaScriptProvider — the LanguageProvider implementation for JavaScript (.js, .jsx).
 // ABOUTME: Delegates to the JS-specific ast, validation, extraction, reassembly, and prompt modules.
 
-import { Project } from 'ts-morph';
+import { Project, SyntaxKind } from 'ts-morph';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type {
@@ -388,36 +388,50 @@ export class JavaScriptProvider implements LanguageProvider {
     });
     const sourceFile = project.createSourceFile('file.js', originalCode);
 
-    // classifyFunctions returns metadata only (no ts-morph nodes).
-    // sourceFile.getFunctions() returns the actual FunctionDeclaration nodes
-    // needed by hasDirectProcessExit.
+    // classifyFunctions returns metadata for both function declarations and
+    // variable-assigned arrow/function expressions.
     const classified = classifyFunctions(sourceFile);
-    const fnNodes = sourceFile.getFunctions();
 
-    // Build a name → node map for classified functions that are function declarations.
-    // NOTE: sourceFile.getFunctions() only returns FunctionDeclaration nodes — it does
-    // not include variable-assigned arrow/function expressions (e.g., `export const foo =
-    // async () => {}`). Those are classified by classifyFunctions() so they appear in
-    // entryPointsNeedingSpans, but hasDirectProcessExit is only called when the node is
-    // found here. M2 must extend this to also walk getVariableStatements() for arrow
-    // functions so process.exit() detection is complete for all entry point forms.
-    const fnNodeByName = new Map<string, ReturnType<typeof sourceFile.getFunctions>[number]>();
-    for (const node of fnNodes) {
+    // Build a name → node map covering both FunctionDeclaration nodes and
+    // variable-assigned ArrowFunction/FunctionExpression nodes. The wide
+    // import('ts-morph').Node type lets hasDirectProcessExit work on both.
+    const fnNodeByName = new Map<string, import('ts-morph').Node>();
+    for (const node of sourceFile.getFunctions()) {
       const name = node.getName();
       if (name) fnNodeByName.set(name, node);
     }
+    for (const varStatement of sourceFile.getVariableStatements()) {
+      for (const decl of varStatement.getDeclarations()) {
+        const initializer = decl.getInitializer();
+        if (!initializer) continue;
+        const kind = initializer.getKind();
+        if (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression) {
+          fnNodeByName.set(decl.getName(), initializer);
+        }
+      }
+    }
+
+    // hasInstrumentableFunctions: false when there are no async functions at all.
+    // Re-export files and all-sync utility files can be skipped without an LLM call.
+    const hasInstrumentableFunctions = classified.some(fn => fn.isAsync);
 
     const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
     const processExitEntryPoints: PreScanResult['processExitEntryPoints'] = [];
+    const asyncFunctionsNeedingSpans: PreScanResult['asyncFunctionsNeedingSpans'] = [];
+    const pureSyncFunctions: PreScanResult['pureSyncFunctions'] = [];
+    const unexportedFunctions: PreScanResult['unexportedFunctions'] = [];
+    const outboundCallsNeedingSpans: PreScanResult['outboundCallsNeedingSpans'] = [];
 
+    const entryPointNames = new Set<string>();
+
+    // COV-001 + RST-006: identify entry points and process.exit() constraints
     for (const fn of classified) {
-      // COV-001: exported async functions and functions named 'main' are entry points.
       const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
       if (!isEntryPoint) continue;
 
+      entryPointNames.add(fn.name);
       entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
 
-      // RST-006 conflict check: does this entry point call process.exit() directly?
       const fnNode = fnNodeByName.get(fn.name);
       if (fnNode && hasDirectProcessExit(fnNode)) {
         const constraintNote =
@@ -431,7 +445,64 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
-    return { entryPointsNeedingSpans, processExitEntryPoints };
+    // COV-004 / RST-001 / RST-004: classify non-entry-point functions
+    for (const fn of classified) {
+      if (entryPointNames.has(fn.name)) continue;
+
+      if (fn.isAsync) {
+        // COV-004: async non-entry-point functions need spans
+        asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+      } else {
+        // RST-001: pure sync functions — no I/O to trace
+        pureSyncFunctions.push({ name: fn.name, startLine: fn.startLine });
+      }
+
+      // RST-004: unexported functions are internal implementation details
+      if (!fn.isExported) {
+        unexportedFunctions.push({ name: fn.name, startLine: fn.startLine });
+      }
+    }
+
+    // COV-002: detect outbound calls (HTTP, DB, messaging) in async function bodies.
+    // Text-based pattern search — sufficient for advisory pre-scan guidance.
+    const OUTBOUND_KEYWORDS = [
+      { text: 'fetch(', label: 'fetch' },
+      { text: 'axios.', label: 'axios' },
+      { text: 'http.request(', label: 'http.request' },
+      { text: 'https.request(', label: 'https.request' },
+      { text: '.query(', label: 'db.query' },
+      { text: '.execute(', label: 'db.execute' },
+      { text: 'mongoose.', label: 'mongoose' },
+      { text: 'prisma.', label: 'prisma' },
+      { text: 'knex(', label: 'knex' },
+      { text: 'sequelize.', label: 'sequelize' },
+      { text: 'redis.', label: 'redis' },
+      { text: '.sendToQueue(', label: 'amqp.sendToQueue' },
+      { text: '.publish(', label: 'amqp.publish' },
+    ];
+
+    for (const fn of classified) {
+      if (!fn.isAsync) continue;
+      const fnNode = fnNodeByName.get(fn.name);
+      if (!fnNode) continue;
+      const bodyText = fnNode.getText();
+      const calls = OUTBOUND_KEYWORDS
+        .filter(kw => bodyText.includes(kw.text))
+        .map(kw => ({ line: fn.startLine, callText: kw.label }));
+      if (calls.length > 0) {
+        outboundCallsNeedingSpans.push({ functionName: fn.name, calls });
+      }
+    }
+
+    return {
+      hasInstrumentableFunctions,
+      entryPointsNeedingSpans,
+      processExitEntryPoints,
+      asyncFunctionsNeedingSpans,
+      pureSyncFunctions,
+      unexportedFunctions,
+      outboundCallsNeedingSpans,
+    };
   }
 
   // ── Feature parity check ──────────────────────────────────────────────────

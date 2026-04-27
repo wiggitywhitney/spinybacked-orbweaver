@@ -245,8 +245,8 @@ describe('instrumentFile', () => {
     });
 
     it('rejects output significantly shorter than input', async () => {
-      const longOriginal = Array.from({ length: 50 }, (_, i) => `// line ${i}\nfunction f${i}() { return ${i}; }`).join('\n');
-      const shortOutput = 'function f0() { return 0; }';
+      const longOriginal = Array.from({ length: 50 }, (_, i) => `// line ${i}\nexport async function f${i}() { return await fetch('/api/${i}'); }`).join('\n');
+      const shortOutput = 'export async function f0() { return await fetch(\'/api/0\'); }';
       const llmOutput = makeValidLlmOutput({ instrumentedCode: shortOutput });
       const client = makeMockClient(llmOutput);
 

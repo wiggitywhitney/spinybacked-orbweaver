@@ -63,7 +63,7 @@ Add a deterministic pre-instrumentation analysis pass that runs on the original 
 
   Unit tests: add tests in `test/languages/javascript/` covering COV-001 detection (exported async entry points found), RST-006 detection (process.exit() entry points flagged), and the tiebreaker (process.exit() entry point gets minimal-wrapper directive not "skip" directive). Verify the `index.js` acceptance gate test passes.
 
-- [ ] **M2 — Remaining predictive rules (COV-004, RST-001, RST-004, COV-002) + early-exit condition**: Extend `JavaScriptProvider.preInstrumentationAnalysis()` with the remaining predictive rules. For each rule, add the findings to `PreScanResult` and format them in the user message injection.
+- [x] **M2 — Remaining predictive rules (COV-004, RST-001, RST-004, COV-002) + early-exit condition**: Extend `JavaScriptProvider.preInstrumentationAnalysis()` with the remaining predictive rules. For each rule, add the findings to `PreScanResult` and format them in the user message injection.
 
   **Early-exit condition (implement alongside RST-001)**: Add a boolean field `hasInstrumentableFunctions: boolean` to `PreScanResult`. Set it to `false` when: (a) the file has no function definitions at all, or (b) every function in the file classifies as RST-001 (pure sync, no I/O) or RST-004 (unexported with no exported orchestrator).
 

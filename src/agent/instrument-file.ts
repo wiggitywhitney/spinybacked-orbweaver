@@ -145,6 +145,25 @@ export async function instrumentFile(
     }
   }
 
+  // Pre-scan early-exit: if the pre-scan determined there are no instrumentable
+  // functions (no async functions in the file), skip the LLM call entirely.
+  // Eliminates NDS-001 oscillation on re-export files and all-sync utility files.
+  if (preScanResult && !preScanResult.hasInstrumentableFunctions) {
+    return {
+      success: true,
+      output: {
+        instrumentedCode: originalCode,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        attributesCreated: 0,
+        spanCategories: null,
+        notes: ['Pre-scan: no instrumentable functions — all are pure sync utilities or unexported helpers. No LLM call made.'],
+        suggestedRefactors: [],
+        tokenUsage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      },
+    };
+  }
+
   // If all exported functions are already instrumented, skip the LLM call entirely.
   // Guard: a file with all-instrumented exports but an uninstrumented async main()
   // still needs an LLM call — check the pre-scan for entry points not yet covered.

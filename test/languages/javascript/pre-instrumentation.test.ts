@@ -1,5 +1,5 @@
-// ABOUTME: Tests for JavaScriptProvider.preInstrumentationAnalysis() — M1 pre-scan.
-// ABOUTME: Covers COV-001 entry point detection, RST-006 process.exit() conflict, and tiebreaker.
+// ABOUTME: Tests for JavaScriptProvider.preInstrumentationAnalysis() — deterministic pre-scan.
+// ABOUTME: Covers COV-001, RST-006, COV-004, RST-001, RST-004, COV-002, and hasInstrumentableFunctions.
 
 import { describe, it, expect } from 'vitest';
 import { JavaScriptProvider } from '../../../src/languages/javascript/index.ts';
@@ -187,6 +187,292 @@ export async function fetchWithFallback(url) {
 
       expect(result.entryPointsNeedingSpans).toHaveLength(0);
       expect(result.processExitEntryPoints).toHaveLength(0);
+    });
+  });
+
+  describe('arrow function process.exit() detection (variable-assigned functions)', () => {
+    it('flags a variable-assigned async arrow function entry point with process.exit()', () => {
+      const source = `
+export const handleSummarize = async () => {
+  const data = await getData();
+  process.exit(0);
+};
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.processExitEntryPoints.some(f => f.name === 'handleSummarize')).toBe(true);
+    });
+
+    it('includes the constraintNote for arrow function process.exit() entry points', () => {
+      const source = `
+export const main = async () => {
+  process.exit(await getCode());
+};
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+      const entry = result.processExitEntryPoints.find(f => f.name === 'main');
+      expect(entry?.constraintNote).toContain('startActiveSpan');
+    });
+  });
+
+  describe('COV-004: async non-entry-point functions needing spans', () => {
+    it('reports an unexported async function in asyncFunctionsNeedingSpans', () => {
+      const source = `
+async function fetchData(id) {
+  return await fetch('/api/' + id);
+}
+
+export async function handleRequest(req) {
+  const data = await fetchData(req.id);
+  return data;
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.asyncFunctionsNeedingSpans.some(f => f.name === 'fetchData')).toBe(true);
+    });
+
+    it('does not duplicate entry points in asyncFunctionsNeedingSpans', () => {
+      const source = `
+export async function handleRequest(req) {
+  return await fetch('/api');
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      // handleRequest is an entry point (COV-001), not a COV-004 finding
+      expect(result.asyncFunctionsNeedingSpans.every(f => f.name !== 'handleRequest')).toBe(true);
+    });
+
+    it('does not report sync functions in asyncFunctionsNeedingSpans', () => {
+      const source = `
+function transform(data) {
+  return data.map(x => x * 2);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.asyncFunctionsNeedingSpans).toHaveLength(0);
+    });
+
+    it('reports variable-assigned async non-entry-point functions', () => {
+      const source = `
+const queryDb = async (sql) => {
+  return await db.query(sql);
+};
+
+export async function runReport() {
+  return await queryDb('SELECT 1');
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.asyncFunctionsNeedingSpans.some(f => f.name === 'queryDb')).toBe(true);
+    });
+  });
+
+  describe('RST-001: pure synchronous functions to skip', () => {
+    it('reports a sync function in pureSyncFunctions', () => {
+      const source = `
+function formatDate(d) {
+  return d.toISOString();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.pureSyncFunctions.some(f => f.name === 'formatDate')).toBe(true);
+    });
+
+    it('does not report async functions in pureSyncFunctions', () => {
+      const source = `
+async function fetchData() {
+  return await fetch('/api');
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.pureSyncFunctions.every(f => f.name !== 'fetchData')).toBe(true);
+    });
+
+    it('reports multiple sync functions', () => {
+      const source = `
+function add(a, b) { return a + b; }
+function multiply(a, b) { return a * b; }
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const names = result.pureSyncFunctions.map(f => f.name);
+      expect(names).toContain('add');
+      expect(names).toContain('multiply');
+    });
+  });
+
+  describe('RST-004: unexported functions to skip', () => {
+    it('reports an unexported function in unexportedFunctions', () => {
+      const source = `
+function internal(x) {
+  return x * 2;
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.unexportedFunctions.some(f => f.name === 'internal')).toBe(true);
+    });
+
+    it('does not report exported functions in unexportedFunctions', () => {
+      const source = `
+export async function handleRequest(req) {
+  return await fetch(req.url);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.unexportedFunctions.every(f => f.name !== 'handleRequest')).toBe(true);
+    });
+
+    it('does not report main in unexportedFunctions (main is treated as entry point)', () => {
+      const source = `
+async function main() {
+  await run();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      // main is an entry point (COV-001), not RST-004
+      expect(result.unexportedFunctions.every(f => f.name !== 'main')).toBe(true);
+    });
+  });
+
+  describe('COV-002: outbound calls needing spans', () => {
+    it('reports fetch() in an async function as an outbound call', () => {
+      const source = `
+export async function loadData() {
+  const res = await fetch('/api/data');
+  return res.json();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const finding = result.outboundCallsNeedingSpans.find(f => f.functionName === 'loadData');
+      expect(finding).toBeDefined();
+      expect(finding?.calls.length).toBeGreaterThan(0);
+    });
+
+    it('reports db.query() as an outbound call', () => {
+      const source = `
+export async function getUser(id) {
+  return await db.query('SELECT * FROM users WHERE id = ?', [id]);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const finding = result.outboundCallsNeedingSpans.find(f => f.functionName === 'getUser');
+      expect(finding).toBeDefined();
+    });
+
+    it('does not report outbound calls from sync functions', () => {
+      const source = `
+function buildUrl(base, path) {
+  return base + path;
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.outboundCallsNeedingSpans).toHaveLength(0);
+    });
+
+    it('returns empty outboundCallsNeedingSpans when no outbound calls exist', () => {
+      const source = `
+export async function noOp() {
+  await Promise.resolve();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      // No outbound I/O calls
+      expect(result.outboundCallsNeedingSpans).toHaveLength(0);
+    });
+  });
+
+  describe('hasInstrumentableFunctions', () => {
+    it('returns true when there are async entry points', () => {
+      const source = `
+export async function handleRequest(req) {
+  return await fetch(req.url);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.hasInstrumentableFunctions).toBe(true);
+    });
+
+    it('returns true when there are async non-entry-point functions', () => {
+      const source = `
+async function queryDb(sql) {
+  return await db.query(sql);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.hasInstrumentableFunctions).toBe(true);
+    });
+
+    it('returns false when all functions are synchronous', () => {
+      const source = `
+export function transform(data) {
+  return data.map(x => x * 2);
+}
+function helper(x) {
+  return x + 1;
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.hasInstrumentableFunctions).toBe(false);
+    });
+
+    it('returns false for a re-export file with no function definitions', () => {
+      const source = `
+export { foo } from './foo.js';
+export { bar } from './bar.js';
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.hasInstrumentableFunctions).toBe(false);
+    });
+
+    it('returns false for an empty file', () => {
+      const result = provider.preInstrumentationAnalysis!('');
+
+      expect(result.hasInstrumentableFunctions).toBe(false);
+    });
+
+    it('returns false for a file with only constants and no functions', () => {
+      const source = `const x = 42;\nexport default x;`;
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.hasInstrumentableFunctions).toBe(false);
     });
   });
 });
