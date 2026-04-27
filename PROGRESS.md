@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- (2026-04-27) Updated the architecture diagrams to show the pre-instrumentation analysis step. `docs/diagrams/per-file-sequence.mmd` now includes a "Pre-instrumentation analysis (deterministic AST scan)" node between the file-load step and the AI agent, reflecting the new deterministic pass added in M1–M3. `docs/diagrams/orchestrator-overview.mmd` updates the edge label from the orchestrator to the agent to include "pre-scan findings," documenting that the agent now receives structured, function-specific directives alongside the file contents and resolved schema.
+
 ### Fixed
 
 - (2026-04-27) Fixed process.exit() detection in the pre-instrumentation analysis for variable-assigned async arrow functions (e.g., `export const handleSummarize = async () => {}`). The node map used to call `hasDirectProcessExit` was built only from `FunctionDeclaration` nodes; arrow functions assigned to variables were classified as entry points but silently skipped for the process.exit() constraint check. The map now covers both declaration forms, so the minimal-wrapper directive is correctly injected for both function styles.

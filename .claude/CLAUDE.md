@@ -119,6 +119,8 @@ When triaging CodeRabbit or `/code-review` findings during a PR, **never defer f
 
 **Never dismiss acceptance gate test failures.** When the acceptance gate suite reports failures — whether during a hook, a manual run, or a `/prd-next` loop — treat every failure as a real signal that must be investigated. Do not rationalize failures as "unrelated to the current task" or "pre-existing." If the tests fail, something is wrong, and the current work cannot proceed until the failures are understood and resolved (or triaged into a dedicated PRD).
 
+**When an Anthropic API call fails, check platform status first.** Errors like `Anthropic API call failed: terminated`, connection resets, and unexpected 5xx responses are often platform-side outages, not code bugs. Before investigating the codebase: check https://status.claude.com for active incidents (API and billing incidents both appear there). If an incident is active or was recently resolved, wait for full resolution and rerun before touching any code. If the status page shows all systems operational, the failure is likely in the code — proceed with investigation.
+
 ## npm Release Workflow
 
 When creating a new GitHub release (`v1.x.x`):

@@ -93,12 +93,26 @@ Add a deterministic pre-instrumentation analysis pass that runs on the original 
 
   Unit tests covering: all-imported sub-operations (resolves correctly), mixed local+imported, no async sub-operations.
 
-- [ ] **M4 — Architecture diagram updates (human review required)**: Update `docs/diagrams/per-file-sequence.mmd` to add the pre-instrumentation analysis step between "Load file contents + re-resolve schema" and "AI Agent." Add a new node (e.g., `PRESCAN["Pre-instrumentation analysis\n(deterministic AST scan)"]`) and update arrows: `LOAD --> PRESCAN --> AGENT`. Review `docs/diagrams/orchestrator-overview.mmd` to determine whether the pre-scan step is visible at that abstraction level; update if appropriate.
+- [x] **M4 — Architecture diagram updates (human review required)**: Update `docs/diagrams/per-file-sequence.mmd` to add the pre-instrumentation analysis step between "Load file contents + re-resolve schema" and "AI Agent." Add a new node (e.g., `PRESCAN["Pre-instrumentation analysis\n(deterministic AST scan)"]`) and update arrows: `LOAD --> PRESCAN --> AGENT`. Review `docs/diagrams/orchestrator-overview.mmd` to determine whether the pre-scan step is visible at that abstraction level; update if appropriate.
 
   After updating the `.mmd` source files, re-render the PNGs following `.claude/rules/mmdc-gotchas.md` (Apple Silicon Chrome path, `-s 2` flag). **Stop and show Whitney the rendered output before committing.** Do not commit diagram changes without explicit confirmation that the rendered diagrams look correct. Once confirmed, commit both the `.mmd` sources and the rendered PNGs together.
 
+- [ ] **M4b — Fix remaining `index.js` acceptance gate failures (prerequisite for PRD closure)** (Decision D-8): Smoke test run 2026-04-27 revealed one persistent failure after M1–M3: NDS-005 (Control Flow Preserved) fires once per attempt because the inner try/catch at ~line 489 of `index.js` (wraps `triggerAutoSummaries`, no rethrow) is dropped when `main()` is wrapped in `startActiveSpan`.
+
+  **Step 1 — Check whether existing guidance was displaced by M1 edits**: Run `grep -n "inner try\|nested try\|Pattern B\|inner.*catch" src/agent/prompt.ts`. If a match is found, the guidance is still present — skip to Step 3.
+
+  **Step 2 — Restore the guidance if missing**: In `src/agent/prompt.ts`, find the NDS-005 rule entry in the Scoring Checklist section. Add (or restore) Pattern B: "When wrapping a function that contains inner try/catch blocks (e.g., a non-rethrowing catch around a sub-operation), keep them nested inside the outer span try block. Do NOT merge, hoist, or remove them. The outer `finally { span.end() }` handles the span lifecycle; inner try/catch handles sub-operation errors independently."
+
+  **Step 3 — Run the smoke test to verify**: `env -u ANTHROPIC_CUSTOM_HEADERS -u ANTHROPIC_BASE_URL vals exec -i -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run --config vitest.acceptance.config.ts -t "index.js"'` — if the test passes (`status: success`, `spansAdded >= 1`, no NDS-003 or NDS-005), M4b is done.
+
+  **Step 4 — If NDS-005 still fires after Steps 2–3**: Extend the pre-scan annotation in `src/languages/javascript/index.ts` (`preInstrumentationAnalysis` method). For each process.exit() entry point directive, append: "Preserve ALL inner try/catch blocks inside the outer span wrapper — do not merge, remove, or hoist them. Keep them nested exactly as they appear in the original body." Run the smoke test again to confirm.
+
+  **Failure 2 — "Anthropic API call failed: terminated"**: Likely a transient Anthropic outage. Do not investigate — check https://status.claude.com if it recurs, then rerun.
+
+  Unit tests: if pre-scan annotation is extended in Step 4, add a unit test verifying the inner-try/catch directive appears for a process.exit() entry point that contains an inner try/catch.
+
 - [ ] **M5 — Documentation updates**: Two locations:
-  - `docs/rules-reference.md`: for each rule that has pre-scan behavior (COV-001, COV-004, RST-001, RST-004, RST-006, COV-002), add a note describing what the pre-scan computes and injects. Follow the existing entry format in that file — read several entries before writing.
+  - `docs/rules-reference.md`: for each rule that has pre-scan behavior (COV-001, COV-004, RST-001, RST-004, RST-006, COV-002), add a note describing what the pre-scan computes and injects. Follow the existing entry format in that file — read several entries before writing. If M4b extended the pre-scan annotation for inner try/catch preservation (under COV-001/RST-006), document that directive here as well.
   - `README.md`: check whether it has an architecture or "how it works" section. If it does, add a brief note (1-3 sentences) about the pre-instrumentation analysis pass and what it provides. If there is no such section, skip.
 
   Use `/write-docs` to validate documentation changes by running real commands and capturing actual output, per CLAUDE.md.
@@ -126,6 +140,7 @@ Add a deterministic pre-instrumentation analysis pass that runs on the original 
 | D-5 | Cross-file analysis in last milestone of this PRD, not a separate follow-on | It is the natural completion of local import analysis (M3). Including it here ensures the full capability ships as one unit rather than requiring a second PRD to complete the work. |
 | D-6 | Prompt tiebreaker (COV-001 vs RST-006) ships in M1, not as a standalone hotfix | A standalone hotfix issue was considered, but the tiebreaker is a direct prerequisite for the pre-scan's COV-001/RST-006 annotation to be consistent with the rules the agent reads. Shipping them together avoids a state where the prompt says one thing and the pre-scan annotation says another. |
 | D-7 | `preInstrumentationAnalysis` method signature uses `(originalCode: string)` not `(sourceFile: SourceFile, originalCode: string)` | Every `LanguageProvider` method (`findFunctions`, `findImports`, `findExports`, `detectOTelInstrumentation`, etc.) takes source text and creates a ts-morph SourceFile internally. Passing a `SourceFile` object would: (1) require importing ts-morph in `src/languages/types.ts`, breaking its language-agnostic contract; (2) require a ts-morph `Project` creation in `instrument-file.ts`, adding JS-specific infrastructure to the shared pipeline. The string-based API is consistent and keeps `types.ts` free of language-specific imports. |
+| D-8 | The `index.js` acceptance gate smoke test must pass before this PRD closes — fix inline, do not defer | Smoke test run 2026-04-27 showed M1–M3 eliminated the original NDS-003 oscillation but two failures remain: NDS-005 (inner try/catch dropped in `main()`) and "Anthropic API call failed: terminated" on attempt 3. The PRD's success criteria already requires the test to pass; this decision makes explicit that both issues must be resolved in this PRD rather than deferred to a follow-on issue. |
 
 ---
 
