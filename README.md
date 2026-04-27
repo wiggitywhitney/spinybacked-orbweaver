@@ -8,7 +8,7 @@ AI-powered OpenTelemetry instrumentation for JavaScript applications. Analyzes y
 
 Spinybacked Orbweaver is an AI agent that adds OpenTelemetry instrumentation to your JavaScript codebase. Point it at your source files, and it:
 
-1. **Analyzes** each file to identify what should be instrumented — external calls (HTTP, DB, message queues), schema-defined spans, and service entry points
+1. **Analyzes** each file to identify what should be instrumented — external calls (HTTP, DB, message queues), schema-defined spans, and service entry points. Before calling the LLM, a deterministic pre-scan computes entry points, skip candidates, and outbound calls from the AST, injecting explicit function-level directives that reduce ambiguous inference.
 2. **Generates** complete instrumented files using an LLM, preferring auto-instrumentation libraries over manual spans
 3. **Validates** every change against a two-tier rubric ([32 rules](research/evaluation-rubric.md) covering syntax, non-destructiveness, coverage, restraint, schema fidelity, and code quality) — reverting any file that fails
 4. **Retries** intelligently — multi-turn fixes with validation feedback, fresh regeneration with failure hints, and function-level fallback that decomposes complex files into individual functions when whole-file attempts are exhausted
