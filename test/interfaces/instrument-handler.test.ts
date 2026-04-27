@@ -790,6 +790,35 @@ describe('handleInstrument', () => {
       const reportLine = stderrCalls.find((s: string) => s.includes('Report:') && s.includes('app.instrumentation.md'));
       expect(reportLine).toBeDefined();
     });
+
+    it('shows full validator error messages in a dedicated section for failed files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        reason: 'Validation failed: NDS-001 — Unexpected token',
+        lastError: 'NDS-001: Unexpected token at line 5\nNDS-003: New variable introduced at line 10',
+        errorProgression: ['2 blocking errors', '2 blocking errors'],
+        validationAttempts: 2,
+        validationStrategyUsed: 'fresh-regeneration',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const allOutput = stderrCalls.join('\n');
+
+      // Must have a section header for validation failures
+      expect(allOutput).toContain('Validation failures');
+
+      // Must show full error text from lastError (not just rule ID abbreviation)
+      expect(allOutput).toContain('NDS-001: Unexpected token at line 5');
+      expect(allOutput).toContain('NDS-003: New variable introduced at line 10');
+    });
   });
 
   describe('prominent PR summary display', () => {
@@ -884,6 +913,38 @@ describe('handleInstrument', () => {
       // But the callback should still handle it gracefully if called.
       // The real test is that confirmEstimate: false is set (tested above).
       expect(callbacks.onCostCeilingReady).toBeDefined();
+    });
+
+    it('--debug-dump-dir writes lastInstrumentedCode to the specified directory on failure', async () => {
+      const { mkdtempSync, writeFileSync: fsWrite, readFileSync: fsRead, existsSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+
+      const dumpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-dump-test-'));
+
+      const failedResult = makeFileResult({
+        path: '/test/project/src/app.js',
+        status: 'failed',
+        spansAdded: 0,
+        lastInstrumentedCode: 'const x = 1; // agent output',
+        reason: 'Validation failed: NDS-001',
+        lastError: 'NDS-001: syntax error',
+        tokenUsage: { inputTokens: 100, outputTokens: 50, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      });
+      const coordinateMock = vi.fn().mockImplementation(
+        async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
+          callbacks?.onFileComplete?.(failedResult, 0, 1);
+          return makeRunResult({ filesProcessed: 1, filesFailed: 1, fileResults: [failedResult] });
+        },
+      );
+
+      const deps = makeDeps({ coordinate: coordinateMock });
+      await handleInstrument(makeOptions({ debugDumpDir: dumpDir }), deps);
+
+      // The failed file's lastInstrumentedCode should be written to dumpDir/app.js
+      const dumpedPath = join(dumpDir, 'app.js');
+      expect(existsSync(dumpedPath)).toBe(true);
+      expect(fsRead(dumpedPath, 'utf-8')).toBe('const x = 1; // agent output');
     });
 
     it('cost ceiling rejection produces exit code 3', async () => {

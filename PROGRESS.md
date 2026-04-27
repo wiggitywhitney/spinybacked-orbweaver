@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-04-27) Added `lastErrorByAttempt` to the diagnostic data captured after each instrumentation attempt. Previously the fix loop recorded only a per-attempt count summary (`errorProgression`) and the full error text from the final attempt (`lastError`). When the agent oscillated — producing different failures on attempt 1 vs attempt 2 vs attempt 3 — there was no way to see how the errors changed across attempts without adding debug logging. The new field stores the complete blocking-failure text from each attempt at the same index as `thinkingBlocksByAttempt`, so `lastErrorByAttempt[0]` is the full text for attempt 1, `lastErrorByAttempt[1]` for attempt 2, etc. The acceptance gate `dumpDiagnostics` function now logs this field alongside `lastError`.
+
+- (2026-04-27) Added a "Validation failures" section to `spiny-orb instrument --verbose` output for failed files. Previously the verbose output for failures showed the failure reason in the status line and agent notes below, but not the full validator error text. The eval team had to dig through agent notes to find the actual rule violation messages — e.g., reconstructing that NDS-001 fired with `TS2352: Conversion of type 'unknown' to type 'Error'` from indirect evidence. Now the full `lastError` text (with complete rule ID and message for every blocking failure from the last attempt) appears in a dedicated "Validation failures (last attempt)" section, flowing directly into `spiny-orb-output.log` when the command is piped through `tee`.
+
+- (2026-04-27) Added `--debug-dump-dir <path>` option to `spiny-orb instrument`. When set, the command writes each file's last instrumented code (the code the agent produced before the validation failure triggered a restore) to the specified directory during the run. This is the CLI equivalent of the acceptance gate test harness's `/tmp/spiny-orb-debug-{label}` file — it lets the eval team inspect what the agent actually produced without modifying the source code or setting up a test harness.
+
 ### Changed
 
 - (2026-04-27) Completed the pre-instrumentation analysis pass feature (cross-file manifest, rules reference, README) — all planned milestones for this feature are now done except the diagnostic infrastructure enhancements in M8.

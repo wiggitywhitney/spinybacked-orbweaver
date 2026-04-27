@@ -132,7 +132,7 @@ Add a deterministic pre-instrumentation analysis pass that runs on the original 
 
 - [x] **M7 — Update PROGRESS.md**
 
-- [ ] **M8 — Acceptance gate diagnostic infrastructure + CLAUDE.md rule (Decisions D-12, D-13, D-14, D-15, D-16, D-17)**: Diagnostic tooling for all five dimensions, CLI verbose improvements for the eval pipeline, and the CLAUDE.md rule tying it together.
+- [x] **M8 — Acceptance gate diagnostic infrastructure + CLAUDE.md rule (Decisions D-12, D-13, D-14, D-15, D-16, D-17)**: Diagnostic tooling for all five dimensions, CLI verbose improvements for the eval pipeline, and the CLAUDE.md rule tying it together.
 
   **Before starting M8**: Read `src/fix-loop/types.ts` (FileResult type) and grep `dumpDiagnostics` across `test/` to see what's already implemented. Several fields from the decisions below (`lastInstrumentedCode`, `lastError`, `thinkingBlocksByAttempt`) may already exist in `FileResult` from prior sessions — do not re-add them. Check what `dumpDiagnostics` already logs before writing new log statements. Only implement what is genuinely missing.
 

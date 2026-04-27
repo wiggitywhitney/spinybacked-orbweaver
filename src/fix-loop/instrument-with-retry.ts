@@ -490,6 +490,7 @@ async function executeRetryLoop(
   let cumulativeTokens: TokenUsage = { ...ZERO_TOKENS };
   const errorProgression: string[] = [];
   const thinkingBlocksByAttempt: string[][] = [];
+  const lastErrorByAttempt: string[] = [];
   let lastOutput: InstrumentationOutput | undefined;
   let lastValidation: ValidationResult | undefined;
   let previousValidation: ValidationResult | undefined;
@@ -524,6 +525,7 @@ async function executeRetryLoop(
           undefined,
           refactors.length > 0 ? refactors : undefined,
           thinkingBlocksByAttempt,
+          lastErrorByAttempt,
         );
       }
     }
@@ -540,6 +542,7 @@ async function executeRetryLoop(
         undefined,
         refactors.length > 0 ? refactors : undefined,
         thinkingBlocksByAttempt,
+        lastErrorByAttempt,
       );
     }
     const plannedStrategy = strategyForAttempt(attempt, maxAttempts);
@@ -595,6 +598,7 @@ async function executeRetryLoop(
       const failTokens = instrumentResult.tokenUsage ?? ZERO_TOKENS;
       cumulativeTokens = addTokenUsage(cumulativeTokens, failTokens);
       errorProgression.push(instrumentResult.error);
+      lastErrorByAttempt.push(instrumentResult.error);
       thinkingBlocksByAttempt.push([]);
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
@@ -609,7 +613,7 @@ async function executeRetryLoop(
           return buildFailedResult(
             filePath, instrumentResult.error, instrumentResult.error,
             cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
-            undefined, undefined, thinkingBlocksByAttempt,
+            undefined, undefined, thinkingBlocksByAttempt, lastErrorByAttempt,
           );
         }
         // Retryable failure — continue to next attempt
@@ -625,6 +629,7 @@ async function executeRetryLoop(
         undefined,
         refactors.length > 0 ? refactors : undefined,
         thinkingBlocksByAttempt,
+        lastErrorByAttempt,
       );
     }
 
@@ -663,6 +668,9 @@ async function executeRetryLoop(
 
     lastValidation = validation;
     errorProgression.push(summarizeErrors(validation));
+    lastErrorByAttempt.push(
+      validation.blockingFailures.map(f => `${f.ruleId}: ${f.message}`).join('\n'),
+    );
 
     // Track NDS-003 violations and LLM refactors for persistence detection
     nds003ViolationsPerAttempt.push(
@@ -799,6 +807,7 @@ async function executeRetryLoop(
             validation.blockingFailures[0]?.ruleId,
             refactors.length > 0 ? refactors : undefined,
             thinkingBlocksByAttempt,
+            lastErrorByAttempt,
           );
         }
         // Not yet on fresh regen — jump to the final attempt (fresh-regeneration)
@@ -836,6 +845,7 @@ async function executeRetryLoop(
     lastValidation!.blockingFailures[0]?.ruleId,
     suggestedRefactors.length > 0 ? suggestedRefactors : undefined,
     thinkingBlocksByAttempt,
+    lastErrorByAttempt,
   );
 }
 
@@ -1236,6 +1246,7 @@ function buildFailedResult(
   firstBlockingRuleId?: string,
   suggestedRefactors?: SuggestedRefactor[],
   thinkingBlocksByAttempt?: string[][],
+  lastErrorByAttempt?: string[],
 ): FileResult {
   return {
     path: filePath,
@@ -1253,6 +1264,7 @@ function buildFailedResult(
     reason,
     lastError,
     lastInstrumentedCode: output?.instrumentedCode,
+    lastErrorByAttempt: lastErrorByAttempt && lastErrorByAttempt.length > 0 ? lastErrorByAttempt : undefined,
     agentVersion: AGENT_VERSION,
     tokenUsage,
     suggestedRefactors,

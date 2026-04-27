@@ -113,6 +113,8 @@ export interface FileResult {
   reason?: string;
   /** Raw error output from the final attempt, for debugging. */
   lastError?: string;
+  /** Full error text from each attempt, for oscillation debugging (index 0 = attempt 1). */
+  lastErrorByAttempt?: string[];
   /** The last instrumented code produced by the agent (before file restore), for debugging. */
   lastInstrumentedCode?: string;
   /** Tier 2 advisory findings for PR display. */

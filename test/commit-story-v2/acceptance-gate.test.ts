@@ -149,6 +149,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       validationAttempts: result.validationAttempts,
       errorProgression: result.errorProgression,
       lastError: result.lastError,
+      lastErrorByAttempt: result.lastErrorByAttempt,
       notes: result.notes,
       tokenUsage: result.tokenUsage,
     }, null, 2));

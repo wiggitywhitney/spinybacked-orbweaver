@@ -3,6 +3,7 @@
 
 import { basename, join, relative, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
@@ -53,6 +54,8 @@ export interface InstrumentOptions {
   yes: boolean;
   verbose: boolean;
   debug: boolean;
+  /** When set, write each file's lastInstrumentedCode to this directory during the run. */
+  debugDumpDir?: string;
 }
 
 /** Injectable dependencies for testing. */
@@ -167,6 +170,15 @@ export async function handleInstrument(
       deps.stderr(`Processing file ${index + 1} of ${total}: ${toDisplayPath(path, options.projectDir)}`);
     },
     onFileComplete: (result, _index, _total) => {
+      // Debug dump: write lastInstrumentedCode to debugDumpDir when set (runs regardless of verbose mode)
+      if (options.debugDumpDir && result.lastInstrumentedCode) {
+        try {
+          writeFileSync(join(options.debugDumpDir, basename(result.path)), result.lastInstrumentedCode, 'utf-8');
+        } catch {
+          // Non-fatal — debug dump failure should not affect the run
+        }
+      }
+
       const displayPath = toDisplayPath(result.path, options.projectDir);
       const outputKTokens = (result.tokenUsage.outputTokens / 1000).toFixed(1);
       const attempts = result.validationAttempts;
@@ -222,6 +234,18 @@ export async function handleInstrument(
       if (refactorCount > 0) {
         const noun = refactorCount === 1 ? 'refactor' : 'refactors';
         deps.stderr(`  ${refactorCount} recommended ${noun}`);
+      }
+
+      // Full validator error messages for failed files (dimension 3 in diagnostic protocol)
+      if (result.status === 'failed' && result.lastError) {
+        deps.stderr('');
+        deps.stderr(`  ${_dim('Validation failures (last attempt)')}`);
+        deps.stderr(`  ${_dim('─'.repeat(60))}`);
+        for (const line of result.lastError.split('\n')) {
+          if (line.trim()) {
+            deps.stderr(`  • ${line}`);
+          }
+        }
       }
 
       // Function-level details when available
