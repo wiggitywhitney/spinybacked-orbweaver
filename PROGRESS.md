@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-04-27) Fixed a gap in the "all sync exports" early-return heuristic in `instrument-file.ts`. Files that export only synchronous helpers but also contain an unexported `async main()` function — a common CLI pattern — were previously returned early without calling the LLM, which meant `main()` never received a root span. The pre-instrumentation analysis now runs before the early-return checks, and the heuristic is blocked when the pre-scan identifies entry points that need instrumentation. Added a regression test covering this case.
+
 ### Added
 
 - (2026-04-27) Added a deterministic pre-instrumentation analysis pass that runs before each LLM call. Before asking the agent to instrument a file, the pipeline now uses the same AST infrastructure as the validation rules to compute facts about the source — which functions are entry points requiring spans (COV-001), which of those entry points have direct `process.exit()` calls that interact with span lifecycle (RST-006 vs COV-001 tiebreaker) — and injects those findings as concrete, function-specific directives into the user message. The immediate target was the `index.js` acceptance gate failure, where `main()` and `handleSummarize()` (both async entry points with direct `process.exit()` calls) caused the agent to oscillate between NDS-003/NDS-005 violations and removing all spans entirely. Also tightened the three conflicting prompt rules (COV-001, RST-006, CDQ-001) to resolve the contradiction: COV-001 now explicitly wins over RST-006 for async entry points, with a minimal-wrapper directive that prevents the NDS-005 violation (no `span.end()` before `process.exit()`). New `PreScanResult` type in the `LanguageProvider` interface lets future Python and Go providers add their own analysis without any interface changes.
