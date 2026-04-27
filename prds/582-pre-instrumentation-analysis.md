@@ -79,7 +79,7 @@ Add a deterministic pre-instrumentation analysis pass that runs on the original 
   - RST-004: identify unexported functions. Report as "unexported — skip unless no exported orchestrator covers this execution path."
   - COV-002: detect outbound call patterns in async function bodies (HTTP: `fetch`, `axios`, `http.request`, `https.request`; DB: `pg`, `mysql`, `mongoose`, `prisma`, `knex`; gRPC patterns). Report as "outbound calls that need spans."
 
-  For COV-004, RST-001, RST-004: the existing validation rule implementations in `src/languages/javascript/rules/` contain the AST logic — read those files to reuse the logic rather than reimplementing. For COV-002: read `src/languages/javascript/rules/cov002.ts` (if it exists) or adapt the outbound call detection from the validation chain.
+  For COV-004: read `src/languages/javascript/rules/cov004.ts` — `classifyFunctions()` + `hasDirectAwait()` already exist there. For RST-001: read `src/languages/javascript/rules/rst001.ts` — the sync-detection heuristic (no async keyword, no await, estimated line count) is there. For RST-004: read `src/languages/javascript/rules/rst004.ts` — the unexported/non-async/no-I/O detection is there. For COV-002: read `src/languages/javascript/rules/cov002.ts` for the outbound call pattern list; if that file doesn't exist, the outbound call detection is in `src/languages/javascript/ast.ts` or the validation chain — grep for `fetch\|axios\|http.request` to find it.
 
   Unit tests for each new pre-scan rule. Run acceptance gate.
 
