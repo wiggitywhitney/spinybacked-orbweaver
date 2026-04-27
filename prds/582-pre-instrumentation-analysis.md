@@ -128,7 +128,7 @@ Add a deterministic pre-instrumentation analysis pass that runs on the original 
 
   Unit tests: manifest provided → correct cross-file lookup; manifest absent → behavior identical to M3 (no cross-file guidance injected). Acceptance gate validation with a multi-file fixture.
 
-- [ ] **M7 — Update PROGRESS.md**
+- [x] **M7 — Update PROGRESS.md**
 
 - [ ] **M8 — Acceptance gate diagnostic infrastructure + CLAUDE.md rule (Decisions D-12, D-13, D-14, D-15, D-16, D-17)**: Diagnostic tooling for all five dimensions, CLI verbose improvements for the eval pipeline, and the CLAUDE.md rule tying it together.
 
