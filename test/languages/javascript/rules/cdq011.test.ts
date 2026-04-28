@@ -45,6 +45,18 @@ describe('checkCanonicalTracerName (CDQ-011)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('passes when getTracer is called on an unrelated object (not trace)', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('commit-story');",
+        "const otherTracer = sdk.getTracer('wrong-name');",
+      ].join('\n');
+
+      const results = checkCanonicalTracerName(code, filePath, canonical);
+      // Only the trace.getTracer() call is checked — sdk.getTracer() is ignored
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('fails when tracer name does not match canonical', () => {

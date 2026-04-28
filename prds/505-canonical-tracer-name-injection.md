@@ -185,11 +185,11 @@ Update user-facing documentation to reflect the new `tracerName` config option a
 - Note the known limitation: variable-based `getTracer()` calls are not checked
 - **Rule documentation update**: Search for any documentation of CDQ-008 in this repo (e.g., `docs/`, `research/`, evaluation rubric) and in the eval repo. Remove or update all references to reflect that CDQ-008 is deleted and replaced by the canonical tracer name gating check. Documentation that still references CDQ-008 as an active rule will mislead future contributors.
 
-- [ ] `orb.yaml` config reference updated with `tracerName` field
-- [ ] README or guide updated explaining tracer name derivation and override
-- [ ] Known limitation documented
-- [ ] CDQ-008 references removed from all rule documentation in this repo and the eval repo; new gating check documented where appropriate
-- [ ] `npm run typecheck` passes (if docs are in any checked format)
+- [x] `orb.yaml` config reference updated with `tracerName` field
+- [x] README or guide updated explaining tracer name derivation and override
+- [x] Known limitation documented
+- [~] CDQ-008 references removed from all rule documentation in this repo and the eval repo; new gating check documented where appropriate — done for this repo; eval repo requires separate access (out of scope for this session)
+- [x] `npm run typecheck` passes (if docs are in any checked format)
 
 ---
 

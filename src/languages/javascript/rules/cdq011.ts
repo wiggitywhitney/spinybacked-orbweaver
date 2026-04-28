@@ -24,9 +24,9 @@ export function checkCanonicalTracerName(
 ): CheckResult[] {
   const findings: Array<{ line: number; found: string }> = [];
 
-  // Match getTracer('name') or getTracer("name") — captures the string literal content
-  const pattern = /getTracer\s*\(\s*(["'])([^"'\n]*)\1/g;
-  const lines = code.split('\n');
+  // Match trace.getTracer('name') or trace.getTracer("name") — captures the string literal content.
+  // Requires the `trace` receiver to avoid false positives on unrelated getTracer() methods.
+  const pattern = /\btrace\s*\.\s*getTracer\s*\(\s*(["'])([^"'\n]*)\1/g;
 
   let match;
   while ((match = pattern.exec(code)) !== null) {
