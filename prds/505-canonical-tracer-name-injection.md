@@ -154,7 +154,11 @@ Add a new per-file blocking check that verifies `trace.getTracer()` calls use th
 
 **Registration**: Add to `tier2Checks` in `instrument-with-retry.ts` and `function-instrumentation.ts` as `blocking: true`. Add to `JS_RULES` export. Add to `rule-names.ts`.
 
-**Canonical name availability**: The check needs the canonical name at validation time. Pass it through the existing validation config/context mechanism — check how other parameterized checks receive their inputs before designing this.
+**Canonical name availability**: The check needs the canonical name at validation time. Here is how it flows as of M3:
+
+- `executeRetryLoop` in `instrument-with-retry.ts` receives `canonicalTracerName?: string` as a parameter (added in M3).
+- `buildValidationConfig` in the same file creates `ValidationConfig` — it does NOT yet carry `canonicalTracerName`. You must add `canonicalTracerName?: string` to `ValidationConfig` in `src/validation/types.ts`, add the field to `buildValidationConfig`, and pass `canonicalTracerName` through.
+- The check function receives `ValidationConfig` (via the `RuleInput` type); read `config.canonicalTracerName` to get the expected name. If `canonicalTracerName` is `undefined`, the check passes (no canonical name was resolved — degrade gracefully rather than block).
 
 Tests:
 - File has `trace.getTracer('commit-story')`, canonical is `commit-story` → passes
