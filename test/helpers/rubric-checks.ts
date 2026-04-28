@@ -362,13 +362,29 @@ export function checkErrorRecording(code: string): RubricCheckResult {
  * unless one of the four legitimate scenarios applies.
  */
 export function checkAsyncContext(code: string): RubricCheckResult {
-  // Flag tracer.startSpan() calls — startActiveSpan is preferred because it
-  // automatically manages active span context so child operations are correctly parented.
-  const tracerStartSpanMatches = code.match(/(?:tracer\w*|getTracer\s*\([^)]*\))\s*(?:\.\s*)\s*startSpan\s*\(/gi);
-  if (tracerStartSpanMatches && tracerStartSpanMatches.length > 0) {
+  // Use AST detection (matching cdq005.ts) so only real CallExpression nodes are
+  // flagged — raw-text regex would also match comments and string literals.
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile('check.js', code);
+
+  const findings: number[] = [];
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+    const expr = node.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return;
+    if (expr.getName() !== 'startSpan') return;
+    const receiverText = expr.getExpression().getText();
+    if (!/tracer/i.test(receiverText)) return;
+    findings.push(node.getStartLineNumber());
+  });
+
+  if (findings.length > 0) {
     return {
       passed: false,
-      details: `Found ${tracerStartSpanMatches.length} tracer.startSpan() call(s) — prefer startActiveSpan() which automatically manages active span context`,
+      details: `Found ${findings.length} tracer.startSpan() call(s) — prefer startActiveSpan() which automatically manages active span context`,
     };
   }
 
