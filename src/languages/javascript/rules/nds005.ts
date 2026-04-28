@@ -57,8 +57,13 @@ export function extractBodyAnchor(tryStmt: TryStatement): string {
       if (nestedAnchor) return nestedAnchor;
       continue;
     }
-    // Return first meaningful line (truncated for matching)
-    return text.slice(0, 80);
+    // Use only the first line of the statement text as the anchor.
+    // Multi-line statements (e.g. function calls with object arguments) have
+    // different internal indentation when wrapped in a span callback —
+    // the 80-char slice would cross the first newline and capture that
+    // indentation difference, causing false mismatches.
+    const firstLine = text.split('\n')[0];
+    return firstLine.slice(0, 80);
   }
   return '';
 }
@@ -275,15 +280,24 @@ export function checkControlFlowPreservation(
       if (origBlock.hasFinally) parts.push('finally');
       const structure = parts.length > 0 ? `try/${parts.join('/')}` : 'try';
 
+      // Include a preview of the original block so the agent knows exactly what
+      // it removed and must restore. 8 lines is enough to show the try/catch
+      // structure and first few content lines.
+      const originalLines = originalCode.split('\n');
+      const startIdx = origBlock.lineNumber - 1;
+      const previewLines = originalLines.slice(startIdx, Math.min(startIdx + 8, originalLines.length));
+      const blockPreview = previewLines.join('\n');
+
       violations.push({
         ruleId: 'NDS-005',
         passed: false,
         filePath,
         lineNumber: null,
         message:
-          `NDS-005: Original ${structure} block (line ${origBlock.lineNumber}) is missing ` +
-          `from instrumented output. Instrumentation must preserve existing error handling ` +
-          `structure — do not remove or merge try/catch/finally blocks.`,
+          `NDS-005: Original ${structure} block is missing from instrumented output. ` +
+          `You removed this block — it must survive intact, ` +
+          `nested inside the outer span wrapper. Do NOT remove, merge, or hoist it.\n` +
+          `Removed block:\n${blockPreview}`,
         tier: 2,
         blocking: true,
       });

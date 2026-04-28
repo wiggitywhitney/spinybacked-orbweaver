@@ -73,6 +73,10 @@ export function buildParser() {
             type: 'boolean' as const,
             default: true,
             describe: 'Create a PR after instrumentation (use --no-pr to skip)',
+          })
+          .option('debug-dump-dir', {
+            type: 'string' as const,
+            describe: 'Write each file\'s last instrumented code to this directory (for debugging)',
           });
       },
     )
@@ -123,6 +127,7 @@ export async function run(args?: string[]) {
         yes: Boolean(argv.yes),
         verbose: Boolean(argv.verbose),
         debug: Boolean(argv.debug),
+        debugDumpDir: argv.debugDumpDir as string | undefined,
       },
       {
         loadConfig,

@@ -297,6 +297,36 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
       expect(failures[0].ruleId).toBe('NDS-005');
     });
 
+    it('missing-block message includes a preview of the original try/catch lines', () => {
+      // When NDS-005 fires for a removed try/catch, the error message must include
+      // the original block's source so the agent knows exactly what to restore.
+      const original = [
+        'async function processOrder(id) {',
+        '  try {',
+        '    const result = await fetchOrder(id);',
+        '    return result;',
+        '  } catch (err) {',
+        '    logger.warn("fetch failed, continuing");',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Agent removed the try/catch wrapper (kept content, dropped structure)
+      const instrumented = [
+        'async function processOrder(id) {',
+        '  const result = await fetchOrder(id);',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      const failure = results.find(r => !r.passed && r.ruleId === 'NDS-005');
+      expect(failure).toBeDefined();
+      // Message must include a preview of the original block's lines
+      expect(failure!.message).toMatch(/try \{/);
+      expect(failure!.message).toMatch(/fetchOrder/);
+    });
+
     it('detects when existing try/catch blocks are merged', () => {
       const original = [
         'function twoStep() {',
@@ -602,6 +632,54 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
         tier: 2,
         blocking: true,
       });
+    });
+
+    it('matches try blocks whose first statement spans multiple lines despite indentation differences from span wrapping', () => {
+      // Body anchor is the first line only — multi-line statements have different
+      // internal indentation when wrapped in a startActiveSpan callback (extra nesting),
+      // so the anchor must not include content past the first newline.
+      const original = [
+        'async function main() {',
+        '  if (cfg) {',
+        '    try {',
+        "      const result = await doWork('.', {",
+        '        onProgress: (msg) => log(msg),',
+        '      });',
+        '    } catch (err) {',
+        '      log(err.message);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function main() {',
+        '  return tracer.startActiveSpan("main", async (span) => {',
+        '    try {',
+        '      if (cfg) {',
+        '        try {',
+        "          const result = await doWork('.', {",
+        '            onProgress: (msg) => log(msg),',
+        '          });',
+        '        } catch (err) {',
+        '          log(err.message);',
+        '        }',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('returns correct CheckResult fields for failing check', () => {

@@ -39,6 +39,8 @@ export interface InstrumentFileCallOptions {
   effortOverride?: AgentConfig['agentEffort'];
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
+  /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
+  processedFilesManifest?: Map<string, string[]>;
 }
 
 /**
@@ -73,6 +75,8 @@ interface InstrumentWithRetryOptions {
   anthropicClient?: Anthropic;
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
+  /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
+  processedFilesManifest?: Map<string, string[]>;
   /**
    * Language provider for the file being instrumented.
    * Passed to the validation chain (checkSyntax, lintCheck) and used to determine
@@ -311,6 +315,15 @@ export const RETRYABLE_NULL_OUTPUT = 'null parsed_output';
 export const RETRYABLE_ELISION = 'elision detected';
 
 /**
+ * Substring that signals a structured output JSON parse failure (retryable).
+ * Thrown by the Anthropic SDK when stream.finalMessage() receives a truncated or
+ * malformed JSON response — a transport-layer failure, not a code quality failure.
+ * Coupling: this substring originates from the Anthropic SDK error message thrown
+ * during zodOutputFormat parsing and propagated through instrumentFile()'s catch block.
+ */
+export const RETRYABLE_PARSE_ERROR = 'Failed to parse structured output';
+
+/**
  * Substring that signals stop_reason: max_tokens — the model hit the output token ceiling.
  * Retrying won't help because the same file will truncate at the same limit.
  * The token budget is shared between adaptive thinking and JSON output, so the
@@ -325,6 +338,7 @@ export const EARLY_ABORT_MAX_TOKENS = 'stop_reason: max_tokens';
 export function isRetryableInstrumentError(error: string): boolean {
   if (error.includes(RETRYABLE_NULL_OUTPUT)) return true;
   if (error.includes(RETRYABLE_ELISION)) return true;
+  if (error.includes(RETRYABLE_PARSE_ERROR)) return true;
   return false;
 }
 
@@ -400,6 +414,7 @@ export async function instrumentWithRetry(
       provider,
       options.projectRoot, anthropicClient, options.clock,
       options.existingSpanNames,
+      options.processedFilesManifest,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -450,6 +465,7 @@ async function executeRetryLoop(
   anthropicClient?: Anthropic,
   clock?: () => number,
   existingSpanNames?: string[],
+  processedFilesManifest?: Map<string, string[]>,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -473,6 +489,8 @@ async function executeRetryLoop(
 
   let cumulativeTokens: TokenUsage = { ...ZERO_TOKENS };
   const errorProgression: string[] = [];
+  const thinkingBlocksByAttempt: string[][] = [];
+  const lastErrorByAttempt: string[] = [];
   let lastOutput: InstrumentationOutput | undefined;
   let lastValidation: ValidationResult | undefined;
   let previousValidation: ValidationResult | undefined;
@@ -506,6 +524,8 @@ async function executeRetryLoop(
           attempt - 1, lastStrategy, errorProgression, lastOutput,
           undefined,
           refactors.length > 0 ? refactors : undefined,
+          thinkingBlocksByAttempt,
+          lastErrorByAttempt,
         );
       }
     }
@@ -521,6 +541,8 @@ async function executeRetryLoop(
         attempt - 1, lastStrategy, errorProgression, lastOutput,
         undefined,
         refactors.length > 0 ? refactors : undefined,
+        thinkingBlocksByAttempt,
+        lastErrorByAttempt,
       );
     }
     const plannedStrategy = strategyForAttempt(attempt, maxAttempts);
@@ -553,16 +575,17 @@ async function executeRetryLoop(
         failureHint: (baseHint + escalation) || undefined,
         maxOutputTokens: outputBudget,
         existingSpanNames,
+        processedFilesManifest,
       };
     } else if (plannedStrategy !== 'initial-generation') {
       // No conversation context or validation available — this is a retry
       // of initial generation triggered by a retryable failure, not a real
       // multi-turn fix or fresh regeneration.
       actualStrategy = 'retry-initial';
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest };
     } else {
       // Initial generation
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest };
     }
     lastStrategy = actualStrategy;
 
@@ -575,6 +598,8 @@ async function executeRetryLoop(
       const failTokens = instrumentResult.tokenUsage ?? ZERO_TOKENS;
       cumulativeTokens = addTokenUsage(cumulativeTokens, failTokens);
       errorProgression.push(instrumentResult.error);
+      lastErrorByAttempt.push(instrumentResult.error);
+      thinkingBlocksByAttempt.push([]);
 
       if (isRetryableInstrumentError(instrumentResult.error) && attempt < maxAttempts) {
         // Budget escalation: stop_reason: max_tokens means the model hit the output token ceiling.
@@ -588,6 +613,7 @@ async function executeRetryLoop(
           return buildFailedResult(
             filePath, instrumentResult.error, instrumentResult.error,
             cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+            undefined, undefined, thinkingBlocksByAttempt, lastErrorByAttempt,
           );
         }
         // Retryable failure — continue to next attempt
@@ -602,12 +628,15 @@ async function executeRetryLoop(
         cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
         undefined,
         refactors.length > 0 ? refactors : undefined,
+        thinkingBlocksByAttempt,
+        lastErrorByAttempt,
       );
     }
 
     const output = instrumentResult.output;
     lastOutput = output;
     cumulativeTokens = addTokenUsage(cumulativeTokens, output.tokenUsage);
+    thinkingBlocksByAttempt.push(output.thinkingBlocks ?? []);
 
     // Capture conversation context for potential next attempt
     if (instrumentResult.conversationContext) {
@@ -639,6 +668,9 @@ async function executeRetryLoop(
 
     lastValidation = validation;
     errorProgression.push(summarizeErrors(validation));
+    lastErrorByAttempt.push(
+      validation.blockingFailures.map(f => `${f.ruleId}: ${f.message}`).join('\n'),
+    );
 
     // Track NDS-003 violations and LLM refactors for persistence detection
     nds003ViolationsPerAttempt.push(
@@ -674,6 +706,7 @@ async function executeRetryLoop(
         advisoryAnnotations,
         agentVersion: AGENT_VERSION,
         tokenUsage: tokens,
+        thinkingBlocksByAttempt: thinkingBlocksByAttempt.some(b => b.length > 0) ? thinkingBlocksByAttempt : undefined,
       });
 
       // Advisory-only pass: when file passes but has advisory findings and budget allows.
@@ -773,6 +806,8 @@ async function executeRetryLoop(
             attempt, actualStrategy, errorProgression, lastOutput,
             validation.blockingFailures[0]?.ruleId,
             refactors.length > 0 ? refactors : undefined,
+            thinkingBlocksByAttempt,
+            lastErrorByAttempt,
           );
         }
         // Not yet on fresh regen — jump to the final attempt (fresh-regeneration)
@@ -809,6 +844,8 @@ async function executeRetryLoop(
     completedAttempts, lastStrategy, errorProgression, lastOutput,
     lastValidation!.blockingFailures[0]?.ruleId,
     suggestedRefactors.length > 0 ? suggestedRefactors : undefined,
+    thinkingBlocksByAttempt,
+    lastErrorByAttempt,
   );
 }
 
@@ -1208,6 +1245,8 @@ function buildFailedResult(
   output?: InstrumentationOutput,
   firstBlockingRuleId?: string,
   suggestedRefactors?: SuggestedRefactor[],
+  thinkingBlocksByAttempt?: string[][],
+  lastErrorByAttempt?: string[],
 ): FileResult {
   return {
     path: filePath,
@@ -1224,8 +1263,11 @@ function buildFailedResult(
     firstBlockingRuleId,
     reason,
     lastError,
+    lastInstrumentedCode: output?.instrumentedCode,
+    lastErrorByAttempt: lastErrorByAttempt && lastErrorByAttempt.length > 0 ? lastErrorByAttempt : undefined,
     agentVersion: AGENT_VERSION,
     tokenUsage,
     suggestedRefactors,
+    thinkingBlocksByAttempt: thinkingBlocksByAttempt?.some(b => b.length > 0) ? thinkingBlocksByAttempt : undefined,
   };
 }

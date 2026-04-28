@@ -1,9 +1,9 @@
 // ABOUTME: JavaScriptProvider — the LanguageProvider implementation for JavaScript (.js, .jsx).
 // ABOUTME: Delegates to the JS-specific ast, validation, extraction, reassembly, and prompt modules.
 
-import { Project } from 'ts-morph';
+import { Project, SyntaxKind } from 'ts-morph';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import type {
   LanguageProvider,
   FunctionInfo,
@@ -14,6 +14,9 @@ import type {
   LanguagePromptSections,
   Example,
   InstrumentationDetectionResult,
+  PreScanResult,
+  PreScanSubOperationGroup,
+  PreScanAlreadyInstrumentedImport,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -23,6 +26,7 @@ import { extractExportedFunctions } from './extraction.ts';
 import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from './reassembly.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
+import { hasDirectProcessExit } from './rules/cov004.ts';
 import { cov001Rule } from './rules/cov001.ts';
 import { cov002Rule } from './rules/cov002.ts';
 import { cov003Rule } from './rules/cov003.ts';
@@ -375,6 +379,272 @@ export class JavaScriptProvider implements LanguageProvider {
       }
       throw error;
     }
+  }
+
+  // ── Pre-instrumentation analysis ──────────────────────────────────────────
+
+  preInstrumentationAnalysis(originalCode: string, processedFilesManifest?: Map<string, string[]>, filePath?: string): PreScanResult {
+    const project = new Project({
+      compilerOptions: { allowJs: true },
+      useInMemoryFileSystem: true,
+    });
+    const sourceFile = project.createSourceFile('file.js', originalCode);
+
+    // classifyFunctions returns metadata for both function declarations and
+    // variable-assigned arrow/function expressions.
+    const classified = classifyFunctions(sourceFile);
+
+    // Build a name → node map covering both FunctionDeclaration nodes and
+    // variable-assigned ArrowFunction/FunctionExpression nodes. The wide
+    // import('ts-morph').Node type lets hasDirectProcessExit work on both.
+    const fnNodeByName = new Map<string, import('ts-morph').Node>();
+    for (const node of sourceFile.getFunctions()) {
+      const name = node.getName();
+      if (name) fnNodeByName.set(name, node);
+    }
+    for (const varStatement of sourceFile.getVariableStatements()) {
+      for (const decl of varStatement.getDeclarations()) {
+        const initializer = decl.getInitializer();
+        if (!initializer) continue;
+        const kind = initializer.getKind();
+        if (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression) {
+          fnNodeByName.set(decl.getName(), initializer);
+        }
+      }
+    }
+
+    const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
+    const processExitEntryPoints: PreScanResult['processExitEntryPoints'] = [];
+    const asyncFunctionsNeedingSpans: PreScanResult['asyncFunctionsNeedingSpans'] = [];
+    const pureSyncFunctions: PreScanResult['pureSyncFunctions'] = [];
+    const unexportedFunctions: PreScanResult['unexportedFunctions'] = [];
+    const outboundCallsNeedingSpans: PreScanResult['outboundCallsNeedingSpans'] = [];
+
+    const entryPointNames = new Set<string>();
+
+    // COV-001 + RST-006: identify entry points and process.exit() constraints
+    for (const fn of classified) {
+      const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
+      if (!isEntryPoint) continue;
+
+      entryPointNames.add(fn.name);
+      entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+
+      const fnNode = fnNodeByName.get(fn.name);
+      if (fnNode && hasDirectProcessExit(fnNode)) {
+        // Detect inner try/catch blocks that must be preserved when the function is wrapped.
+        const innerTryStatements = fnNode.getDescendantsOfKind(SyntaxKind.TryStatement);
+        let constraintNote: string;
+        if (innerTryStatements.length > 0) {
+          const blockWord = innerTryStatements.length === 1 ? 'block' : 'blocks';
+          const lineWord = innerTryStatements.length === 1 ? 'line' : 'lines';
+          const lineList = innerTryStatements.map(t => t.getStartLineNumber()).join(', ');
+          const preserveWord = innerTryStatements.length === 1 ? 'it' : 'them';
+          // Process-first: CRITICAL constraint up front, then how-to, then don'ts.
+          constraintNote =
+            `CRITICAL: \`${fn.name}\` (line ${fn.startLine}) contains ${innerTryStatements.length} inner try/catch ${blockWord} at ${lineWord} ${lineList} — preserve ${preserveWord} exactly. ` +
+            `Wrap the function by placing ALL original lines unchanged between \`try {\` and \`} finally { span.end(); }\`. ` +
+            `Do NOT remove, merge, hoist, or omit any original line including the inner try/catch. ` +
+            `Requires a span — COV-001. Has direct process.exit() calls: ` +
+            `do NOT add span.end() before individual process.exit() calls. ` +
+            `Do NOT add intermediate variables for setAttribute.`;
+        } else {
+          constraintNote =
+            `Entry point \`${fn.name}\` (line ${fn.startLine}) requires a span — COV-001. ` +
+            `Has direct process.exit() calls: place all original lines unchanged inside ` +
+            `the try block (startActiveSpan → try { [all original lines here] } finally { span.end() }). ` +
+            `Do NOT add span.end() before individual process.exit() calls — the finally block handles all exit paths. ` +
+            `Do NOT add intermediate variables for setAttribute — use only variables already in scope.`;
+        }
+        processExitEntryPoints.push({ name: fn.name, startLine: fn.startLine, constraintNote });
+      }
+    }
+
+    // COV-004 / RST-001 / RST-004: classify non-entry-point functions
+    for (const fn of classified) {
+      if (entryPointNames.has(fn.name)) continue;
+
+      if (fn.isAsync) {
+        // COV-004: async non-entry-point functions need spans — but apply the same
+        // process.exit() exception as the prompt rule: if the function calls
+        // process.exit() directly in its body, skip it (instrument sub-ops instead).
+        const fnNode = fnNodeByName.get(fn.name);
+        if (!fnNode || !hasDirectProcessExit(fnNode)) {
+          asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+        }
+      } else {
+        // RST-001: pure sync functions — no I/O to trace
+        pureSyncFunctions.push({ name: fn.name, startLine: fn.startLine });
+      }
+
+      // RST-004: unexported non-async functions are internal implementation details.
+      // Async unexported functions are already in asyncFunctionsNeedingSpans (COV-004);
+      // including them here would create conflicting skip/instrument guidance.
+      if (!fn.isExported && !fn.isAsync) {
+        unexportedFunctions.push({ name: fn.name, startLine: fn.startLine });
+      }
+    }
+
+    // hasInstrumentableFunctions: false when the file has no entry points and no async
+    // non-entry-point functions needing spans. Computed after the COV-001/COV-004 loops
+    // so process.exit() exclusions are accounted for — a file where every async function
+    // is excluded by the process.exit() exception correctly yields false here.
+    const hasInstrumentableFunctions =
+      entryPointsNeedingSpans.length > 0 || asyncFunctionsNeedingSpans.length > 0;
+
+    // COV-002: detect outbound calls (HTTP, DB, messaging) in async function bodies.
+    // Text-based pattern search — sufficient for advisory pre-scan guidance.
+    const OUTBOUND_KEYWORDS = [
+      { text: 'fetch(', label: 'fetch' },
+      { text: 'axios.', label: 'axios' },
+      { text: 'http.request(', label: 'http.request' },
+      { text: 'https.request(', label: 'https.request' },
+      { text: '.query(', label: 'db.query' },
+      { text: '.execute(', label: 'db.execute' },
+      { text: 'mongoose.', label: 'mongoose' },
+      { text: 'prisma.', label: 'prisma' },
+      { text: 'knex(', label: 'knex' },
+      { text: 'sequelize.', label: 'sequelize' },
+      { text: 'redis.', label: 'redis' },
+      { text: '.sendToQueue(', label: 'amqp.sendToQueue' },
+      { text: '.publish(', label: 'amqp.publish' },
+    ];
+
+    for (const fn of classified) {
+      if (!fn.isAsync) continue;
+      const fnNode = fnNodeByName.get(fn.name);
+      if (!fnNode) continue;
+      const bodyText = fnNode.getText();
+      const calls = OUTBOUND_KEYWORDS
+        .filter(kw => bodyText.includes(kw.text))
+        .map(kw => ({ line: fn.startLine, callText: kw.label }));
+      if (calls.length > 0) {
+        outboundCallsNeedingSpans.push({ functionName: fn.name, calls });
+      }
+    }
+
+    // Local import analysis — per-entry-point sub-operation breakdown.
+    // Build a map of local name → {moduleSpecifier, exportedName} from all import declarations.
+    // For aliased imports (import { foo as bar }), use the alias (bar) as the key since
+    // that is the name that appears at call sites. exportedName (foo) is preserved for
+    // cross-file manifest lookup — the manifest records the exported name, not the alias.
+    const namedImportMap = new Map<string, { moduleSpecifier: string; exportedName: string }>();
+    for (const importDecl of sourceFile.getImportDeclarations()) {
+      const moduleSpecifier = importDecl.getModuleSpecifierValue();
+      for (const namedImport of importDecl.getNamedImports()) {
+        const exportedName = namedImport.getName();
+        const localName = namedImport.getAliasNode()?.getText() ?? exportedName;
+        namedImportMap.set(localName, { moduleSpecifier, exportedName });
+      }
+      const defaultImport = importDecl.getDefaultImport();
+      if (defaultImport) {
+        namedImportMap.set(defaultImport.getText(), { moduleSpecifier, exportedName: defaultImport.getText() });
+      }
+    }
+
+    // Build a set of locally-defined function names (function declarations +
+    // variable-assigned arrow/function expressions at file scope).
+    const localFunctionNames = new Set<string>();
+    for (const fn of sourceFile.getFunctions()) {
+      const name = fn.getName();
+      if (name) localFunctionNames.add(name);
+    }
+    for (const varStatement of sourceFile.getVariableStatements()) {
+      for (const decl of varStatement.getDeclarations()) {
+        const initializer = decl.getInitializer();
+        if (!initializer) continue;
+        const kind = initializer.getKind();
+        if (kind === SyntaxKind.ArrowFunction || kind === SyntaxKind.FunctionExpression) {
+          localFunctionNames.add(decl.getName());
+        }
+      }
+    }
+
+    // For each entry-point function, walk its call expressions to find identifier-callee
+    // calls (not method calls). Categorize each as local or imported.
+    const entryPointSubOperations: PreScanSubOperationGroup[] = [];
+    for (const ep of entryPointsNeedingSpans) {
+      const fnNode = fnNodeByName.get(ep.name);
+      if (!fnNode) continue;
+
+      const localSubOperations: string[] = [];
+      const importedSubOperationMap = new Map<string, { moduleSpecifier: string; exportedName: string }>();
+
+      const callExprs = fnNode.getDescendantsOfKind(SyntaxKind.CallExpression);
+      for (const callExpr of callExprs) {
+        const callee = callExpr.getExpression();
+        // Only plain identifier calls (e.g., `foo()`) — skip method calls like `obj.method()`
+        if (callee.getKind() !== SyntaxKind.Identifier) continue;
+        const calleeName = callee.getText();
+        // Skip self-calls
+        if (calleeName === ep.name) continue;
+        // Skip if already seen
+        if (localSubOperations.includes(calleeName) || importedSubOperationMap.has(calleeName)) continue;
+
+        const importInfo = namedImportMap.get(calleeName);
+        if (importInfo) {
+          importedSubOperationMap.set(calleeName, importInfo);
+        } else if (localFunctionNames.has(calleeName)) {
+          localSubOperations.push(calleeName);
+        }
+        // If neither local nor imported, omit per scope constraint.
+      }
+
+      const importedSubOperations = Array.from(importedSubOperationMap.entries()).map(
+        ([name, { moduleSpecifier, exportedName }]) => ({
+          name,
+          sourceModule: moduleSpecifier,
+          ...(name !== exportedName ? { exportedName } : {}),
+        }),
+      );
+
+      // Only emit a group when there is something to report.
+      if (localSubOperations.length > 0 || importedSubOperations.length > 0) {
+        entryPointSubOperations.push({ entryPointName: ep.name, localSubOperations, importedSubOperations });
+      }
+    }
+
+    // Cross-file manifest lookup — identify imported functions already instrumented
+    // in previously-processed files. Requires both the manifest and the current file path
+    // to resolve relative import specifiers to absolute paths for manifest lookup.
+    const alreadyInstrumentedImports: PreScanAlreadyInstrumentedImport[] = [];
+    if (processedFilesManifest && filePath && processedFilesManifest.size > 0) {
+      const fileDir = dirname(filePath);
+      const seen = new Set<string>(); // deduplicate across multiple entry points
+
+      for (const group of entryPointSubOperations) {
+        for (const imported of group.importedSubOperations) {
+          const dedupeKey = `${imported.name}:${imported.sourceModule}`;
+          if (seen.has(dedupeKey)) continue;
+
+          const resolvedPath = resolve(fileDir, imported.sourceModule);
+          const instrumentedNames = processedFilesManifest.get(resolvedPath);
+          // Check by exported name (original symbol) when the import is aliased — the manifest
+          // records the function name from the source file, not the local call-site alias.
+          const lookupName = imported.exportedName ?? imported.name;
+          if (instrumentedNames?.includes(lookupName)) {
+            alreadyInstrumentedImports.push({
+              name: imported.name,
+              sourceModule: imported.sourceModule,
+              sourceFile: resolvedPath,
+            });
+            seen.add(dedupeKey);
+          }
+        }
+      }
+    }
+
+    return {
+      hasInstrumentableFunctions,
+      entryPointsNeedingSpans,
+      processExitEntryPoints,
+      asyncFunctionsNeedingSpans,
+      pureSyncFunctions,
+      unexportedFunctions,
+      outboundCallsNeedingSpans,
+      entryPointSubOperations,
+      alreadyInstrumentedImports,
+    };
   }
 
   // ── Feature parity check ──────────────────────────────────────────────────

@@ -799,4 +799,75 @@ describe('DX verification — FileResult field content for all exit paths', () =
       expect(result.errorProgression!.length).toBeGreaterThan(0);
     });
   });
+
+  describe('lastErrorByAttempt accumulation', () => {
+    it('accumulates per-attempt full error text across validation failures', async () => {
+      let callCount = 0;
+      const attempt1Failure: ValidationResult = {
+        passed: false,
+        tier1Results: [
+          { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+        ],
+        tier2Results: [],
+        blockingFailures: [
+          { ruleId: 'NDS-001', passed: false, filePath: testFilePath, lineNumber: 5, message: 'Unexpected token at line 5', tier: 1, blocking: true },
+        ],
+        advisoryFindings: [],
+      };
+      const attempt2Failure: ValidationResult = {
+        passed: false,
+        tier1Results: [
+          { ruleId: 'NDS-003', passed: false, filePath: testFilePath, lineNumber: 10, message: 'New variable introduced', tier: 1, blocking: true },
+        ],
+        tier2Results: [],
+        blockingFailures: [
+          { ruleId: 'NDS-003', passed: false, filePath: testFilePath, lineNumber: 10, message: 'New variable introduced', tier: 1, blocking: true },
+        ],
+        advisoryFindings: [],
+      };
+
+      const validations = [attempt1Failure, attempt2Failure];
+
+      const deps: InstrumentWithRetryDeps = {
+        instrumentFile: async () => {
+          const tokenUsage = callCount === 0 ? attempt1Tokens : attempt2Tokens;
+          const output = makeOutput({ tokenUsage });
+          return { success: true, output } as InstrumentFileResult;
+        },
+        validateFile: async () => {
+          const v = validations[callCount]!;
+          callCount++;
+          return v;
+        },
+      };
+
+      const result = await instrumentWithRetry(
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
+      );
+
+      expect(result.status).toBe('failed');
+      expect(result.lastErrorByAttempt).toBeDefined();
+      expect(result.lastErrorByAttempt!.length).toBe(2);
+      expect(result.lastErrorByAttempt![0]).toContain('NDS-001');
+      expect(result.lastErrorByAttempt![0]).toContain('Unexpected token at line 5');
+      expect(result.lastErrorByAttempt![1]).toContain('NDS-003');
+      expect(result.lastErrorByAttempt![1]).toContain('New variable introduced');
+    });
+
+    it('includes instrument failure messages in lastErrorByAttempt', async () => {
+      const deps: InstrumentWithRetryDeps = {
+        instrumentFile: async () => ({ success: false, error: 'API error: terminated' }) as InstrumentFileResult,
+        validateFile: async () => makePassingValidation(testFilePath),
+      };
+
+      const result = await instrumentWithRetry(
+        testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }), { deps, provider: jsProvider },
+      );
+
+      expect(result.status).toBe('failed');
+      expect(result.lastErrorByAttempt).toBeDefined();
+      expect(result.lastErrorByAttempt!.length).toBeGreaterThanOrEqual(1);
+      expect(result.lastErrorByAttempt![0]).toContain('API error: terminated');
+    });
+  });
 });

@@ -2,7 +2,7 @@
 // ABOUTME: Follows the spec's 7-section structure with Claude 4.x prompt hygiene.
 
 import type { AgentConfig } from '../config/schema.ts';
-import type { LanguageProvider, Example, InstrumentationDetectionResult } from '../languages/types.ts';
+import type { LanguageProvider, Example, InstrumentationDetectionResult, PreScanResult } from '../languages/types.ts';
 
 /**
  * Format a list of instrumentation examples into the XML block used in the system prompt.
@@ -174,7 +174,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **NDS-001**: Output must be syntactically valid ${activeProvider.displayName}
 - **NDS-002**: Pre-existing tests must still pass after your changes
-- **NDS-003**: Do NOT modify, remove, or reorder any non-instrumentation code. Only add instrumentation.
+- **NDS-003**: Do NOT modify, remove, or reorder any non-instrumentation code. Only add instrumentation. Removing original code — including try/catch blocks, conditionals, or any other lines you did not write — causes immediate rejection, even if the removed code appears "redundant" or conflicts with your instrumentation approach. Valid instrumentation never requires removing original code. If your approach requires removing something, the approach is wrong — ADD instrumentation that works within the existing structure instead.
 
   **Return-value capture exception**: When you need \`span.setAttribute()\` to receive a return value, you may rewrite \`return asyncExpr\` as \`const result = await asyncExpr; span.setAttribute('attr.name', result.field); return result;\`. Rules: (1) the original call expression must be preserved exactly — only the statement form changes from \`return\` to \`const … = await\`; (2) the captured variable must be immediately used in a \`span.setAttribute()\` call before the \`return\`; (3) do NOT use this for synchronous expressions or to restructure multi-statement returns or chains.
 - **API-001**: Import only from \`@opentelemetry/api\`. No SDK, exporter, or instrumentation-* imports.
@@ -218,7 +218,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Coverage
 
-- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span.
+- **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span. **COV-001 takes priority over RST-006** — when a function is both an async entry point and calls \`process.exit()\` directly, add the span. Use the minimal wrapper only: \`startActiveSpan → try { original body } finally { span.end() }\`. Do NOT add \`span.end()\` before individual \`process.exit()\` calls (NDS-005 violation). Do NOT declare new intermediate variables for \`setAttribute\` (NDS-003 violation). Use only variables already in scope.
 - **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
 - **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`).
 - **COV-004**: Long-running or async I/O operations should have spans. When multiple sibling functions share the same structure (e.g., async functions that receive state, call an LLM, and return state), instrument ALL of them consistently — do not instrument some and skip others. **Context propagation is NOT a valid COV-004 exemption for exported async functions.** Each exported async function must have its own span, even if called from within an instrumented parent. The only valid reason to skip an exported async function under COV-004 is RST-001 (it is synchronous with no I/O). **Exception — \`process.exit()\` functions: if the function calls \`process.exit()\` directly in its body (not only inside catch or finally blocks), do not add a span — \`process.exit()\` bypasses the span's \`finally\` block; instrument the async sub-operations inside it instead (RST-006).** RST-004 applies only to unexported functions and does not exempt exported ones.
@@ -232,7 +232,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **RST-003**: Do NOT add spans to thin wrappers (single return delegating to another function).
 - **RST-004**: Do NOT add spans to unexported internal functions. **RST-004 takes precedence over COV-004**: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation. Only instrument an unexported I/O function when no exported orchestrator span covers that execution path.
 - **RST-005**: Do NOT add instrumentation to functions that already have spans (\`startActiveSpan\`, \`startSpan\`, \`tracer.\`).
-- **RST-006**: Do NOT add a span to an async function that calls \`process.exit()\` directly in its body. \`process.exit()\` bypasses the span's \`finally\` block, causing the span to leak at runtime and never export. Instrument the async sub-operations inside such functions instead. (Exception: if \`process.exit()\` appears only inside a \`catch\` or \`finally\` block, the function is not exempt from COV-004 and should still be spanned on the happy path.)
+- **RST-006**: Do NOT add a span to an async function that calls \`process.exit()\` directly in its body. \`process.exit()\` bypasses the span's \`finally\` block, causing the span to leak at runtime and never export. Instrument the async sub-operations inside such functions instead. (Exception: if \`process.exit()\` appears only inside a \`catch\` or \`finally\` block, the function is not exempt from COV-004 and should still be spanned on the happy path.) **When RST-006 conflicts with COV-001 (the function is an async entry point), COV-001 wins — see COV-001.**
 
 ### API-Only Dependency
 
@@ -248,12 +248,12 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Code Quality
 
-- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT add span instrumentation around \`process.exit()\` calls — leave \`process.exit()\` untouched (modifying control flow violates NDS-003). If a function contains \`process.exit()\`, skip instrumentation of that call site and report it in advisory notes as a refactor suggestion (e.g., extract the logic before the exit into an instrumented wrapper).
+- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT add \`span.end()\` immediately before \`process.exit()\` calls — the \`finally\` block handles normal exit paths; \`process.exit()\` paths leak the span at runtime (known limitation). Report leaked span paths in \`notes\` as a known limitation.
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
 - **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: For manual spans (\`startSpan\`), use \`context.with()\` to maintain async context.
 - **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`. **Exemption: CDQ-006 does not apply to root spans or spans created at the entry point of a traced operation — these always record.** Do not add \`isRecording()\` guards to root spans or entry-point spans. Do not cite CDQ-006 violations for root spans or entry-point spans in advisory notes or instrumentation reasoning.
-- **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields, or undefined values. PII attribute names to avoid: \`author\`, \`committer\`, \`username\`, \`email\`, \`password\`, \`ssn\`, \`name\`, \`user\`. Do NOT pass raw filesystem paths (variables named \`filePath\`, \`outputDir\`, etc.) as attribute values — use \`path.basename()\` or a project-relative path instead. Watch for optional chaining (\`?.\`) in \`setAttribute\` value arguments — these can produce \`undefined\`. If the value is a member access like \`entries.length\`, guard with \`if (entries)\` or use optional chaining (\`entries?.length ?? 0\`).
+- **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields, or undefined values. PII attribute names to avoid: \`author\`, \`committer\`, \`username\`, \`email\`, \`password\`, \`ssn\`, \`name\`, \`user\`. Do NOT pass raw filesystem paths (variables named \`filePath\`, \`outputDir\`, etc.) as attribute values — use \`path.basename()\` or a project-relative path instead. Watch for optional chaining (\`?.\`) in \`setAttribute\` value arguments — these can produce \`undefined\`. If the value is a member access like \`entries.length\`, guard with \`if (entries)\` or use optional chaining (\`entries?.length ?? 0\`). Import constraint: only apply these transformations when the required utility (e.g., \`basename\` from \`node:path\`) is already imported in the file. Do NOT add new non-OTel imports to comply with this advisory — if the utility is not already available, use the raw value and note it as a known limitation in \`notes\`.
 - **CDQ-009**: Do NOT use \`!== undefined\` to guard a variable before accessing its property as a \`setAttribute\` value. This guard passes when the variable is \`null\` and will throw a TypeError at runtime. Use \`if (x)\` (truthy check) or \`x != null\` (covers both null and undefined) instead.
 - **CDQ-010**: Do NOT call string methods (\`.split()\`, \`.slice()\`, \`.trim()\`, \`.replace()\`, \`.toLowerCase()\`, and similar string-only methods) directly on a property access expression without type coercion — unless the field's string type is evident from context (e.g., assigned from a string literal, a template literal, or a method whose name indicates a string return like \`.toString()\` or \`.getName()\`). If \`obj.field\` is not a string at runtime, this throws \`TypeError: obj.field.method is not a function\`. When the type is uncertain, use \`String(obj.field).method()\` or, for timestamps, \`new Date(obj.field).toISOString()\` instead.
 - **CDQ-008**: Use the same tracer naming convention across all files. Do NOT vary the pattern.
@@ -333,6 +333,7 @@ You are returning structured JSON via the output schema. Fill in each field:
  * @param detectionResult - Optional OTel detection result from AST analysis
  * @param existingSpanNames - Optional span names already declared by earlier files; agent must not reuse them
  * @param prettierConstraint - Optional prose constraint derived from the project's non-default Prettier config
+ * @param preScanResult - Optional pre-instrumentation analysis findings from the deterministic AST pass
  * @returns The user message string
  */
 export function buildUserMessage(
@@ -343,6 +344,7 @@ export function buildUserMessage(
   detectionResult?: InstrumentationDetectionResult,
   existingSpanNames?: string[],
   prettierConstraint?: string,
+  preScanResult?: PreScanResult,
 ): string {
   const lineCount = originalCode.split('\n').length;
   const isLargeFile = lineCount > config.largeFileThresholdLines;
@@ -384,6 +386,87 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
     message += `
 
 **Formatting**: ${sanitizedPrettierConstraint}`;
+  }
+
+  // Inject pre-instrumentation analysis directives when findings are present.
+  // This section appears before the source file block so the agent reads the
+  // constraints before seeing the code.
+  if (preScanResult) {
+    // Normalize source-derived strings before embedding in directives. Source
+    // file identifiers and module paths are trusted as valid JS/TS tokens but
+    // may contain edge-case characters (newlines in template expressions, path
+    // separators) that could break directive line structure.
+    const sanitize = (s: string): string => s.replace(/[\r\n]+/g, ' ').trim();
+
+    const directives: string[] = [];
+
+    // COV-001 entry points (+ RST-006 process.exit() constraint when applicable)
+    const processExitNames = new Set(preScanResult.processExitEntryPoints.map(f => f.name));
+    for (const ep of preScanResult.entryPointsNeedingSpans) {
+      if (processExitNames.has(ep.name)) {
+        const constraint = preScanResult.processExitEntryPoints.find(f => f.name === ep.name);
+        if (constraint) directives.push(`- ${constraint.constraintNote}`);
+      } else {
+        directives.push(`- Entry point \`${sanitize(ep.name)}\` (line ${ep.startLine}) requires a span — COV-001.`);
+      }
+    }
+
+    // COV-004: async non-entry-point functions needing spans
+    for (const fn of preScanResult.asyncFunctionsNeedingSpans) {
+      directives.push(`- \`${sanitize(fn.name)}\` (line ${fn.startLine}) is async — add a span (COV-004).`);
+    }
+
+    // COV-002: outbound calls needing enclosing spans
+    for (const group of preScanResult.outboundCallsNeedingSpans) {
+      const callList = group.calls.map(c => sanitize(c.callText)).join(', ');
+      directives.push(`- \`${sanitize(group.functionName)}\` makes outbound calls (${callList}) — ensure they are covered by spans (COV-002).`);
+    }
+
+    // RST-001: pure sync functions to skip
+    if (preScanResult.pureSyncFunctions.length > 0) {
+      const names = preScanResult.pureSyncFunctions.map(f => `\`${sanitize(f.name)}\``).join(', ');
+      directives.push(`- Synchronous functions — skip, no I/O to trace (RST-001): ${names}.`);
+    }
+
+    // RST-004: unexported functions to skip
+    if (preScanResult.unexportedFunctions.length > 0) {
+      const names = preScanResult.unexportedFunctions.map(f => `\`${sanitize(f.name)}\``).join(', ');
+      directives.push(`- Unexported — skip unless no exported orchestrator covers this execution path (RST-004): ${names}.`);
+    }
+
+    // Per-entry-point sub-operation breakdown (local vs. imported)
+    for (const group of preScanResult.entryPointSubOperations) {
+      const localPart = group.localSubOperations.length > 0
+        ? `local: ${group.localSubOperations.map(n => `\`${sanitize(n)}\``).join(', ')}`
+        : null;
+      const importedPart = group.importedSubOperations.length > 0
+        ? `imported (handled elsewhere): ${group.importedSubOperations.map(s => `\`${sanitize(s.name)}\` from \`${sanitize(s.sourceModule)}\``).join(', ')}`
+        : null;
+      const parts = [localPart, importedPart].filter(Boolean).join('; ');
+      if (!parts) continue;
+      directives.push(`- In \`${sanitize(group.entryPointName)}()\`, async sub-operations — ${parts}.`);
+    }
+
+    // Already-instrumented imports from cross-file manifest lookup
+    if (preScanResult.alreadyInstrumentedImports.length > 0) {
+      const byModule = new Map<string, string[]>();
+      for (const imp of preScanResult.alreadyInstrumentedImports) {
+        const existing = byModule.get(imp.sourceModule) ?? [];
+        existing.push(imp.name);
+        byModule.set(imp.sourceModule, existing);
+      }
+      for (const [sourceModule, names] of byModule) {
+        const nameList = names.map(n => `\`${sanitize(n)}\``).join(', ');
+        directives.push(`- Already instrumented in \`${sanitize(sourceModule)}\`: ${nameList}. Do not re-instrument these.`);
+      }
+    }
+
+    if (directives.length > 0) {
+      message += `
+
+**Pre-instrumentation analysis** (deterministic findings — apply before reading the source):
+${directives.join('\n')}`;
+    }
   }
 
   message += `

@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
-import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, detectMalformedExtensions, detectRepeatNds003Lines, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
+import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, detectMalformedExtensions, detectRepeatNds003Lines, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, RETRYABLE_PARSE_ERROR, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
@@ -2519,6 +2519,11 @@ describe('isRetryableInstrumentError — regression guard for upstream error str
       expected: true,
     },
     {
+      name: 'structured output parse failure (retryable)',
+      error: `Anthropic API call failed: ${RETRYABLE_PARSE_ERROR}: Error: Failed to parse structured output as JSON: Unterminated string in JSON at position 12169`,
+      expected: true,
+    },
+    {
       name: 'API auth failure (terminal)',
       error: 'Anthropic API call failed: 401 Unauthorized',
       expected: false,
@@ -2542,6 +2547,7 @@ describe('isRetryableInstrumentError — regression guard for upstream error str
     // If instrument-file.ts stops using these substrings, the acceptance gate catches it.
     expect(RETRYABLE_NULL_OUTPUT).toBe('null parsed_output');
     expect(RETRYABLE_ELISION).toBe('elision detected');
+    expect(RETRYABLE_PARSE_ERROR).toBe('Failed to parse structured output');
   });
 });
 

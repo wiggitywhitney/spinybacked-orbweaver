@@ -1,8 +1,9 @@
 // ABOUTME: Handler for the `spiny-orb instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
@@ -53,6 +54,8 @@ export interface InstrumentOptions {
   yes: boolean;
   verbose: boolean;
   debug: boolean;
+  /** When set, write each file's lastInstrumentedCode to this directory during the run. */
+  debugDumpDir?: string;
 }
 
 /** Injectable dependencies for testing. */
@@ -167,6 +170,21 @@ export async function handleInstrument(
       deps.stderr(`Processing file ${index + 1} of ${total}: ${toDisplayPath(path, options.projectDir)}`);
     },
     onFileComplete: (result, _index, _total) => {
+      // Debug dump: write lastInstrumentedCode to debugDumpDir when set (runs regardless of verbose mode).
+      // Preserves relative path within debugDumpDir to avoid basename collisions (e.g., src/a/index.js
+      // and src/b/index.js are both named "index.js" but must not overwrite each other).
+      if (options.debugDumpDir && result.lastInstrumentedCode) {
+        try {
+          const rel = relative(options.projectDir, result.path);
+          const safeRel = rel.startsWith('..') || isAbsolute(rel) ? basename(result.path) : rel;
+          const outPath = join(options.debugDumpDir, safeRel);
+          mkdirSync(dirname(outPath), { recursive: true });
+          writeFileSync(outPath, result.lastInstrumentedCode, 'utf-8');
+        } catch (err) {
+          deps.stderr(`Warning: failed to write debug dump for ${toDisplayPath(result.path, options.projectDir)}: ${String(err)}`);
+        }
+      }
+
       const displayPath = toDisplayPath(result.path, options.projectDir);
       const outputKTokens = (result.tokenUsage.outputTokens / 1000).toFixed(1);
       const attempts = result.validationAttempts;
@@ -222,6 +240,18 @@ export async function handleInstrument(
       if (refactorCount > 0) {
         const noun = refactorCount === 1 ? 'refactor' : 'refactors';
         deps.stderr(`  ${refactorCount} recommended ${noun}`);
+      }
+
+      // Full validator error messages for failed files
+      if (result.status === 'failed' && result.lastError) {
+        deps.stderr('');
+        deps.stderr(`  ${_dim('Validation failures (last attempt)')}`);
+        deps.stderr(`  ${_dim('─'.repeat(60))}`);
+        for (const line of result.lastError.split('\n')) {
+          if (line.trim()) {
+            deps.stderr(`  • ${line}`);
+          }
+        }
       }
 
       // Function-level details when available
@@ -363,7 +393,13 @@ export async function handleInstrument(
 
   // Output results
   if (options.output === 'json') {
-    deps.stdout(JSON.stringify(runResult, null, 2));
+    // Strip debug-only fields before serialization — lastInstrumentedCode and
+    // thinkingBlocksByAttempt can be large and are only needed by the test harness.
+    const serializableResult = {
+      ...runResult,
+      fileResults: runResult.fileResults.map(({ lastInstrumentedCode, thinkingBlocksByAttempt, lastErrorByAttempt, ...rest }) => rest),
+    };
+    deps.stdout(JSON.stringify(serializableResult, null, 2));
   } else {
     const committedCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
     const correctSkipCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded === 0).length;

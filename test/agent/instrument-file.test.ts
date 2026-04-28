@@ -45,13 +45,18 @@ function makeMockClient(llmOutput: LlmOutput, usage?: {
   output_tokens?: number;
   cache_creation_input_tokens?: number | null;
   cache_read_input_tokens?: number | null;
-}) {
+}, thinkingBlocks?: string[]) {
+  const thinkingContent = (thinkingBlocks ?? []).map(thinking => ({
+    type: 'thinking' as const,
+    thinking,
+  }));
   const response = {
     id: 'msg_test_123',
     type: 'message' as const,
     role: 'assistant' as const,
     model: 'claude-sonnet-4-6',
     content: [
+      ...thinkingContent,
       {
         type: 'text' as const,
         text: JSON.stringify(llmOutput),
@@ -245,8 +250,8 @@ describe('instrumentFile', () => {
     });
 
     it('rejects output significantly shorter than input', async () => {
-      const longOriginal = Array.from({ length: 50 }, (_, i) => `// line ${i}\nfunction f${i}() { return ${i}; }`).join('\n');
-      const shortOutput = 'function f0() { return 0; }';
+      const longOriginal = Array.from({ length: 50 }, (_, i) => `// line ${i}\nexport async function f${i}() { return await fetch('/api/${i}'); }`).join('\n');
+      const shortOutput = 'export async function f0() { return await fetch(\'/api/0\'); }';
       const llmOutput = makeValidLlmOutput({ instrumentedCode: shortOutput });
       const client = makeMockClient(llmOutput);
 
@@ -434,7 +439,7 @@ export async function handleRequest(req, res) {
   });
 }
 
-async function processData(data) {
+function processData(data) {
   return data.items.map(item => item.value);
 }`;
 
@@ -713,6 +718,76 @@ export function filterActive(users: { isActive: boolean }[]): { isActive: boolea
       );
 
       expect(client.messages.stream).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls the LLM when only sync exports exist but pre-scan identifies async main() as entry point', async () => {
+      // A file may export only synchronous helpers but contain an unexported
+      // async main() that is the CLI entry point and needs a root span (COV-001).
+      // The "all sync exports → skip" heuristic must not fire in this case.
+      const syncExportsWithAsyncMain = `export function transform(x) {
+  return x * 2;
+}
+
+async function main() {
+  const data = await loadData();
+  console.log(transform(data));
+}`;
+      const client = makeMockClient(makeValidLlmOutput());
+
+      await instrumentFile(
+        '/project/src/cli.js',
+        syncExportsWithAsyncMain,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      // Should have called the LLM — pre-scan identifies async main() as an entry point
+      expect(client.messages.stream).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('thinking block extraction', () => {
+    it('extracts thinking blocks when present in response', async () => {
+      const client = makeMockClient(
+        makeValidLlmOutput(),
+        undefined,
+        ['I should add a span to handleRequest since it is an async entry point.', 'Second thinking block here.'],
+      );
+
+      const result = await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.output.thinkingBlocks).toEqual([
+        'I should add a span to handleRequest since it is an async entry point.',
+        'Second thinking block here.',
+      ]);
+    });
+
+    it('does not include thinkingBlocks when no thinking blocks in response', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+
+      const result = await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.output.thinkingBlocks).toBeUndefined();
     });
   });
 });

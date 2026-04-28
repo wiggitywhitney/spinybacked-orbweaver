@@ -11,14 +11,13 @@ When a real-world eval run completes for a language provider, mark it using thes
 
 Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
 
-**Current status**: TypeScript — *pending eval run-3* (blocked on PRD #582 M2).
+**Current status**: TypeScript — *pending eval run-3* (unblocked — PRD #582 merged).
 
 ---
 
 ## Short-term (current focus)
 
-- Pre-instrumentation analysis pass ([PRD #582](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/582)) — deterministic AST scan before LLM call injects proactive guidance; fixes index.js acceptance gate failure and reduces retry-loop non-determinism. M2 adds `hasInstrumentableFunctions` early-exit so files with no instrumentable functions bypass the LLM entirely (required to unblock TypeScript eval).
-- TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable". Blocked by PRD #582 M2.
+- TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable".
 
 ## Medium-term
 

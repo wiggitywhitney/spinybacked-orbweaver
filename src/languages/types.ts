@@ -213,6 +213,214 @@ export interface InstrumentationDetectionResult {
 }
 
 /**
+ * An entry point function identified by the pre-instrumentation analysis pass.
+ */
+export interface PreScanEntryPoint {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * An entry point with a direct process.exit() call, identified by the pre-scan.
+ *
+ * These functions are both COV-001 entry points AND have RST-006 constraint.
+ * COV-001 wins: the function still needs a span. The constraintNote provides
+ * the exact per-function directive to inject into the LLM user message.
+ */
+export interface ProcessExitEntryPoint {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+  /** Pre-formatted directive string to inject into the user message for this function. */
+  constraintNote: string;
+}
+
+/**
+ * An async non-entry-point function identified by the pre-scan (COV-004).
+ *
+ * These functions are async but not exported entry points. They typically
+ * need spans too (COV-004 advisory rule).
+ */
+export interface PreScanAsyncFunction {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * A pure synchronous function identified by the pre-scan (RST-001).
+ *
+ * These functions are not async and contain no await expressions.
+ * Spans on them provide no observability value and should be skipped.
+ */
+export interface PreScanSyncFunction {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * An unexported function identified by the pre-scan (RST-004).
+ *
+ * These functions are not exported and are typically covered by context
+ * propagation from their caller. Spans on them are usually unnecessary.
+ */
+export interface PreScanUnexportedFunction {
+  /** Function name. */
+  name: string;
+  /** Starting line in the source file (1-based). */
+  startLine: number;
+}
+
+/**
+ * A single outbound call site detected in a function body (COV-002).
+ */
+export interface PreScanOutboundCall {
+  /** Human-readable label for the call (e.g., 'fetch', 'db.query'). */
+  callText: string;
+  /** Line number where the call appears (1-based). */
+  line: number;
+}
+
+/**
+ * Outbound calls detected in an async function body (COV-002).
+ *
+ * These call sites (HTTP, DB, messaging) need enclosing spans for latency
+ * and error visibility.
+ */
+export interface PreScanOutboundCallGroup {
+  /** Name of the async function containing the calls. */
+  functionName: string;
+  /** Individual outbound call sites found in the function body. */
+  calls: PreScanOutboundCall[];
+}
+
+/**
+ * An async sub-operation call imported from another module, found in an entry
+ * point's body (M3 import analysis).
+ */
+export interface PreScanImportedSubOperation {
+  /** The local name used at call sites (alias if present, otherwise the exported name). */
+  name: string;
+  /** The import source module path (e.g., `'./handlers.js'`). */
+  sourceModule: string;
+  /** The original exported name from the source module, when the import is aliased.
+   *  Used for cross-file manifest lookup (the manifest records the exported name, not the alias). */
+  exportedName?: string;
+}
+
+/**
+ * An imported function identified as already instrumented in a previously-processed
+ * file (M6 cross-file manifest lookup).
+ */
+export interface PreScanAlreadyInstrumentedImport {
+  /** The function name being called in this file. */
+  name: string;
+  /** The import source module path as written in this file (e.g., `'./handlers.js'`). */
+  sourceModule: string;
+  /** The absolute file path where this function was instrumented. */
+  sourceFile: string;
+}
+
+/**
+ * Per-entry-point breakdown of async sub-operation calls (M3 import analysis).
+ *
+ * For each async entry-point function, lists which function calls within its body
+ * are locally defined in this file vs. imported from other modules. Helps the agent
+ * understand the instrumentation boundary: local sub-operations may need spans here;
+ * imported ones will be handled in their source files.
+ */
+export interface PreScanSubOperationGroup {
+  /** The entry point function name. */
+  entryPointName: string;
+  /** Names of functions called in this entry point that are defined locally in this file. */
+  localSubOperations: string[];
+  /** Functions called in this entry point that are imported from other modules. */
+  importedSubOperations: PreScanImportedSubOperation[];
+}
+
+/**
+ * Results from the pre-instrumentation analysis pass.
+ *
+ * Returned by `LanguageProvider.preInstrumentationAnalysis()`. Callers inject
+ * these findings into the LLM user message before the instrumentation call.
+ */
+export interface PreScanResult {
+  /**
+   * Whether the file contains any functions worth instrumenting.
+   *
+   * `false` when the file has no function definitions at all, or when every
+   * function in the file is synchronous (no async, no await). When `false`,
+   * callers may skip the LLM call entirely — there is nothing to trace.
+   */
+  hasInstrumentableFunctions: boolean;
+
+  /** Async entry-point functions that require spans (COV-001). */
+  entryPointsNeedingSpans: PreScanEntryPoint[];
+
+  /**
+   * Async entry-point functions with direct process.exit() calls (COV-001 vs RST-006).
+   * COV-001 wins — these functions still need spans. The constraintNote contains
+   * the minimal-wrapper directive for each function.
+   * These functions also appear in entryPointsNeedingSpans.
+   */
+  processExitEntryPoints: ProcessExitEntryPoint[];
+
+  /**
+   * Async non-entry-point functions that need spans (COV-004).
+   *
+   * These are async but not exported entry points. They do not appear in
+   * entryPointsNeedingSpans.
+   */
+  asyncFunctionsNeedingSpans: PreScanAsyncFunction[];
+
+  /**
+   * Pure synchronous functions that should be skipped (RST-001).
+   *
+   * Not async, no await expressions. Spans on these provide no observability value.
+   */
+  pureSyncFunctions: PreScanSyncFunction[];
+
+  /**
+   * Unexported functions that should be skipped (RST-004).
+   *
+   * Internal implementation details covered by context propagation from callers.
+   * Does not include entry points (which may be unexported but are special-cased).
+   */
+  unexportedFunctions: PreScanUnexportedFunction[];
+
+  /**
+   * Outbound calls in async function bodies that need enclosing spans (COV-002).
+   *
+   * HTTP requests, database queries, and messaging calls without span coverage.
+   */
+  outboundCallsNeedingSpans: PreScanOutboundCallGroup[];
+
+  /**
+   * Per-entry-point sub-operation call analysis (M3 import analysis).
+   *
+   * For each async entry-point, lists which function calls in its body are locally
+   * defined vs. imported from other modules. Empty array when no entry points have
+   * resolvable sub-operation calls.
+   */
+  entryPointSubOperations: PreScanSubOperationGroup[];
+
+  /**
+   * Imported functions already instrumented in a previously-processed file (M6 cross-file lookup).
+   *
+   * Populated when the coordinator passes a processed-files manifest and the pre-scan
+   * finds imported call targets that match functions instrumented in earlier files.
+   * Empty when no manifest is provided or no matches are found.
+   */
+  alreadyInstrumentedImports: PreScanAlreadyInstrumentedImport[];
+}
+
+/**
  * The full contract every language provider must implement.
  *
  * Providers are registered with the coordinator and selected by file extension.
@@ -581,6 +789,25 @@ export interface LanguageProvider {
    * @returns `true` if the provider implements this rule; `false` if explicitly not-applicable
    */
   hasImplementation(ruleId: string): boolean;
+
+  // -------------------------------------------------------------------------
+  // Pre-instrumentation analysis (optional)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Run a deterministic AST pre-scan on the original source before the LLM call.
+   *
+   * Computes what should and shouldn't be instrumented from the original source
+   * and returns findings for injection into the user message. Providers that do
+   * not implement this method are treated as returning no findings — the pipeline
+   * proceeds unchanged.
+   *
+   * The analysis uses only the source text passed in. No file system reads.
+   *
+   * @param originalCode - Source code text before instrumentation
+   * @returns Pre-scan findings, or `undefined` if the provider does not implement this method
+   */
+  preInstrumentationAnalysis?(originalCode: string, processedFilesManifest?: Map<string, string[]>, filePath?: string): PreScanResult;
 }
 
 /**

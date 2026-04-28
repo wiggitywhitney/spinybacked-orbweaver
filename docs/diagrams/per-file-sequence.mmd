@@ -5,6 +5,7 @@ title: "Per-File Processing Sequence"
 flowchart TD
     START(["Next single file"])
     LOAD["Load file contents\n+ re-resolve schema"]
+    PRESCAN["Pre-instrumentation analysis\n(deterministic AST scan)"]
     AGENT["AI Agent\nfile contents + resolved schema"]
     OUT["Instrumented output\n+ reasoning"]
     VAL["Validator\ntwo-tier checks"]
@@ -16,7 +17,8 @@ flowchart TD
     NEXT(["Next single file"])
 
     START --> LOAD
-    LOAD --> AGENT
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
     AGENT --> OUT
     OUT --> VAL
     VAL --> PASS
@@ -27,5 +29,5 @@ flowchart TD
     COMMIT --> SCHEMA
     SCHEMA --> NEXT
 
-    linkStyle 7 stroke:#006400
-    linkStyle 5 stroke:#8B0000
+    linkStyle 8 stroke:#006400
+    linkStyle 6 stroke:#8B0000

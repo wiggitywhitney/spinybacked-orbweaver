@@ -277,9 +277,9 @@ export function formatResponse(data) {
     it('length-based rejection includes ratio and line counts', async () => {
       const longOriginal = Array.from(
         { length: 50 },
-        (_, i) => `function f${i}() {\n  return ${i};\n}\n`,
+        (_, i) => `export async function f${i}() {\n  return await fetch('/api/${i}');\n}\n`,
       ).join('\n');
-      const shortOutput = 'function f0() { return 0; }';
+      const shortOutput = "export async function f0() { return await fetch('/api/0'); }";
 
       const llmOutput: LlmOutput = {
         instrumentedCode: shortOutput,

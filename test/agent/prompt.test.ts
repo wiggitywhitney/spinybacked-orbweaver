@@ -749,6 +749,142 @@ describe('buildUserMessage', () => {
       expect(formattingPos).toBeLessThan(sourceFilePos);
     });
   });
+
+  describe('preScanResult injection', () => {
+    it('injects Pre-instrumentation analysis section when entry points are present', () => {
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'handleRequest', startLine: 5 }],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
+      };
+      const message = buildUserMessage(
+        '/app/src/handler.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).toContain('**Pre-instrumentation analysis**');
+      expect(message).toContain('handleRequest');
+      expect(message).toContain('COV-001');
+    });
+
+    it('uses constraintNote for process.exit() entry points', () => {
+      const constraintNote = 'Entry point `main` (line 1) requires a span — COV-001. Has direct process.exit() calls: use minimal wrapper only.';
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
+        processExitEntryPoints: [{ name: 'main', startLine: 1, constraintNote }],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
+      };
+      const message = buildUserMessage(
+        '/app/src/main.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).toContain(constraintNote);
+    });
+
+    it('omits Pre-instrumentation analysis section when preScanResult is undefined', () => {
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        jsProvider,
+      );
+      expect(message).not.toContain('Pre-instrumentation analysis');
+    });
+
+    it('omits Pre-instrumentation analysis section when entry points are empty', () => {
+      const preScan = {
+        hasInstrumentableFunctions: false,
+        entryPointsNeedingSpans: [],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
+      };
+      const message = buildUserMessage(
+        '/app/src/routes/users.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).not.toContain('Pre-instrumentation analysis');
+    });
+
+    it('Pre-instrumentation analysis section appears before source_file tag', () => {
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'run', startLine: 3 }],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
+      };
+      const message = buildUserMessage(
+        '/app/src/runner.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      const preScanPos = message.indexOf('**Pre-instrumentation analysis**');
+      const sourceFilePos = message.indexOf('<source_file>');
+      expect(preScanPos).toBeGreaterThan(0);
+      expect(preScanPos).toBeLessThan(sourceFilePos);
+    });
+
+    it('injects already-instrumented imports from M6 cross-file lookup', () => {
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [
+          { name: 'handleOrder', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js' },
+          { name: 'processPayment', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js' },
+        ],
+      };
+      const message = buildUserMessage(
+        '/app/index.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).toContain('Already instrumented');
+      expect(message).toContain('handleOrder');
+      expect(message).toContain('processPayment');
+      expect(message).toContain('./services/orders.js');
+    });
+
+    it('does not emit already-instrumented directive when list is empty', () => {
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [],
+      };
+      const message = buildUserMessage(
+        '/app/index.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).not.toContain('Already instrumented');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

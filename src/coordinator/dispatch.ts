@@ -285,6 +285,10 @@ export async function dispatchFiles(
   const rejectedExtensionIds = new Set<string>();
   // Track which file first declared each span name — detects cross-file collisions
   const spanNameOrigins = new Map<string, string>();
+  // Cross-file manifest — maps absolute file path to instrumented function names.
+  // Built incrementally as files succeed; passed to each subsequent instrumentFn call
+  // so the pre-scan can identify imported functions already covered by earlier files.
+  const processedFilesManifest = new Map<string, string[]>();
   const abortTracker = new EarlyAbortTracker();
 
   // Read project name via provider for tracer naming fallback.
@@ -325,7 +329,13 @@ export async function dispatchFiles(
       const fileContent = await readFile(filePath, 'utf-8');
 
       // Check if already instrumented — skip without schema resolution or LLM call
-      if (provider.detectOTelInstrumentation(fileContent).hasExistingInstrumentation) {
+      const earlyDetection = provider.detectOTelInstrumentation(fileContent);
+      if (earlyDetection.hasExistingInstrumentation) {
+        // Seed manifest so downstream files know these functions are already covered.
+        const names = [...new Set(
+          earlyDetection.spanPatterns.map(p => p.enclosingFunction).filter((n): n is string => n !== undefined),
+        )];
+        if (names.length > 0) processedFilesManifest.set(filePath, names);
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
         abortTracker.record(skipped);
@@ -356,7 +366,7 @@ export async function dispatchFiles(
       const existingSpanNames = accumulatedExtensions
         .filter(ext => ext.startsWith('span.'))
         .map(ext => ext.slice(5));
-      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames, provider });
+      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames, provider, processedFilesManifest });
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);
@@ -496,6 +506,28 @@ export async function dispatchFiles(
         } catch (restoreErr) {
           const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
           extWarnings?.push(`Schema extension restore failed for ${filePath}: ${restoreMsg}`);
+        }
+      }
+
+      // Update cross-file manifest AFTER extension processing so the manifest
+      // only includes files whose instrumented content is definitively committed.
+      // !isDryRun: dry-run reverts the file below — manifest must not include reverted content.
+      if (!isDryRun && (result.status === 'success' || result.status === 'partial') && result.spansAdded > 0) {
+        try {
+          const instrumentedCode = await readFile(filePath, 'utf-8');
+          const detection = provider.detectOTelInstrumentation(instrumentedCode);
+          const functionNames = [
+            ...new Set(
+              detection.spanPatterns
+                .map(p => p.enclosingFunction)
+                .filter((name): name is string => name !== undefined),
+            ),
+          ];
+          if (functionNames.length > 0) {
+            processedFilesManifest.set(filePath, functionNames);
+          }
+        } catch {
+          // Best-effort — manifest absence for this file is non-fatal
         }
       }
 
@@ -647,6 +679,9 @@ export async function dispatchFiles(
                   results[tracked.resultIndex].status = 'failed';
                   results[tracked.resultIndex].reason =
                     `Smart rollback: identified as failing file in checkpoint test at file ${i + 1}/${total}`;
+                  // Reverted — remove from manifest so downstream files don't
+                  // treat its exports as already instrumented
+                  processedFilesManifest.delete(tracked.path);
                 }
               }
 
@@ -707,6 +742,8 @@ export async function dispatchFiles(
                     results[tracked.resultIndex].status = 'failed';
                     results[tracked.resultIndex].reason =
                       `Rolled back: checkpoint test failure (smart rollback fallback) at file ${i + 1}/${total}`;
+                    // Reverted — remove from manifest
+                    processedFilesManifest.delete(tracked.path);
                   }
                 }
               }
@@ -721,6 +758,8 @@ export async function dispatchFiles(
                 results[tracked.resultIndex].status = 'failed';
                 results[tracked.resultIndex].reason =
                   `Rolled back: checkpoint test failure at file ${i + 1}/${total}`;
+                // Reverted — remove from manifest
+                processedFilesManifest.delete(tracked.path);
               }
             }
 
