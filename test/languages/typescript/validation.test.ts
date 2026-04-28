@@ -1,7 +1,7 @@
 // ABOUTME: Unit/integration tests for TypeScript validation — checkSyntax and findTsconfig.
 // ABOUTME: Verifies tsconfig-aware moduleResolution substitution (Bundler) and fallback (NodeNext).
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { mkdtemp, writeFile, rm, mkdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -36,9 +36,16 @@ describe('findTsconfig', () => {
     expect(result).toBe(join(tempDir, 'tsconfig.json'));
   });
 
-  it('returns null when no tsconfig.json is found', () => {
-    // os.tmpdir() is outside any project; no tsconfig.json exists up the chain
-    const result = findTsconfig(tmpdir());
+  it('returns null when no tsconfig.json is found', async () => {
+    // Create a directory >12 levels deep so findTsconfig cannot walk up
+    // to any tsconfig.json that might exist in an ancestor of tmpdir().
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-find-none-'));
+    let deep = tempDir;
+    for (let i = 0; i < 13; i++) {
+      deep = join(deep, `d${i}`);
+      await mkdir(deep);
+    }
+    const result = findTsconfig(deep);
     expect(result).toBeNull();
   });
 });
@@ -137,18 +144,26 @@ describe('checkSyntax — Bundler moduleResolution from project tsconfig', () =>
 // ---------------------------------------------------------------------------
 
 describe('checkSyntax — fallback path (no tsconfig)', () => {
-  const createdFiles: string[] = [];
+  let deepDir: string;
 
-  afterEach(async () => {
-    for (const f of createdFiles.splice(0)) {
-      try { await unlink(f); } catch { /* best effort */ }
+  beforeEach(async () => {
+    // Build a directory >12 levels deep so findTsconfig cannot reach any
+    // ancestor tsconfig.json that might exist above tmpdir() in some CI environments.
+    const root = await mkdtemp(join(tmpdir(), 'spiny-orb-fallback-'));
+    deepDir = root;
+    for (let i = 0; i < 13; i++) {
+      deepDir = join(deepDir, `d${i}`);
+      await mkdir(deepDir);
     }
   });
 
+  afterEach(async () => {
+    const root = deepDir.split('/').slice(0, tmpdir().split('/').length + 2).join('/');
+    try { await rm(root, { recursive: true, force: true }); } catch { /* best effort */ }
+  });
+
   it('catches real TypeScript type errors using fallback NodeNext flags', async () => {
-    // File placed directly in tmpdir() — no tsconfig.json exists there or above
-    const tempFile = join(tmpdir(), `spiny-orb-test-${Date.now()}.ts`);
-    createdFiles.push(tempFile);
+    const tempFile = join(deepDir, 'bad.ts');
     await writeFile(tempFile, 'const x: number = "bad";');
 
     const result = checkSyntax(tempFile);
@@ -158,8 +173,7 @@ describe('checkSyntax — fallback path (no tsconfig)', () => {
   });
 
   it('passes for valid TypeScript in the fallback path', async () => {
-    const tempFile = join(tmpdir(), `spiny-orb-test-${Date.now()}.ts`);
-    createdFiles.push(tempFile);
+    const tempFile = join(deepDir, 'ok.ts');
     await writeFile(tempFile, 'export const x: number = 1;\n');
 
     const result = checkSyntax(tempFile);
