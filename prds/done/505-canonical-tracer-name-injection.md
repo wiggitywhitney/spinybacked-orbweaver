@@ -1,9 +1,10 @@
 # PRD #505: Canonical Tracer Name Injection
 
-**Status**: Active
+**Status**: Complete
 **Priority**: Medium
 **GitHub Issue**: [#505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)
 **Created**: 2026-04-18
+**Completed**: 2026-04-28
 
 ---
 
