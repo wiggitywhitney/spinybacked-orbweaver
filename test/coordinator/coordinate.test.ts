@@ -107,6 +107,7 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
     hasTestSuite: vi.fn().mockResolvedValue(false),
+    resolveTracerName: vi.fn().mockResolvedValue('test-service'),
     ...overrides,
   };
 }

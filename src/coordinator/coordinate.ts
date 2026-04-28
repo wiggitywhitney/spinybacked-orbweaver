@@ -33,6 +33,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
 import { getProviderByLanguage } from '../languages/registry.ts';
 import type { LanguageProvider } from '../languages/types.ts';
+import { resolveCanonicalTracerName } from './tracer-name.ts';
 
 /**
  * Run a project's test suite without OTLP overrides.
@@ -125,6 +126,8 @@ export interface CoordinateDeps {
   restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
   /** Anthropic client for SCH-005 judge calls. When absent, SCH-005 degrades gracefully (returns pass). */
   anthropicClient?: Anthropic;
+  /** Injectable canonical tracer name resolver. Defaults to resolveCanonicalTracerName. */
+  resolveTracerName?: (config: AgentConfig, registryDir: string) => Promise<string>;
 }
 
 /**
@@ -193,6 +196,7 @@ export async function coordinate(
   const runTests = deps?.executeProjectTests ?? executeProjectTests;
   const writeForRollback = deps?.writeFileForRollback ?? ((fp: string, content: string) => defaultWriteFile(fp, content, 'utf-8'));
   const restoreExtensions = deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
+  const resolveTracerName = deps?.resolveTracerName ?? resolveCanonicalTracerName;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
@@ -330,6 +334,15 @@ export async function coordinate(
     }
   }
 
+  // Step 4f: Resolve canonical tracer name (degrade and warn on failure)
+  let canonicalTracerName: string | undefined;
+  try {
+    canonicalTracerName = await resolveTracerName(config, registryDir);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    schemaHashWarnings.push(`Canonical tracer name resolution failed (degraded): ${message}`);
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   // checkpointWindowRef is populated by dispatch with files since the last passing checkpoint.
   // Used for end-of-run rollback when live-check tests fail (M4/NDS-002).
@@ -347,6 +360,7 @@ export async function coordinate(
       registryDir,
       schemaExtensionWarnings,
       provider: languageProvider,
+      ...(canonicalTracerName !== undefined ? { canonicalTracerName } : {}),
       ...(config.dryRun ? { dryRun: true } : {}),
       ...(checkpointTestRunner ? { runTestCommand: checkpointTestRunner } : {}),
       ...(baselineTestPassed !== undefined ? { baselineTestPassed } : {}),

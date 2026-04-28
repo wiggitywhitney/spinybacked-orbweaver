@@ -606,6 +606,38 @@ describe('buildSystemPrompt', () => {
       expect(prompt).toContain('will be rejected');
     });
   });
+
+  describe('canonicalTracerName parameter', () => {
+    it('uses canonicalTracerName in Tracer Acquisition section when provided', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider, 'commit-story');
+
+      expect(prompt).toContain('trace.getTracer("commit-story")');
+      expect(prompt).not.toContain('trace.getTracer("test_service")');
+    });
+
+    it('adds canonical tracer name instruction in Code Quality section when provided', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider, 'commit-story');
+
+      const codeQualityIdx = prompt.indexOf('### Code Quality');
+      expect(codeQualityIdx).toBeGreaterThan(-1);
+      const afterCodeQuality = prompt.slice(codeQualityIdx);
+      expect(afterCodeQuality).toContain('commit-story');
+      expect(afterCodeQuality).toContain('trace.getTracer()');
+    });
+
+    it('falls back to schema namespace when canonicalTracerName is not provided', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain('trace.getTracer("test_service")');
+    });
+
+    it('uses canonicalTracerName over schema namespace when both present', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider, 'my-override-name');
+
+      expect(prompt).toContain('trace.getTracer("my-override-name")');
+      expect(prompt).not.toContain('trace.getTracer("test_service")');
+    });
+  });
 });
 
 describe('buildUserMessage', () => {

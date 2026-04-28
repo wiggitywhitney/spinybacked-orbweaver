@@ -393,6 +393,45 @@ describe('dispatchFiles', () => {
       expect(secondCallOptions).toBeDefined();
       expect(secondCallOptions.existingSpanNames).toContain('myapp.first.op');
     });
+
+    it('passes canonicalTracerName to every file when provided in dispatch options', async () => {
+      const file1 = await createFile('a.js', 'async function a() {}');
+      const file2 = await createFile('b.js', 'async function b() {}');
+      const file3 = await createFile('c.js', 'async function c() {}');
+
+      const capturedOptions: unknown[] = [];
+      const instrumentWithRetry = vi.fn().mockImplementation(async (filePath: string, _code: string, _schema: unknown, _config: unknown, opts: unknown) => {
+        capturedOptions.push(opts);
+        return makeSuccessResult(filePath);
+      });
+
+      const deps = makeDeps({ instrumentWithRetry });
+      await dispatchFiles(
+        [file1, file2, file3], tmpDir, makeConfig(), undefined,
+        { deps, provider: jsProvider, canonicalTracerName: 'commit-story' },
+      );
+
+      expect(instrumentWithRetry).toHaveBeenCalledTimes(3);
+      for (const opts of capturedOptions) {
+        expect((opts as { canonicalTracerName?: string }).canonicalTracerName).toBe('commit-story');
+      }
+    });
+
+    it('does not pass canonicalTracerName when not provided in dispatch options', async () => {
+      const file1 = await createFile('a.js', 'async function a() {}');
+
+      const capturedOptions: unknown[] = [];
+      const instrumentWithRetry = vi.fn().mockImplementation(async (filePath: string, _code: string, _schema: unknown, _config: unknown, opts: unknown) => {
+        capturedOptions.push(opts);
+        return makeSuccessResult(filePath);
+      });
+
+      const deps = makeDeps({ instrumentWithRetry });
+      await dispatchFiles([file1], tmpDir, makeConfig(), undefined, { deps, provider: jsProvider });
+
+      expect(capturedOptions[0]).toBeDefined();
+      expect((capturedOptions[0] as { canonicalTracerName?: string }).canonicalTracerName).toBeUndefined();
+    });
   });
 
   describe('empty file list', () => {

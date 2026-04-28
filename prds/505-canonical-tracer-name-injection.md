@@ -129,12 +129,12 @@ Do NOT place this instruction in the preamble or in the file-level instrumentati
 
 **Existing `getTracer()` calls**: If a file already has a `trace.getTracer('something-else')` call (pre-existing instrumentation), the injected instruction tells the agent to use the canonical name — this means the agent will correct pre-existing wrong names. This is the intended behavior.
 
-- [ ] Coordinator resolves canonical name before file dispatch loop
-- [ ] Canonical name passed into per-file instrumentation context
-- [ ] Prompt updated to instruct agent to use the canonical tracer name
-- [ ] Integration test: instrument a multi-file fixture and verify all files use the canonical name
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] Coordinator resolves canonical name before file dispatch loop
+- [x] Canonical name passed into per-file instrumentation context
+- [x] Prompt updated to instruct agent to use the canonical tracer name
+- [x] Integration test: instrument a multi-file fixture and verify all files use the canonical name
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M4: Per-file gating check for tracer name correctness
 

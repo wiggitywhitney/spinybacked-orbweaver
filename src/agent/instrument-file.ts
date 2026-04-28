@@ -76,6 +76,8 @@ interface InstrumentFileOptions {
   existingSpanNames?: string[];
   /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
   processedFilesManifest?: Map<string, string[]>;
+  /** Canonical tracer name resolved by the coordinator. When provided, used in all trace.getTracer() calls. */
+  canonicalTracerName?: string;
 }
 
 /**
@@ -232,7 +234,7 @@ export async function instrumentFile(
     };
   }
 
-  const systemPrompt = buildSystemPrompt(resolvedSchema, undefined, provider);
+  const systemPrompt = buildSystemPrompt(resolvedSchema, undefined, provider, options?.canonicalTracerName);
   // Skip Prettier config resolution on feedback-only turns — feedbackMessage replaces
   // userMessage entirely, so the constraint would never be read.
   const prettierConstraint = options?.feedbackMessage ? undefined : await provider.getFormatterConstraint(filePath);

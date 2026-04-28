@@ -67,12 +67,14 @@ function extractAttributeNames(schema: object): string[] {
  * @param resolvedSchema - The resolved Weaver schema object (from `weaver registry resolve`)
  * @param projectName - Optional project name used as tracer name fallback when schema namespace is absent
  * @param provider - Language provider supplying language-specific prompt sections and examples
+ * @param canonicalTracerName - When provided, used as the tracer name instead of deriving from schema namespace
  * @returns The complete system prompt string
  */
 export function buildSystemPrompt(
   resolvedSchema: object,
   projectName: string | undefined,
   provider: LanguageProvider,
+  canonicalTracerName?: string,
 ): string {
   const activeProvider = provider;
   const sections = activeProvider.getSystemPromptSections();
@@ -80,10 +82,11 @@ export function buildSystemPrompt(
 
   const schemaJson = JSON.stringify(resolvedSchema, null, 2);
   const rawNamespace = (resolvedSchema as Record<string, unknown>).namespace;
-  const tracerName =
-    typeof rawNamespace === 'string' && rawNamespace.trim().length > 0
+  const tracerName = canonicalTracerName !== undefined
+    ? canonicalTracerName
+    : (typeof rawNamespace === 'string' && rawNamespace.trim().length > 0
       ? rawNamespace
-      : (projectName ?? 'unknown_service');
+      : (projectName ?? 'unknown_service'));
   const tracerNameLiteral = JSON.stringify(tracerName);
   const attributeNames = extractAttributeNames(resolvedSchema);
 
@@ -256,6 +259,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields, or undefined values. PII attribute names to avoid: \`author\`, \`committer\`, \`username\`, \`email\`, \`password\`, \`ssn\`, \`name\`, \`user\`. Do NOT pass raw filesystem paths (variables named \`filePath\`, \`outputDir\`, etc.) as attribute values — use \`path.basename()\` or a project-relative path instead. Watch for optional chaining (\`?.\`) in \`setAttribute\` value arguments — these can produce \`undefined\`. If the value is a member access like \`entries.length\`, guard with \`if (entries)\` or use optional chaining (\`entries?.length ?? 0\`). Import constraint: only apply these transformations when the required utility (e.g., \`basename\` from \`node:path\`) is already imported in the file. Do NOT add new non-OTel imports to comply with this advisory — if the utility is not already available, use the raw value and note it as a known limitation in \`notes\`.
 - **CDQ-009**: Do NOT use \`!== undefined\` to guard a variable before accessing its property as a \`setAttribute\` value. This guard passes when the variable is \`null\` and will throw a TypeError at runtime. Use \`if (x)\` (truthy check) or \`x != null\` (covers both null and undefined) instead.
 - **CDQ-010**: Do NOT call string methods (\`.split()\`, \`.slice()\`, \`.trim()\`, \`.replace()\`, \`.toLowerCase()\`, and similar string-only methods) directly on a property access expression without type coercion — unless the field's string type is evident from context (e.g., assigned from a string literal, a template literal, or a method whose name indicates a string return like \`.toString()\` or \`.getName()\`). If \`obj.field\` is not a string at runtime, this throws \`TypeError: obj.field.method is not a function\`. When the type is uncertain, use \`String(obj.field).method()\` or, for timestamps, \`new Date(obj.field).toISOString()\` instead.
+${canonicalTracerName !== undefined ? `- Use exactly this tracer name in all \`trace.getTracer()\` calls: ${tracerNameLiteral}. This name is validated by a blocking check — any string literal that doesn't match exactly will fail the file.` : ''}
 
 ${formatExamplesSection(examples)}
 

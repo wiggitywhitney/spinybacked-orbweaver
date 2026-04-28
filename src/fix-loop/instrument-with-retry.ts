@@ -41,6 +41,8 @@ export interface InstrumentFileCallOptions {
   existingSpanNames?: string[];
   /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
   processedFilesManifest?: Map<string, string[]>;
+  /** Canonical tracer name resolved by the coordinator. When provided, used in all trace.getTracer() calls. */
+  canonicalTracerName?: string;
 }
 
 /**
@@ -77,6 +79,8 @@ interface InstrumentWithRetryOptions {
   existingSpanNames?: string[];
   /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
   processedFilesManifest?: Map<string, string[]>;
+  /** Canonical tracer name resolved by the coordinator. When provided, used in all trace.getTracer() calls. */
+  canonicalTracerName?: string;
   /**
    * Language provider for the file being instrumented.
    * Passed to the validation chain (checkSyntax, lintCheck) and used to determine
@@ -215,16 +219,21 @@ function buildValidationConfig(
  * @param validationFeedback - Formatted validation errors from formatFeedbackForAgent
  * @param existingSpanNames - Span names already used by other files in this run
  * @param repeatLineEscalation - Optional escalation block for NDS-003 repeat offenders
+ * @param canonicalTracerName - When provided, reminds agent to use the canonical tracer name
  * @returns Complete feedback message for the LLM
  */
 function buildFixPrompt(
   validationFeedback: string,
   existingSpanNames?: string[],
   repeatLineEscalation?: string,
+  canonicalTracerName?: string,
 ): string {
   let prompt = `The instrumented file has validation errors. Fix the **blocking failures** (status: fail) — these must be resolved for the file to pass. Also address the **advisory findings** (status: advisory) — these are non-blocking quality improvements you should make but will not fail the file if unresolved. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
   if (existingSpanNames && existingSpanNames.length > 0) {
     prompt += `\n\nReminder: these span names are already in use by other files — do not reuse them: ${existingSpanNames.join(', ')}`;
+  }
+  if (canonicalTracerName !== undefined) {
+    prompt += `\n\nReminder: use exactly this tracer name in all trace.getTracer() calls: ${JSON.stringify(canonicalTracerName)}`;
   }
   if (repeatLineEscalation) {
     prompt += repeatLineEscalation;
@@ -416,6 +425,7 @@ export async function instrumentWithRetry(
       options.projectRoot, anthropicClient, options.clock,
       options.existingSpanNames,
       options.processedFilesManifest,
+      options.canonicalTracerName,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -467,6 +477,7 @@ async function executeRetryLoop(
   clock?: () => number,
   existingSpanNames?: string[],
   processedFilesManifest?: Map<string, string[]>,
+  canonicalTracerName?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
@@ -560,10 +571,11 @@ async function executeRetryLoop(
       const escalation = buildRepeatLineEscalation(repeatLines, originalCode);
       callOptions = {
         conversationContext: lastConversationContext,
-        feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation), existingSpanNames, escalation || undefined),
+        feedbackMessage: buildFixPrompt(formatFeedbackFn(lastValidation), existingSpanNames, escalation || undefined, canonicalTracerName),
         maxOutputTokens: outputBudget,
         effortOverride: 'low',
         existingSpanNames,
+        canonicalTracerName,
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint.
@@ -577,16 +589,17 @@ async function executeRetryLoop(
         maxOutputTokens: outputBudget,
         existingSpanNames,
         processedFilesManifest,
+        canonicalTracerName,
       };
     } else if (plannedStrategy !== 'initial-generation') {
       // No conversation context or validation available — this is a retry
       // of initial generation triggered by a retryable failure, not a real
       // multi-turn fix or fresh regeneration.
       actualStrategy = 'retry-initial';
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName };
     } else {
       // Initial generation
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName };
     }
     lastStrategy = actualStrategy;
 
@@ -741,7 +754,7 @@ async function executeRetryLoop(
           resolvedSchema,
           config,
           provider,
-          { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames },
+          { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames, canonicalTracerName },
         );
 
         if (advisoryInstrumentResult.success) {
