@@ -104,12 +104,12 @@ Tests:
 - Config `tracerName` not set, registry name is `my_app` → returns `my-app`
 - Config `tracerName` not set, registry name has no underscores → returns unchanged
 
-- [ ] `tracerName` added to config schema with validation
-- [ ] Resolution function implemented (config override → registry name normalized)
-- [ ] Normalization: underscores replaced with hyphens, no other transformation
-- [ ] Unit tests for all resolution paths
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] `tracerName` added to config schema with validation
+- [x] Resolution function implemented (config override → registry name normalized)
+- [x] Normalization: underscores replaced with hyphens, no other transformation
+- [x] Unit tests for all resolution paths
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M3: Coordinator injects canonical tracer name into per-file prompts
 
