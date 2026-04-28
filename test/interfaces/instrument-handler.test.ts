@@ -916,7 +916,7 @@ describe('handleInstrument', () => {
     });
 
     it('--debug-dump-dir writes lastInstrumentedCode to the specified directory on failure', async () => {
-      const { mkdtempSync, writeFileSync: fsWrite, readFileSync: fsRead, existsSync } = await import('node:fs');
+      const { mkdtempSync, readFileSync: fsRead, existsSync } = await import('node:fs');
       const { tmpdir } = await import('node:os');
       const { join } = await import('node:path');
 
