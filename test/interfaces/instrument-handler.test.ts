@@ -923,30 +923,30 @@ describe('handleInstrument', () => {
       const dumpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-dump-test-'));
 
       try {
-      const failedResult = makeFileResult({
-        path: '/test/project/src/app.js',
-        status: 'failed',
-        spansAdded: 0,
-        lastInstrumentedCode: 'const x = 1; // agent output',
-        reason: 'Validation failed: NDS-001',
-        lastError: 'NDS-001: syntax error',
-        tokenUsage: { inputTokens: 100, outputTokens: 50, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
-      });
-      const coordinateMock = vi.fn().mockImplementation(
-        async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
-          callbacks?.onFileComplete?.(failedResult, 0, 1);
-          return makeRunResult({ filesProcessed: 1, filesFailed: 1, fileResults: [failedResult] });
-        },
-      );
+        const failedResult = makeFileResult({
+          path: '/test/project/src/app.js',
+          status: 'failed',
+          spansAdded: 0,
+          lastInstrumentedCode: 'const x = 1; // agent output',
+          reason: 'Validation failed: NDS-001',
+          lastError: 'NDS-001: syntax error',
+          tokenUsage: { inputTokens: 100, outputTokens: 50, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+        });
+        const coordinateMock = vi.fn().mockImplementation(
+          async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
+            callbacks?.onFileComplete?.(failedResult, 0, 1);
+            return makeRunResult({ filesProcessed: 1, filesFailed: 1, fileResults: [failedResult] });
+          },
+        );
 
-      const deps = makeDeps({ coordinate: coordinateMock });
-      await handleInstrument(makeOptions({ debugDumpDir: dumpDir }), deps);
+        const deps = makeDeps({ coordinate: coordinateMock });
+        await handleInstrument(makeOptions({ debugDumpDir: dumpDir }), deps);
 
-      // The failed file's lastInstrumentedCode should be written preserving relative path
-      // (/test/project/src/app.js relative to projectDir /test/project → src/app.js)
-      const dumpedPath = join(dumpDir, 'src', 'app.js');
-      expect(existsSync(dumpedPath)).toBe(true);
-      expect(fsRead(dumpedPath, 'utf-8')).toBe('const x = 1; // agent output');
+        // The failed file's lastInstrumentedCode should be written preserving relative path
+        // (/test/project/src/app.js relative to projectDir /test/project → src/app.js)
+        const dumpedPath = join(dumpDir, 'src', 'app.js');
+        expect(existsSync(dumpedPath)).toBe(true);
+        expect(fsRead(dumpedPath, 'utf-8')).toBe('const x = 1; // agent output');
       } finally {
         rmSync(dumpDir, { recursive: true, force: true });
       }
