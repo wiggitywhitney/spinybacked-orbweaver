@@ -289,29 +289,34 @@ describe('CDQ-003: checkErrorRecording', () => {
 });
 
 describe('CDQ-005: checkAsyncContext', () => {
-  it('passes with startActiveSpan (auto-managed context)', () => {
+  it('passes with startActiveSpan (preferred pattern)', () => {
     const code = `tracer.startActiveSpan('foo', async (span) => {});`;
     const result = checkAsyncContext(code);
     expect(result.passed).toBe(true);
   });
 
-  it('fails with startSpan without context.with', () => {
+  it('fails with tracer.startSpan (advisory — startActiveSpan is preferred)', () => {
     const code = `const span = tracer.startSpan('foo');
 doWork();
 span.end();`;
     const result = checkAsyncContext(code);
     expect(result.passed).toBe(false);
-    expect(result.details).toContain('context.with');
+    expect(result.details).toContain('startActiveSpan');
   });
 
-  it('passes with startSpan and context.with', () => {
-    const code = `const span = tracer.startSpan('foo');
-context.with(trace.setSpan(context.active(), span), () => {
-  doWork();
-});
-span.end();`;
+  it('does not flag startSpan on a non-tracer receiver', () => {
+    const code = `const op = db.startSpan('query');
+op.end();`;
     const result = checkAsyncContext(code);
     expect(result.passed).toBe(true);
+  });
+
+  it('flags startSpan on camelCase tracer-like receiver names (otelTracer)', () => {
+    const code = `const span = otelTracer.startSpan('foo');
+span.end();`;
+    const result = checkAsyncContext(code);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('startActiveSpan');
   });
 });
 

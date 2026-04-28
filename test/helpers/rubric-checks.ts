@@ -356,22 +356,36 @@ export function checkErrorRecording(code: string): RubricCheckResult {
 }
 
 /**
- * CDQ-005: Async context maintained.
- * startActiveSpan callback auto-manages context — passes.
- * startSpan requires context.with() — checked here.
+ * CDQ-005: startActiveSpan preferred over startSpan.
+ * startActiveSpan automatically sets the span as active in context — passes.
+ * tracer.startSpan() is advisory: the agent should prefer startActiveSpan
+ * unless one of the four legitimate scenarios applies.
  */
 export function checkAsyncContext(code: string): RubricCheckResult {
-  // startActiveSpan auto-manages context — no manual context.with() needed.
-  // startSpan requires manual context management.
-  const startSpanMatches = code.match(/\.startSpan\s*\(/g);
-  if (startSpanMatches && startSpanMatches.length > 0) {
-    const hasContextWith = /context\.with\s*\(/.test(code);
-    if (!hasContextWith) {
-      return {
-        passed: false,
-        details: `Found ${startSpanMatches.length} startSpan() calls without context.with() for async context management`,
-      };
-    }
+  // Use AST detection (matching cdq005.ts) so only real CallExpression nodes are
+  // flagged — raw-text regex would also match comments and string literals.
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile('check.js', code);
+
+  const findings: number[] = [];
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+    const expr = node.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return;
+    if (expr.getName() !== 'startSpan') return;
+    const receiverText = expr.getExpression().getText();
+    if (!/tracer/i.test(receiverText)) return;
+    findings.push(node.getStartLineNumber());
+  });
+
+  if (findings.length > 0) {
+    return {
+      passed: false,
+      details: `Found ${findings.length} tracer.startSpan() call(s) — prefer startActiveSpan() which automatically manages active span context`,
+    };
   }
 
   return { passed: true };
