@@ -52,6 +52,12 @@ export function checkStartActiveSpanPreferred(code: string, filePath: string): C
     if (!Node.isPropertyAccessExpression(expr)) return;
     if (expr.getName() !== 'startSpan') return;
 
+    // Only flag calls on tracer-like receivers — OTel tracers use names like `tracer`,
+    // `this.tracer`, or inline `trace.getTracer(...)`. Other libraries that happen to
+    // have a `startSpan` method (e.g. database adapters) should not trigger this rule.
+    const receiverText = expr.getExpression().getText();
+    if (!/tracer/i.test(receiverText)) return;
+
     findings.push({ line: node.getStartLineNumber() });
   });
 

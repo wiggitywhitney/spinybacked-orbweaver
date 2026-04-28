@@ -268,6 +268,40 @@ describe('checkDomainAttributes (COV-005)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('does not false-positive on a dotted receiver that shares the tracked variable name', () => {
+      // span variable is `op`, but config.op.setAttribute should NOT count as a span setAttribute
+      const registry: RegistrySpanDefinition[] = [
+        {
+          spanName: 'doWork',
+          requiredAttributes: ['work.id'],
+          recommendedAttributes: [],
+        },
+      ];
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork(config, id) {',
+        '  return tracer.startActiveSpan("doWork", (op) => {',
+        '    try {',
+        '      // config.op is NOT the span — should not count as setAttribute on the span',
+        '      config.op.setAttribute("work.id", id);',
+        '      return id;',
+        '    } finally {',
+        '      op.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // config.op.setAttribute should NOT count — op must have been set via `op.setAttribute`
+      // so this should still report missing work.id
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('work.id');
+    });
+
     it('still flags missing attributes when span is named op and attribute is absent', () => {
       const registry: RegistrySpanDefinition[] = [
         {

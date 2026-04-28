@@ -258,8 +258,12 @@ function extractSetAttributeName(callExpr: CallExpression, knownSpanVarNames?: S
   // Only match span.setAttribute — skip unrelated APIs.
   // Check the last segment of the receiver (handles `this.span`, `obj.activeSpan`).
   const receiverText = expr.getExpression().getText();
-  const receiverLastSegment = receiverText.split('.').at(-1) ?? receiverText;
-  const isKnownSpanVar = knownSpanVarNames !== undefined && knownSpanVarNames.has(receiverLastSegment);
+  // For bare identifiers (no dot), check against known span variable names first.
+  // For dotted access (e.g. `this.span`, `config.op`), rely on the /span/i regex only —
+  // matching on just the last segment would produce false positives when an unrelated
+  // object happens to have a property with the same name as the tracked span variable.
+  const isBareIdentifier = !receiverText.includes('.');
+  const isKnownSpanVar = isBareIdentifier && knownSpanVarNames !== undefined && knownSpanVarNames.has(receiverText);
   if (!isKnownSpanVar && !receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return null;
 
   const args = callExpr.getArguments();

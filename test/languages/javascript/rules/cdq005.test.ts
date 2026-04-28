@@ -133,6 +133,34 @@ describe('checkStartActiveSpanPreferred (CDQ-005)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('does not flag startSpan on a non-tracer receiver', () => {
+      const code = [
+        '// Some library has its own startSpan method',
+        'const db = require("some-db");',
+        'function doWork() {',
+        '  const op = db.startSpan("query");',
+        '  op.end();',
+        '}',
+      ].join('\n');
+
+      const results = checkStartActiveSpanPreferred(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags inline trace.getTracer().startSpan()', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'function doWork() {',
+        '  const span = trace.getTracer("svc").startSpan("op");',
+        '  span.end();',
+        '}',
+      ].join('\n');
+
+      const results = checkStartActiveSpanPreferred(code, filePath);
+      expect(results.some(r => !r.passed)).toBe(true);
+    });
+
     it('passes when both startActiveSpan and startSpan are present only via startActiveSpan', () => {
       // startSpan in a string literal comment — should not flag
       const code = [
