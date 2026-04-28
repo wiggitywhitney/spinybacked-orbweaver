@@ -201,6 +201,7 @@ export async function coordinate(
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
   const checkpointTestWarnings: string[] = [];
+  const tracerNameWarnings: string[] = [];
 
   const language = config.language ?? 'javascript';
   const languageProvider: LanguageProvider | undefined = getProviderByLanguage(language);
@@ -340,7 +341,7 @@ export async function coordinate(
     canonicalTracerName = await resolveTracerName(config, registryDir);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    schemaHashWarnings.push(`Canonical tracer name resolution failed (degraded): ${message}`);
+    tracerNameWarnings.push(`Canonical tracer name resolution failed (degraded): ${message}`);
   }
 
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
@@ -416,6 +417,7 @@ export async function coordinate(
   runResult.warnings.push(...schemaHashWarnings);
   runResult.warnings.push(...schemaDiffWarnings);
   runResult.warnings.push(...checkpointTestWarnings);
+  runResult.warnings.push(...tracerNameWarnings);
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {
