@@ -18,6 +18,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 - TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable".
+- Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
 
 ## Medium-term
 
@@ -27,7 +28,6 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 - Canonical tracer name injection ([PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)) — deletes CDQ-008, replaces with per-file blocking check driven by registry manifest name.
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
 - Anthropic SDK version check + bump — pin `^0.78.0` is months stale.
-- COV-005 receiver filter fragility — `extractSetAttributeName` misses non-standard span variable names; latent bug, accepted as-is in the audit.
 - Audit `src/agent/prompt.ts` for orphan rule references ([issue #519](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/519)) — one-shot sweep to reconcile the prompt against the rule catalog. Sequence-dependent: run after PRD #505, PRD #508, and PRD #509 merge so the rule catalog is stable. Prevention for future drift is covered by the rules-related work conventions in project CLAUDE.md.
 - Fix agent attribute invention strategy — registry-first, pattern inference, empty schema gate ([PRD #581](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/581)) — removes OTel semconv as a separate fallback, replaces with registry-first lookup and pattern inference from existing registry entries.
 
