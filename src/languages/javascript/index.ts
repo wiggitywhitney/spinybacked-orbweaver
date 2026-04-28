@@ -413,10 +413,6 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
-    // hasInstrumentableFunctions: false when there are no async functions at all.
-    // Re-export files and all-sync utility files can be skipped without an LLM call.
-    const hasInstrumentableFunctions = classified.some(fn => fn.isAsync);
-
     const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
     const processExitEntryPoints: PreScanResult['processExitEntryPoints'] = [];
     const asyncFunctionsNeedingSpans: PreScanResult['asyncFunctionsNeedingSpans'] = [];
@@ -489,6 +485,13 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
+    // hasInstrumentableFunctions: false when the file has no entry points and no async
+    // non-entry-point functions needing spans. Computed after the COV-001/COV-004 loops
+    // so process.exit() exclusions are accounted for — a file where every async function
+    // is excluded by the process.exit() exception correctly yields false here.
+    const hasInstrumentableFunctions =
+      entryPointsNeedingSpans.length > 0 || asyncFunctionsNeedingSpans.length > 0;
+
     // COV-002: detect outbound calls (HTTP, DB, messaging) in async function bodies.
     // Text-based pattern search — sufficient for advisory pre-scan guidance.
     const OUTBOUND_KEYWORDS = [
@@ -520,7 +523,7 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
-    // M3: Local import analysis — per-entry-point sub-operation breakdown.
+    // Local import analysis — per-entry-point sub-operation breakdown.
     // Build a map of imported name → source module from all import declarations.
     const namedImportMap = new Map<string, string>();
     for (const importDecl of sourceFile.getImportDeclarations()) {
@@ -591,7 +594,7 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
-    // M6: Cross-file manifest lookup — identify imported functions already instrumented
+    // Cross-file manifest lookup — identify imported functions already instrumented
     // in previously-processed files. Requires both the manifest and the current file path
     // to resolve relative import specifiers to absolute paths for manifest lookup.
     const alreadyInstrumentedImports: PreScanAlreadyInstrumentedImport[] = [];

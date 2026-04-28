@@ -241,7 +241,7 @@ export async function handleInstrument(
         deps.stderr(`  ${refactorCount} recommended ${noun}`);
       }
 
-      // Full validator error messages for failed files (dimension 3 in diagnostic protocol)
+      // Full validator error messages for failed files
       if (result.status === 'failed' && result.lastError) {
         deps.stderr('');
         deps.stderr(`  ${_dim('Validation failures (last attempt)')}`);

@@ -285,7 +285,7 @@ export async function dispatchFiles(
   const rejectedExtensionIds = new Set<string>();
   // Track which file first declared each span name — detects cross-file collisions
   const spanNameOrigins = new Map<string, string>();
-  // M6: Cross-file manifest — maps absolute file path to instrumented function names.
+  // Cross-file manifest — maps absolute file path to instrumented function names.
   // Built incrementally as files succeed; passed to each subsequent instrumentFn call
   // so the pre-scan can identify imported functions already covered by earlier files.
   const processedFilesManifest = new Map<string, string[]>();
@@ -503,7 +503,7 @@ export async function dispatchFiles(
         }
       }
 
-      // M6: Update cross-file manifest AFTER extension processing so the manifest
+      // Update cross-file manifest AFTER extension processing so the manifest
       // only includes files whose instrumented content is definitively committed.
       // !isDryRun: dry-run reverts the file below — manifest must not include reverted content.
       if (!isDryRun && (result.status === 'success' || result.status === 'partial') && result.spansAdded > 0) {
@@ -673,7 +673,7 @@ export async function dispatchFiles(
                   results[tracked.resultIndex].status = 'failed';
                   results[tracked.resultIndex].reason =
                     `Smart rollback: identified as failing file in checkpoint test at file ${i + 1}/${total}`;
-                  // M6: reverted — remove from manifest so downstream files don't
+                  // Reverted — remove from manifest so downstream files don't
                   // treat its exports as already instrumented
                   processedFilesManifest.delete(tracked.path);
                 }
@@ -736,7 +736,7 @@ export async function dispatchFiles(
                     results[tracked.resultIndex].status = 'failed';
                     results[tracked.resultIndex].reason =
                       `Rolled back: checkpoint test failure (smart rollback fallback) at file ${i + 1}/${total}`;
-                    // M6: reverted — remove from manifest
+                    // Reverted — remove from manifest
                     processedFilesManifest.delete(tracked.path);
                   }
                 }
@@ -752,7 +752,7 @@ export async function dispatchFiles(
                 results[tracked.resultIndex].status = 'failed';
                 results[tracked.resultIndex].reason =
                   `Rolled back: checkpoint test failure at file ${i + 1}/${total}`;
-                // M6: reverted — remove from manifest
+                // Reverted — remove from manifest
                 processedFilesManifest.delete(tracked.path);
               }
             }

@@ -434,7 +434,7 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
       directives.push(`- Unexported — skip unless no exported orchestrator covers this execution path (RST-004): ${names}.`);
     }
 
-    // M3: per-entry-point sub-operation breakdown (local vs. imported)
+    // Per-entry-point sub-operation breakdown (local vs. imported)
     for (const group of preScanResult.entryPointSubOperations) {
       const localPart = group.localSubOperations.length > 0
         ? `local: ${group.localSubOperations.map(n => `\`${sanitize(n)}\``).join(', ')}`
@@ -446,7 +446,7 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
       directives.push(`- In \`${sanitize(group.entryPointName)}()\`, async sub-operations — ${parts}.`);
     }
 
-    // M6: already-instrumented imports from cross-file manifest lookup
+    // Already-instrumented imports from cross-file manifest lookup
     if (preScanResult.alreadyInstrumentedImports.length > 0) {
       const byModule = new Map<string, string[]>();
       for (const imp of preScanResult.alreadyInstrumentedImports) {

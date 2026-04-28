@@ -116,8 +116,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
    */
   function dumpDiagnostics(label: string, result: FileResult): void {
     // Dimension 2: write the agent's last instrumented code to a stable /tmp path.
-    // Uses result.lastInstrumentedCode (captured before file restore at line 774 of instrument-with-retry.ts)
-    // rather than result.path, which may have been restored to the original after validation failure.
+    // Uses result.lastInstrumentedCode (captured from output.instrumentedCode in buildFailedResult
+    // before the retry loop restores result.path to the original after validation failure).
     const debugFilePath = `/tmp/spiny-orb-debug-${label}`;
     const codeToCapture = result.lastInstrumentedCode ??
       (existsSync(result.path) ? readFileSync(result.path, 'utf-8') : undefined);
