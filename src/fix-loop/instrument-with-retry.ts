@@ -174,6 +174,7 @@ function buildValidationConfig(
       'COV-002': { enabled: true, blocking: true },
       'RST-001': { enabled: true, blocking: false },
       'COV-005': { enabled: true, blocking: false },
+      'CDQ-005': { enabled: true, blocking: false },
       // Phase 4 checks
       'COV-001': { enabled: true, blocking: true },
       'COV-003': { enabled: true, blocking: true },

@@ -214,6 +214,124 @@ describe('checkDomainAttributes (COV-005)', () => {
     });
   });
 
+  describe('non-standard span variable names (receiver filter)', () => {
+    it('does not produce false positive when startActiveSpan callback param is named op', () => {
+      const registry: RegistrySpanDefinition[] = [
+        {
+          spanName: 'doWork',
+          requiredAttributes: ['work.id'],
+          recommendedAttributes: [],
+        },
+      ];
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork(id) {',
+        '  return tracer.startActiveSpan("doWork", (op) => {',
+        '    try {',
+        '      op.setAttribute("work.id", id);',
+        '      return id;',
+        '    } finally {',
+        '      op.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not produce false positive when startSpan assigns to variable named op', () => {
+      const registry: RegistrySpanDefinition[] = [
+        {
+          spanName: 'doWork',
+          requiredAttributes: ['work.id'],
+          recommendedAttributes: [],
+        },
+      ];
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork(id) {',
+        '  const op = tracer.startSpan("doWork");',
+        '  op.setAttribute("work.id", id);',
+        '  op.end();',
+        '}',
+      ].join('\n');
+
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not false-positive on a dotted receiver that shares the tracked variable name', () => {
+      // span variable is `op`, but config.op.setAttribute should NOT count as a span setAttribute
+      const registry: RegistrySpanDefinition[] = [
+        {
+          spanName: 'doWork',
+          requiredAttributes: ['work.id'],
+          recommendedAttributes: [],
+        },
+      ];
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork(config, id) {',
+        '  return tracer.startActiveSpan("doWork", (op) => {',
+        '    try {',
+        '      // config.op is NOT the span — should not count as setAttribute on the span',
+        '      config.op.setAttribute("work.id", id);',
+        '      return id;',
+        '    } finally {',
+        '      op.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // config.op.setAttribute should NOT count — op must have been set via `op.setAttribute`
+      // so this should still report missing work.id
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('work.id');
+    });
+
+    it('still flags missing attributes when span is named op and attribute is absent', () => {
+      const registry: RegistrySpanDefinition[] = [
+        {
+          spanName: 'doWork',
+          requiredAttributes: ['work.id'],
+          recommendedAttributes: [],
+        },
+      ];
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork(id) {',
+        '  return tracer.startActiveSpan("doWork", (op) => {',
+        '    try {',
+        '      return id;',
+        '    } finally {',
+        '      op.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('work.id');
+    });
+  });
+
   describe('startSpan attribute scope does not leak across spans', () => {
     it('does not count attributes from a later span as satisfying an earlier span', () => {
       // span1 ("op1") never sets "op1.attr" — only span2 does after span1.end().

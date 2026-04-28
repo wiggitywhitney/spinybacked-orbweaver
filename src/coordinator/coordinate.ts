@@ -482,12 +482,16 @@ export async function coordinate(
           `Live-check partial: ${runResult.filesFailed} file(s) failed instrumentation ` +
           `(${failedPaths.join(', ')}${runResult.filesFailed > 5 ? '...' : ''}). ` +
           `Compliance report may be incomplete — spans from failed files are missing. ` +
+          `This warning is advisory — the run completed; successfully instrumented files are unaffected. ` +
           `To get full coverage, review the failed files above and re-run spiny-orb on them.`,
         );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      runResult.warnings.push(`End-of-run live-check failed (degraded): ${message}`);
+      runResult.warnings.push(
+        `End-of-run live-check failed (degraded): ${message}. ` +
+        `To recover: re-run spiny-orb or check the Weaver installation and network connectivity.`,
+      );
     }
   }
 
@@ -565,7 +569,10 @@ export async function coordinate(
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      runResult.warnings.push(`SCH-005 span deduplication check failed (degraded): ${message}`);
+      runResult.warnings.push(
+        `SCH-005 (No Duplicate Span Definitions) check failed (degraded): ${message}. ` +
+        `To recover: re-run spiny-orb or check the Weaver registry configuration.`,
+      );
     }
   } else if (config.schemaPath) {
     runResult.warnings.push(
