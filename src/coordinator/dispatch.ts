@@ -329,7 +329,13 @@ export async function dispatchFiles(
       const fileContent = await readFile(filePath, 'utf-8');
 
       // Check if already instrumented — skip without schema resolution or LLM call
-      if (provider.detectOTelInstrumentation(fileContent).hasExistingInstrumentation) {
+      const earlyDetection = provider.detectOTelInstrumentation(fileContent);
+      if (earlyDetection.hasExistingInstrumentation) {
+        // Seed manifest so downstream files know these functions are already covered.
+        const names = [...new Set(
+          earlyDetection.spanPatterns.map(p => p.enclosingFunction).filter((n): n is string => n !== undefined),
+        )];
+        if (names.length > 0) processedFilesManifest.set(filePath, names);
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
         abortTracker.record(skipped);

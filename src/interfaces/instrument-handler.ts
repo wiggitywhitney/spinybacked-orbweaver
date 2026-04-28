@@ -392,7 +392,13 @@ export async function handleInstrument(
 
   // Output results
   if (options.output === 'json') {
-    deps.stdout(JSON.stringify(runResult, null, 2));
+    // Strip debug-only fields before serialization — lastInstrumentedCode and
+    // thinkingBlocksByAttempt can be large and are only needed by the test harness.
+    const serializableResult = {
+      ...runResult,
+      fileResults: runResult.fileResults.map(({ lastInstrumentedCode, thinkingBlocksByAttempt, lastErrorByAttempt, ...rest }) => rest),
+    };
+    deps.stdout(JSON.stringify(serializableResult, null, 2));
   } else {
     const committedCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
     const correctSkipCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded === 0).length;
