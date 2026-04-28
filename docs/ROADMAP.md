@@ -11,13 +11,13 @@ When a real-world eval run completes for a language provider, mark it using thes
 
 Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
 
-**Current status**: TypeScript — *pending eval run-3* (unblocked — PRD #582 merged).
+**Current status**: TypeScript — *pending eval run-4* (unblocked — PRD #582 M2 merged; `checkSyntax()` Bundler moduleResolution fix merged in #624).
 
 ---
 
 ## Short-term (current focus)
 
-- TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable".
+- TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable". Both prior blockers now cleared: PRD #582 M2 and the `checkSyntax()` Bundler moduleResolution fix (#624).
 - Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
 
 ## Medium-term
