@@ -24,9 +24,9 @@ const FIX_MESSAGE =
  * context, ensuring child operations are correctly parented. `startSpan()` does not set the span
  * active, so the agent must have a specific reason to use it.
  *
- * Detection is AST-based: finds any call expression whose method name is `startSpan` on any
- * receiver. This matches `tracer.startSpan()` and avoids false matches on string literals
- * or comments.
+ * Detection is AST-based: finds call expressions whose method name is `startSpan` with a
+ * receiver matching `/tracer/i` (e.g., `tracer`, `this.tracer`, `trace.getTracer(...)`).
+ * This avoids false matches on string literals, comments, and non-tracer `startSpan` APIs.
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)

@@ -263,7 +263,11 @@ function extractSetAttributeName(callExpr: CallExpression, knownSpanVarNames?: S
   // object happens to have a property with the same name as the tracked span variable.
   const isBareIdentifier = !receiverText.includes('.');
   const isKnownSpanVar = isBareIdentifier && knownSpanVarNames !== undefined && knownSpanVarNames.has(receiverText);
-  if (!isKnownSpanVar && !receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return null;
+  // For dotted receivers, check only the last segment against the regex — checking the full
+  // path would produce false positives when a non-span parent segment contains a span-like
+  // substring (e.g. `myActiveSpanContainer.prop` matches `/activeSpan/` on the full text).
+  const receiverForRegex = isBareIdentifier ? receiverText : (receiverText.split('.').at(-1) ?? receiverText);
+  if (!isKnownSpanVar && !receiverForRegex.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return null;
 
   const args = callExpr.getArguments();
   if (args.length < 2) return null;

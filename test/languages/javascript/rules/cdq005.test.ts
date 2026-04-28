@@ -81,6 +81,19 @@ describe('checkStartActiveSpanPreferred (CDQ-005)', () => {
       expect(findings).toHaveLength(2);
     });
 
+    it('flags inline trace.getTracer().startSpan()', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'function doWork() {',
+        '  const span = trace.getTracer("svc").startSpan("op");',
+        '  span.end();',
+        '}',
+      ].join('\n');
+
+      const results = checkStartActiveSpanPreferred(code, filePath);
+      expect(results.some(r => !r.passed)).toBe(true);
+    });
+
     it('fix message covers the four legitimate startSpan scenarios', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
@@ -146,19 +159,6 @@ describe('checkStartActiveSpanPreferred (CDQ-005)', () => {
       const results = checkStartActiveSpanPreferred(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
-    });
-
-    it('flags inline trace.getTracer().startSpan()', () => {
-      const code = [
-        'const { trace } = require("@opentelemetry/api");',
-        'function doWork() {',
-        '  const span = trace.getTracer("svc").startSpan("op");',
-        '  span.end();',
-        '}',
-      ].join('\n');
-
-      const results = checkStartActiveSpanPreferred(code, filePath);
-      expect(results.some(r => !r.passed)).toBe(true);
     });
 
     it('passes when both startActiveSpan and startSpan are present only via startActiveSpan', () => {
