@@ -2,8 +2,8 @@
 // ABOUTME: Mirrors javascript/validation.ts but uses tsc for type-aware syntax checking and the typescript Prettier parser.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import * as prettier from 'prettier';
 import type { CheckResult } from '../../validation/types.ts';
 
@@ -28,6 +28,91 @@ export function findTsc(startDir: string): string {
   return 'tsc';
 }
 
+// ─── tsconfig discovery ───────────────────────────────────────────────────────
+
+/**
+ * Find the nearest `tsconfig.json` by walking up from startDir.
+ * Returns the absolute path to the first tsconfig.json found, or null if none exists.
+ *
+ * @param startDir - Directory to start the upward search from
+ * @returns Absolute path to tsconfig.json, or null if not found
+ */
+export function findTsconfig(startDir: string): string | null {
+  let dir = startDir;
+  for (let i = 0; i < 12; i++) {
+    const candidate = join(dir, 'tsconfig.json');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
+  return null;
+}
+
+// ─── tsconfig module-option reading ───────────────────────────────────────────
+
+interface TsConfigModuleOptions {
+  module?: string;
+  moduleResolution?: string;
+}
+
+/**
+ * Strip line comments and block comments from JSON-like text
+ * so that tsconfig.json files (which are JSON5, not strict JSON) can be parsed.
+ */
+function stripJsonComments(text: string): string {
+  return text
+    .replace(/\/\/[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+/**
+ * Read the `module` and `moduleResolution` compiler options from a tsconfig.json.
+ *
+ * Only the top-level `compilerOptions` are read; `extends` chains are followed
+ * one level to cover the common pattern of a root tsconfig that extends a base.
+ * Only filesystem-relative extends paths (e.g., `"./tsconfig.base.json"`) are
+ * resolved; npm-package-style references (e.g., `"@tsconfig/node20/tsconfig.json"`)
+ * are not resolved and fall back to the child config's own values (or NodeNext
+ * defaults if absent).
+ * Returns an empty object when the file cannot be read or parsed.
+ *
+ * @param tsconfigPath - Absolute path to a tsconfig.json file
+ * @returns The module and moduleResolution settings found, or empty if absent
+ */
+function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions {
+  const readOptions = (path: string): TsConfigModuleOptions & { extendsPath?: string } => {
+    try {
+      const raw = readFileSync(path, 'utf-8');
+      const parsed = JSON.parse(stripJsonComments(raw)) as Record<string, unknown>;
+      const co = (parsed.compilerOptions ?? {}) as Record<string, unknown>;
+      return {
+        module: typeof co.module === 'string' ? co.module : undefined,
+        moduleResolution: typeof co.moduleResolution === 'string' ? co.moduleResolution : undefined,
+        extendsPath: typeof parsed.extends === 'string'
+          ? resolve(dirname(path), parsed.extends.endsWith('.json') ? parsed.extends : `${parsed.extends}.json`)
+          : undefined,
+      };
+    } catch {
+      return {};
+    }
+  };
+
+  const own = readOptions(tsconfigPath);
+  if (own.module && own.moduleResolution) return { module: own.module, moduleResolution: own.moduleResolution };
+
+  // Follow `extends` one level to pick up module settings from a base config
+  if (own.extendsPath) {
+    const base = readOptions(own.extendsPath);
+    return {
+      module: own.module ?? base.module,
+      moduleResolution: own.moduleResolution ?? base.moduleResolution,
+    };
+  }
+
+  return { module: own.module, moduleResolution: own.moduleResolution };
+}
+
 // ─── syntax (checkSyntax) ─────────────────────────────────────────────────────
 
 /**
@@ -46,21 +131,27 @@ function parseTscLineNumber(stderr: string): number | null {
 /**
  * Run `tsc --noEmit` on a TypeScript file to validate syntax and types.
  *
- * Uses `tsc` (found in `node_modules/.bin/tsc` relative to the file) with
- * `--strict` and `--skipLibCheck` for thorough per-file checking without
- * requiring the full project to be compiled. This catches type errors introduced
- * by the LLM agent (e.g., wrong argument type to `span.setAttribute()`).
+ * When a `tsconfig.json` is found by walking up from the file's directory, its
+ * `module` and `moduleResolution` settings are read and substituted into the
+ * per-flag tsc invocation. This prevents false positives on projects using
+ * `moduleResolution: Bundler` (e.g., taze, Vite-based tools) where extensionless
+ * relative imports are valid but would fail under the hardcoded NodeNext default.
  *
- * Note: Passing a specific file path to tsc bypasses tsconfig.json project settings.
- * The flags below are chosen to match common TypeScript project configurations
- * and to detect agent-introduced errors without false positives from project-specific
- * settings.
+ * Only `module` and `moduleResolution` are read from the project tsconfig;
+ * other project-specific settings (verbatimModuleSyntax, erasableSyntaxOnly,
+ * rootDir, etc.) are intentionally not inherited so the check stays focused on
+ * the structural correctness of the instrumented output.
  *
  * @param filePath - Absolute path to the TypeScript file to check
  * @returns CheckResult with ruleId 'NDS-001', tier 1, blocking true
  */
 export function checkSyntax(filePath: string): CheckResult {
   const tsc = findTsc(dirname(filePath));
+  const tsconfig = findTsconfig(dirname(filePath));
+  const moduleOpts = tsconfig ? readTsConfigModuleOptions(tsconfig) : {};
+  const moduleFlag = moduleOpts.module ?? 'NodeNext';
+  const moduleResolutionFlag = moduleOpts.moduleResolution ?? 'NodeNext';
+
   try {
     execFileSync(
       tsc,
@@ -69,8 +160,8 @@ export function checkSyntax(filePath: string): CheckResult {
         '--strict',
         '--skipLibCheck',
         '--allowImportingTsExtensions',
-        '--module', 'NodeNext',
-        '--moduleResolution', 'NodeNext',
+        '--module', moduleFlag,
+        '--moduleResolution', moduleResolutionFlag,
         '--target', 'ES2022',
         '--jsx', 'preserve',
         filePath,
