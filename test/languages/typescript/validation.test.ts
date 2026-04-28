@@ -19,9 +19,9 @@ describe('getTscMajorVersion', () => {
     expect(version).toBe(5);
   });
 
-  it('returns 6 for taze\'s tsc 6.x binary (if present)', () => {
-    const tsc6 = '/Users/whitney.lee/Documents/Repositories/taze/node_modules/.bin/tsc';
-    if (!existsSync(tsc6)) return; // skip if taze not cloned locally
+  it('returns 6 for an external tsc 6.x binary (if TSC6_PATH env var is set)', () => {
+    const tsc6 = process.env['TSC6_PATH'];
+    if (!tsc6 || !existsSync(tsc6)) return; // skip if not configured locally
     const version = getTscMajorVersion(tsc6);
     expect(version).toBe(6);
   });
