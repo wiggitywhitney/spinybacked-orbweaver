@@ -25,7 +25,6 @@ const RULE_NAMES: Record<string, string> = {
   'CDQ-005': 'startActiveSpan Preferred',
   'CDQ-006': 'isRecording Guard',
   'CDQ-007': 'Attribute Data Quality',
-  'CDQ-008': 'Tracer Naming',
   'CDQ-009': 'Null-Safe Guard',
   'CDQ-010': 'String Method Type Safety',
 

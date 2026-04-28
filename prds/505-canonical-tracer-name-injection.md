@@ -71,13 +71,13 @@ Files to update:
 
 Run `npm run typecheck` and `npm test` after deletion. Fix any type errors or test failures before proceeding.
 
-- [ ] CDQ-008 implementation file deleted
-- [ ] All imports, exports, and references removed
-- [ ] `runLevelAdvisory` field removed from coordinator types if unused
-- [ ] CDQ-008 guidance removed from agent prompt
-- [ ] Tests covering CDQ-008 deleted
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] CDQ-008 implementation file deleted
+- [x] All imports, exports, and references removed
+- [x] `runLevelAdvisory` field removed from coordinator types if unused (SCH-005 still uses it — field retained, comment updated to reference SCH-005)
+- [x] CDQ-008 guidance removed from agent prompt
+- [x] Tests covering CDQ-008 deleted
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M2: Add `tracerName` config field and canonical name resolution
 
@@ -96,7 +96,7 @@ async function resolveCanonicalTracerName(config: Config): Promise<string> {
 }
 ```
 
-Reading the registry manifest: the manifest file is `registry_manifest.yaml` inside the schema directory. Parse the `name` field. Use the existing YAML reading infrastructure if available; otherwise add a minimal YAML parse for this field.
+Reading the registry manifest: `extractNamespacePrefix(registryDir)` in `src/coordinator/schema-extensions.ts` already reads `registry_manifest.yaml` and returns the `name` field — reuse it directly. The function takes `registryDir` (the schema directory path, available from `config.schemaPath`). The resolution function should call `extractNamespacePrefix` and apply the underscore-to-hyphen normalization to its return value. Do NOT write a new YAML reader.
 
 Tests:
 - Config `tracerName` set → returns config value exactly

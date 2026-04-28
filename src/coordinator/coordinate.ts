@@ -28,8 +28,6 @@ import type { LiveCheckResult, LiveCheckDeps, LiveCheckOptions } from './live-ch
 import { readFile, writeFile as defaultWriteFile } from 'node:fs/promises';
 import { restoreExtensionsFile as defaultRestoreExtensionsFile } from './schema-extensions.ts';
 import { checkGhAvailable as defaultCheckGhAvailable } from '../deliverables/git-workflow.ts';
-import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
-import type { FileContent } from '../validation/tier2/cdq008.ts';
 import { checkRegistrySpanDuplicates } from '../validation/tier2/sch005.ts';
 import type Anthropic from '@anthropic-ai/sdk';
 import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
@@ -115,7 +113,6 @@ export interface CoordinateDeps {
     deps?: LiveCheckDeps,
     callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
   ) => Promise<LiveCheckResult>;
-  readFileForAdvisory: (filePath: string) => Promise<string>;
   checkGhAvailable?: () => Promise<boolean | { available: boolean; warning?: string }>;
   liveCheckOptions?: LiveCheckOptions;
   /** Injectable test suite detection for checkpoint test wiring. */
@@ -191,7 +188,6 @@ export async function coordinate(
   const cleanupSnap = deps?.cleanupSnapshot ?? defaultCleanupSnapshot;
   const schemaDiff = deps?.computeSchemaDiff ?? defaultComputeSchemaDiff;
   const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
-  const readForAdvisory = deps?.readFileForAdvisory ?? ((fp: string) => readFile(fp, 'utf-8'));
   const checkGh = deps?.checkGhAvailable ?? defaultCheckGhAvailable;
   const detectTestSuite = deps?.hasTestSuite ?? defaultHasTestSuite;
   const runTests = deps?.executeProjectTests ?? executeProjectTests;
@@ -406,33 +402,6 @@ export async function coordinate(
   runResult.warnings.push(...schemaHashWarnings);
   runResult.warnings.push(...schemaDiffWarnings);
   runResult.warnings.push(...checkpointTestWarnings);
-
-  // Step 6b: Run CDQ-008 cross-file tracer naming check (advisory, degrade and warn)
-  const successfulFiles = fileResults.filter(r => r.status === 'success' || r.status === 'partial');
-  if (successfulFiles.length > 0) {
-    const readResults = await Promise.allSettled(
-      successfulFiles.map(async (r) => ({
-        filePath: r.path,
-        code: await readForAdvisory(r.path),
-      })),
-    );
-
-    const fileContents: FileContent[] = [];
-    for (const [index, readResult] of readResults.entries()) {
-      if (readResult.status === 'fulfilled') {
-        fileContents.push(readResult.value);
-      } else {
-        const filePath = successfulFiles[index]?.path ?? '<unknown>';
-        const message = readResult.reason instanceof Error ? readResult.reason.message : String(readResult.reason);
-        runResult.warnings.push(`CDQ-008 file read failed (degraded): ${filePath} — ${message}`);
-      }
-    }
-
-    if (fileContents.length > 0) {
-      const cdq008Result = checkTracerNamingConsistency(fileContents);
-      runResult.runLevelAdvisory.push(cdq008Result);
-    }
-  }
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {

@@ -120,7 +120,6 @@ describe('TypeScriptProvider', () => {
       expect(provider.hasImplementation('RST-001')).toBe(true);
       expect(provider.hasImplementation('SCH-002')).toBe(true);
       expect(provider.hasImplementation('NDS-003')).toBe(true);
-      expect(provider.hasImplementation('CDQ-008')).toBe(true);
     });
 
     it('returns false for NDS-001 (syntax check — dispatched through checkSyntax, not a ValidationRule)', () => {

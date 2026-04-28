@@ -169,7 +169,6 @@ function makeAcceptanceDeps(resolvedSchema: object): CoordinateDeps {
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
     computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
-    readFileForAdvisory: (fp: string) => import('node:fs/promises').then(fs => fs.readFile(fp, 'utf-8')),
     hasTestSuite: vi.fn().mockResolvedValue(false),
   };
 }
@@ -537,7 +536,6 @@ function makePhase5Deps(resolvedSchema: object, tempDir: string): CoordinateDeps
       testsPassed: true,
       warnings: [],
     }),
-    readFileForAdvisory: (fp: string) => import('node:fs/promises').then(fs => fs.readFile(fp, 'utf-8')),
     hasTestSuite: vi.fn().mockResolvedValue(false),
   };
 }
