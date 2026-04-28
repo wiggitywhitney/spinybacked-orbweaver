@@ -115,24 +115,33 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
 
 // ─── tsc version detection ────────────────────────────────────────────────────
 
+/** Cache tsc major version by binary path — the version is constant per binary during a run. */
+const tscVersionCache = new Map<string, number>();
+
 /**
  * Return the major version number of the given tsc binary.
  * Used to conditionally apply flags that are only available in newer tsc releases
  * (e.g. `--ignoreConfig` introduced in tsc 6).
+ * Result is cached by binary path — the version cannot change during a run.
  * Returns 5 on any failure so callers default to conservative behaviour.
  *
  * @param tsc - Path to the tsc binary
  * @returns Major version integer (e.g. 5 or 6)
  */
 export function getTscMajorVersion(tsc: string): number {
+  const cached = tscVersionCache.get(tsc);
+  if (cached !== undefined) return cached;
   try {
     const out = execFileSync(tsc, ['--version'], {
       timeout: 5_000,
       stdio: ['pipe', 'pipe', 'pipe'],
     }).toString();
     const match = out.match(/Version (\d+)\./);
-    return match ? parseInt(match[1], 10) : 5;
+    const version = match ? parseInt(match[1], 10) : 5;
+    tscVersionCache.set(tsc, version);
+    return version;
   } catch {
+    tscVersionCache.set(tsc, 5);
     return 5;
   }
 }
@@ -140,15 +149,15 @@ export function getTscMajorVersion(tsc: string): number {
 // ─── syntax (checkSyntax) ─────────────────────────────────────────────────────
 
 /**
- * Parse tsc stderr for the first error line number.
+ * Parse tsc output for the first error line number.
  * tsc reports errors in the format: `path/to/file.ts(LINE,COL): error TS...`
  *
- * @param stderr - stderr from tsc invocation
+ * @param output - Combined stdout and stderr from tsc invocation (tsc writes to stdout in some versions)
  * @returns The line number of the first error, or null if none found
  */
-function parseTscLineNumber(stderr: string): number | null {
+function parseTscLineNumber(output: string): number | null {
   // tsc format: "file.ts(3,5): error TS2345: ..."
-  const match = stderr.match(/\((\d+),\d+\):/);
+  const match = output.match(/\((\d+),\d+\):/);
   return match ? parseInt(match[1], 10) : null;
 }
 
@@ -165,6 +174,10 @@ function parseTscLineNumber(stderr: string): number | null {
  * other project-specific settings (verbatimModuleSyntax, erasableSyntaxOnly,
  * rootDir, etc.) are intentionally not inherited so the check stays focused on
  * the structural correctness of the instrumented output.
+ *
+ * For tsc 6+, `--ignoreConfig` is added to suppress TS5112 — the new hard error
+ * tsc 6 emits when individual files are passed on the CLI alongside a tsconfig.json.
+ * tsc 5.x does not support this flag; the version is detected via getTscMajorVersion().
  *
  * @param filePath - Absolute path to the TypeScript file to check
  * @returns CheckResult with ruleId 'NDS-001', tier 1, blocking true

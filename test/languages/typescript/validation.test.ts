@@ -209,7 +209,7 @@ describe('checkSyntax — fallback path (no tsconfig)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// checkSyntax — --ignoreConfig and stdout capture (#631)
+// checkSyntax — --ignoreConfig (tsc 6+) and stdout capture
 // ---------------------------------------------------------------------------
 
 describe('checkSyntax — --ignoreConfig and stdout capture', () => {
