@@ -1391,4 +1391,56 @@ describe('coordinate', () => {
       expect(capturedDispatchName).toBe('JavaScript');
     });
   });
+
+  describe('check-failure message format (#518)', () => {
+    describe('live-check partial message', () => {
+      it('states advisory disposition when some files failed and live-check ran', async () => {
+        const deps = makeDeps({
+          discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
+          dispatchFiles: vi.fn().mockResolvedValue([
+            makeSuccessResult('/project/a.js'),
+            makeFailedResult('/project/b.js'),
+          ]),
+          runLiveCheck: vi.fn().mockResolvedValue({
+            skipped: false,
+            testsPassed: true,
+            complianceReport: 'OK',
+            warnings: [],
+          }),
+        });
+
+        const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+        const partialWarning = result.warnings.find(w => w.startsWith('Live-check partial'));
+        expect(partialWarning).toBeDefined();
+        // Must state the partial state is advisory (run completed)
+        expect(partialWarning).toContain('advisory');
+        // Must provide next-step guidance
+        expect(partialWarning).toContain('re-run');
+      });
+    });
+
+    describe('end-of-run live-check failed (degraded)', () => {
+      it('includes a recovery action when live-check throws unexpectedly', async () => {
+        const deps = makeDeps({
+          discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+          dispatchFiles: vi.fn().mockResolvedValue([makeSuccessResult('/project/a.js')]),
+          runLiveCheck: vi.fn().mockRejectedValue(new Error('network timeout')),
+        });
+
+        const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+        const degradedWarning = result.warnings.find(w =>
+          w.includes('live-check') && w.includes('degraded'),
+        );
+        expect(degradedWarning).toBeDefined();
+        // Must include the underlying error
+        expect(degradedWarning).toContain('network timeout');
+        // Must include recovery guidance (not just the word "check" from "live-check")
+        expect(degradedWarning).toMatch(/re-run|retry/i);
+      });
+    });
+
+  });
+
 });

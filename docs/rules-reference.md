@@ -118,7 +118,7 @@ These rules verify that the instrumentation code follows OTel best practices.
 | Rule | Name | What it checks | OTel spec relationship |
 |------|------|----------------|------------------------|
 | CDQ-001 | Spans Closed | Every span is closed in all code paths — via `span.end()` in a `finally` block or via `startActiveSpan` callback. Unclosed spans leak resources. | Not assessed in PRD #483 audit |
-| CDQ-005 | Async Context Maintained | Async functions using manual `startSpan()` pattern wrap the async operation in a `context.with()` binding so trace context propagates across `await` boundaries. | Not assessed in PRD #483 audit |
+| CDQ-005 | startActiveSpan Preferred | `tracer.startSpan()` calls in agent-generated instrumentation are flagged as advisory findings. `startActiveSpan()` is preferred because it automatically sets the span as active in context so child operations are correctly parented. `startSpan()` is accepted when the agent confirms which of four legitimate scenarios applies: sibling span, fire-and-forget background work, explicit parallel lifecycle control, or lifetime extending beyond a single function scope. | Directly aligned — OTel API spec states "In most cases you want to use `startActiveSpan`, as it takes care of setting the span and its context active" |
 
 ---
 
@@ -131,7 +131,7 @@ Advisory findings appear in output (CLI verbose mode, PR summary, reasoning repo
 | Rule | Name | What it checks | OTel spec relationship |
 |------|------|----------------|------------------------|
 | COV-004 | Async Operation Spans | Async functions (with `async` keyword or `await` expressions) have spans for latency tracking and error visibility. Two exemptions apply: (1) RST-001 utility functions (synchronous, no I/O); (2) functions that call `process.exit()` directly in their top-level body — those cannot be safely spanned because `process.exit()` bypasses the span's `finally` block. Functions where `process.exit()` appears only inside a `catch` block are NOT exempt — the happy path can still be safely spanned. **Pre-scan:** Before the LLM call, identifies async non-entry-point functions that need spans. Functions with direct `process.exit()` calls in their top-level body are excluded from this list, applying the same exception as this rule's exemption clause. | Directly aligned — async boundaries are where OTel context propagation happens; spans on async functions are not optional for observable systems |
-| COV-005 | Domain Attributes | Spans include the registry-defined attributes for their operation. Required attributes must be added; recommended attributes should be. | Indirectly consistent — project-specific in inputs (registry-based version of semconv) |
+| COV-005 | Domain Attributes | Spans include the registry-defined attributes for their operation. Required attributes must be added; recommended attributes should be. Receiver identification uses the callback parameter name (for `startActiveSpan`) or the declared variable name (for `startSpan`) so non-standard names like `op` or `s` are correctly tracked. | Indirectly consistent — project-specific in inputs (registry-based version of semconv) |
 
 ### Restraint (RST)
 

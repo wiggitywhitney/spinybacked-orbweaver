@@ -158,9 +158,17 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
     // Search within callback arguments
     for (const arg of spanCall.getArguments()) {
       if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg)) {
+        // The first parameter of the callback IS the span — track its name so
+        // extractSetAttributeName recognises non-standard names (e.g. `op`, `s`).
+        const knownSpanVarNames = new Set<string>();
+        const params = arg.getParameters();
+        if (params.length > 0) {
+          const firstParamName = params[0].getName();
+          if (firstParamName) knownSpanVarNames.add(firstParamName);
+        }
         arg.forEachDescendant((desc) => {
           if (Node.isCallExpression(desc)) {
-            const attrName = extractSetAttributeName(desc);
+            const attrName = extractSetAttributeName(desc, knownSpanVarNames);
             if (attrName) attributes.add(attrName);
           }
         });
@@ -189,6 +197,11 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
     }
 
     if (containingBlock && ancestorStatement && (Node.isBlock(containingBlock) || Node.isSourceFile(containingBlock))) {
+      // Track the bound span variable name so extractSetAttributeName recognises
+      // non-standard names (e.g. `op`, `s`) as well as the /span/i regex.
+      const knownSpanVarNames = new Set<string>();
+      if (spanVarName) knownSpanVarNames.add(spanVarName);
+
       const statements = containingBlock.getStatements();
       const declIndex = statements.findIndex(s => s === ancestorStatement);
       if (declIndex >= 0) {
@@ -196,7 +209,7 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
           // Collect attributes first so a combined setAttribute+end() statement is not missed
           statements[i].forEachDescendant((desc) => {
             if (Node.isCallExpression(desc)) {
-              const attrName = extractSetAttributeName(desc);
+              const attrName = extractSetAttributeName(desc, knownSpanVarNames);
               if (attrName) attributes.add(attrName);
             }
           });
@@ -230,15 +243,24 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
 /**
  * Extract the attribute name from a span.setAttribute("name", value) call.
  * Returns null if this is not a setAttribute call or the first arg is not a string literal.
+ *
+ * Option 2 (structural): callers pass `knownSpanVarNames` — the set of variable names
+ * that are known to hold a span (e.g. callback param name for startActiveSpan, or the
+ * declared variable name for startSpan). This handles non-standard names like `op` or `s`
+ * that the /span/i regex would miss. When no known names are provided, falls back to the
+ * regex alone — preserving the existing behaviour for call sites that don't supply context.
  */
-function extractSetAttributeName(callExpr: CallExpression): string | null {
+function extractSetAttributeName(callExpr: CallExpression, knownSpanVarNames?: Set<string>): string | null {
   const expr = callExpr.getExpression();
   if (!Node.isPropertyAccessExpression(expr)) return null;
   if (expr.getName() !== 'setAttribute') return null;
 
-  // Only match span.setAttribute — skip unrelated APIs
+  // Only match span.setAttribute — skip unrelated APIs.
+  // Check the last segment of the receiver (handles `this.span`, `obj.activeSpan`).
   const receiverText = expr.getExpression().getText();
-  if (!receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return null;
+  const receiverLastSegment = receiverText.split('.').at(-1) ?? receiverText;
+  const isKnownSpanVar = knownSpanVarNames !== undefined && knownSpanVarNames.has(receiverLastSegment);
+  if (!isKnownSpanVar && !receiverText.match(/span|activeSpan|parentSpan|rootSpan|childSpan/i)) return null;
 
   const args = callExpr.getArguments();
   if (args.length < 2) return null;
