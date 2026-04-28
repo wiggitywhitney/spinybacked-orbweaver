@@ -791,6 +791,58 @@ describe('handleInstrument', () => {
       expect(reportLine).toBeDefined();
     });
 
+    it('shows agent thinking blocks in verbose mode for failed files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        reason: 'Validation failed',
+        lastError: 'NDS-001: parse error',
+        thinkingBlocksByAttempt: [
+          ['The function handleRequest is exported and async — it needs a span.'],
+          ['Retrying with startActiveSpan wrapper.'],
+        ],
+        errorProgression: ['1 blocking error', '1 blocking error'],
+        validationAttempts: 2,
+        validationStrategyUsed: 'fresh-regeneration',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+
+      expect(allOutput).toContain('Agent thinking');
+      expect(allOutput).toContain('Attempt 1');
+      expect(allOutput).toContain('handleRequest is exported and async');
+      expect(allOutput).toContain('Attempt 2');
+    });
+
+    it('does not show agent thinking section when thinkingBlocksByAttempt is absent', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        reason: 'Validation failed',
+        lastError: 'NDS-001: parse error',
+        errorProgression: ['1 blocking error'],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      expect(allOutput).not.toContain('Agent thinking');
+    });
+
     it('shows full validator error messages in a dedicated section for failed files', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions({ verbose: true }), deps);
