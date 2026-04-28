@@ -71,6 +71,10 @@ function stripJsonComments(text: string): string {
  *
  * Only the top-level `compilerOptions` are read; `extends` chains are followed
  * one level to cover the common pattern of a root tsconfig that extends a base.
+ * Only filesystem-relative extends paths (e.g., `"./tsconfig.base.json"`) are
+ * resolved; npm-package-style references (e.g., `"@tsconfig/node20/tsconfig.json"`)
+ * are not resolved and fall back to the child config's own values (or NodeNext
+ * defaults if absent).
  * Returns an empty object when the file cannot be read or parsed.
  *
  * @param tsconfigPath - Absolute path to a tsconfig.json file
