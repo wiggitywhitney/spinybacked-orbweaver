@@ -78,11 +78,11 @@ describe('resolveCanonicalTracerName', () => {
   });
 
   it('normalizes multiple underscores in registry name', async () => {
-    const dir = await makeRegistryDir('my_app');
+    const dir = await makeRegistryDir('my_app_service');
     tempDirs.push(dir);
     const config = makeConfig();
     const result = await resolveCanonicalTracerName(config, dir);
-    expect(result).toBe('my-app');
+    expect(result).toBe('my-app-service');
   });
 
   it('returns registry name unchanged when it has no underscores', async () => {
