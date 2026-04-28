@@ -167,13 +167,13 @@ Tests:
 - File has no `getTracer()` call → passes
 - File has two `getTracer()` calls, one correct and one wrong → fails
 
-- [ ] New per-file rule implemented
-- [ ] Rule registered in `tier2Checks` as blocking
-- [ ] Rule registered in `JS_RULES` and `rule-names.ts`
-- [ ] Canonical name passed through to validation context
-- [ ] Unit tests for all cases above
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] New per-file rule implemented
+- [x] Rule registered in `tier2Checks` as blocking
+- [x] Rule registered in `JS_RULES` and `rule-names.ts`
+- [x] Canonical name passed through to validation context
+- [x] Unit tests for all cases above
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M5: Documentation
 

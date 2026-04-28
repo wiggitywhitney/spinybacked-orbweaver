@@ -78,6 +78,7 @@ function buildTier1OnlyValidationConfig() {
       'NDS-004': { enabled: false, blocking: false },
       'NDS-005': { enabled: false, blocking: false },
       'RST-005': { enabled: false, blocking: false },
+      'CDQ-011': { enabled: false, blocking: false },
     },
   };
 }

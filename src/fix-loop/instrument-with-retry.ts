@@ -148,12 +148,14 @@ function summarizeErrors(validation: ValidationResult): string {
  * @param projectRoot - Optional project root for checks that need package.json access (API-002)
  * @param resolvedSchema - Weaver registry for SCH-001 through SCH-004 checks
  * @param anthropicClient - Anthropic client for LLM judge calls (SCH-001, SCH-004)
+ * @param canonicalTracerName - When provided, CDQ-011 verifies all getTracer() calls use this name
  */
 function buildValidationConfig(
   config: AgentConfig,
   projectRoot?: string,
   resolvedSchema?: object,
   anthropicClient?: Anthropic,
+  canonicalTracerName?: string,
 ) {
   // Detect schema-sparse registries: when the registry has very few span
   // definitions, SCH-001/SCH-002 should be advisory rather than blocking.
@@ -171,6 +173,7 @@ function buildValidationConfig(
     projectRoot,
     resolvedSchema,
     anthropicClient,
+    canonicalTracerName,
     tier2Checks: {
       // Phase 2 checks
       'CDQ-001': { enabled: true, blocking: true },
@@ -208,6 +211,7 @@ function buildValidationConfig(
       'NDS-007': { enabled: true, blocking: true },
       'RST-005': { enabled: true, blocking: false },
       'RST-006': { enabled: true, blocking: false },
+      'CDQ-011': { enabled: true, blocking: true },
     },
   };
 }
@@ -480,7 +484,7 @@ async function executeRetryLoop(
   canonicalTracerName?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
-  const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient);
+  const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient, canonicalTracerName);
 
   // Pre-flight token estimate — skip files that are very likely to exceed the budget.
   // Fail fast on impossible budgets (below fixed prompt overhead) to avoid wasting API tokens
@@ -1016,7 +1020,7 @@ async function functionLevelFallback(
   // Recompute successful after syntax check may have marked additional functions as failed
   successful = fnResults.filter(r => r.success);
 
-  const validationConfig = buildValidationConfig(config, retryOptions.projectRoot, resolvedSchema, retryOptions.anthropicClient);
+  const validationConfig = buildValidationConfig(config, retryOptions.projectRoot, resolvedSchema, retryOptions.anthropicClient, retryOptions.canonicalTracerName);
   // Collect schema extensions from successful functions so SCH-001 accepts
   // span names the agent declared as extensions (not just base registry names).
   const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);

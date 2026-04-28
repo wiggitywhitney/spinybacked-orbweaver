@@ -27,6 +27,7 @@ const RULE_NAMES: Record<string, string> = {
   'CDQ-007': 'Attribute Data Quality',
   'CDQ-009': 'Null-Safe Guard',
   'CDQ-010': 'String Method Type Safety',
+  'CDQ-011': 'Canonical Tracer Name',
 
   // Tier 2 — Restraint
   'RST-001': 'No Utility Spans',
