@@ -118,7 +118,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     // Dimension 2: write the agent's last instrumented code to a stable /tmp path.
     // Uses result.lastInstrumentedCode (captured from output.instrumentedCode in buildFailedResult
     // before the retry loop restores result.path to the original after validation failure).
-    const debugFilePath = `/tmp/spiny-orb-debug-${label}`;
+    const safeLabel = label.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const debugFilePath = join(tmpdir(), `spiny-orb-debug-${safeLabel}`);
     const codeToCapture = result.lastInstrumentedCode ??
       (existsSync(result.path) ? readFileSync(result.path, 'utf-8') : undefined);
     if (codeToCapture) {
@@ -134,7 +135,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     if (result.thinkingBlocksByAttempt) {
       result.thinkingBlocksByAttempt.forEach((blocks, idx) => {
         if (blocks.length > 0) {
-          const text = blocks[0];
+          const text = blocks.join('\n\n');
           const preview = text.length > 2000 ? `${text.slice(0, 2000)}\n[... truncated at 2000 chars; full thinking in result.thinkingBlocksByAttempt[${idx}]]` : text;
           console.log(`[${label} thinking attempt ${idx + 1}]`, preview);
         }

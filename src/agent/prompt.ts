@@ -443,6 +443,7 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
         ? `imported (handled elsewhere): ${group.importedSubOperations.map(s => `\`${sanitize(s.name)}\` from \`${sanitize(s.sourceModule)}\``).join(', ')}`
         : null;
       const parts = [localPart, importedPart].filter(Boolean).join('; ');
+      if (!parts) continue;
       directives.push(`- In \`${sanitize(group.entryPointName)}()\`, async sub-operations — ${parts}.`);
     }
 

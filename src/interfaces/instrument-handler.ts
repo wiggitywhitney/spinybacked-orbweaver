@@ -1,7 +1,7 @@
 // ABOUTME: Handler for the `spiny-orb instrument` command.
 // ABOUTME: Loads config, calls coordinate(), and maps RunResult to exit codes.
 
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { AgentConfig } from '../config/schema.ts';
@@ -175,8 +175,9 @@ export async function handleInstrument(
       // and src/b/index.js are both named "index.js" but must not overwrite each other).
       if (options.debugDumpDir && result.lastInstrumentedCode) {
         try {
-          const rel = toDisplayPath(result.path, options.projectDir);
-          const outPath = join(options.debugDumpDir, rel.startsWith('..') ? basename(result.path) : rel);
+          const rel = relative(options.projectDir, result.path);
+          const safeRel = rel.startsWith('..') || isAbsolute(rel) ? basename(result.path) : rel;
+          const outPath = join(options.debugDumpDir, safeRel);
           mkdirSync(dirname(outPath), { recursive: true });
           writeFileSync(outPath, result.lastInstrumentedCode, 'utf-8');
         } catch (err) {

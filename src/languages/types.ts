@@ -305,10 +305,13 @@ export interface PreScanOutboundCallGroup {
  * point's body (M3 import analysis).
  */
 export interface PreScanImportedSubOperation {
-  /** The function name being called. */
+  /** The local name used at call sites (alias if present, otherwise the exported name). */
   name: string;
   /** The import source module path (e.g., `'./handlers.js'`). */
   sourceModule: string;
+  /** The original exported name from the source module, when the import is aliased.
+   *  Used for cross-file manifest lookup (the manifest records the exported name, not the alias). */
+  exportedName?: string;
 }
 
 /**

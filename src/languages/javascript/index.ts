@@ -524,19 +524,21 @@ export class JavaScriptProvider implements LanguageProvider {
     }
 
     // Local import analysis — per-entry-point sub-operation breakdown.
-    // Build a map of local name → source module from all import declarations.
-    // For aliased imports (import { foo as bar }), use the alias (bar) as the key
-    // since that is the name that appears at call sites in this file.
-    const namedImportMap = new Map<string, string>();
+    // Build a map of local name → {moduleSpecifier, exportedName} from all import declarations.
+    // For aliased imports (import { foo as bar }), use the alias (bar) as the key since
+    // that is the name that appears at call sites. exportedName (foo) is preserved for
+    // cross-file manifest lookup — the manifest records the exported name, not the alias.
+    const namedImportMap = new Map<string, { moduleSpecifier: string; exportedName: string }>();
     for (const importDecl of sourceFile.getImportDeclarations()) {
       const moduleSpecifier = importDecl.getModuleSpecifierValue();
       for (const namedImport of importDecl.getNamedImports()) {
-        const localName = namedImport.getAliasNode()?.getText() ?? namedImport.getName();
-        namedImportMap.set(localName, moduleSpecifier);
+        const exportedName = namedImport.getName();
+        const localName = namedImport.getAliasNode()?.getText() ?? exportedName;
+        namedImportMap.set(localName, { moduleSpecifier, exportedName });
       }
       const defaultImport = importDecl.getDefaultImport();
       if (defaultImport) {
-        namedImportMap.set(defaultImport.getText(), moduleSpecifier);
+        namedImportMap.set(defaultImport.getText(), { moduleSpecifier, exportedName: defaultImport.getText() });
       }
     }
 
@@ -566,7 +568,7 @@ export class JavaScriptProvider implements LanguageProvider {
       if (!fnNode) continue;
 
       const localSubOperations: string[] = [];
-      const importedSubOperationMap = new Map<string, string>(); // name → sourceModule
+      const importedSubOperationMap = new Map<string, { moduleSpecifier: string; exportedName: string }>();
 
       const callExprs = fnNode.getDescendantsOfKind(SyntaxKind.CallExpression);
       for (const callExpr of callExprs) {
@@ -579,8 +581,9 @@ export class JavaScriptProvider implements LanguageProvider {
         // Skip if already seen
         if (localSubOperations.includes(calleeName) || importedSubOperationMap.has(calleeName)) continue;
 
-        if (namedImportMap.has(calleeName)) {
-          importedSubOperationMap.set(calleeName, namedImportMap.get(calleeName)!);
+        const importInfo = namedImportMap.get(calleeName);
+        if (importInfo) {
+          importedSubOperationMap.set(calleeName, importInfo);
         } else if (localFunctionNames.has(calleeName)) {
           localSubOperations.push(calleeName);
         }
@@ -588,7 +591,11 @@ export class JavaScriptProvider implements LanguageProvider {
       }
 
       const importedSubOperations = Array.from(importedSubOperationMap.entries()).map(
-        ([name, sourceModule]) => ({ name, sourceModule }),
+        ([name, { moduleSpecifier, exportedName }]) => ({
+          name,
+          sourceModule: moduleSpecifier,
+          ...(name !== exportedName ? { exportedName } : {}),
+        }),
       );
 
       // Only emit a group when there is something to report.
@@ -612,7 +619,10 @@ export class JavaScriptProvider implements LanguageProvider {
 
           const resolvedPath = resolve(fileDir, imported.sourceModule);
           const instrumentedNames = processedFilesManifest.get(resolvedPath);
-          if (instrumentedNames?.includes(imported.name)) {
+          // Check by exported name (original symbol) when the import is aliased — the manifest
+          // records the function name from the source file, not the local call-site alias.
+          const lookupName = imported.exportedName ?? imported.name;
+          if (instrumentedNames?.includes(lookupName)) {
             alreadyInstrumentedImports.push({
               name: imported.name,
               sourceModule: imported.sourceModule,
