@@ -244,11 +244,10 @@ function collectSetAttributes(spanCall: CallExpression): Set<string> {
  * Extract the attribute name from a span.setAttribute("name", value) call.
  * Returns null if this is not a setAttribute call or the first arg is not a string literal.
  *
- * Option 2 (structural): callers pass `knownSpanVarNames` — the set of variable names
- * that are known to hold a span (e.g. callback param name for startActiveSpan, or the
- * declared variable name for startSpan). This handles non-standard names like `op` or `s`
- * that the /span/i regex would miss. When no known names are provided, falls back to the
- * regex alone — preserving the existing behaviour for call sites that don't supply context.
+ * Callers may pass `knownSpanVarNames` — the set of variable names structurally determined
+ * to hold a span (callback param for startActiveSpan; declared variable for startSpan).
+ * This handles non-standard names like `op` or `s` that the /span/i regex would miss.
+ * When no known names are provided, falls back to the regex alone.
  */
 function extractSetAttributeName(callExpr: CallExpression, knownSpanVarNames?: Set<string>): string | null {
   const expr = callExpr.getExpression();

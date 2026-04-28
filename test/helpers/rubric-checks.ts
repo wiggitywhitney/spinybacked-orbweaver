@@ -356,22 +356,20 @@ export function checkErrorRecording(code: string): RubricCheckResult {
 }
 
 /**
- * CDQ-005: Async context maintained.
- * startActiveSpan callback auto-manages context — passes.
- * startSpan requires context.with() — checked here.
+ * CDQ-005: startActiveSpan preferred over startSpan.
+ * startActiveSpan automatically sets the span as active in context — passes.
+ * tracer.startSpan() is advisory: the agent should prefer startActiveSpan
+ * unless one of the four legitimate scenarios applies.
  */
 export function checkAsyncContext(code: string): RubricCheckResult {
-  // startActiveSpan auto-manages context — no manual context.with() needed.
-  // startSpan requires manual context management.
-  const startSpanMatches = code.match(/\.startSpan\s*\(/g);
-  if (startSpanMatches && startSpanMatches.length > 0) {
-    const hasContextWith = /context\.with\s*\(/.test(code);
-    if (!hasContextWith) {
-      return {
-        passed: false,
-        details: `Found ${startSpanMatches.length} startSpan() calls without context.with() for async context management`,
-      };
-    }
+  // Flag tracer.startSpan() calls — startActiveSpan is preferred because it
+  // automatically manages active span context so child operations are correctly parented.
+  const tracerStartSpanMatches = code.match(/(?:tracer\w*|getTracer\s*\([^)]*\))\s*(?:\.\s*)\s*startSpan\s*\(/g);
+  if (tracerStartSpanMatches && tracerStartSpanMatches.length > 0) {
+    return {
+      passed: false,
+      details: `Found ${tracerStartSpanMatches.length} tracer.startSpan() call(s) — prefer startActiveSpan() which automatically manages active span context`,
+    };
   }
 
   return { passed: true };

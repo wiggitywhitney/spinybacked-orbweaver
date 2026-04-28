@@ -39,7 +39,7 @@ The agent gets real-time feedback and retries on violations. These are the rules
 | SCH-003 | Attribute Values Conform to Registry Types | Schema Fidelity | |
 | SCH-004 | No Redundant Schema Entries | Schema Fidelity | |
 | CDQ-001 | Spans Closed in All Code Paths | Code Quality | |
-| CDQ-005 | Async Context Maintained | Code Quality | |
+| CDQ-005 | startActiveSpan Preferred | Code Quality | |
 | CDQ-006 | Expensive Attribute Computation Guarded | Code Quality | |
 | CDQ-008 | Consistent Tracer Naming Convention | Code Quality | |
 
@@ -162,4 +162,4 @@ The rubric cites its sources per-dimension:
 - ~~"Adapted from the IS spec for static analysis"~~ — implies the rules are IS rules translated, not original work
 - ~~"Based on community standards"~~ — too vague, sounds like borrowed work
 
-**Note on CDQ-005:** The rubric defines CDQ-005 as "Async Context Maintained." Spiny-orb previously had an internal validator also named CDQ-005 but for "Count Attribute Types" — a different concern. PR #286 removed the spiny-orb CDQ-005 validator to resolve this naming conflict. The count attribute type concern is correctly covered by SCH-003 (attribute values conform to registry types).
+**Note on CDQ-005:** Spiny-orb's CDQ-005 validator is now "startActiveSpan Preferred" — it flags `tracer.startSpan()` calls and asks the agent to confirm the choice is intentional, since `startActiveSpan()` is preferred for automatic context management. An earlier version of CDQ-005 checked for `context.with()` wrapping; that check has been superseded by the startActiveSpan advisory.

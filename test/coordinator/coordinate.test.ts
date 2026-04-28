@@ -17,6 +17,15 @@ vi.mock('../../src/validation/judge.ts', () => ({
 }));
 import { callJudge } from '../../src/validation/judge.ts';
 
+vi.mock('../../src/validation/tier2/sch005.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../src/validation/tier2/sch005.ts')>();
+  return {
+    ...original,
+    checkRegistrySpanDuplicates: vi.fn().mockImplementation(original.checkRegistrySpanDuplicates),
+  };
+});
+import { checkRegistrySpanDuplicates } from '../../src/validation/tier2/sch005.ts';
+
 /** Minimal config for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -1438,6 +1447,23 @@ describe('coordinate', () => {
         expect(degradedWarning).toContain('network timeout');
         // Must include recovery guidance (not just the word "check" from "live-check")
         expect(degradedWarning).toMatch(/re-run|retry/i);
+      });
+    });
+
+    describe('SCH-005 check failed (degraded)', () => {
+      it('includes the rule name and recovery action when checkRegistrySpanDuplicates throws', async () => {
+        vi.mocked(checkRegistrySpanDuplicates).mockRejectedValueOnce(new Error('registry parse error'));
+        const deps = makeDeps({
+          discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
+          dispatchFiles: vi.fn().mockResolvedValue([makeSuccessResult('/project/a.js')]),
+        });
+
+        const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+        const sch005Warning = result.warnings.find(w => w.includes('SCH-005'));
+        expect(sch005Warning).toBeDefined();
+        expect(sch005Warning).toContain('registry parse error');
+        expect(sch005Warning).toMatch(/re-run/i);
       });
     });
 

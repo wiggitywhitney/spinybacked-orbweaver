@@ -242,7 +242,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['RST-005']).toEqual({ enabled: true, blocking: false });
     expect(checks['RST-006']).toEqual({ enabled: true, blocking: false });
 
-    // Total: 30 checks (API-003 deleted; RST-006 added; CDQ-005 added)
+    // Total: 30 checks (API-003 deleted; RST-006 added; CDQ-005 (startActiveSpan Preferred) added)
     expect(Object.keys(checks)).toHaveLength(30);
 
     // projectRoot is undefined when not provided
