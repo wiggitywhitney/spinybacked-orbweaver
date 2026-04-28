@@ -439,7 +439,7 @@ export async function handleRequest(req, res) {
   });
 }
 
-async function processData(data) {
+function processData(data) {
   return data.items.map(item => item.value);
 }`;
 

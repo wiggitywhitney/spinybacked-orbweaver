@@ -916,12 +916,13 @@ describe('handleInstrument', () => {
     });
 
     it('--debug-dump-dir writes lastInstrumentedCode to the specified directory on failure', async () => {
-      const { mkdtempSync, readFileSync: fsRead, existsSync } = await import('node:fs');
+      const { mkdtempSync, readFileSync: fsRead, existsSync, rmSync } = await import('node:fs');
       const { tmpdir } = await import('node:os');
       const { join } = await import('node:path');
 
       const dumpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-dump-test-'));
 
+      try {
       const failedResult = makeFileResult({
         path: '/test/project/src/app.js',
         status: 'failed',
@@ -946,6 +947,9 @@ describe('handleInstrument', () => {
       const dumpedPath = join(dumpDir, 'src', 'app.js');
       expect(existsSync(dumpedPath)).toBe(true);
       expect(fsRead(dumpedPath, 'utf-8')).toBe('const x = 1; // agent output');
+      } finally {
+        rmSync(dumpDir, { recursive: true, force: true });
+      }
     });
 
     it('cost ceiling rejection produces exit code 3', async () => {

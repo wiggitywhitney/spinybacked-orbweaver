@@ -185,8 +185,11 @@ export async function instrumentFile(
       const uninstrumentedEntryPoints = preScanResult?.entryPointsNeedingSpans.filter(
         ep => !instrumentedFunctionNames.has(ep.name),
       ) ?? [];
+      const uninstrumentedAsyncFns = preScanResult?.asyncFunctionsNeedingSpans.filter(
+        fn => !instrumentedFunctionNames.has(fn.name),
+      ) ?? [];
 
-      if (uninstrumentedEntryPoints.length === 0) {
+      if (uninstrumentedEntryPoints.length === 0 && uninstrumentedAsyncFns.length === 0) {
         const skippedNames = exportedFunctions.map(f => f.name).join(', ');
         return {
           success: true,
@@ -211,7 +214,8 @@ export async function instrumentFile(
   // Guard: a file with only sync exports but an unexported async main() still needs
   // instrumentation — pre-scan's entryPointsNeedingSpans overrides the heuristic.
   if (exportedFunctions.length > 0 && !exportedFunctions.some(f => f.isAsync)
-      && !preScanResult?.entryPointsNeedingSpans.length) {
+      && !preScanResult?.entryPointsNeedingSpans.length
+      && !preScanResult?.asyncFunctionsNeedingSpans.length) {
     const skippedNames = exportedFunctions.map(f => f.name).join(', ');
     return {
       success: true,
