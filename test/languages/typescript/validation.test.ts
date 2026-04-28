@@ -5,7 +5,32 @@ import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { mkdtemp, writeFile, rm, mkdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkSyntax, findTsconfig } from '../../../src/languages/typescript/validation.ts';
+import { existsSync } from 'node:fs';
+import { checkSyntax, findTsconfig, getTscMajorVersion } from '../../../src/languages/typescript/validation.ts';
+
+// ---------------------------------------------------------------------------
+// getTscMajorVersion
+// ---------------------------------------------------------------------------
+
+describe('getTscMajorVersion', () => {
+  it('returns 5 for the local tsc 5.x binary', () => {
+    const tsc5 = join(import.meta.dirname, '../../../node_modules/.bin/tsc');
+    const version = getTscMajorVersion(tsc5);
+    expect(version).toBe(5);
+  });
+
+  it('returns 6 for an external tsc 6.x binary (if TSC6_PATH env var is set)', () => {
+    const tsc6 = process.env['TSC6_PATH'];
+    if (!tsc6 || !existsSync(tsc6)) return; // skip if not configured locally
+    const version = getTscMajorVersion(tsc6);
+    expect(version).toBe(6);
+  });
+
+  it('returns 5 (safe default) for a non-existent binary', () => {
+    const version = getTscMajorVersion('/nonexistent/tsc');
+    expect(version).toBe(5);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // findTsconfig
@@ -180,5 +205,52 @@ describe('checkSyntax — fallback path (no tsconfig)', () => {
 
     expect(result.passed).toBe(true);
     expect(result.ruleId).toBe('NDS-001');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkSyntax — --ignoreConfig (tsc 6+) and stdout capture
+// ---------------------------------------------------------------------------
+
+describe('checkSyntax — --ignoreConfig and stdout capture', () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('passes on a valid file inside a project with tsconfig.json (no TS5112 error)', async () => {
+    // Newer tsc emits TS5112 when individual files are passed on the CLI and a
+    // tsconfig.json exists — unless --ignoreConfig is present.
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-ts5112-'));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: { target: 'ES2022', strict: true, noEmit: true, skipLibCheck: true },
+    }));
+    await writeFile(join(tempDir, 'ok.ts'), 'export const x: number = 1;\n');
+
+    const result = checkSyntax(join(tempDir, 'ok.ts'));
+
+    expect(result.passed).toBe(true);
+    expect(result.ruleId).toBe('NDS-001');
+  });
+
+  it('includes tsc error text in NDS-001 message even when tsc writes to stdout', async () => {
+    // tsc (including TS5112) sometimes writes diagnostics to stdout rather than
+    // stderr. The error message must include the combined output.
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-stdout-'));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: { target: 'ES2022', strict: true, noEmit: true, skipLibCheck: true },
+    }));
+    // Type error that tsc will report on stderr
+    await writeFile(join(tempDir, 'bad.ts'), 'const x: number = "bad";');
+
+    const result = checkSyntax(join(tempDir, 'bad.ts'));
+
+    expect(result.passed).toBe(false);
+    // Error detail must appear — not an empty double-space gap
+    expect(result.message).not.toMatch(/exit code\.\s{2,}Fix/);
+    expect(result.message).toContain('TS');
   });
 });

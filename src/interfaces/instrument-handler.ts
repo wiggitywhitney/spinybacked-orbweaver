@@ -254,6 +254,22 @@ export async function handleInstrument(
         }
       }
 
+      // Agent thinking blocks for failed files — helps diagnose why the agent failed
+      if (result.status === 'failed' && result.thinkingBlocksByAttempt && result.thinkingBlocksByAttempt.some(b => b.length > 0)) {
+        deps.stderr('');
+        deps.stderr(`  ${_dim('Agent thinking')}`);
+        deps.stderr(`  ${_dim('─'.repeat(60))}`);
+        result.thinkingBlocksByAttempt.forEach((blocks, attemptIdx) => {
+          if (blocks.length === 0) return;
+          deps.stderr(`  ${_dim(`Attempt ${attemptIdx + 1}`)}`);
+          for (const block of blocks) {
+            for (const line of block.split('\n')) {
+              deps.stderr(`    ${line}`);
+            }
+          }
+        });
+      }
+
       // Function-level details when available
       if (result.functionResults && result.functionResults.length > 0) {
         deps.stderr('');

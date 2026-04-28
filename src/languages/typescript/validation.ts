@@ -113,18 +113,51 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
   return { module: own.module, moduleResolution: own.moduleResolution };
 }
 
+// ─── tsc version detection ────────────────────────────────────────────────────
+
+/** Cache tsc major version by binary path — the version is constant per binary during a run. */
+const tscVersionCache = new Map<string, number>();
+
+/**
+ * Return the major version number of the given tsc binary.
+ * Used to conditionally apply flags that are only available in newer tsc releases
+ * (e.g. `--ignoreConfig` introduced in tsc 6).
+ * Result is cached by binary path — the version cannot change during a run.
+ * Returns 5 on any failure so callers default to conservative behaviour.
+ *
+ * @param tsc - Path to the tsc binary
+ * @returns Major version integer (e.g. 5 or 6)
+ */
+export function getTscMajorVersion(tsc: string): number {
+  const cached = tscVersionCache.get(tsc);
+  if (cached !== undefined) return cached;
+  try {
+    const out = execFileSync(tsc, ['--version'], {
+      timeout: 5_000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).toString();
+    const match = out.match(/Version (\d+)\./);
+    const version = match ? parseInt(match[1], 10) : 5;
+    tscVersionCache.set(tsc, version);
+    return version;
+  } catch {
+    tscVersionCache.set(tsc, 5);
+    return 5;
+  }
+}
+
 // ─── syntax (checkSyntax) ─────────────────────────────────────────────────────
 
 /**
- * Parse tsc stderr for the first error line number.
+ * Parse tsc output for the first error line number.
  * tsc reports errors in the format: `path/to/file.ts(LINE,COL): error TS...`
  *
- * @param stderr - stderr from tsc invocation
+ * @param output - Combined stdout and stderr from tsc invocation (tsc writes to stdout in some versions)
  * @returns The line number of the first error, or null if none found
  */
-function parseTscLineNumber(stderr: string): number | null {
+function parseTscLineNumber(output: string): number | null {
   // tsc format: "file.ts(3,5): error TS2345: ..."
-  const match = stderr.match(/\((\d+),\d+\):/);
+  const match = output.match(/\((\d+),\d+\):/);
   return match ? parseInt(match[1], 10) : null;
 }
 
@@ -141,6 +174,10 @@ function parseTscLineNumber(stderr: string): number | null {
  * other project-specific settings (verbatimModuleSyntax, erasableSyntaxOnly,
  * rootDir, etc.) are intentionally not inherited so the check stays focused on
  * the structural correctness of the instrumented output.
+ *
+ * For tsc 6+, `--ignoreConfig` is added to suppress TS5112 — the new hard error
+ * tsc 6 emits when individual files are passed on the CLI alongside a tsconfig.json.
+ * tsc 5.x does not support this flag; the version is detected via getTscMajorVersion().
  *
  * @param filePath - Absolute path to the TypeScript file to check
  * @returns CheckResult with ruleId 'NDS-001', tier 1, blocking true
@@ -160,6 +197,7 @@ export function checkSyntax(filePath: string): CheckResult {
         '--strict',
         '--skipLibCheck',
         '--allowImportingTsExtensions',
+        ...getTscMajorVersion(tsc) >= 6 ? ['--ignoreConfig'] : [],
         '--module', moduleFlag,
         '--moduleResolution', moduleResolutionFlag,
         '--target', 'ES2022',
@@ -182,17 +220,20 @@ export function checkSyntax(filePath: string): CheckResult {
       blocking: true,
     };
   } catch (error: unknown) {
-    const stderr =
-      error !== null &&
-      typeof error === 'object' &&
-      'stderr' in error &&
-      error.stderr instanceof Buffer
-        ? error.stderr.toString()
-        : error instanceof Error
-          ? error.message
-          : String(error);
+    // tsc sometimes writes diagnostics to stdout rather than stderr (e.g. TS5112).
+    // Capture both and join so NDS-001 messages are never silently empty.
+    const isErrorObj = error !== null && typeof error === 'object';
+    const stdout = isErrorObj && 'stdout' in error && error.stdout instanceof Buffer
+      ? error.stdout.toString()
+      : '';
+    const stderr = isErrorObj && 'stderr' in error && error.stderr instanceof Buffer
+      ? error.stderr.toString()
+      : error instanceof Error
+        ? error.message
+        : String(error);
+    const combined = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n');
 
-    const lineNumber = parseTscLineNumber(stderr);
+    const lineNumber = parseTscLineNumber(combined);
 
     return {
       ruleId: 'NDS-001',
@@ -200,7 +241,7 @@ export function checkSyntax(filePath: string): CheckResult {
       filePath,
       lineNumber,
       message:
-        `NDS-001 check failed: tsc --noEmit returned a non-zero exit code. ${stderr.trim()} ` +
+        `NDS-001 check failed: tsc --noEmit returned a non-zero exit code. ${combined} ` +
         `Fix the TypeScript error${lineNumber ? ` at line ${lineNumber}` : ''} and ensure the file is valid TypeScript.`,
       tier: 1,
       blocking: true,
