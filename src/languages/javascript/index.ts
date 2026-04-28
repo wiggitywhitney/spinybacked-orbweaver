@@ -524,12 +524,15 @@ export class JavaScriptProvider implements LanguageProvider {
     }
 
     // Local import analysis — per-entry-point sub-operation breakdown.
-    // Build a map of imported name → source module from all import declarations.
+    // Build a map of local name → source module from all import declarations.
+    // For aliased imports (import { foo as bar }), use the alias (bar) as the key
+    // since that is the name that appears at call sites in this file.
     const namedImportMap = new Map<string, string>();
     for (const importDecl of sourceFile.getImportDeclarations()) {
       const moduleSpecifier = importDecl.getModuleSpecifierValue();
       for (const namedImport of importDecl.getNamedImports()) {
-        namedImportMap.set(namedImport.getName(), moduleSpecifier);
+        const localName = namedImport.getAliasNode()?.getText() ?? namedImport.getName();
+        namedImportMap.set(localName, moduleSpecifier);
       }
       const defaultImport = importDecl.getDefaultImport();
       if (defaultImport) {

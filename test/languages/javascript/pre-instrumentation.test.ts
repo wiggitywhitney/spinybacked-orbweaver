@@ -622,6 +622,26 @@ export async function handlerB() {
     });
   });
 
+  describe('M3: aliased import resolution', () => {
+    it('resolves aliased imports by the local alias name, not the exported name', () => {
+      const source = `
+import { summarize as handleSummarize } from './handlers.js';
+
+export async function main() {
+  await handleSummarize();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      const group = result.entryPointSubOperations.find(g => g.entryPointName === 'main');
+      expect(group).toBeDefined();
+      // handleSummarize is the alias used at the call site — must appear as imported
+      expect(group!.importedSubOperations.map(s => s.name)).toContain('handleSummarize');
+      expect(group!.localSubOperations).not.toContain('handleSummarize');
+    });
+  });
+
   describe('hasInstrumentableFunctions', () => {
     it('returns true when there are async entry points', () => {
       const source = `
