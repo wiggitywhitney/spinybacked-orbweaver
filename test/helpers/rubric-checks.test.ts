@@ -310,6 +310,14 @@ op.end();`;
     const result = checkAsyncContext(code);
     expect(result.passed).toBe(true);
   });
+
+  it('flags startSpan on camelCase tracer-like receiver names (otelTracer)', () => {
+    const code = `const span = otelTracer.startSpan('foo');
+span.end();`;
+    const result = checkAsyncContext(code);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('startActiveSpan');
+  });
 });
 
 describe('CDQ-007: checkAttributeSafety', () => {

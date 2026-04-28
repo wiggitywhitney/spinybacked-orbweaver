@@ -364,7 +364,7 @@ export function checkErrorRecording(code: string): RubricCheckResult {
 export function checkAsyncContext(code: string): RubricCheckResult {
   // Flag tracer.startSpan() calls — startActiveSpan is preferred because it
   // automatically manages active span context so child operations are correctly parented.
-  const tracerStartSpanMatches = code.match(/(?:tracer\w*|getTracer\s*\([^)]*\))\s*(?:\.\s*)\s*startSpan\s*\(/g);
+  const tracerStartSpanMatches = code.match(/(?:tracer\w*|getTracer\s*\([^)]*\))\s*(?:\.\s*)\s*startSpan\s*\(/gi);
   if (tracerStartSpanMatches && tracerStartSpanMatches.length > 0) {
     return {
       passed: false,
