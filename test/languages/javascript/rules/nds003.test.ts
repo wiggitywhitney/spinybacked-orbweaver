@@ -279,6 +279,65 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('multi-line Prettier brace style (#649)', () => {
+    it('allows standalone catch (error) { on its own line', () => {
+      const original = [
+        'async function doWork() {',
+        '  return riskyCall();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'async function doWork() {',
+        '  return tracer.startActiveSpan("doWork", async (span) => {',
+        '    try {',
+        '      return riskyCall();',
+        '    }',
+        '    catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error',
+        '    }',
+        '    finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows throw error without trailing semicolon', () => {
+      const original = [
+        'function doWork() {',
+        '  return riskyCall();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      return riskyCall();',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      throw error',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('safe instrumentation-motivated refactors', () => {
     it('allows catch {} to become catch (error) {} for recordException', () => {
       const original = [
