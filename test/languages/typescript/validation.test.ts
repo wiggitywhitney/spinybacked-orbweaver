@@ -2,7 +2,7 @@
 // ABOUTME: Verifies tsconfig-aware moduleResolution substitution (Bundler) and fallback (NodeNext).
 
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { mkdtemp, writeFile, rm, mkdir, unlink } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, mkdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
@@ -202,6 +202,143 @@ describe('checkSyntax — fallback path (no tsconfig)', () => {
     await writeFile(tempFile, 'export const x: number = 1;\n');
 
     const result = checkSyntax(tempFile);
+
+    expect(result.passed).toBe(true);
+    expect(result.ruleId).toBe('NDS-001');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkSyntax — target propagation from tsconfig (#638)
+// ---------------------------------------------------------------------------
+
+describe('checkSyntax — target read from tsconfig', () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('passes when tsconfig sets target ESNext and file uses Array.fromAsync (ES2024)', async () => {
+    // Array.fromAsync is available in ESNext lib but not ES2022.
+    // Without reading target from tsconfig, checkSyntax hardcodes --target ES2022
+    // and reports TS2550. After fix, it reads "target": "ESNext" and passes.
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-esnext-target-'));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        target: 'ESNext',
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+      },
+    }));
+
+    await writeFile(join(tempDir, 'packages.ts'), [
+      'export async function loadPackages(): Promise<number[]> {',
+      '  return Array.fromAsync([1, 2, 3]);',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'packages.ts'));
+
+    expect(result.passed).toBe(true);
+    expect(result.ruleId).toBe('NDS-001');
+  });
+
+  it('reads target through a one-level extends chain', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-esnext-extends-'));
+
+    await writeFile(join(tempDir, 'tsconfig.base.json'), JSON.stringify({
+      compilerOptions: {
+        target: 'ESNext',
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+      },
+    }));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      extends: './tsconfig.base.json',
+    }));
+
+    await writeFile(join(tempDir, 'packages.ts'), [
+      'export async function loadPackages(): Promise<number[]> {',
+      '  return Array.fromAsync([1, 2, 3]);',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'packages.ts'));
+
+    expect(result.passed).toBe(true);
+  });
+
+  it('omits --lib and --types flags when absent from tsconfig (behavior unchanged)', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-no-lib-types-'));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+      },
+    }));
+
+    await writeFile(join(tempDir, 'ok.ts'), 'export const x: number = 1;\n');
+
+    const result = checkSyntax(join(tempDir, 'ok.ts'));
+
+    expect(result.passed).toBe(true);
+    expect(result.ruleId).toBe('NDS-001');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkSyntax — types propagation from tsconfig (#638)
+// ---------------------------------------------------------------------------
+
+describe('checkSyntax — types read from tsconfig', () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('passes for node: protocol imports when tsconfig sets types: ["node"] and @types/node is available', async () => {
+    // node:process imports fail with TS2591 without --types node.
+    // This test symlinks the project @types/node into the temp dir so tsc can find it.
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-types-node-'));
+
+    const projectTypesNode = join(import.meta.dirname, '../../../node_modules/@types/node');
+    await mkdir(join(tempDir, 'node_modules', '@types'), { recursive: true });
+    await symlink(projectTypesNode, join(tempDir, 'node_modules', '@types', 'node'));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        types: ['node'],
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+      },
+    }));
+
+    await writeFile(join(tempDir, 'context.ts'), [
+      'import { env } from "node:process";',
+      'export function getVar(key: string): string | undefined {',
+      '  return env[key];',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'context.ts'));
 
     expect(result.passed).toBe(true);
     expect(result.ruleId).toBe('NDS-001');

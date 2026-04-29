@@ -54,6 +54,9 @@ export function findTsconfig(startDir: string): string | null {
 interface TsConfigModuleOptions {
   module?: string;
   moduleResolution?: string;
+  target?: string;
+  lib?: string[];
+  types?: string[];
 }
 
 /**
@@ -67,18 +70,17 @@ function stripJsonComments(text: string): string {
 }
 
 /**
- * Read the `module` and `moduleResolution` compiler options from a tsconfig.json.
+ * Read compiler options from a tsconfig.json that are relevant to per-file tsc invocations.
  *
- * Only the top-level `compilerOptions` are read; `extends` chains are followed
- * one level to cover the common pattern of a root tsconfig that extends a base.
- * Only filesystem-relative extends paths (e.g., `"./tsconfig.base.json"`) are
- * resolved; npm-package-style references (e.g., `"@tsconfig/node20/tsconfig.json"`)
- * are not resolved and fall back to the child config's own values (or NodeNext
- * defaults if absent).
+ * Reads: `module`, `moduleResolution`, `target`, `lib`, `types`.
+ * `extends` chains are followed one level to cover the common pattern of a root
+ * tsconfig that inherits from a base config. Only filesystem-relative extends paths
+ * (e.g., `"./tsconfig.base.json"`) are resolved; npm-package-style references
+ * (e.g., `"@tsconfig/node20/tsconfig.json"`) fall back to the child config's values.
  * Returns an empty object when the file cannot be read or parsed.
  *
  * @param tsconfigPath - Absolute path to a tsconfig.json file
- * @returns The module and moduleResolution settings found, or empty if absent
+ * @returns Compiler options relevant to per-file tsc checks, or empty if absent
  */
 function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions {
   const readOptions = (path: string): TsConfigModuleOptions & { extendsPath?: string } => {
@@ -89,6 +91,9 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
       return {
         module: typeof co.module === 'string' ? co.module : undefined,
         moduleResolution: typeof co.moduleResolution === 'string' ? co.moduleResolution : undefined,
+        target: typeof co.target === 'string' ? co.target : undefined,
+        lib: Array.isArray(co.lib) ? co.lib.filter((v): v is string => typeof v === 'string') : undefined,
+        types: Array.isArray(co.types) ? co.types.filter((v): v is string => typeof v === 'string') : undefined,
         extendsPath: typeof parsed.extends === 'string'
           ? resolve(dirname(path), parsed.extends.endsWith('.json') ? parsed.extends : `${parsed.extends}.json`)
           : undefined,
@@ -99,18 +104,22 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
   };
 
   const own = readOptions(tsconfigPath);
-  if (own.module && own.moduleResolution) return { module: own.module, moduleResolution: own.moduleResolution };
+  const allPresent = own.module && own.moduleResolution && own.target;
+  if (allPresent) return { module: own.module, moduleResolution: own.moduleResolution, target: own.target, lib: own.lib, types: own.types };
 
-  // Follow `extends` one level to pick up module settings from a base config
+  // Follow `extends` one level to pick up settings from a base config
   if (own.extendsPath) {
     const base = readOptions(own.extendsPath);
     return {
       module: own.module ?? base.module,
       moduleResolution: own.moduleResolution ?? base.moduleResolution,
+      target: own.target ?? base.target,
+      lib: own.lib ?? base.lib,
+      types: own.types ?? base.types,
     };
   }
 
-  return { module: own.module, moduleResolution: own.moduleResolution };
+  return { module: own.module, moduleResolution: own.moduleResolution, target: own.target, lib: own.lib, types: own.types };
 }
 
 // ─── tsc version detection ────────────────────────────────────────────────────
@@ -165,13 +174,14 @@ function parseTscLineNumber(output: string): number | null {
  * Run `tsc --noEmit` on a TypeScript file to validate syntax and types.
  *
  * When a `tsconfig.json` is found by walking up from the file's directory, its
- * `module` and `moduleResolution` settings are read and substituted into the
- * per-flag tsc invocation. This prevents false positives on projects using
- * `moduleResolution: Bundler` (e.g., taze, Vite-based tools) where extensionless
- * relative imports are valid but would fail under the hardcoded NodeNext default.
+ * `module`, `moduleResolution`, `target`, `lib`, and `types` settings are read
+ * and substituted into the per-flag tsc invocation. This prevents false positives
+ * on projects using non-standard compiler options — for example:
+ * - `moduleResolution: Bundler` (taze, Vite-based tools) requires extensionless imports
+ * - `target: ESNext` makes APIs like `Array.fromAsync` available
+ * - `types: ["node"]` makes `node:*` protocol imports resolvable
  *
- * Only `module` and `moduleResolution` are read from the project tsconfig;
- * other project-specific settings (verbatimModuleSyntax, erasableSyntaxOnly,
+ * Other project-specific settings (verbatimModuleSyntax, erasableSyntaxOnly,
  * rootDir, etc.) are intentionally not inherited so the check stays focused on
  * the structural correctness of the instrumented output.
  *
@@ -188,6 +198,7 @@ export function checkSyntax(filePath: string): CheckResult {
   const moduleOpts = tsconfig ? readTsConfigModuleOptions(tsconfig) : {};
   const moduleFlag = moduleOpts.module ?? 'NodeNext';
   const moduleResolutionFlag = moduleOpts.moduleResolution ?? 'NodeNext';
+  const targetFlag = moduleOpts.target ?? 'ES2022';
 
   try {
     execFileSync(
@@ -200,7 +211,9 @@ export function checkSyntax(filePath: string): CheckResult {
         ...getTscMajorVersion(tsc) >= 6 ? ['--ignoreConfig'] : [],
         '--module', moduleFlag,
         '--moduleResolution', moduleResolutionFlag,
-        '--target', 'ES2022',
+        '--target', targetFlag,
+        ...moduleOpts.lib ? ['--lib', moduleOpts.lib.join(',')] : [],
+        ...moduleOpts.types ? ['--types', moduleOpts.types.join(',')] : [],
         '--jsx', 'preserve',
         filePath,
       ],

@@ -611,6 +611,101 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('aggregation variable capture for setAttribute (#639)', () => {
+    it('allows const capture used solely as the argument to span.setAttribute', () => {
+      const original = [
+        'function checkGlobal(resolvePkgs) {',
+        '  return tracer.startActiveSpan("checkGlobal", (span) => {',
+        '    doWork(resolvePkgs);',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function checkGlobal(resolvePkgs) {',
+        '  return tracer.startActiveSpan("checkGlobal", (span) => {',
+        '    const packagesTotal = resolvePkgs.reduce((acc, pkg) => acc + pkg.deps.length, 0);',
+        '    span.setAttribute("taze.check.packages_total", packagesTotal);',
+        '    doWork(resolvePkgs);',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows capture and setAttribute separated by other instrumentation lines', () => {
+      const original = [
+        'function check(items) {',
+        '  process(items);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function check(items) {',
+        '  return tracer.startActiveSpan("check", (span) => {',
+        '    try {',
+        '      const total = items.length;',
+        '      span.setAttribute("check.total", total);',
+        '      process(items);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still flags a capture variable that is also passed to a non-setAttribute call', () => {
+      const original = [
+        'function doWork() {',
+        '  process();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  const extra = computeExtra();',
+        '  span.setAttribute("key", extra);',
+        '  console.log(extra);',
+        '  process();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      // extra appears 3 times (capture + setAttribute + console.log) so totalUses !== 2
+      expect(failures.length).toBeGreaterThan(0);
+    });
+
+    it('still flags a capture variable that appears more than once in added lines', () => {
+      const original = [
+        'function doWork() {',
+        '  process();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  const total = getTotal();',
+        '  span.setAttribute("total", total);',
+        '  console.log(total);',
+        '  process();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('known limitations', () => {
     it('truthy property guard wrapping business logic is not detected (accepted trade-off)', () => {
       // Same trade-off as the undefined guard: if (obj.prop) { businessLogic() } passes
