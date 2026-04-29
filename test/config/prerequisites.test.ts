@@ -15,15 +15,34 @@ import {
 } from '../../src/config/prerequisites.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 
+vi.mock('../../src/coordinator/dispatch.ts', () => ({
+  resolveSchema: vi.fn(),
+}));
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, execFileSync: vi.fn() };
+});
+
+import { resolveSchema } from '../../src/coordinator/dispatch.ts';
+import { execFileSync } from 'node:child_process';
+
 let testDir: string;
 
 beforeEach(() => {
   testDir = join(tmpdir(), `spiny-orb-prereq-test-${Date.now()}`);
   mkdirSync(testDir, { recursive: true });
+  // Default: weaver check succeeds and schema has at least one attribute.
+  // Individual tests override these as needed.
+  vi.mocked(execFileSync).mockReturnValue(Buffer.from(''));
+  vi.mocked(resolveSchema).mockResolvedValue({
+    groups: [{ id: 'default.group', type: 'attribute_group', attributes: [{ name: 'default.attr', type: 'string' }] }],
+  });
 });
 
 afterEach(() => {
   rmSync(testDir, { recursive: true, force: true });
+  vi.resetAllMocks();
 });
 
 function writeFile(relativePath: string, content: string): string {
@@ -217,6 +236,37 @@ describe('checkWeaverSchema', () => {
     if (!result.passed) {
       expect(result.message).toMatch(/Weaver CLI not found|Weaver schema validation failed/);
     }
+  });
+
+  describe('empty schema gate', () => {
+    beforeEach(() => {
+      mkdirSync(join(testDir, 'telemetry', 'registry'), { recursive: true });
+    });
+
+    it('fails with a clear error when schema has zero registered attributes', async () => {
+      vi.mocked(resolveSchema).mockResolvedValue({ groups: [] });
+
+      const result = await checkWeaverSchema(testDir, './telemetry/registry');
+
+      expect(result.passed).toBe(false);
+      expect(result.id).toBe('WEAVER_SCHEMA');
+      expect(result.message).toContain('No registered attributes found');
+      expect(result.message).toContain('opentelemetry.io/docs/specs/semconv');
+    });
+
+    it('passes when schema has at least one registered attribute', async () => {
+      vi.mocked(resolveSchema).mockResolvedValue({
+        groups: [{
+          id: 'test.group',
+          type: 'attribute_group',
+          attributes: [{ name: 'test.attr', type: 'string' }],
+        }],
+      });
+
+      const result = await checkWeaverSchema(testDir, './telemetry/registry');
+
+      expect(result.passed).toBe(true);
+    });
   });
 });
 

@@ -5,6 +5,8 @@ import { readFile, access } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import type { AgentConfig } from './schema.ts';
+import { resolveSchema } from '../coordinator/dispatch.ts';
+import { parseResolvedRegistry, getAllAttributeNames } from '../validation/tier2/registry-types.ts';
 
 /** Check whether a resolved path stays within the project root. */
 function isWithinProject(fullPath: string, projectRoot: string): boolean {
@@ -224,6 +226,24 @@ async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promi
       passed: false,
       message: `Weaver schema validation failed at ${fullPath}: ${stderr}`,
     };
+  }
+
+  // Verify the schema has at least one registered attribute.
+  // An empty schema means the agent has no naming patterns to follow.
+  try {
+    const rawSchema = await resolveSchema(projectRoot, schemaPath);
+    const registry = parseResolvedRegistry(rawSchema);
+    const attributeNames = getAllAttributeNames(registry);
+    if (attributeNames.size === 0) {
+      return {
+        id: PREREQUISITE_IDS.WEAVER_SCHEMA,
+        passed: false,
+        message: `No registered attributes found in schema at \`${fullPath}\`. The agent has no naming patterns to follow and cannot run. Add OTel semantic conventions as a Weaver registry dependency: https://opentelemetry.io/docs/specs/semconv/`,
+      };
+    }
+  } catch {
+    // If resolution fails after check passes, allow the run to proceed.
+    // The weaver registry check already validated structural correctness.
   }
 
   return {
