@@ -15,7 +15,7 @@ export interface CheckResult {
    *
    * Tier 1: "ELISION", "NDS-001" (syntax), "LINT", "WEAVER"
    * Tier 2 — Coverage: "COV-001" through "COV-006"
-   * Tier 2 — Quality: "CDQ-001", "CDQ-006", "CDQ-011"
+   * Tier 2 — Quality: "CDQ-001", "CDQ-005", "CDQ-006", "CDQ-007", "CDQ-009", "CDQ-010", "CDQ-011"
    * Tier 2 — Restraint: "RST-001" through "RST-005"
    * Tier 2 — Non-destructive: "NDS-003" through "NDS-006"
    * Tier 2 — API: "API-001" through "API-004"

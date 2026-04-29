@@ -509,7 +509,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Scope** | Per-file |
 | **Impact** | Normal |
 | **Classification** | Automatable |
-| **Mechanism** | Regex: find all `trace.getTracer('name')` or `trace.getTracer("name")` string-literal calls. Verify each matches the project's canonical tracer name (from `tracerName` in `orb.yaml`, or from the Weaver registry manifest `name` field normalized to hyphens). Variable-based and template-literal `getTracer()` calls are a known limitation; only string literals are checked. |
+| **Mechanism** | Regex: find all `trace.getTracer('name')`, `trace.getTracer("name")`, or `` trace.getTracer(`name`) `` string-literal calls. Verify each matches the project's canonical tracer name (from `tracerName` in `orb.yaml`, or from the Weaver registry manifest `name` field normalized to hyphens). Variable-based calls and interpolated template literals (e.g., `` `svc-${env}` ``) are a known limitation — they are not checked. |
 | **Rationale** | Replaces CDQ-008 (deleted in PRD #505). CDQ-008 fired post-run and could not fix the inconsistency it detected. CDQ-011 verifies each file individually after the coordinator has injected the canonical name into the instrumentation prompt — giving the fix loop an opportunity to correct any mismatch before the file is committed. |
 
 ---

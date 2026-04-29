@@ -26,8 +26,9 @@ export function checkCanonicalTracerName(
 
   // Match trace.getTracer('name'), trace.getTracer("name"), or trace.getTracer(`name`) — captures
   // the string literal content. Requires the `trace` receiver to avoid false positives on unrelated
-  // getTracer() methods. Template literals with interpolations are not matched (known limitation).
-  const pattern = /\btrace\s*\.\s*getTracer\s*\(\s*(?:(["'])([^"'\n]*)\1|`([^`\n]*)`)/g;
+  // getTracer() methods. The backtick group excludes `$` to avoid matching interpolated template
+  // literals like `svc-${env}` — those are treated as variable-based (graceful pass, not fail).
+  const pattern = /\btrace\s*\.\s*getTracer\s*\(\s*(?:(["'])([^"'\n]*)\1|`([^`\n$]*)`)/g;
 
   let match;
   while ((match = pattern.exec(code)) !== null) {

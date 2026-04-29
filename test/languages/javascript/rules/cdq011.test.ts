@@ -56,6 +56,19 @@ describe('checkCanonicalTracerName (CDQ-011)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when getTracer uses an interpolated template literal (treated as variable-based)', () => {
+      // Interpolated template literals are excluded from the check — they contain `$`
+      // and therefore match no canonical name, but the graceful pass applies
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer(`svc-${env}`);',
+      ].join('\n');
+
+      const results = checkCanonicalTracerName(code, filePath, canonical);
+      // Should pass — interpolated template literals are not checked (treated as variable-based)
+      expect(results[0].passed).toBe(true);
+    });
+
     it('passes when getTracer is called on an unrelated object (not trace)', () => {
       const code = [
         "import { trace } from '@opentelemetry/api';",

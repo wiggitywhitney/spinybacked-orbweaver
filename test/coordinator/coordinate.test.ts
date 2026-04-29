@@ -298,8 +298,9 @@ describe('coordinate', () => {
 
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
-      expect(result.warnings.some(w => w.includes('Canonical tracer name resolution failed'))).toBe(true);
-      expect(result.warnings.some(w => w.includes('missing manifest'))).toBe(true);
+      const tracerWarning = result.warnings.find(w => w.includes('Canonical tracer name resolution failed'));
+      expect(tracerWarning).toBeDefined();
+      expect(tracerWarning).toContain('missing manifest');
       // Run should still complete — degraded, not aborted
       expect(result.filesSucceeded).toBeGreaterThan(0);
     });
