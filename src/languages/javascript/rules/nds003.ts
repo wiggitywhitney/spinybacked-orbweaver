@@ -28,7 +28,9 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // These appear when the agent wraps code in try/catch/finally for span lifecycle
   /^\s*try\s*\{\s*$/,
   /^\s*\}\s*catch\s*\([^)]*\)\s*\{\s*$/,
+  /^\s*catch\s*\([^)]*\)\s*\{\s*$/,   // standalone catch when } is on the previous line (Prettier style)
   /^\s*\}\s*finally\s*\{\s*$/,
+  /^\s*finally\s*\{\s*$/,              // standalone finally when } is on the previous line (Prettier style)
   /^\s*\}\s*$/,                 // standalone closing brace
   /^\s*\);?\s*$/,               // standalone closing paren with optional semicolon
   /^\s*\}\);?\s*$/,             // standalone closing brace+paren (end of callback)
@@ -55,7 +57,7 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // (enabled by `useUnknownInCatchVariables` in strict mode) and wraps `span.recordException`.
   /^\s*if\s*\(\s*\w+\s+instanceof\s+Error\s*\)\s*\{?\s*$/,
   // Re-throw of caught exception (after recording exception on span)
-  /^\s*throw\s+(?:err|error|e|ex|exception)\s*;/,
+  /^\s*throw\s+(?:err|error|e|ex|exception)\s*;?\s*$/,
   // Return with span wrapper
   /^\s*return\s+tracer\./,
   /^\s*return\s+(?:span|otelSpan)\./,
