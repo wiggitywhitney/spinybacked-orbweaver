@@ -61,7 +61,7 @@ Add setup guidance in `spiny-orb init` and the README: recommend considering OTe
 
 - [x] **M5 — Acceptance tests**: Add two test cases to `test/acceptance-gate.test.ts` (the P1 file — covers single-file instrumentation). Use `test/fixtures/weaver-registry/` as the reference format for fixture registry structure. Test A (registry-first selection): create a fixture registry containing `dd.http.request.method` as a registered attribute; instrument a fixture JS file that makes an HTTP call; assert that the `schemaExtensions` array in the result is empty (agent used the registry key, didn't invent) and that the instrumented file contains `setAttribute('dd.http.request.method'` — not `setAttribute('http.request.method'`. Test B (pattern-consistent invention): create a fixture registry with only `dd.*`-prefixed attributes and no HTTP-related attribute; instrument a fixture JS file that makes an HTTP call; assert that any entry in `schemaExtensions` starts with `dd.` — not `http.` or any other non-`dd` prefix. Follow the existing test structure and fixture patterns in the acceptance gate file for both setup and teardown.
 
-- [ ] **M6 — Update PROGRESS.md**
+- [x] **M6 — Update PROGRESS.md**
 
 ---
 
