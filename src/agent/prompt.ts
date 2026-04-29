@@ -144,9 +144,10 @@ Functions that already contain \`tracer.startActiveSpan\`, \`tracer.startSpan\`,
 
 When adding span attributes, you MUST exhaust registered keys before inventing new ones. Unregistered attribute keys reduce schema fidelity and make telemetry difficult to query consistently.
 
-1. **OTel semantic conventions first**: Use a matching convention if one exists (e.g., \`http.method\`, \`db.statement\`)
-2. **Weaver schema attributes second**: Check ALL registered attribute keys in the schema for semantic equivalence — not just exact name matches. A registered key that captures the same concept under a different name is the correct choice.
-3. **Invent only as a last resort**: Create new custom attributes under the project namespace prefix ONLY when no registered key fits. In \`schemaExtensions\`, include a rationale for why no existing key matched — this helps humans review and promote useful extensions into the registry.
+1. **Check the registry for semantic equivalents**: Check ALL registered attribute keys in the schema for semantic equivalence — not just exact name matches. A registered key that captures the same concept under a different name is the correct choice. (The registry already includes any OTel semantic conventions the org has imported as a registry dependency — checking the registry handles both org-specific and OTel-standard attributes in one pass.)
+2. **Invent only as a last resort**: If no registered key is a semantic match, invent a new attribute using the naming patterns already present in the registry. Derive the attribute namespace from the first segment of existing registered attribute names (e.g., if registered attributes are \`dd.http.request.method\` and \`dd.db.query.text\`, the namespace is \`dd\`) — exactly as span naming derives namespace from the first segment of existing span names. Match the casing convention and structural patterns of existing registered attribute names so invented attributes are stylistically consistent with the registry. In \`schemaExtensions\`, include a rationale for why no existing key was a semantic match — this helps humans review and promote useful extensions into the registry.
+
+Do NOT apply OTel semantic convention attribute names from training data that are not present in the resolved registry schema passed in context. The registry is the only source of truth.
 ${attributeNames.length > 0 ? `
 **Registered attribute keys from this project's schema** (prefer these — unregistered keys trigger SCH-002 rejection unless reported as a schemaExtension):
 ${attributeNames.map(n => `\`${n}\``).join(', ')}

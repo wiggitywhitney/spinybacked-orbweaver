@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- (2026-04-29) Fixed the agent's attribute priority ordering. Previously the agent was instructed to check OTel semantic conventions (from training data) before the Weaver registry when selecting attribute keys. This was backwards: the registry is the project's source of truth and already includes any OTel conventions the org has imported as a dependency. The new ordering checks the registry first for semantic equivalents, then invents a new attribute using the naming patterns already present in registered attribute names (namespace prefix, casing, structural conventions) as a last resort. An explicit negative constraint was added: the agent must not apply OTel attribute names from training data that are absent from the registry. This prevents the agent from bypassing an org's deliberate schema decisions and reduces SCH-002 violations caused by OTel-vs-registry naming divergence.
+
 ### Added
 
 - (2026-04-28) Updated user-facing documentation for the canonical tracer name feature. The `tracerName` field is now documented in the Configuration Reference table in README with its default derivation logic (Weaver registry manifest `name`, underscores to hyphens) and its known limitation (variable-based `trace.getTracer()` calls are not validated). `docs/rules-reference.md` now lists CDQ-011 in the Tier 2 blocking Code Quality table, removes CDQ-008 from the active run-level rules table (replaced by the new blocking check), and notes CDQ-008 as deleted in the structural changes changelog.
