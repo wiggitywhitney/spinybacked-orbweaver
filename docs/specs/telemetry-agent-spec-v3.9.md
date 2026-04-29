@@ -741,9 +741,8 @@ groups:
 
 When agent needs an attribute:
 
-1. **Check OTel semantic conventions** — use semconv reference if exists
-2. **Check existing Weaver schema** — use if already defined
-3. **Neither exists** — create new custom attribute under project namespace
+1. **Check the Weaver registry for semantic equivalents** — the registry already includes any OTel semantic conventions the org has imported as a dependency. Check all registered attribute keys for semantic equivalence, not just exact name matches. Do NOT apply OTel attribute names from training data that are absent from the resolved registry schema.
+2. **Invent using registry patterns** — if no registered key is a semantic match, invent a new attribute using the naming patterns already present in the registry: derive the namespace from the first segment of existing registered attribute names, match casing conventions and structural patterns.
 
 **Agent has full authority to extend schema** (create spans, attributes, groups) — within the guardrails below.
 

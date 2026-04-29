@@ -219,7 +219,8 @@ module.exports = { fetchProduct };
 
       const output = result.output;
       expect(output.schemaExtensions).toEqual([]);
-      expect(output.instrumentedCode).toContain("setAttribute('dd.http.request.method'");
+      // Accept both single and double quotes around the attribute key
+      expect(output.instrumentedCode).toMatch(/setAttribute\(['"]dd\.http\.request\.method['"]/)
     });
 
     it('Test B: agent invents attributes with dd. namespace when only dd.* attributes exist in registry', { timeout: 240_000 }, async () => {
@@ -254,6 +255,8 @@ module.exports = { fetchProduct };
       // Any attribute extensions (schemaExtensions entries not starting with 'span.')
       // must start with 'dd.' — matching the registry's established namespace.
       const attributeExtensions = output.schemaExtensions.filter(e => !e.startsWith('span.'));
+      // At least one attribute must be invented (otherwise the test verifies nothing)
+      expect(attributeExtensions.length, 'Agent should invent at least one attribute for the HTTP call').toBeGreaterThan(0);
       for (const ext of attributeExtensions) {
         expect(ext, `Attribute extension '${ext}' should start with 'dd.' to match registry namespace`).toMatch(/^dd\./);
       }

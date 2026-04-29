@@ -254,6 +254,15 @@ describe('checkWeaverSchema', () => {
       expect(result.message).toContain('opentelemetry.io/docs/specs/semconv');
     });
 
+    it('passes when resolveSchema throws after weaver check succeeds (catch path)', async () => {
+      vi.mocked(resolveSchema).mockRejectedValue(new Error('resolve failure'));
+
+      const result = await checkWeaverSchema(testDir, './telemetry/registry');
+
+      expect(result.passed).toBe(true);
+      expect(result.id).toBe('WEAVER_SCHEMA');
+    });
+
     it('passes when schema has at least one registered attribute', async () => {
       vi.mocked(resolveSchema).mockResolvedValue({
         groups: [{

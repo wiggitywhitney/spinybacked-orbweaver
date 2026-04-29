@@ -4,9 +4,11 @@
 **Last Updated:** 2026-04-29
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-04-29 | Initial research — OD-1 for PRD #581 M2 |
+
 
 ## Findings
 
