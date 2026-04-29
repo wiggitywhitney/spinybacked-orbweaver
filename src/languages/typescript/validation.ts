@@ -216,11 +216,13 @@ export function checkSyntax(filePath: string): CheckResult {
   const moduleResolutionFlag = moduleOpts.moduleResolution ?? 'NodeNext';
   const targetFlag = moduleOpts.target ?? 'ES2022';
 
-  // Auto-detect @types/node: many Node.js projects have it installed but don't declare
-  // "types": ["node"] in tsconfig (TypeScript auto-discovers it in full-project mode).
-  // Mirror that discovery here so node:* imports work in per-file mode.
-  const typesFlags = moduleOpts.types ? [...moduleOpts.types] : [];
-  if (tsconfig && !typesFlags.includes('node')) {
+  // Auto-detect @types/node only when `types` is absent from tsconfig.
+  // When `types` is explicitly set, the project is intentionally restricting which
+  // @types packages are loaded — do not override that intent. When absent, TypeScript
+  // normally auto-discovers all installed @types; mirror that for node:* imports.
+  const explicitTypes = moduleOpts.types;
+  const typesFlags = explicitTypes ? [...explicitTypes] : [];
+  if (tsconfig && explicitTypes === undefined) {
     const nodeTypesPath = join(dirname(tsconfig), 'node_modules', '@types', 'node');
     if (existsSync(nodeTypesPath)) typesFlags.push('node');
   }
