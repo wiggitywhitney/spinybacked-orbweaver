@@ -33,12 +33,17 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   /^\s*\);?\s*$/,               // standalone closing paren with optional semicolon
   /^\s*\}\);?\s*$/,             // standalone closing brace+paren (end of callback)
   // Defined-value guards wrapping setAttribute calls (CDQ-007 compliance).
-  // Matches: if (x !== undefined) {, if (x != null) {, if (typeof x !== 'undefined') {
+  // Matches single-condition form: if (x !== undefined) {, if (x != null) {, if (typeof x !== 'undefined') {
   // Trade-off: this also filters guards wrapping business logic, which is a known
   // limitation. The agent only generates these guards around span.setAttribute() calls,
   // so false negatives from guard-wrapped business logic don't arise in practice.
   // The same trade-off exists for standalone `}` (line 31) — accepted since v1.
   /^\s*if\s*\(\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*\)\s*\{?\s*$/,
+  // Compound AND null guards: if (a != null && b.c !== undefined) { — two conditions.
+  // Required when the agent guards both a parent object and a nested property to satisfy
+  // TypeScript strict null checks before span.setAttribute (e.g. run-6 taze src/api/check.ts).
+  // Same accepted trade-off as the single-condition form above.
+  /^\s*if\s*\(\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*&&\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*\)\s*\{?\s*$/,
   // Truthy property-access guards wrapping setAttribute calls (#388).
   // Matches: if (context.chat) {, if (result.data) {, etc.
   // Requires at least one dot dereference to avoid matching bare identifier

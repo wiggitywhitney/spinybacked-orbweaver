@@ -248,12 +248,80 @@ describe('checkSyntax — target read from tsconfig', () => {
     expect(result.ruleId).toBe('NDS-001');
   });
 
-  it('reads lib/types from base config when child defines target/module/moduleResolution', async () => {
+  it('passes when project tsconfig sets lib: ["ESNext"] and file uses console.log (no false TS2584)', async () => {
+    // Regression for #640 lib propagation: passing --lib ESNext to tsc removed DOM, stripping console.
+    // After fix (stop lib propagation), tsc uses default lib for target which includes DOM.
+    // @types/node is symlinked so console is available even when DOM is not (belt-and-suspenders).
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-lib-console-'));
+
+    const projectTypesNode = join(import.meta.dirname, '../../../node_modules/@types/node');
+    await mkdir(join(tempDir, 'node_modules', '@types'), { recursive: true });
+    await symlink(projectTypesNode, join(tempDir, 'node_modules', '@types', 'node'));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        target: 'ESNext',
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        lib: ['ESNext'],
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+      },
+    }));
+
+    await writeFile(join(tempDir, 'vscode.ts'), [
+      'export function log(msg: string): void {',
+      '  // eslint-disable-next-line no-console',
+      '  console.log(msg);',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'vscode.ts'));
+
+    expect(result.passed).toBe(true);
+    expect(result.ruleId).toBe('NDS-001');
+  });
+
+  it('passes for node: imports when @types/node is installed but not declared in tsconfig types', async () => {
+    // Regression for Finding D: taze has no "types" field in tsconfig but has @types/node installed.
+    // After fix (auto-detect @types/node when present in node_modules), node: imports resolve.
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-auto-node-'));
+
+    const projectTypesNode = join(import.meta.dirname, '../../../node_modules/@types/node');
+    await mkdir(join(tempDir, 'node_modules', '@types'), { recursive: true });
+    await symlink(projectTypesNode, join(tempDir, 'node_modules', '@types', 'node'));
+
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: {
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+        // No "types" field — auto-detection expected
+      },
+    }));
+
+    await writeFile(join(tempDir, 'context.ts'), [
+      'import { env } from "node:process";',
+      'export function getVar(key: string): string | undefined {',
+      '  return env[key];',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'context.ts'));
+
+    expect(result.passed).toBe(true);
+    expect(result.ruleId).toBe('NDS-001');
+  });
+
+  it('reads types from base config when child defines target/module/moduleResolution', async () => {
     // Regression for early-return short-circuit: if child has module+moduleResolution+target
-    // the old code returned before reading the base, dropping inherited lib/types.
+    // the old code returned before reading the base, dropping inherited types.
     tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-mixed-extends-'));
 
-    // Base defines lib (ESNext) and types (node)
+    // Base defines types (node)
     const projectTypesNode = join(import.meta.dirname, '../../../node_modules/@types/node');
     await mkdir(join(tempDir, 'node_modules', '@types'), { recursive: true });
     await symlink(projectTypesNode, join(tempDir, 'node_modules', '@types', 'node'));
@@ -316,8 +384,8 @@ describe('checkSyntax — target read from tsconfig', () => {
     expect(result.passed).toBe(true);
   });
 
-  it('omits --lib and --types flags when absent from tsconfig (behavior unchanged)', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-no-lib-types-'));
+  it('omits --types flag when absent from tsconfig (behavior unchanged)', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-no-types-'));
 
     await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
       compilerOptions: {
