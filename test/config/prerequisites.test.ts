@@ -228,14 +228,18 @@ describe('checkWeaverSchema', () => {
   });
 
   it('reports when weaver CLI is not installed', async () => {
-    // Create schema directory but weaver CLI won't be available in test env
     mkdirSync(join(testDir, 'telemetry', 'registry'), { recursive: true });
+    // Explicitly simulate ENOENT so this test always covers the not-installed path
+    vi.mocked(execFileSync).mockImplementationOnce(() => {
+      const err = Object.assign(new Error('spawn weaver ENOENT'), { code: 'ENOENT' });
+      throw err;
+    });
+
     const result = await checkWeaverSchema(testDir, './telemetry/registry');
+
     expect(result.id).toBe('WEAVER_SCHEMA');
-    // Either weaver is installed (passes) or not (ENOENT message)
-    if (!result.passed) {
-      expect(result.message).toMatch(/Weaver CLI not found|Weaver schema validation failed/);
-    }
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('Weaver CLI not found');
   });
 
   describe('empty schema gate', () => {
