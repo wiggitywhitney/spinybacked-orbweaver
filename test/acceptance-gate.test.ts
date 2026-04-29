@@ -174,6 +174,92 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
     });
   });
 
+  describe('registry-first attribute selection (PRD #581)', () => {
+    // Fixture: async function that makes an HTTP fetch call. No OTel imports.
+    const httpFixture = `
+async function fetchProduct(productId, method) {
+  const response = await fetch(\`https://api.store.com/products/\${productId}\`, {
+    method: method || 'GET',
+  });
+  const statusCode = response.status;
+  const data = await response.json();
+  return { data, statusCode };
+}
+
+module.exports = { fetchProduct };
+`.trimStart();
+
+    it('Test A: agent uses registry attribute dd.http.request.method instead of inventing', { timeout: 240_000 }, async () => {
+      // Schema contains dd.http.request.method and a span definition covering HTTP calls.
+      // Agent should select the registered key and produce zero schema extensions.
+      const schemaA = {
+        groups: [
+          {
+            id: 'span.dd.http.client',
+            type: 'span',
+            brief: 'Outbound HTTP client request',
+            attributes: [
+              { name: 'dd.http.request.method', type: 'string', brief: 'HTTP method used for the request (GET, POST, etc.)' },
+              { name: 'dd.http.response.status_code', type: 'int', brief: 'HTTP response status code' },
+            ],
+          },
+        ],
+      };
+
+      const result = await instrumentFile(
+        '/project/src/fetch-product.js',
+        httpFixture,
+        schemaA,
+        makeConfig(),
+        new JavaScriptProvider(),
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error(`instrumentFile failed: ${result.error}`);
+
+      const output = result.output;
+      expect(output.schemaExtensions).toEqual([]);
+      expect(output.instrumentedCode).toContain("setAttribute('dd.http.request.method'");
+    });
+
+    it('Test B: agent invents attributes with dd. namespace when only dd.* attributes exist in registry', { timeout: 240_000 }, async () => {
+      // Schema has only dd.* attributes, no HTTP-specific one.
+      // Agent must invent an HTTP attribute — it must start with dd.
+      const schemaB = {
+        groups: [
+          {
+            id: 'dd.service',
+            type: 'attribute_group',
+            brief: 'Service identity attributes',
+            attributes: [
+              { name: 'dd.service.name', type: 'string', brief: 'Name of the service' },
+              { name: 'dd.service.version', type: 'string', brief: 'Version of the service' },
+            ],
+          },
+        ],
+      };
+
+      const result = await instrumentFile(
+        '/project/src/fetch-product.js',
+        httpFixture,
+        schemaB,
+        makeConfig(),
+        new JavaScriptProvider(),
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) throw new Error(`instrumentFile failed: ${result.error}`);
+
+      const output = result.output;
+      // Any attribute extensions (schemaExtensions entries not starting with 'span.')
+      // must start with 'dd.' — matching the registry's established namespace.
+      const attributeExtensions = output.schemaExtensions.filter(e => !e.startsWith('span.'));
+      for (const ext of attributeExtensions) {
+        expect(ext, `Attribute extension '${ext}' should start with 'dd.' to match registry namespace`).toMatch(/^dd\./);
+      }
+    });
+  });
+
   describe('already-instrumented.js — RST-005', () => {
     it('detects existing instrumentation and skips without LLM call', async () => {
       const original = loadFixture('src/already-instrumented.js');
