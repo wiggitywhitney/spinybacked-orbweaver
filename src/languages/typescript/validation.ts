@@ -82,6 +82,13 @@ function stripJsonComments(text: string): string {
  * @param tsconfigPath - Absolute path to a tsconfig.json file
  * @returns Compiler options relevant to per-file tsc checks, or empty if absent
  */
+/** Return a non-empty string array from a tsconfig value, or undefined if empty/absent. */
+function toStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const filtered = value.filter((v): v is string => typeof v === 'string');
+  return filtered.length > 0 ? filtered : undefined;
+}
+
 function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions {
   const readOptions = (path: string): TsConfigModuleOptions & { extendsPath?: string } => {
     try {
@@ -92,8 +99,8 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
         module: typeof co.module === 'string' ? co.module : undefined,
         moduleResolution: typeof co.moduleResolution === 'string' ? co.moduleResolution : undefined,
         target: typeof co.target === 'string' ? co.target : undefined,
-        lib: Array.isArray(co.lib) ? co.lib.filter((v): v is string => typeof v === 'string') : undefined,
-        types: Array.isArray(co.types) ? co.types.filter((v): v is string => typeof v === 'string') : undefined,
+        lib: toStringArray(co.lib),
+        types: toStringArray(co.types),
         extendsPath: typeof parsed.extends === 'string'
           ? resolve(dirname(path), parsed.extends.endsWith('.json') ? parsed.extends : `${parsed.extends}.json`)
           : undefined,
@@ -104,10 +111,10 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
   };
 
   const own = readOptions(tsconfigPath);
-  const allPresent = own.module && own.moduleResolution && own.target;
-  if (allPresent) return { module: own.module, moduleResolution: own.moduleResolution, target: own.target, lib: own.lib, types: own.types };
 
-  // Follow `extends` one level to pick up settings from a base config
+  // Follow `extends` one level to pick up settings from a base config.
+  // Always resolve the base when present — even if the child defines all scalar
+  // options — so that lib/types declared only in the base are not dropped.
   if (own.extendsPath) {
     const base = readOptions(own.extendsPath);
     return {

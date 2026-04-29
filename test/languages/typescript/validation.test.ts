@@ -248,6 +248,45 @@ describe('checkSyntax — target read from tsconfig', () => {
     expect(result.ruleId).toBe('NDS-001');
   });
 
+  it('reads lib/types from base config when child defines target/module/moduleResolution', async () => {
+    // Regression for early-return short-circuit: if child has module+moduleResolution+target
+    // the old code returned before reading the base, dropping inherited lib/types.
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-mixed-extends-'));
+
+    // Base defines lib (ESNext) and types (node)
+    const projectTypesNode = join(import.meta.dirname, '../../../node_modules/@types/node');
+    await mkdir(join(tempDir, 'node_modules', '@types'), { recursive: true });
+    await symlink(projectTypesNode, join(tempDir, 'node_modules', '@types', 'node'));
+
+    await writeFile(join(tempDir, 'tsconfig.base.json'), JSON.stringify({
+      compilerOptions: { types: ['node'] },
+    }));
+
+    // Child defines target/module/moduleResolution but not types
+    await writeFile(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      extends: './tsconfig.base.json',
+      compilerOptions: {
+        target: 'ESNext',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        strict: true,
+        noEmit: true,
+        skipLibCheck: true,
+      },
+    }));
+
+    await writeFile(join(tempDir, 'context.ts'), [
+      'import { env } from "node:process";',
+      'export function getVar(key: string): string | undefined {',
+      '  return env[key];',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'context.ts'));
+
+    expect(result.passed).toBe(true);
+  });
+
   it('reads target through a one-level extends chain', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-esnext-extends-'));
 
