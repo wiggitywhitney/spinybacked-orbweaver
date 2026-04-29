@@ -109,7 +109,7 @@ The phase definition lists rubric rule IDs (e.g., NDS-001, CDQ-003). Look up eac
 | Restraint | ~line 282 | RST-001 through RST-005 |
 | API-Only Dependency | ~line 337 | API-002, API-003, API-004 |
 | Schema Fidelity | ~line 374 | SCH-001 through SCH-004 |
-| Code Quality | ~line 422 | CDQ-001 through CDQ-008 |
+| Code Quality | ~line 422 | CDQ-001 through CDQ-007, CDQ-009, CDQ-010, CDQ-011 |
 
 For each rule, extract: Rule ID, name, impact level, evaluation scope, full description including evaluation method, and automation classification (summary at ~line 514).
 

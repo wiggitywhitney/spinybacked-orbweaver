@@ -41,7 +41,7 @@ The agent gets real-time feedback and retries on violations. These are the rules
 | CDQ-001 | Spans Closed in All Code Paths | Code Quality | |
 | CDQ-005 | startActiveSpan Preferred | Code Quality | |
 | CDQ-006 | Expensive Attribute Computation Guarded | Code Quality | |
-| CDQ-008 | Consistent Tracer Naming Convention | Code Quality | |
+| CDQ-011 | Canonical Tracer Name | Code Quality | |
 
 **28 rules** with automated validators.
 
@@ -130,7 +130,7 @@ The evaluation framework — how rules are **structured**, not what they **check
 - **COV (6 rules)**: Coverage decisions are original. IS doesn't evaluate whether the right code paths were instrumented.
 - **API (4 rules)**: Dependency model is original. IS doesn't check package.json.
 - **SCH-002, SCH-003, SCH-004**: Schema attribute compliance (beyond naming) is original.
-- **CDQ-001, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-008**: Code quality patterns are original.
+- **CDQ-001, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-011**: Code quality patterns are original.
 
 ### The sources behind the 32 rules
 

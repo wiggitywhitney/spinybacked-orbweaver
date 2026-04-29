@@ -84,7 +84,7 @@ export const AgentConfigSchema = z.strictObject({
   exclude: z.array(z.string()).default([]),
 
   // Tracer name override — when set, used as the canonical tracer name instead of deriving from registry
-  tracerName: z.string().optional(),
+  tracerName: z.string().min(1).optional(),
 
 });
 

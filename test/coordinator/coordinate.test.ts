@@ -291,6 +291,19 @@ describe('coordinate', () => {
       expect(result.warnings.every(w => !w.includes('gh CLI'))).toBe(true);
     });
 
+    it('warns when canonical tracer name resolution fails, and run continues without enforcement', async () => {
+      const deps = makeDeps({
+        resolveTracerName: vi.fn().mockRejectedValue(new Error('missing manifest')),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      expect(result.warnings.some(w => w.includes('Canonical tracer name resolution failed'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('missing manifest'))).toBe(true);
+      // Run should still complete — degraded, not aborted
+      expect(result.filesSucceeded).toBeGreaterThan(0);
+    });
+
     it('reports finalization errors in warnings but returns valid RunResult', async () => {
       const deps = makeDeps({
         finalizeResults: vi.fn().mockRejectedValue(

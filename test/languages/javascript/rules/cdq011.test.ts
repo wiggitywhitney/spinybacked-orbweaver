@@ -46,6 +46,16 @@ describe('checkCanonicalTracerName (CDQ-011)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when getTracer is called with a backtick template literal matching canonical', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer(`commit-story`);',
+      ].join('\n');
+
+      const results = checkCanonicalTracerName(code, filePath, canonical);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('passes when getTracer is called on an unrelated object (not trace)', () => {
       const code = [
         "import { trace } from '@opentelemetry/api';",
@@ -99,6 +109,18 @@ describe('checkCanonicalTracerName (CDQ-011)', () => {
       const failures = results.filter(r => !r.passed);
       expect(failures).toHaveLength(1);
       expect(failures[0].message).toContain('wrong-service');
+    });
+
+    it('fails when getTracer uses a wrong backtick template literal', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer(`wrong-name`);',
+      ].join('\n');
+
+      const results = checkCanonicalTracerName(code, filePath, canonical);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('wrong-name');
+      expect(results[0].message).toContain('commit-story');
     });
 
     it('includes line number in the finding', () => {

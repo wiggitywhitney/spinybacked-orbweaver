@@ -425,6 +425,14 @@ describe('AgentConfigSchema', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it('rejects an empty string (would cause CDQ-011 to block all files)', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        tracerName: '',
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('unknown fields', () => {

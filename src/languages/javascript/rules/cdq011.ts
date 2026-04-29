@@ -24,13 +24,14 @@ export function checkCanonicalTracerName(
 ): CheckResult[] {
   const findings: Array<{ line: number; found: string }> = [];
 
-  // Match trace.getTracer('name') or trace.getTracer("name") — captures the string literal content.
-  // Requires the `trace` receiver to avoid false positives on unrelated getTracer() methods.
-  const pattern = /\btrace\s*\.\s*getTracer\s*\(\s*(["'])([^"'\n]*)\1/g;
+  // Match trace.getTracer('name'), trace.getTracer("name"), or trace.getTracer(`name`) — captures
+  // the string literal content. Requires the `trace` receiver to avoid false positives on unrelated
+  // getTracer() methods. Template literals with interpolations are not matched (known limitation).
+  const pattern = /\btrace\s*\.\s*getTracer\s*\(\s*(?:(["'])([^"'\n]*)\1|`([^`\n]*)`)/g;
 
   let match;
   while ((match = pattern.exec(code)) !== null) {
-    const found = match[2];
+    const found = match[2] ?? match[3];
     if (found !== canonicalTracerName) {
       // Determine line number (1-based)
       const before = code.slice(0, match.index);
