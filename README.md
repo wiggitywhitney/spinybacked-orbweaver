@@ -544,6 +544,7 @@ Only `schemaPath` and `sdkInitFile` are required — everything else has default
 | `schemaCheckpointInterval` | number | `5` | Run `weaver registry check` every N files during processing |
 | `weaverMinVersion` | string | `0.21.2` | Minimum Weaver CLI version required |
 | `reviewSensitivity` | `strict` \| `moderate` \| `off` | `moderate` | PR annotation strictness — `strict` flags tier 3+ spans, `moderate` flags outliers only, `off` suppresses warnings |
+| `tracerName` | string | *(from registry)* | Canonical tracer name used in all `trace.getTracer()` calls. When absent, derived from the Weaver registry manifest `name` field with underscores replaced by hyphens (e.g., `my_app` → `my-app`). Set this if your project uses an established naming convention that differs from the registry name. Variable-based `getTracer()` calls are not checked by the validator — only string literals. |
 | `confirmEstimate` | boolean | `true` | Prompt for cost ceiling approval before processing (CLI only — MCP always skips) |
 | `dryRun` | boolean | `false` | Preview mode — run analysis but revert all changes |
 | `exclude` | string[] | `[]` | Glob patterns for files to skip (e.g., `["test/**", "*.spec.js"]`) |

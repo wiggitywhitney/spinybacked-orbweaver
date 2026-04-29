@@ -216,6 +216,8 @@ interface DispatchFilesOptions {
    * Required — callers must supply a provider explicitly.
    */
   provider: LanguageProvider;
+  /** Canonical tracer name resolved by the coordinator. Passed to each file's instrumentation. */
+  canonicalTracerName?: string;
 }
 
 /**
@@ -366,7 +368,7 @@ export async function dispatchFiles(
       const existingSpanNames = accumulatedExtensions
         .filter(ext => ext.startsWith('span.'))
         .map(ext => ext.slice(5));
-      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames, provider, processedFilesManifest });
+      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames, provider, processedFilesManifest, canonicalTracerName: options.canonicalTracerName });
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);

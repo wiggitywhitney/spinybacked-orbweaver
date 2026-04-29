@@ -19,3 +19,4 @@ export { runSchemaCheckpoint } from './schema-checkpoint.ts';
 export type { SchemaCheckpointResult, SchemaCheckpointDeps } from './schema-checkpoint.ts';
 export { renderReasoningReport } from './reasoning-report.ts';
 export type { CoordinatorCallbacks, CostCeiling, RunResult, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';
+export { resolveCanonicalTracerName } from './tracer-name.ts';

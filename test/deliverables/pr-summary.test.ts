@@ -840,11 +840,11 @@ describe('renderPrSummary', () => {
       const result = _makeRunResult({
         runLevelAdvisory: [
           {
-            ruleId: 'CDQ-008',
+            ruleId: 'SCH-005',
             passed: false,
             filePath: '',
             lineNumber: null,
-            message: 'Inconsistent tracer names across files',
+            message: 'Duplicate span definitions found across files',
             tier: 2,
             blocking: false,
           },
@@ -852,8 +852,8 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('CDQ-008 (Tracer Naming)');
-      expect(md).toContain('Inconsistent tracer names');
+      expect(md).toContain('SCH-005 (No Duplicate Span Definitions)');
+      expect(md).toContain('Duplicate span definitions');
     });
   });
 

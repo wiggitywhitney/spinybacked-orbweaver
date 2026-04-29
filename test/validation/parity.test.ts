@@ -114,15 +114,6 @@ describe('feature parity matrix', () => {
     expect(tsNds006!.applicableTo('go')).toBe(false);
   });
 
-  it('CDQ-008 applies to all languages (cross-language naming consistency)', () => {
-    const rules = getAllRules();
-    const cdq008 = rules.find(r => r.ruleId === 'CDQ-008');
-    expect(cdq008).toBeDefined();
-    expect(cdq008!.applicableTo('javascript')).toBe(true);
-    expect(cdq008!.applicableTo('python')).toBe(true);
-    expect(cdq008!.applicableTo('go')).toBe(true);
-  });
-
   it('CDQ-009 applies to JS/TS, not Python/Go (not-null-safe guard check)', () => {
     const rules = getAllRules();
     const cdq009 = rules.find(r => r.ruleId === 'CDQ-009');
@@ -151,7 +142,7 @@ describe('feature parity matrix', () => {
       'COV-001', 'COV-002', 'COV-003', 'COV-004', 'COV-005', 'COV-006',
       'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005', 'RST-006',
       'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006', 'NDS-007',
-      'CDQ-001', 'CDQ-005', 'CDQ-006', 'CDQ-007', 'CDQ-008', 'CDQ-009', 'CDQ-010',
+      'CDQ-001', 'CDQ-005', 'CDQ-006', 'CDQ-007', 'CDQ-009', 'CDQ-010', 'CDQ-011',
       'API-001', 'API-002', 'API-004',
       'SCH-001', 'SCH-002', 'SCH-003', 'SCH-004',
     ];

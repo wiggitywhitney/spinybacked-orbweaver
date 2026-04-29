@@ -15,7 +15,7 @@ export interface CheckResult {
    *
    * Tier 1: "ELISION", "NDS-001" (syntax), "LINT", "WEAVER"
    * Tier 2 — Coverage: "COV-001" through "COV-006"
-   * Tier 2 — Quality: "CDQ-001", "CDQ-006", "CDQ-008"
+   * Tier 2 — Quality: "CDQ-001", "CDQ-005", "CDQ-006", "CDQ-007", "CDQ-009", "CDQ-010", "CDQ-011"
    * Tier 2 — Restraint: "RST-001" through "RST-005"
    * Tier 2 — Non-destructive: "NDS-003" through "NDS-006"
    * Tier 2 — API: "API-001" through "API-004"
@@ -98,6 +98,9 @@ export interface ValidationConfig {
   /** Agent-declared schema extensions for the current file. SCH-001 accepts span names
    *  matching these extensions in addition to registry definitions. Format: `span.<namespace>.<operation>`. */
   declaredSpanExtensions?: string[];
+  /** Canonical tracer name resolved by the coordinator. When set, CDQ-011 verifies all
+   *  trace.getTracer() string literals match this name exactly. */
+  canonicalTracerName?: string;
 }
 
 /**

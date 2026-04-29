@@ -502,15 +502,15 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Classification** | Automatable |
 | **Mechanism** | AST: flag `setAttribute` calls where the value is a full object spread, `JSON.stringify` of a request/response object, or an array without bounded length. Flag attribute keys matching known PII field patterns (`email`, `password`, `ssn`, `phone`, `creditCard`, `address`, `*_name` for person names). Also flag unconditional `setAttribute` calls where the value argument is sourced from an optional parameter, nullable field, or unvalidated input without a preceding defined-value guard (e.g., `if (value !== undefined)`). Setting attributes to `undefined` pollutes telemetry data; conditional setting is the expected pattern. |
 
-#### CDQ-008: Consistent Tracer Naming Convention
+#### CDQ-011: Canonical Tracer Name
 
 | | |
 |---|---|
-| **Scope** | Per-run |
+| **Scope** | Per-file |
 | **Impact** | Normal |
 | **Classification** | Automatable |
-| **Mechanism** | AST: collect all `trace.getTracer()` name arguments across the codebase. Classify each name into a pattern category — dotted path (`project.module.component`), module name (`inference`), project name (`commit-story`), file name (`kubectl-get`), or other. Flag if more than one naming pattern is detected across files. The specific convention does not matter; consistency does. A single outlier in an otherwise consistent codebase is flagged at the outlier site, not run-wide. |
-| **Rationale** | CDQ-002 verifies a tracer name argument exists but not that names follow a consistent convention. Inconsistent tracer names fragment trace analysis — filtering, grouping, and service maps become unreliable when the same codebase uses multiple naming patterns. Discovered during PRD #2 evaluation: the agent used 4 different naming conventions across 4 files. |
+| **Mechanism** | Regex: find all `trace.getTracer('name')`, `trace.getTracer("name")`, or `` trace.getTracer(`name`) `` string-literal calls. Verify each matches the project's canonical tracer name (from `tracerName` in `orb.yaml`, or from the Weaver registry manifest `name` field normalized to hyphens). Variable-based calls and interpolated template literals (e.g., `` `svc-${env}` ``) are a known limitation — they are not checked. |
+| **Rationale** | Replaces CDQ-008 (deleted in PRD #505). CDQ-008 fired post-run and could not fix the inconsistency it detected. CDQ-011 verifies each file individually after the coordinator has injected the canonical name into the instrumentation prompt — giving the fix loop an opportunity to correct any mismatch before the file is committed. |
 
 ---
 
@@ -532,7 +532,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 
 | Classification | Count | Rules |
 |---|---|---|
-| Automatable | 29 | NDS-001 through NDS-004, NDS-006, API-001, COV-001 through COV-006, RST-001 through RST-005, API-002 through API-004, SCH-002, SCH-003, CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-008 |
+| Automatable | 29 | NDS-001 through NDS-004, NDS-006, API-001, COV-001 through COV-006, RST-001 through RST-005, API-002 through API-004, SCH-002, SCH-003, CDQ-001, CDQ-002, CDQ-003, CDQ-005, CDQ-006, CDQ-007, CDQ-011 |
 | Mixed-mode (automatable in registry mode, semi-automatable in naming quality fallback) | 1 | SCH-001 |
 | Semi-automatable | 2 | NDS-005, SCH-004 |
 

@@ -105,9 +105,9 @@ function makeDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps {
     cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
     computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
     runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
-    readFileForAdvisory: vi.fn().mockResolvedValue(''),
     checkGhAvailable: vi.fn().mockResolvedValue(true),
     hasTestSuite: vi.fn().mockResolvedValue(false),
+    resolveTracerName: vi.fn().mockResolvedValue('test-service'),
     ...overrides,
   };
 }
@@ -289,6 +289,20 @@ describe('coordinate', () => {
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
       expect(result.warnings.every(w => !w.includes('gh CLI'))).toBe(true);
+    });
+
+    it('warns when canonical tracer name resolution fails, and run continues without enforcement', async () => {
+      const deps = makeDeps({
+        resolveTracerName: vi.fn().mockRejectedValue(new Error('missing manifest')),
+      });
+
+      const result = await coordinate('/project', makeConfig(), undefined, deps);
+
+      const tracerWarning = result.warnings.find(w => w.includes('Canonical tracer name resolution failed'));
+      expect(tracerWarning).toBeDefined();
+      expect(tracerWarning).toContain('missing manifest');
+      // Run should still complete — degraded, not aborted
+      expect(result.filesSucceeded).toBeGreaterThan(0);
     });
 
     it('reports finalization errors in warnings but returns valid RunResult', async () => {
@@ -703,94 +717,6 @@ describe('coordinate', () => {
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
       expect(result.warnings.some(w => w.includes('Schema diff'))).toBe(true);
-    });
-  });
-
-  describe('run-level advisory checks (CDQ-008)', () => {
-    it('runs CDQ-008 tracer naming check after dispatch and populates runLevelAdvisory', async () => {
-      const deps = makeDeps({
-        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeSuccessResult('/project/a.js'),
-          makeSuccessResult('/project/b.js'),
-        ]),
-        readFileForAdvisory: vi.fn()
-          .mockResolvedValueOnce('const tracer = trace.getTracer("com.myapp.users");')
-          .mockResolvedValueOnce('const tracer = trace.getTracer("my-service");'),
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      expect(result.runLevelAdvisory).toHaveLength(1);
-      expect(result.runLevelAdvisory[0].ruleId).toBe('CDQ-008');
-      expect(result.runLevelAdvisory[0].passed).toBe(false);
-      expect(result.runLevelAdvisory[0].message).toContain('inconsistent');
-    });
-
-    it('runLevelAdvisory contains passing CDQ-008 result when tracer naming is consistent', async () => {
-      const deps = makeDeps({
-        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeSuccessResult('/project/a.js'),
-          makeSuccessResult('/project/b.js'),
-        ]),
-        readFileForAdvisory: vi.fn()
-          .mockResolvedValueOnce('const tracer = trace.getTracer("com.myapp.users");')
-          .mockResolvedValueOnce('const tracer = trace.getTracer("com.myapp.orders");'),
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      expect(result.runLevelAdvisory).toHaveLength(1);
-      expect(result.runLevelAdvisory[0].passed).toBe(true);
-    });
-
-    it('skips CDQ-008 when no files succeeded', async () => {
-      const deps = makeDeps({
-        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeFailedResult('/project/a.js'),
-        ]),
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      expect(result.runLevelAdvisory).toHaveLength(0);
-    });
-
-    it('still runs CDQ-008 on readable files when some reads fail', async () => {
-      const deps = makeDeps({
-        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js', '/project/b.js']),
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeSuccessResult('/project/a.js'),
-          makeSuccessResult('/project/b.js'),
-        ]),
-        readFileForAdvisory: vi.fn()
-          .mockResolvedValueOnce('const tracer = trace.getTracer("com.myapp.users");')
-          .mockRejectedValueOnce(new Error('EACCES')),
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      expect(result.runLevelAdvisory).toHaveLength(1);
-      expect(result.runLevelAdvisory[0].ruleId).toBe('CDQ-008');
-      expect(result.warnings.some(w => w.includes('CDQ-008 file read failed'))).toBe(true);
-      expect(result.warnings.some(w => w.includes('/project/b.js'))).toBe(true);
-    });
-
-    it('reports CDQ-008 file read failure as warning without aborting', async () => {
-      const deps = makeDeps({
-        discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
-        dispatchFiles: vi.fn().mockResolvedValue([
-          makeSuccessResult('/project/a.js'),
-        ]),
-        readFileForAdvisory: vi.fn().mockRejectedValue(new Error('EACCES')),
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      expect(result.runLevelAdvisory).toHaveLength(0);
-      expect(result.warnings.some(w => w.includes('CDQ-008'))).toBe(true);
     });
   });
 

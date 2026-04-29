@@ -1,9 +1,10 @@
 # PRD #505: Canonical Tracer Name Injection
 
-**Status**: Active
+**Status**: Complete
 **Priority**: Medium
 **GitHub Issue**: [#505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)
 **Created**: 2026-04-18
+**Completed**: 2026-04-28
 
 ---
 
@@ -71,13 +72,13 @@ Files to update:
 
 Run `npm run typecheck` and `npm test` after deletion. Fix any type errors or test failures before proceeding.
 
-- [ ] CDQ-008 implementation file deleted
-- [ ] All imports, exports, and references removed
-- [ ] `runLevelAdvisory` field removed from coordinator types if unused
-- [ ] CDQ-008 guidance removed from agent prompt
-- [ ] Tests covering CDQ-008 deleted
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] CDQ-008 implementation file deleted
+- [x] All imports, exports, and references removed
+- [x] `runLevelAdvisory` field removed from coordinator types if unused (SCH-005 still uses it — field retained, comment updated to reference SCH-005)
+- [x] CDQ-008 guidance removed from agent prompt
+- [x] Tests covering CDQ-008 deleted
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M2: Add `tracerName` config field and canonical name resolution
 
@@ -96,7 +97,7 @@ async function resolveCanonicalTracerName(config: Config): Promise<string> {
 }
 ```
 
-Reading the registry manifest: the manifest file is `registry_manifest.yaml` inside the schema directory. Parse the `name` field. Use the existing YAML reading infrastructure if available; otherwise add a minimal YAML parse for this field.
+Reading the registry manifest: `extractNamespacePrefix(registryDir)` in `src/coordinator/schema-extensions.ts` already reads `registry_manifest.yaml` and returns the `name` field — reuse it directly. The function takes `registryDir` (the schema directory path, available from `config.schemaPath`). The resolution function should call `extractNamespacePrefix` and apply the underscore-to-hyphen normalization to its return value. Do NOT write a new YAML reader.
 
 Tests:
 - Config `tracerName` set → returns config value exactly
@@ -104,12 +105,12 @@ Tests:
 - Config `tracerName` not set, registry name is `my_app` → returns `my-app`
 - Config `tracerName` not set, registry name has no underscores → returns unchanged
 
-- [ ] `tracerName` added to config schema with validation
-- [ ] Resolution function implemented (config override → registry name normalized)
-- [ ] Normalization: underscores replaced with hyphens, no other transformation
-- [ ] Unit tests for all resolution paths
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] `tracerName` added to config schema with validation
+- [x] Resolution function implemented (config override → registry name normalized)
+- [x] Normalization: underscores replaced with hyphens, no other transformation
+- [x] Unit tests for all resolution paths
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M3: Coordinator injects canonical tracer name into per-file prompts
 
@@ -129,12 +130,12 @@ Do NOT place this instruction in the preamble or in the file-level instrumentati
 
 **Existing `getTracer()` calls**: If a file already has a `trace.getTracer('something-else')` call (pre-existing instrumentation), the injected instruction tells the agent to use the canonical name — this means the agent will correct pre-existing wrong names. This is the intended behavior.
 
-- [ ] Coordinator resolves canonical name before file dispatch loop
-- [ ] Canonical name passed into per-file instrumentation context
-- [ ] Prompt updated to instruct agent to use the canonical tracer name
-- [ ] Integration test: instrument a multi-file fixture and verify all files use the canonical name
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] Coordinator resolves canonical name before file dispatch loop
+- [x] Canonical name passed into per-file instrumentation context
+- [x] Prompt updated to instruct agent to use the canonical tracer name
+- [x] Integration test: instrument a multi-file fixture and verify all files use the canonical name
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M4: Per-file gating check for tracer name correctness
 
@@ -154,7 +155,11 @@ Add a new per-file blocking check that verifies `trace.getTracer()` calls use th
 
 **Registration**: Add to `tier2Checks` in `instrument-with-retry.ts` and `function-instrumentation.ts` as `blocking: true`. Add to `JS_RULES` export. Add to `rule-names.ts`.
 
-**Canonical name availability**: The check needs the canonical name at validation time. Pass it through the existing validation config/context mechanism — check how other parameterized checks receive their inputs before designing this.
+**Canonical name availability**: The check needs the canonical name at validation time. Here is how it flows as of M3:
+
+- `executeRetryLoop` in `instrument-with-retry.ts` receives `canonicalTracerName?: string` as a parameter (added in M3).
+- `buildValidationConfig` in the same file creates `ValidationConfig` — it does NOT yet carry `canonicalTracerName`. You must add `canonicalTracerName?: string` to `ValidationConfig` in `src/validation/types.ts`, add the field to `buildValidationConfig`, and pass `canonicalTracerName` through.
+- The check function receives `ValidationConfig` (via the `RuleInput` type); read `config.canonicalTracerName` to get the expected name. If `canonicalTracerName` is `undefined`, the check passes (no canonical name was resolved — degrade gracefully rather than block).
 
 Tests:
 - File has `trace.getTracer('commit-story')`, canonical is `commit-story` → passes
@@ -163,13 +168,13 @@ Tests:
 - File has no `getTracer()` call → passes
 - File has two `getTracer()` calls, one correct and one wrong → fails
 
-- [ ] New per-file rule implemented
-- [ ] Rule registered in `tier2Checks` as blocking
-- [ ] Rule registered in `JS_RULES` and `rule-names.ts`
-- [ ] Canonical name passed through to validation context
-- [ ] Unit tests for all cases above
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [x] New per-file rule implemented
+- [x] Rule registered in `tier2Checks` as blocking
+- [x] Rule registered in `JS_RULES` and `rule-names.ts`
+- [x] Canonical name passed through to validation context
+- [x] Unit tests for all cases above
+- [x] `npm run typecheck` passes
+- [x] `npm test` passes
 
 ### M5: Documentation
 
@@ -181,11 +186,11 @@ Update user-facing documentation to reflect the new `tracerName` config option a
 - Note the known limitation: variable-based `getTracer()` calls are not checked
 - **Rule documentation update**: Search for any documentation of CDQ-008 in this repo (e.g., `docs/`, `research/`, evaluation rubric) and in the eval repo. Remove or update all references to reflect that CDQ-008 is deleted and replaced by the canonical tracer name gating check. Documentation that still references CDQ-008 as an active rule will mislead future contributors.
 
-- [ ] `orb.yaml` config reference updated with `tracerName` field
-- [ ] README or guide updated explaining tracer name derivation and override
-- [ ] Known limitation documented
-- [ ] CDQ-008 references removed from all rule documentation in this repo and the eval repo; new gating check documented where appropriate
-- [ ] `npm run typecheck` passes (if docs are in any checked format)
+- [x] `orb.yaml` config reference updated with `tracerName` field
+- [x] README or guide updated explaining tracer name derivation and override
+- [x] Known limitation documented
+- [~] CDQ-008 references removed from all rule documentation in this repo and the eval repo; new gating check documented where appropriate — done for this repo; eval repo requires separate access (out of scope for this session)
+- [x] `npm run typecheck` passes (if docs are in any checked format)
 
 ---
 

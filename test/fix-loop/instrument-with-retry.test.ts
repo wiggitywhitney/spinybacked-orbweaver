@@ -185,7 +185,7 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(result.errorProgression).toEqual(['0 errors']);
   });
 
-  it('passes all 30 Tier 2 checks to validateFile with correct blocking flags', async () => {
+  it('passes all 31 Tier 2 checks to validateFile with correct blocking flags', async () => {
     const output = makeInstrumentationOutput();
     let capturedConfig: ValidateFileInput['config'] | undefined;
     const deps: InstrumentWithRetryDeps = {
@@ -242,8 +242,10 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['RST-005']).toEqual({ enabled: true, blocking: false });
     expect(checks['RST-006']).toEqual({ enabled: true, blocking: false });
 
-    // Total: 30 checks (API-003 deleted; RST-006 added; CDQ-005 (startActiveSpan Preferred) added)
-    expect(Object.keys(checks)).toHaveLength(30);
+    expect(checks['CDQ-011']).toEqual({ enabled: true, blocking: true });
+
+    // Total: 31 checks (API-003 deleted; RST-006 added; CDQ-005/CDQ-011 added)
+    expect(Object.keys(checks)).toHaveLength(31);
 
     // projectRoot is undefined when not provided
     expect(capturedConfig!.projectRoot).toBeUndefined();

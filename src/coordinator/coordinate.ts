@@ -28,13 +28,12 @@ import type { LiveCheckResult, LiveCheckDeps, LiveCheckOptions } from './live-ch
 import { readFile, writeFile as defaultWriteFile } from 'node:fs/promises';
 import { restoreExtensionsFile as defaultRestoreExtensionsFile } from './schema-extensions.ts';
 import { checkGhAvailable as defaultCheckGhAvailable } from '../deliverables/git-workflow.ts';
-import { checkTracerNamingConsistency } from '../validation/tier2/cdq008.ts';
-import type { FileContent } from '../validation/tier2/cdq008.ts';
 import { checkRegistrySpanDuplicates } from '../validation/tier2/sch005.ts';
 import type Anthropic from '@anthropic-ai/sdk';
 import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
 import { getProviderByLanguage } from '../languages/registry.ts';
 import type { LanguageProvider } from '../languages/types.ts';
+import { resolveCanonicalTracerName } from './tracer-name.ts';
 
 /**
  * Run a project's test suite without OTLP overrides.
@@ -115,7 +114,6 @@ export interface CoordinateDeps {
     deps?: LiveCheckDeps,
     callbacks?: Pick<CoordinatorCallbacks, 'onValidationStart' | 'onValidationComplete'>,
   ) => Promise<LiveCheckResult>;
-  readFileForAdvisory: (filePath: string) => Promise<string>;
   checkGhAvailable?: () => Promise<boolean | { available: boolean; warning?: string }>;
   liveCheckOptions?: LiveCheckOptions;
   /** Injectable test suite detection for checkpoint test wiring. */
@@ -128,6 +126,8 @@ export interface CoordinateDeps {
   restoreExtensionsFile?: (registryDir: string, snapshot: string | null) => Promise<void>;
   /** Anthropic client for SCH-005 judge calls. When absent, SCH-005 degrades gracefully (returns pass). */
   anthropicClient?: Anthropic;
+  /** Injectable canonical tracer name resolver. Defaults to resolveCanonicalTracerName. */
+  resolveTracerName?: (config: AgentConfig, registryDir: string) => Promise<string>;
 }
 
 /**
@@ -191,16 +191,17 @@ export async function coordinate(
   const cleanupSnap = deps?.cleanupSnapshot ?? defaultCleanupSnapshot;
   const schemaDiff = deps?.computeSchemaDiff ?? defaultComputeSchemaDiff;
   const liveCheck = deps?.runLiveCheck ?? defaultRunLiveCheck;
-  const readForAdvisory = deps?.readFileForAdvisory ?? ((fp: string) => readFile(fp, 'utf-8'));
   const checkGh = deps?.checkGhAvailable ?? defaultCheckGhAvailable;
   const detectTestSuite = deps?.hasTestSuite ?? defaultHasTestSuite;
   const runTests = deps?.executeProjectTests ?? executeProjectTests;
   const writeForRollback = deps?.writeFileForRollback ?? ((fp: string, content: string) => defaultWriteFile(fp, content, 'utf-8'));
   const restoreExtensions = deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
+  const resolveTracerName = deps?.resolveTracerName ?? resolveCanonicalTracerName;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
   const checkpointTestWarnings: string[] = [];
+  const tracerNameWarnings: string[] = [];
 
   const language = config.language ?? 'javascript';
   const languageProvider: LanguageProvider | undefined = getProviderByLanguage(language);
@@ -334,6 +335,15 @@ export async function coordinate(
     }
   }
 
+  // Step 4f: Resolve canonical tracer name (degrade and warn on failure)
+  let canonicalTracerName: string | undefined;
+  try {
+    canonicalTracerName = await resolveTracerName(config, registryDir);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    tracerNameWarnings.push(`Canonical tracer name resolution failed (degraded): ${message}`);
+  }
+
   // Step 5: Dispatch files (individual failures are degrade-and-continue)
   // checkpointWindowRef is populated by dispatch with files since the last passing checkpoint.
   // Used for end-of-run rollback when live-check tests fail (M4/NDS-002).
@@ -351,6 +361,7 @@ export async function coordinate(
       registryDir,
       schemaExtensionWarnings,
       provider: languageProvider,
+      ...(canonicalTracerName !== undefined ? { canonicalTracerName } : {}),
       ...(config.dryRun ? { dryRun: true } : {}),
       ...(checkpointTestRunner ? { runTestCommand: checkpointTestRunner } : {}),
       ...(baselineTestPassed !== undefined ? { baselineTestPassed } : {}),
@@ -406,33 +417,7 @@ export async function coordinate(
   runResult.warnings.push(...schemaHashWarnings);
   runResult.warnings.push(...schemaDiffWarnings);
   runResult.warnings.push(...checkpointTestWarnings);
-
-  // Step 6b: Run CDQ-008 cross-file tracer naming check (advisory, degrade and warn)
-  const successfulFiles = fileResults.filter(r => r.status === 'success' || r.status === 'partial');
-  if (successfulFiles.length > 0) {
-    const readResults = await Promise.allSettled(
-      successfulFiles.map(async (r) => ({
-        filePath: r.path,
-        code: await readForAdvisory(r.path),
-      })),
-    );
-
-    const fileContents: FileContent[] = [];
-    for (const [index, readResult] of readResults.entries()) {
-      if (readResult.status === 'fulfilled') {
-        fileContents.push(readResult.value);
-      } else {
-        const filePath = successfulFiles[index]?.path ?? '<unknown>';
-        const message = readResult.reason instanceof Error ? readResult.reason.message : String(readResult.reason);
-        runResult.warnings.push(`CDQ-008 file read failed (degraded): ${filePath} — ${message}`);
-      }
-    }
-
-    if (fileContents.length > 0) {
-      const cdq008Result = checkTracerNamingConsistency(fileContents);
-      runResult.runLevelAdvisory.push(cdq008Result);
-    }
-  }
+  runResult.warnings.push(...tracerNameWarnings);
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {

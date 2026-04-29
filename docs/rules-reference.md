@@ -2,7 +2,7 @@
 
 Spinybacked Orbweaver validates every instrumented file against a two-tier rubric. This document lists every rule: what it checks, whether it blocks file success or is advisory, and how it relates to the OpenTelemetry specification.
 
-The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/`. Run-level and cross-file checks (CDQ-008, SCH-005) plus shared registry parsing infrastructure live in `src/validation/tier2/` — no per-file rule implementations live there. When rule details and this document disagree, the source of truth is the code — please open an issue.
+The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/`. Run-level checks (SCH-005) plus shared registry parsing infrastructure live in `src/validation/tier2/` — no per-file rule implementations live there. When rule details and this document disagree, the source of truth is the code — please open an issue.
 
 ## How rules work
 
@@ -31,7 +31,8 @@ The PRD #483 advisory rules audit ([issue #483](https://github.com/wiggitywhitne
 - **Promoted to blocking**: NDS-004, NDS-005, NDS-006, API-001, and the import-level portion of API-004.
 - **Newly registered** (rule files existed pre-audit but were not wired into `tier2Checks`): CDQ-007, CDQ-009, CDQ-010.
 - **API-004 split**: the import-level check is blocking; the manifest-level check moved into API-002 (which activated previously dead code and remains advisory).
-- **Pending deletion** (kept documented with a flag until the deletion lands): CDQ-008 via [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505); SCH-004 via [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508); SCH-005's fate is being decided as PRD #508 Milestone M1.
+- **Deleted**: CDQ-008 (Tracer Naming) — replaced by CDQ-011 (Canonical Tracer Name) plus coordinator-level canonical name injection ([PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)).
+- **Pending deletion** (kept documented with a flag until the deletion lands): SCH-004 via [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508); SCH-005's fate is being decided as PRD #508 Milestone M1.
 
 ### TypeScript provider (2026-04-24)
 
@@ -47,7 +48,7 @@ PRD #372 shipped `TypeScriptProvider`, which implements language-specific versio
 PRD #507 cleaned up the rule file architecture to unblock future Python and Go language providers. No rule behavior changed; this is a provider-architecture change.
 
 - **Stale SCH-001–004 duplicates removed**: `src/validation/tier2/sch001.ts`, `sch002.ts`, `sch003.ts`, and `sch004.ts` — copies that had drifted from the canonical implementations in `src/languages/javascript/rules/` (notably `tier2/sch004.ts` was missing type inference and pre-filter logic present in the canonical copy) — were deleted. The canonical copies in `javascript/rules/` are the single authoritative source.
-- **`tier2/` scope narrowed**: `src/validation/tier2/` now holds only `registry-types.ts` (shared registry parsing infrastructure imported directly by `javascript/rules/`), `sch005.ts` (run-level coordinator check with a different lifecycle from per-file checks), and `cdq008.ts` (pending deletion via [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)). No per-file rule implementations live in `tier2/`.
+- **`tier2/` scope narrowed**: `src/validation/tier2/` now holds only `registry-types.ts` (shared registry parsing infrastructure imported directly by `javascript/rules/`) and `sch005.ts` (run-level coordinator check with a different lifecycle from per-file checks). No per-file rule implementations live in `tier2/`. (CDQ-008 was deleted as part of [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505).)
 - **LanguageProvider interface**: all hot-path pipeline modules (`src/agent/instrument-file.ts`, `src/agent/prompt.ts`, coordinator and fix-loop modules) now route through the `LanguageProvider` interface rather than importing JavaScript-specific symbols directly.
 
 ---
@@ -119,6 +120,7 @@ These rules verify that the instrumentation code follows OTel best practices.
 |------|------|----------------|------------------------|
 | CDQ-001 | Spans Closed | Every span is closed in all code paths — via `span.end()` in a `finally` block or via `startActiveSpan` callback. Unclosed spans leak resources. | Not assessed in PRD #483 audit |
 | CDQ-005 | startActiveSpan Preferred | `tracer.startSpan()` calls in agent-generated instrumentation are flagged as advisory findings. `startActiveSpan()` is preferred because it automatically sets the span as active in context so child operations are correctly parented. `startSpan()` is accepted when the agent confirms which of four legitimate scenarios applies: sibling span, fire-and-forget background work, explicit parallel lifecycle control, or lifetime extending beyond a single function scope. | Directly aligned — OTel API spec states "In most cases you want to use `startActiveSpan`, as it takes care of setting the span and its context active" |
+| CDQ-011 | Canonical Tracer Name | All `trace.getTracer()` string literals use the canonical tracer name derived by the coordinator (from `tracerName` in `spiny-orb.yaml`, or from the Weaver registry manifest `name` field normalized to hyphens). Fires on string-literal `getTracer()` calls only — variable-based tracer names are a known limitation and are not checked. The check passes when no canonical name was resolved (degrade gracefully). **Added in [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505).** | Project-specific concern — OTel spec allows any valid string as a tracer scope name; this rule enforces project-level consistency |
 
 ---
 
@@ -171,11 +173,10 @@ These rules verify that the agent didn't over-instrument. Not everything needs a
 
 ## Run-level and pending-deletion rules
 
-Two rules live outside the per-file pipeline. They are documented here for completeness but do not run for every instrumented file.
+One rule lives outside the per-file pipeline. It is documented here for completeness but does not run for every instrumented file.
 
 | Rule | Name | What it checks | Status | OTel spec relationship |
 |------|------|----------------|--------|------------------------|
-| CDQ-008 | Tracer Naming | Post-run cross-file check: all `trace.getTracer()` calls across instrumented files use a consistent naming convention. Lives in `src/validation/tier2/cdq008.ts`; invoked from the coordinator after instrumentation completes; findings go to `runLevelAdvisory` (not per-file feedback). | **Pending deletion** — [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505) replaces post-hoc detection with canonical-name injection + per-file verification | Deletion aligned — OTel spec does not mandate a tracer naming convention |
 | SCH-005 | No Duplicate Span Definitions | Post-run cross-file check: flags when agent-declared schema extensions duplicate existing registry span definitions. Lives in `src/validation/tier2/sch005.ts`; invoked from the coordinator. | **Fate pending** — SCH-005 audit is [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)'s Milestone M1 | Not assessed in PRD #483 audit |
 
 ---

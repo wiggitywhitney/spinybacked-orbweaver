@@ -297,7 +297,7 @@ Each language provider registers its implementations. Rules that don't apply to 
 
 Every existing test becomes a JavaScript-specific test. The file structure changes:
 
-```
+```text
 test/languages/javascript/validation/cov001.test.ts
 ```
 
@@ -372,7 +372,7 @@ These check properties of the *output* (Weaver schema, span naming, attribute na
 | SCH-002 | Attribute keys match registry | Checks strings against schema |
 | SCH-003 | Attribute values conform to types | Checks type consistency |
 | SCH-004 | No redundant schema entries | LLM judge, language-agnostic |
-| CDQ-008 | Tracer naming consistency | Cross-file string check |
+| CDQ-011 | Canonical tracer name | Per-file string literal check |
 
 ### Shared-Concept Rules (shared interface, per-language implementation)
 
@@ -421,7 +421,7 @@ All 1,850+ existing tests must pass after the refactoring. Don't add a single ne
 
 For each language, maintain before/after file pairs with known-correct instrumentation:
 
-```
+```text
 test/fixtures/
   javascript/
     express-handler.before.js

@@ -393,6 +393,48 @@ describe('AgentConfigSchema', () => {
     });
   });
 
+  describe('tracerName', () => {
+    it('is undefined when absent (no default)', () => {
+      const result = AgentConfigSchema.safeParse(makeMinimalConfig());
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.tracerName).toBeUndefined();
+    });
+
+    it('accepts a non-empty string', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        tracerName: 'my-service',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.tracerName).toBe('my-service');
+    });
+
+    it('accepts a name with underscores (stored as-is, no normalization in schema)', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        tracerName: 'my_service',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.tracerName).toBe('my_service');
+    });
+
+    it('rejects a non-string value', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        tracerName: 42,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects an empty string (would cause CDQ-011 to block all files)', () => {
+      const result = AgentConfigSchema.safeParse({
+        ...makeMinimalConfig(),
+        tracerName: '',
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
   describe('unknown fields', () => {
     it('rejects unknown fields', () => {
       const result = AgentConfigSchema.safeParse({
