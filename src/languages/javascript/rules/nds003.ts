@@ -172,6 +172,65 @@ function reconcileReturnCaptures(
 }
 
 /**
+ * Reconcile aggregation variable captures that exist solely to feed span.setAttribute().
+ *
+ * When the agent computes an intermediate value for setAttribute:
+ *   const total = arr.reduce(...);
+ *   span.setAttribute('key', total);
+ * NDS-003 sees `const total = ...` as a non-instrumentation addition. This is the
+ * same semantic pattern as return-value capture — the variable exists only to supply
+ * the span attribute value and has no other use.
+ *
+ * Note: span.setAttribute() is already filtered from addedLines by isInstrumentationLine,
+ * so this reconciler scans the full normalized instrumented output to find setAttribute
+ * calls that reference the captured variable.
+ *
+ * Removes matched capture entries from addedLines in place.
+ * A variable is only reconciled when it appears in the instrumented output exactly twice:
+ * once in the capture line and once in a span.setAttribute call, with no other uses.
+ *
+ * @param addedLines - Non-instrumentation added lines (mutated in place)
+ * @param allInstrumentedLines - All non-empty trimmed lines from the instrumented output
+ */
+function reconcileSetAttributeCaptures(
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+  allInstrumentedLines: string[],
+): void {
+  const setAttrPattern = /^(?:span|otelSpan)\.setAttribute\(\s*['"`][^'"` ]+['"`]\s*,\s*(\w+)\s*\)/;
+
+  // Count how many times each variable name appears as the argument to setAttribute
+  // in the full instrumented output (setAttribute lines are filtered from addedLines).
+  const setAttrVarCount = new Map<string, number>();
+  for (const line of allInstrumentedLines) {
+    const m = line.match(setAttrPattern);
+    if (m) setAttrVarCount.set(m[1], (setAttrVarCount.get(m[1]) ?? 0) + 1);
+  }
+
+  const toRemove = new Set<number>();
+
+  for (let i = 0; i < addedLines.length; i++) {
+    if (toRemove.has(i)) continue;
+    const capture = extractCapture(addedLines[i].line);
+    if (!capture) continue;
+
+    // Variable must be referenced in exactly one setAttribute call
+    if ((setAttrVarCount.get(capture.varName) ?? 0) !== 1) continue;
+
+    // Variable must appear exactly twice in the full instrumented output:
+    // once in the capture line and once in the setAttribute call
+    const varUsagePattern = new RegExp(`\\b${capture.varName}\\b`);
+    const totalUses = allInstrumentedLines.filter((l) => varUsagePattern.test(l)).length;
+    if (totalUses !== 2) continue;
+
+    toRemove.add(i);
+  }
+
+  for (const idx of [...toRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
  * NDS-003: Verify that non-instrumentation lines are unchanged.
  *
  * Two-directional check:
@@ -252,6 +311,13 @@ export function checkNonInstrumentationDiff(
   // as missing and the `const <var> = <expr>` + `return <var>` as added.
   // This is a safe instrumentation-motivated transformation (like catch-variable binding).
   reconcileReturnCaptures(missingLines, addedLines);
+
+  // Reconcile aggregation variable captures: when the agent introduces a const solely
+  // to compute a span attribute value (e.g. const total = arr.reduce(...);
+  // span.setAttribute('key', total)), NDS-003 sees the capture as a non-instrumentation
+  // addition. Remove matched captures from addedLines using the full instrumented output
+  // (setAttribute is already filtered from addedLines by isInstrumentationLine).
+  reconcileSetAttributeCaptures(addedLines, instrumentedLines);
 
   if (missingLines.length === 0 && addedLines.length === 0) {
     return [{
