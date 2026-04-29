@@ -55,7 +55,6 @@ interface TsConfigModuleOptions {
   module?: string;
   moduleResolution?: string;
   target?: string;
-  lib?: string[];
   types?: string[];
 }
 
@@ -72,7 +71,7 @@ function stripJsonComments(text: string): string {
 /**
  * Read compiler options from a tsconfig.json that are relevant to per-file tsc invocations.
  *
- * Reads: `module`, `moduleResolution`, `target`, `lib`, `types`.
+ * Reads: `module`, `moduleResolution`, `target`, `types`.
  * `extends` chains are followed one level to cover the common pattern of a root
  * tsconfig that inherits from a base config. Only filesystem-relative extends paths
  * (e.g., `"./tsconfig.base.json"`) are resolved; npm-package-style references
@@ -99,7 +98,6 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
         module: typeof co.module === 'string' ? co.module : undefined,
         moduleResolution: typeof co.moduleResolution === 'string' ? co.moduleResolution : undefined,
         target: typeof co.target === 'string' ? co.target : undefined,
-        lib: toStringArray(co.lib),
         types: toStringArray(co.types),
         extendsPath: typeof parsed.extends === 'string'
           ? resolve(dirname(path), parsed.extends.endsWith('.json') ? parsed.extends : `${parsed.extends}.json`)
@@ -121,12 +119,11 @@ function readTsConfigModuleOptions(tsconfigPath: string): TsConfigModuleOptions 
       module: own.module ?? base.module,
       moduleResolution: own.moduleResolution ?? base.moduleResolution,
       target: own.target ?? base.target,
-      lib: own.lib ?? base.lib,
       types: own.types ?? base.types,
     };
   }
 
-  return { module: own.module, moduleResolution: own.moduleResolution, target: own.target, lib: own.lib, types: own.types };
+  return { module: own.module, moduleResolution: own.moduleResolution, target: own.target, types: own.types };
 }
 
 // ─── tsc version detection ────────────────────────────────────────────────────
@@ -181,12 +178,24 @@ function parseTscLineNumber(output: string): number | null {
  * Run `tsc --noEmit` on a TypeScript file to validate syntax and types.
  *
  * When a `tsconfig.json` is found by walking up from the file's directory, its
- * `module`, `moduleResolution`, `target`, `lib`, and `types` settings are read
- * and substituted into the per-flag tsc invocation. This prevents false positives
+ * `module`, `moduleResolution`, `target`, and `types` settings are read and
+ * substituted into the per-flag tsc invocation. This prevents false positives
  * on projects using non-standard compiler options — for example:
  * - `moduleResolution: Bundler` (taze, Vite-based tools) requires extensionless imports
  * - `target: ESNext` makes APIs like `Array.fromAsync` available
  * - `types: ["node"]` makes `node:*` protocol imports resolvable
+ *
+ * `lib` is intentionally NOT propagated: a project's explicit `lib` is designed to
+ * work alongside its full type roots (e.g. `@types/node` providing `console`), not in
+ * per-file isolation. Propagating it strips DOM globals like `console` when the project
+ * sets `"lib": ["ESNext"]`. With no `--lib` flag, tsc uses the default lib for the target,
+ * which includes DOM.
+ *
+ * `@types/node` is auto-detected: if `node_modules/@types/node` exists under the project
+ * root (derived from the tsconfig location) and is not already in the `types` list, it is
+ * added automatically. This mirrors TypeScript's full-project auto-discovery behavior and
+ * fixes `node:*` imports in projects that have `@types/node` installed without an explicit
+ * `"types": ["node"]` in tsconfig (e.g. taze).
  *
  * Other project-specific settings (verbatimModuleSyntax, erasableSyntaxOnly,
  * rootDir, etc.) are intentionally not inherited so the check stays focused on
@@ -207,6 +216,15 @@ export function checkSyntax(filePath: string): CheckResult {
   const moduleResolutionFlag = moduleOpts.moduleResolution ?? 'NodeNext';
   const targetFlag = moduleOpts.target ?? 'ES2022';
 
+  // Auto-detect @types/node: many Node.js projects have it installed but don't declare
+  // "types": ["node"] in tsconfig (TypeScript auto-discovers it in full-project mode).
+  // Mirror that discovery here so node:* imports work in per-file mode.
+  const typesFlags = moduleOpts.types ? [...moduleOpts.types] : [];
+  if (tsconfig && !typesFlags.includes('node')) {
+    const nodeTypesPath = join(dirname(tsconfig), 'node_modules', '@types', 'node');
+    if (existsSync(nodeTypesPath)) typesFlags.push('node');
+  }
+
   try {
     execFileSync(
       tsc,
@@ -219,8 +237,7 @@ export function checkSyntax(filePath: string): CheckResult {
         '--module', moduleFlag,
         '--moduleResolution', moduleResolutionFlag,
         '--target', targetFlag,
-        ...moduleOpts.lib ? ['--lib', moduleOpts.lib.join(',')] : [],
-        ...moduleOpts.types ? ['--types', moduleOpts.types.join(',')] : [],
+        ...typesFlags.length > 0 ? ['--types', typesFlags.join(',')] : [],
         '--jsx', 'preserve',
         filePath,
       ],

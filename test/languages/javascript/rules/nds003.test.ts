@@ -611,6 +611,85 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('null guards wrapping span.setAttribute (#645)', () => {
+    it('allows a simple null guard wrapping span.setAttribute', () => {
+      const original = [
+        'export async function check(options) {',
+        '  return doWork(options);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'export async function check(options) {',
+        '  return tracer.startActiveSpan("taze.check", async (span) => {',
+        '    try {',
+        '      if (options.mode != null) {',
+        '        span.setAttribute("taze.check.mode", options.mode);',
+        '      }',
+        '      return doWork(options);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows a compound AND null guard wrapping span.setAttribute', () => {
+      // Run-6 catch-22: agent writes if (options != null && options.mode != null) to satisfy
+      // tsc strict null checks before setAttribute. Compound conditions are not matched by
+      // the existing single-condition null guard pattern, causing NDS-003 to flag the if line.
+      const original = [
+        'export async function check(options) {',
+        '  return doWork(options);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'export async function check(options) {',
+        '  return tracer.startActiveSpan("taze.check", async (span) => {',
+        '    try {',
+        '      if (options != null && options.mode != null) {',
+        '        span.setAttribute("taze.check.mode", options.mode);',
+        '      }',
+        '      return doWork(options);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still flags a compound condition that mixes null check with business logic', () => {
+      const original = [
+        'function doWork(options) {',
+        '  process(options);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork(options) {',
+        '  if (options != null && options.enabled === true) {',
+        '    process(options);',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('aggregation variable capture for setAttribute (#639)', () => {
     it('allows const capture used solely as the argument to span.setAttribute', () => {
       const original = [
