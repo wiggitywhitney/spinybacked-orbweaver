@@ -286,6 +286,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     deps.stderr(`  sdkInitFile: ${sdkInitFile}`);
     deps.stderr(`  dependencyStrategy: ${dependencyStrategy}`);
     deps.stderr(`  targetType: ${targetType}`);
+    deps.stderr('  Tip: consider importing OTel semantic conventions as a registry dependency: https://opentelemetry.io/docs/specs/semconv/');
     deps.stderr('');
 
     const answer = await deps.prompt('Create spiny-orb.yaml with these settings? [y/N] ');
