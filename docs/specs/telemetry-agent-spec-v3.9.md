@@ -415,7 +415,7 @@ Before instrumentation can begin, user must run `orb init`. This is mandatory.
 7. **Variable shadowing check** — before inserting `span`, `tracer`, or other OTel variables, use ts-morph scope analysis to check for existing variables with the same name. If collision detected, use suffixed names (`otelSpan`, `otelTracer`).
 8. **For business logic gaps only:**
    - Determine needed attributes
-   - Check semconv first, then existing schema, then create new
+   - Check registry first for semantic equivalents (the registry already includes any OTel semconv the org has imported as a dependency), then invent using existing registry naming patterns
    - Add manual span
 9. **Update Weaver schema** if new libraries/attributes/spans added
 10. **Per-file validation** — syntax → lint → Weaver static (fix loop, max attempts enforced)

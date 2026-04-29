@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-04-29) Updated the SCH-002 (Attribute Keys Match Registry) rule description in `docs/rules-reference.md` and the agent prompt to reflect registry-first attribute selection: the registry already includes any OTel semantic conventions the org has imported as a dependency, so the agent checks only the registry and never falls back to OTel semconv from training data. Also updated the telemetry agent spec (v3.9) and removed the one remaining "Check semconv first" instruction found in the spec's algorithm description.
+
 - (2026-04-29) Added a tip to `spiny-orb init`'s configuration summary and to the manual setup section of the README recommending OTel semantic conventions as a Weaver registry dependency for new schemas. This guides users toward populated registries before running instrumentation, reducing the chance of hitting the new empty-schema gate.
 
 - (2026-04-29) Added an empty-schema prerequisite gate that blocks instrumentation runs when the Weaver registry has zero registered attributes. Without at least one attribute, the agent has no naming patterns to follow and would either fall back to OTel semconv from training data or invent arbitrary names. The gate returns a clear error directing users to add OTel semantic conventions as a Weaver registry dependency (https://opentelemetry.io/docs/specs/semconv/). Research confirmed that the auto-add offer originally planned for interactive mode is not viable in weaver 0.21.2: wildcard imports are schema-invalid, --include-unreferenced produces a 4.9MB payload that overflows LLM context, and per-group extends requires enumerating specific IDs.

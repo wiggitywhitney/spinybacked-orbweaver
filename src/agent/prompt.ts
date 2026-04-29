@@ -246,7 +246,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 ### Schema Fidelity
 
 - **SCH-001**: Use registry-defined span names when they match the operation. Do NOT invent names when the registry already defines one.
-- **SCH-002**: Use registry-defined attribute keys. Check for semantic equivalence, not just exact name matches.
+- **SCH-002**: Use registry-defined attribute keys (the registry includes any OTel semantic conventions the org has imported as a dependency — check the registry only, do NOT apply OTel attribute names from training data that are absent from the resolved schema). Check for semantic equivalence, not just exact name matches.
 - **SCH-003**: Attribute values must conform to registry-defined types and constraints. Count attributes (\`*_count\`) MUST use \`type: int\` in schema extensions and pass raw numbers to \`setAttribute\` — never wrap numeric values in \`String()\`.
 - **SCH-004**: Do NOT create attributes that duplicate existing registry entries under a different name. **Do NOT cite SCH-004 in advisory notes or instrumentation reasoning unless you can identify a specific existing entry in the resolved schema that would be made redundant.** If no such entry exists in the resolved schema passed in context, SCH-004 does not apply.
 
