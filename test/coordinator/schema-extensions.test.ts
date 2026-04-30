@@ -201,6 +201,72 @@ describe('writeSchemaExtensions', () => {
     expect(agentExt).toContain('myapp.order.total');
   });
 
+  it('preserves existing extensions from previous runs when new extensions are written', async () => {
+    // Simulate a previous run that wrote agent-extensions.yaml with workspace attributes
+    const { stringify } = await import('yaml');
+    const previousRunContent = stringify({
+      groups: [{
+        id: 'registry.myapp.agent_extensions',
+        type: 'attribute_group',
+        display_name: 'Agent-Created Attributes',
+        brief: 'Attributes created by the instrumentation agent',
+        attributes: [{
+          id: 'myapp.workspace.catalogs_count',
+          type: 'int',
+          stability: 'development',
+          brief: 'Agent-discovered attribute: myapp.workspace.catalogs_count',
+        }],
+      }],
+    });
+    await writeFile(join(registryDir, 'agent-extensions.yaml'), previousRunContent);
+
+    // Current run: new file produces a different attribute
+    const extensions = [
+      '- id: myapp.cache.loaded\n  type: boolean\n  stability: development\n  brief: Whether the cache was loaded',
+    ];
+
+    const result = await writeSchemaExtensions(registryDir, extensions);
+
+    expect(result.written).toBe(true);
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    // Previous run's attribute must still be present
+    expect(content).toContain('myapp.workspace.catalogs_count');
+    // New attribute must also be present
+    expect(content).toContain('myapp.cache.loaded');
+  });
+
+  it('new extension overwrites existing by same ID (schema refinement)', async () => {
+    const { stringify } = await import('yaml');
+    const previousRunContent = stringify({
+      groups: [{
+        id: 'registry.myapp.agent_extensions',
+        type: 'attribute_group',
+        display_name: 'Agent-Created Attributes',
+        brief: 'Attributes created by the instrumentation agent',
+        attributes: [{
+          id: 'myapp.order.total',
+          type: 'string',  // wrong type from previous run
+          stability: 'development',
+          brief: 'Old brief',
+        }],
+      }],
+    });
+    await writeFile(join(registryDir, 'agent-extensions.yaml'), previousRunContent);
+
+    const extensions = [
+      '- id: myapp.order.total\n  type: int\n  stability: development\n  brief: Corrected brief',
+    ];
+
+    await writeSchemaExtensions(registryDir, extensions);
+
+    const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
+    // New version should win (int, not string)
+    const parsed = parse(content) as { groups: Array<{ attributes?: Array<{ id: string; type: string }> }> };
+    const attrGroup = parsed.groups.find(g => Array.isArray((g as { attributes?: unknown }).attributes));
+    const attr = attrGroup?.attributes?.find(a => a.id === 'myapp.order.total');
+    expect(attr?.type).toBe('int');
+  });
+
   it('rejects extensions that do not use the project namespace prefix', async () => {
     const extensions = [
       '- id: wrong_namespace.order.total\n  type: int\n  stability: development\n  brief: Order total',
@@ -275,7 +341,7 @@ describe('writeSchemaExtensions', () => {
     expect(parsed.groups[0].attributes).toHaveLength(3);
   });
 
-  it('overwrites agent-extensions.yaml on subsequent runs', async () => {
+  it('merges agent-extensions.yaml on subsequent runs (append-only)', async () => {
     const ext1 = ['- id: myapp.order.total\n  type: int\n  stability: development\n  brief: Order total'];
     const ext2 = ['- id: myapp.user.id\n  type: string\n  stability: development\n  brief: User ID'];
 
@@ -284,9 +350,11 @@ describe('writeSchemaExtensions', () => {
 
     const content = await readFile(join(registryDir, 'agent-extensions.yaml'), 'utf-8');
     const parsed = parse(content) as { groups: Array<{ attributes: Array<{ id: string }> }> };
-    // Second run overwrites — only ext2 present
-    expect(parsed.groups[0].attributes).toHaveLength(1);
-    expect(parsed.groups[0].attributes[0].id).toBe('myapp.user.id');
+    // Second run merges — both attributes present
+    expect(parsed.groups[0].attributes).toHaveLength(2);
+    const ids = parsed.groups[0].attributes.map(a => a.id);
+    expect(ids).toContain('myapp.order.total');
+    expect(ids).toContain('myapp.user.id');
   });
 
   it('returns written=false and skips writing when no valid extensions', async () => {

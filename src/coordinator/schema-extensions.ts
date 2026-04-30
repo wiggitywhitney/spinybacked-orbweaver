@@ -141,6 +141,34 @@ export async function writeSchemaExtensions(
   }
 
   const namespacePrefix = await extractNamespacePrefix(registryDir);
+
+  // Seed from the existing agent-extensions.yaml so extensions from previous runs
+  // (e.g. files that were skipped or failed in this run) are not silently dropped.
+  // New extensions win on ID conflict (allows schema refinement across runs).
+  const existingAttributes = new Map<string, Record<string, unknown>>();
+  const existingSpans = new Map<string, Record<string, unknown>>();
+  try {
+    const existingContent = await readFile(filePath, 'utf-8');
+    const existingParsed = parse(existingContent) as Record<string, unknown>;
+    const existingGroups = Array.isArray(existingParsed?.groups)
+      ? (existingParsed.groups as Array<Record<string, unknown>>)
+      : [];
+    for (const group of existingGroups) {
+      if (!group || typeof group !== 'object') continue;
+      if (group.type === 'attribute_group' && Array.isArray(group.attributes)) {
+        for (const attr of group.attributes as Array<Record<string, unknown>>) {
+          if (typeof attr?.id === 'string') existingAttributes.set(attr.id, attr);
+        }
+      } else if (group.type === 'span' && typeof group.id === 'string') {
+        existingSpans.set(group.id, group);
+      }
+    }
+  } catch (err) {
+    // Only suppress ENOENT (file not yet created). Rethrow permission errors,
+    // corrupt YAML, and other unexpected failures so they surface explicitly.
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+
   const validAttributes: Array<Record<string, unknown>> = [];
   const validSpans: Array<Record<string, unknown>> = [];
   const rejected: string[] = [];
@@ -196,20 +224,27 @@ export async function writeSchemaExtensions(
     return { written: false, extensionCount: 0, filePath, rejected };
   }
 
+  // Merge: new extensions win on ID conflict; existing entries not in new set are preserved.
+  for (const attr of validAttributes) existingAttributes.set(attr.id as string, attr);
+  for (const span of validSpans) existingSpans.set(span.id as string, span);
+
+  const mergedAttributes = [...existingAttributes.values()];
+  const mergedSpans = [...existingSpans.values()];
+
   const groups: Array<Record<string, unknown>> = [];
 
-  if (validAttributes.length > 0) {
+  if (mergedAttributes.length > 0) {
     groups.push({
       id: `registry.${namespacePrefix}.agent_extensions`,
       type: 'attribute_group',
       display_name: 'Agent-Created Attributes',
       brief: 'Attributes created by the instrumentation agent',
-      attributes: validAttributes,
+      attributes: mergedAttributes,
     });
   }
 
-  if (validSpans.length > 0) {
-    for (const span of validSpans) {
+  if (mergedSpans.length > 0) {
+    for (const span of mergedSpans) {
       groups.push({
         ...span,
         type: 'span',
