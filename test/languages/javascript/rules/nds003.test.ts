@@ -896,6 +896,38 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('as const normalization', () => {
+    it('allows adding as const to a discriminated union discriminant property', () => {
+      // TypeScript widens string literal discriminants to string inside startActiveSpan
+      // callbacks. The fix is to add `as const`. NDS-003 must treat `x as const` as
+      // equivalent to `x` — it is a type annotation with zero runtime effect.
+      const original = [
+        "async function loadPackage(filepath) {",
+        "  return { type: 'package.json', filepath };",
+        "}",
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('my-service');",
+        "async function loadPackage(filepath) {",
+        "  return tracer.startActiveSpan('taze.package.load', async (span) => {",
+        "    try {",
+        "      span.setAttribute('taze.package.filepath', filepath);",
+        "      return { type: 'package.json' as const, filepath };",
+        "    } finally {",
+        "      span.end();",
+        "    }",
+        "  });",
+        "}",
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('CDQ-006 isRecording() guard', () => {
     it('allows if (span.isRecording()) { as an instrumentation line', () => {
       // CDQ-006 recommends wrapping expensive setAttribute computations in an

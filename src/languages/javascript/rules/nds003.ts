@@ -76,11 +76,13 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
  *   so renamed catch variables don't trigger false positives.
  */
 function normalizeLine(line: string): string {
-  // Normalize catch {} → catch (error) {} and catch (e) {} → catch (error) {}
-  return line.replace(
-    /\}\s*catch\s*(?:\(\s*\w+\s*\))?\s*\{/,
-    '} catch (error) {',
-  );
+  return line
+    // Normalize catch {} → catch (error) {} and catch (e) {} → catch (error) {}
+    .replace(/\}\s*catch\s*(?:\(\s*\w+\s*\))?\s*\{/, '} catch (error) {')
+    // Strip `as const` — pure TypeScript type annotation, zero runtime effect.
+    // Required when agent adds `as const` to discriminant string literals to prevent
+    // type widening inside startActiveSpan callbacks (HARD CONSTRAINT in TS prompt).
+    .replace(/\s+as\s+const\b/g, '');
 }
 
 /**
