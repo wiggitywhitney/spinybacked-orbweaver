@@ -241,9 +241,12 @@ async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promi
         message: `No registered attributes found in schema at \`${fullPath}\`. The agent has no naming patterns to follow and cannot run. Add OTel semantic conventions as a Weaver registry dependency: https://opentelemetry.io/docs/specs/semconv/`,
       };
     }
-  } catch {
-    // If resolution fails after check passes, allow the run to proceed.
+  } catch (err) {
+    // If resolution fails after check passes, allow the run to proceed but warn.
     // The weaver registry check already validated structural correctness.
+    // Resolution failure after a passing check is unexpected — surface it visibly.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`spiny-orb: resolveSchema failed after weaver registry check passed (${msg}) — skipping attribute count check`);
   }
 
   return {

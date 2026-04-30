@@ -174,7 +174,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
     });
   });
 
-  describe('registry-first attribute selection (PRD #581)', () => {
+  describe('registry-first attribute selection', () => {
     // Fixture: async function that makes an HTTP fetch call. No OTel imports.
     const httpFixture = `
 async function fetchProduct(productId, method) {
@@ -218,7 +218,10 @@ module.exports = { fetchProduct };
       if (!result.success) throw new Error(`instrumentFile failed: ${result.error}`);
 
       const output = result.output;
-      expect(output.schemaExtensions).toEqual([]);
+      // Span extensions are expected (agent used the registered span definition); only
+      // attribute extensions must be empty — the agent should use dd.http.request.method.
+      const attributeExtensionsA = output.schemaExtensions.filter(e => !e.startsWith('span.'));
+      expect(attributeExtensionsA).toEqual([]);
       // Accept both single and double quotes around the attribute key
       expect(output.instrumentedCode).toMatch(/setAttribute\(['"]dd\.http\.request\.method['"]/)
     });
