@@ -425,7 +425,8 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
       const sections = provider.getSystemPromptSections();
       // When a function returns a discriminated-union object literal, startActiveSpan
       // widens the string literal type. Guidance must instruct the agent to cast.
-      expect(sections.spanCreation).toMatch(/as const|discriminated union/i);
+      expect(sections.spanCreation).toMatch(/discriminated union/i);
+      expect(sections.spanCreation).toMatch(/as const|cast the whole return/i);
     });
   });
 
