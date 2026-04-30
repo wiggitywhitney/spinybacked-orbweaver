@@ -54,9 +54,9 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   /^\s*if\s*\(\s*\w+(?:\.\w+)+\s*\)\s*\{?\s*$/,
   // isRecording() guard for CDQ-006 compliance.
   // CDQ-006 recommends wrapping expensive span.setAttribute computations in this guard
-  // to skip computation when the span is not sampling. Matches span.isRecording() and
-  // otelSpan.isRecording() with optional trailing brace.
-  /^\s*if\s*\(\s*(?:span|otelSpan)\.isRecording\(\)\s*\)\s*\{?\s*$/,
+  // to skip computation when the span is not sampling. Matches any span variable name
+  // (span, otelSpan, activeSpan, etc.) with optional trailing brace.
+  /^\s*if\s*\(\s*\w+\.isRecording\(\)\s*\)\s*\{?\s*$/,
   // TypeScript error type-narrowing guard inside catch blocks.
   // `if (err instanceof Error) {` is required when catch variable is typed `unknown`
   // (enabled by `useUnknownInCatchVariables` in strict mode) and wraps `span.recordException`.

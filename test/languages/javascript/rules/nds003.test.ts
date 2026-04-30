@@ -896,7 +896,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
-  describe('CDQ-006 isRecording() guard (#660)', () => {
+  describe('CDQ-006 isRecording() guard', () => {
     it('allows if (span.isRecording()) { as an instrumentation line', () => {
       // CDQ-006 recommends wrapping expensive setAttribute computations in an
       // isRecording() guard. NDS-003 must not flag it as added business logic.
@@ -927,6 +927,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
 
     it('allows if (otelSpan.isRecording()) { when using otelSpan variable name', () => {
+      // Regex uses \w+ — covers any span variable name the agent might use.
       const original = [
         'function work() {',
         '  doWork();',
