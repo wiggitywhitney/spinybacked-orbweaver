@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-04-30) Archived PRD #581 to prds/done/ and removed from ROADMAP.md after merge.
+
 - (2026-04-29) Completed PRD #581 (Fix Agent Attribute Invention Strategy): all six milestones shipped — registry-first prompt rewrite, empty-schema gate, init/README guidance, rule description updates, and acceptance tests.
 
 - (2026-04-29) Added two acceptance-gate tests for the registry-first attribute selection behavior. Test A verifies that when the registry contains `dd.http.request.method`, the agent uses that key rather than inventing an attribute or reaching for `http.request.method` from OTel training data. Test B verifies that when the registry contains only `dd.*`-prefixed attributes, any invented attributes also use the `dd.` namespace rather than defaulting to raw OTel convention names.
