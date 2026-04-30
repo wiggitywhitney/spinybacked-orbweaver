@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-04-30) Fixed NDS-003 (Code Preserved) to allow `if (span.isRecording()) {` as an instrumentation line. CDQ-006 recommends this guard for wrapping expensive `span.setAttribute` calls to avoid the computation cost when the span is not sampling, but NDS-003 was treating it as business logic and blocking files that used it. Added patterns for both `span.isRecording()` and `otelSpan.isRecording()` forms. Surfaced in taze eval run-9 (`src/io/resolves.ts`).
+
+- (2026-04-30) Fixed TypeScript prompt to add a HARD CONSTRAINT for discriminated union return types inside `startActiveSpan` callbacks. When a function returns an object literal whose string field is a discriminant (e.g., `{ type: 'package.json', ... }`), TypeScript widens the literal type to `string` inside the async callback, causing `TS2322`. The fix is to cast the discriminant with `as const` or cast the whole return to the named type. Without this guidance the agent was producing code that failed `tsc` in every project using discriminated unions. Surfaced in taze eval run-9 (`src/io/packageJson.ts`, `src/io/packageYaml.ts`).
+
 - (2026-04-30) Archived PRD #581 to prds/done/ and removed from ROADMAP.md after merge.
 
 - (2026-04-29) Completed PRD #581 (Fix Agent Attribute Invention Strategy): all six milestones shipped — registry-first prompt rewrite, empty-schema gate, init/README guidance, rule description updates, and acceptance tests.
