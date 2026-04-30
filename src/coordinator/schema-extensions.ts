@@ -163,8 +163,10 @@ export async function writeSchemaExtensions(
         existingSpans.set(group.id, group);
       }
     }
-  } catch {
-    // File absent or corrupt — start from new extensions only
+  } catch (err) {
+    // Only suppress ENOENT (file not yet created). Rethrow permission errors,
+    // corrupt YAML, and other unexpected failures so they surface explicitly.
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
 
   const validAttributes: Array<Record<string, unknown>> = [];
