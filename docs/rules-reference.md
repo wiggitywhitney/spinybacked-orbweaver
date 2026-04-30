@@ -109,7 +109,7 @@ These rules verify that instrumentation conforms to the project's telemetry regi
 | Rule | Name | What it checks | OTel spec relationship |
 |------|------|----------------|------------------------|
 | SCH-001 | Span Names Match Registry | Span names match the operation names defined in the registry. Blocking when the registry has span definitions; downgraded to advisory when the registry is sparse (fewer than 3 span definitions) — a workaround for a gap in the extension acceptance path, to be removed in [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508). | Directly aligned — [OTel Trace API — Span](https://opentelemetry.io/docs/specs/otel/trace/api/#span): low cardinality and meaningful operation identification |
-| SCH-002 | Attribute Keys Match Registry | Attribute keys match the names defined in the registry. Same sparse-registry downgrade as SCH-001; to be removed by [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508). | Directly aligned — OTel semantic conventions define standard attribute keys |
+| SCH-002 | Attribute Keys Match Registry | Attribute keys match the names defined in the registry (including any OTel semantic conventions the org has imported as a registry dependency). The agent checks the registry only — it does not fall back to OTel semconv from training data. Same sparse-registry downgrade as SCH-001; to be removed by [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508). | Directly aligned — OTel semantic conventions define standard attribute keys |
 | SCH-003 | Attribute Values Conform | Attribute values match the types and constraints defined in the registry (enums, integers, strings). | Not assessed in PRD #483 audit |
 
 ### Code quality (CDQ)

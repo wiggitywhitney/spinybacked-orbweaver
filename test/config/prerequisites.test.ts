@@ -1,8 +1,8 @@
 // ABOUTME: Unit tests for prerequisite checks before instrumentation.
 // ABOUTME: Covers package.json, OTel API dependency, SDK init file, Weaver schema, and API key checks.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -14,6 +14,8 @@ import {
   checkPrerequisites,
 } from '../../src/config/prerequisites.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
+
+const VALID_REGISTRY_FIXTURE = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'valid');
 
 let testDir: string;
 
@@ -209,14 +211,52 @@ describe('checkWeaverSchema', () => {
   });
 
   it('reports when weaver CLI is not installed', async () => {
-    // Create schema directory but weaver CLI won't be available in test env
     mkdirSync(join(testDir, 'telemetry', 'registry'), { recursive: true });
-    const result = await checkWeaverSchema(testDir, './telemetry/registry');
-    expect(result.id).toBe('WEAVER_SCHEMA');
-    // Either weaver is installed (passes) or not (ENOENT message)
-    if (!result.passed) {
-      expect(result.message).toMatch(/Weaver CLI not found|Weaver schema validation failed/);
+    // Hide the weaver binary by replacing PATH with an empty directory so
+    // execFileSync throws ENOENT — tests the not-installed error handling path.
+    const originalPath = process.env.PATH;
+    process.env.PATH = testDir;
+    try {
+      const result = await checkWeaverSchema(testDir, './telemetry/registry');
+      expect(result.id).toBe('WEAVER_SCHEMA');
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('Weaver CLI not found');
+    } finally {
+      process.env.PATH = originalPath;
     }
+  });
+
+  describe('empty schema gate', () => {
+    it('blocks run when schema has zero registered attributes', async () => {
+      // A valid registry manifest with no attribute group files resolves to
+      // zero attributes — weaver accepts it, but the gate should fire.
+      const registryDir = join(testDir, 'telemetry', 'registry');
+      mkdirSync(registryDir, { recursive: true });
+      writeFileSync(join(registryDir, 'registry_manifest.yaml'), [
+        'name: test_empty',
+        'description: Empty registry with no attribute groups',
+        'semconv_version: 0.1.0',
+        'schema_base_url: https://test.dev/schemas/',
+      ].join('\n'));
+
+      const result = await checkWeaverSchema(testDir, './telemetry/registry');
+
+      expect(result.passed).toBe(false);
+      expect(result.id).toBe('WEAVER_SCHEMA');
+      expect(result.message).toContain('No registered attributes found');
+      expect(result.message).toContain('opentelemetry.io/docs/specs/semconv');
+    });
+
+    it('passes when schema has registered attributes', async () => {
+      // Copy the valid registry fixture — it has real attribute definitions.
+      const registryDir = join(testDir, 'telemetry', 'registry');
+      cpSync(VALID_REGISTRY_FIXTURE, registryDir, { recursive: true });
+
+      const result = await checkWeaverSchema(testDir, './telemetry/registry');
+
+      expect(result.passed).toBe(true);
+      expect(result.id).toBe('WEAVER_SCHEMA');
+    });
   });
 });
 

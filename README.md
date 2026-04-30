@@ -226,6 +226,8 @@ dependencyStrategy: dependencies
 
 All other fields have sensible defaults — see [Configuration Reference](#configuration-reference) for the full list.
 
+For new schemas starting from scratch, consider importing OpenTelemetry semantic conventions as a Weaver registry dependency so the agent has established attribute names to work with: https://opentelemetry.io/docs/specs/semconv/
+
 ### What the agent does automatically vs. what it only recommends
 
 When the agent runs, it directly modifies two things without asking:

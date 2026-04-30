@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- (2026-04-29) Completed PRD #581 (Fix Agent Attribute Invention Strategy): all six milestones shipped — registry-first prompt rewrite, empty-schema gate, init/README guidance, rule description updates, and acceptance tests.
+
+- (2026-04-29) Added two acceptance-gate tests for the registry-first attribute selection behavior. Test A verifies that when the registry contains `dd.http.request.method`, the agent uses that key rather than inventing an attribute or reaching for `http.request.method` from OTel training data. Test B verifies that when the registry contains only `dd.*`-prefixed attributes, any invented attributes also use the `dd.` namespace rather than defaulting to raw OTel convention names.
+
+- (2026-04-29) Updated the SCH-002 (Attribute Keys Match Registry) rule description in `docs/rules-reference.md` and the agent prompt to reflect registry-first attribute selection: the registry already includes any OTel semantic conventions the org has imported as a dependency, so the agent checks only the registry and never falls back to OTel semconv from training data. Also updated the telemetry agent spec (v3.9) and removed the one remaining "Check semconv first" instruction found in the spec's algorithm description.
+
+- (2026-04-29) Added a tip to `spiny-orb init`'s configuration summary and to the manual setup section of the README recommending OTel semantic conventions as a Weaver registry dependency for new schemas. This guides users toward populated registries before running instrumentation, reducing the chance of hitting the new empty-schema gate.
+
+- (2026-04-29) Added an empty-schema prerequisite gate that blocks instrumentation runs when the Weaver registry has zero registered attributes. Without at least one attribute, the agent has no naming patterns to follow and would either fall back to OTel semconv from training data or invent arbitrary names. The gate returns a clear error directing users to add OTel semantic conventions as a Weaver registry dependency (https://opentelemetry.io/docs/specs/semconv/). Research confirmed that the auto-add offer originally planned for interactive mode is not viable in weaver 0.21.2: wildcard imports are schema-invalid, --include-unreferenced produces a 4.9MB payload that overflows LLM context, and per-group extends requires enumerating specific IDs.
+
+- (2026-04-29) Fixed the agent's attribute priority ordering. Previously the agent was instructed to check OTel semantic conventions (from training data) before the Weaver registry when selecting attribute keys. This was backwards: the registry is the project's source of truth and already includes any OTel conventions the org has imported as a dependency. The new ordering checks the registry first for semantic equivalents, then invents a new attribute using the naming patterns already present in registered attribute names (namespace prefix, casing, structural conventions) as a last resort. An explicit negative constraint was added: the agent must not apply OTel attribute names from training data that are absent from the registry. This prevents the agent from bypassing an org's deliberate schema decisions and reduces SCH-002 violations caused by OTel-vs-registry naming divergence.
+
 ### Added
 
 - (2026-04-28) Updated user-facing documentation for the canonical tracer name feature. The `tracerName` field is now documented in the Configuration Reference table in README with its default derivation logic (Weaver registry manifest `name`, underscores to hyphens) and its known limitation (variable-based `trace.getTracer()` calls are not validated). `docs/rules-reference.md` now lists CDQ-011 in the Tier 2 blocking Code Quality table, removes CDQ-008 from the active run-level rules table (replaced by the new blocking check), and notes CDQ-008 as deleted in the structural changes changelog.

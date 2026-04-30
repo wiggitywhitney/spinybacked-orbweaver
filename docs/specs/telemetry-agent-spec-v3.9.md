@@ -415,7 +415,7 @@ Before instrumentation can begin, user must run `orb init`. This is mandatory.
 7. **Variable shadowing check** — before inserting `span`, `tracer`, or other OTel variables, use ts-morph scope analysis to check for existing variables with the same name. If collision detected, use suffixed names (`otelSpan`, `otelTracer`).
 8. **For business logic gaps only:**
    - Determine needed attributes
-   - Check semconv first, then existing schema, then create new
+   - Check registry first for semantic equivalents (the registry already includes any OTel semconv the org has imported as a dependency), then invent using existing registry naming patterns
    - Add manual span
 9. **Update Weaver schema** if new libraries/attributes/spans added
 10. **Per-file validation** — syntax → lint → Weaver static (fix loop, max attempts enforced)
@@ -741,9 +741,8 @@ groups:
 
 When agent needs an attribute:
 
-1. **Check OTel semantic conventions** — use semconv reference if exists
-2. **Check existing Weaver schema** — use if already defined
-3. **Neither exists** — create new custom attribute under project namespace
+1. **Check the Weaver registry for semantic equivalents** — the registry already includes any OTel semantic conventions the org has imported as a dependency. Check all registered attribute keys for semantic equivalence, not just exact name matches. Do NOT apply OTel attribute names from training data that are absent from the resolved registry schema.
+2. **Invent using registry patterns** — if no registered key is a semantic match, invent a new attribute using the naming patterns already present in the registry: derive the namespace from the first segment of existing registered attribute names, match casing conventions and structural patterns.
 
 **Agent has full authority to extend schema** (create spans, attributes, groups) — within the guardrails below.
 
