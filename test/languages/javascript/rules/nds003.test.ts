@@ -896,6 +896,64 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('CDQ-006 isRecording() guard (#660)', () => {
+    it('allows if (span.isRecording()) { as an instrumentation line', () => {
+      // CDQ-006 recommends wrapping expensive setAttribute computations in an
+      // isRecording() guard. NDS-003 must not flag it as added business logic.
+      const original = [
+        'function resolvePackages(pkgs) {',
+        '  return resolveAll(pkgs);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function resolvePackages(pkgs) {',
+        '  return tracer.startActiveSpan("resolvePackages", (span) => {',
+        '    try {',
+        '      if (span.isRecording()) {',
+        '        span.setAttribute("pkg.count", pkgs.length);',
+        '      }',
+        '      return resolveAll(pkgs);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('allows if (otelSpan.isRecording()) { when using otelSpan variable name', () => {
+      const original = [
+        'function work() {',
+        '  doWork();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function work() {',
+        '  return tracer.startActiveSpan("work", (otelSpan) => {',
+        '    try {',
+        '      if (otelSpan.isRecording()) {',
+        '        otelSpan.setAttribute("work.key", computeValue());',
+        '      }',
+        '      doWork();',
+        '    } finally {',
+        '      otelSpan.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty original', () => {
       const results = checkNonInstrumentationDiff('', 'const x = 1;\n', filePath);

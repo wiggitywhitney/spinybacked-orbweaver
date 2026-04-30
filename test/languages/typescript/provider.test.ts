@@ -420,6 +420,13 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
       // TypeScript provider must warn against stripping type annotations
       expect(sections.constraints.toLowerCase()).toMatch(/type annotation|import type/);
     });
+
+    it('spanCreation includes discriminated union cast guidance (#659)', () => {
+      const sections = provider.getSystemPromptSections();
+      // When a function returns a discriminated-union object literal, startActiveSpan
+      // widens the string literal type. Guidance must instruct the agent to cast.
+      expect(sections.spanCreation).toMatch(/as const|discriminated union/i);
+    });
   });
 
   describe('getInstrumentationExamples', () => {

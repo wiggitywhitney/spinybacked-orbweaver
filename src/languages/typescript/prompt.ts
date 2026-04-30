@@ -124,7 +124,15 @@ export function handleEvent(event: Event): void {
 
 For synchronous functions that return \`void\` AND perform only pure in-memory computation (no I/O, no network, no database calls) — RST-001 (No Utility Spans) applies. Skip them; do not instrument.
 
-For functions with existing try/catch blocks, wrap the entire function body — preserve the existing error handling inside the try block and add OTel error recording at the top of the catch block.`,
+For functions with existing try/catch blocks, wrap the entire function body — preserve the existing error handling inside the try block and add OTel error recording at the top of the catch block.
+
+**HARD CONSTRAINT — discriminated union return types inside \`startActiveSpan\` callbacks.** When a function returns an object literal whose string field is the discriminant of a union (e.g., \`{ type: 'package.json', ... }\` matching \`PackageMeta\`), TypeScript widens the literal type to \`string\` inside the async callback, producing \`TS2322: Type 'string' is not assignable to type '"package.json"'\`. Cast the discriminant field with \`as const\`, or cast the whole return to the named type:
+\`\`\`typescript
+// Option 1: cast the discriminant field
+return { type: 'package.json' as const, filepath };
+// Option 2: cast the whole return to the named union member type
+return { type: 'package.json', filepath } as PackageMeta;
+\`\`\``,
 
     errorHandling: `TypeScript catch bindings are typed as \`unknown\` (not \`any\`). Before calling \`span.recordException(error)\`, the error must be a valid value — \`span.recordException\` accepts \`Error | string | Attributes\`. Use this pattern:
 
