@@ -896,6 +896,122 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('braceless if → braced if (#675)', () => {
+    it('allows braceless single-statement if to gain braces for span wrapping', () => {
+      // Agent adds braces to `if (cond)\n  return` to wrap the body in a span context.
+      // NDS-003 must not flag `if (!cacheChanged)` as missing or `if (!cacheChanged) {` as added.
+      const original = [
+        'function doWork(cacheChanged) {',
+        '  if (!cacheChanged)',
+        '    return;',
+        '  doRealWork();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork(cacheChanged) {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      if (!cacheChanged) {',
+        '        return;',
+        '      }',
+        '      doRealWork();',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still detects a new if block added by the agent (not in original)', () => {
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  if (shouldSkip) {',
+        '    return null;',
+        '  }',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('await added to return-value capture (#675)', () => {
+    it('allows await added to a non-async expression in return-value capture', () => {
+      // Agent adds `await` to `Promise.all(...)` when extracting it to a variable for setAttribute.
+      // reconcileReturnCaptures must strip `await` from the captured expression before comparison.
+      const original = [
+        'async function checkAll(pkgs) {',
+        '  return Promise.all(pkgs.map(check));',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'async function checkAll(pkgs) {',
+        '  return tracer.startActiveSpan("checkAll", async (span) => {',
+        '    try {',
+        '      const result = await Promise.all(pkgs.map(check));',
+        '      span.setAttribute("taze.check.packages_outdated", result.filter((r) => r.outdated).length);',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('renamed catch variable in throw (#675)', () => {
+    it('allows throw with an arbitrary catch variable name in a span catch block', () => {
+      // Agent renames outer catch variable to `spanError` to avoid shadowing inner `error`.
+      // The throw pattern must accept any single identifier, not just err/error/e/ex/exception.
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      return computeResult();',
+        '    } catch (spanError) {',
+        '      span.recordException(spanError);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw spanError;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('as const normalization', () => {
     it('allows adding as const to a discriminated union discriminant property', () => {
       // TypeScript widens string literal discriminants to string inside startActiveSpan
