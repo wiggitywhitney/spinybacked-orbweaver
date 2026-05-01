@@ -4,6 +4,7 @@
 **Last Updated:** 2026-04-28
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-04-28 | Initial research — TS5112, --ignoreConfig, stdout vs stderr, new 6.x defaults, --noCheck |
@@ -20,7 +21,7 @@ TypeScript 6.0 (released March 2026) introduced TS5112, a hard error that fires 
 
 **The biggest surprise: tsc errors go to stdout, not stderr** — and this is "Working as Intended." Multiple GitHub issues (615, 9526, 12844) report this and are all closed as "By Design." TS5112 specifically also goes to stdout. Any tool capturing tsc output must capture both streams.
 
-The spiny-orb codebase empirically discovered this; line 210 of `validation.ts` reads:
+The spiny-orb codebase empirically discovered this; line 262 of `validation.ts` reads:
 ```typescript
 // tsc sometimes writes diagnostics to stdout rather than stderr (e.g. TS5112).
 ```
