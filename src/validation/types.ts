@@ -54,7 +54,7 @@ export interface ValidationResult {
   blockingFailures: CheckResult[];
   /** All failed advisory checks from Tier 2. */
   advisoryFindings: CheckResult[];
-  /** Token usage from LLM judge calls (SCH-001, SCH-002, NDS-005). Tracked separately from instrumentation costs. */
+  /** Token usage from LLM judge calls (SCH-001, SCH-002). Tracked separately from instrumentation costs. */
   judgeTokenUsage?: TokenUsage[];
 }
 

@@ -211,8 +211,8 @@ Pick up whichever output path wasn't wired in M3. Also wire per-file reasoning r
 - **Risk: Modifying `CheckResult` shape (Option 1) breaks consumers that destructure the type.**
   - Mitigation: If Option 1 is chosen in M1, make `humanMessage` optional to avoid breaking existing consumers. Add a deprecation path if any consumer relies on `message` in a human-facing context that should migrate to `humanMessage`.
 
-- **Risk: PRDs #505 and #508 don't merge before M4 starts, causing the advisory rule list to shift mid-implementation.**
-  - Mitigation: M4's first step is "Confirm PRD #505 and PRD #508 merge status." If they haven't merged, M4 pauses until they do; M1-M3 can still proceed.
+- **Risk: A future PRD deletes or renames a rule after M4/M5 descriptions are written, causing a description to reference a rule that no longer exists.**
+  - Mitigation: When any rule deletion or rename PRD merges, check whether a human-facing description exists for the affected rule and delete or update it accordingly. The rules-related conventions in project CLAUDE.md (read the audit doc, update rules-reference.md) apply here.
 
 - **Risk: Description registry (Option 3) drifts from rule behavior over time — a rule's detection logic changes but its description doesn't update.**
   - Mitigation: If Option 3 is chosen in M1, include a lint-like check that fails if a rule file is modified without the corresponding registry entry being touched in the same commit (or within N commits). Defer detailed design of this check to M2.

@@ -336,17 +336,18 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
       expect(failure?.message).toContain('delimiter-variant duplicate');
     });
 
-    it('accepts a string extension that would Jaccard-match an int registry attribute (type compat prevents false flag)', async () => {
-      // "user_age_label" tokens: {user, age, label} — Jaccard vs "user.age" = 2/4 = 0.5
-      // With double precision: intersection={user,age}=2, union={user,age,label}=3, sim=0.667 > 0.5
-      // BUT user.age is int, user_age_label is used as string → type incompatible → not flagged
+    it('accepts a string extension that normalization-matches an int registry attribute (type compat prevents false flag)', async () => {
+      // "user_age" normalizes to "userage", same as "user.age" — normalization would flag it as a
+      // delimiter-variant duplicate. But user.age is int and user_age is used as a string →
+      // type-compat pre-filter filters out user.age before normalization runs → extension accepted.
+      // This test fails if the type-compat pre-filter is removed.
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
         'function doWork(user) {',
         '  return tracer.startActiveSpan("doWork", (span) => {',
         '    try {',
-        '      span.setAttribute("user_age_label", "adult");',
+        '      span.setAttribute("user_age", "adult");',
         '      return 1;',
         '    } finally { span.end(); }',
         '  });',
@@ -354,12 +355,12 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
       ].join('\n');
 
       const { results } = await checkAttributeKeysMatchRegistry(
-        code, filePath, m3Schema, ['user_age_label'],
+        code, filePath, m3Schema, ['user_age'],
       );
 
-      // Extension should be accepted — no duplicate flag for it
+      // Extension should be accepted — type-compat pre-filter prevents false duplicate flag
       const extensionFailure = results.find(
-        (r) => !r.passed && r.message.includes('user_age_label') && r.message.includes('duplicate'),
+        (r) => !r.passed && r.message.includes('user_age') && r.message.includes('duplicate'),
       );
       expect(extensionFailure).toBeUndefined();
     });

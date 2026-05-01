@@ -119,8 +119,9 @@ function normalizeRegistryType(type: ResolvedRegistryAttribute['type']): string 
  *
  * Extension acceptance path: when the agent declares a new attribute as a schemaExtension,
  * checkSemanticDuplicate is called against existing registry entries before accepting it.
- * Delimiter-variant duplicates (normalization) and structural near-duplicates (Jaccard > 0.5)
- * are caught deterministically; an optional LLM judge catches semantic equivalents.
+ * Extension acceptance uses normalization (delimiter-variant detection) and an optional LLM
+ * judge — Jaccard is disabled (useJaccard: false) to avoid false positives on legitimate
+ * sibling attributes (e.g., http.request.status_code vs http.response.status_code).
  *
  * "Not in registry" failure path: attribute keys used in code that are neither in the registry
  * nor declared as accepted extensions produce a failure. The semantic suggestion (if any
@@ -157,6 +158,9 @@ export async function checkAttributeKeysMatchRegistry(
     name,
     type: normalizeRegistryType(attrDefs.get(name)?.type),
   }));
+  // Snapshot before the extension acceptance loop mutates registryEntries with accepted extensions.
+  // Used for "Did you mean?" suggestions so hints point at actual registry entries, not peer extensions.
+  const registryEntriesSnapshot = [...registryEntries];
 
   // Extract all attribute keys from code, with inferred value types from the AST.
   // Used both to check keys against the registry and to infer types for extension acceptance.
@@ -180,7 +184,7 @@ export async function checkAttributeKeysMatchRegistry(
       // When inferredType is provided, type-compat pre-filter prevents false positives
       // against type-mismatched registry entries (e.g., a string extension is not flagged
       // as a duplicate of an int registry attribute even if their names are similar).
-      const inferredType = keyTypeMap.get(ext);
+      const inferredType = keyTypeMap.get(ext) ?? 'unknown';
 
       // useJaccard: false for extension acceptance — Jaccard cannot distinguish legitimate
       // sibling attributes (e.g., http.request.status_code vs http.response.status_code share
@@ -250,10 +254,11 @@ export async function checkAttributeKeysMatchRegistry(
       : `Valid registry attributes (${registryNamesList.length} total, showing first 30): ${registryNamesList.slice(0, 30).join(', ')}`;
 
   for (const issue of issues) {
-    // Run semantic dedup against registry entries (including accepted extensions) for suggestion.
+    // Run semantic dedup against the pre-mutation snapshot (original registry entries only).
     // The suggestion helps the agent understand whether it picked a name that is close to an
-    // existing registry entry — guiding correction without listing all registry attributes.
-    const dedupResult = await checkSemanticDuplicate(issue.key, registryEntries, {
+    // existing registry entry — using the snapshot ensures hints point at real registry entries,
+    // not at extensions accepted from the same declaration.
+    const dedupResult = await checkSemanticDuplicate(issue.key, registryEntriesSnapshot, {
       ruleId: 'SCH-002',
       useJaccard: true,
       inferredType: issue.inferredType,
