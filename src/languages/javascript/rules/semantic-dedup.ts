@@ -208,8 +208,9 @@ export async function checkSemanticDuplicate(
   let candidates = activeEntries;
 
   if (options.inferredType !== undefined) {
-    // Namespace pre-filter: restrict to the same root namespace when candidate has dots.
-    // A "commit_story.*" attribute is never a semantic duplicate of a "gen_ai.*" attribute.
+    // Namespace pre-filter: restrict to the same root namespace when candidate uses dot notation.
+    // Underscore-delimited candidates (e.g., "http_request_duration") bypass this filter — the
+    // normalization stage already catches most such cases as delimiter-variant duplicates.
     const candidateRoot = candidate.includes('.') ? (candidate.split('.')[0] ?? '') : '';
     if (candidateRoot) {
       candidates = candidates.filter((e) => {

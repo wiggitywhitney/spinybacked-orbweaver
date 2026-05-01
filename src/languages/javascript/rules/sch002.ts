@@ -46,8 +46,8 @@ export interface Sch002Result {
 }
 
 // ---------------------------------------------------------------------------
-// Inferred value type (copied from SCH-004 — stays here, not in semantic-dedup.ts
-// which has no ts-morph dependency)
+// Inferred value type — lives here rather than semantic-dedup.ts because this logic
+// requires ts-morph for AST parsing (semantic-dedup.ts has no ts-morph dependency)
 // ---------------------------------------------------------------------------
 
 /**
@@ -250,7 +250,7 @@ export async function checkAttributeKeysMatchRegistry(
       : `Valid registry attributes (${registryNamesList.length} total, showing first 30): ${registryNamesList.slice(0, 30).join(', ')}`;
 
   for (const issue of issues) {
-    // Run semantic dedup against original registry entries (not user extensions) for suggestion.
+    // Run semantic dedup against registry entries (including accepted extensions) for suggestion.
     // The suggestion helps the agent understand whether it picked a name that is close to an
     // existing registry entry — guiding correction without listing all registry attributes.
     const dedupResult = await checkSemanticDuplicate(issue.key, registryEntries, {

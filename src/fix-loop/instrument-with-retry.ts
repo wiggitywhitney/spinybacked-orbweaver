@@ -182,7 +182,7 @@ function buildValidationConfig(
       'CDQ-007': { enabled: true, blocking: false },
       'CDQ-009': { enabled: true, blocking: false },
       'CDQ-010': { enabled: true, blocking: false },
-      // Phase 5 checks — unconditionally blocking (sparse-registry downgrade removed in SCH rebuild)
+      // Phase 5 checks — unconditionally blocking (extension acceptance validates semantic duplicates, so novel extensions pass regardless of registry size)
       'SCH-001': { enabled: true, blocking: true },
       'SCH-002': { enabled: true, blocking: true },
       'SCH-003': { enabled: true, blocking: true },

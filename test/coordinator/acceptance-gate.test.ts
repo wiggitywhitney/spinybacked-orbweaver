@@ -844,10 +844,10 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
 
 describe('Acceptance Gate — SCH-001/002 unconditionally blocking (sparse registry, no downgrade)', () => {
   /**
-   * Verifies that SCH-001 and SCH-002 are blocking even with a sparse registry
-   * (< 3 span definitions). Prior to the SCH rebuild, both were downgraded to
-   * advisory when the registry had fewer than 3 span definitions. The sparse
-   * logic was removed — these checks are now unconditionally blocking.
+   * Verifies that SCH-001 and SCH-002 are unconditionally blocking regardless of
+   * registry size. A sparse registry (no span definitions) triggers the naming
+   * quality fallback path for SCH-001, which is also blocking. Novel extensions
+   * pass because extension acceptance validates semantic duplicates independently.
    */
 
   // Sparse schema: one attribute group, NO span definitions → triggers SCH-001 naming quality fallback
@@ -880,7 +880,7 @@ describe('Acceptance Gate — SCH-001/002 unconditionally blocking (sparse regis
     const failure = results.find((r: any) => !r.passed);
     expect(failure).toBeDefined();
     expect(failure!.ruleId).toBe('SCH-001');
-    // Sparse-registry downgrade removed — single-component names are blocking regardless of registry size
+    // SCH-001 is unconditionally blocking — single-component names fail regardless of registry size
     expect(failure!.blocking).toBe(true);
     expect(failure!.message).toContain('single-component');
   });
@@ -925,7 +925,7 @@ describe('Acceptance Gate — SCH-001/002 unconditionally blocking (sparse regis
     const failure = results.find((r: any) => !r.passed);
     expect(failure).toBeDefined();
     expect(failure!.ruleId).toBe('SCH-002');
-    // Sparse-registry downgrade removed — unregistered attributes are blocking regardless of registry size
+    // SCH-002 is unconditionally blocking — unregistered attributes fail regardless of registry size
     expect(failure!.blocking).toBe(true);
   });
 

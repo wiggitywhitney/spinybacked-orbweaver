@@ -4,7 +4,7 @@
 **Priority**: Medium
 **GitHub Issue**: [#509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)
 **Created**: 2026-04-20
-**Blocked by**: Not hard-blocked. Milestones M4 and M5 (writing rule descriptions) should sequence after [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505) (CDQ-008 deletion) and [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508) (SCH-004 deletion, SCH-005 audit) merge so the rule list is stable. M1-M3 (design + infrastructure + first output path wire) can proceed anytime.
+**Blocked by**: Not blocked. PRD #505 (CDQ-008 deletion) and PRD #508 (SCH-004 deletion, SCH-005 audit) have both merged — the rule list is stable. M1–M5 can proceed.
 **Source**: PRD #483's Downstream PRD candidate "Human-facing advisory output" in `docs/reviews/advisory-rules-audit-2026-04-15.md`
 
 ---
@@ -68,7 +68,7 @@ Each option has tradeoffs; the decision happens in Milestone M1 after reading th
 
 ## Rule scope
 
-All validation rules whose findings ever surface to humans. The exact list will be finalized after PRD #505 and PRD #508 merge, because those PRDs delete rules (CDQ-008, SCH-004) and may modify others (SCH-005). Provisional list as of 2026-04-20:
+All validation rules whose findings ever surface to humans. PRD #505 (CDQ-008 deleted) and PRD #508 (SCH-004 deleted, SCH-005 deleted, SCH-001/002 rebuilt as unconditionally blocking) have both merged. Final rule list:
 
 **Advisory rules** (non-blocking, surface to humans via PR summary and reasoning reports):
 - CDQ-006 (expensive attribute computation guarded)
@@ -83,18 +83,16 @@ All validation rules whose findings ever surface to humans. The exact list will 
 - RST-004 (no spans on internal implementation details)
 - RST-005 (no double-instrumentation)
 - API-002 (`@opentelemetry/api` dependency placement)
-- SCH-001 (span names match registry — unconditionally blocking after PRD #508 rebuild; naming quality fallback is now deterministic)
-- SCH-002 (attribute keys match registry — unconditionally blocking after PRD #508 rebuild)
 
 **Blocking rules** (surface to humans via CLI error output and PR summary):
 - NDS-001 (syntax valid), NDS-002 (tests pass), NDS-003 (code preserved), NDS-004 (signatures preserved — promoted in audit), NDS-005 (control flow preserved — promoted in audit), NDS-006 (module system match — promoted in audit), NDS-007 (expected-condition catch blocks — new rule from audit)
 - COV-001 (entry point spans), COV-002 (outbound call spans), COV-003 (error recording), COV-006 (auto-instrumentation preference)
 - API-001 (non-API OTel package imports forbidden — promoted in audit), API-004 import-level (SDK internal packages forbidden — promoted in audit)
-- SCH-001 (when registry rich), SCH-002 (when registry rich), SCH-003 (attribute values conform)
+- SCH-001 (span names match registry — unconditionally blocking; naming quality fallback is deterministic), SCH-002 (attribute keys match registry — unconditionally blocking), SCH-003 (attribute values conform)
 - ELISION, LINT, WEAVER
 - CDQ-001 (spans closed), CDQ-002 (tracer acquired), CDQ-003 (standard error recording), CDQ-005 (count attribute types)
 
-Before Milestone M4 begins, confirm the final list by checking PRD #505 and PRD #508 status.
+PRD #505 and PRD #508 have both merged — the rule list above is final.
 
 ---
 
@@ -109,7 +107,7 @@ _Decisions will be added as design questions are resolved during implementation.
 - **Critical constraint (inherited from PRD #483 Action Items):** Do NOT modify existing `message` fields. The agent depends on the current terse, directive format for fix-loop correction. Adding human-facing text inline to existing messages would change the text the agent reads and could alter its correction behavior. Human-facing descriptions are strictly additive.
 - **Writing style for human-facing descriptions**: each description explains (1) what the rule checks, (2) why a fired finding matters in practical terms, and (3) what the human should do about it — fix, accept, or ignore. Target length: 3-4 sentences, terse enough to fit in a PR annotation. Avoid jargon that requires cross-referencing another document; if a term must be used, briefly gloss it the first time.
 - **Rule ID introduction convention** (from project CLAUDE.md): each human-facing description introduces the rule by its plain-English meaning alongside the ID on first use — e.g., "COV-005 (domain attributes present) fired because…" not "COV-005 fired because…".
-- **Sequencing with #505 and #508**: M1-M3 (design decision, infrastructure, first output path) can proceed at any time. M4 and M5 (writing descriptions for individual rules) should sequence after #505 and #508 merge so we don't write descriptions for rules about to be deleted (CDQ-008, SCH-004, SCH-005 — SCH-005 deletion confirmed in PRD #508 M1).
+- **Sequencing with #505 and #508**: Both PRDs have merged. CDQ-008, SCH-004, and SCH-005 are deleted; SCH-001/002 are now unconditionally blocking. All milestones (M1–M6) can proceed.
 - **Rules-related PRD** per the project CLAUDE.md convention. Both rules-related conventions apply: read the audit document at the start of every milestone; update `docs/rules-reference.md` as the final PRD step.
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 
@@ -152,11 +150,10 @@ Pick one output path (CLI verbose output OR PR summary file) and wire it to disp
 
 ### Milestone M4: Write human-facing descriptions for all advisory rules
 
-Confirm the advisory rule list is stable (PRD #505 and PRD #508 merged; SCH-005 confirmed deleted in PRD #508 M1). Then write human-facing descriptions for every advisory rule per the writing-style guide in Design Notes.
+Write human-facing descriptions for every advisory rule per the writing-style guide in Design Notes. The advisory rule list in the "Rule scope" section is final — PRD #505 and PRD #508 have both merged.
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Confirm PRD #505 and PRD #508 merge status; update the rule list in this PRD if either changed the advisory set
-- [ ] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above, minus any deleted by #505/#508)
+- [ ] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above)
 - [ ] Each description follows the writing style: (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Length: 3-4 sentences. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
 - [ ] Descriptions surface correctly in the output path wired in M3 — manually verified on a test run
 - [ ] `npm test` passes; `npm run typecheck` passes
