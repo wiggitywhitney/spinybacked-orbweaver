@@ -169,7 +169,7 @@ Success criterion: test exists, passes locally, and CI acceptance gate workflow 
 ## Design Notes
 
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
-- The diagnostic agent uses `SimpleSpanProcessor` if it emits spans — `BatchSpanProcessor` relies on scheduled timers that are commonly faked in test suites, causing silent flush failures.
+- The diagnostic agent does not emit OTel spans in this PRD. If future work introduces telemetry for this module, prefer `SimpleSpanProcessor` over `BatchSpanProcessor` in test contexts — `BatchSpanProcessor` relies on scheduled timers that are commonly faked in test suites, causing silent flush failures.
 - The agent's context budget depends on the call graph serialization format chosen in M1. Token cost estimate must be documented in the M1 research file before M2 begins — do not guess.
 - The `DiagnosticResult` type should be defined in `src/coordinator/diagnostic-agent.ts` and exported. `coordinate.ts` imports it — do not define the type in `coordinate.ts`.
 
