@@ -218,14 +218,17 @@ async function checkRegistryConformance(
         const method = dedupResult.detectionMethod === 'normalization'
           ? 'delimiter-variant duplicate'
           : 'semantic duplicate';
+        const matchedNote = dedupResult.matchedEntry
+          ? ` of existing registry operation "${dedupResult.matchedEntry}"`
+          : '';
         allResults.push({
           ruleId: 'SCH-001',
           passed: false,
           filePath,
           lineNumber: null,
           message:
-            `SCH-001 check failed: declared span extension "${spanOpName}" is a ${method} of ` +
-            `existing registry operation "${dedupResult.matchedEntry}". ` +
+            `SCH-001 check failed: declared span extension "${spanOpName}" is a ${method}` +
+            `${matchedNote}. ` +
             `Use the existing registry operation instead of declaring a new extension.`,
           tier: 2,
           blocking: true,
@@ -234,6 +237,8 @@ async function checkRegistryConformance(
       }
 
       validOperations.add(spanOpName);
+      // Add to registryEntries so subsequent extensions are checked against this one too.
+      registryEntries.push({ name: spanOpName });
     }
   } else if (declaredExtensions) {
     // Registry has no span defs yet — accept all declared extensions

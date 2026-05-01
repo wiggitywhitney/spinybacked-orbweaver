@@ -181,10 +181,11 @@ export async function checkSemanticDuplicate(
     }
   }
 
-  // Stage 2: Jaccard pre-pass (attribute keys only — useJaccard: true)
-  // Threshold > 0.5: more than half the tokens must overlap. Catches delimiter-style structural
-  // near-duplicates (e.g., "http.request.status_code" vs "http.response.status_code") cheaply
-  // before paying for a judge call.
+  // Stage 2: Jaccard pre-pass (useJaccard: true) — for fast structural duplicate detection
+  // in "not in registry" suggestion paths. Threshold > 0.5: more than half the tokens must
+  // overlap. NOT used in extension acceptance paths (use useJaccard: false there) because
+  // Jaccard alone cannot distinguish legitimate siblings like "http.request.status_code" vs
+  // "http.response.status_code" (3/5 tokens overlap at 0.6) from true duplicates.
   if (options.useJaccard) {
     for (const entry of activeEntries) {
       if (computeJaccardSimilarity(candidate, entry.name) > 0.5) {
@@ -242,11 +243,10 @@ export async function checkSemanticDuplicate(
   if (!judgeResult.verdict) return { ...noMatch, judgeTokenUsage };
 
   if (!judgeResult.verdict.answer && judgeResult.verdict.confidence >= 0.7) {
-    // Use the judge's suggestion if parseable; fall back to the first filtered candidate.
-    // candidateNames is guaranteed non-empty (checked above); candidate is never needed as fallback.
-    const matchedEntry =
-      extractNameFromSuggestion(judgeResult.verdict.suggestion ?? '', candidateNames) ??
-      candidateNames[0]!;
+    // Use the judge's suggestion if parseable; leave matchedEntry undefined when the suggestion
+    // doesn't name a parseable candidate. Callers must handle undefined matchedEntry by producing
+    // a generic "duplicate detected" message rather than naming a specific entry.
+    const matchedEntry = extractNameFromSuggestion(judgeResult.verdict.suggestion ?? '', candidateNames);
     return {
       isDuplicate: true,
       matchedEntry,

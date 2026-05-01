@@ -182,9 +182,12 @@ export async function checkAttributeKeysMatchRegistry(
       // as a duplicate of an int registry attribute even if their names are similar).
       const inferredType = keyTypeMap.get(ext);
 
+      // useJaccard: false for extension acceptance — Jaccard cannot distinguish legitimate
+      // sibling attributes (e.g., http.request.status_code vs http.response.status_code share
+      // 3/5 tokens at 0.6) from true duplicates. The judge handles semantic disambiguation.
       const dedupResult = await checkSemanticDuplicate(ext, registryEntries, {
         ruleId: 'SCH-002',
-        useJaccard: true,
+        useJaccard: false,
         inferredType,
         judgeDeps: judgeDeps ? { client: judgeDeps.client, options: judgeDeps.options } : undefined,
       });
@@ -195,21 +198,26 @@ export async function checkAttributeKeysMatchRegistry(
         const method = dedupResult.detectionMethod === 'normalization'
           ? 'delimiter-variant duplicate'
           : 'semantic duplicate';
+        const matchedNote = dedupResult.matchedEntry
+          ? ` of existing registry attribute "${dedupResult.matchedEntry}"`
+          : '';
         allResults.push({
           ruleId: 'SCH-002',
           passed: false,
           filePath,
           lineNumber: null,
           message:
-            `SCH-002 check failed: declared attribute extension "${ext}" is a ${method} of ` +
-            `existing registry attribute "${dedupResult.matchedEntry}". ` +
+            `SCH-002 check failed: declared attribute extension "${ext}" is a ${method}` +
+            `${matchedNote}. ` +
             `Use the existing registry attribute instead of declaring a new extension.`,
           tier: 2,
           blocking: true,
         });
       } else {
-        // Accept the extension: add to registryNames so it passes the "in registry" check below.
+        // Accept the extension: add to both registryNames and registryEntries so subsequent
+        // extensions in the same declaration are checked against this newly accepted one.
         registryNames.add(ext);
+        registryEntries.push({ name: ext, type: inferredType !== 'unknown' ? inferredType : undefined });
       }
     }
   }

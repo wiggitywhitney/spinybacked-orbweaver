@@ -68,7 +68,7 @@ const originalCode = [
 ].join('\n');
 
 // Instrumented code:
-// - Adds OTel spans with vague name "doStuff" — triggers SCH-001 naming quality fallback judge
+// - Adds OTel spans with vague name "doStuff" — triggers SCH-001 deterministic naming quality check (no judge call)
 // - Removes the `throw err` in catch block
 const instrumentedCode = [
   'import { trace } from "@opentelemetry/api";',
