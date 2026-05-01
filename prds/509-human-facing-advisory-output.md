@@ -91,7 +91,7 @@ All validation rules whose findings ever surface to humans. The exact list will 
 - NDS-001 (syntax valid), NDS-002 (tests pass), NDS-003 (code preserved), NDS-004 (signatures preserved — promoted in audit), NDS-005 (control flow preserved — promoted in audit), NDS-006 (module system match — promoted in audit), NDS-007 (expected-condition catch blocks — new rule from audit)
 - COV-001 (entry point spans), COV-002 (outbound call spans), COV-003 (error recording), COV-006 (auto-instrumentation preference)
 - API-001 (non-API OTel package imports forbidden — promoted in audit), API-004 import-level (SDK internal packages forbidden — promoted in audit)
-- SCH-001 (when registry rich), SCH-002 (when registry rich), SCH-003 (attribute values conform), SCH-005 (duplicate span definitions — fate TBD in PRD #508)
+- SCH-001 (when registry rich), SCH-002 (when registry rich), SCH-003 (attribute values conform)
 - ELISION, LINT, WEAVER
 - CDQ-001 (spans closed), CDQ-002 (tracer acquired), CDQ-003 (standard error recording), CDQ-005 (count attribute types)
 
@@ -110,7 +110,7 @@ _Decisions will be added as design questions are resolved during implementation.
 - **Critical constraint (inherited from PRD #483 Action Items):** Do NOT modify existing `message` fields. The agent depends on the current terse, directive format for fix-loop correction. Adding human-facing text inline to existing messages would change the text the agent reads and could alter its correction behavior. Human-facing descriptions are strictly additive.
 - **Writing style for human-facing descriptions**: each description explains (1) what the rule checks, (2) why a fired finding matters in practical terms, and (3) what the human should do about it — fix, accept, or ignore. Target length: 3-4 sentences, terse enough to fit in a PR annotation. Avoid jargon that requires cross-referencing another document; if a term must be used, briefly gloss it the first time.
 - **Rule ID introduction convention** (from project CLAUDE.md): each human-facing description introduces the rule by its plain-English meaning alongside the ID on first use — e.g., "COV-005 (domain attributes present) fired because…" not "COV-005 fired because…".
-- **Sequencing with #505 and #508**: M1-M3 (design decision, infrastructure, first output path) can proceed at any time. M4 and M5 (writing descriptions for individual rules) should sequence after #505 and #508 merge so we don't write descriptions for rules about to be deleted (CDQ-008, SCH-004) or rules whose fate is pending (SCH-005).
+- **Sequencing with #505 and #508**: M1-M3 (design decision, infrastructure, first output path) can proceed at any time. M4 and M5 (writing descriptions for individual rules) should sequence after #505 and #508 merge so we don't write descriptions for rules about to be deleted (CDQ-008, SCH-004, SCH-005 — SCH-005 deletion confirmed in PRD #508 M1).
 - **Rules-related PRD** per the project CLAUDE.md convention. Both rules-related conventions apply: read the audit document at the start of every milestone; update `docs/rules-reference.md` as the final PRD step.
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 
@@ -153,7 +153,7 @@ Pick one output path (CLI verbose output OR PR summary file) and wire it to disp
 
 ### Milestone M4: Write human-facing descriptions for all advisory rules
 
-Confirm the advisory rule list is stable (PRD #505 and PRD #508 merged; SCH-005 fate resolved). Then write human-facing descriptions for every advisory rule per the writing-style guide in Design Notes.
+Confirm the advisory rule list is stable (PRD #505 and PRD #508 merged; SCH-005 confirmed deleted in PRD #508 M1). Then write human-facing descriptions for every advisory rule per the writing-style guide in Design Notes.
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
 - [ ] Confirm PRD #505 and PRD #508 merge status; update the rule list in this PRD if either changed the advisory set

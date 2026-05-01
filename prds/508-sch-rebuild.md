@@ -61,7 +61,21 @@ Three schema-fidelity rules have structural flaws that can't be fixed in place �
 
 ## Decision Log
 
-_Decisions will be added as design questions are resolved during implementation._
+**D-1 (SCH-005 fate): Delete**
+
+SCH-005 checks for semantic duplicates between span definitions that already exist in the resolved Weaver registry — it compares pairs of registry-authored spans (not agent-declared extensions) using a judge-only approach. The agent does not author the registry; the fix for a registry-level duplicate (consolidating two YAML span definitions) is a human registry-authorship task outside the instrumentation pipeline. There is no per-file action the agent can take.
+
+The only agent-actionable form of this check — detecting when the agent declares a new span extension that is semantically equivalent to an existing registry entry — is fully covered by the SCH-001 rebuild's semantic duplicate detection on the extension acceptance path (M2/M5). After the SCH-001 rebuild, every agent-declared extension is compared against the existing registry before being accepted; the detection that mattered is moved upstream to where the agent can act.
+
+This follows the CDQ-008 precedent exactly: detection-without-a-fix-mechanism → delete. The case for keeping run-level detection cannot be made: the signal (duplicate registry spans authored by humans) is not actionable by the agent, and the agent-actionable version of the concern is already covered by the SCH-001 rebuild.
+
+Files removed in M6:
+- `src/validation/tier2/sch005.ts`
+- `test/validation/tier2/sch005.test.ts`
+- Step 7e coordinator block in `src/coordinator/coordinate.ts` (lines 538–566)
+- Export lines for SCH-005 in `src/validation/tier2/index.ts`
+- `'SCH-005'` entry in `src/validation/rule-names.ts`
+- SCH-005 reference in comment at `src/coordinator/types.ts` line 57
 
 ---
 
@@ -92,11 +106,11 @@ Analysis steps:
 
 This milestone can proceed in parallel with PRD #507 because it does not touch files. Its output is a decision recorded in this PRD's Decision Log, which informs all subsequent milestones.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/validation/tier2/sch005.ts` and `src/coordinator/coordinate.ts` line 538 read in full
-- [ ] SCH-005 decision recorded in this PRD's Decision Log: convert to per-file check, keep run-level, or delete — with rationale
-- [ ] If "convert to per-file check": add a new milestone below to implement the per-file check
-- [ ] If "delete": add steps to M7 to remove file, tests, and coordinator invocation
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `src/validation/tier2/sch005.ts` and `src/coordinator/coordinate.ts` line 538 read in full
+- [x] SCH-005 decision recorded in this PRD's Decision Log: **delete** — see D-1
+- [x] If "convert to per-file check": add a new milestone below to implement the per-file check — N/A (decision is delete)
+- [x] If "delete": add steps to M7 to remove file, tests, and coordinator invocation — deletion files listed in D-1; M6 execution steps already present
 
 ### Milestone M2: Design the semantic duplicate detection algorithm (shared between SCH-001 and SCH-002)
 
@@ -169,9 +183,14 @@ Apply whichever decision M1 recorded:
 - **If keep run-level**: justify the decision in a Design Note in this PRD, do not delete, and skip the rest of this milestone.
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] M1 decision executed (delete / convert / keep)
-- [ ] If deleted: no SCH-005 references remain in source or tests (grep confirms)
-- [ ] If converted: per-file SCH-005 passes its test fixtures; run-level implementation removed
+- [ ] M1 decision executed: **delete** (per D-1)
+- [ ] `src/validation/tier2/sch005.ts` deleted
+- [ ] `test/validation/tier2/sch005.test.ts` deleted
+- [ ] Step 7e coordinator block removed from `src/coordinator/coordinate.ts` (lines 538–566)
+- [ ] SCH-005 export lines removed from `src/validation/tier2/index.ts`
+- [ ] `'SCH-005'` entry removed from `src/validation/rule-names.ts`
+- [ ] SCH-005 reference removed from comment in `src/coordinator/types.ts`
+- [ ] No SCH-005 references remain in source or tests (grep confirms)
 - [ ] `npm test` and `npm run typecheck` pass
 
 ### Milestone M7: Update rule documentation and close out
