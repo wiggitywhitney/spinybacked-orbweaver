@@ -23,10 +23,9 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Medium-term
 
 - Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
-- SCH-001/002 rebuild + SCH-004 deletion + SCH-005 audit ([PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)) — multi-language rule architecture ✓ cleared (PRD #507 merged).
-- Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 and PRD #508.
+- Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
-- Audit `src/agent/prompt.ts` for orphan rule references ([issue #519](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/519)) — one-shot sweep to reconcile the prompt against the rule catalog. Sequence-dependent: run after PRD #505, PRD #508, and PRD #509 merge so the rule catalog is stable. Prevention for future drift is covered by the rules-related work conventions in project CLAUDE.md.
+- Audit `src/agent/prompt.ts` for orphan rule references ([issue #519](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/519)) — one-shot sweep to reconcile the prompt against the rule catalog. Sequence-dependent: run after PRD #505 and PRD #509 merge so the rule catalog is stable (PRD #508 ✓ cleared). Prevention for future drift is covered by the rules-related work conventions in project CLAUDE.md.
 
 ## Long-term
 

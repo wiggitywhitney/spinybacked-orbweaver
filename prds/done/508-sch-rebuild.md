@@ -1,6 +1,6 @@
 # PRD #508: SCH rule rebuild — SCH-001/002 semantic duplicate detection, SCH-004 deletion, SCH-005 audit
 
-**Status**: Draft — do not begin implementation work until PRD #507 is merged
+**Status**: Complete — 2026-05-01
 **Priority**: Medium
 **GitHub Issue**: [#508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)
 **Created**: 2026-04-20
@@ -61,11 +61,51 @@ Three schema-fidelity rules have structural flaws that can't be fixed in place �
 
 ## Decision Log
 
-_Decisions will be added as design questions are resolved during implementation._
+**D-4 (SCH-001 applicableTo restricted to JS/TS)**
+
+SCH-001 previously returned `applicableTo: return true` (all languages) but uses ts-morph internally for AST parsing. SCH-002 already restricted correctly to JS/TS. The audit document flagged this as a bug to fix in the rebuild. After M5, SCH-001 returns `language === 'javascript' || language === 'typescript'`. Python and Go providers, when added in future PRDs, must implement their own SCH-001 with language-specific AST parsing — they cannot inherit the JS/TS implementation. The TypeScript provider's `TS_INHERITED_RULE_IDS` continues to include SCH-001 (typescript is in the allowed set). The parity test that previously expected SCH-001 to apply to Python/Go was updated to match.
+
+**D-3 (type-compat pre-filter applies before all pipeline stages, not just the judge)**
+
+During M3 implementation, the original M2 design placed the type-compatibility pre-filter only before the judge call (stage 3). This caused Jaccard (stage 2) to produce false positives for type-mismatched pairs: "user_age_label" (string) vs "user.age" (int) had Jaccard similarity 0.67 > 0.5, so Jaccard would flag it before the type filter ran. Fix: move type-compat filtering to apply before ALL stages (normalization, Jaccard, judge) in `checkSemanticDuplicate`. The namespace pre-filter remains judge-only (stage 3). This change is already reflected in `src/languages/javascript/rules/semantic-dedup.ts`.
+
+**D-2 (shared helper location): `src/languages/javascript/rules/semantic-dedup.ts`**
+
+PRD #507 chose Option B (Decision D-2 in #507): `javascript/rules/` owns all canonical rule copies; `tier2/` retains only `registry-types.ts` and `sch005.ts`. The shared semantic-dedup algorithm created in M2 therefore lives at `src/languages/javascript/rules/semantic-dedup.ts`. It exports pure-logic helpers (`normalizeKey`, `computeJaccardSimilarity`, `isTypeCompatible`) and the main orchestration function `checkSemanticDuplicate`. SCH-001 and SCH-002 import from this module in M3/M5.
+
+**D-1 (SCH-005 fate): Delete**
+
+SCH-005 checks for semantic duplicates between span definitions that already exist in the resolved Weaver registry — it compares pairs of registry-authored spans (not agent-declared extensions) using a judge-only approach. The agent does not author the registry; the fix for a registry-level duplicate (consolidating two YAML span definitions) is a human registry-authorship task outside the instrumentation pipeline. There is no per-file action the agent can take.
+
+The only agent-actionable form of this check — detecting when the agent declares a new span extension that is semantically equivalent to an existing registry entry — is fully covered by the SCH-001 rebuild's semantic duplicate detection on the extension acceptance path (M2/M5). After the SCH-001 rebuild, every agent-declared extension is compared against the existing registry before being accepted; the detection that mattered is moved upstream to where the agent can act.
+
+This follows the CDQ-008 precedent exactly: detection-without-a-fix-mechanism → delete. The case for keeping run-level detection cannot be made: the signal (duplicate registry spans authored by humans) is not actionable by the agent, and the agent-actionable version of the concern is already covered by the SCH-001 rebuild.
+
+Files removed in M6:
+- `src/validation/tier2/sch005.ts`
+- `test/validation/tier2/sch005.test.ts`
+- Step 7e coordinator block in `src/coordinator/coordinate.ts` (lines 538–566)
+- Export lines for SCH-005 in `src/validation/tier2/index.ts`
+- `'SCH-005'` entry in `src/validation/rule-names.ts`
+- SCH-005 reference in comment at `src/coordinator/types.ts` line 57
 
 ---
 
 ## Design Notes
+
+- **Semantic-dedup algorithm design (from M2):** The shared module at `src/languages/javascript/rules/semantic-dedup.ts` exports:
+  - `normalizeKey(s: string): string` — strips `.`, `-`, `_` and lowercases. Used by both SCH-001 and SCH-002 for stage-1 comparison.
+  - `computeJaccardSimilarity(a: string, b: string): number` — tokenizes on delimiters, returns `|A∩B|/|A∪B|`. Used by SCH-002 only.
+  - `isTypeCompatible(novelType: InferredType, registryType?: string): boolean` — int/double are mutually compatible; unknown always passes. Used by SCH-002 only.
+  - `checkSemanticDuplicate(candidate, entries, options): Promise<SemanticDedupResult>` — orchestrates the three-stage pipeline:
+    1. Normalization: `normalizeKey(candidate) === normalizeKey(entry.name)` → immediate duplicate flag.
+    2. Jaccard (if `options.useJaccard`): similarity > 0.5 → immediate duplicate flag.
+    3. Judge (if `options.judgeDeps`): caller passes pre-filtered entries (namespace + type pre-filtered for SCH-002; no pre-filter for SCH-001). Judge confidence ≥ 0.7 required for a duplicate verdict.
+  - `SemanticDedupResult` shape: `{ isDuplicate, matchedEntry?, detectionMethod?, judgeTokenUsage }`.
+  - `InferredType`, `RegistryEntry`, `SemanticDedupDeps`, `SemanticDedupOptions` type exports.
+  - SCH-001 calls with `useJaccard: false`, `useNamespaceFilter: false`, all registry operations as entries.
+  - SCH-002 calls with `useJaccard: true`, namespace-filtered + type-filtered entries.
+  - The module has no ts-morph dependency — it accepts already-extracted strings and pre-inferred types from callers.
 
 - **Blocked by PRD #507.** Do not start M2 (rebuild work) until #507 is merged. The `tier2/` consolidation decision in #507's Milestone M6 determines the file layout this PRD operates on. M1 (SCH-005 audit) can proceed in parallel with #507 because it is analysis work that doesn't touch files yet.
 - **TS-provider integration per Decision 10 in PRD #483.** SCH rules are a language-agnostic concept with language-specific extraction. The architecture established by #507 determines how these rebuilt rules interact with TypeScript. `TS_INHERITED_RULE_IDS` in `TypeScriptProvider` (on its branch or on main after #372 merges) must continue to include the rebuilt SCH rules correctly. When this PRD finishes, the TS provider's SCH coverage must match JS coverage for all rebuilt rules.
@@ -92,11 +132,11 @@ Analysis steps:
 
 This milestone can proceed in parallel with PRD #507 because it does not touch files. Its output is a decision recorded in this PRD's Decision Log, which informs all subsequent milestones.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `src/validation/tier2/sch005.ts` and `src/coordinator/coordinate.ts` line 538 read in full
-- [ ] SCH-005 decision recorded in this PRD's Decision Log: convert to per-file check, keep run-level, or delete — with rationale
-- [ ] If "convert to per-file check": add a new milestone below to implement the per-file check
-- [ ] If "delete": add steps to M7 to remove file, tests, and coordinator invocation
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `src/validation/tier2/sch005.ts` and `src/coordinator/coordinate.ts` line 538 read in full
+- [x] SCH-005 decision recorded in this PRD's Decision Log: **delete** — see D-1
+- [x] If "convert to per-file check": add a new milestone below to implement the per-file check — N/A (decision is delete)
+- [x] If "delete": add steps to M7 to remove file, tests, and coordinator invocation — deletion files listed in D-1; M6 execution steps already present
 
 ### Milestone M2: Design the semantic duplicate detection algorithm (shared between SCH-001 and SCH-002)
 
@@ -106,13 +146,13 @@ Define the semantic duplicate detection algorithm that both SCH-001 and SCH-002 
 2. **Jaccard pre-pass (SCH-002 only, deterministic):** For attribute keys, compute Jaccard token similarity. Above a threshold (currently > 0.5 in SCH-004), flag as a structural duplicate candidate. Span names are too short for Jaccard to be useful — SCH-001 skips this stage.
 3. **LLM judge (optional, requires Anthropic client):** For non-matching normalized forms that pass the Jaccard pre-pass (SCH-002) or are non-matching-normalized (SCH-001), pose the semantic-equivalence question to the LLM judge. Use pre-filtered candidates (namespace pre-filter for SCH-002 from SCH-004 patterns). Post-validate judge suggestions against type compatibility (SCH-002 only, migrated from SCH-004).
 
-Decide shared helper location based on the `tier2/` architecture decision from PRD #507.
+Decide shared helper location based on the `tier2/` architecture decision from PRD #507. **PRD #507 chose Option B (Decision D-2)**: `javascript/rules/` owns all canonical rule copies; `tier2/` retains only `registry-types.ts` and `sch005.ts` (the latter will be deleted in M6). Shared helpers for this algorithm therefore live in `src/languages/javascript/rules/` as a utility module (e.g., `src/languages/javascript/rules/semantic-dedup.ts`).
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Algorithm design documented in a Design Note in this PRD (covers normalization rules, Jaccard threshold rationale, judge prompt, pre-filter specifications, optional-client handling)
-- [ ] Decision: shared helper lives in `src/validation/tier2/` (if #507 chose Option A) or in `src/languages/javascript/rules/` as a shared utility (if #507 chose Option B). Recorded in Decision Log.
-- [ ] Unit tests designed for the algorithm — cover: delimiter-variant duplicates (normalization catches), Jaccard-similar pairs (SCH-002 only), semantic duplicates caught by judge, genuinely novel extensions that pass all three stages, optional-client-absent degradation
-- [ ] `npm test` and `npm run typecheck` pass (no behavior change yet — just test scaffolding)
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Algorithm design documented in a Design Note in this PRD (covers normalization rules, Jaccard threshold rationale, judge prompt, pre-filter specifications, optional-client handling)
+- [x] Decision: shared helper lives in `src/languages/javascript/rules/semantic-dedup.ts` (Option B per D-2). Recorded in Decision Log.
+- [x] Unit tests designed for the algorithm — cover: delimiter-variant duplicates (normalization catches), Jaccard-similar pairs (SCH-002 only), semantic duplicates caught by judge, genuinely novel extensions that pass all three stages, optional-client-absent degradation
+- [x] `npm test` and `npm run typecheck` pass (no behavior change yet — just test scaffolding)
 
 ### Milestone M3: Rebuild SCH-002
 
@@ -120,46 +160,45 @@ Add semantic duplicate detection to SCH-002's extension acceptance path using th
 
 Add semantic suggestions to the "not in registry" failure message: when an attribute key is not in the registry, run the novel key through the same semantic duplicate detection and include any near-match in the failure message so the agent knows whether the attribute it picked is close to something already in the registry. **Note (PRD #581):** The feedback message must not suggest that the agent check OTel semantic conventions as a separate step outside the registry. Per the decision in PRD #581, the registry is the only source of truth for attribute selection — it already includes any OTel semconv the org has imported as a dependency. The message should say "not found in the registry" (full stop), optionally with a semantic near-match suggestion from within the registry.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH-002 rebuild narrative
-- [ ] SCH-002's extension acceptance path calls the semantic duplicate detection algorithm from M2
-- [ ] SCH-004's `inferValueType`, type compatibility pre-filter, namespace pre-filter, and post-validation patterns migrated to SCH-002 (sourced from `src/languages/javascript/rules/sch004.ts` — the canonical copy with full logic, not the stale `tier2/` copy)
-- [ ] Jaccard pre-pass retained in SCH-002 for attribute keys (migrated from SCH-004)
-- [ ] Jaccard threshold rationale documented as a code comment (explains why 0.5, not just that it is 0.5)
-- [ ] "Not in registry" failure message includes a semantic suggestion when the novel key resembles an existing attribute
-- [ ] Test fixture: registry has `http.request.duration`; agent declares `http_request_duration` as an extension; SCH-002 flags the extension as a delimiter-variant duplicate
-- [ ] Test fixture: registry has `user.age` (int); agent declares `user_age_label` as a string attribute extension; type compatibility pre-filter prevents a false-duplicate flag
-- [ ] Test fixture: agent declares a genuinely novel attribute not semantically equivalent to any registry entry; SCH-002 accepts the extension
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH-002 rebuild narrative
+- [x] SCH-002's extension acceptance path calls `checkSemanticDuplicate` from `semantic-dedup.ts` with `useJaccard: true`; `inferredType` is looked up from code usage via `keyTypeMap.get(ext)` so type-compat pre-filter applies when the extension is used in code (not absent — improved over the original design note).
+- [x] SCH-004's `inferValueType`, type compatibility pre-filter, namespace pre-filter, and post-validation patterns migrated to SCH-002. `inferValueType` copied into SCH-002 directly. `extractAttributeKeys` extended to return `inferredType` from the value argument AST node. Type-compat pre-filter moved to apply before ALL pipeline stages (normalization, Jaccard, judge) in `semantic-dedup.ts`.
+- [x] Jaccard pre-pass retained in SCH-002 for attribute keys (via `checkSemanticDuplicate` with `useJaccard: true`)
+- [x] Jaccard threshold rationale documented as a code comment in `semantic-dedup.ts`
+- [x] "Not in registry" failure message includes a semantic suggestion when the novel key resembles an existing attribute
+- [x] Test fixture: registry has `http.request.duration`; agent declares `http_request_duration` as an extension; SCH-002 flags the extension as a delimiter-variant duplicate
+- [x] Test fixture: registry has `user.age` (int); agent declares `user_age_label` as a string attribute extension; type compatibility pre-filter prevents a false-duplicate flag
+- [x] Test fixture: agent declares a genuinely novel attribute not semantically equivalent to any registry entry; SCH-002 accepts the extension
+- [x] `npm test` and `npm run typecheck` pass
 
 ### Milestone M4: Delete SCH-004 and remove sparse-registry downgrade logic
 
 SCH-004's patterns are now in SCH-002. Delete the canonical SCH-004 file (location determined by PRD #507's Option A/B decision), its tests, and all references. Remove the sparse-registry downgrade logic in `src/fix-loop/instrument-with-retry.ts` — the `schemaSparse` computation, the `SPARSE_THRESHOLD` constant, and any conditional that downgrades SCH-001/002 to advisory when sparse. Genuinely novel extensions now always pass on the extension path regardless of registry size.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] SCH-004 canonical file deleted (path determined by #507's Option A/B decision — either `src/validation/tier2/sch004.ts` or `src/languages/javascript/rules/sch004.ts`)
-- [ ] SCH-004 tests deleted
-- [ ] SCH-004 removed from `src/validation/rule-names.ts` (or equivalent registry)
-- [ ] SCH-004 references removed from `src/fix-loop/instrument-with-retry.ts` and `src/languages/javascript/index.ts`
-- [ ] `schemaSparse` and `SPARSE_THRESHOLD` removed from `src/fix-loop/instrument-with-retry.ts`
-- [ ] Conditionals that downgrade SCH-001/002 to advisory when sparse are removed; SCH-001 and SCH-002 are unconditionally blocking after this milestone
-- [ ] Acceptance-gate tests updated if they reference SCH-004 or sparse-registry behavior
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] SCH-004 canonical file deleted: `src/languages/javascript/rules/sch004.ts` and judge integration test `test/languages/javascript/rules/sch004-judge.test.ts`
+- [x] SCH-004 canonical file deleted
+- [x] SCH-004 tests deleted (sch004.test.ts, sch004-judge.test.ts, acceptance-gate (g) SCH-004 test)
+- [x] SCH-004 removed from `src/validation/rule-names.ts`
+- [x] SCH-004 references removed from `src/fix-loop/instrument-with-retry.ts`, `src/languages/javascript/index.ts`, `src/languages/typescript/index.ts`, `src/fix-loop/function-instrumentation.ts`, `src/agent/prompt.ts`, and comment-only files
+- [x] `schemaSparse` and `SPARSE_THRESHOLD` removed from `src/fix-loop/instrument-with-retry.ts`; `parseResolvedRegistry`/`getSpanDefinitions` imports removed
+- [x] Conditionals that downgrade SCH-001/002 to advisory when sparse are removed; SCH-001 and SCH-002 are unconditionally blocking after this milestone
+- [x] Acceptance-gate tests and chain-judge-integration tests updated; refactor-recommendation test fixed (span name 'greet' → 'greeting.send' to pass SCH-001 naming quality with blocking: true)
+- [x] `npm test` and `npm run typecheck` pass
 
 ### Milestone M5: Rebuild SCH-001
 
 Replace the LLM judge in the naming-quality fallback with deterministic checks. Add semantic duplicate detection to the conformance-mode extension acceptance path using the algorithm from M2 (normalization comparison + optional judge; no Jaccard because span names are short). Fix `applicableTo` to restrict to JS/TS only.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH-001 rebuild narrative
-- [ ] Naming-quality fallback replaces the LLM judge with two deterministic checks:
-  - Dotted-notation structure: `/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/` — at least two dot-separated components
-  - Single-component vagueness: any span name with no dot separator is flagged as too vague (single-component names like `process` or `doStuff` always flagged)
-- [ ] LLM judge code and its dependencies removed from SCH-001's naming-quality path
-- [ ] SCH-001's extension acceptance path calls the semantic duplicate detection algorithm from M2 (normalization + optional judge, no Jaccard)
-- [ ] `applicableTo` fixed: `language === 'javascript' || language === 'typescript'`
-- [ ] Test fixture: registry has `user.register` as an operation; agent declares `user_registration` as a span extension; SCH-001 flags as a delimiter-variant duplicate
-- [ ] Test fixture: registry has no span definitions; agent generates `do_stuff` span name; SCH-001 flags as single-component vague name (deterministic, no LLM call)
-- [ ] Test fixture: agent declares a genuinely novel span name not semantically equivalent to any registry operation; SCH-001 accepts the extension
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH-001 rebuild narrative
+- [x] Naming-quality fallback replaces the LLM judge with two deterministic checks (single-component vagueness + dotted-notation regex)
+- [x] LLM judge code and its dependencies removed from SCH-001's naming-quality path; `callJudge` import removed
+- [x] SCH-001's extension acceptance path calls `checkSemanticDuplicate` from M2 (useJaccard: false, no inferredType)
+- [x] `applicableTo` fixed: `language === 'javascript' || language === 'typescript'`
+- [x] Test fixture: judge-mocked test in sch001-judge.test.ts confirms "user_registration" flagged as semantic duplicate of "user.register" via judge (normalization doesn't catch since "userregistration" ≠ "userregister")
+- [x] Test fixture: sch001.test.ts confirms "do_stuff" (single-component) and "doWork" (single-component) flagged deterministically without judge
+- [x] Test fixture: sch001-judge.test.ts confirms genuinely novel span "user.purchase" is accepted (judge says distinct)
+- [x] `npm test` and `npm run typecheck` pass
 
 ### Milestone M6: Execute the SCH-005 decision from M1
 
@@ -168,22 +207,27 @@ Apply whichever decision M1 recorded:
 - **If convert to per-file check**: implement the per-file version designed in M1, add it to the registered per-file rules, remove the coordinator-level invocation, delete the run-level implementation.
 - **If keep run-level**: justify the decision in a Design Note in this PRD, do not delete, and skip the rest of this milestone.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] M1 decision executed (delete / convert / keep)
-- [ ] If deleted: no SCH-005 references remain in source or tests (grep confirms)
-- [ ] If converted: per-file SCH-005 passes its test fixtures; run-level implementation removed
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] M1 decision executed: **delete** (per D-1)
+- [x] `src/validation/tier2/sch005.ts` deleted
+- [x] `test/validation/tier2/sch005.test.ts` deleted
+- [x] Step 7e coordinator block removed from `src/coordinator/coordinate.ts`
+- [x] SCH-005 export lines removed from `src/validation/tier2/index.ts`
+- [x] `'SCH-005'` entry removed from `src/validation/rule-names.ts`
+- [x] SCH-005 reference removed from comment in `src/coordinator/types.ts`
+- [x] No SCH-005 references remain in source or tests (grep confirms — additional removals: coordinate.test.ts SCH-005 describe blocks, pr-summary.test.ts test fixture, coordinate.ts import and comment, validation/types.ts comment)
+- [x] `npm test` and `npm run typecheck` pass
 
 ### Milestone M7: Update rule documentation and close out
 
 Update the canonical rule reference and close the loop back to the audit document and ROADMAP.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `docs/rules-reference.md` updated via `/write-docs` to reflect: SCH-004 deletion; SCH-005 fate (delete, convert, or keep — per M6); SCH-001 rebuilt (deterministic fallback, extension semantic dedup); SCH-002 rebuilt (extension semantic dedup with migrated SCH-004 patterns); sparse-registry downgrade removed (SCH-001 and SCH-002 unconditionally blocking)
-- [ ] `docs/ROADMAP.md` updated to reflect this PRD complete
-- [ ] PRD #483 audit document's Action Items section updated to mark "SCH-001/SCH-002 rebuild + SCH-004 deletion" complete with a link to this PRD; SCH-005 audit outcome recorded
-- [ ] Acceptance-gate tests for the coordinator exercise the rebuilt SCH-001 and SCH-002 against both a sparse and a rich registry; both pass without the sparse-downgrade safety net
-- [ ] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for `SCH-001`, `SCH-002`, `SCH-004`, and `SCH-005`. Remove the SCH-004 bullet (rule deleted). If SCH-005 was deleted in M6, remove any SCH-005 references. Update SCH-001 and SCH-002 prompt bullets to reflect rebuilt behavior — in particular, if sparse-downgrade language appears, remove it (sparse logic was removed in M4). Record each prompt change in the PR description.
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `docs/rules-reference.md` updated to reflect: SCH-004 and SCH-005 deleted; SCH-001 rebuilt (deterministic fallback, extension semantic dedup, JS/TS only); SCH-002 rebuilt (extension semantic dedup with migrated SCH-004 patterns, semantic suggestion in failure message); sparse-registry downgrade removed (unconditionally blocking); new SCH rule rebuild section added; run-level rules section removed
+- [x] `docs/ROADMAP.md` updated to reflect this PRD complete (PRD #508 entry removed)
+- [x] PRD #483 audit document's Action Items section updated: "SCH-001/SCH-002 rebuild + SCH-004 deletion + SCH-005 deletion" marked COMPLETE with full outcome summary
+- [x] Acceptance-gate tests for sparse registry: four tests added (SCH-001 naming quality blocking + passing on sparse schema; SCH-002 blocking + passing on sparse schema) without sparse-downgrade safety net
+- [x] **Prompt verification**: grepped prompt.ts for SCH-001–005. SCH-004 already removed in M4; SCH-005 never in prompt. SCH-001 updated with dotted-notation naming convention requirement and extension acceptance note. SCH-002 guidance unchanged (already describes semantic equivalence check).
 
 ---
 

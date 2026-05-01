@@ -49,18 +49,36 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
     });
   });
 
-  describe('no registry span definitions', () => {
-    it('falls back to naming quality check when registry has no span definitions', async () => {
-      const schemaWithoutSpans = {
-        groups: [
-          {
-            id: 'registry.myapp.api',
-            type: 'attribute_group',
-            attributes: [{ name: 'http.method', type: 'string' }],
-          },
-        ],
-      };
+  describe('no registry span definitions — deterministic naming quality fallback', () => {
+    const schemaWithoutSpans = {
+      groups: [
+        {
+          id: 'registry.myapp.api',
+          type: 'attribute_group',
+          attributes: [{ name: 'http.method', type: 'string' }],
+        },
+      ],
+    };
 
+    it('passes for a properly-named two-component dotted span name', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("work.process", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].ruleId).toBe('SCH-001');
+    });
+
+    it('flags single-component span name with no dot separator as too vague', async () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -73,10 +91,67 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
 
       const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
 
-      // Falls back to naming quality — "doWork" is valid (no dynamic values, bounded cardinality)
       expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
-      expect(results[0].ruleId).toBe('SCH-001');
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('doWork');
+      expect(results[0].message).toContain('single-component');
+    });
+
+    it('flags do_stuff (underscore, no dot) as single-component vague name', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("do_stuff", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('do_stuff');
+      expect(results[0].message).toContain('single-component');
+      // Deterministic — no judge token usage
+      expect(results[0].blocking).toBe(true);
+    });
+
+    it('flags span name that has dots but violates naming convention', async () => {
+      // Uppercase component violates /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("myApp.User.GetUsers", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('myApp.User.GetUsers');
+    });
+
+    it('naming quality check has no judge token usage (purely deterministic)', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
+        '  return tracer.startActiveSpan("do_stuff", (span) => {',
+        '    try { return 1; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const result = await checkSpanNamesMatchRegistry(code, filePath, schemaWithoutSpans, { client: {} as any });
+
+      // No judge calls even with a client provided — naming quality is deterministic
+      expect(result.judgeTokenUsage).toHaveLength(0);
     });
   });
 
@@ -250,14 +325,16 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('flags span names containing UUIDs or numbers as unbounded cardinality', async () => {
+    it('flags dotted span names containing embedded long numeric sequences as unbounded cardinality', async () => {
+      // A dotted name that passes the naming convention regex but has a 5-digit number
+      // embedded inside a component — cardinality check fires.
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
         'function doWork() {',
-        '  return tracer.startActiveSpan("user-12345-get", (span) => {',
+        '  return tracer.startActiveSpan("http.request.user12345get", (span) => {',
         '    try { return 1; } finally { span.end(); }',
         '  });',
         '}',
@@ -272,14 +349,19 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   });
 
   describe('HTTP status codes are not unbounded cardinality', () => {
-    it('does not flag span names containing HTTP status codes like 200', async () => {
+    // HTTP status codes embedded in dotted span names should not be flagged as dynamic values.
+    // Single-component names (no dot) are always flagged as vague, regardless of their content.
+    it('does not flag dotted span names with HTTP status codes embedded in word segments', async () => {
+      // HTTP status code test: cardinality check treats "200", "404", "500" as bounded (not dynamic).
+      // The naming convention regex requires components to start with letters — so "200" as a
+      // standalone component would fail the regex, but "response200" as a component passes.
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
-        'function handleError() {',
-        '  return tracer.startActiveSpan("handle_http_200", (span) => {',
+        'function handleOk() {',
+        '  return tracer.startActiveSpan("http.handle.response200", (span) => {',
         '    try { return 1; } finally { span.end(); }',
         '  });',
         '}',
@@ -291,14 +373,14 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('does not flag span names containing status code 404', async () => {
+    it('does not flag dotted span names with 404 embedded in word segment', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
         'function handleNotFound() {',
-        '  return tracer.startActiveSpan("error_404_handler", (span) => {',
+        '  return tracer.startActiveSpan("http.error.notfound404", (span) => {',
         '    try { return 1; } finally { span.end(); }',
         '  });',
         '}',
@@ -310,14 +392,14 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('does not flag span names containing status code 500', async () => {
+    it('does not flag dotted span names with 500 embedded in word segment', async () => {
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
         'function handleError() {',
-        '  return tracer.startActiveSpan("handle_500_error", (span) => {',
+        '  return tracer.startActiveSpan("http.error.server500", (span) => {',
         '    try { return 1; } finally { span.end(); }',
         '  });',
         '}',
@@ -329,14 +411,16 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('still flags genuinely unbounded numeric patterns like timestamps', async () => {
+    it('still flags genuinely unbounded numeric patterns like timestamps in dotted names', async () => {
+      // A dotted name that passes the convention regex but has a timestamp-like long number
+      // embedded in a component — cardinality check fires after the naming convention check passes.
       const schemaWithoutSpans = { groups: [] };
 
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
         'function doWork() {',
-        '  return tracer.startActiveSpan("request-1709234567890", (span) => {',
+        '  return tracer.startActiveSpan("http.request.ts1709234567890", (span) => {',
         '    try { return 1; } finally { span.end(); }',
         '  });',
         '}',
@@ -346,6 +430,7 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('unbounded cardinality');
     });
   });
 

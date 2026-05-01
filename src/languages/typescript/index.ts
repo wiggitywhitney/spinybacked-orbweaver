@@ -66,7 +66,7 @@ const TS_INHERITED_RULE_IDS = new Set<string>([
   'NDS-003', 'NDS-005', 'NDS-007',
   'CDQ-001', 'CDQ-005', 'CDQ-006', 'CDQ-007', 'CDQ-009', 'CDQ-010', 'CDQ-011',
   'API-001', 'API-002', 'API-004',
-  'SCH-001', 'SCH-002', 'SCH-003', 'SCH-004',
+  'SCH-001', 'SCH-002', 'SCH-003',
 ]);
 
 /**

@@ -17,7 +17,6 @@ import { detectOscillation } from './oscillation.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
-import { parseResolvedRegistry, getSpanDefinitions } from '../validation/tier2/registry-types.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -146,8 +145,8 @@ function summarizeErrors(validation: ValidationResult): string {
  *
  * @param config - Agent configuration
  * @param projectRoot - Optional project root for checks that need package.json access (API-002)
- * @param resolvedSchema - Weaver registry for SCH-001 through SCH-004 checks
- * @param anthropicClient - Anthropic client for LLM judge calls (SCH-001, SCH-004)
+ * @param resolvedSchema - Weaver registry for SCH-001 through SCH-003 checks
+ * @param anthropicClient - Anthropic client for LLM judge calls (SCH-001, SCH-002)
  * @param canonicalTracerName - When provided, CDQ-011 verifies all getTracer() calls use this name
  */
 function buildValidationConfig(
@@ -157,17 +156,6 @@ function buildValidationConfig(
   anthropicClient?: Anthropic,
   canonicalTracerName?: string,
 ) {
-  // Detect schema-sparse registries: when the registry has very few span
-  // definitions, SCH-001/SCH-002 should be advisory rather than blocking.
-  // The agent invents correct names/attributes, but the registry doesn't
-  // have them — rejecting causes oscillation and wasted retries.
-  const SPARSE_THRESHOLD = 3;
-  let schemaSparse = false;
-  if (resolvedSchema) {
-    const registry = parseResolvedRegistry(resolvedSchema);
-    schemaSparse = getSpanDefinitions(registry).length < SPARSE_THRESHOLD;
-  }
-
   return {
     enableWeaver: false,
     projectRoot,
@@ -194,11 +182,10 @@ function buildValidationConfig(
       'CDQ-007': { enabled: true, blocking: false },
       'CDQ-009': { enabled: true, blocking: false },
       'CDQ-010': { enabled: true, blocking: false },
-      // Phase 5 checks — SCH-001/SCH-002 downgrade to advisory for sparse registries
-      'SCH-001': { enabled: true, blocking: !schemaSparse },
-      'SCH-002': { enabled: true, blocking: !schemaSparse },
+      // Phase 5 checks — unconditionally blocking (extension acceptance validates semantic duplicates, so novel extensions pass regardless of registry size)
+      'SCH-001': { enabled: true, blocking: true },
+      'SCH-002': { enabled: true, blocking: true },
       'SCH-003': { enabled: true, blocking: true },
-      'SCH-004': { enabled: true, blocking: false },
       // API-001/004: blocking — diff-based (agent-added imports only)
       // API-002: advisory — agent cannot modify package.json
       // API-003: deleted in the advisory rules audit

@@ -732,7 +732,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
     expect(results[0].message).toContain('not found in registry');
   });
 
-  it('(g) SCH-002 passes for attribute keys present in registry', () => {
+  it('(g) SCH-002 passes for attribute keys present in registry', async () => {
     const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
 
     const code = [
@@ -749,13 +749,13 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const results = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
     expect(results).toHaveLength(1);
     expect(results[0].ruleId).toBe('SCH-002');
     expect(results[0].passed).toBe(true);
   });
 
-  it('(g) SCH-002 fails for attribute keys NOT in registry', () => {
+  it('(g) SCH-002 fails for attribute keys NOT in registry', async () => {
     const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
 
     const code = [
@@ -771,7 +771,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const results = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
     expect(results).toHaveLength(1);
     expect(results[0].ruleId).toBe('SCH-002');
     expect(results[0].passed).toBe(false);
@@ -802,34 +802,10 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
     expect(results[0].passed).toBe(true);
   });
 
-  it('(g) SCH-004 produces advisory results (non-blocking)', async () => {
-    const { checkNoRedundantSchemaEntries } = require('../../src/languages/javascript/rules/sch004.ts');
-
-    const code = [
-      'const { trace } = require("@opentelemetry/api");',
-      'const tracer = trace.getTracer("fixture-service");',
-      '',
-      'function handle(req, res) {',
-      '  return tracer.startActiveSpan("handle", (span) => {',
-      '    try {',
-      '      span.setAttribute("http.request.method", "GET");',
-      '    } finally { span.end(); }',
-      '  });',
-      '}',
-    ].join('\n');
-
-    const { results } = await checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
-    expect(results).toHaveLength(1);
-    expect(results[0].ruleId).toBe('SCH-004');
-    expect(results[0].tier).toBe(2);
-    expect(results[0].blocking).toBe(false);
-  });
-
-  it('(g) all four SCH checkers produce CheckResult with standard format', async () => {
+  it('(g) all three SCH checkers produce CheckResult with standard format', async () => {
     const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
     const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
     const { checkAttributeValuesConformToTypes } = require('../../src/languages/javascript/rules/sch003.ts');
-    const { checkNoRedundantSchemaEntries } = require('../../src/languages/javascript/rules/sch004.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -843,20 +819,16 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const { results: sch004Results } = await checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema);
-    expect(sch004Results).toHaveLength(1);
-
     const { results: sch001Results } = await checkSpanNamesMatchRegistry(code, '/f.js', resolvedSchema);
     const results = [
       ...sch001Results,
-      ...checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema),
+      ...(await checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema)).results,
       ...checkAttributeValuesConformToTypes(code, '/f.js', resolvedSchema),
-      sch004Results[0],
     ];
 
     for (const r of results) {
       // All SCH checks produce standard CheckResult
-      expect(r.ruleId).toMatch(/^SCH-00[1-4]$/);
+      expect(r.ruleId).toMatch(/^SCH-00[1-3]$/);
       expect(typeof r.passed).toBe('boolean');
       expect(r.filePath).toBe('/f.js');
       expect(typeof r.message).toBe('string');
@@ -865,11 +837,117 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       expect(typeof r.blocking).toBe('boolean');
     }
 
-    // SCH-001 through SCH-003 are blocking; SCH-004 is advisory
-    expect(results[0].blocking).toBe(true);
-    expect(results[1].blocking).toBe(true);
-    expect(results[2].blocking).toBe(true);
-    expect(results[3].blocking).toBe(false);
+    // All three active SCH checkers are blocking
+    expect(results.every((r) => r.blocking)).toBe(true);
+  });
+});
+
+describe('Acceptance Gate — SCH-001/002 unconditionally blocking (sparse registry, no downgrade)', () => {
+  /**
+   * Verifies that SCH-001 and SCH-002 are unconditionally blocking regardless of
+   * registry size. A sparse registry (no span definitions) triggers the naming
+   * quality fallback path for SCH-001, which is also blocking. Novel extensions
+   * pass because extension acceptance validates semantic duplicates independently.
+   */
+
+  // Sparse schema: one attribute group, NO span definitions → triggers SCH-001 naming quality fallback
+  const sparseSchema = {
+    groups: [
+      {
+        id: 'registry.myapp.api',
+        type: 'attribute_group',
+        attributes: [
+          { name: 'http.request.method', type: 'string' },
+        ],
+      },
+    ],
+  };
+
+  it('SCH-001 naming quality fallback is blocking on sparse registry (single-component vague name)', async () => {
+    const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doStuff", (span) => {',
+      '    try { return 1; } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkSpanNamesMatchRegistry(code, '/project/a.js', sparseSchema);
+    const failure = results.find((r: any) => !r.passed);
+    expect(failure).toBeDefined();
+    expect(failure!.ruleId).toBe('SCH-001');
+    // SCH-001 is unconditionally blocking — single-component names fail regardless of registry size
+    expect(failure!.blocking).toBe(true);
+    expect(failure!.message).toContain('single-component');
+  });
+
+  it('SCH-001 passes for properly-named span on sparse registry (deterministic check)', async () => {
+    const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("work.process", (span) => {',
+      '    try { return 1; } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkSpanNamesMatchRegistry(code, '/project/a.js', sparseSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].passed).toBe(true);
+    // Passes deterministically — no judge called, no LLM dependency
+    expect(results[0].ruleId).toBe('SCH-001');
+  });
+
+  it('SCH-002 is blocking on sparse registry when attribute not in registry', async () => {
+    const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("work.process", (span) => {',
+      '    try {',
+      '      span.setAttribute("unknown.custom.attr", "value");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/a.js', sparseSchema);
+    const failure = results.find((r: any) => !r.passed);
+    expect(failure).toBeDefined();
+    expect(failure!.ruleId).toBe('SCH-002');
+    // SCH-002 is unconditionally blocking — unregistered attributes fail regardless of registry size
+    expect(failure!.blocking).toBe(true);
+  });
+
+  it('SCH-002 passes on sparse registry for registered attribute', async () => {
+    const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork(req) {',
+      '  return tracer.startActiveSpan("work.process", (span) => {',
+      '    try {',
+      '      span.setAttribute("http.request.method", req.method);',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/a.js', sparseSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].passed).toBe(true);
   });
 });
 

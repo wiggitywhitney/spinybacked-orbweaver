@@ -836,7 +836,7 @@ export interface RuleInput extends ValidateFileInput {
  * Supports three forms to match the range of existing checker return types:
  * - Single `CheckResult`: simple checkers with one finding or a single passing result
  * - `CheckResult[]`: checkers that produce multiple findings (one per issue)
- * - `{ results, judgeTokenUsage }`: checkers that call an LLM judge (SCH-001, SCH-004)
+ * - `{ results, judgeTokenUsage }`: checkers that call an LLM judge (SCH-001, SCH-002)
  *
  * The validation chain normalizes all three forms via `unpackRuleResult()`.
  */

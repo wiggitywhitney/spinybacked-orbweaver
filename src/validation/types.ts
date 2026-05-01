@@ -19,7 +19,7 @@ export interface CheckResult {
    * Tier 2 — Restraint: "RST-001" through "RST-005"
    * Tier 2 — Non-destructive: "NDS-003" through "NDS-006"
    * Tier 2 — API: "API-001" through "API-004"
-   * Tier 2 — Schema: "SCH-001" through "SCH-004"
+   * Tier 2 — Schema: "SCH-001" through "SCH-003"
    *
    * Note: NDS-002 (tests still pass) is enforced by the coordinator's
    * schema checkpoint (dispatch.ts), not as a per-file validation check.
@@ -54,7 +54,7 @@ export interface ValidationResult {
   blockingFailures: CheckResult[];
   /** All failed advisory checks from Tier 2. */
   advisoryFindings: CheckResult[];
-  /** Token usage from LLM judge calls (SCH-004, SCH-001, NDS-005). Tracked separately from instrumentation costs. */
+  /** Token usage from LLM judge calls (SCH-001, SCH-002). Tracked separately from instrumentation costs. */
   judgeTokenUsage?: TokenUsage[];
 }
 
@@ -89,7 +89,7 @@ export interface ValidationConfig {
   /** Registry span definitions for COV-005 domain attribute checks. */
   registryDefinitions?: RegistrySpanDefinition[];
   /** Resolved Weaver registry (from `weaver registry resolve -f json`).
-   *  Used by SCH-001 through SCH-004 Tier 2 checks. */
+   *  Used by SCH-001 through SCH-003 Tier 2 checks. */
   resolvedSchema?: object;
   /** Absolute path to project root. Required for API-002 dependency placement check. */
   projectRoot?: string;

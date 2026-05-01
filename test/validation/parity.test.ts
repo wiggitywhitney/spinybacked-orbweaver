@@ -74,14 +74,14 @@ describe('feature parity matrix', () => {
     }
   });
 
-  it('SCH-001 and SCH-004 apply to all languages (cross-language concept)', () => {
+  it('SCH-001 applicableTo restricts to JS/TS — ts-morph is not safe for Python/Go', () => {
     const rules = getAllRules();
-    const universalSchRules = rules.filter(r => r.ruleId === 'SCH-001' || r.ruleId === 'SCH-004');
-    expect(universalSchRules.length).toBeGreaterThanOrEqual(2);
-    for (const rule of universalSchRules) {
-      expect(rule.applicableTo('python'), `${rule.ruleId}.applicableTo('python')`).toBe(true);
-      expect(rule.applicableTo('go'), `${rule.ruleId}.applicableTo('go')`).toBe(true);
-    }
+    const sch001 = rules.find(r => r.ruleId === 'SCH-001' && r.applicableTo('javascript'));
+    expect(sch001).toBeDefined();
+    expect(sch001!.applicableTo('javascript')).toBe(true);
+    expect(sch001!.applicableTo('typescript')).toBe(true);
+    expect(sch001!.applicableTo('python')).toBe(false);
+    expect(sch001!.applicableTo('go')).toBe(false);
   });
 
   it('SCH-002 and SCH-003 apply only to JS/TS (ts-morph internal — not safe for Python/Go)', () => {
@@ -144,7 +144,7 @@ describe('feature parity matrix', () => {
       'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006', 'NDS-007',
       'CDQ-001', 'CDQ-005', 'CDQ-006', 'CDQ-007', 'CDQ-009', 'CDQ-010', 'CDQ-011',
       'API-001', 'API-002', 'API-004',
-      'SCH-001', 'SCH-002', 'SCH-003', 'SCH-004',
+      'SCH-001', 'SCH-002', 'SCH-003',
     ];
 
     for (const ruleId of expected) {

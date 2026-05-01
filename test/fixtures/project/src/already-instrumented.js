@@ -21,6 +21,6 @@ export async function handleWebhook(req, res) {
   });
 }
 
-async function processWebhookPayload(payload) {
+function processWebhookPayload(payload) {
   return { processed: true, type: payload.type };
 }
