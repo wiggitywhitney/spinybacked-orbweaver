@@ -74,12 +74,14 @@ describe('feature parity matrix', () => {
     }
   });
 
-  it('SCH-001 applies to all languages (cross-language concept)', () => {
+  it('SCH-001 applies to JS/TS only (uses ts-morph internally — not safe for Python/Go)', () => {
     const rules = getAllRules();
-    const sch001 = rules.find(r => r.ruleId === 'SCH-001');
+    const sch001 = rules.find(r => r.ruleId === 'SCH-001' && r.applicableTo('javascript'));
     expect(sch001).toBeDefined();
-    expect(sch001!.applicableTo('python')).toBe(true);
-    expect(sch001!.applicableTo('go')).toBe(true);
+    expect(sch001!.applicableTo('javascript')).toBe(true);
+    expect(sch001!.applicableTo('typescript')).toBe(true);
+    expect(sch001!.applicableTo('python')).toBe(false);
+    expect(sch001!.applicableTo('go')).toBe(false);
   });
 
   it('SCH-002 and SCH-003 apply only to JS/TS (ts-morph internal — not safe for Python/Go)', () => {

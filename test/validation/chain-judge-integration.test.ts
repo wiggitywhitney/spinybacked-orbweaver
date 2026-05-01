@@ -1,5 +1,5 @@
 // ABOUTME: Integration test for the full validation pipeline with judge-enhanced rules.
-// ABOUTME: Exercises the SCH-001 judge path through validateFile() in naming quality fallback mode.
+// ABOUTME: Exercises SCH-001 deterministic naming quality through validateFile(); no judge is called.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -116,14 +116,9 @@ describe('full pipeline with judge-enhanced rules', () => {
     };
   }
 
-  it('calls judge for SCH-001 and collects token usage', async () => {
-    const parseFn = vi.fn()
-      // SCH-001 judge call: vague span name "doStuff"
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use "myapp.request.process" instead of "doStuff".', confidence: 0.85 },
-        { input: 80, output: 30 },
-      ));
-
+  it('SCH-001 naming quality is deterministic — no judge is called for single-component vague names', async () => {
+    // "doStuff" is single-component (no dot) → flagged deterministically, no judge call needed
+    const parseFn = vi.fn();
     const mockClient = { messages: { parse: parseFn } };
 
     const filePath = join(tempDir, 'test.js');
@@ -139,83 +134,25 @@ describe('full pipeline with judge-enhanced rules', () => {
 
     const result = await validateFile(input);
 
-    // Judge was called for SCH-001
-    expect(parseFn).toHaveBeenCalled();
-    expect(parseFn.mock.calls.length).toBe(1);
+    // Judge was NOT called — naming quality is deterministic
+    expect(parseFn).not.toHaveBeenCalled();
 
-    // Token usage from judge call is collected
-    expect(result.judgeTokenUsage).toBeDefined();
-    expect(result.judgeTokenUsage).toHaveLength(1);
+    // No judge token usage
+    expect(result.judgeTokenUsage == null || result.judgeTokenUsage.length === 0).toBe(true);
 
-    // Token usage reflects actual values from the mock
-    const usage = result.judgeTokenUsage![0]!;
-    expect(usage.inputTokens).toBeGreaterThan(0);
-    expect(usage.outputTokens).toBeGreaterThan(0);
-
-    // SCH-001 result exists
-    const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
-    expect(sch001Results.length).toBeGreaterThan(0);
-  });
-
-  it('judge verdict produces blocking SCH-001 failure', async () => {
-    const parseFn = vi.fn()
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use structured naming.', confidence: 0.85 },
-        { input: 80, output: 30 },
-      ));
-
-    const mockClient = { messages: { parse: parseFn } };
-
-    const filePath = join(tempDir, 'test.js');
-    writeFileSync(filePath, instrumentedCode, 'utf-8');
-
-    const input: ValidateFileInput = {
-      originalCode,
-      instrumentedCode,
-      filePath,
-      config: buildConfig(mockClient),
-      provider: jsProvider,
-    };
-
-    const result = await validateFile(input);
-
-    // SCH-001 naming failure is blocking
+    // SCH-001 produced a deterministic failure for "doStuff"
     const sch001Failures = result.blockingFailures.filter(r => r.ruleId === 'SCH-001');
     expect(sch001Failures.length).toBeGreaterThanOrEqual(1);
+    const hasVagueRef = sch001Failures.some(r =>
+      r.message.includes('doStuff') && r.message.includes('single-component'),
+    );
+    expect(hasVagueRef).toBe(true);
 
     // Overall: fails because SCH-001 is blocking
     expect(result.passed).toBe(false);
   });
 
-  it('degrades gracefully when judge is unavailable — script-only results used', async () => {
-    // Judge call fails
-    const parseFn = vi.fn().mockRejectedValue(new Error('API connection failed'));
-    const mockClient = { messages: { parse: parseFn } };
-
-    const filePath = join(tempDir, 'test.js');
-    writeFileSync(filePath, instrumentedCode, 'utf-8');
-
-    const input: ValidateFileInput = {
-      originalCode,
-      instrumentedCode,
-      filePath,
-      config: buildConfig(mockClient),
-      provider: jsProvider,
-    };
-
-    const result = await validateFile(input);
-
-    // Judge was attempted but failed — no judge token usage
-    expect(parseFn).toHaveBeenCalled();
-    const judgeTokens = result.judgeTokenUsage ?? [];
-    expect(judgeTokens).toHaveLength(0);
-
-    // Pipeline did NOT crash — script-only SCH-001 results are present
-    const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
-    expect(sch001Results.length).toBeGreaterThan(0);
-  });
-
-  it('works without judge (no anthropicClient) — pure script mode', async () => {
+  it('SCH-001 deterministic failure is blocking even without anthropicClient', async () => {
     const filePath = join(tempDir, 'test.js');
     writeFileSync(filePath, instrumentedCode, 'utf-8');
 
@@ -229,30 +166,23 @@ describe('full pipeline with judge-enhanced rules', () => {
           'SCH-001': { enabled: true, blocking: true },
         },
         resolvedSchema: schemaNoSpanDefs,
-        // No anthropicClient — judge won't run
+        // No anthropicClient
       },
       provider: jsProvider,
     };
 
     const result = await validateFile(input);
 
-    // No judge token usage since no client was provided
+    // No judge token usage since no client
     expect(result.judgeTokenUsage).toBeUndefined();
 
-    // SCH-001 still ran (script-only mode)
+    // SCH-001 still produced a result (deterministic naming check)
     const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
     expect(sch001Results.length).toBeGreaterThan(0);
+    expect(result.passed).toBe(false);
   });
 
-  it('judge suggestion appears in SCH-001 failure message', async () => {
-    const parseFn = vi.fn()
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use "myapp.request.process" instead of "doStuff".', confidence: 0.85 },
-        { input: 80, output: 30 },
-      ));
-
-    const mockClient = { messages: { parse: parseFn } };
-
+  it('SCH-001 failure message contains the vague span name for debugging', async () => {
     const filePath = join(tempDir, 'test.js');
     writeFileSync(filePath, instrumentedCode, 'utf-8');
 
@@ -260,63 +190,15 @@ describe('full pipeline with judge-enhanced rules', () => {
       originalCode,
       instrumentedCode,
       filePath,
-      config: buildConfig(mockClient),
+      config: buildConfig({ messages: { parse: vi.fn() } }),
       provider: jsProvider,
     };
 
     const result = await validateFile(input);
 
-    // SCH-001 messages reference the span name
     const sch001Fails = result.tier2Results.filter(r => r.ruleId === 'SCH-001' && !r.passed);
     expect(sch001Fails.length).toBeGreaterThan(0);
     const hasSpanRef = sch001Fails.some(r => r.message.includes('doStuff'));
     expect(hasSpanRef).toBe(true);
-  });
-
-  it('low-confidence SCH-001 verdict message indicates advisory downgrade', async () => {
-    const parseFn = vi.fn()
-      // SCH-001: low confidence — internally marked blocking: false by sch001.ts
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Maybe use a better name.', confidence: 0.5 },
-        { input: 80, output: 30 },
-      ));
-
-    const mockClient = { messages: { parse: parseFn } };
-
-    const filePath = join(tempDir, 'test.js');
-    writeFileSync(filePath, instrumentedCode, 'utf-8');
-
-    const input: ValidateFileInput = {
-      originalCode,
-      instrumentedCode,
-      filePath,
-      config: buildConfig(mockClient),
-      provider: jsProvider,
-    };
-
-    const result = await validateFile(input);
-
-    // SCH-001 should have a result with the downgrade message
-    const allSch001 = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
-    expect(allSch001.length).toBeGreaterThan(0);
-
-    const sch001Failures = allSch001.filter(r => !r.passed);
-    expect(sch001Failures.length).toBeGreaterThan(0);
-
-    // The message from sch001.ts includes "downgraded to advisory" for low-confidence
-    const downgraded = sch001Failures.some(r =>
-      r.message.includes('downgraded to advisory'),
-    );
-    expect(downgraded).toBe(true);
-
-    // Verify the downgrade actually takes effect in the final classification:
-    // SCH-001 should appear in advisory findings, NOT in blocking failures
-    expect(result.advisoryFindings.some(r => r.ruleId === 'SCH-001')).toBe(true);
-    expect(result.blockingFailures.some(r => r.ruleId === 'SCH-001')).toBe(false);
-    expect(result.passed).toBe(true);
-
-    // Token usage still collected even for low-confidence verdicts
-    expect(result.judgeTokenUsage).toBeDefined();
-    expect(result.judgeTokenUsage!.length).toBeGreaterThanOrEqual(1);
   });
 });

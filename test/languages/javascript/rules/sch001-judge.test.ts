@@ -1,49 +1,17 @@
-// ABOUTME: Tests for SCH-001 judge integration — naming quality assessment in fallback mode.
-// ABOUTME: Verifies judge catches vague span names that cardinality checks miss.
+// ABOUTME: Tests for SCH-001 extension acceptance judge path — semantic duplicate detection.
+// ABOUTME: Verifies judge catches span extensions that are semantic duplicates of registry operations.
 
-import { describe, it, expect, vi } from 'vitest';
-import { checkSpanNamesMatchRegistry } from '../../../../src/languages/javascript/rules/sch001.ts';
-import type { JudgeCallResult } from '../../../../src/validation/judge.ts';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('../../../../src/validation/judge.ts', () => ({
+  callJudge: vi.fn(),
+}));
+import { callJudge } from '../../../../src/validation/judge.ts';
 import type { TokenUsage } from '../../../../src/agent/schema.ts';
 
-/**
- * Create a mock Anthropic client that returns controlled judge responses.
- * Follows the same judge mock pattern as chain-judge-integration tests.
- */
-function makeMockClient(response: JudgeCallResult | null) {
-  const parseFn = vi.fn().mockResolvedValue(
-    response
-      ? {
-          parsed_output: response.verdict ? {
-            answer: response.verdict.answer,
-            suggestion: response.verdict.suggestion ?? null,
-            confidence: response.verdict.confidence,
-          } : null,
-          usage: {
-            input_tokens: response.tokenUsage.inputTokens,
-            output_tokens: response.tokenUsage.outputTokens,
-            cache_creation_input_tokens: response.tokenUsage.cacheCreationInputTokens,
-            cache_read_input_tokens: response.tokenUsage.cacheReadInputTokens,
-          },
-        }
-      : { parsed_output: null, usage: { input_tokens: 0, output_tokens: 0 } },
-  );
+import { checkSpanNamesMatchRegistry } from '../../../../src/languages/javascript/rules/sch001.ts';
 
-  return {
-    messages: { parse: parseFn },
-    _parseFn: parseFn,
-  };
-}
-
-function makeMockClientThrowing() {
-  const parseFn = vi.fn().mockRejectedValue(new Error('API connection failed'));
-  return {
-    messages: { parse: parseFn },
-    _parseFn: parseFn,
-  };
-}
-
-const judgeTokenUsage: TokenUsage = {
+const MOCK_TOKEN_USAGE: TokenUsage = {
   inputTokens: 80,
   outputTokens: 30,
   cacheCreationInputTokens: 0,
@@ -52,299 +20,194 @@ const judgeTokenUsage: TokenUsage = {
 
 const filePath = '/tmp/test-file.js';
 
-// Schema with NO span definitions — triggers fallback mode
-const schemaWithoutSpans = {
+// Schema with one span definition: "user.register" operation
+const schemaWithUserRegister = {
   groups: [
     {
-      id: 'registry.myapp.api',
-      type: 'attribute_group',
-      attributes: [{ name: 'http.method', type: 'string' }],
-    },
-  ],
-};
-
-// Schema WITH span definitions — triggers registry conformance mode (no judge needed)
-const schemaWithSpans = {
-  groups: [
-    {
-      id: 'span.myapp.user.get_users',
+      id: 'span.user.register',
       type: 'span',
-      brief: 'Retrieve all users',
-      span_kind: 'server',
-      attributes: [{ name: 'http.request.method', requirement_level: 'required' }],
+      brief: 'Registers a new user account',
     },
   ],
 };
 
-/**
- * Code with a vague span name that passes cardinality but not naming quality.
- * "doStuff" doesn't follow <namespace>.<category>.<operation> convention.
- */
-const codeWithVagueSpanName = [
+// Code that uses "user.registration" as a declared extension (not in registry)
+// The agent declares "user.registration" (in the extensions list), then uses it in code.
+const codeWithUserRegistration = [
   'const { trace } = require("@opentelemetry/api");',
   'const tracer = trace.getTracer("svc");',
-  'function doStuff() {',
-  '  return tracer.startActiveSpan("doStuff", (span) => {',
-  '    try { return 1; } finally { span.end(); }',
+  'function register() {',
+  '  return tracer.startActiveSpan("user.registration", (span) => {',
+  '    try { return {}; } finally { span.end(); }',
   '  });',
   '}',
 ].join('\n');
 
-/**
- * Code with a well-named span that follows dotted convention.
- */
-const codeWithGoodSpanName = [
-  'const { trace } = require("@opentelemetry/api");',
-  'const tracer = trace.getTracer("svc");',
-  'function getUsers() {',
-  '  return tracer.startActiveSpan("myapp.user.list", (span) => {',
-  '    try { return []; } finally { span.end(); }',
-  '  });',
-  '}',
-].join('\n');
+beforeEach(() => {
+  vi.mocked(callJudge).mockReset();
+});
 
-describe('SCH-001 judge integration', () => {
-  describe('judge catches vague naming in fallback mode', () => {
-    it('flags a vague span name when judge says it does not follow convention', async () => {
-      const client = makeMockClient({
-        verdict: {
-          answer: false, // Does NOT follow convention
-          suggestion: 'Use "myapp.task.process" instead of "doStuff".',
-          confidence: 0.9,
-        },
-        tokenUsage: judgeTokenUsage,
-      });
-
-      const { results, judgeTokenUsage: usage } = await checkSpanNamesMatchRegistry(
-        codeWithVagueSpanName,
-        filePath,
-        schemaWithoutSpans,
-        { client: client as any },
-      );
-
-      // Judge says name is vague — should produce a failing result
-      const failures = results.filter(r => !r.passed);
-      expect(failures).toHaveLength(1);
-      expect(failures[0].ruleId).toBe('SCH-001');
-      expect(failures[0].message).toContain('doStuff');
-      expect(failures[0].message).toContain('myapp.task.process');
-      expect(failures[0].tier).toBe(2);
-      // High confidence → blocking
-      expect(failures[0].blocking).toBe(true);
-      expect(usage).toHaveLength(1);
-      expect(usage[0].inputTokens).toBe(80);
-    });
-
-    it('passes when judge confirms the span name follows convention', async () => {
-      const client = makeMockClient({
-        verdict: {
-          answer: true, // Follows convention
-          confidence: 0.95,
-        },
-        tokenUsage: judgeTokenUsage,
-      });
-
-      const { results, judgeTokenUsage: usage } = await checkSpanNamesMatchRegistry(
-        codeWithGoodSpanName,
-        filePath,
-        schemaWithoutSpans,
-        { client: client as any },
-      );
-
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
-      expect(usage).toHaveLength(1);
-    });
-  });
-
-  describe('confidence threshold — low confidence downgrades to advisory', () => {
-    it('downgrades to advisory when judge confidence is below 0.7', async () => {
-      const client = makeMockClient({
-        verdict: {
-          answer: false, // Fails naming check
-          suggestion: 'Consider using a dotted convention.',
-          confidence: 0.5, // Low confidence
-        },
-        tokenUsage: judgeTokenUsage,
-      });
-
-      const { results } = await checkSpanNamesMatchRegistry(
-        codeWithVagueSpanName,
-        filePath,
-        schemaWithoutSpans,
-        { client: client as any },
-      );
-
-      const failures = results.filter(r => !r.passed);
-      expect(failures).toHaveLength(1);
-      // Low confidence → advisory, not blocking
-      expect(failures[0].blocking).toBe(false);
-      expect(failures[0].message).toContain('confidence');
-    });
-
-    it('keeps blocking when judge confidence is at or above 0.7', async () => {
-      const client = makeMockClient({
+describe('SCH-001 extension acceptance judge path', () => {
+  describe('M5 fixture: declared extension flagged as semantic duplicate', () => {
+    it('flags user.registration as semantic duplicate of user.register via judge', async () => {
+      // Normalization: "userregistration" vs "userregister" — NOT equal → normalization misses it
+      // No Jaccard (span names, useJaccard: false)
+      // Judge: returns answer=false (not semantically distinct) → duplicate
+      vi.mocked(callJudge).mockResolvedValueOnce({
         verdict: {
           answer: false,
-          suggestion: 'Use "myapp.task.process".',
-          confidence: 0.7, // At threshold
+          suggestion: 'Use "user.register" instead.',
+          confidence: 0.9,
         },
-        tokenUsage: judgeTokenUsage,
+        tokenUsage: MOCK_TOKEN_USAGE,
       });
 
-      const { results } = await checkSpanNamesMatchRegistry(
-        codeWithVagueSpanName,
-        filePath,
-        schemaWithoutSpans,
-        { client: client as any },
+      const declaredExtensions = ['span.user.registration'];
+
+      const { results, judgeTokenUsage } = await checkSpanNamesMatchRegistry(
+        codeWithUserRegistration, filePath, schemaWithUserRegister,
+        { client: {} as any }, declaredExtensions,
       );
 
-      const failures = results.filter(r => !r.passed);
-      expect(failures).toHaveLength(1);
-      expect(failures[0].blocking).toBe(true);
+      // Extension was flagged as a semantic duplicate
+      const extensionFailure = results.find(
+        (r) => !r.passed && r.message.includes('user.registration'),
+      );
+      expect(extensionFailure).toBeDefined();
+      expect(extensionFailure!.message).toContain('user.register');
+      expect(extensionFailure!.blocking).toBe(true);
+      expect(judgeTokenUsage).toHaveLength(1);
     });
   });
 
-  describe('graceful fallback when judge is unavailable', () => {
-    it('falls back to script-only when judge returns null (API error)', async () => {
-      const client = makeMockClientThrowing();
-
-      const { results, judgeTokenUsage: usage } = await checkSpanNamesMatchRegistry(
-        codeWithVagueSpanName,
-        filePath,
-        schemaWithoutSpans,
-        { client: client as any },
-      );
-
-      // Falls back to cardinality-only check — "doStuff" has no dynamic values → pass
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
-      expect(usage).toHaveLength(0);
-    });
-
-    it('uses script-only mode when no client provided', async () => {
-      const { results, judgeTokenUsage: usage } = await checkSpanNamesMatchRegistry(
-        codeWithVagueSpanName,
-        filePath,
-        schemaWithoutSpans,
-      );
-
-      // No judge → cardinality check only — "doStuff" passes
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
-      expect(usage).toHaveLength(0);
-    });
-  });
-
-  describe('judge is not called in registry conformance mode', () => {
-    it('does not call judge when registry has span definitions', async () => {
-      const client = makeMockClient({
-        verdict: { answer: true, confidence: 0.9 },
-        tokenUsage: judgeTokenUsage,
-      });
-
-      const { results } = await checkSpanNamesMatchRegistry(
-        codeWithGoodSpanName.replace('myapp.user.list', 'myapp.user.get_users'),
-        filePath,
-        schemaWithSpans,
-        { client: client as any },
-      );
-
-      // Registry mode — no judge call
-      expect(client._parseFn).not.toHaveBeenCalled();
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
-    });
-  });
-
-  describe('judge question construction', () => {
-    it('includes span name and naming convention in the judge question', async () => {
-      const client = makeMockClient({
-        verdict: { answer: true, confidence: 0.85 },
-        tokenUsage: judgeTokenUsage,
-      });
-
-      await checkSpanNamesMatchRegistry(
-        codeWithVagueSpanName,
-        filePath,
-        schemaWithoutSpans,
-        { client: client as any },
-      );
-
-      expect(client._parseFn).toHaveBeenCalledTimes(1);
-      const callArgs = client._parseFn.mock.calls[0][0];
-      const userMessage = callArgs.messages.find((m: any) => m.role === 'user')?.content;
-      expect(userMessage).toContain('doStuff');
-      expect(userMessage).toContain('convention');
-    });
-  });
-
-  describe('multiple span names in fallback mode', () => {
-    it('calls judge for each span name that passes cardinality check', async () => {
-      const parseFn = vi.fn()
-        .mockResolvedValueOnce({
-          parsed_output: { answer: false, suggestion: 'Use "myapp.task.process"', confidence: 0.9 },
-          usage: { input_tokens: 80, output_tokens: 30 },
-        })
-        .mockResolvedValueOnce({
-          parsed_output: { answer: true, suggestion: null, confidence: 0.88 },
-          usage: { input_tokens: 75, output_tokens: 28 },
-        });
-
-      const client = { messages: { parse: parseFn }, _parseFn: parseFn };
-
-      const codeWithMultipleSpans = [
+  describe('normalization catches delimiter variants without judge', () => {
+    it('flags user_register as delimiter-variant of user.register without judge call', async () => {
+      // "user_register" normalizes to "userregister" — same as "user.register" → normalization catches
+      const codeWithUnderscoreVariant = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
-        'function a() {',
+        'function register() {',
+        '  return tracer.startActiveSpan("user_register", (span) => {',
+        '    try { return {}; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const { results, judgeTokenUsage } = await checkSpanNamesMatchRegistry(
+        codeWithUnderscoreVariant, filePath, schemaWithUserRegister,
+        { client: {} as any }, ['span.user_register'],
+      );
+
+      const extensionFailure = results.find(
+        (r) => !r.passed && r.message.includes('user_register'),
+      );
+      expect(extensionFailure).toBeDefined();
+      expect(extensionFailure!.message).toContain('delimiter-variant');
+      expect(extensionFailure!.message).toContain('user.register');
+      // Normalization doesn't require judge
+      expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+      expect(judgeTokenUsage).toHaveLength(0);
+    });
+  });
+
+  describe('M5 fixture: genuinely novel extension is accepted', () => {
+    it('accepts a genuinely novel span extension not semantically equivalent to registry', async () => {
+      vi.mocked(callJudge).mockResolvedValueOnce({
+        verdict: {
+          answer: true, // semantically distinct
+          suggestion: undefined,
+          confidence: 0.95,
+        },
+        tokenUsage: MOCK_TOKEN_USAGE,
+      });
+
+      const codeWithNovelExtension = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function purchase() {',
+        '  return tracer.startActiveSpan("user.purchase", (span) => {',
+        '    try { return {}; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        codeWithNovelExtension, filePath, schemaWithUserRegister,
+        { client: {} as any }, ['span.user.purchase'],
+      );
+
+      // Extension accepted — no duplicate failure for "user.purchase"
+      const duplicateFailure = results.find(
+        (r) => !r.passed && r.message.includes('duplicate'),
+      );
+      expect(duplicateFailure).toBeUndefined();
+    });
+  });
+
+  describe('degradation without judge client', () => {
+    it('accepts extension without judge when no client provided (normalization-only mode)', async () => {
+      // "user.registration" vs "user.register": normalization doesn't catch it
+      // No judge → extension accepted (novel)
+      const { results } = await checkSpanNamesMatchRegistry(
+        codeWithUserRegistration, filePath, schemaWithUserRegister,
+        undefined, // no judgeDeps
+        ['span.user.registration'],
+      );
+
+      // Without judge, semantic duplicate is not caught — extension is accepted
+      const extensionFailure = results.find(
+        (r) => !r.passed && r.message.includes('duplicate'),
+      );
+      expect(extensionFailure).toBeUndefined();
+      expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('judge is NOT called for naming quality fallback (deterministic in M5)', () => {
+    it('flags single-component span name without calling judge', async () => {
+      // Even with a judge client, naming quality is deterministic — no judge call
+      const schemaWithoutSpans = { groups: [] };
+
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function doWork() {',
         '  return tracer.startActiveSpan("doStuff", (span) => {',
         '    try { return 1; } finally { span.end(); }',
         '  });',
         '}',
-        'function b() {',
-        '  return tracer.startActiveSpan("myapp.order.create", (span) => {',
-        '    try { return 2; } finally { span.end(); }',
-        '  });',
-        '}',
       ].join('\n');
 
-      const { results, judgeTokenUsage: usage } = await checkSpanNamesMatchRegistry(
-        codeWithMultipleSpans,
-        filePath,
-        schemaWithoutSpans,
-        { client: client as any },
-      );
-
-      expect(parseFn).toHaveBeenCalledTimes(2);
-      // First span: judge says vague → fail. Second: judge says good → no failure.
-      const failures = results.filter(r => !r.passed);
-      expect(failures).toHaveLength(1);
-      expect(failures[0].message).toContain('doStuff');
-      expect(usage).toHaveLength(2);
-    });
-  });
-
-  describe('backward compatibility', () => {
-    it('cardinality failures are still detected without judge', async () => {
-      const codeWithDynamicSpan = [
-        'const { trace } = require("@opentelemetry/api");',
-        'const tracer = trace.getTracer("svc");',
-        'function doWork() {',
-        '  return tracer.startActiveSpan("user-12345-get", (span) => {',
-        '    try { return 1; } finally { span.end(); }',
-        '  });',
-        '}',
-      ].join('\n');
-
-      const { results } = await checkSpanNamesMatchRegistry(
-        codeWithDynamicSpan,
-        filePath,
-        schemaWithoutSpans,
+      const { results, judgeTokenUsage } = await checkSpanNamesMatchRegistry(
+        code, filePath, schemaWithoutSpans, { client: {} as any },
       );
 
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
-      expect(results[0].message).toContain('unbounded cardinality');
+      expect(results[0].message).toContain('single-component');
+      // Judge is NOT called — naming quality is deterministic
+      expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+      expect(judgeTokenUsage).toHaveLength(0);
+    });
+  });
+
+  describe('judge is NOT called in registry conformance mode for matching span names', () => {
+    it('does not call judge when span name exactly matches registry', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function register() {',
+        '  return tracer.startActiveSpan("user.register", (span) => {',
+        '    try { return {}; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      await checkSpanNamesMatchRegistry(
+        code, filePath, schemaWithUserRegister, { client: {} as any },
+      );
+
+      expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
     });
   });
 });

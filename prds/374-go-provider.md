@@ -300,7 +300,7 @@ Following Part 8 checklist, Step 3:
   - `cdq001.ts` — spans closed: `defer span.End()` is the correct pattern; flag `tracer.Start()` calls without a corresponding `defer span.End()` in the same function
   - `nds004.ts` — signature preservation: apply NDS-004 policy from OD-1; if Option B (skip functions without ctx), this checker must not flag functions that were correctly skipped
   - `nds006.ts` — module system match: `applicableTo('go') = false` — Go modules have no CJS/ESM equivalent
-  - **Portable rules — same implementation, `applicableTo('go') = true`:** `sch001`, `sch002`, `sch003`, `sch004`, `cdq008` — these check schema strings, no language-specific logic needed
+  - **Portable rules — same implementation, `applicableTo('go') = true`:** `sch002`, `sch003`, `cdq008` — these check schema strings, no language-specific logic needed. Note: `sch004` was deleted (PRD #508) — patterns moved to SCH-002's extension acceptance path. `sch001` is no longer portable (PRD #508 D-4): SCH-001 uses ts-morph internally and is restricted to JS/TS; the Go provider must implement its own `sch001.ts` with Go-specific span name extraction (no ts-morph).
   - **Not applicable to Go — `applicableTo('go') = false`:** `nds006` (no CJS/ESM in Go), `cov006` (per OD-5, SIG still maturing), `cov004` (per OD-6, goroutines deferred)
   - **Shared-concept rules requiring Go-specific implementation:** all remaining rules (`cov001`, `cov002`, `cov003`, `rst001`–`rst005`, `nds003`, `nds004`, `nds005`, `cdq001`, `cdq006`, `api001`, `api002`) — implement each per the Go-specific patterns described above
 - [ ] `GoProvider.hasImplementation()` returns correct values for all 26 rule IDs

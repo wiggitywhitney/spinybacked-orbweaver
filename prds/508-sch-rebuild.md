@@ -61,6 +61,10 @@ Three schema-fidelity rules have structural flaws that can't be fixed in place �
 
 ## Decision Log
 
+**D-4 (SCH-001 applicableTo restricted to JS/TS)**
+
+SCH-001 previously returned `applicableTo: return true` (all languages) but uses ts-morph internally for AST parsing. SCH-002 already restricted correctly to JS/TS. The audit document flagged this as a bug to fix in the rebuild. After M5, SCH-001 returns `language === 'javascript' || language === 'typescript'`. Python and Go providers, when added in future PRDs, must implement their own SCH-001 with language-specific AST parsing — they cannot inherit the JS/TS implementation. The TypeScript provider's `TS_INHERITED_RULE_IDS` continues to include SCH-001 (typescript is in the allowed set). The parity test that previously expected SCH-001 to apply to Python/Go was updated to match.
+
 **D-3 (type-compat pre-filter applies before all pipeline stages, not just the judge)**
 
 During M3 implementation, the original M2 design placed the type-compatibility pre-filter only before the judge call (stage 3). This caused Jaccard (stage 2) to produce false positives for type-mismatched pairs: "user_age_label" (string) vs "user.age" (int) had Jaccard similarity 0.67 > 0.5, so Jaccard would flag it before the type filter ran. Fix: move type-compat filtering to apply before ALL stages (normalization, Jaccard, judge) in `checkSemanticDuplicate`. The namespace pre-filter remains judge-only (stage 3). This change is already reflected in `src/languages/javascript/rules/semantic-dedup.ts`.
@@ -186,17 +190,15 @@ SCH-004's patterns are now in SCH-002. Delete the canonical SCH-004 file (locati
 
 Replace the LLM judge in the naming-quality fallback with deterministic checks. Add semantic duplicate detection to the conformance-mode extension acceptance path using the algorithm from M2 (normalization comparison + optional judge; no Jaccard because span names are short). Fix `applicableTo` to restrict to JS/TS only.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH-001 rebuild narrative
-- [ ] Naming-quality fallback replaces the LLM judge with two deterministic checks:
-  - Dotted-notation structure: `/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/` — at least two dot-separated components
-  - Single-component vagueness: any span name with no dot separator is flagged as too vague (single-component names like `process` or `doStuff` always flagged)
-- [ ] LLM judge code and its dependencies removed from SCH-001's naming-quality path
-- [ ] SCH-001's extension acceptance path calls the semantic duplicate detection algorithm from M2 (normalization + optional judge, no Jaccard)
-- [ ] `applicableTo` fixed: `language === 'javascript' || language === 'typescript'`
-- [ ] Test fixture: registry has `user.register` as an operation; agent declares `user_registration` as a span extension; SCH-001 flags as a semantic duplicate. **Note**: "user_registration" and "user.register" do NOT normalize to the same string ("userregistration" ≠ "userregister"), so normalization does not catch this — the judge path fires. The test fixture must mock the judge (using `vi.mock('../../../src/validation/judge.ts', ...)`) and return `answer: false, confidence: 0.9`. Without a judge mock, the fixture would silently pass (no judge → no duplicate flag).
-- [ ] Test fixture: registry has no span definitions; agent generates `do_stuff` span name; SCH-001 flags as single-component vague name (deterministic, no LLM call)
-- [ ] Test fixture: agent declares a genuinely novel span name not semantically equivalent to any registry operation; SCH-001 accepts the extension
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the SCH-001 rebuild narrative
+- [x] Naming-quality fallback replaces the LLM judge with two deterministic checks (single-component vagueness + dotted-notation regex)
+- [x] LLM judge code and its dependencies removed from SCH-001's naming-quality path; `callJudge` import removed
+- [x] SCH-001's extension acceptance path calls `checkSemanticDuplicate` from M2 (useJaccard: false, no inferredType)
+- [x] `applicableTo` fixed: `language === 'javascript' || language === 'typescript'`
+- [x] Test fixture: judge-mocked test in sch001-judge.test.ts confirms "user_registration" flagged as semantic duplicate of "user.register" via judge (normalization doesn't catch since "userregistration" ≠ "userregister")
+- [x] Test fixture: sch001.test.ts confirms "do_stuff" (single-component) and "doWork" (single-component) flagged deterministically without judge
+- [x] Test fixture: sch001-judge.test.ts confirms genuinely novel span "user.purchase" is accepted (judge says distinct)
+- [x] `npm test` and `npm run typecheck` pass
 
 ### Milestone M6: Execute the SCH-005 decision from M1
 
