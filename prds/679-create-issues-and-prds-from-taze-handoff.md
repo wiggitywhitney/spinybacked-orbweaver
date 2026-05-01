@@ -26,7 +26,7 @@ Create each deliverable in dependency order. Every milestone starts by reading t
 ## Milestones
 
 - [x] M1: Create 4 standalone GitHub issues from the handoff doc
-- [ ] M2: Create PRD 2 (smarter end-of-run test failure handling) + CodeRabbit review + audit
+- [x] M2: Create PRD 2 (smarter end-of-run test failure handling) + CodeRabbit review + audit
 - [ ] M3: Create PRD 1 (live-check actually validates something) + CodeRabbit review + audit
 - [ ] M4: Create PRD 3 (diagnostic agent for persistent failures) + CodeRabbit review + audit
 - [ ] M5: Create PRD 4 (dependency-aware file instrumentation ordering) + CodeRabbit review + audit

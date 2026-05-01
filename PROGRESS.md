@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-01) Created PRD #687 documenting the fix for spiny-orb's end-of-run rollback problem: when a checkpoint test fails with a timeout, the current logic rolls back all recently committed files including ones whose code was never in the failing test's call path. PRD #687 specifies three connected fixes — an API health check (npm/jsr) to detect environmental failures before rolling back, a single retry with ~30s delay for transient failures, and extending the existing stack-trace-based smart-rollback logic from the checkpoint path to the end-of-run path in coordinate.ts. The PRD includes the foundational insight that spans are no-ops during checkpoint tests (OTel SDK never initializes), which means instrumentation cannot cause timeout failures — making the current rollback behavior provably wrong.
+
 - (2026-05-01) Created four GitHub issues from the taze eval run-11 handoff document, capturing the four actionable problems found: the PR summary incorrectly showing "OK" when Weaver received no spans (#683), the rollback count math becoming unreadable after a 3-file rollback (#684), the missing documentation explaining why checkpoint test failures can't be caused by instrumentation (#685), and a research spike to survey how CI tooling, code-transformation tools, and live telemetry validators handle the same problems in other ecosystems (#686). All issue bodies reviewed with `/write-prompt` before creation. Updated Issue D to include a step that triggers `/prd-update-decisions` if the research reveals design changes for PRDs 1–4, and updated PRD #679's M2–M5 milestones to read the research output before drafting each PRD.
 
 ### Changed
