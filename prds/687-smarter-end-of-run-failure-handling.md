@@ -38,21 +38,27 @@ Health checks are not a courtesy — they are the narrow gate through which envi
 
 ---
 
-## Open Design Question
+## Decision: Smart-rollback runs first
 
-**Should smart-rollback run first as a cheap deterministic gate?**
-
-The three fixes below are ordered: health-check → retry → smart-rollback. But consider the run-11 case: smart-rollback alone would have prevented the bad rollback without any external calls or delays, because the failing test's stack trace points to `resolves.ts`, which was never committed.
-
-The alternative ordering — smart-rollback first, then health-check and retry only when committed files are in the call path — is cheaper and requires no network calls in the common case. The PRD implementor should evaluate both orderings and document the decision before implementation.
+The three fixes execute in this order: **smart-rollback → health-check → retry**. Smart-rollback is the cheap deterministic gate; health-check and retry only apply when committed files appear in the failing test's call path. See Decision Log for the full rationale.
 
 ---
 
 ## Solution
 
-Three connected fixes that form a decision tree. A partial implementation leaves the rollback logic inconsistent — all three must ship together.
+Three connected fixes that form a decision tree. A partial implementation leaves the rollback logic inconsistent — all three must ship together. They execute in this order: smart-rollback → health-check → retry.
 
-### Fix 1: API health check before rollback
+### Fix 1: Extend smart-rollback to the end-of-run path
+
+The `parseFailingSourceFiles` function in `dispatch.ts` parses a failing test's stack trace and identifies which source files it exercises. This logic is already used during checkpoint rollback decisions but is **not applied** at the end-of-run in `coordinate.ts` Step 7c.
+
+Apply it there: when a test fails, parse the stack trace, identify source files in the call path, compare against the set of committed instrumented files. If no committed file appears in the call path, do not roll back. If committed files ARE in the call path, proceed to Fix 2.
+
+**Open research question**: Is `parseFailingSourceFiles` lift-and-shift from `dispatch.ts` to `coordinate.ts`, or are there differences between the checkpoint context and the end-of-run context that require separate handling? The implementor should read both call sites before deciding.
+
+### Fix 2: API health check before rollback
+
+Only reached when Fix 1 determines that committed files appear in the failing test's call path.
 
 When a test fails with a timeout error, check the health endpoint of the external API involved:
 - npm: `GET registry.npmjs.org/-/ping` — healthy if response is `{}`
@@ -60,26 +66,20 @@ When a test fails with a timeout error, check the health endpoint of the externa
 
 If the API is unhealthy: report that and suspend rollback. The failure is environmental, not caused by instrumentation.
 
-If the API is healthy: proceed to Fix 2.
+If the API is healthy: proceed to Fix 3.
 
 **Open research question**: How do we identify "the external API this test depends on" generically when it's not npm or jsr? The current approach hard-codes npm/jsr health endpoints. The implementor should research whether a more general approach (e.g., parsing timeout error messages for hostnames) is feasible.
 
-### Fix 2: One retry with delay
+### Fix 3: One retry with delay
 
-After a healthy API check, wait ~30 seconds and retry the test suite once.
+Only reached when Fix 2 confirms the external API is healthy.
+
+Wait ~30 seconds and retry the test suite once.
 
 - If the retry passes: do not roll back. The failure was transient.
-- If the retry fails again: proceed to Fix 3.
+- If the retry fails again: roll back the committed files in the call path and report why.
 
 **Open research question**: Which test failure types are amenable to retry vs. deterministic instrumentation breakage? The implementor should survey the failure taxonomy before finalizing the retry heuristic. Timeout errors with a healthy API are the clear case for retry; other failure types (assertion errors, type errors) should likely not trigger retry.
-
-### Fix 3: Extend smart-rollback to the end-of-run path
-
-The `parseFailingSourceFiles` function in `dispatch.ts` parses a failing test's stack trace and identifies which source files it exercises. This logic is already used during checkpoint rollback decisions but is **not applied** at the end-of-run in `coordinate.ts` Step 7c.
-
-Apply it there: when a test fails, parse the stack trace, identify source files in the call path, compare against the set of committed instrumented files. If no committed file appears in the call path, do not roll back.
-
-**Open research question**: Is `parseFailingSourceFiles` lift-and-shift from `dispatch.ts` to `coordinate.ts`, or are there differences between the checkpoint context and the end-of-run context that require separate handling? The implementor should read both call sites before deciding.
 
 ---
 
@@ -94,9 +94,9 @@ Apply it there: when a test fails, parse the stack trace, identify source files 
 ## Milestones
 
 - [ ] M1: Research — answer the three open research questions before any implementation
-- [ ] M2: Implement Fix 3 (smart-rollback at end-of-run) with tests
-- [ ] M3: Implement Fix 1 (API health check) with tests
-- [ ] M4: Implement Fix 2 (retry with delay) with tests
+- [ ] M2: Implement Fix 1 (smart-rollback at end-of-run) with tests
+- [ ] M3: Implement Fix 2 (API health check) with tests
+- [ ] M4: Implement Fix 3 (retry with delay) with tests
 - [ ] M5: Integration test — end-to-end scenario reproducing run-11 failure pattern
 
 ---
@@ -105,7 +105,9 @@ Apply it there: when a test fails, parse the stack trace, identify source files 
 
 ### M1: Research
 
-**Do not write any implementation code in this milestone.** This milestone answers the three open questions before any code is written.
+**Step 0**: Read related research before starting: [Research: Industry Practices — Flaky Test Handling, Codemod Rollback, Live Telemetry Validation](../docs/research/industry-practices-spike.md)
+
+**Do not write any implementation code in this milestone.** This milestone answers three open research questions before any code is written. The fix ordering (smart-rollback → health-check → retry) is already decided — see Decision Log.
 
 **Question 1 — Failure type taxonomy**: Survey the existing test failure cases in the eval runs at `~/Documents/Repositories/spinybacked-orbweaver-eval` (taze runs 8–11). If that path does not exist, run `gh repo list wiggitywhitney | grep eval` to find the cloned location. Categorize each failure by type: timeout, assertion error, type error, import error, etc. For each category, determine whether retry is appropriate. Document the taxonomy and the retry heuristic in a markdown file at `docs/research/end-of-run-failure-taxonomy.md`.
 
@@ -113,11 +115,9 @@ Apply it there: when a test fails, parse the stack trace, identify source files 
 
 **Question 3 — parseFailingSourceFiles portability**: Read `parseFailingSourceFiles` in `dispatch.ts` and the call site in `coordinate.ts` Step 7c. Determine whether the function can be called from `coordinate.ts` without modification, or whether end-of-run stack traces differ in structure from checkpoint stack traces. Write findings to `docs/research/end-of-run-failure-taxonomy.md` (same file, separate section).
 
-**Question 4 — Fix ordering**: Based on the answers to Questions 1–3, decide the ordering of the three fixes (see Open Design Question section). Document the chosen ordering and the rationale. Update this PRD's Decision Log with the ordering decision before proceeding to M2.
+Success criterion: `docs/research/end-of-run-failure-taxonomy.md` exists and answers all three questions with enough specificity to drive M2–M4 implementation without further research.
 
-Success criterion: `docs/research/end-of-run-failure-taxonomy.md` exists and answers all four questions with enough specificity to drive M2–M4 implementation without further research.
-
-### M2: Implement Fix 3 — Smart-rollback at end-of-run
+### M2: Implement Fix 1 — Smart-rollback at end-of-run
 
 **Start by reading `docs/research/end-of-run-failure-taxonomy.md`** to confirm the research answers before writing any code.
 
@@ -130,20 +130,24 @@ Success criteria:
 - The run-11 scenario (failing test in uncommitted file) does not trigger rollback
 - Existing test suite passes with no regressions
 
-### M3: Implement Fix 1 — API health check before rollback
+### M3: Implement Fix 2 — API health check before rollback
+
+**This milestone implements Fix 2, which only fires when Fix 1 (M2) determined that committed instrumented files appear in the failing test's call path. If Fix 1 would have skipped rollback, Fix 2 is never reached.**
 
 **Start by reading `docs/research/end-of-run-failure-taxonomy.md`** to use the documented failure taxonomy and API identification approach.
 
-Add health check logic: when a timeout error is detected in the failing test output, check the relevant API endpoint. Health check targets: `registry.npmjs.org/-/ping` (npm), `jsr.io` (jsr). If unhealthy, suspend rollback and report the specific endpoint that failed.
+Add health check logic: when a timeout error is detected in the failing test output AND committed files are in the call path, check the health endpoint of the external API involved. Health check targets: `registry.npmjs.org/-/ping` (npm), `jsr.io` (jsr). If unhealthy, suspend rollback and report the specific endpoint that failed.
 
 TDD: write a failing unit test that mocks an unhealthy npm endpoint and asserts rollback is suspended. Confirm failure, implement, confirm pass.
 
 Success criteria:
-- Unit test exists and passes (mocked unhealthy API → no rollback)
-- Unit test exists and passes (mocked healthy API → rollback proceeds to retry)
+- Unit test exists and passes (committed files in call path + mocked unhealthy API → no rollback)
+- Unit test exists and passes (committed files in call path + mocked healthy API → rollback proceeds to retry)
 - Existing test suite passes with no regressions
 
-### M4: Implement Fix 2 — Retry with delay
+### M4: Implement Fix 3 — Retry with delay
+
+**This milestone implements Fix 3, which only fires when Fix 1 (M2) determined committed files are in the call path AND Fix 2 (M3) confirmed the external API is healthy. If either earlier fix resolved the situation, Fix 3 is never reached.**
 
 **Start by reading `docs/research/end-of-run-failure-taxonomy.md`** to confirm the retry heuristic.
 
@@ -177,8 +181,8 @@ Success criterion: integration test exists in `test/coordinator/acceptance-gate.
 ## Design Notes
 
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
-- The three fixes form a decision tree. The ordering (which fix runs first) is an open design question resolved in M1. Do not implement M2–M4 until the ordering decision is documented in the Decision Log.
-- Fix 3 (smart-rollback) is the cheapest and most deterministic fix. Fix 1 (health check) makes external network calls. Fix 2 (retry) adds a 30-second delay. The M1 research should inform whether Fix 3 should gate Fixes 1 and 2.
+- The three fixes form a decision tree executing in order: smart-rollback (Fix 1) → health-check (Fix 2) → retry (Fix 3). Fix 1 is the cheap deterministic gate; Fixes 2 and 3 only run when committed files appear in the failing test's call path.
+- Fix 1 (smart-rollback) makes no external calls. Fix 2 (health check) makes one external network call. Fix 3 (retry) adds a 30-second delay. This ordering minimizes cost in the common case.
 
 ---
 
@@ -188,4 +192,4 @@ Success criterion: integration test exists in `test/coordinator/acceptance-gate.
 |---|---|---|
 | 2026-05-01 | Three fixes must ship together | They form a decision tree; partial implementation leaves rollback logic inconsistent |
 | 2026-05-01 | `--exclude` flag workaround explicitly rejected | Hides real signal; masks symptoms without diagnosing cause |
-| 2026-05-01 | Fix ordering deferred to M1 research | Run-11 suggests smart-rollback-first may be more efficient; decision requires reading `parseFailingSourceFiles` portability before committing |
+| 2026-05-01 | Fix ordering: smart-rollback → health-check → retry | Industry practices research spike confirms: check the cheapest deterministic gate first (Meta PFS model: a pass is strong evidence, a fail is weak evidence; Slack: pre-filter infrastructure categories before flakiness logic). Smart-rollback alone resolves run-11 without any external calls. Health-check and retry only apply when committed files are in the call path. |
