@@ -152,9 +152,11 @@ Success criteria:
 ### M4: Integration test
 
 Write an integration test that reproduces the ambiguous failure scenario (committed files in call path, timeout error, API healthy, retry failed) and asserts that:
-- The PR flag content contains a non-empty `specificCause` (when synthetic fixture provides sufficient signal)
+- The PR flag content contains a non-empty `specificCause` when the synthetic fixture satisfies the sufficient-signal conditions from M1 Research Question 2: a span wrapper is present in the direct call path to the failing test AND the error type is timeout or assertion
 - The PR flag content contains a non-empty `evidence` block in all cases
 - No rollback occurs
+
+The synthetic fixture must explicitly include a span wrapper in the call path — a fixture where committed files are in the call path but no span wrapper is present will exercise the evidence-only path, not the `specificCause` path. Construct two fixture variants: one with span wrapper (expects `specificCause` non-null) and one without (expects `specificCause` null).
 
 Place in `test/coordinator/acceptance-gate.test.ts` alongside existing acceptance gate tests. Verify locally with:
 
