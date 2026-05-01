@@ -98,10 +98,12 @@ Pick the approach that gives the agent enough call context to reason about causa
 
 **Question 2 — Agent signal thresholds**: When should the diagnostic agent produce a specific cause statement vs. only present evidence? Define the conditions:
 
-- **Sufficient signal for a specific claim**: span wrapper appears in the call path to the failing test AND the error type is timeout or assertion (not type/import error, which PRD #687 handles via direct rollback)
-- **Insufficient signal — present evidence only**: committed files are in call path but no span wrapper appears in the direct call path; error type is novel/unrecognized
+- **Sufficient signal for a specific claim**: span wrapper appears in the direct call path to the failing test AND the error type is timeout or assertion (not type/import error, which PRD #687 handles via direct rollback)
+- **Insufficient signal — present evidence only**: committed files are in call path but no span wrapper appears in the direct call path; OR error type is novel/unrecognized
 
-Document the decision matrix in `docs/research/diagnostic-agent-signal-thresholds.md`.
+**Live-check compliance data role**: Live-check data is evidence-only — it enriches the `specificCause` statement but does NOT gate whether one is produced. The signal threshold above (span wrapper + error type) determines whether `specificCause` is non-null. However, when live-check data is available and indicates the span(s) in the call path did NOT fire despite the wrapper being present structurally, the agent MUST surface that contradiction explicitly in its cause statement (e.g., "span wrapper is present in the call path but live-check shows no spans fired for this operation — the wrapper may not be executing in practice"). A structural span wrapper that never fires is still a finding worth surfacing.
+
+Document the decision matrix — including the live-check evidence role — in `docs/research/diagnostic-agent-signal-thresholds.md`.
 
 Success criterion: Both research files exist and contain enough specificity to drive M2 implementation without further research.
 
