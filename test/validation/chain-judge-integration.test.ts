@@ -14,7 +14,7 @@ const jsProvider = new JavaScriptProvider();
 
 /**
  * Schema with attribute groups but NO span definitions.
- * No span groups triggers SCH-001 naming quality fallback mode (judge assesses span names).
+ * No span groups triggers SCH-001 deterministic naming quality checks (no judge call).
  */
 const schemaNoSpanDefs = {
   groups: [
@@ -102,7 +102,7 @@ describe('full pipeline with judge-enhanced rules', () => {
   });
 
   /**
-   * Build a ValidationConfig that enables SCH-001 judge path plus the
+   * Build a ValidationConfig that enables SCH-001 deterministic naming checks plus the
    * minimum needed for Tier 1 to pass.
    */
   function buildConfig(mockClient: unknown): ValidationConfig {

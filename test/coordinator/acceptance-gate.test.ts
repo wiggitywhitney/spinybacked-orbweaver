@@ -842,6 +842,115 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
   });
 });
 
+describe('Acceptance Gate — SCH-001/002 unconditionally blocking (sparse registry, no downgrade)', () => {
+  /**
+   * Verifies that SCH-001 and SCH-002 are blocking even with a sparse registry
+   * (< 3 span definitions). Prior to the SCH rebuild, both were downgraded to
+   * advisory when the registry had fewer than 3 span definitions. The sparse
+   * logic was removed — these checks are now unconditionally blocking.
+   */
+
+  // Sparse schema: one attribute group, NO span definitions → triggers SCH-001 naming quality fallback
+  const sparseSchema = {
+    groups: [
+      {
+        id: 'registry.myapp.api',
+        type: 'attribute_group',
+        attributes: [
+          { name: 'http.request.method', type: 'string' },
+        ],
+      },
+    ],
+  };
+
+  it('SCH-001 naming quality fallback is blocking on sparse registry (single-component vague name)', async () => {
+    const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("doStuff", (span) => {',
+      '    try { return 1; } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkSpanNamesMatchRegistry(code, '/project/a.js', sparseSchema);
+    const failure = results.find((r: any) => !r.passed);
+    expect(failure).toBeDefined();
+    expect(failure!.ruleId).toBe('SCH-001');
+    // Sparse-registry downgrade removed — single-component names are blocking regardless of registry size
+    expect(failure!.blocking).toBe(true);
+    expect(failure!.message).toContain('single-component');
+  });
+
+  it('SCH-001 passes for properly-named span on sparse registry (deterministic check)', async () => {
+    const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("work.process", (span) => {',
+      '    try { return 1; } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkSpanNamesMatchRegistry(code, '/project/a.js', sparseSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].passed).toBe(true);
+    // Passes deterministically — no judge called, no LLM dependency
+    expect(results[0].ruleId).toBe('SCH-001');
+  });
+
+  it('SCH-002 is blocking on sparse registry when attribute not in registry', async () => {
+    const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  return tracer.startActiveSpan("work.process", (span) => {',
+      '    try {',
+      '      span.setAttribute("unknown.custom.attr", "value");',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/a.js', sparseSchema);
+    const failure = results.find((r: any) => !r.passed);
+    expect(failure).toBeDefined();
+    expect(failure!.ruleId).toBe('SCH-002');
+    // Sparse-registry downgrade removed — unregistered attributes are blocking regardless of registry size
+    expect(failure!.blocking).toBe(true);
+  });
+
+  it('SCH-002 passes on sparse registry for registered attribute', async () => {
+    const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
+
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork(req) {',
+      '  return tracer.startActiveSpan("work.process", (span) => {',
+      '    try {',
+      '      span.setAttribute("http.request.method", req.method);',
+      '      return 1;',
+      '    } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/a.js', sparseSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0].passed).toBe(true);
+  });
+});
+
 describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
   /**
    * Integration tests verifying all PRD 31 features work together:

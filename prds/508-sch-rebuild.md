@@ -222,12 +222,12 @@ Apply whichever decision M1 recorded:
 
 Update the canonical rule reference and close the loop back to the audit document and ROADMAP.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `docs/rules-reference.md` updated via `/write-docs` to reflect: SCH-004 deletion; SCH-005 fate (delete, convert, or keep — per M6); SCH-001 rebuilt (deterministic fallback, extension semantic dedup); SCH-002 rebuilt (extension semantic dedup with migrated SCH-004 patterns); sparse-registry downgrade removed (SCH-001 and SCH-002 unconditionally blocking)
-- [ ] `docs/ROADMAP.md` updated to reflect this PRD complete
-- [ ] PRD #483 audit document's Action Items section updated to mark "SCH-001/SCH-002 rebuild + SCH-004 deletion" complete with a link to this PRD; SCH-005 audit outcome recorded
-- [ ] Acceptance-gate tests for the coordinator exercise the rebuilt SCH-001 and SCH-002 against both a sparse and a rich registry; both pass without the sparse-downgrade safety net
-- [ ] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for `SCH-001`, `SCH-002`, `SCH-004`, and `SCH-005`. Remove the SCH-004 bullet (rule deleted). If SCH-005 was deleted in M6, remove any SCH-005 references. Update SCH-001 and SCH-002 prompt bullets to reflect rebuilt behavior — in particular, if sparse-downgrade language appears, remove it (sparse logic was removed in M4). Record each prompt change in the PR description.
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `docs/rules-reference.md` updated to reflect: SCH-004 and SCH-005 deleted; SCH-001 rebuilt (deterministic fallback, extension semantic dedup, JS/TS only); SCH-002 rebuilt (extension semantic dedup with migrated SCH-004 patterns, semantic suggestion in failure message); sparse-registry downgrade removed (unconditionally blocking); new SCH rule rebuild section added; run-level rules section removed
+- [x] `docs/ROADMAP.md` updated to reflect this PRD complete (PRD #508 entry removed)
+- [x] PRD #483 audit document's Action Items section updated: "SCH-001/SCH-002 rebuild + SCH-004 deletion + SCH-005 deletion" marked COMPLETE with full outcome summary
+- [x] Acceptance-gate tests for sparse registry: four tests added (SCH-001 naming quality blocking + passing on sparse schema; SCH-002 blocking + passing on sparse schema) without sparse-downgrade safety net
+- [x] **Prompt verification**: grepped prompt.ts for SCH-001–005. SCH-004 already removed in M4; SCH-005 never in prompt. SCH-001 updated with dotted-notation naming convention requirement and extension acceptance note. SCH-002 guidance unchanged (already describes semantic equivalence check).
 
 ---
 

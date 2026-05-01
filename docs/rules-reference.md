@@ -2,7 +2,7 @@
 
 Spinybacked Orbweaver validates every instrumented file against a two-tier rubric. This document lists every rule: what it checks, whether it blocks file success or is advisory, and how it relates to the OpenTelemetry specification.
 
-The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/`. Run-level checks (SCH-005) plus shared registry parsing infrastructure live in `src/validation/tier2/` — no per-file rule implementations live there. When rule details and this document disagree, the source of truth is the code — please open an issue.
+The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/`. Shared registry parsing infrastructure lives in `src/validation/tier2/registry-types.ts` — no per-file rule implementations live in `tier2/`. When rule details and this document disagree, the source of truth is the code — please open an issue.
 
 ## How rules work
 
@@ -32,7 +32,7 @@ The PRD #483 advisory rules audit ([issue #483](https://github.com/wiggitywhitne
 - **Newly registered** (rule files existed pre-audit but were not wired into `tier2Checks`): CDQ-007, CDQ-009, CDQ-010.
 - **API-004 split**: the import-level check is blocking; the manifest-level check moved into API-002 (which activated previously dead code and remains advisory).
 - **Deleted**: CDQ-008 (Tracer Naming) — replaced by CDQ-011 (Canonical Tracer Name) plus coordinator-level canonical name injection ([PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505)).
-- **Pending deletion** (kept documented with a flag until the deletion lands): SCH-004 via [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508); SCH-005's fate is being decided as PRD #508 Milestone M1.
+- **Deleted**: SCH-004 and SCH-005 — see SCH rule rebuild section below.
 
 ### TypeScript provider (2026-04-24)
 
@@ -48,8 +48,19 @@ PRD #372 shipped `TypeScriptProvider`, which implements language-specific versio
 PRD #507 cleaned up the rule file architecture to unblock future Python and Go language providers. No rule behavior changed; this is a provider-architecture change.
 
 - **Stale SCH-001–004 duplicates removed**: `src/validation/tier2/sch001.ts`, `sch002.ts`, `sch003.ts`, and `sch004.ts` — copies that had drifted from the canonical implementations in `src/languages/javascript/rules/` (notably `tier2/sch004.ts` was missing type inference and pre-filter logic present in the canonical copy) — were deleted. The canonical copies in `javascript/rules/` are the single authoritative source.
-- **`tier2/` scope narrowed**: `src/validation/tier2/` now holds only `registry-types.ts` (shared registry parsing infrastructure imported directly by `javascript/rules/`) and `sch005.ts` (run-level coordinator check with a different lifecycle from per-file checks). No per-file rule implementations live in `tier2/`. (CDQ-008 was deleted as part of [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505).)
+- **`tier2/` scope narrowed**: `src/validation/tier2/` now holds only `registry-types.ts` (shared registry parsing infrastructure imported directly by `javascript/rules/`). No per-file rule implementations live in `tier2/`. (CDQ-008 was deleted as part of [PRD #505](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/505); SCH-004 and SCH-005 were deleted as part of [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508).)
 - **LanguageProvider interface**: all hot-path pipeline modules (`src/agent/instrument-file.ts`, `src/agent/prompt.ts`, coordinator and fix-loop modules) now route through the `LanguageProvider` interface rather than importing JavaScript-specific symbols directly.
+
+### SCH rule rebuild (2026-05-01)
+
+[PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508) rebuilt the schema-fidelity rules. No rule IDs changed; behavior and applicability did.
+
+- **SCH-001 rebuilt**: The naming quality fallback (used when the registry has no span definitions) now runs deterministic checks — no LLM calls. Two checks: (1) single-component vagueness — span names with no dot separator are always rejected; (2) dotted-notation structure — names with dots must match `/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/`. Extension acceptance (conformance mode, when registry has span definitions) now validates that declared span extensions are not semantic duplicates of existing registry operations — normalization comparison catches delimiter variants; an optional LLM judge catches semantic equivalents. **`applicableTo` changed to JS/TS only** — SCH-001 uses ts-morph internally and would silently misbehave on Python or Go source; was previously `return true` (all languages).
+- **SCH-002 rebuilt**: Extension acceptance now validates that declared attribute extensions are not semantic duplicates of existing registry attributes, using a three-stage pipeline: (1) normalization comparison (delimiter variants, e.g., `http_request_duration` ≈ `http.request.duration`); (2) Jaccard token similarity > 0.5 (structural near-duplicates); (3) optional LLM judge (semantic equivalents). A type-compatibility pre-filter prevents false positives across different value types. The "not in registry" failure message now includes a semantic near-match suggestion when one is found.
+- **SCH-004 deleted**: Its useful patterns (type inference, pre-filters, Jaccard similarity, judge integration) were migrated to SCH-002's extension acceptance path. Post-hoc duplicate detection after instrumentation is complete is too late for the agent to act; extension-path detection is the correct location.
+- **SCH-005 deleted**: Was a run-level coordinator check (no per-file fix mechanism) that flagged semantically equivalent span definitions already in the registry schema. Registry authorship is outside the instrumentation agent's control. The agent-actionable version — detecting when the agent declares an extension that duplicates an existing registry entry — is now covered by SCH-001's extension acceptance path.
+- **Sparse-registry downgrade removed**: SCH-001 and SCH-002 were previously downgraded to advisory when the registry had fewer than 3 span definitions. This workaround existed because the extension acceptance path blindly accepted any declared extension, causing oscillation in sparse registries. With semantic duplicate detection on the extension path, genuinely novel extensions always pass regardless of registry size — the workaround is no longer needed. **SCH-001 and SCH-002 are now unconditionally blocking.**
+- **Shared semantic-dedup module**: `src/languages/javascript/rules/semantic-dedup.ts` implements the three-stage detection pipeline used by both SCH-001 and SCH-002 extension acceptance paths.
 
 ---
 
@@ -108,8 +119,8 @@ These rules verify that instrumentation conforms to the project's telemetry regi
 
 | Rule | Name | What it checks | OTel spec relationship |
 |------|------|----------------|------------------------|
-| SCH-001 | Span Names Match Registry | Span names match the operation names defined in the registry. Blocking when the registry has span definitions; downgraded to advisory when the registry is sparse (fewer than 3 span definitions) — a workaround for a gap in the extension acceptance path, to be removed in [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508). | Directly aligned — [OTel Trace API — Span](https://opentelemetry.io/docs/specs/otel/trace/api/#span): low cardinality and meaningful operation identification |
-| SCH-002 | Attribute Keys Match Registry | Attribute keys match the names defined in the registry (including any OTel semantic conventions the org has imported as a registry dependency). The agent checks the registry only — it does not fall back to OTel semconv from training data. Same sparse-registry downgrade as SCH-001; to be removed by [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508). | Directly aligned — OTel semantic conventions define standard attribute keys |
+| SCH-001 | Span Names Match Registry | Span names match the operation names defined in the registry. **Unconditionally blocking** (sparse-registry downgrade removed in [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)). **Extension acceptance**: declared span extensions are validated against existing registry operations — delimiter variants (normalization) and semantic equivalents (optional LLM judge) are rejected. **Naming quality fallback** (no registry span definitions): single-component span names (no dot separator) are always rejected; dotted names must match `/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/` — both checks are deterministic, no LLM call. **JS/TS only** (uses ts-morph). | Directly aligned — [OTel Trace API — Span](https://opentelemetry.io/docs/specs/otel/trace/api/#span): low cardinality and meaningful operation identification |
+| SCH-002 | Attribute Keys Match Registry | Attribute keys match the names defined in the registry (including any OTel semantic conventions the org has imported as a registry dependency). The agent checks the registry only — it does not fall back to OTel semconv from training data. **Unconditionally blocking** (sparse-registry downgrade removed in [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)). **Extension acceptance**: declared attribute extensions are validated — normalization (delimiter variants), Jaccard > 0.5 (structural near-duplicates), optional LLM judge (semantic equivalents); type-compatibility pre-filter prevents false positives across types. **"Not in registry" message** includes a semantic near-match suggestion when available. | Directly aligned — OTel semantic conventions define standard attribute keys |
 | SCH-003 | Attribute Values Conform | Attribute values match the types and constraints defined in the registry (enums, integers, strings). | Not assessed in PRD #483 audit |
 
 ### Code quality (CDQ)
@@ -154,12 +165,6 @@ These rules verify that the agent didn't over-instrument. Not everything needs a
 |------|------|----------------|------------------------|
 | API-002 | Dependency Placement | `@opentelemetry/api` is declared as a `peerDependency` (for libraries) or `dependency` (for applications) in `package.json`. Also flags library projects that declare `@opentelemetry/sdk-*` packages — the manifest-level check absorbed from API-004 in the PRD #483 audit (previously dead code; now active). Remains advisory because the agent cannot modify `package.json`. | Directly aligned — [OTel JS contrib GUIDELINES](https://github.com/open-telemetry/opentelemetry-js-contrib/blob/main/GUIDELINES.md): "It SHOULD add an entry in `peerDependencies` in `package.json` with the minimum API version it requires" |
 
-### Schema fidelity (SCH)
-
-| Rule | Name | What it checks | OTel spec relationship |
-|------|------|----------------|------------------------|
-| SCH-004 | No Redundant Schema Entries | The agent didn't create new schema entries that duplicate existing ones under different names. **Pending deletion in [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)** — SCH-004's patterns (type inference, pre-filters, LLM judge integration) are migrating to SCH-002's extension acceptance path, where semantic duplicate detection belongs. | Indirectly consistent — project-specific concern (registry coherence) |
-
 ### Code quality (CDQ)
 
 | Rule | Name | What it checks | OTel spec relationship |
@@ -168,16 +173,6 @@ These rules verify that the agent didn't over-instrument. Not everything needs a
 | CDQ-007 | Attribute Data Quality | Three sub-checks on `setAttribute` calls: (1) key is a known PII name (e.g., `email`, `username`); (2) value is a path-like identifier on a non-`file.*` attribute key; (3) value is a property access without a null guard in scope. The path sub-check exempts OTel `file.*` semantic-convention keys where full paths are spec-correct. **Newly registered in the PRD #483 audit** — rule file existed pre-audit but was not wired into `tier2Checks`. **Import constraint:** Advisory transformations (e.g., using `basename(path)` for path attributes) apply only when the required utility is already imported in the file. The agent will not add new non-OTel imports to comply with this advisory — if the utility is not available, it uses the raw value and notes it as a known limitation. | Mixed: PII sub-check — indirectly consistent; path sub-check — directly aligned after refactor ([file semconv](https://opentelemetry.io/docs/specs/semconv/attributes-registry/file/)); nullable sub-check — directly aligned ([OTel Common — Attribute](https://opentelemetry.io/docs/specs/otel/common/#attribute)) |
 | CDQ-009 | Null-Safe Guard | `setAttribute` calls where the value is a non-optional property access guarded by `!== undefined` rather than the more protective `!= null`. **Newly registered in the PRD #483 audit.** Agent prompt updated with preventive guidance. | Directly aligned — same basis as CDQ-007 nullable sub-check ([OTel Common — Attribute](https://opentelemetry.io/docs/specs/otel/common/#attribute)) |
 | CDQ-010 | String Method Type Safety | `setAttribute` value arguments where a string-only method (`.split()`, `.slice()`, `.trim()`, etc.) is called directly on a property access without type coercion via `String()`. **Newly registered in the PRD #483 audit.** Agent prompt updated with preventive guidance. | Directly aligned — OTel string attributes must be strings; coercion prevents passing non-strings to `setAttribute` |
-
----
-
-## Run-level and pending-deletion rules
-
-One rule lives outside the per-file pipeline. It is documented here for completeness but does not run for every instrumented file.
-
-| Rule | Name | What it checks | Status | OTel spec relationship |
-|------|------|----------------|--------|------------------------|
-| SCH-005 | No Duplicate Span Definitions | Post-run cross-file check: flags when agent-declared schema extensions duplicate existing registry span definitions. Lives in `src/validation/tier2/sch005.ts`; invoked from the coordinator. | **Fate pending** — SCH-005 audit is [PRD #508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)'s Milestone M1 | Not assessed in PRD #483 audit |
 
 ---
 
