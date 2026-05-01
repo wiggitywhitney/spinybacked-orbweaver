@@ -845,6 +845,62 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('known limitations', () => {
+    it('throw with arbitrary identifier outside span catch is not detected (accepted trade-off)', () => {
+      // throw \w+ suppresses any single-identifier throw, including those outside span
+      // catch blocks. Making INSTRUMENTATION_PATTERNS context-aware requires passing line
+      // index + full file through every pattern check — a major architectural refactor.
+      // The false negative risk (agent adding a standalone throw outside a span catch)
+      // is essentially zero in practice. Same trade-off as standalone } and try { filtering.
+      const original = [
+        'function doWork() {',
+        '  doSomething();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  throw someBusinessError;',
+        '  doSomething();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      // This PASSES (not detected) — `throw \w+` filters the added throw regardless of context.
+      expect(failures).toHaveLength(0);
+    });
+
+    it('braceless-if brace + statement move is not detected (accepted trade-off)', () => {
+      // Bracing a braceless if while moving a subsequent statement inside the block
+      // changes semantics (statement now conditional). normalizeLine() strips the trailing
+      // `{` from `if (cond) {` lines so they match the original `if (cond)`, and the
+      // moved statement is still present in the instrumented output so the forward check
+      // passes. Fixing this requires multi-line context inspection — a significant refactor.
+      // In practice agents never restructure business logic; brace-addition is only for
+      // span body wrapping. Same trade-off as standalone } filtering.
+      const original = [
+        'function doWork(cond) {',
+        '  if (cond)',
+        '    return;',
+        '  doAlways();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork(cond) {',
+        '  if (cond) {',
+        '    return;',
+        '    doAlways();',  // moved inside — now conditional, semantics changed
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      // This PASSES (not detected) — brace normalization + frequency match misses the move.
+      expect(failures).toHaveLength(0);
+    });
+
     it('truthy property guard wrapping business logic is not detected (accepted trade-off)', () => {
       // Same trade-off as the undefined guard: if (obj.prop) { businessLogic() } passes
       // because the guard line matches the pattern. In practice the agent only generates
