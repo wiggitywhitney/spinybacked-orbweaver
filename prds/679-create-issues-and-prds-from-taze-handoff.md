@@ -29,7 +29,7 @@ Create each deliverable in dependency order. Every milestone starts by reading t
 - [x] M2: Create PRD 2 (smarter end-of-run test failure handling) + CodeRabbit review + audit
 - [x] M3: Create PRD 1 (live-check actually validates something) + CodeRabbit review + audit
 - [x] M4: Create PRD 3 (diagnostic agent for persistent failures) + CodeRabbit review + audit
-- [ ] M5: Create PRD 4 (dependency-aware file instrumentation ordering) + CodeRabbit review + audit
+- [x] M5: Create PRD 4 (dependency-aware file instrumentation ordering) + CodeRabbit review + audit
 - [ ] M6: Update ROADMAP.md per handoff doc placement instructions + CodeRabbit review + audit
 - [ ] M7: Delete `docs/handoff/` directory + CodeRabbit review
 
