@@ -19,7 +19,7 @@ export interface CheckResult {
    * Tier 2 — Restraint: "RST-001" through "RST-005"
    * Tier 2 — Non-destructive: "NDS-003" through "NDS-006"
    * Tier 2 — API: "API-001" through "API-004"
-   * Tier 2 — Schema: "SCH-001" through "SCH-003" (SCH-005 is run-level only)
+   * Tier 2 — Schema: "SCH-001" through "SCH-003"
    *
    * Note: NDS-002 (tests still pass) is enforced by the coordinator's
    * schema checkpoint (dispatch.ts), not as a per-file validation check.

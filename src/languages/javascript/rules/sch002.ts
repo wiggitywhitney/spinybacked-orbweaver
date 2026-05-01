@@ -77,11 +77,13 @@ function inferValueType(valueNode: Node): InferredType {
       exprText === 'parseInt' ||
       exprText === 'Math.round' ||
       exprText === 'Math.floor' ||
-      exprText === 'Math.ceil' ||
-      exprText === 'Number'
+      exprText === 'Math.ceil'
     ) {
       return 'int';
     }
+    // Number() can return floats (Number("3.14") = 3.14) — classify as double, not int.
+    // int and double are mutually compatible in isTypeCompatible, so double is a safe superset.
+    if (exprText === 'Number') return 'double';
     if (exprText === 'parseFloat') return 'double';
     if (exprText === 'Boolean') return 'boolean';
     if (

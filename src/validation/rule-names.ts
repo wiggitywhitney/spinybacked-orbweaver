@@ -53,7 +53,6 @@ const RULE_NAMES: Record<string, string> = {
   'SCH-001': 'Span Names Match Registry',
   'SCH-002': 'Attribute Keys Match Registry',
   'SCH-003': 'Attribute Values Conform',
-  'SCH-005': 'No Duplicate Span Definitions',
 };
 
 /**

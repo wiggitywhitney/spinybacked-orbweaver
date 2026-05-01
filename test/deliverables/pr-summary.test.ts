@@ -840,11 +840,11 @@ describe('renderPrSummary', () => {
       const result = _makeRunResult({
         runLevelAdvisory: [
           {
-            ruleId: 'SCH-005',
+            ruleId: 'CDQ-006',
             passed: false,
             filePath: '',
             lineNumber: null,
-            message: 'Duplicate span definitions found across files',
+            message: 'Expensive computation not guarded by isRecording()',
             tier: 2,
             blocking: false,
           },
@@ -852,8 +852,8 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain('SCH-005 (No Duplicate Span Definitions)');
-      expect(md).toContain('Duplicate span definitions');
+      expect(md).toContain('CDQ-006');
+      expect(md).toContain('Expensive computation not guarded');
     });
   });
 

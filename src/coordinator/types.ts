@@ -54,7 +54,7 @@ export interface RunResult {
   schemaHashStart?: string;
   schemaHashEnd?: string;
   endOfRunValidation?: string;
-  /** Run-level advisory findings from cross-file checks (e.g., SCH-005 duplicate span definitions). */
+  /** Run-level advisory findings from cross-file checks. */
   runLevelAdvisory: import('../validation/types.ts').CheckResult[];
   warnings: string[];
   /**

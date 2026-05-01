@@ -242,10 +242,11 @@ export async function checkSemanticDuplicate(
   if (!judgeResult.verdict) return { ...noMatch, judgeTokenUsage };
 
   if (!judgeResult.verdict.answer && judgeResult.verdict.confidence >= 0.7) {
+    // Use the judge's suggestion if parseable; fall back to the first filtered candidate.
+    // candidateNames is guaranteed non-empty (checked above); candidate is never needed as fallback.
     const matchedEntry =
       extractNameFromSuggestion(judgeResult.verdict.suggestion ?? '', candidateNames) ??
-      candidateNames[0] ??
-      candidate;
+      candidateNames[0]!;
     return {
       isDuplicate: true,
       matchedEntry,

@@ -207,16 +207,16 @@ Apply whichever decision M1 recorded:
 - **If convert to per-file check**: implement the per-file version designed in M1, add it to the registered per-file rules, remove the coordinator-level invocation, delete the run-level implementation.
 - **If keep run-level**: justify the decision in a Design Note in this PRD, do not delete, and skip the rest of this milestone.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] M1 decision executed: **delete** (per D-1)
-- [ ] `src/validation/tier2/sch005.ts` deleted
-- [ ] `test/validation/tier2/sch005.test.ts` deleted
-- [ ] Step 7e coordinator block removed from `src/coordinator/coordinate.ts` (lines 538–566)
-- [ ] SCH-005 export lines removed from `src/validation/tier2/index.ts`
-- [ ] `'SCH-005'` entry removed from `src/validation/rule-names.ts`
-- [ ] SCH-005 reference removed from comment in `src/coordinator/types.ts`
-- [ ] No SCH-005 references remain in source or tests (grep confirms)
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] M1 decision executed: **delete** (per D-1)
+- [x] `src/validation/tier2/sch005.ts` deleted
+- [x] `test/validation/tier2/sch005.test.ts` deleted
+- [x] Step 7e coordinator block removed from `src/coordinator/coordinate.ts`
+- [x] SCH-005 export lines removed from `src/validation/tier2/index.ts`
+- [x] `'SCH-005'` entry removed from `src/validation/rule-names.ts`
+- [x] SCH-005 reference removed from comment in `src/coordinator/types.ts`
+- [x] No SCH-005 references remain in source or tests (grep confirms — additional removals: coordinate.test.ts SCH-005 describe blocks, pr-summary.test.ts test fixture, coordinate.ts import and comment, validation/types.ts comment)
+- [x] `npm test` and `npm run typecheck` pass
 
 ### Milestone M7: Update rule documentation and close out
 

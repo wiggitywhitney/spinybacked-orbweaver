@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
-import type { TokenUsage } from '../../src/agent/schema.ts';
 import type { CoordinatorCallbacks } from '../../src/coordinator/types.ts';
 import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
@@ -16,15 +15,6 @@ vi.mock('../../src/validation/judge.ts', () => ({
   callJudge: vi.fn(),
 }));
 import { callJudge } from '../../src/validation/judge.ts';
-
-vi.mock('../../src/validation/tier2/sch005.ts', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../src/validation/tier2/sch005.ts')>();
-  return {
-    ...original,
-    checkRegistrySpanDuplicates: vi.fn().mockImplementation(original.checkRegistrySpanDuplicates),
-  };
-});
-import { checkRegistrySpanDuplicates } from '../../src/validation/tier2/sch005.ts';
 
 /** Minimal config for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -720,92 +710,6 @@ describe('coordinate', () => {
     });
   });
 
-  describe('run-level advisory checks (SCH-005)', () => {
-    const mockTokenUsage: TokenUsage = {
-      inputTokens: 100,
-      outputTokens: 40,
-      cacheCreationInputTokens: 0,
-      cacheReadInputTokens: 0,
-    };
-
-    beforeEach(() => {
-      vi.mocked(callJudge).mockReset();
-    });
-
-    it('produces no SCH-005 findings when no judge client is provided (graceful degradation)', async () => {
-      // Without anthropicClient in deps, SCH-005 degrades gracefully regardless of spans.
-      const similarRegistry = {
-        groups: [
-          { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
-          { id: 'span.myapp.generate.execute', type: 'span', brief: 'Executes the generator' },
-        ],
-      };
-      const deps = makeDeps({
-        resolveSchemaForHash: vi.fn().mockResolvedValue(similarRegistry),
-        // no anthropicClient
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      const sch005Failures = result.runLevelAdvisory.filter(
-        (r) => r.ruleId === 'SCH-005' && !r.passed,
-      );
-      expect(sch005Failures).toHaveLength(0);
-      expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
-      expect(result.filesFailed).toBe(0);
-    });
-
-    it('produces SCH-005 finding when judge client provided and callJudge returns duplicate verdict', async () => {
-      vi.mocked(callJudge).mockResolvedValue({
-        verdict: { answer: false, confidence: 0.9 },
-        tokenUsage: mockTokenUsage,
-      });
-
-      // Same-namespace spans that the judge will flag as duplicates
-      const similarRegistry = {
-        groups: [
-          { id: 'span.myapp.generate.run', type: 'span', brief: 'Runs the generator' },
-          { id: 'span.myapp.generate.execute', type: 'span', brief: 'Executes the generator' },
-        ],
-      };
-      const deps = makeDeps({
-        resolveSchemaForHash: vi.fn().mockResolvedValue(similarRegistry),
-        anthropicClient: {} as any,
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      const sch005Findings = result.runLevelAdvisory.filter((r) => r.ruleId === 'SCH-005');
-      expect(sch005Findings.length).toBeGreaterThanOrEqual(1);
-      expect(sch005Findings[0]!.passed).toBe(false);
-      expect(sch005Findings[0]!.blocking).toBe(false);
-      // SCH-005 is non-blocking — all files still succeed
-      expect(result.filesFailed).toBe(0);
-    });
-
-    it('produces no SCH-005 advisory findings when registry spans are in different namespaces', async () => {
-      // Cross-namespace spans are filtered by D-1 pre-filter — no judge call, no finding.
-      const distinctRegistry = {
-        groups: [
-          { id: 'span.myapp.api.handle_request', type: 'span' },
-          { id: 'span.billing.payment.process', type: 'span' },
-        ],
-      };
-      const deps = makeDeps({
-        resolveSchemaForHash: vi.fn().mockResolvedValue(distinctRegistry),
-        anthropicClient: {} as any,
-      });
-
-      const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-      const sch005Failures = result.runLevelAdvisory.filter(
-        (r) => r.ruleId === 'SCH-005' && !r.passed,
-      );
-      expect(sch005Failures).toHaveLength(0);
-      expect(result.filesFailed).toBe(0);
-    });
-  });
-
   describe('happy path end-to-end', () => {
     it('wires discovery → dispatch → aggregate → finalize in order', async () => {
       const callOrder: string[] = [];
@@ -1373,23 +1277,6 @@ describe('coordinate', () => {
         expect(degradedWarning).toContain('network timeout');
         // Must include recovery guidance (not just the word "check" from "live-check")
         expect(degradedWarning).toMatch(/re-run|retry/i);
-      });
-    });
-
-    describe('SCH-005 check failed (degraded)', () => {
-      it('includes the rule name and recovery action when checkRegistrySpanDuplicates throws', async () => {
-        vi.mocked(checkRegistrySpanDuplicates).mockRejectedValueOnce(new Error('registry parse error'));
-        const deps = makeDeps({
-          discoverFiles: vi.fn().mockResolvedValue(['/project/a.js']),
-          dispatchFiles: vi.fn().mockResolvedValue([makeSuccessResult('/project/a.js')]),
-        });
-
-        const result = await coordinate('/project', makeConfig(), undefined, deps);
-
-        const sch005Warning = result.warnings.find(w => w.includes('SCH-005'));
-        expect(sch005Warning).toBeDefined();
-        expect(sch005Warning).toContain('registry parse error');
-        expect(sch005Warning).toMatch(/re-run/i);
       });
     });
 
