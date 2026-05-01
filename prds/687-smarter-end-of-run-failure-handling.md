@@ -11,7 +11,10 @@
 
 When the end-of-run test suite fails, spiny-orb rolls back all recently committed files indiscriminately. This is often incorrect.
 
-**Why the current behavior is provably wrong**: During checkpoint tests, `testCommand` executes without loading the SDK init file. Every `tracer.startActiveSpan()` resolves to a `NonRecordingSpan` via `@opentelemetry/api`'s no-op default — zero spans are emitted. Span wrappers have negligible overhead (microseconds) because they're no-ops. This means our instrumentation **cannot cause timeout errors** in the checkpoint test suite. Timeout failures are environmental.
+**Foundational insight** (the most important context for this PRD): During checkpoint tests, `testCommand` executes without loading the SDK init file. Every `tracer.startActiveSpan()` resolves to a `NonRecordingSpan` via `@opentelemetry/api`'s no-op default — zero spans are emitted. Span wrappers have negligible overhead (microseconds) because they're no-ops. This insight has two consequences:
+
+- **Consequence 1 (drives this PRD)**: Our instrumentation **cannot cause timeout errors** in the checkpoint test suite. Timeout failures are environmental — the current rollback logic is wrong to roll back instrumented files when a timeout occurs.
+- **Consequence 2 (drives PRD 1)**: Every "Live-check: OK" in every PR summary to date is a false positive — Weaver received nothing and nothing failed. The live-check is currently inert. This is addressed separately in PRD 1.
 
 **Run-11 proof case**:
 - `resolves.test.ts:136` failed with an npm timeout on `resolveDependency`
