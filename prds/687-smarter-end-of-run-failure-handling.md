@@ -28,9 +28,9 @@ The current end-of-run rollback logic in `coordinate.ts` Step 7c applies no filt
 
 ## Design Principle
 
-**The default assumption when a test fails is that we caused it. The only permitted exception is if the external API is verifiably down.**
+**The default assumption when a test fails is that we caused it. Two permitted exceptions exist: (1) smart-rollback deterministically finds no committed file in the failing test's call path — the failure cannot implicate our changes; (2) the external API is verifiably down — the failure is environmental.**
 
-Health checks are not a courtesy — they are the narrow gate through which environmental failures escape the "we caused it" default.
+Health checks are not a courtesy — they are the narrow gate through which environmental failures escape the "we caused it" default when committed files ARE in the call path.
 
 **Explicitly rejected approaches**:
 - `--exclude` flags for specific failing tests: hides real signal. If a test is flaky, we need to know. Excluding it masks the symptom without diagnosing the cause.
@@ -158,7 +158,7 @@ TDD: write a failing unit test that simulates a transient failure (first run fai
 Success criteria:
 - Unit test exists and passes (transient failure → retry succeeds → no rollback)
 - Unit test exists and passes (persistent failure → retry also fails → rollback proceeds)
-- The delay is configurable for testing (default 30s, override via env var or config)
+- The delay is configurable for testing via env var `SPINY_ORB_RETRY_DELAY_MS` (default 30000ms)
 - Existing test suite passes with no regressions
 
 ### M5: Integration test — end-of-run failure scenario

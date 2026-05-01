@@ -4,6 +4,7 @@
 **Last Updated:** 2026-05-01
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-05-01 | Initial research — three-area spike informing PRDs 1–4 |
