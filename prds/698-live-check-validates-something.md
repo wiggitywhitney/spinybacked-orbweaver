@@ -54,7 +54,7 @@ Framework interaction questions for jest, mocha, pytest, etc. belong in downstre
 ## Relationship to Other PRDs
 
 - **PRD #687 (smarter end-of-run failure handling)**: Independent. Both PRDs can be worked in parallel.
-- **PRD 3 (diagnostic agent for persistent failures, not yet created)**: Depends on PRD 1. PRD 3's diagnostic agent uses live-check compliance data as one of its diagnostic inputs for the flag-and-surface output. PRD 3 must not begin until PRD 1 is complete.
+- **PRD #699 (diagnostic agent for persistent failures)**: Depends on PRD #698. PRD #699's diagnostic agent uses live-check compliance data as one of its diagnostic inputs for the flag-and-surface output. PRD #699 must not begin until PRD #698 is complete.
 
 ---
 
