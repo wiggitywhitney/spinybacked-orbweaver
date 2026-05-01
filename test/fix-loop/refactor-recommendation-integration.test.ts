@@ -242,12 +242,14 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
   it('does not produce recommendations when validation passes (no NDS-003)', async () => {
     // If the instrumented code passes validation, no recommendations should appear
     // even if the LLM suggests refactors.
+    // Use a two-component dotted span name so SCH-001 naming quality check passes
+    // both the current judge path and the future deterministic check (no single-component names).
     const passingInstrumentedCode = [
       "const { trace } = require('@opentelemetry/api');",
       "const tracer = trace.getTracer('greeting-service');",
       '',
       'function greet(name) {',
-      "  return tracer.startActiveSpan('greet', (span) => {",
+      "  return tracer.startActiveSpan('greeting.send', (span) => {",
       '    try {',
       "      sendMessage('Hello, ' + name);",
       '    } catch (error) {',

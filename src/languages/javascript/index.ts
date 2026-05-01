@@ -56,10 +56,9 @@ import { api002Rule } from './rules/api002.ts';
 import { sch001Rule } from './rules/sch001.ts';
 import { sch002Rule } from './rules/sch002.ts';
 import { sch003Rule } from './rules/sch003.ts';
-import { sch004Rule } from './rules/sch004.ts';
 /**
  * All ValidationRule instances this provider registers.
- * Covers 31 per-file Tier 2 rules (including API-004 from api001.ts; API-003 deleted).
+ * Covers 30 per-file Tier 2 rules (including API-004 from api001.ts; API-003 and SCH-004 deleted).
  *
  * NDS-001 (syntax) and LINT are not ValidationRule objects — they are
  * dispatched directly through provider.checkSyntax() and provider.lintCheck()
@@ -71,7 +70,7 @@ const JS_RULES = [
   nds003Rule, nds004Rule, nds005Rule, nds006Rule, nds007Rule,
   cdq001Rule, cdq005Rule, cdq006Rule, cdq007Rule, cdq009Rule, cdq010Rule, cdq011Rule,
   api001Rule, api002Rule, api004Rule,
-  sch001Rule, sch002Rule, sch003Rule, sch004Rule,
+  sch001Rule, sch002Rule, sch003Rule,
 ] as const;
 
 /**

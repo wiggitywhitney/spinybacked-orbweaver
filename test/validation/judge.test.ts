@@ -36,7 +36,7 @@ function makeMockClient(response: {
 
 function makeQuestion(overrides?: Partial<JudgeQuestion>): JudgeQuestion {
   return {
-    ruleId: 'SCH-004',
+    ruleId: 'SCH-002',
     context: 'Novel attribute key "request.latency" not in registry.',
     question: 'Does "request.latency" capture the same concept as any registered key?',
     candidates: ['http.request.duration', 'http.response.time'],
@@ -143,7 +143,7 @@ describe('callJudge', () => {
     });
 
     const question = makeQuestion({
-      ruleId: 'SCH-004',
+      ruleId: 'SCH-002',
       context: 'Novel attribute "req.dur"',
       question: 'Is this a semantic duplicate?',
       candidates: ['http.request.duration'],
@@ -155,7 +155,7 @@ describe('callJudge', () => {
     const messages = callArgs.messages;
     const userContent = messages.find((m: any) => m.role === 'user')?.content;
 
-    expect(userContent).toContain('SCH-004');
+    expect(userContent).toContain('SCH-002');
     expect(userContent).toContain('Novel attribute "req.dur"');
     expect(userContent).toContain('Is this a semantic duplicate?');
     expect(userContent).toContain('http.request.duration');

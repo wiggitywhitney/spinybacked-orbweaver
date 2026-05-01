@@ -8,7 +8,7 @@ import type { TokenUsage } from '../../../../src/agent/schema.ts';
 
 /**
  * Create a mock Anthropic client that returns controlled judge responses.
- * Follows the same pattern as sch004-judge.test.ts.
+ * Follows the same judge mock pattern as chain-judge-integration tests.
  */
 function makeMockClient(response: JudgeCallResult | null) {
   const parseFn = vi.fn().mockResolvedValue(

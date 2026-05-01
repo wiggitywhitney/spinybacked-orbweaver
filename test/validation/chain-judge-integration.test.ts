@@ -1,5 +1,5 @@
 // ABOUTME: Integration test for the full validation pipeline with judge-enhanced rules.
-// ABOUTME: Exercises SCH-004 and SCH-001 judge paths through validateFile().
+// ABOUTME: Exercises the SCH-001 judge path through validateFile() in naming quality fallback mode.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -14,8 +14,7 @@ const jsProvider = new JavaScriptProvider();
 
 /**
  * Schema with attribute groups but NO span definitions.
- * - Attribute groups: triggers SCH-004 (novel keys compared to registry)
- * - No span groups: triggers SCH-001 naming quality fallback mode (judge)
+ * No span groups triggers SCH-001 naming quality fallback mode (judge assesses span names).
  */
 const schemaNoSpanDefs = {
   groups: [
@@ -56,8 +55,6 @@ function makeParseResponse(verdict: { answer: boolean; suggestion: string | null
 }
 
 // Original code: has try/catch with throw
-// Also uses a vague span name "doStuff" (SCH-001 judge catches)
-// Also adds a novel attribute "http.request.latency" (SCH-004 judge catches)
 const originalCode = [
   'function processRequest(req) {',
   '  try {',
@@ -71,10 +68,7 @@ const originalCode = [
 ].join('\n');
 
 // Instrumented code:
-// - Adds OTel spans with vague name "doStuff" (triggers SCH-001 fallback judge)
-// - Adds novel attribute "http.request.latency" not in registry (triggers SCH-004 judge).
-//   Uses "http" namespace so the namespace pre-filter passes same-namespace registry candidates.
-//   Jaccard vs "http.request.duration" = 0.5 (not > 0.5) → reaches judge tier.
+// - Adds OTel spans with vague name "doStuff" — triggers SCH-001 naming quality fallback judge
 // - Removes the `throw err` in catch block
 const instrumentedCode = [
   'import { trace } from "@opentelemetry/api";',
@@ -83,7 +77,7 @@ const instrumentedCode = [
   'function processRequest(req) {',
   '  return tracer.startActiveSpan("doStuff", (span) => {',
   '    try {',
-  '      span.setAttribute("http.request.latency", 42);',
+  '      span.setAttribute("http.request.method", "GET");',
   '      const result = handleRequest(req);',
   '      return result;',
   '    } catch (err) {',
@@ -108,32 +102,26 @@ describe('full pipeline with judge-enhanced rules', () => {
   });
 
   /**
-   * Build a ValidationConfig that enables only the two judge-enhanced rules
-   * (SCH-001 and SCH-004) plus the minimum needed for Tier 1 to pass.
+   * Build a ValidationConfig that enables SCH-001 judge path plus the
+   * minimum needed for Tier 1 to pass.
    */
   function buildConfig(mockClient: unknown): ValidationConfig {
     return {
       enableWeaver: false,
       tier2Checks: {
         'SCH-001': { enabled: true, blocking: true },
-        'SCH-004': { enabled: true, blocking: false },
       },
       resolvedSchema: schemaNoSpanDefs,
       anthropicClient: mockClient as import('@anthropic-ai/sdk').default,
     };
   }
 
-  it('calls judge for both rules and collects token usage', async () => {
+  it('calls judge for SCH-001 and collects token usage', async () => {
     const parseFn = vi.fn()
       // SCH-001 judge call: vague span name "doStuff"
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Use "myapp.request.process" instead of "doStuff".', confidence: 0.85 },
         { input: 80, output: 30 },
-      ))
-      // SCH-004 judge call: "http.request.latency" semantically matches "http.request.duration"
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use "http.request.duration" instead of "http.request.latency".', confidence: 0.92 },
-        { input: 120, output: 45 },
       ));
 
     const mockClient = { messages: { parse: parseFn } };
@@ -151,40 +139,29 @@ describe('full pipeline with judge-enhanced rules', () => {
 
     const result = await validateFile(input);
 
-    // Judge was called for both rules
+    // Judge was called for SCH-001
     expect(parseFn).toHaveBeenCalled();
-    const callCount = parseFn.mock.calls.length;
-    expect(callCount).toBe(2);
+    expect(parseFn.mock.calls.length).toBe(1);
 
-    // Token usage from judge calls is collected
+    // Token usage from judge call is collected
     expect(result.judgeTokenUsage).toBeDefined();
-    expect(result.judgeTokenUsage).toHaveLength(2);
+    expect(result.judgeTokenUsage).toHaveLength(1);
 
-    // Each judge call contributed token usage
-    for (const usage of result.judgeTokenUsage!) {
-      expect(usage.inputTokens).toBeGreaterThan(0);
-      expect(usage.outputTokens).toBeGreaterThan(0);
-    }
+    // Token usage reflects actual values from the mock
+    const usage = result.judgeTokenUsage![0]!;
+    expect(usage.inputTokens).toBeGreaterThan(0);
+    expect(usage.outputTokens).toBeGreaterThan(0);
 
-    // Verify rule-specific results exist
+    // SCH-001 result exists
     const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
-    const sch004Results = result.tier2Results.filter(r => r.ruleId === 'SCH-004');
-
     expect(sch001Results.length).toBeGreaterThan(0);
-    expect(sch004Results.length).toBeGreaterThan(0);
   });
 
-  it('judge verdicts appear in advisory findings and blocking failures', async () => {
+  it('judge verdict produces blocking SCH-001 failure', async () => {
     const parseFn = vi.fn()
-      // SCH-001: vague name (blocking — SCH-001 is blocking)
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Use structured naming.', confidence: 0.85 },
         { input: 80, output: 30 },
-      ))
-      // SCH-004: semantic duplicate (advisory — SCH-004 is non-blocking)
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use "http.request.duration".', confidence: 0.92 },
-        { input: 120, output: 45 },
       ));
 
     const mockClient = { messages: { parse: parseFn } };
@@ -206,16 +183,12 @@ describe('full pipeline with judge-enhanced rules', () => {
     const sch001Failures = result.blockingFailures.filter(r => r.ruleId === 'SCH-001');
     expect(sch001Failures.length).toBeGreaterThanOrEqual(1);
 
-    // SCH-004 failure is advisory
-    const advisoryRuleIds = result.advisoryFindings.map(r => r.ruleId);
-    expect(advisoryRuleIds).toContain('SCH-004');
-
     // Overall: fails because SCH-001 is blocking
     expect(result.passed).toBe(false);
   });
 
   it('degrades gracefully when judge is unavailable — script-only results used', async () => {
-    // All judge calls fail
+    // Judge call fails
     const parseFn = vi.fn().mockRejectedValue(new Error('API connection failed'));
     const mockClient = { messages: { parse: parseFn } };
 
@@ -234,17 +207,12 @@ describe('full pipeline with judge-enhanced rules', () => {
 
     // Judge was attempted but failed — no judge token usage
     expect(parseFn).toHaveBeenCalled();
-    // Judge failures mean no judgeTokenUsage collected (or empty)
     const judgeTokens = result.judgeTokenUsage ?? [];
     expect(judgeTokens).toHaveLength(0);
 
-    // Pipeline did NOT crash — script-only results are present
+    // Pipeline did NOT crash — script-only SCH-001 results are present
     const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
-    const sch004Results = result.tier2Results.filter(r => r.ruleId === 'SCH-004');
-
-    // Both rules still produced results from their script portions
     expect(sch001Results.length).toBeGreaterThan(0);
-    expect(sch004Results.length).toBeGreaterThan(0);
   });
 
   it('works without judge (no anthropicClient) — pure script mode', async () => {
@@ -259,7 +227,6 @@ describe('full pipeline with judge-enhanced rules', () => {
         enableWeaver: false,
         tier2Checks: {
           'SCH-001': { enabled: true, blocking: true },
-          'SCH-004': { enabled: true, blocking: false },
         },
         resolvedSchema: schemaNoSpanDefs,
         // No anthropicClient — judge won't run
@@ -272,25 +239,16 @@ describe('full pipeline with judge-enhanced rules', () => {
     // No judge token usage since no client was provided
     expect(result.judgeTokenUsage).toBeUndefined();
 
-    // Both rules still ran (script-only mode)
+    // SCH-001 still ran (script-only mode)
     const sch001Results = result.tier2Results.filter(r => r.ruleId === 'SCH-001');
-    const sch004Results = result.tier2Results.filter(r => r.ruleId === 'SCH-004');
-
     expect(sch001Results.length).toBeGreaterThan(0);
-    expect(sch004Results.length).toBeGreaterThan(0);
   });
 
-  it('judge suggestions appear in result messages', async () => {
+  it('judge suggestion appears in SCH-001 failure message', async () => {
     const parseFn = vi.fn()
-      // SCH-001
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Use "myapp.request.process" instead of "doStuff".', confidence: 0.85 },
         { input: 80, output: 30 },
-      ))
-      // SCH-004
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: false, suggestion: 'Use "http.request.duration" instead of "http.request.latency".', confidence: 0.92 },
-        { input: 120, output: 45 },
       ));
 
     const mockClient = { messages: { parse: parseFn } };
@@ -308,14 +266,6 @@ describe('full pipeline with judge-enhanced rules', () => {
 
     const result = await validateFile(input);
 
-    // SCH-004 suggestion about using the registered key
-    const sch004Fails = result.tier2Results.filter(r => r.ruleId === 'SCH-004' && !r.passed);
-    expect(sch004Fails.length).toBeGreaterThan(0);
-    const hasRecommendation = sch004Fails.some(r =>
-      r.message.includes('http.request.duration') || r.message.includes('request.latency'),
-    );
-    expect(hasRecommendation).toBe(true);
-
     // SCH-001 messages reference the span name
     const sch001Fails = result.tier2Results.filter(r => r.ruleId === 'SCH-001' && !r.passed);
     expect(sch001Fails.length).toBeGreaterThan(0);
@@ -329,11 +279,6 @@ describe('full pipeline with judge-enhanced rules', () => {
       .mockResolvedValueOnce(makeParseResponse(
         { answer: false, suggestion: 'Maybe use a better name.', confidence: 0.5 },
         { input: 80, output: 30 },
-      ))
-      // SCH-004 (just pass it)
-      .mockResolvedValueOnce(makeParseResponse(
-        { answer: true, suggestion: null, confidence: 0.95 },
-        { input: 120, output: 45 },
       ));
 
     const mockClient = { messages: { parse: parseFn } };

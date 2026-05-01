@@ -224,12 +224,10 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['CDQ-009']).toEqual({ enabled: true, blocking: false });
     expect(checks['CDQ-010']).toEqual({ enabled: true, blocking: false });
 
-    // Phase 5 checks (4) — SCH-001/SCH-002 downgrade to advisory for sparse registries
-    // (empty schema has 0 span definitions, below the sparse threshold of 3)
-    expect(checks['SCH-001']).toEqual({ enabled: true, blocking: false });
-    expect(checks['SCH-002']).toEqual({ enabled: true, blocking: false });
+    // Phase 5 checks (3) — unconditionally blocking after sparse-registry downgrade removal
+    expect(checks['SCH-001']).toEqual({ enabled: true, blocking: true });
+    expect(checks['SCH-002']).toEqual({ enabled: true, blocking: true });
     expect(checks['SCH-003']).toEqual({ enabled: true, blocking: true });
-    expect(checks['SCH-004']).toEqual({ enabled: true, blocking: false });
 
     // API/NDS/RST checks (8) — API-001/004 promoted to blocking; API-003 deleted
     expect(checks['API-001']).toEqual({ enabled: true, blocking: true });
@@ -244,8 +242,8 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
 
     expect(checks['CDQ-011']).toEqual({ enabled: true, blocking: true });
 
-    // Total: 31 checks (API-003 deleted; RST-006 added; CDQ-005/CDQ-011 added)
-    expect(Object.keys(checks)).toHaveLength(31);
+    // Total: 30 checks (API-003 and SCH-004 deleted; RST-006 added; CDQ-005/CDQ-011 added)
+    expect(Object.keys(checks)).toHaveLength(30);
 
     // projectRoot is undefined when not provided
     expect(capturedConfig!.projectRoot).toBeUndefined();

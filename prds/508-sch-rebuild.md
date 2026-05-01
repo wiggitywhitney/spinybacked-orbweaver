@@ -171,16 +171,16 @@ Add semantic suggestions to the "not in registry" failure message: when an attri
 
 SCH-004's patterns are now in SCH-002. Delete the canonical SCH-004 file (location determined by PRD #507's Option A/B decision), its tests, and all references. Remove the sparse-registry downgrade logic in `src/fix-loop/instrument-with-retry.ts` — the `schemaSparse` computation, the `SPARSE_THRESHOLD` constant, and any conditional that downgrades SCH-001/002 to advisory when sparse. Genuinely novel extensions now always pass on the extension path regardless of registry size.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] SCH-004 canonical file deleted: `src/languages/javascript/rules/sch004.ts` (Option B confirmed by PRD #507 D-2; the `tier2/sch004.ts` stale copy was already deleted by PRD #507). Tests at `test/languages/javascript/rules/sch004.test.ts`. The `checkNoRedundantSchemaEntries` function and all SCH-004 exports must be removed. Note: acceptance-gate.test.ts has an `(g) SCH-004 produces advisory results` test that imports from `sch004.ts` — this test must also be deleted.
-- [ ] SCH-004 canonical file deleted
-- [ ] SCH-004 tests deleted
-- [ ] SCH-004 removed from `src/validation/rule-names.ts` (or equivalent registry)
-- [ ] SCH-004 references removed from `src/fix-loop/instrument-with-retry.ts` and `src/languages/javascript/index.ts`
-- [ ] `schemaSparse` and `SPARSE_THRESHOLD` removed from `src/fix-loop/instrument-with-retry.ts`
-- [ ] Conditionals that downgrade SCH-001/002 to advisory when sparse are removed; SCH-001 and SCH-002 are unconditionally blocking after this milestone
-- [ ] Acceptance-gate tests updated if they reference SCH-004 or sparse-registry behavior
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] SCH-004 canonical file deleted: `src/languages/javascript/rules/sch004.ts` and judge integration test `test/languages/javascript/rules/sch004-judge.test.ts`
+- [x] SCH-004 canonical file deleted
+- [x] SCH-004 tests deleted (sch004.test.ts, sch004-judge.test.ts, acceptance-gate (g) SCH-004 test)
+- [x] SCH-004 removed from `src/validation/rule-names.ts`
+- [x] SCH-004 references removed from `src/fix-loop/instrument-with-retry.ts`, `src/languages/javascript/index.ts`, `src/languages/typescript/index.ts`, `src/fix-loop/function-instrumentation.ts`, `src/agent/prompt.ts`, and comment-only files
+- [x] `schemaSparse` and `SPARSE_THRESHOLD` removed from `src/fix-loop/instrument-with-retry.ts`; `parseResolvedRegistry`/`getSpanDefinitions` imports removed
+- [x] Conditionals that downgrade SCH-001/002 to advisory when sparse are removed; SCH-001 and SCH-002 are unconditionally blocking after this milestone
+- [x] Acceptance-gate tests and chain-judge-integration tests updated; refactor-recommendation test fixed (span name 'greet' → 'greeting.send' to pass SCH-001 naming quality with blocking: true)
+- [x] `npm test` and `npm run typecheck` pass
 
 ### Milestone M5: Rebuild SCH-001
 
@@ -193,7 +193,7 @@ Replace the LLM judge in the naming-quality fallback with deterministic checks. 
 - [ ] LLM judge code and its dependencies removed from SCH-001's naming-quality path
 - [ ] SCH-001's extension acceptance path calls the semantic duplicate detection algorithm from M2 (normalization + optional judge, no Jaccard)
 - [ ] `applicableTo` fixed: `language === 'javascript' || language === 'typescript'`
-- [ ] Test fixture: registry has `user.register` as an operation; agent declares `user_registration` as a span extension; SCH-001 flags as a delimiter-variant duplicate
+- [ ] Test fixture: registry has `user.register` as an operation; agent declares `user_registration` as a span extension; SCH-001 flags as a semantic duplicate. **Note**: "user_registration" and "user.register" do NOT normalize to the same string ("userregistration" ≠ "userregister"), so normalization does not catch this — the judge path fires. The test fixture must mock the judge (using `vi.mock('../../../src/validation/judge.ts', ...)`) and return `answer: false, confidence: 0.9`. Without a judge mock, the fixture would silently pass (no judge → no duplicate flag).
 - [ ] Test fixture: registry has no span definitions; agent generates `do_stuff` span name; SCH-001 flags as single-component vague name (deterministic, no LLM call)
 - [ ] Test fixture: agent declares a genuinely novel span name not semantically equivalent to any registry operation; SCH-001 accepts the extension
 - [ ] `npm test` and `npm run typecheck` pass

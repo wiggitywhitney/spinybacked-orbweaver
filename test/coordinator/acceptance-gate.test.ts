@@ -802,34 +802,10 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
     expect(results[0].passed).toBe(true);
   });
 
-  it('(g) SCH-004 produces advisory results (non-blocking)', async () => {
-    const { checkNoRedundantSchemaEntries } = require('../../src/languages/javascript/rules/sch004.ts');
-
-    const code = [
-      'const { trace } = require("@opentelemetry/api");',
-      'const tracer = trace.getTracer("fixture-service");',
-      '',
-      'function handle(req, res) {',
-      '  return tracer.startActiveSpan("handle", (span) => {',
-      '    try {',
-      '      span.setAttribute("http.request.method", "GET");',
-      '    } finally { span.end(); }',
-      '  });',
-      '}',
-    ].join('\n');
-
-    const { results } = await checkNoRedundantSchemaEntries(code, '/project/src/api.js', resolvedSchema);
-    expect(results).toHaveLength(1);
-    expect(results[0].ruleId).toBe('SCH-004');
-    expect(results[0].tier).toBe(2);
-    expect(results[0].blocking).toBe(false);
-  });
-
-  it('(g) all four SCH checkers produce CheckResult with standard format', async () => {
+  it('(g) all three SCH checkers produce CheckResult with standard format', async () => {
     const { checkSpanNamesMatchRegistry } = require('../../src/languages/javascript/rules/sch001.ts');
     const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
     const { checkAttributeValuesConformToTypes } = require('../../src/languages/javascript/rules/sch003.ts');
-    const { checkNoRedundantSchemaEntries } = require('../../src/languages/javascript/rules/sch004.ts');
 
     const code = [
       'const { trace } = require("@opentelemetry/api");',
@@ -843,20 +819,16 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const { results: sch004Results } = await checkNoRedundantSchemaEntries(code, '/f.js', resolvedSchema);
-    expect(sch004Results).toHaveLength(1);
-
     const { results: sch001Results } = await checkSpanNamesMatchRegistry(code, '/f.js', resolvedSchema);
     const results = [
       ...sch001Results,
       ...(await checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema)).results,
       ...checkAttributeValuesConformToTypes(code, '/f.js', resolvedSchema),
-      sch004Results[0],
     ];
 
     for (const r of results) {
       // All SCH checks produce standard CheckResult
-      expect(r.ruleId).toMatch(/^SCH-00[1-4]$/);
+      expect(r.ruleId).toMatch(/^SCH-00[1-3]$/);
       expect(typeof r.passed).toBe('boolean');
       expect(r.filePath).toBe('/f.js');
       expect(typeof r.message).toBe('string');
@@ -865,11 +837,8 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       expect(typeof r.blocking).toBe('boolean');
     }
 
-    // SCH-001 through SCH-003 are blocking; SCH-004 is advisory
-    expect(results[0].blocking).toBe(true);
-    expect(results[1].blocking).toBe(true);
-    expect(results[2].blocking).toBe(true);
-    expect(results[3].blocking).toBe(false);
+    // All three active SCH checkers are blocking
+    expect(results.every((r) => r.blocking)).toBe(true);
   });
 });
 
