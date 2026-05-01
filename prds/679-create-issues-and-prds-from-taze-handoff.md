@@ -200,6 +200,8 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M4.
 - Agent produces a specific cause ("the span wrapper in `packument.fetchPackage` adds overhead on the hot npm call path at line X") — not a probability, not a hedged assessment
 - Surface the specific cause to the user with the rollback decision: "Roll back? (y/N) — here's why"
 
+**Scope override (Decision 4 in PRD #687, 2026-05-01)**: The handoff doc frames PRD 3's output as a "Roll back? (y/N)" prompt. This framing is superseded. Under the flag-and-surface philosophy, spiny-orb does NOT roll back on ambiguous failures — it commits the files and surfaces diagnostic context in the PR for human review. PRD 3's diagnostic agent should be reframed accordingly: the agent produces rich flag content for the PR (specific cause, call graph summary, live-check compliance data) rather than presenting an interactive rollback decision. The human decides what to do with the committed files via the PR review process. The "Roll back? (y/N)" language in the handoff doc should NOT appear in PRD 3.
+
 **Research milestones** (must be included): How do we serialize the call graph efficiently without blowing the context window? When should the agent recommend action vs. only present evidence?
 
 **Step 3 — Run `/write-prompt`**: After /prd-create produces the PRD file, run `/write-prompt` on the full PRD content. Apply all suggested improvements. Commit any changes.
