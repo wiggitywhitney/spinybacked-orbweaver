@@ -44,7 +44,7 @@ When the flag-and-surface path in `coordinate.ts` Step 7c reaches an ambiguous f
 - The failing test name and full error output
 - The serialized call graph from the failing test to committed instrumented files (see M1 for serialization approach)
 - All committed instrumented file diffs for this run
-- If PRD #698 is complete: the live-check compliance report showing what spans actually fired
+- The live-check compliance report showing what spans actually fired (always available — PRD #698 is a hard prerequisite)
 
 **The diagnostic agent produces:**
 - A specific cause statement — for example: "the span wrapper in `packument.fetchPackage` adds overhead on the hot npm call path at line X" — not a probability
@@ -114,7 +114,7 @@ Success criterion: Both research files exist and contain enough specificity to d
 Implement a diagnostic agent module at `src/coordinator/diagnostic-agent.ts`.
 
 The agent:
-1. Accepts the inputs defined in the Solution section (failing test, error output, serialized call graph, committed diffs, optional live-check compliance report)
+1. Accepts the inputs defined in the Solution section (failing test, error output, serialized call graph, committed diffs, live-check compliance report)
 2. Applies the signal threshold logic from M1 Research Question 2 to determine whether to produce a specific claim or present evidence
 3. Returns a structured result:
    ```typescript
