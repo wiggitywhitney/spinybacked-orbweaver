@@ -123,7 +123,7 @@ Success criteria:
 
 ### M4: PR summary distinction + `--verbose` output
 
-Before implementing, search for all callsites that generate the live-check status line: `grep -r "Live-Check" src/ --include="*.ts" -l`. Update every callsite found — do not update only the first one. Then update PR summary logic to distinguish two states based on the parsed JSON from M2:
+Before implementing, search for all callsites that generate the live-check status line: `grep -ri "live-check" src/ --include="*.ts" -l`. Update every callsite found — do not update only the first one. Then update PR summary logic to distinguish two states based on the parsed JSON from M2:
 
 - **Spans received**: `Live-Check: OK (N spans passed compliance)`
 - **Nothing received**: `Live-Check: OK (no spans received — live-check did not validate any telemetry)`
