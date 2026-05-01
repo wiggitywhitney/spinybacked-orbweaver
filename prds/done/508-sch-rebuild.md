@@ -1,6 +1,6 @@
 # PRD #508: SCH rule rebuild — SCH-001/002 semantic duplicate detection, SCH-004 deletion, SCH-005 audit
 
-**Status**: Draft — do not begin implementation work until PRD #507 is merged
+**Status**: Complete — 2026-05-01
 **Priority**: Medium
 **GitHub Issue**: [#508](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/508)
 **Created**: 2026-04-20
