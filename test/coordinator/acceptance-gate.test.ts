@@ -732,7 +732,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
     expect(results[0].message).toContain('not found in registry');
   });
 
-  it('(g) SCH-002 passes for attribute keys present in registry', () => {
+  it('(g) SCH-002 passes for attribute keys present in registry', async () => {
     const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
 
     const code = [
@@ -749,13 +749,13 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const results = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
     expect(results).toHaveLength(1);
     expect(results[0].ruleId).toBe('SCH-002');
     expect(results[0].passed).toBe(true);
   });
 
-  it('(g) SCH-002 fails for attribute keys NOT in registry', () => {
+  it('(g) SCH-002 fails for attribute keys NOT in registry', async () => {
     const { checkAttributeKeysMatchRegistry } = require('../../src/languages/javascript/rules/sch002.ts');
 
     const code = [
@@ -771,7 +771,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
       '}',
     ].join('\n');
 
-    const results = checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
+    const { results } = await checkAttributeKeysMatchRegistry(code, '/project/src/api.js', resolvedSchema);
     expect(results).toHaveLength(1);
     expect(results[0].ruleId).toBe('SCH-002');
     expect(results[0].passed).toBe(false);
@@ -849,7 +849,7 @@ describe('Acceptance Gate — Phase 5 SCH Tier 2 Checks', () => {
     const { results: sch001Results } = await checkSpanNamesMatchRegistry(code, '/f.js', resolvedSchema);
     const results = [
       ...sch001Results,
-      ...checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema),
+      ...(await checkAttributeKeysMatchRegistry(code, '/f.js', resolvedSchema)).results,
       ...checkAttributeValuesConformToTypes(code, '/f.js', resolvedSchema),
       sch004Results[0],
     ];

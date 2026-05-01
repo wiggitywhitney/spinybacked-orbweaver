@@ -227,6 +227,19 @@ describe('checkSemanticDuplicate — Jaccard stage', () => {
     expect(result.isDuplicate).toBe(false);
   });
 
+  it('type-compat pre-filter prevents Jaccard from flagging type-mismatched pairs', async () => {
+    // user_age_label vs user.age (int): Jaccard = 2/3 = 0.67 > 0.5, would normally flag
+    // but string (candidate) vs int (registry) are incompatible → user.age excluded before Jaccard
+    const entries: RegistryEntry[] = [{ name: 'user.age', type: 'int' }];
+    const result = await checkSemanticDuplicate('user_age_label', entries, {
+      ruleId: 'SCH-002',
+      useJaccard: true,
+      inferredType: 'string',
+    });
+
+    expect(result.isDuplicate).toBe(false);
+  });
+
   it('skips Jaccard stage when useJaccard is false (SCH-001 mode)', async () => {
     // Same pair as the Jaccard test above — should NOT be caught without Jaccard
     const entries: RegistryEntry[] = [{ name: 'http.response.status_code' }];

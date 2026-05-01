@@ -126,13 +126,23 @@ export function isTypeCompatible(novelType: InferredType, registryType?: string)
 /**
  * Check whether a candidate extension name is a semantic duplicate of any registry entry.
  *
- * Three-stage pipeline:
+ * When options.inferredType is provided, type-compatible entries are selected first.
+ * This pre-filter applies before all three pipeline stages to prevent type-mismatched registry
+ * entries from triggering false positives at any stage (including Jaccard, which has no type
+ * awareness on its own). For example: a string attribute "user_age_label" should not be
+ * flagged as a Jaccard duplicate of an int attribute "user.age" even though their token
+ * overlap is 0.67. SCH-001 never provides inferredType (span names have no value type).
+ *
+ * Three-stage pipeline (all stages operate on the type-filtered entry set):
  * 1. Normalization: strip delimiters, lowercase, compare — catches delimiter-variant duplicates.
- * 2. Jaccard pre-pass (if options.useJaccard): token similarity > 0.5 — catches structural near-duplicates.
- * 3. LLM judge (if options.judgeDeps): semantic equivalence with optional pre-filtering:
- *    - Type compatibility pre-filter: applied when options.inferredType is provided (SCH-002).
- *    - Namespace pre-filter: applied when options.inferredType is provided and candidate has dots (SCH-002).
- *    SCH-001 passes all entries without pre-filtering.
+ * 2. Jaccard pre-pass (if options.useJaccard): token similarity > 0.5 — catches structural
+ *    near-duplicates. Threshold of 0.5 means more than half the tokens overlap; this catches
+ *    obvious delimiter-style variants before paying for a judge call while avoiding false
+ *    positives on pairs that share only a single common token.
+ * 3. LLM judge (if options.judgeDeps): semantic equivalence with namespace pre-filter applied
+ *    when candidate has dots (restricts to same root namespace — cross-domain pairs like
+ *    "commit_story.*" vs "gen_ai.*" are never semantic duplicates).
+ *    SCH-001 passes all entries without namespace pre-filtering (span names are short).
  *
  * @param candidate - The extension name being declared (e.g., "user_registration" or "http_request_duration").
  * @param registryEntries - Existing registry entries to compare against.
@@ -147,9 +157,20 @@ export async function checkSemanticDuplicate(
 
   if (registryEntries.length === 0) return noMatch;
 
+  // Type-compatibility pre-filter: when inferredType is provided, restrict all pipeline stages
+  // to registry entries whose type is compatible with the candidate's value type.
+  // 'unknown' type is always compatible (cannot determine type → don't pre-filter).
+  // Applies before normalization and Jaccard as well as the judge, so a string candidate
+  // is never flagged as a duplicate of an int registry entry at any stage.
+  const activeEntries = options.inferredType !== undefined
+    ? registryEntries.filter((e) => isTypeCompatible(options.inferredType!, e.type))
+    : registryEntries;
+
+  if (activeEntries.length === 0) return noMatch;
+
   // Stage 1: Normalization comparison (always runs)
   const normalizedCandidate = normalizeKey(candidate);
-  for (const entry of registryEntries) {
+  for (const entry of activeEntries) {
     if (normalizedCandidate === normalizeKey(entry.name)) {
       return {
         isDuplicate: true,
@@ -161,8 +182,11 @@ export async function checkSemanticDuplicate(
   }
 
   // Stage 2: Jaccard pre-pass (attribute keys only — useJaccard: true)
+  // Threshold > 0.5: more than half the tokens must overlap. Catches delimiter-style structural
+  // near-duplicates (e.g., "http.request.status_code" vs "http.response.status_code") cheaply
+  // before paying for a judge call.
   if (options.useJaccard) {
-    for (const entry of registryEntries) {
+    for (const entry of activeEntries) {
       if (computeJaccardSimilarity(candidate, entry.name) > 0.5) {
         return {
           isDuplicate: true,
@@ -177,17 +201,12 @@ export async function checkSemanticDuplicate(
   // Stage 3: LLM judge (optional — requires judgeDeps)
   if (!options.judgeDeps) return noMatch;
 
-  // Pre-filter candidates for the judge:
-  // When inferredType is provided (SCH-002), apply type-compat and namespace pre-filters.
-  // When inferredType is absent (SCH-001), pass all entries — span names need no pre-filtering.
-  let candidates = registryEntries;
+  // Namespace pre-filter for judge: restrict to the same root namespace when candidate has dots.
+  // A "commit_story.*" attribute is never a semantic duplicate of a "gen_ai.*" attribute.
+  // SCH-001 span names are short and need no namespace pre-filtering.
+  let candidates = activeEntries;
 
   if (options.inferredType !== undefined) {
-    // Type-compatibility pre-filter: exclude registry entries whose type is incompatible.
-    candidates = candidates.filter((e) =>
-      isTypeCompatible(options.inferredType!, e.type),
-    );
-
     // Namespace pre-filter: restrict to the same root namespace when candidate has dots.
     // A "commit_story.*" attribute is never a semantic duplicate of a "gen_ai.*" attribute.
     const candidateRoot = candidate.includes('.') ? (candidate.split('.')[0] ?? '') : '';
