@@ -120,7 +120,7 @@ Define the semantic duplicate detection algorithm that both SCH-001 and SCH-002 
 2. **Jaccard pre-pass (SCH-002 only, deterministic):** For attribute keys, compute Jaccard token similarity. Above a threshold (currently > 0.5 in SCH-004), flag as a structural duplicate candidate. Span names are too short for Jaccard to be useful — SCH-001 skips this stage.
 3. **LLM judge (optional, requires Anthropic client):** For non-matching normalized forms that pass the Jaccard pre-pass (SCH-002) or are non-matching-normalized (SCH-001), pose the semantic-equivalence question to the LLM judge. Use pre-filtered candidates (namespace pre-filter for SCH-002 from SCH-004 patterns). Post-validate judge suggestions against type compatibility (SCH-002 only, migrated from SCH-004).
 
-Decide shared helper location based on the `tier2/` architecture decision from PRD #507.
+Decide shared helper location based on the `tier2/` architecture decision from PRD #507. **PRD #507 chose Option B (Decision D-2)**: `javascript/rules/` owns all canonical rule copies; `tier2/` retains only `registry-types.ts` and `sch005.ts` (the latter will be deleted in M6). Shared helpers for this algorithm therefore live in `src/languages/javascript/rules/` as a utility module (e.g., `src/languages/javascript/rules/semantic-dedup.ts`).
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
 - [ ] Algorithm design documented in a Design Note in this PRD (covers normalization rules, Jaccard threshold rationale, judge prompt, pre-filter specifications, optional-client handling)
