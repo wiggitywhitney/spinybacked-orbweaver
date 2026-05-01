@@ -74,7 +74,7 @@ describe('feature parity matrix', () => {
     }
   });
 
-  it('SCH-001 applies to JS/TS only (uses ts-morph internally — not safe for Python/Go)', () => {
+  it('SCH-001 applicableTo restricts to JS/TS — ts-morph is not safe for Python/Go', () => {
     const rules = getAllRules();
     const sch001 = rules.find(r => r.ruleId === 'SCH-001' && r.applicableTo('javascript'));
     expect(sch001).toBeDefined();
