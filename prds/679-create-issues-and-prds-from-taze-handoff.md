@@ -330,7 +330,7 @@ If VERDICT is FAIL on either check, update `docs/ROADMAP.md` to close all gaps b
 
 **Step 1 — Create branch**: `git checkout -b docs/remove-taze-handoff`
 
-**Step 2 — Remove files**: `git rm -r docs/handoff/`
+**Step 2 — Remove files**: `git rm docs/handoff/spiny-orb-design-handoff.md docs/handoff/issue-tracking.md`
 
 **Step 3 — CodeRabbit review**:
 - Commit: `git commit -m "docs: remove taze eval handoff working copy"`
