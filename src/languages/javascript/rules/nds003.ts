@@ -61,8 +61,10 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // `if (err instanceof Error) {` is required when catch variable is typed `unknown`
   // (enabled by `useUnknownInCatchVariables` in strict mode) and wraps `span.recordException`.
   /^\s*if\s*\(\s*\w+\s+instanceof\s+Error\s*\)\s*\{?\s*$/,
-  // Re-throw of caught exception (after recording exception on span)
-  /^\s*throw\s+(?:err|error|e|ex|exception)\s*;?\s*$/,
+  // Re-throw of caught exception (after recording exception on span).
+  // Matches any single identifier — catch variables may be renamed (e.g., `spanError`)
+  // to avoid shadowing inner-scope `error` variables.
+  /^\s*throw\s+\w+\s*;?\s*$/,
   // Return with span wrapper
   /^\s*return\s+tracer\./,
   /^\s*return\s+(?:span|otelSpan)\./,
@@ -84,7 +86,12 @@ function normalizeLine(line: string): string {
     // literals to prevent type widening inside startActiveSpan callbacks.
     // Lookahead restricts stripping to assertion contexts ([,;)}\]] or EOL) so
     // occurrences inside string literals (e.g. `'x as const'`) are not affected.
-    .replace(/\s+as\s+const(?=\s*(?:[,;)}\]]|$))/gm, '');
+    .replace(/\s+as\s+const(?=\s*(?:[,;)}\]]|$))/gm, '')
+    // Normalize braceless `if` → braced `if`: strip trailing `{` so that
+    // `if (cond) {` compares equal to `if (cond)`. Required when the agent adds
+    // braces to a single-statement `if` to accommodate span body wrapping.
+    // Only fires when `{` is at the end of the line (not inline one-liners).
+    .replace(/^(if\s*\(.+\))\s*\{\s*$/, '$1');
 }
 
 /**
@@ -133,16 +140,20 @@ function reconcileReturnCaptures(
   missingLines: Array<{ line: string; originalLineNum: number }>,
   addedLines: Array<{ line: string; instrumentedLineNum: number }>,
 ): void {
-  // Index added lines by their capture expressions (array to handle duplicates in order)
-  const capturesByExpr = new Map<string, number[]>(); // expr → indices in addedLines
+  // Index added lines by their capture expressions (array to handle duplicates in order).
+  // Strip leading `await` before indexing — the agent may add `await` to a non-async
+  // expression when extracting it to a variable (e.g., `const r = await Promise.all(...)`
+  // from an original `return Promise.all(...)`).
+  const capturesByExpr = new Map<string, number[]>(); // normalized expr → indices in addedLines
   for (let i = 0; i < addedLines.length; i++) {
     const capture = extractCapture(addedLines[i].line);
     if (capture) {
-      const existing = capturesByExpr.get(capture.expr);
+      const normalizedExpr = capture.expr.replace(/^await\s+/, '');
+      const existing = capturesByExpr.get(normalizedExpr);
       if (existing) {
         existing.push(i);
       } else {
-        capturesByExpr.set(capture.expr, [i]);
+        capturesByExpr.set(normalizedExpr, [i]);
       }
     }
   }
@@ -155,7 +166,9 @@ function reconcileReturnCaptures(
     const returnExpr = extractReturnExpr(missingLines[mi].line);
     if (!returnExpr) continue;
 
-    const captureIndices = capturesByExpr.get(returnExpr);
+    // Strip leading `await` for comparison — matches captures where await was added.
+    const normalizedReturnExpr = returnExpr.replace(/^await\s+/, '');
+    const captureIndices = capturesByExpr.get(normalizedReturnExpr);
     if (!captureIndices || captureIndices.length === 0) continue;
 
     // Consume the first available index (sequential pairing for duplicate expressions)

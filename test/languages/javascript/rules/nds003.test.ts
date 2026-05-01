@@ -845,6 +845,62 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('known limitations', () => {
+    it('throw with arbitrary identifier outside span catch is not detected (accepted trade-off)', () => {
+      // throw \w+ suppresses any single-identifier throw, including those outside span
+      // catch blocks. Making INSTRUMENTATION_PATTERNS context-aware requires passing line
+      // index + full file through every pattern check — a major architectural refactor.
+      // The false negative risk (agent adding a standalone throw outside a span catch)
+      // is essentially zero in practice. Same trade-off as standalone } and try { filtering.
+      const original = [
+        'function doWork() {',
+        '  doSomething();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  throw someBusinessError;',
+        '  doSomething();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      // This PASSES (not detected) — `throw \w+` filters the added throw regardless of context.
+      expect(failures).toHaveLength(0);
+    });
+
+    it('braceless-if brace + statement move is not detected (accepted trade-off)', () => {
+      // Bracing a braceless if while moving a subsequent statement inside the block
+      // changes semantics (statement now conditional). normalizeLine() strips the trailing
+      // `{` from `if (cond) {` lines so they match the original `if (cond)`, and the
+      // moved statement is still present in the instrumented output so the forward check
+      // passes. Fixing this requires multi-line context inspection — a significant refactor.
+      // In practice agents never restructure business logic; brace-addition is only for
+      // span body wrapping. Same trade-off as standalone } filtering.
+      const original = [
+        'function doWork(cond) {',
+        '  if (cond)',
+        '    return;',
+        '  doAlways();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork(cond) {',
+        '  if (cond) {',
+        '    return;',
+        '    doAlways();',  // moved inside — now conditional, semantics changed
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      // This PASSES (not detected) — brace normalization + frequency match misses the move.
+      expect(failures).toHaveLength(0);
+    });
+
     it('truthy property guard wrapping business logic is not detected (accepted trade-off)', () => {
       // Same trade-off as the undefined guard: if (obj.prop) { businessLogic() } passes
       // because the guard line matches the pattern. In practice the agent only generates
@@ -892,6 +948,122 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       // This PASSES (not detected) — the guard pattern matches the if-line,
       // and the standalone } is also filtered. This is the same trade-off as
       // standalone } filtering for try/catch/finally wrapping.
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('braceless if → braced if (#675)', () => {
+    it('allows braceless single-statement if to gain braces for span wrapping', () => {
+      // Agent adds braces to `if (cond)\n  return` to wrap the body in a span context.
+      // NDS-003 must not flag `if (!cacheChanged)` as missing or `if (!cacheChanged) {` as added.
+      const original = [
+        'function doWork(cacheChanged) {',
+        '  if (!cacheChanged)',
+        '    return;',
+        '  doRealWork();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork(cacheChanged) {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      if (!cacheChanged) {',
+        '        return;',
+        '      }',
+        '      doRealWork();',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still detects a new if block added by the agent (not in original)', () => {
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  if (shouldSkip) {',
+        '    return null;',
+        '  }',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('await added to return-value capture (#675)', () => {
+    it('allows await added to a non-async expression in return-value capture', () => {
+      // Agent adds `await` to `Promise.all(...)` when extracting it to a variable for setAttribute.
+      // reconcileReturnCaptures must strip `await` from the captured expression before comparison.
+      const original = [
+        'async function checkAll(pkgs) {',
+        '  return Promise.all(pkgs.map(check));',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'async function checkAll(pkgs) {',
+        '  return tracer.startActiveSpan("checkAll", async (span) => {',
+        '    try {',
+        '      const result = await Promise.all(pkgs.map(check));',
+        '      span.setAttribute("taze.check.packages_outdated", result.filter((r) => r.outdated).length);',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('renamed catch variable in throw (#675)', () => {
+    it('allows throw with an arbitrary catch variable name in a span catch block', () => {
+      // Agent renames outer catch variable to `spanError` to avoid shadowing inner `error`.
+      // The throw pattern must accept any single identifier, not just err/error/e/ex/exception.
+      const original = [
+        'function doWork() {',
+        '  return computeResult();',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function doWork() {',
+        '  return tracer.startActiveSpan("doWork", (span) => {',
+        '    try {',
+        '      return computeResult();',
+        '    } catch (spanError) {',
+        '      span.recordException(spanError);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw spanError;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
       expect(failures).toHaveLength(0);
     });
   });
