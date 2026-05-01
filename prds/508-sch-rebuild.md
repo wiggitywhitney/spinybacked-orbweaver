@@ -61,6 +61,10 @@ Three schema-fidelity rules have structural flaws that can't be fixed in place �
 
 ## Decision Log
 
+**D-2 (shared helper location): `src/languages/javascript/rules/semantic-dedup.ts`**
+
+PRD #507 chose Option B (Decision D-2 in #507): `javascript/rules/` owns all canonical rule copies; `tier2/` retains only `registry-types.ts` and `sch005.ts`. The shared semantic-dedup algorithm created in M2 therefore lives at `src/languages/javascript/rules/semantic-dedup.ts`. It exports pure-logic helpers (`normalizeKey`, `computeJaccardSimilarity`, `isTypeCompatible`) and the main orchestration function `checkSemanticDuplicate`. SCH-001 and SCH-002 import from this module in M3/M5.
+
 **D-1 (SCH-005 fate): Delete**
 
 SCH-005 checks for semantic duplicates between span definitions that already exist in the resolved Weaver registry — it compares pairs of registry-authored spans (not agent-declared extensions) using a judge-only approach. The agent does not author the registry; the fix for a registry-level duplicate (consolidating two YAML span definitions) is a human registry-authorship task outside the instrumentation pipeline. There is no per-file action the agent can take.
@@ -80,6 +84,20 @@ Files removed in M6:
 ---
 
 ## Design Notes
+
+- **Semantic-dedup algorithm design (from M2):** The shared module at `src/languages/javascript/rules/semantic-dedup.ts` exports:
+  - `normalizeKey(s: string): string` — strips `.`, `-`, `_` and lowercases. Used by both SCH-001 and SCH-002 for stage-1 comparison.
+  - `computeJaccardSimilarity(a: string, b: string): number` — tokenizes on delimiters, returns `|A∩B|/|A∪B|`. Used by SCH-002 only.
+  - `isTypeCompatible(novelType: InferredType, registryType?: string): boolean` — int/double are mutually compatible; unknown always passes. Used by SCH-002 only.
+  - `checkSemanticDuplicate(candidate, entries, options): Promise<SemanticDedupResult>` — orchestrates the three-stage pipeline:
+    1. Normalization: `normalizeKey(candidate) === normalizeKey(entry.name)` → immediate duplicate flag.
+    2. Jaccard (if `options.useJaccard`): similarity > 0.5 → immediate duplicate flag.
+    3. Judge (if `options.judgeDeps`): caller passes pre-filtered entries (namespace + type pre-filtered for SCH-002; no pre-filter for SCH-001). Judge confidence ≥ 0.7 required for a duplicate verdict.
+  - `SemanticDedupResult` shape: `{ isDuplicate, matchedEntry?, detectionMethod?, judgeTokenUsage }`.
+  - `InferredType`, `RegistryEntry`, `SemanticDedupDeps`, `SemanticDedupOptions` type exports.
+  - SCH-001 calls with `useJaccard: false`, `useNamespaceFilter: false`, all registry operations as entries.
+  - SCH-002 calls with `useJaccard: true`, namespace-filtered + type-filtered entries.
+  - The module has no ts-morph dependency — it accepts already-extracted strings and pre-inferred types from callers.
 
 - **Blocked by PRD #507.** Do not start M2 (rebuild work) until #507 is merged. The `tier2/` consolidation decision in #507's Milestone M6 determines the file layout this PRD operates on. M1 (SCH-005 audit) can proceed in parallel with #507 because it is analysis work that doesn't touch files yet.
 - **TS-provider integration per Decision 10 in PRD #483.** SCH rules are a language-agnostic concept with language-specific extraction. The architecture established by #507 determines how these rebuilt rules interact with TypeScript. `TS_INHERITED_RULE_IDS` in `TypeScriptProvider` (on its branch or on main after #372 merges) must continue to include the rebuilt SCH rules correctly. When this PRD finishes, the TS provider's SCH coverage must match JS coverage for all rebuilt rules.
@@ -122,11 +140,11 @@ Define the semantic duplicate detection algorithm that both SCH-001 and SCH-002 
 
 Decide shared helper location based on the `tier2/` architecture decision from PRD #507. **PRD #507 chose Option B (Decision D-2)**: `javascript/rules/` owns all canonical rule copies; `tier2/` retains only `registry-types.ts` and `sch005.ts` (the latter will be deleted in M6). Shared helpers for this algorithm therefore live in `src/languages/javascript/rules/` as a utility module (e.g., `src/languages/javascript/rules/semantic-dedup.ts`).
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Algorithm design documented in a Design Note in this PRD (covers normalization rules, Jaccard threshold rationale, judge prompt, pre-filter specifications, optional-client handling)
-- [ ] Decision: shared helper lives in `src/validation/tier2/` (if #507 chose Option A) or in `src/languages/javascript/rules/` as a shared utility (if #507 chose Option B). Recorded in Decision Log.
-- [ ] Unit tests designed for the algorithm — cover: delimiter-variant duplicates (normalization catches), Jaccard-similar pairs (SCH-002 only), semantic duplicates caught by judge, genuinely novel extensions that pass all three stages, optional-client-absent degradation
-- [ ] `npm test` and `npm run typecheck` pass (no behavior change yet — just test scaffolding)
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Algorithm design documented in a Design Note in this PRD (covers normalization rules, Jaccard threshold rationale, judge prompt, pre-filter specifications, optional-client handling)
+- [x] Decision: shared helper lives in `src/languages/javascript/rules/semantic-dedup.ts` (Option B per D-2). Recorded in Decision Log.
+- [x] Unit tests designed for the algorithm — cover: delimiter-variant duplicates (normalization catches), Jaccard-similar pairs (SCH-002 only), semantic duplicates caught by judge, genuinely novel extensions that pass all three stages, optional-client-absent degradation
+- [x] `npm test` and `npm run typecheck` pass (no behavior change yet — just test scaffolding)
 
 ### Milestone M3: Rebuild SCH-002
 
