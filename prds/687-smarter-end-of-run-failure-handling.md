@@ -142,14 +142,17 @@ Apply `parseFailingSourceFiles` from `dispatch.ts` at the end-of-run failure pat
 When a test fails, implement this routing:
 1. No committed file in call path → no action, no flag. Done.
 2. Committed files in call path AND the error is a direct error (import error, TS type error in agent-added code) → rollback and report reason.
-3. Committed files in call path, ambiguous failure → emit a flag placeholder for Fixes 2–3 to populate. Do not roll back.
+3. Committed files in call path, ambiguous failure → flag-and-surface. Do not roll back.
+
+**Flag UX design (Decision 5 — do this before writing any flag output code)**: Before implementing the flag output, present the human with concrete UX options for how the flag surfaces — e.g., a section in the PR body, an inline PR comment on the affected file, console output at run time, a separate summary artifact. Get human approval on the format before writing any flag output code. The flag UX is not specified in this PRD.
 
 TDD: write failing unit tests for each of the three branches before implementing. Confirm each fails, implement, confirm all pass.
 
 Success criteria:
 - Unit test: failing test with no committed file in call path → no action (the run-11 scenario)
 - Unit test: failing test with committed file in call path + import error in agent code → rollback
-- Unit test: failing test with committed file in call path + timeout error → flag emitted, no rollback
+- Unit test: failing test with committed file in call path + timeout error → flag triggered, no rollback
+- Flag UX design approved by human before flag output code is written
 - Existing test suite passes with no regressions
 
 ### M3: Implement Fix 2 — API health as diagnostic context
@@ -158,14 +161,14 @@ Success criteria:
 
 **Start by reading `docs/research/end-of-run-failure-taxonomy.md`** to use the documented API identification approach.
 
-When Fix 1 routes to flag-and-surface, check the health endpoint of the relevant external API: `registry.npmjs.org/-/ping` (npm), `jsr.io` (jsr). Record the result and include it in the flag message. Do not make a rollback decision based on this result.
+When Fix 1 routes to flag-and-surface, check the health endpoint of the relevant external API: `registry.npmjs.org/-/ping` (npm), `jsr.io` (jsr). Record the result as diagnostic context available to the flag. Do not make a rollback decision based on this result.
 
 TDD: write failing unit tests before implementing. Confirm failure, implement, confirm pass.
 
 Success criteria:
-- Unit test: unhealthy API → flag message includes "API was unreachable at test time — likely environmental", no rollback
-- Unit test: healthy API → flag message includes API health status, no rollback
-- Fix 2 result is visible in the PR flag output
+- Unit test: unhealthy API → diagnostic context records API as unreachable, no rollback
+- Unit test: healthy API → diagnostic context records API as healthy, no rollback
+- Fix 2 result is available as structured data for the flag output (exact flag UX decided with human per Decision 5)
 - Existing test suite passes with no regressions
 
 ### M4: Implement Fix 3 — Retry as diagnostic context
@@ -174,17 +177,15 @@ Success criteria:
 
 **Start by reading `docs/research/end-of-run-failure-taxonomy.md`** to confirm the retry heuristic.
 
-Wait ~30 seconds and retry the test suite once. Record the result and include it in the flag message. Do not make a rollback decision based on this result.
-
-- Retry passes: flag message includes "Tests passed on retry — likely transient. Human review recommended before merging."
-- Retry fails: flag message includes "Tests failed on retry — persistent failure. See call path and diffs for committed files."
+Wait ~30 seconds and retry the test suite once. Record the result as diagnostic context available to the flag. Do not make a rollback decision based on this result.
 
 TDD: write failing unit tests before implementing. Use `SPINY_ORB_RETRY_DELAY_MS` env var to control delay so tests don't actually wait 30 seconds.
 
 Success criteria:
-- Unit test: transient failure (retry passes) → flag message reflects transient result, no rollback
-- Unit test: persistent failure (retry fails) → flag message reflects persistent result, no rollback
+- Unit test: transient failure (retry passes) → diagnostic context records retry as passed, no rollback
+- Unit test: persistent failure (retry fails) → diagnostic context records retry as failed, no rollback
 - The delay is configurable via `SPINY_ORB_RETRY_DELAY_MS` (default 30000ms)
+- Fix 3 result is available as structured data for the flag output (exact flag UX decided with human per Decision 5)
 - Existing test suite passes with no regressions
 
 ### M5: Integration test — end-of-run failure scenario with flag-and-surface output
@@ -195,7 +196,7 @@ Write integration tests that cover the two primary end-of-run outcomes. Updated 
 - Fixture with committed instrumented files
 - Test suite that fails with a timeout (ambiguous, not a direct code error)
 - Assert: committed files are NOT rolled back
-- Assert: PR output includes a flag with call path, API health result, and retry result
+- Assert: structured diagnostic context is produced (call path, API health result, retry result) — exact flag UX asserted against the format approved by the human per Decision 5
 
 **Scenario B — Direct error (rollback)**:
 - Fixture with committed files containing an agent-introduced import error
@@ -229,3 +230,4 @@ Success criterion: both scenarios exist in `test/coordinator/acceptance-gate.tes
 | 2026-05-01 | `--exclude` flag workaround explicitly rejected | Hides real signal; masks symptoms without diagnosing cause |
 | 2026-05-01 | Fix ordering: smart-rollback → health-check → retry | Industry practices research spike confirms: check the cheapest deterministic gate first (Meta PFS model: a pass is strong evidence, a fail is weak evidence; Slack: pre-filter infrastructure categories before flakiness logic). Smart-rollback alone resolves run-11 without any external calls. Health-check and retry only apply when committed files are in the call path. |
 | 2026-05-01 | Flag-and-surface preferred over rollback for ambiguous failures; rollback reserved for direct errors | Rollback claims certainty spiny-orb doesn't have. When a test fails and committed files are in the call path, causation is usually ambiguous — the agent can't know if it was environmental, transient, or a real regression. A human reviewing the PR has context the agent doesn't (test history, performance characteristics, domain knowledge). Version control means nothing is lost. The PR is already the review surface — surface the problem there rather than silently discarding correct instrumentation. Rollback is preserved only for unambiguous direct errors the agent provably introduced: import errors or TS type errors in its added span wrapper code. API health and retry results become diagnostic inputs to the flag message, not rollback gates. PRD #3 (diagnostic agent) scope should be framed around producing flag content for human review, not explaining rollback decisions. |
+| 2026-05-01 | Flag UX deferred to implementation time with human in the loop | The exact format, content, and surface for the flag (PR comment, PR body section, console output, etc.) is a UX design decision that requires human input. It cannot be pre-decided in the PRD without knowing what options feel right at the moment of implementation. At M2 start, the implementor must present concrete UX options to the human and get approval before writing any flag output code. Fixes 2 and 3 produce structured diagnostic context as data; the UX layer on top of that data is designed with the human. |
