@@ -83,9 +83,8 @@ All validation rules whose findings ever surface to humans. The exact list will 
 - RST-004 (no spans on internal implementation details)
 - RST-005 (no double-instrumentation)
 - API-002 (`@opentelemetry/api` dependency placement)
-- SCH-001 (span names match registry — when registry is sparse, advisory per current behavior; behavior changes after PRD #508)
-- SCH-002 (attribute keys match registry — same caveat as SCH-001)
-- SCH-004 (no redundant schema entries — pending deletion in PRD #508)
+- SCH-001 (span names match registry — unconditionally blocking after PRD #508 rebuild; naming quality fallback is now deterministic)
+- SCH-002 (attribute keys match registry — unconditionally blocking after PRD #508 rebuild)
 
 **Blocking rules** (surface to humans via CLI error output and PR summary):
 - NDS-001 (syntax valid), NDS-002 (tests pass), NDS-003 (code preserved), NDS-004 (signatures preserved — promoted in audit), NDS-005 (control flow preserved — promoted in audit), NDS-006 (module system match — promoted in audit), NDS-007 (expected-condition catch blocks — new rule from audit)
