@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-05-01) Created four GitHub issues from the taze eval run-11 handoff document, capturing the four actionable problems found: the PR summary incorrectly showing "OK" when Weaver received no spans (#683), the rollback count math becoming unreadable after a 3-file rollback (#684), the missing documentation explaining why checkpoint test failures can't be caused by instrumentation (#685), and a research spike to survey how CI tooling, code-transformation tools, and live telemetry validators handle the same problems in other ecosystems (#686). All issue bodies reviewed with `/write-prompt` before creation. Updated Issue D to include a step that triggers `/prd-update-decisions` if the research reveals design changes for PRDs 1–4, and updated PRD #679's M2–M5 milestones to read the research output before drafting each PRD.
+
 ### Changed
 
 - (2026-05-01) Fixed NDS-003 (Code Preserved) to handle three instrumentation-motivated transformations that appeared in taze eval run-11 (`src/io/resolves.ts`): (1) braceless single-statement `if` gaining braces for span body wrapping — `normalizeLine()` now strips the trailing `{` from `if (condition) {` lines so both forms compare equal; (2) `await` added to a non-async expression during return-value capture — `reconcileReturnCaptures()` now strips leading `await` from both the capture expression and the return expression before comparison; (3) catch variable renamed to avoid shadowing (e.g., `spanError` instead of `error`) — the `throw` instrumentation pattern now matches any single-identifier throw rather than a fixed list of known names.

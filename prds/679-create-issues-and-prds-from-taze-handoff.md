@@ -25,7 +25,7 @@ Create each deliverable in dependency order. Every milestone starts by reading t
 
 ## Milestones
 
-- [ ] M1: Create 4 standalone GitHub issues from the handoff doc
+- [x] M1: Create 4 standalone GitHub issues from the handoff doc
 - [ ] M2: Create PRD 2 (smarter end-of-run test failure handling) + CodeRabbit review + audit
 - [ ] M3: Create PRD 1 (live-check actually validates something) + CodeRabbit review + audit
 - [ ] M4: Create PRD 3 (diagnostic agent for persistent failures) + CodeRabbit review + audit
@@ -85,7 +85,7 @@ If VERDICT is FAIL, update the issues to close the gaps before proceeding to M2.
 
 ### M2: Create PRD 2 — Smarter end-of-run test failure handling
 
-**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — the foundational insight section and the "PRD 2" section are both required reading. The foundational insight explains why timeout failures cannot be caused by instrumentation (spans are no-ops); this context must be reflected in the PRD's design principle.
+**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — the foundational insight section and the "PRD 2" section are both required reading. The foundational insight explains why timeout failures cannot be caused by instrumentation (spans are no-ops); this context must be reflected in the PRD's design principle. If `docs/research/industry-practices-spike.md` exists, read it too — the spike covers flaky test handling and rollback patterns that directly inform PRD 2's design decisions. If the research surfaces design decisions that affect this or other open PRDs, run `/prd-update-decisions` before proceeding to Step 1.
 
 **Step 1 — Create branch**: `git checkout -b prd/smarter-end-of-run-failure-handling`
 
@@ -134,7 +134,7 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M3.
 
 ### M3: Create PRD 1 — Make live-check actually validate something
 
-**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — the foundational insight section and the "PRD 1" section are both required reading. The foundational insight is the background that makes the problem legible; the PRD must reflect it.
+**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — the foundational insight section and the "PRD 1" section are both required reading. The foundational insight is the background that makes the problem legible; the PRD must reflect it. If `docs/research/industry-practices-spike.md` exists, read it too — the spike covers live telemetry validation tooling patterns that directly inform PRD 1's SDK injection approach. If the research surfaces design decisions that affect this or other open PRDs, run `/prd-update-decisions` before proceeding to Step 1.
 
 **Step 1 — Create branch**: `git checkout -b prd/live-check-validation`
 
@@ -184,7 +184,7 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M4.
 
 ### M4: Create PRD 3 — Diagnostic agent for persistent failures
 
-**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — specifically the "PRD 3" section. Note the prerequisite dependencies (PRDs 1 and 2) which must be explicit in the PRD.
+**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — specifically the "PRD 3" section. Note the prerequisite dependencies (PRDs 1 and 2) which must be explicit in the PRD. If `docs/research/industry-practices-spike.md` exists, read it too — the spike covers diagnostic tooling patterns that inform PRD 3's call graph serialization and rollback decision design. If the research surfaces design decisions that affect this or other open PRDs, run `/prd-update-decisions` before proceeding to Step 1.
 
 **Step 1 — Create branch**: `git checkout -b prd/diagnostic-agent-persistent-failures`
 
@@ -230,7 +230,7 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M5.
 
 ### M5: Create PRD 4 — Dependency-aware file instrumentation ordering
 
-**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — specifically the "PRD 4" section. Note that this PRD is independent of PRDs 1–3 and can be worked in parallel.
+**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — specifically the "PRD 4" section. Note that this PRD is independent of PRDs 1–3 and can be worked in parallel. If `docs/research/industry-practices-spike.md` exists, read it too — it may contain findings relevant to dependency graph tooling patterns. If the research surfaces design decisions that affect this or other open PRDs, run `/prd-update-decisions` before proceeding to Step 1.
 
 **Step 1 — Create branch**: `git checkout -b prd/dependency-aware-ordering`
 
