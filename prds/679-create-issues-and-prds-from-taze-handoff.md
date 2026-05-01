@@ -15,21 +15,23 @@ Eval runs 8–11 on taze TypeScript surfaced four design problems in spiny-orb's
 
 ## Solution
 
-Create each deliverable in dependency order. Every milestone starts by reading the local handoff copy and ends with an audit agent that verifies nothing was lost. After each PRD is created, the audit agent compares the created PRD against the relevant handoff sections and produces a structured gap report. If the verdict is FAIL, gaps are resolved before the next milestone begins. Update ROADMAP.md as the final step.
+Create each deliverable in dependency order. Every milestone starts by reading the local handoff copy and ends with an audit agent that verifies nothing was lost. Each GitHub issue body is reviewed with `/write-prompt` before creation. Each PRD file is reviewed with `/write-prompt` after drafting and before committing. Every PRD and ROADMAP.md change goes through a branch → PR → CodeRabbit review cycle — never directly to main. Update ROADMAP.md as the final step.
 
 **Source document**: `docs/handoff/spiny-orb-design-handoff.md` (local copy saved in this repo; original at `spinybacked-orbweaver-eval/docs/spiny-orb-design-handoff.md` — the eval repo copy may change, so always use the local copy)
+
+**Issue tracking**: As each deliverable is created, append its issue number to `docs/handoff/issue-tracking.md` in the format `[label]: #[number]` (e.g., `Issue A: #680`, `PRD 2: #681`). Create the file on first use. M6 uses this file to look up issue numbers for ROADMAP.md entries.
 
 ---
 
 ## Milestones
 
 - [ ] M1: Create 4 standalone GitHub issues from the handoff doc
-- [ ] M2: Create PRD 2 (smarter end-of-run test failure handling) + audit against handoff doc
-- [ ] M3: Create PRD 1 (live-check actually validates something) + audit against handoff doc
-- [ ] M4: Create PRD 3 (diagnostic agent for persistent failures) + audit against handoff doc
-- [ ] M5: Create PRD 4 (dependency-aware file instrumentation ordering) + audit against handoff doc
-- [ ] M6: Update ROADMAP.md per handoff doc placement instructions + audit against handoff doc
-- [ ] M7: Delete `docs/handoff/spiny-orb-design-handoff.md` and commit the removal
+- [ ] M2: Create PRD 2 (smarter end-of-run test failure handling) + CodeRabbit review + audit
+- [ ] M3: Create PRD 1 (live-check actually validates something) + CodeRabbit review + audit
+- [ ] M4: Create PRD 3 (diagnostic agent for persistent failures) + CodeRabbit review + audit
+- [ ] M5: Create PRD 4 (dependency-aware file instrumentation ordering) + CodeRabbit review + audit
+- [ ] M6: Update ROADMAP.md per handoff doc placement instructions + CodeRabbit review + audit
+- [ ] M7: Delete `docs/handoff/` directory + CodeRabbit review
 
 ---
 
@@ -39,7 +41,7 @@ Create each deliverable in dependency order. Every milestone starts by reading t
 
 **Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — specifically the sections "Issue 1", "Issue 2", "Issue 3", and "Industry practices research spike." Use this as the source of truth for each issue's problem statement, proposed fix, and scope.
 
-Create the following GitHub issues on `wiggitywhitney/spinybacked-orbweaver`. For each issue: draft the body, run `/write-prompt` on it, apply all suggested improvements, then create it.
+Create the following GitHub issues on `wiggitywhitney/spinybacked-orbweaver`. For each issue: draft the body, run `/write-prompt` on it, apply all suggested improvements, create it, then append its number to `docs/handoff/issue-tracking.md`.
 
 **Issue A — PR summary "Live-Check Compliance: OK" is misleading**
 - Problem: When Weaver receives zero spans, the PR summary shows "OK". Readers interpret this as "telemetry passed compliance." It actually means "nothing was evaluated."
@@ -65,7 +67,7 @@ Create the following GitHub issues on `wiggitywhitney/spinybacked-orbweaver`. Fo
 - Priority: Medium
 - Label: none
 
-**End**: Run an audit agent. The agent reads `docs/handoff/spiny-orb-design-handoff.md` sections "Issue 1", "Issue 2", "Issue 3", and "Industry practices research spike", then fetches each created issue and produces:
+**End**: Run an audit agent with `Read` and `Bash` tool access. The agent reads `docs/handoff/spiny-orb-design-handoff.md` sections "Issue 1", "Issue 2", "Issue 3", and "Industry practices research spike", then retrieves each created issue body with `gh issue view <N> --repo wiggitywhitney/spinybacked-orbweaver --json body --jq '.body'`, and produces:
 
 ```text
 FIDELITY CHECK: M1 — Standalone Issues
@@ -85,7 +87,9 @@ If VERDICT is FAIL, update the issues to close the gaps before proceeding to M2.
 
 **Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — the foundational insight section and the "PRD 2" section are both required reading. The foundational insight explains why timeout failures cannot be caused by instrumentation (spans are no-ops); this context must be reflected in the PRD's design principle.
 
-Run `/prd-create` to create PRD 2. The content below is the source of truth for what the PRD must capture — do not omit or weaken any item.
+**Step 1 — Create branch**: `git checkout -b prd/smarter-end-of-run-failure-handling`
+
+**Step 2 — Run `/prd-create`**: Use the content below as the source of truth for what PRD 2 must capture — do not omit or weaken any item. The content below drives the /prd-create conversation.
 
 **Problem**: When the end-of-run test suite fails, spiny-orb rolls back all recently committed files. This is often incorrect. Proof case from run-11: `resolves.test.ts:136` failed with an npm timeout. `resolves.ts` failed NDS-003 and was never committed. Three correctly-instrumented files (`yarnWorkspaces.ts`, `pnpmWorkspaces.ts`, `packument.ts`) were rolled back for a failure in code spiny-orb never touched. The npm registry was healthy at the time (`registry.npmjs.org/-/ping` returns `{}`).
 
@@ -102,7 +106,17 @@ Run `/prd-create` to create PRD 2. The content below is the source of truth for 
 
 **Out of scope** (must be stated explicitly): NDS-003 calibration for `resolves.ts` — filed as issue #675.
 
-**End**: Run an audit agent. The agent reads `docs/handoff/spiny-orb-design-handoff.md` sections "Foundational insight" and "PRD 2", then reads the newly created PRD file and produces:
+**Step 3 — Run `/write-prompt`**: After /prd-create produces the PRD file, run `/write-prompt` on the full PRD content. Apply all suggested improvements. Commit any changes.
+
+**Step 4 — Track issue number**: Append `PRD 2: #[N]` to `docs/handoff/issue-tracking.md`. Commit this file.
+
+**Step 5 — CodeRabbit review**:
+- Push branch: `git push -u origin prd/smarter-end-of-run-failure-handling`
+- Create PR: `gh pr create --repo wiggitywhitney/spinybacked-orbweaver --title "PRD: Smarter end-of-run test failure handling" --body "Adds PRD #[N] for smarter end-of-run test failure handling from taze eval handoff."`
+- Start a 7-minute background timer for CodeRabbit. When it fires, fetch all findings with three gh api calls (reviews, inline comments, issue comments). Address all non-Skip findings, push, start another 7-minute timer for re-review.
+- After re-review passes and human approves, merge and delete the branch.
+
+**End**: Run an audit agent with `Read` and `Bash` tool access. The agent reads `docs/handoff/spiny-orb-design-handoff.md` sections "Foundational insight" and "PRD 2", then reads the newly created PRD file, and produces:
 
 ```text
 FIDELITY CHECK: PRD 2 — Smarter end-of-run test failure handling
@@ -122,7 +136,9 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M3.
 
 **Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — the foundational insight section and the "PRD 1" section are both required reading. The foundational insight is the background that makes the problem legible; the PRD must reflect it.
 
-Run `/prd-create` to create PRD 1. The content below is the source of truth for what the PRD must capture.
+**Step 1 — Create branch**: `git checkout -b prd/live-check-validation`
+
+**Step 2 — Run `/prd-create`**: Use the content below as the source of truth for what PRD 1 must capture — do not omit or weaken any item.
 
 **Background** (foundational insight — must appear in the PRD): During the spiny-orb checkpoint test run, `testCommand` executes without loading the SDK init file. Every `tracer.startActiveSpan()` resolves to a `NonRecordingSpan` via `@opentelemetry/api`'s no-op default. Zero spans are emitted. This means every "Live-check: OK" in every PR summary to date is a false positive — Weaver received nothing and nothing failed. Verified against taze's `vitest.config.ts` and `package.json`.
 
@@ -140,7 +156,17 @@ Run `/prd-create` to create PRD 1. The content below is the source of truth for 
 
 **Out of scope** (must be stated): Framework interaction questions for jest, mocha, pytest, etc. belong in downstream language PRDs, not this PRD.
 
-**End**: Run an audit agent. The agent reads `docs/handoff/spiny-orb-design-handoff.md` sections "Foundational insight" and "PRD 1", then reads the newly created PRD file and produces:
+**Step 3 — Run `/write-prompt`**: After /prd-create produces the PRD file, run `/write-prompt` on the full PRD content. Apply all suggested improvements. Commit any changes.
+
+**Step 4 — Track issue number**: Append `PRD 1: #[N]` to `docs/handoff/issue-tracking.md`. Commit this file.
+
+**Step 5 — CodeRabbit review**:
+- Push branch: `git push -u origin prd/live-check-validation`
+- Create PR: `gh pr create --repo wiggitywhitney/spinybacked-orbweaver --title "PRD: Make live-check actually validate something" --body "Adds PRD #[N] for live-check validation from taze eval handoff."`
+- Start a 7-minute background timer for CodeRabbit. When it fires, fetch all findings with three gh api calls (reviews, inline comments, issue comments). Address all non-Skip findings, push, start another 7-minute timer for re-review.
+- After re-review passes and human approves, merge and delete the branch.
+
+**End**: Run an audit agent with `Read` and `Bash` tool access. The agent reads `docs/handoff/spiny-orb-design-handoff.md` sections "Foundational insight" and "PRD 1", then reads the newly created PRD file, and produces:
 
 ```text
 FIDELITY CHECK: PRD 1 — Make live-check actually validate something
@@ -160,7 +186,9 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M4.
 
 **Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — specifically the "PRD 3" section. Note the prerequisite dependencies (PRDs 1 and 2) which must be explicit in the PRD.
 
-Run `/prd-create` to create PRD 3. The content below is the source of truth for what the PRD must capture.
+**Step 1 — Create branch**: `git checkout -b prd/diagnostic-agent-persistent-failures`
+
+**Step 2 — Run `/prd-create`**: Use the content below as the source of truth for what PRD 3 must capture — do not omit or weaken any item.
 
 **Prerequisites** (must be explicit in the PRD, not just the header): PRDs 1 and 2 must be complete before PRD 3 is started. Without real telemetry signal (PRD 1), the diagnostic agent has no live-check compliance data to reason from. Without eliminating false rollbacks (PRD 2), the agent is reasoning about failures that may not be instrumentation-related at all.
 
@@ -174,7 +202,17 @@ Run `/prd-create` to create PRD 3. The content below is the source of truth for 
 
 **Research milestones** (must be included): How do we serialize the call graph efficiently without blowing the context window? When should the agent recommend action vs. only present evidence?
 
-**End**: Run an audit agent. The agent reads `docs/handoff/spiny-orb-design-handoff.md` section "PRD 3", then reads the newly created PRD file and produces:
+**Step 3 — Run `/write-prompt`**: After /prd-create produces the PRD file, run `/write-prompt` on the full PRD content. Apply all suggested improvements. Commit any changes.
+
+**Step 4 — Track issue number**: Append `PRD 3: #[N]` to `docs/handoff/issue-tracking.md`. Commit this file.
+
+**Step 5 — CodeRabbit review**:
+- Push branch: `git push -u origin prd/diagnostic-agent-persistent-failures`
+- Create PR: `gh pr create --repo wiggitywhitney/spinybacked-orbweaver --title "PRD: Diagnostic agent for persistent failures" --body "Adds PRD #[N] for diagnostic agent from taze eval handoff."`
+- Start a 7-minute background timer for CodeRabbit. When it fires, fetch all findings with three gh api calls (reviews, inline comments, issue comments). Address all non-Skip findings, push, start another 7-minute timer for re-review.
+- After re-review passes and human approves, merge and delete the branch.
+
+**End**: Run an audit agent with `Read` and `Bash` tool access. The agent reads `docs/handoff/spiny-orb-design-handoff.md` section "PRD 3", then reads the newly created PRD file, and produces:
 
 ```text
 FIDELITY CHECK: PRD 3 — Diagnostic agent for persistent failures
@@ -194,7 +232,9 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M5.
 
 **Start**: Read `docs/handoff/spiny-orb-design-handoff.md` in full — specifically the "PRD 4" section. Note that this PRD is independent of PRDs 1–3 and can be worked in parallel.
 
-Run `/prd-create` to create PRD 4. The content below is the source of truth for what the PRD must capture.
+**Step 1 — Create branch**: `git checkout -b prd/dependency-aware-ordering`
+
+**Step 2 — Run `/prd-create`**: Use the content below as the source of truth for what PRD 4 must capture — do not omit or weaken any item.
 
 **Problem**: Files are currently processed alphabetically. When the agent instruments `resolveDependencies` (file 19 in taze), it doesn't know that `packument.ts` (file 29, which wraps all npm calls in OTel spans) hasn't been instrumented yet. If order were leaves-first, callers-later, the agent for `resolveDependencies` would know npm fetches are already covered by `taze.fetch.npm` spans in `packument.ts` and could focus on orchestration-level attributes instead of potentially adding redundant HTTP spans.
 
@@ -204,7 +244,17 @@ Run `/prd-create` to create PRD 4. The content below is the source of truth for 
 
 **Independence note** (must be stated): This PRD is independent of PRDs 1–3 and can be worked in parallel with any of them.
 
-**End**: Run an audit agent. The agent reads `docs/handoff/spiny-orb-design-handoff.md` section "PRD 4", then reads the newly created PRD file and produces:
+**Step 3 — Run `/write-prompt`**: After /prd-create produces the PRD file, run `/write-prompt` on the full PRD content. Apply all suggested improvements. Commit any changes.
+
+**Step 4 — Track issue number**: Append `PRD 4: #[N]` to `docs/handoff/issue-tracking.md`. Commit this file.
+
+**Step 5 — CodeRabbit review**:
+- Push branch: `git push -u origin prd/dependency-aware-ordering`
+- Create PR: `gh pr create --repo wiggitywhitney/spinybacked-orbweaver --title "PRD: Dependency-aware file instrumentation ordering" --body "Adds PRD #[N] for dependency-aware ordering from taze eval handoff."`
+- Start a 7-minute background timer for CodeRabbit. When it fires, fetch all findings with three gh api calls (reviews, inline comments, issue comments). Address all non-Skip findings, push, start another 7-minute timer for re-review.
+- After re-review passes and human approves, merge and delete the branch.
+
+**End**: Run an audit agent with `Read` and `Bash` tool access. The agent reads `docs/handoff/spiny-orb-design-handoff.md` section "PRD 4", then reads the newly created PRD file, and produces:
 
 ```text
 FIDELITY CHECK: PRD 4 — Dependency-aware file instrumentation ordering
@@ -222,9 +272,11 @@ If VERDICT is FAIL, update the PRD to close the gaps before proceeding to M6.
 
 ### M6: Update ROADMAP.md per handoff doc placement instructions
 
-**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` — specifically the "ROADMAP.md placement instructions" section at the bottom. Use it as the exact specification for what to add and where.
+**Start**: Read `docs/handoff/spiny-orb-design-handoff.md` — specifically the "ROADMAP.md placement instructions" section at the bottom. Read `docs/handoff/issue-tracking.md` to get the GitHub issue numbers for each deliverable.
 
-Open `docs/ROADMAP.md` and add entries using each deliverable's actual GitHub issue number (assigned during M1–M5).
+**Step 1 — Create branch**: `git checkout -b docs/roadmap-taze-handoff`
+
+**Step 2 — Update ROADMAP.md**: Open `docs/ROADMAP.md` and add entries using each deliverable's actual GitHub issue number from `docs/handoff/issue-tracking.md`.
 
 **Short-term section** (add after the TypeScript eval entry, in this exact order):
 1. PRD 2 — smarter end-of-run test failure handling (add first; this is blocking clean eval runs now)
@@ -238,27 +290,53 @@ Open `docs/ROADMAP.md` and add entries using each deliverable's actual GitHub is
 2. PRD 3 — diagnostic agent for persistent failures — state explicitly that this depends on PRD 1 AND PRD 2, both must be complete
 3. PRD 4 — dependency-aware file ordering (independent; can run in parallel with PRDs 1–3)
 
-**End**: Run an audit agent. The agent reads the "ROADMAP.md placement instructions" section of `docs/handoff/spiny-orb-design-handoff.md`, then reads `docs/ROADMAP.md`, and produces:
+**Step 3 — CodeRabbit review**:
+- Commit the ROADMAP.md change
+- Push branch: `git push -u origin docs/roadmap-taze-handoff`
+- Create PR: `gh pr create --repo wiggitywhitney/spinybacked-orbweaver --title "docs: update ROADMAP.md with taze eval handoff deliverables" --body "Adds entries for PRDs 1–4 and standalone issues from taze eval handoff."`
+- Start a 7-minute background timer for CodeRabbit. When it fires, fetch all findings with three gh api calls. Address all non-Skip findings, push, start another 7-minute timer for re-review.
+- After re-review passes and human approves, merge and delete the branch.
+
+**End**: Run an audit agent with `Read` and `Bash` tool access. The agent:
+1. Reads the "ROADMAP.md placement instructions" section of `docs/handoff/spiny-orb-design-handoff.md`
+2. Reads `docs/handoff/issue-tracking.md` to get every issue number created during M1–M5
+3. Reads `docs/ROADMAP.md`
+
+The agent checks two things independently and produces a combined report:
 
 ```text
 FIDELITY CHECK: M6 — ROADMAP.md update
+
+--- Check 1: Placement instructions ---
 Source: docs/handoff/spiny-orb-design-handoff.md (section: ROADMAP.md placement instructions)
 
 GAPS (specified in handoff, absent or incorrect in ROADMAP.md):
 - [item]: [what the handoff specifies vs. what ROADMAP.md says]
 
-VERDICT: PASS (no gaps) | FAIL ([N] gaps found)
+--- Check 2: Issue coverage ---
+Source: docs/handoff/issue-tracking.md
+
+MISSING FROM ROADMAP (issue numbers in issue-tracking.md not linked anywhere in ROADMAP.md):
+- [label]: #[number]
+
+VERDICT: PASS (both checks clean) | FAIL ([N] gaps in check 1, [M] missing from check 2)
 ```
 
-If VERDICT is FAIL, update `docs/ROADMAP.md` to close the gaps.
+If VERDICT is FAIL on either check, update `docs/ROADMAP.md` to close all gaps before merging.
 
 ---
 
 ### M7: Remove local handoff copy
 
-Delete `docs/handoff/spiny-orb-design-handoff.md` and the `docs/handoff/` directory. The handoff doc was a temporary working reference — all content it contained is now captured in the created PRDs and issues. Commit the removal with the message: `docs: remove taze eval handoff working copy [skip ci]`.
+**Step 1 — Create branch**: `git checkout -b docs/remove-taze-handoff`
 
-Run: `git rm -r docs/handoff/ && git commit -m "docs: remove taze eval handoff working copy [skip ci]"`
+**Step 2 — Remove files**: `git rm docs/handoff/spiny-orb-design-handoff.md docs/handoff/issue-tracking.md`
+
+**Step 3 — CodeRabbit review**:
+- Commit: `git commit -m "docs: remove taze eval handoff working copy"`
+- Push: `git push -u origin docs/remove-taze-handoff`
+- Create PR: `gh pr create --repo wiggitywhitney/spinybacked-orbweaver --title "docs: remove taze eval handoff working copy" --body "All content from docs/handoff/ is now captured in PRDs and GitHub issues. Removing the temporary working copy."`
+- Start a 7-minute background timer for CodeRabbit. When it fires, fetch all findings. Address any non-Skip findings, push, start another 7-minute timer. After re-review passes and human approves, merge and delete the branch.
 
 ---
 
@@ -267,6 +345,8 @@ Run: `git rm -r docs/handoff/ && git commit -m "docs: remove taze eval handoff w
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 - Every milestone starts by reading the local handoff copy (`docs/handoff/spiny-orb-design-handoff.md`). Do not rely on the eval repo copy — it may change.
 - Every milestone ends with an audit agent run. If the audit VERDICT is FAIL, close the gaps before proceeding. Do not accumulate gaps across milestones.
+- Every PRD goes through a branch → PR → CodeRabbit review cycle. Do not commit PRDs directly to main.
+- Run `/write-prompt` on every PRD file after /prd-create produces it, and on every GitHub issue body before creating it. Apply all improvements before committing or creating.
 - The handoff doc's foundational insight (OTel SDK never initializes during checkpoint tests) is background context that informs PRDs 1, 2, and 3. When creating each of those PRDs, confirm the foundational insight is reflected in the problem statement or background section.
 
 ---
@@ -279,3 +359,6 @@ Run: `git rm -r docs/handoff/ && git commit -m "docs: remove taze eval handoff w
 | 2026-05-01 | Local copy deleted in M7 after all PRDs and issues are created | Once content is captured in PRDs and issues, the working copy is noise in the repo; delete it cleanly rather than leaving it |
 | 2026-05-01 | PRDs created in order: standalone issues → PRD 2 → PRD 1 → PRD 3 → PRD 4 | Dependency order: PRD 2 blocks clean eval runs (highest urgency); PRD 3 depends on both PRD 1 and PRD 2 |
 | 2026-05-01 | Every milestone starts with handoff doc read and ends with audit agent | Context is cleared between milestone sessions; re-reading prevents drift; end-of-milestone audit catches gaps before they compound |
+| 2026-05-01 | Every PRD goes through branch → PR → CodeRabbit review, not direct to main | PRDs are prompts AI agents act on; they deserve the same review rigor as code |
+| 2026-05-01 | Run `/write-prompt` on every PRD file and every issue body | PRDs and issues are prompts; ad-hoc writing misses anti-patterns that cause incorrect agent behavior |
+| 2026-05-01 | Issue numbers tracked in `docs/handoff/issue-tracking.md` | Context is cleared between milestones; disk-persisted tracking file prevents M6 from losing issue numbers |
