@@ -1192,6 +1192,57 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('regex literal modification (#709)', () => {
+    it('fails when a regex literal body is modified', () => {
+      // In taze run-12, the agent corrupted /\./g to /\.\g/ in src/utils/yarnWorkspaces.ts.
+      // NDS-003 must detect that the original line is missing and a different line was added.
+      const original = 'const separators = str.split(/\\./g);';
+      const instrumented = 'const separators = str.split(/\\.\\g/);';
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+
+    it('passes when a regex literal is preserved alongside instrumentation', () => {
+      const original = 'const separators = str.split(/\\./g);';
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'const separators = str.split(/\\./g);',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('fails when a regex literal is modified inside an instrumented function', () => {
+      // Covers the realistic taze case: mutation inside an instrumentation-wrapped function.
+      const original = [
+        'function getWorkspaces(str) {',
+        '  return str.split(/\\./g);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function getWorkspaces(str) {',
+        '  return tracer.startActiveSpan("getWorkspaces", (span) => {',
+        '    try {',
+        '      return str.split(/\\.\\g/);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure', () => {
       const results = checkNonInstrumentationDiff('const x = 1;', 'const x = 1;', filePath);

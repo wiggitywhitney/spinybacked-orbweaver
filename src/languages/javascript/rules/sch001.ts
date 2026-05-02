@@ -218,22 +218,26 @@ async function checkRegistryConformance(
         const method = dedupResult.detectionMethod === 'normalization'
           ? 'delimiter-variant duplicate'
           : 'semantic duplicate';
-        const matchedNote = dedupResult.matchedEntry
-          ? ` of existing registry operation "${dedupResult.matchedEntry}"`
-          : '';
+        const matchedEntry = dedupResult.matchedEntry ?? '';
+        // Advisory: the agent has more context about whether these are truly distinct operations.
+        // Blocking caused oscillation when hierarchically-distinct operations (e.g., a CLI
+        // dispatcher "taze.cli.run" vs its child "taze.check.run") triggered the judge's
+        // similarity detection. The agent can decide: reuse the existing name if equivalent,
+        // or keep the new name if the operations serve different roles in the trace hierarchy.
         allResults.push({
           ruleId: 'SCH-001',
           passed: false,
           filePath,
           lineNumber: null,
           message:
-            `SCH-001 check failed: declared span extension "${spanOpName}" is a ${method}` +
-            `${matchedNote}. ` +
-            `Use the existing registry operation instead of declaring a new extension.`,
+            `SCH-001: declared span extension "${spanOpName}" may be a ${method}` +
+            (matchedEntry ? ` of existing registry operation "${matchedEntry}"` : '') +
+            `. If these operations are equivalent, reuse "${matchedEntry || 'the existing name'}" instead of declaring a new extension. If they are hierarchically distinct (e.g., a dispatcher vs its child operation), this advisory can be ignored.`,
           tier: 2,
-          blocking: true,
+          blocking: false,
         });
-        continue; // Don't add duplicate to validOperations
+        // Fall through to add the extension to validOperations — blocking caused the agent to
+        // reuse existing span names across unrelated operations, producing span name collisions.
       }
 
       validOperations.add(spanOpName);

@@ -69,14 +69,42 @@ describe('SCH-001 extension acceptance judge path', () => {
         { client: {} as any }, declaredExtensions,
       );
 
-      // Extension was flagged as a semantic duplicate
-      const extensionFailure = results.find(
+      // Extension was flagged as a potential semantic duplicate — advisory, not blocking
+      const extensionWarning = results.find(
         (r) => !r.passed && r.message.includes('user.registration'),
       );
-      expect(extensionFailure).toBeDefined();
-      expect(extensionFailure!.message).toContain('user.register');
-      expect(extensionFailure!.blocking).toBe(true);
+      expect(extensionWarning).toBeDefined();
+      expect(extensionWarning!.message).toContain('user.register');
+      expect(extensionWarning!.blocking).toBe(false);
       expect(judgeTokenUsage).toHaveLength(1);
+    });
+
+    it('accepts the span name as valid despite semantic duplicate advisory', async () => {
+      // The agent declared "user.registration" which is a semantic duplicate of "user.register".
+      // Even with the advisory warning, the span should be accepted so it passes the registry
+      // conformance check — without this, the agent oscillates: it cannot use the registry name
+      // (different operation) and cannot extend without being blocked.
+      vi.mocked(callJudge).mockResolvedValueOnce({
+        verdict: {
+          answer: false,
+          suggestion: 'Use "user.register" instead.',
+          confidence: 0.9,
+        },
+        tokenUsage: MOCK_TOKEN_USAGE,
+      });
+
+      const declaredExtensions = ['span.user.registration'];
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        codeWithUserRegistration, filePath, schemaWithUserRegister,
+        { client: {} as any }, declaredExtensions,
+      );
+
+      // The span name "user.registration" in code is accepted (no blocking registry-conformance failure)
+      const conformanceFailure = results.find(
+        (r) => !r.passed && r.blocking,
+      );
+      expect(conformanceFailure).toBeUndefined();
     });
   });
 
@@ -98,12 +126,13 @@ describe('SCH-001 extension acceptance judge path', () => {
         { client: {} as any }, ['span.user_register'],
       );
 
-      const extensionFailure = results.find(
+      const extensionWarning = results.find(
         (r) => !r.passed && r.message.includes('user_register'),
       );
-      expect(extensionFailure).toBeDefined();
-      expect(extensionFailure!.message).toContain('delimiter-variant');
-      expect(extensionFailure!.message).toContain('user.register');
+      expect(extensionWarning).toBeDefined();
+      expect(extensionWarning!.message).toContain('delimiter-variant');
+      expect(extensionWarning!.message).toContain('user.register');
+      expect(extensionWarning!.blocking).toBe(false);
       // Normalization doesn't require judge
       expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
       expect(judgeTokenUsage).toHaveLength(0);
