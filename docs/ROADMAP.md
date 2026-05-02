@@ -18,10 +18,18 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 - TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable". Both prior blockers now cleared: PRD #582 M2 and the `checkSyntax()` Bundler moduleResolution fix (#624).
+- Smarter end-of-run test failure handling ([PRD #687](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/687)) — rollback logic incorrectly attributes timeout failures to instrumentation; blocking clean eval runs. Three connected fixes: call path analysis (smart-rollback), API health check, and one retry with delay.
+- Fix misleading "Live-Check: OK" when Weaver receives no spans ([issue #683](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/683)) — until PRD #698 lands, the PR summary should distinguish "nothing evaluated" from "spans passed compliance."
+- Fix rollback count math in end-of-run summary ([issue #684](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/684)) — committed count does not decrement on rollback, making post-rollback summaries unreadable.
+- Document the SDK initialization boundary ([issue #685](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/685)) — checkpoint tests run without OTel SDK init (spans are no-ops); live-check post PRD #698 runs with SDK init (spans fire). Users debugging unexpected behavior need this distinction documented.
+- Industry practices research spike: flaky tests, rollback patterns, live telemetry validators ([issue #686](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/686)) — survey established patterns before committing to designs in PRDs #698, #687, #699, and #700.
 - Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
 
 ## Medium-term
 
+- Make live-check actually validate something ([PRD #698](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/698)) — Weaver live-check has never received real spans; every "Live-check: OK" to date is a false positive. Prerequisite for PRD #699.
+- Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 AND PRD #687 — both must be complete before starting.
+- Dependency-aware file instrumentation ordering ([PRD #700](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/700)) — instrument leaves before callers so each agent sees the full instrumentation picture of its dependencies. Independent of PRDs #698, #687, #699; can run in parallel.
 - Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
