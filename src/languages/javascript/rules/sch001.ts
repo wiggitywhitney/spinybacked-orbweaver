@@ -215,29 +215,42 @@ async function checkRegistryConformance(
       allJudgeTokenUsage.push(...dedupResult.judgeTokenUsage);
 
       if (dedupResult.isDuplicate) {
-        const method = dedupResult.detectionMethod === 'normalization'
-          ? 'delimiter-variant duplicate'
-          : 'semantic duplicate';
         const matchedEntry = dedupResult.matchedEntry ?? '';
-        // Advisory: the agent has more context about whether these are truly distinct operations.
-        // Blocking caused oscillation when hierarchically-distinct operations (e.g., a CLI
-        // dispatcher "taze.cli.run" vs its child "taze.check.run") triggered the judge's
-        // similarity detection. The agent can decide: reuse the existing name if equivalent,
-        // or keep the new name if the operations serve different roles in the trace hierarchy.
+        if (dedupResult.detectionMethod === 'normalization') {
+          // Delimiter variants (e.g., user_register ≈ user.register) are unambiguously wrong —
+          // blocking, and the extension is not added to validOperations.
+          allResults.push({
+            ruleId: 'SCH-001',
+            passed: false,
+            filePath,
+            lineNumber: null,
+            message:
+              `SCH-001 check failed: declared span extension "${spanOpName}" is a delimiter-variant duplicate` +
+              (matchedEntry ? ` of existing registry operation "${matchedEntry}"` : '') +
+              `. Use the existing registry operation instead of declaring a new extension.`,
+            tier: 2,
+            blocking: true,
+          });
+          continue; // Don't add delimiter variants to validOperations
+        }
+        // Semantic duplicates detected by the judge are advisory — the agent has more context
+        // about whether operations are truly equivalent or hierarchically distinct. Blocking
+        // caused oscillation when hierarchically-distinct operations (e.g., a CLI dispatcher
+        // "taze.cli.run" vs its child "taze.check.run") triggered the judge's similarity
+        // detection and forced the agent to reuse existing names across unrelated operations.
         allResults.push({
           ruleId: 'SCH-001',
           passed: false,
           filePath,
           lineNumber: null,
           message:
-            `SCH-001: declared span extension "${spanOpName}" may be a ${method}` +
+            `SCH-001: declared span extension "${spanOpName}" may be a semantic duplicate` +
             (matchedEntry ? ` of existing registry operation "${matchedEntry}"` : '') +
-            `. If these operations are equivalent, reuse "${matchedEntry || 'the existing name'}" instead of declaring a new extension. If they are hierarchically distinct (e.g., a dispatcher vs its child operation), this advisory can be ignored.`,
+            `. If these operations are equivalent, reuse "${matchedEntry || 'the existing name'}" instead of declaring a new extension. If they are a different operation class, this advisory can be ignored.`,
           tier: 2,
           blocking: false,
         });
-        // Fall through to add the extension to validOperations — blocking caused the agent to
-        // reuse existing span names across unrelated operations, producing span name collisions.
+        // Fall through to add the extension to validOperations.
       }
 
       validOperations.add(spanOpName);

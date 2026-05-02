@@ -109,33 +109,49 @@ describe('SCH-001 extension acceptance judge path', () => {
   });
 
   describe('normalization catches delimiter variants without judge', () => {
-    it('flags user_register as delimiter-variant of user.register without judge call', async () => {
-      // "user_register" normalizes to "userregister" — same as "user.register" → normalization catches
-      const codeWithUnderscoreVariant = [
-        'const { trace } = require("@opentelemetry/api");',
-        'const tracer = trace.getTracer("svc");',
-        'function register() {',
-        '  return tracer.startActiveSpan("user_register", (span) => {',
-        '    try { return {}; } finally { span.end(); }',
-        '  });',
-        '}',
-      ].join('\n');
+    // "user_register" normalizes to "userregister" — same as "user.register" → normalization catches
+    const codeWithUnderscoreVariant = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function register() {',
+      '  return tracer.startActiveSpan("user_register", (span) => {',
+      '    try { return {}; } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
 
+    it('flags user_register as delimiter-variant of user.register without judge call', async () => {
       const { results, judgeTokenUsage } = await checkSpanNamesMatchRegistry(
         codeWithUnderscoreVariant, filePath, schemaWithUserRegister,
         { client: {} as any }, ['span.user_register'],
       );
 
-      const extensionWarning = results.find(
+      const extensionFailure = results.find(
         (r) => !r.passed && r.message.includes('user_register'),
       );
-      expect(extensionWarning).toBeDefined();
-      expect(extensionWarning!.message).toContain('delimiter-variant');
-      expect(extensionWarning!.message).toContain('user.register');
-      expect(extensionWarning!.blocking).toBe(false);
+      expect(extensionFailure).toBeDefined();
+      expect(extensionFailure!.message).toContain('delimiter-variant');
+      expect(extensionFailure!.message).toContain('user.register');
+      // Delimiter variants are blocking — unambiguously wrong, not a judgment call
+      expect(extensionFailure!.blocking).toBe(true);
       // Normalization doesn't require judge
       expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
       expect(judgeTokenUsage).toHaveLength(0);
+    });
+
+    it('rejects the span name in code when its declared extension is a delimiter variant', async () => {
+      // Delimiter variants must not be added to validOperations — the span name in code
+      // should still fail the registry conformance check.
+      const { results } = await checkSpanNamesMatchRegistry(
+        codeWithUnderscoreVariant, filePath, schemaWithUserRegister,
+        { client: {} as any }, ['span.user_register'],
+      );
+
+      // A blocking conformance failure should appear for "user_register" in code
+      const conformanceFailure = results.find(
+        (r) => !r.passed && r.blocking && r.message.includes('user_register'),
+      );
+      expect(conformanceFailure).toBeDefined();
     });
   });
 
