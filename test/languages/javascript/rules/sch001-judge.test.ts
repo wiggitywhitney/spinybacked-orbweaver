@@ -147,9 +147,15 @@ describe('SCH-001 extension acceptance judge path', () => {
         { client: {} as any }, ['span.user_register'],
       );
 
-      // A blocking conformance failure should appear for "user_register" in code
+      // A blocking conformance failure should appear for "user_register" in code.
+      // Tighten predicate past the delimiter-variant extension warning (also blocking,
+      // also includes 'user_register') to the registry-conformance failure specifically.
       const conformanceFailure = results.find(
-        (r) => !r.passed && r.blocking && r.message.includes('user_register'),
+        (r) =>
+          !r.passed &&
+          r.blocking &&
+          r.message.includes('user_register') &&
+          r.message.includes('not found in registry span definitions'),
       );
       expect(conformanceFailure).toBeDefined();
     });
