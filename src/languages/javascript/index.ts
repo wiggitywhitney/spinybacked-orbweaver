@@ -20,7 +20,7 @@ import type {
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
-import { classifyFunctions, detectOTelImports } from './ast.ts';
+import { classifyFunctions, detectOTelImports, detectFrameworkLibraries } from './ast.ts';
 import { checkSyntax, checkLint, formatCode, buildPrettierConstraint } from './validation.ts';
 import { extractExportedFunctions } from './extraction.ts';
 import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from './reassembly.ts';
@@ -632,6 +632,11 @@ export class JavaScriptProvider implements LanguageProvider {
       }
     }
 
+    // Deterministic framework library detection: runs regardless of what the LLM returns
+    // for librariesNeeded. instrumentFile unions this with llmOutput.librariesNeeded.
+    const otelDetection = detectOTelImports(sourceFile);
+    const detectedLibraries = detectFrameworkLibraries(otelDetection.frameworkImports);
+
     return {
       hasInstrumentableFunctions,
       entryPointsNeedingSpans,
@@ -642,6 +647,7 @@ export class JavaScriptProvider implements LanguageProvider {
       outboundCallsNeedingSpans,
       entryPointSubOperations,
       alreadyInstrumentedImports,
+      detectedLibraries: detectedLibraries.length > 0 ? detectedLibraries : undefined,
     };
   }
 

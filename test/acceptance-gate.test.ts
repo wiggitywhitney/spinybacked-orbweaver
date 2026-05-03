@@ -137,10 +137,11 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
         expect(check.passed, `${rule} failed: ${check.details}`).toBe(true);
       }
 
-      // librariesNeeded assertion removed: LLM occasionally returns [] for librariesNeeded
-      // even when the file imports pg/express — same non-determinism that caused order-service.js
-      // single-shot to be removed. P3 covers librariesNeeded.length > 0 for this file.
-      // Root gap tracked in #710 (deterministic detection path).
+      // Deterministic detection (#710): even if the LLM returns empty librariesNeeded,
+      // the pre-scan detects pg and express imports and the union path fills the gap.
+      const packages = output.librariesNeeded.map((l: { package: string }) => l.package);
+      expect(packages, 'Expected pg auto-instrumentation library').toContain('@opentelemetry/instrumentation-pg');
+      expect(packages, 'Expected express auto-instrumentation library').toContain('@opentelemetry/instrumentation-express');
     });
   });
 

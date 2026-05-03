@@ -5,9 +5,10 @@ import { describe, it, expect } from 'vitest';
 import { Project } from 'ts-morph';
 import { join } from 'node:path';
 import { classifyFunctions } from '../../../src/languages/javascript/ast.ts';
-import type { FunctionInfo } from '../../../src/languages/javascript/ast.ts';
+import type { FunctionInfo, ImportInfo } from '../../../src/languages/javascript/ast.ts';
 import { detectOTelImports } from '../../../src/languages/javascript/ast.ts';
 import { checkVariableShadowing } from '../../../src/languages/javascript/ast.ts';
+import { detectFrameworkLibraries } from '../../../src/languages/javascript/ast.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', '..', 'fixtures', 'ast');
 
@@ -345,5 +346,65 @@ describe('checkVariableShadowing', () => {
       expect(result.safeNames.get('span')).toBe('span');
       expect(result.safeNames.get('tracer')).toBe('tracer');
     });
+  });
+});
+
+function makeImport(moduleSpecifier: string): ImportInfo {
+  return { moduleSpecifier, namedImports: [], defaultImport: undefined, namespaceImport: undefined, lineNumber: 1 };
+}
+
+describe('detectFrameworkLibraries', () => {
+  it('returns library requirement for pg import', () => {
+    const result = detectFrameworkLibraries([makeImport('pg')]);
+    expect(result).toHaveLength(1);
+    expect(result[0].package).toBe('@opentelemetry/instrumentation-pg');
+    expect(result[0].importName).toBe('PgInstrumentation');
+  });
+
+  it('returns library requirement for express import', () => {
+    const result = detectFrameworkLibraries([makeImport('express')]);
+    expect(result).toHaveLength(1);
+    expect(result[0].package).toBe('@opentelemetry/instrumentation-express');
+    expect(result[0].importName).toBe('ExpressInstrumentation');
+  });
+
+  it('returns multiple requirements for pg and express together', () => {
+    const result = detectFrameworkLibraries([makeImport('pg'), makeImport('express')]);
+    const packages = result.map(r => r.package);
+    expect(packages).toContain('@opentelemetry/instrumentation-pg');
+    expect(packages).toContain('@opentelemetry/instrumentation-express');
+    expect(result).toHaveLength(2);
+  });
+
+  it('deduplicates by package — http and node:http both map to instrumentation-http', () => {
+    const result = detectFrameworkLibraries([makeImport('http'), makeImport('node:http')]);
+    const packages = result.map(r => r.package);
+    expect(packages.filter(p => p === '@opentelemetry/instrumentation-http')).toHaveLength(1);
+  });
+
+  it('ignores unknown framework imports', () => {
+    const result = detectFrameworkLibraries([makeImport('some-unknown-package')]);
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty array for empty input', () => {
+    const result = detectFrameworkLibraries([]);
+    expect(result).toHaveLength(0);
+  });
+
+  it('pipeline: detectOTelImports frameworkImports flow reaches detectFrameworkLibraries for openai', () => {
+    const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+    const sourceFile = project.createSourceFile('f.js', "import OpenAI from 'openai';\nexport async function call() { return new OpenAI(); }");
+    const { frameworkImports } = detectOTelImports(sourceFile);
+    const result = detectFrameworkLibraries(frameworkImports);
+    expect(result.some(r => r.package === '@traceloop/instrumentation-openai')).toBe(true);
+  });
+
+  it('pipeline: detectOTelImports frameworkImports flow reaches detectFrameworkLibraries for @anthropic-ai/sdk', () => {
+    const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+    const sourceFile = project.createSourceFile('f.js', "import Anthropic from '@anthropic-ai/sdk';\nexport async function call() { return new Anthropic(); }");
+    const { frameworkImports } = detectOTelImports(sourceFile);
+    const result = detectFrameworkLibraries(frameworkImports);
+    expect(result.some(r => r.package === '@traceloop/instrumentation-anthropic')).toBe(true);
   });
 });

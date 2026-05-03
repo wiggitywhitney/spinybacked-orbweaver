@@ -142,7 +142,75 @@ const KNOWN_FRAMEWORK_PACKAGES = new Set([
   'winston', 'pino', 'bunyan',
   // Other instrumented packages
   'socket.io', 'openai', 'dataloader', 'aws-sdk', '@aws-sdk/client-s3',
+  // OpenLLMetry instrumented packages
+  '@anthropic-ai/sdk', '@aws-sdk/client-bedrock-runtime', '@google-cloud/vertexai',
+  'cohere-ai', 'together-ai', 'llamaindex', '@modelcontextprotocol/sdk',
+  '@pinecone-database/pinecone', 'chromadb', '@qdrant/js-client-rest',
 ]);
+
+/**
+ * Maps known framework import specifiers to their OTel auto-instrumentation packages.
+ * Extracted from the LLM prompt's auto-instrumentation table so detection is deterministic
+ * rather than relying on the LLM returning the correct librariesNeeded field.
+ * This mapping mirrors the table in src/languages/javascript/prompt.ts exactly.
+ */
+export const FRAMEWORK_TO_LIBRARY = new Map<string, { package: string; importName: string }>([
+  // Core @opentelemetry/instrumentation-* packages
+  ['pg', { package: '@opentelemetry/instrumentation-pg', importName: 'PgInstrumentation' }],
+  ['mysql', { package: '@opentelemetry/instrumentation-mysql', importName: 'MySQLInstrumentation' }],
+  ['mysql2', { package: '@opentelemetry/instrumentation-mysql2', importName: 'MySQL2Instrumentation' }],
+  ['mongodb', { package: '@opentelemetry/instrumentation-mongodb', importName: 'MongoDBInstrumentation' }],
+  ['mongoose', { package: '@opentelemetry/instrumentation-mongoose', importName: 'MongooseInstrumentation' }],
+  ['redis', { package: '@opentelemetry/instrumentation-redis', importName: 'RedisInstrumentation' }],
+  ['ioredis', { package: '@opentelemetry/instrumentation-ioredis', importName: 'IORedisInstrumentation' }],
+  ['express', { package: '@opentelemetry/instrumentation-express', importName: 'ExpressInstrumentation' }],
+  ['fastify', { package: '@opentelemetry/instrumentation-fastify', importName: 'FastifyInstrumentation' }],
+  ['koa', { package: '@opentelemetry/instrumentation-koa', importName: 'KoaInstrumentation' }],
+  ['@hapi/hapi', { package: '@opentelemetry/instrumentation-hapi', importName: 'HapiInstrumentation' }],
+  ['@grpc/grpc-js', { package: '@opentelemetry/instrumentation-grpc', importName: 'GrpcInstrumentation' }],
+  ['http', { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' }],
+  ['https', { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' }],
+  ['node:http', { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' }],
+  ['node:https', { package: '@opentelemetry/instrumentation-http', importName: 'HttpInstrumentation' }],
+  ['kafkajs', { package: '@opentelemetry/instrumentation-kafkajs', importName: 'KafkaJsInstrumentation' }],
+  ['pino', { package: '@opentelemetry/instrumentation-pino', importName: 'PinoInstrumentation' }],
+  // OpenLLMetry @traceloop/instrumentation-* packages
+  ['@anthropic-ai/sdk', { package: '@traceloop/instrumentation-anthropic', importName: 'AnthropicInstrumentation' }],
+  ['openai', { package: '@traceloop/instrumentation-openai', importName: 'OpenAIInstrumentation' }],
+  ['@aws-sdk/client-bedrock-runtime', { package: '@traceloop/instrumentation-bedrock', importName: 'BedrockInstrumentation' }],
+  ['@google-cloud/vertexai', { package: '@traceloop/instrumentation-vertexai', importName: 'VertexAIInstrumentation' }],
+  ['cohere-ai', { package: '@traceloop/instrumentation-cohere', importName: 'CohereInstrumentation' }],
+  ['together-ai', { package: '@traceloop/instrumentation-together', importName: 'TogetherInstrumentation' }],
+  ['llamaindex', { package: '@traceloop/instrumentation-llamaindex', importName: 'LlamaIndexInstrumentation' }],
+  ['@modelcontextprotocol/sdk', { package: '@traceloop/instrumentation-mcp', importName: 'MCPInstrumentation' }],
+  ['@pinecone-database/pinecone', { package: '@traceloop/instrumentation-pinecone', importName: 'PineconeInstrumentation' }],
+  ['chromadb', { package: '@traceloop/instrumentation-chromadb', importName: 'ChromaDBInstrumentation' }],
+  ['@qdrant/js-client-rest', { package: '@traceloop/instrumentation-qdrant', importName: 'QdrantInstrumentation' }],
+]);
+
+/**
+ * Given a list of framework imports detected in a source file, return the corresponding
+ * OTel auto-instrumentation library requirements, deduplicated by package.
+ *
+ * This is the deterministic path for librariesNeeded — it runs regardless of what the
+ * LLM returns, so pg and express auto-instrumentation are always recorded even when the
+ * LLM intermittently returns an empty librariesNeeded array.
+ *
+ * @param frameworkImports - Framework imports from detectOTelImports().frameworkImports
+ * @returns LibraryRequirement[] with unique package entries
+ */
+export function detectFrameworkLibraries(frameworkImports: ImportInfo[]): { package: string; importName: string }[] {
+  const seen = new Set<string>();
+  const result: { package: string; importName: string }[] = [];
+  for (const imp of frameworkImports) {
+    const lib = FRAMEWORK_TO_LIBRARY.get(imp.moduleSpecifier);
+    if (lib && !seen.has(lib.package)) {
+      seen.add(lib.package);
+      result.push(lib);
+    }
+  }
+  return result;
+}
 
 /**
  * Detect existing OpenTelemetry imports, tracer patterns, and framework imports in a source file.

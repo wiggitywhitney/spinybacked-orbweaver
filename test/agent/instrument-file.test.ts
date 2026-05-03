@@ -790,4 +790,63 @@ async function main() {
       expect(result.output.thinkingBlocks).toBeUndefined();
     });
   });
+
+  describe('deterministic librariesNeeded union (#710)', () => {
+    const PG_EXPRESS_JS = `import { Pool } from 'pg';
+import express from 'express';
+export async function getUsers(req, res) {
+  const pool = new Pool();
+  const rows = await pool.query('SELECT * FROM users');
+  res.json(rows.rows);
+}`;
+
+    it('includes pg instrumentation library even when LLM returns empty librariesNeeded', async () => {
+      // LLM returns empty librariesNeeded — deterministic path must supply it
+      const llmOutput = makeValidLlmOutput({
+        instrumentedCode: PG_EXPRESS_JS,
+        librariesNeeded: [],
+      });
+      const client = makeMockClient(llmOutput);
+
+      const result = await instrumentFile(
+        '/project/src/users.js',
+        PG_EXPRESS_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const packages = result.output.librariesNeeded.map(l => l.package);
+      expect(packages).toContain('@opentelemetry/instrumentation-pg');
+      expect(packages).toContain('@opentelemetry/instrumentation-express');
+    });
+
+    it('deduplicates when LLM already listed a library that deterministic detection also finds', async () => {
+      // LLM returns pg library — should not appear twice
+      const llmOutput = makeValidLlmOutput({
+        instrumentedCode: PG_EXPRESS_JS,
+        librariesNeeded: [{ package: '@opentelemetry/instrumentation-pg', importName: 'PgInstrumentation' }],
+      });
+      const client = makeMockClient(llmOutput);
+
+      const result = await instrumentFile(
+        '/project/src/users.js',
+        PG_EXPRESS_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const pgEntries = result.output.librariesNeeded.filter(l => l.package === '@opentelemetry/instrumentation-pg');
+      expect(pgEntries).toHaveLength(1);
+    });
+  });
 });
