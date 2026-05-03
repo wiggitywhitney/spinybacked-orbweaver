@@ -391,4 +391,20 @@ describe('detectFrameworkLibraries', () => {
     const result = detectFrameworkLibraries([]);
     expect(result).toHaveLength(0);
   });
+
+  it('pipeline: detectOTelImports frameworkImports flow reaches detectFrameworkLibraries for openai', () => {
+    const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+    const sourceFile = project.createSourceFile('f.js', "import OpenAI from 'openai';\nexport async function call() { return new OpenAI(); }");
+    const { frameworkImports } = detectOTelImports(sourceFile);
+    const result = detectFrameworkLibraries(frameworkImports);
+    expect(result.some(r => r.package === '@traceloop/instrumentation-openai')).toBe(true);
+  });
+
+  it('pipeline: detectOTelImports frameworkImports flow reaches detectFrameworkLibraries for @anthropic-ai/sdk', () => {
+    const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+    const sourceFile = project.createSourceFile('f.js', "import Anthropic from '@anthropic-ai/sdk';\nexport async function call() { return new Anthropic(); }");
+    const { frameworkImports } = detectOTelImports(sourceFile);
+    const result = detectFrameworkLibraries(frameworkImports);
+    expect(result.some(r => r.package === '@traceloop/instrumentation-anthropic')).toBe(true);
+  });
 });

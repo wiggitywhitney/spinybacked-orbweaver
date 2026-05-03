@@ -142,6 +142,10 @@ const KNOWN_FRAMEWORK_PACKAGES = new Set([
   'winston', 'pino', 'bunyan',
   // Other instrumented packages
   'socket.io', 'openai', 'dataloader', 'aws-sdk', '@aws-sdk/client-s3',
+  // OpenLLMetry instrumented packages
+  '@anthropic-ai/sdk', '@aws-sdk/client-bedrock-runtime', '@google-cloud/vertexai',
+  'cohere-ai', 'together-ai', 'llamaindex', '@modelcontextprotocol/sdk',
+  '@pinecone-database/pinecone', 'chromadb', '@qdrant/js-client-rest',
 ]);
 
 /**

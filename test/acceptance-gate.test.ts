@@ -139,7 +139,9 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
 
       // Deterministic detection (#710): even if the LLM returns empty librariesNeeded,
       // the pre-scan detects pg and express imports and the union path fills the gap.
-      expect(output.librariesNeeded.length, 'Expected pg/express library requirements').toBeGreaterThan(0);
+      const packages = output.librariesNeeded.map((l: { package: string }) => l.package);
+      expect(packages, 'Expected pg auto-instrumentation library').toContain('@opentelemetry/instrumentation-pg');
+      expect(packages, 'Expected express auto-instrumentation library').toContain('@opentelemetry/instrumentation-express');
     });
   });
 

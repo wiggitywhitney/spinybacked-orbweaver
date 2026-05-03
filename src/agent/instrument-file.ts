@@ -336,6 +336,7 @@ export async function instrumentFile(
     for (const lib of detectedLibraries) {
       if (!seenPackages.has(lib.package)) {
         mergedLibraries.push(lib);
+        seenPackages.add(lib.package);
       }
     }
 
