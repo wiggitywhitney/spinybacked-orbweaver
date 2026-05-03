@@ -228,6 +228,16 @@ module.exports = { fetchProduct };
     });
 
     it('Test B: agent invents attributes with dd. namespace when only dd.* attributes exist in registry', { timeout: 240_000 }, async () => {
+      // NOTE: This test asserts on raw instrumentFile() output — before the coordinator
+      // layer runs. In a real run, writeSchemaExtensions() (src/coordinator/schema-extensions.ts)
+      // independently rejects extensions whose namespace doesn't match registry_manifest.yaml's
+      // `name` field. However, that coordinator gate enforces a different rule (the project's
+      // declared name) than what this test checks (visible schema pattern inference). The two
+      // layers are not redundant — this test is the only coverage for the prompt's theory of
+      // correctness. A Test B failure is an agent output quality signal, not a registry integrity
+      // risk. See Issue #722 (coordinator silent rejection → fix-loop feedback) and Issue #724
+      // (complete PRD #581 attribute namespace parallel) for full architectural context.
+
       // Schema has only dd.* attributes, no HTTP-specific one.
       // Agent must invent an HTTP attribute — it must start with dd.
       const schemaB = {
