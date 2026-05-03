@@ -1018,6 +1018,20 @@ describe('coordinate', () => {
       expect(result.filesSucceeded).toBe(0);
     });
 
+    it('committed count derived from fileResults filter reflects rollback', async () => {
+      const deps = makeRollbackDeps();
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // The committed-count filter used by instrument-handler and pr-summary
+      // must reflect rollback — rolled-back files changed status to 'failed'.
+      const committed = result.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
+      expect(committed).toBe(0);
+      // filesRolledBack is set so the final CLI output can show the rollback count explicitly.
+      expect(result.filesRolledBack).toBe(2);
+    });
+
     it('adds rollback warning to RunResult', async () => {
       const deps = makeRollbackDeps();
       const config = makeConfig({ testCommand: 'vitest run' });

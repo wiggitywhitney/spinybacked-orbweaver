@@ -488,13 +488,22 @@ export async function coordinate(
     checkpointWindowRef.files.length > 0 &&
     baselineTestPassed === true
   ) {
-    // Restore file content to pre-instrumentation state
+    // Restore file content to pre-instrumentation state.
+    // Track per-file success: filesRolledBack counts only successful restores so
+    // the CLI summary doesn't claim a file was rolled back when its restore failed.
+    let rolledBackCount = 0;
+    let restoreFailures = 0;
     for (const tracked of checkpointWindowRef.files) {
       try {
         await writeForRollback(tracked.path, tracked.originalContent);
-      } catch { /* best-effort file restore */ }
-      fileResults[tracked.resultIndex].status = 'failed';
-      fileResults[tracked.resultIndex].reason = 'Rolled back: end-of-run test failure';
+        rolledBackCount += 1;
+        fileResults[tracked.resultIndex].status = 'failed';
+        fileResults[tracked.resultIndex].reason = 'Rolled back: end-of-run test failure';
+      } catch {
+        restoreFailures += 1;
+        fileResults[tracked.resultIndex].status = 'failed';
+        fileResults[tracked.resultIndex].reason = 'Rollback failed: file restore error';
+      }
     }
 
     // Restore schema extensions to last passing checkpoint state
@@ -511,13 +520,19 @@ export async function coordinate(
 
     // Update aggregate counts to reflect rollback.
     // All files in the checkpoint window were successfully processed before rollback.
-    const rolledBackCount = checkpointWindowRef.files.length;
-    runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - rolledBackCount);
-    runResult.filesFailed += rolledBackCount;
+    const totalWindowFiles = checkpointWindowRef.files.length;
+    runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - totalWindowFiles);
+    runResult.filesFailed += totalWindowFiles;
+    runResult.filesRolledBack = rolledBackCount;
 
     runResult.warnings.push(
       `Rolled back ${rolledBackCount} file(s) due to end-of-run test failure`,
     );
+    if (restoreFailures > 0) {
+      runResult.warnings.push(
+        `Rollback restore failed for ${restoreFailures} file(s) — content was not restored to pre-instrumentation state`,
+      );
+    }
   }
 
   // Step 7d: Compute schema hash at run end (after potential rollback so it reflects final state)
