@@ -64,6 +64,11 @@ export function buildParser() {
             default: false,
             describe: 'Show additional diagnostic output',
           })
+          .option('thinking', {
+            type: 'boolean' as const,
+            default: false,
+            describe: 'Show agent thinking blocks for failed files (combine with --verbose for full output)',
+          })
           .option('debug', {
             type: 'boolean' as const,
             default: false,
@@ -126,6 +131,7 @@ export async function run(args?: string[]) {
         output: (argv.output as 'text' | 'json') ?? 'text',
         yes: Boolean(argv.yes),
         verbose: Boolean(argv.verbose),
+        thinking: Boolean(argv.thinking),
         debug: Boolean(argv.debug),
         debugDumpDir: argv.debugDumpDir as string | undefined,
       },

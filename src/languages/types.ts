@@ -418,6 +418,16 @@ export interface PreScanResult {
    * Empty when no manifest is provided or no matches are found.
    */
   alreadyInstrumentedImports: PreScanAlreadyInstrumentedImport[];
+
+  /**
+   * Auto-instrumentation library requirements detected from the file's framework imports.
+   *
+   * Populated deterministically from FRAMEWORK_TO_LIBRARY in ast.ts, so these libraries
+   * are recorded even when the LLM intermittently returns an empty librariesNeeded array.
+   * The coordinator unions this with llmOutput.librariesNeeded after the LLM call.
+   * Empty when no known framework packages are imported.
+   */
+  detectedLibraries?: { package: string; importName: string }[];
 }
 
 /**

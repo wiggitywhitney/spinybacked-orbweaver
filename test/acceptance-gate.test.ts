@@ -137,10 +137,9 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
         expect(check.passed, `${rule} failed: ${check.details}`).toBe(true);
       }
 
-      // librariesNeeded assertion removed: LLM occasionally returns [] for librariesNeeded
-      // even when the file imports pg/express — same non-determinism that caused order-service.js
-      // single-shot to be removed. P3 covers librariesNeeded.length > 0 for this file.
-      // Root gap tracked in #710 (deterministic detection path).
+      // Deterministic detection (#710): even if the LLM returns empty librariesNeeded,
+      // the pre-scan detects pg and express imports and the union path fills the gap.
+      expect(output.librariesNeeded.length, 'Expected pg/express library requirements').toBeGreaterThan(0);
     });
   });
 
