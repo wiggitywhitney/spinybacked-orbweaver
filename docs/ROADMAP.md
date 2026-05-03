@@ -11,13 +11,12 @@ When a real-world eval run completes for a language provider, mark it using thes
 
 Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
 
-**Current status**: TypeScript — *run-12 complete* (6 committed, 13 failed, 14 correct skips). Two open blockers: SCH-001 cascade deadlock (#708) and NDS-003 regex miss (#709).
+**Current status**: TypeScript — **Experimental** ✓ (*run-13 complete*: 14 committed, 19 correct skips, 0 failures, 93% quality). Known limitations: CDQ-006 isRecording guards missing on ~35% of files (tracked in #728); attribute namespace inference needs prompt strengthening (tracked in #724).
 
 ---
 
 ## Short-term (current focus)
 
-- TypeScript real-world evaluation ([issue #591](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/591)) — complete the taze eval run (30/33 files not yet reached) to establish pass rate and mark provider "experimental" or "stable". Both prior blockers now cleared: PRD #582 M2 and the `checkSyntax()` Bundler moduleResolution fix (#624).
 - Smarter end-of-run test failure handling ([PRD #687](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/687)) — rollback logic incorrectly attributes timeout failures to instrumentation; blocking clean eval runs. Three connected fixes: call path analysis (smart-rollback), API health check, and one retry with delay.
 - Document the SDK initialization boundary ([issue #685](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/685)) — checkpoint tests run without OTel SDK init (spans are no-ops); live-check post PRD #698 runs with SDK init (spans fire). Users debugging unexpected behavior need this distinction documented.
 - Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
