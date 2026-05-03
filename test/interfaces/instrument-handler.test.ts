@@ -67,6 +67,7 @@ function makeOptions(overrides?: Partial<InstrumentOptions>): InstrumentOptions 
     output: 'text',
     yes: false,
     verbose: false,
+    thinking: false,
     debug: false,
     ...overrides,
   };
@@ -791,9 +792,9 @@ describe('handleInstrument', () => {
       expect(reportLine).toBeDefined();
     });
 
-    it('shows agent thinking blocks in verbose mode for failed files', async () => {
+    it('shows agent thinking blocks when --thinking and --verbose are both passed', async () => {
       const deps = makeDeps();
-      await handleInstrument(makeOptions({ verbose: true }), deps);
+      await handleInstrument(makeOptions({ verbose: true, thinking: true }), deps);
       const callbacks = getCallbacks(deps);
 
       (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
@@ -819,6 +820,57 @@ describe('handleInstrument', () => {
       expect(allOutput).toContain('Attempt 1');
       expect(allOutput).toContain('handleRequest is exported and async');
       expect(allOutput).toContain('Attempt 2');
+    });
+
+    it('does NOT show agent thinking blocks when --verbose is passed without --thinking', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        reason: 'Validation failed',
+        lastError: 'NDS-001: parse error',
+        thinkingBlocksByAttempt: [
+          ['The function handleRequest is exported and async — it needs a span.'],
+        ],
+        errorProgression: ['1 blocking error'],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      expect(allOutput).not.toContain('Agent thinking');
+    });
+
+    it('shows agent thinking blocks with --thinking alone (without --verbose)', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: false, thinking: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        reason: 'Validation failed',
+        lastError: 'NDS-001: parse error',
+        thinkingBlocksByAttempt: [
+          ['The function handleRequest is exported and async — it needs a span.'],
+        ],
+        errorProgression: ['1 blocking error'],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      expect(allOutput).toContain('Agent thinking');
+      expect(allOutput).toContain('handleRequest is exported and async');
     });
 
     it('does not show agent thinking section when thinkingBlocksByAttempt is absent', async () => {

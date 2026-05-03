@@ -53,6 +53,8 @@ export interface InstrumentOptions {
   output: 'text' | 'json';
   yes: boolean;
   verbose: boolean;
+  /** When true, include agent thinking blocks in the output for failed files. */
+  thinking?: boolean;
   debug: boolean;
   /** When set, write each file's lastInstrumentedCode to this directory during the run. */
   debugDumpDir?: string;
@@ -216,6 +218,21 @@ export async function handleInstrument(
         } else {
           deps.stderr(`  ${displayPath}: ${statusLabel}`);
         }
+        // Agent thinking blocks — shown when --thinking is passed, regardless of --verbose
+        if (options.thinking && result.status === 'failed' && result.thinkingBlocksByAttempt && result.thinkingBlocksByAttempt.some(b => b.length > 0)) {
+          deps.stderr('');
+          deps.stderr(`  ${_dim('Agent thinking')}`);
+          deps.stderr(`  ${_dim('─'.repeat(60))}`);
+          result.thinkingBlocksByAttempt.forEach((blocks, attemptIdx) => {
+            if (blocks.length === 0) return;
+            deps.stderr(`  ${_dim(`Attempt ${attemptIdx + 1}`)}`);
+            for (const block of blocks) {
+              for (const line of block.split('\n')) {
+                deps.stderr(`    ${line}`);
+              }
+            }
+          });
+        }
         return;
       }
 
@@ -254,8 +271,8 @@ export async function handleInstrument(
         }
       }
 
-      // Agent thinking blocks for failed files — helps diagnose why the agent failed
-      if (result.status === 'failed' && result.thinkingBlocksByAttempt && result.thinkingBlocksByAttempt.some(b => b.length > 0)) {
+      // Agent thinking blocks for failed files — shown when --thinking is passed
+      if (options.thinking && result.status === 'failed' && result.thinkingBlocksByAttempt && result.thinkingBlocksByAttempt.some(b => b.length > 0)) {
         deps.stderr('');
         deps.stderr(`  ${_dim('Agent thinking')}`);
         deps.stderr(`  ${_dim('─'.repeat(60))}`);

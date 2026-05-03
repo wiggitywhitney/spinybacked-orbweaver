@@ -327,10 +327,22 @@ export async function instrumentFile(
       };
     }
 
+    // Union LLM librariesNeeded with deterministic framework detection from preInstrumentationAnalysis.
+    // The LLM occasionally returns [] for librariesNeeded even when the file imports a known framework
+    // (e.g., pg, express). The deterministic path fills the gap, deduplicating by package.
+    const detectedLibraries = preScanResult?.detectedLibraries ?? [];
+    const mergedLibraries = [...llmOutput.librariesNeeded];
+    const seenPackages = new Set(llmOutput.librariesNeeded.map(l => l.package));
+    for (const lib of detectedLibraries) {
+      if (!seenPackages.has(lib.package)) {
+        mergedLibraries.push(lib);
+      }
+    }
+
     // Combine LLM output with token usage into InstrumentationOutput
     const output: InstrumentationOutput = {
       instrumentedCode: llmOutput.instrumentedCode,
-      librariesNeeded: llmOutput.librariesNeeded,
+      librariesNeeded: mergedLibraries,
       schemaExtensions: llmOutput.schemaExtensions,
       attributesCreated: llmOutput.attributesCreated,
       spanCategories: llmOutput.spanCategories,
