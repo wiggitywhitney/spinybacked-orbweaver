@@ -11,7 +11,7 @@ When a real-world eval run completes for a language provider, mark it using thes
 
 Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
 
-**Current status**: TypeScript — **Experimental** ✓ (*run-13 complete*: 14 committed, 19 correct skips, 0 failures, 93% quality). Known limitations: CDQ-006 isRecording guards missing on ~35% of files (tracked in #728); attribute namespace inference needs prompt strengthening (tracked in #724).
+**Current status**: TypeScript — **Experimental** ✓ (*run-13 complete*: 14 committed, 19 correct skips, 0 failures, 93% quality). Known limitations: CDQ-006 isRecording guards are missing on ~35% of files (tracked in #728); attribute namespace inference requires prompt strengthening (tracked in #724).
 
 ---
 
