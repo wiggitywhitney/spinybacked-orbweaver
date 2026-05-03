@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-05-03) TypeScript language provider reached **Experimental** status after taze run-13 completed all 33 TypeScript files at 93% quality (27/29 rubric dimensions: NDS 4/4, COV 6/6, RST 5/5, API 3/3, SCH 3/4, CDQ 6/7). First fully clean TypeScript evaluation run — 14 files committed, 19 correct skips, 0 failures, 0 rollbacks. The 90% threshold for Experimental (≥90% quality, zero syntax errors) is met. Known gaps driving follow-on work: CDQ-006 isRecording guard missing on ~35% of committed files (#728) and attribute namespace inference gap from PRD #581 (#724). PRD #372 C7 complete; follow-up issue #591 closed.
+
 ### Fixed
 
 - (2026-05-03) Fixed misleading "Live-Check Compliance: OK" message when Weaver received zero spans (#683). The OTel SDK does not initialize during checkpoint tests, so every live-check run to date has trivially passed with zero spans evaluated. The compliance report now appends "(no spans received — live-check did not validate any telemetry)" when Weaver's output contains no positive span count. Detection uses ANSI-stripped regex matching; the definitive fix (SDK initialization and `--format=json` parsing) is tracked in PRD #698.
