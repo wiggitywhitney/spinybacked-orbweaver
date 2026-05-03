@@ -135,6 +135,8 @@ function makeSuccessfulLiveCheckDeps(stopResponse: string): LiveCheckDeps {
   };
 }
 
+const ZERO_SPAN_NOTE = '(no spans received — live-check did not validate any telemetry)';
+
 describe('runLiveCheck — zero-span compliance report annotation', () => {
   it('annotates the compliance report when Weaver output indicates zero spans received', async () => {
     const deps = makeSuccessfulLiveCheckDeps('OK');
@@ -148,8 +150,7 @@ describe('runLiveCheck — zero-span compliance report annotation', () => {
     );
 
     expect(result.skipped).toBe(false);
-    expect(result.complianceReport).toContain('no spans received');
-    expect(result.complianceReport).toContain('live-check did not validate any telemetry');
+    expect(result.complianceReport).toContain(ZERO_SPAN_NOTE);
   });
 
   it('does not annotate when the compliance report includes a positive span count', async () => {
@@ -164,6 +165,6 @@ describe('runLiveCheck — zero-span compliance report annotation', () => {
     );
 
     expect(result.skipped).toBe(false);
-    expect(result.complianceReport).not.toContain('no spans received');
+    expect(result.complianceReport).not.toContain(ZERO_SPAN_NOTE);
   });
 });
