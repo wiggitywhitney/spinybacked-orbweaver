@@ -277,14 +277,14 @@ Following Part 8 checklist, Steps 5 and 6:
 
 - [x] Identify a real open-source TypeScript project to use as evaluation target — `wiggitywhitney/taze` (fork of antfu-collective/taze), 33 TypeScript files in `src/`
 - [x] Instrument 20+ files using `spiny-orb instrument` — two runs attempted (run-1, run-2); both aborted after 3 files due to NDS-001 failures on the first three alphabetical files (re-export, void sync method, type-error-prone entry point). **Blocked on PRD #582 M2 (`hasInstrumentableFunctions` early-exit)** — without it every run aborts before reaching substantive files. Tracked in follow-up issue (see below).
-- [ ] Record results: pass rate on golden tests, syntax errors in output, coverage of entry points — **deferred to follow-up eval after PRD #582 M2**
-- [ ] Pass rate ≥ 90% to mark this provider "experimental"; ≥ 95% for "stable" — **deferred**
-- [ ] Zero syntax errors in output — **deferred**
+- [x] Record results: pass rate on golden tests, syntax errors in output, coverage of entry points — **run-13 complete**: 14 committed, 19 correct skips, 0 failures, 0 rollbacks; 93% quality (27/29 rubric dimensions); $4.93 / 54m 45s. Full findings in `spinybacked-orbweaver-eval/evaluation/taze/run-13/actionable-fix-output.md`.
+- [x] Pass rate ≥ 90% to mark this provider "experimental"; ≥ 95% for "stable" — **93% → Experimental ✓**. Known gaps: CDQ-006 isRecording guards (#728), attribute namespace inference (#724).
+- [x] Zero syntax errors in output — **confirmed**. No NDS-001 syntax failures in run-13 committed files.
 - [x] Write language-specific setup guide for TypeScript users — see docs/ROADMAP.md note and taze eval handoff at spinybacked-orbweaver-eval/evaluation/taze/spiny-orb-handoff.md
 - [x] Document known limitations (void-callback return type constraint, re-export file detection, `error as Error` prohibited, consecutive-failure abort threshold, live-registry test flakiness in checkpoint runs) — documented in taze eval handoff and in prompt guidance added to this branch
-- [ ] Update feature parity matrix — **deferred to follow-up eval**
+- [x] Update feature parity matrix — `test/validation/parity.test.ts` parity assertion passes; no new rule gaps discovered in run-13 (NDS 100%, COV 100%, RST 100%).
 
-**C7 eval follow-up**: a standalone issue tracks completing the real-world eval after PRD #582 M2 (hasInstrumentableFunctions early-exit) ships. The implementation (C0-C6) is merged; the eval pass rate metrics are not yet obtained.
+**C7 complete (2026-05-03)**: taze run-13 achieved 93% quality across all 33 TypeScript files. TypeScript provider marked **Experimental**. Follow-up issues: #724 (attribute namespace), #728 (CDQ-006 guards), #714 (pre-scan extension to TypeScript). Standalone follow-up issue #591 closed.
 
 ---
 
