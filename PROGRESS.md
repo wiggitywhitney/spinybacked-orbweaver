@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-05-03) Strengthened attribute namespace enforcement in `src/agent/prompt.ts` to complete the span/attribute parallel that PRD #581 intended (#724). The attribute invention step previously used soft `Derive` language where the span naming section used hard `MUST`/`Do NOT` constraints. Changed to: all invented attribute keys MUST start with the registry namespace prefix; Do NOT derive namespace from URL domains, variable names, or code-local terminology (with explicit counter-example: `store.product.id` from a URL is wrong, `dd.store.product.id` is correct). Also added debug output to Test B in `test/acceptance-gate.test.ts` so CI artifact upload captures agent notes and schema extensions on both pass and fail — Test B previously bypassed the fix-loop's `dumpDiagnostics` path entirely.
+
 ### Added
 
 - (2026-05-03) TypeScript language provider reached **Experimental** status after taze run-13 completed all 33 TypeScript files at 93% quality (27/29 rubric dimensions: NDS 4/4, COV 6/6, RST 5/5, API 3/3, SCH 3/4, CDQ 6/7). First fully clean TypeScript evaluation run — 14 files committed, 19 correct skips, 0 failures, 0 rollbacks. The 90% threshold for Experimental (≥90% quality, zero syntax errors) is met. Known gaps driving follow-on work: CDQ-006 isRecording guard missing on ~35% of committed files (#728) and attribute namespace inference gap from PRD #581 (#724). PRD #372 C7 complete; follow-up issue #591 closed.
