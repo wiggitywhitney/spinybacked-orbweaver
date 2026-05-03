@@ -514,6 +514,7 @@ export async function coordinate(
     const rolledBackCount = checkpointWindowRef.files.length;
     runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - rolledBackCount);
     runResult.filesFailed += rolledBackCount;
+    runResult.filesRolledBack = rolledBackCount;
 
     runResult.warnings.push(
       `Rolled back ${rolledBackCount} file(s) due to end-of-run test failure`,

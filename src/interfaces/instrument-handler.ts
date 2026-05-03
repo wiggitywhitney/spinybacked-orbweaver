@@ -419,9 +419,12 @@ export async function handleInstrument(
   } else {
     const committedCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
     const correctSkipCount = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded === 0).length;
+    const rolledBackSuffix = (runResult.filesRolledBack ?? 0) > 0
+      ? ` (${runResult.filesRolledBack} rolled back)`
+      : '';
     deps.stderr(
       `${runResult.filesProcessed} files processed: ` +
-      `${committedCount} committed, ${runResult.filesFailed} failed, ` +
+      `${committedCount} committed, ${runResult.filesFailed} failed${rolledBackSuffix}, ` +
       `${runResult.filesPartial} partial, ${correctSkipCount} correct skips, ${runResult.filesSkipped} skipped`,
     );
     // Show recommended refactors summary for files that have them

@@ -6,7 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-05-03) Fixed misleading "Live-Check Compliance: OK" message when Weaver received zero spans (#683). The OTel SDK does not initialize during checkpoint tests, so every live-check run to date has trivially passed with zero spans evaluated. The compliance report now appends "(no spans received — live-check did not validate any telemetry)" when Weaver's output contains no positive span count. Detection uses ANSI-stripped regex matching; the definitive fix (SDK initialization and `--format=json` parsing) is tracked in PRD #698.
+
+- (2026-05-03) Fixed ambiguous end-of-run summary when files are rolled back after a live-check test failure (#684). Added `filesRolledBack` field to `RunResult`; the final "files processed" CLI output now shows the rollback count explicitly (e.g., "10 committed, 4 failed (3 rolled back)") so the pre-rollback "Run complete" console line and the post-rollback summary are no longer confusing to read together.
+
 ### Added
+
+- (2026-05-03) Added artifact upload step to all jobs in `.github/workflows/acceptance-gate.yml` (#697). After each vitest run (including on failure via `if: always()`), debug files written to `/tmp/spiny-orb-debug-*.js` are uploaded as named artifacts (`spiny-orb-debug-<suite>`). This makes dimensions 2 (instrumented code), 4 (agent notes), and 5 (agent thinking) available after CI failures via `gh run download`, where previously they were lost when the runner exited.
 
 - (2026-05-02) Made SCH-001 (span names match registry) semantic-duplicate detection advisory instead of blocking in `src/languages/javascript/rules/sch001.ts`. When the LLM judge identifies a declared span extension as semantically similar to an existing registry operation, the finding is now advisory: the agent is warned but the extension is accepted. Previously blocking caused oscillation — the agent could not use the existing name (different operation) and could not declare a new extension without being blocked, so it reused existing span names across unrelated operations (producing span name collisions, as seen in taze run-12). Delimiter variants detected via normalization remain blocking. OTel reasoning: the Trace API requires low-cardinality, operation-class-identifying names, but does not prohibit hierarchically-distinct parent/child operations from having separate span names; the similarity judge cannot reliably distinguish `taze.cli.run` (CLI dispatcher) from `taze.check.run` (check operation). Updated agent prompt and `docs/rules-reference.md`.
 

@@ -67,6 +67,14 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
+      - name: Upload debug diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spiny-orb-debug-${{ matrix.test-group.name }}
+          path: /tmp/spiny-orb-debug-*.js
+          if-no-files-found: ignore
+
   # Deliverables e2e tests — needs write permissions for push + PR creation
   deliverables:
     runs-on: ubuntu-latest
@@ -93,3 +101,11 @@ jobs:
         timeout-minutes: 25
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload debug diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spiny-orb-debug-deliverables
+          path: /tmp/spiny-orb-debug-*.js
+          if-no-files-found: ignore

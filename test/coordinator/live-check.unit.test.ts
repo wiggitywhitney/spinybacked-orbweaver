@@ -106,3 +106,64 @@ describe('runLiveCheck — Weaver shutdown failure message format', () => {
     expect(result.skipped).toBe(false);
   });
 });
+
+/** Build mock deps where Weaver runs successfully and /stop returns the given report. */
+function makeSuccessfulLiveCheckDeps(stopResponse: string): LiveCheckDeps {
+  return {
+    createServerFn: () => ({
+      on: () => {},
+      listen: (_port: number, cb: () => void) => { cb(); return {}; },
+      close: (cb: () => void) => { cb(); },
+    }),
+    spawnFn: () => ({
+      stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
+      stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
+      on: (_: string, __: unknown) => {},
+      kill: () => {},
+    }),
+    execFileFn: (_cmd: string, _args: string[], _opts: unknown, cb: (e: Error | null, stdout: string, stderr: string) => void) => {
+      cb(null, '', '');
+    },
+    fetchFn: async () => ({
+      text: async () => stopResponse,
+    } as Response),
+    setTimeout: (cb: () => void, _ms: number) => {
+      cb();
+      return 0;
+    },
+    clearTimeout: () => {},
+  };
+}
+
+describe('runLiveCheck — zero-span compliance report annotation', () => {
+  it('annotates the compliance report when Weaver output indicates zero spans received', async () => {
+    const deps = makeSuccessfulLiveCheckDeps('OK');
+
+    const result = await runLiveCheck(
+      VALID_REGISTRY,
+      '/project',
+      'npm test',
+      undefined,
+      deps,
+    );
+
+    expect(result.skipped).toBe(false);
+    expect(result.complianceReport).toContain('no spans received');
+    expect(result.complianceReport).toContain('live-check did not validate any telemetry');
+  });
+
+  it('does not annotate when the compliance report includes a positive span count', async () => {
+    const deps = makeSuccessfulLiveCheckDeps('OK\n3 spans received');
+
+    const result = await runLiveCheck(
+      VALID_REGISTRY,
+      '/project',
+      'npm test',
+      undefined,
+      deps,
+    );
+
+    expect(result.skipped).toBe(false);
+    expect(result.complianceReport).not.toContain('no spans received');
+  });
+});

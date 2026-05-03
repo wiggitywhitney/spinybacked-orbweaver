@@ -47,6 +47,8 @@ export interface RunResult {
   filesFailed: number;
   filesSkipped: number;
   filesPartial: number;
+  /** Number of successfully instrumented files that were rolled back due to end-of-run test failure. */
+  filesRolledBack?: number;
   librariesInstalled: string[];
   libraryInstallFailures: string[];
   sdkInitUpdated: boolean;

@@ -270,6 +270,15 @@ export async function runLiveCheck(
     complianceReport = weaverStdout;
   }
 
+  // Annotate the report when Weaver received no spans — the OTel SDK does not
+  // initialize during checkpoint tests, so every live-check to date has been a
+  // false positive. Surface this clearly rather than letting "OK" mislead users.
+  if (complianceReport && reportIndicatesZeroSpans(complianceReport)) {
+    complianceReport =
+      complianceReport.trim() +
+      ' (no spans received — live-check did not validate any telemetry)';
+  }
+
   // Fire onValidationComplete callback
   try {
     callbacks?.onValidationComplete?.(testsPassed, complianceReport ?? '');
@@ -283,6 +292,20 @@ export async function runLiveCheck(
     testsPassed,
     warnings,
   };
+}
+
+/**
+ * Return true when the Weaver compliance report indicates zero spans were received.
+ * Weaver reports "OK" with no span details when it receives nothing; the SDK
+ * does not initialize during checkpoint tests so this is always the case today.
+ */
+function reportIndicatesZeroSpans(report: string): boolean {
+  // Strip ANSI escape codes before analysis
+  const stripped = report.replace(/\x1b\[[0-9;]*m/g, '').trim();
+  // Explicit zero span count in the report
+  if (/\b0\s+span/i.test(stripped)) return true;
+  // No positive span count found — Weaver received nothing meaningful
+  return !/\b[1-9]\d*\s+span/i.test(stripped);
 }
 
 /**

@@ -64,6 +64,7 @@ export function aggregateResults(
     filesFailed: results.filter(r => r.status === 'failed').length,
     filesSkipped: results.filter(r => r.status === 'skipped').length,
     filesPartial: results.filter(r => r.status === 'partial').length,
+    filesRolledBack: 0,
     librariesInstalled: [],
     libraryInstallFailures: [],
     sdkInitUpdated: false,
