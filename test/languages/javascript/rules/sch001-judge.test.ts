@@ -69,30 +69,58 @@ describe('SCH-001 extension acceptance judge path', () => {
         { client: {} as any }, declaredExtensions,
       );
 
-      // Extension was flagged as a semantic duplicate
-      const extensionFailure = results.find(
+      // Extension was flagged as a potential semantic duplicate — advisory, not blocking
+      const extensionWarning = results.find(
         (r) => !r.passed && r.message.includes('user.registration'),
       );
-      expect(extensionFailure).toBeDefined();
-      expect(extensionFailure!.message).toContain('user.register');
-      expect(extensionFailure!.blocking).toBe(true);
+      expect(extensionWarning).toBeDefined();
+      expect(extensionWarning!.message).toContain('user.register');
+      expect(extensionWarning!.blocking).toBe(false);
       expect(judgeTokenUsage).toHaveLength(1);
+    });
+
+    it('accepts the span name as valid despite semantic duplicate advisory', async () => {
+      // The agent declared "user.registration" which is a semantic duplicate of "user.register".
+      // Even with the advisory warning, the span should be accepted so it passes the registry
+      // conformance check — without this, the agent oscillates: it cannot use the registry name
+      // (different operation) and cannot extend without being blocked.
+      vi.mocked(callJudge).mockResolvedValueOnce({
+        verdict: {
+          answer: false,
+          suggestion: 'Use "user.register" instead.',
+          confidence: 0.9,
+        },
+        tokenUsage: MOCK_TOKEN_USAGE,
+      });
+
+      const declaredExtensions = ['span.user.registration'];
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        codeWithUserRegistration, filePath, schemaWithUserRegister,
+        { client: {} as any }, declaredExtensions,
+      );
+
+      // The span name "user.registration" in code is accepted (no blocking registry-conformance failure)
+      const conformanceFailure = results.find(
+        (r) => !r.passed && r.blocking,
+      );
+      expect(conformanceFailure).toBeUndefined();
     });
   });
 
   describe('normalization catches delimiter variants without judge', () => {
-    it('flags user_register as delimiter-variant of user.register without judge call', async () => {
-      // "user_register" normalizes to "userregister" — same as "user.register" → normalization catches
-      const codeWithUnderscoreVariant = [
-        'const { trace } = require("@opentelemetry/api");',
-        'const tracer = trace.getTracer("svc");',
-        'function register() {',
-        '  return tracer.startActiveSpan("user_register", (span) => {',
-        '    try { return {}; } finally { span.end(); }',
-        '  });',
-        '}',
-      ].join('\n');
+    // "user_register" normalizes to "userregister" — same as "user.register" → normalization catches
+    const codeWithUnderscoreVariant = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function register() {',
+      '  return tracer.startActiveSpan("user_register", (span) => {',
+      '    try { return {}; } finally { span.end(); }',
+      '  });',
+      '}',
+    ].join('\n');
 
+    it('flags user_register as delimiter-variant of user.register without judge call', async () => {
       const { results, judgeTokenUsage } = await checkSpanNamesMatchRegistry(
         codeWithUnderscoreVariant, filePath, schemaWithUserRegister,
         { client: {} as any }, ['span.user_register'],
@@ -104,9 +132,32 @@ describe('SCH-001 extension acceptance judge path', () => {
       expect(extensionFailure).toBeDefined();
       expect(extensionFailure!.message).toContain('delimiter-variant');
       expect(extensionFailure!.message).toContain('user.register');
+      // Delimiter variants are blocking — unambiguously wrong, not a judgment call
+      expect(extensionFailure!.blocking).toBe(true);
       // Normalization doesn't require judge
       expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
       expect(judgeTokenUsage).toHaveLength(0);
+    });
+
+    it('rejects the span name in code when its declared extension is a delimiter variant', async () => {
+      // Delimiter variants must not be added to validOperations — the span name in code
+      // should still fail the registry conformance check.
+      const { results } = await checkSpanNamesMatchRegistry(
+        codeWithUnderscoreVariant, filePath, schemaWithUserRegister,
+        { client: {} as any }, ['span.user_register'],
+      );
+
+      // A blocking conformance failure should appear for "user_register" in code.
+      // Tighten predicate past the delimiter-variant extension warning (also blocking,
+      // also includes 'user_register') to the registry-conformance failure specifically.
+      const conformanceFailure = results.find(
+        (r) =>
+          !r.passed &&
+          r.blocking &&
+          r.message.includes('user_register') &&
+          r.message.includes('not found in registry span definitions'),
+      );
+      expect(conformanceFailure).toBeDefined();
     });
   });
 

@@ -215,25 +215,42 @@ async function checkRegistryConformance(
       allJudgeTokenUsage.push(...dedupResult.judgeTokenUsage);
 
       if (dedupResult.isDuplicate) {
-        const method = dedupResult.detectionMethod === 'normalization'
-          ? 'delimiter-variant duplicate'
-          : 'semantic duplicate';
-        const matchedNote = dedupResult.matchedEntry
-          ? ` of existing registry operation "${dedupResult.matchedEntry}"`
-          : '';
+        const matchedEntry = dedupResult.matchedEntry ?? '';
+        if (dedupResult.detectionMethod === 'normalization') {
+          // Delimiter variants (e.g., user_register ≈ user.register) are unambiguously wrong —
+          // blocking, and the extension is not added to validOperations.
+          allResults.push({
+            ruleId: 'SCH-001',
+            passed: false,
+            filePath,
+            lineNumber: null,
+            message:
+              `SCH-001 check failed: declared span extension "${spanOpName}" is a delimiter-variant duplicate` +
+              (matchedEntry ? ` of existing registry operation "${matchedEntry}"` : '') +
+              `. Use the existing registry operation instead of declaring a new extension.`,
+            tier: 2,
+            blocking: true,
+          });
+          continue; // Don't add delimiter variants to validOperations
+        }
+        // Semantic duplicates detected by the judge are advisory — the agent has more context
+        // about whether operations are truly equivalent or hierarchically distinct. Blocking
+        // caused oscillation when hierarchically-distinct operations (e.g., a CLI dispatcher
+        // "taze.cli.run" vs its child "taze.check.run") triggered the judge's similarity
+        // detection and forced the agent to reuse existing names across unrelated operations.
         allResults.push({
           ruleId: 'SCH-001',
           passed: false,
           filePath,
           lineNumber: null,
           message:
-            `SCH-001 check failed: declared span extension "${spanOpName}" is a ${method}` +
-            `${matchedNote}. ` +
-            `Use the existing registry operation instead of declaring a new extension.`,
+            `SCH-001: declared span extension "${spanOpName}" may be a semantic duplicate` +
+            (matchedEntry ? ` of existing registry operation "${matchedEntry}"` : '') +
+            `. If these operations are equivalent, reuse "${matchedEntry || 'the existing name'}" instead of declaring a new extension. If they are a different operation class, this advisory can be ignored.`,
           tier: 2,
-          blocking: true,
+          blocking: false,
         });
-        continue; // Don't add duplicate to validOperations
+        // Fall through to add the extension to validOperations.
       }
 
       validOperations.add(spanOpName);
