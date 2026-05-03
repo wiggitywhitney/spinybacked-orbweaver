@@ -11,7 +11,7 @@ When a real-world eval run completes for a language provider, mark it using thes
 
 Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
 
-**Current status**: TypeScript — *pending eval run-4* (unblocked — PRD #582 M2 merged; `checkSyntax()` Bundler moduleResolution fix merged in #624).
+**Current status**: TypeScript — *run-12 complete* (6 committed, 13 failed, 14 correct skips). Two open blockers: SCH-001 cascade deadlock (#708) and NDS-003 regex miss (#709).
 
 ---
 
@@ -24,16 +24,23 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 - Document the SDK initialization boundary ([issue #685](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/685)) — checkpoint tests run without OTel SDK init (spans are no-ops); live-check post PRD #698 runs with SDK init (spans fire). Users debugging unexpected behavior need this distinction documented.
 - Industry practices research spike: flaky tests, rollback patterns, live telemetry validators ([issue #686](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/686)) — survey established patterns before committing to designs in PRDs #698, #687, #699, and #700.
 - Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
+- Make SCH-001 advisory rather than blocking ([issue #708](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/708)) — blocking mode caused a cascade deadlock in taze run-12: one committed span name poisoned all downstream files via judge rulings, forcing span name collisions. Requires OTel span naming research before implementing.
+- Fix NDS-003 missing regex literal modifications ([issue #709](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/709)) — agent corrupted `/\./g` to `/\.\g/` in taze run-12 without NDS-003 catching it; needs root cause investigation and a regression test.
+- Extend pre-scan deterministic skip patterns ([issue #714](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/714)) — avoid LLM calls for pure re-export files and other AST-detectable patterns; surfaced from run-12 eval data.
+- Annotate Test B with layer-scope documentation ([issue #723](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/723)) — adds a comment block explaining that Test B asserts on raw agent output before coordinator namespace enforcement; the two layers encode different theories of correctness and are not redundant. PR also serves as the CI trigger for artifact collection required by issue #724.
+- Complete PRD #581 attribute namespace enforcement ([issue #724](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/724)) — the attribute section of the agent prompt uses `Derive` where the span section uses `MUST start with`; this structural gap causes the agent to drift from registry namespace conventions. Exact phrasing TBD pending CI artifacts from issue #723.
 
 ## Medium-term
 
 - Make live-check actually validate something ([PRD #698](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/698)) — Weaver live-check has never received real spans; every "Live-check: OK" to date is a false positive. Prerequisite for PRD #699.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 AND PRD #687 — both must be complete before starting.
 - Dependency-aware file instrumentation ordering ([PRD #700](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/700)) — instrument leaves before callers so each agent sees the full instrumentation picture of its dependencies. Independent of PRDs #698, #687, #699; can run in parallel.
+- Enrich callee span-name context in processedFilesManifest ([issue #718](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/718)) — lets caller agents reason about span layer (not just function coverage) when callees are already instrumented; blocked by PRD #700.
 - Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
 - Audit `src/agent/prompt.ts` for orphan rule references ([issue #519](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/519)) — one-shot sweep to reconcile the prompt against the rule catalog. Sequence-dependent: run after PRD #505 and PRD #509 merge so the rule catalog is stable (PRD #508 ✓ cleared). Prevention for future drift is covered by the rules-related work conventions in project CLAUDE.md.
+- Coordinator silent rejection should feed back into the fix loop ([issue #722](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/722)) — wrong-namespace extensions are currently silently dropped; routing the rejection back as feedback would give the agent a retry opportunity consistent with how other validation failures work. Independent of issues #723 and #724.
 
 ## Long-term
 
