@@ -122,6 +122,31 @@ The agent uses three escalating strategies:
 | Fresh regeneration | Subsequent retries | Start from scratch with failure hints from previous attempts |
 | Function-level fallback | After all whole-file attempts exhausted | Decompose file into functions, instrument each independently |
 
+## SDK initialization boundary
+
+spiny-orb uses two execution contexts with different OTel SDK behavior. Understanding the difference matters when debugging unexpected test failures or interpreting live-check results.
+
+### Checkpoint test context
+
+During checkpoint tests (`testCommand` in Stage 3), the test suite runs **without** OTel SDK initialization — no `--require` or `--import` of the SDK init file. Every `tracer.startActiveSpan()` call in the instrumented code resolves to a no-op `NonRecordingSpan` via `@opentelemetry/api`'s default global provider. Zero spans are emitted.
+
+Consequences:
+- Instrumentation cannot cause checkpoint test failures. A timeout or assertion error during checkpoint tests is an environmental problem (slow network, missing dependency, flaky test), not a result of anything spiny-orb added to the code.
+- Live-check during this phase always reports "OK" because Weaver receives nothing. Every "Live-check: OK" to date is a false positive — the compliance annotation in the PR summary notes this explicitly.
+
+### Live-check context (planned — PRD #698)
+
+When PRD #698 ships, the live-check step will inject SDK initialization so real spans reach Weaver. In that context:
+- Spans actually fire during the test run.
+- Weaver receives real telemetry and produces a meaningful compliance report.
+- A live-check failure may indicate that something spiny-orb added causes a problem at span-emit time.
+
+### What this means for rollback decisions
+
+When the end-of-run test suite fails:
+- **If the failure occurs before PRD #698 ships**: The SDK is not initialized during the test run. Instrumentation code is structurally present but behaviorally inert. Failures are environmental — network timeouts, registry unavailability, pre-existing flakiness.
+- **After PRD #698 ships**: Failures may reflect instrumentation behavior. The live-check compliance report becomes a meaningful diagnostic input.
+
 ## Key design decisions
 
 - **Per-file commits**: Each file is committed independently. This enables selective rollback and makes PR review easier.
