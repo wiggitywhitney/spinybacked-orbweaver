@@ -1,6 +1,6 @@
 # PRD #687: Smarter end-of-run test failure handling
 
-**Status**: Active
+**Status**: Complete (2026-05-04)
 **Priority**: High
 **GitHub Issue**: [#687](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/687)
 **Created**: 2026-05-01
