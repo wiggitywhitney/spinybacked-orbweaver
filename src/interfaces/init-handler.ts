@@ -254,9 +254,11 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
       env: { ...process.env, HOME: process.env.HOME || homedir() },
     });
   } catch (err: unknown) {
-    const error = err as { stderr?: Buffer };
-    const stderr = error.stderr ? error.stderr.toString().trim() : 'unknown error';
-    errors.push(`Weaver schema validation failed at ${schemaPath}: ${stderr}`);
+    const error = err as { stdout?: Buffer; stderr?: Buffer; message?: string };
+    const out = error.stdout?.toString().trim() ?? '';
+    const errOut = error.stderr?.toString().trim() ?? '';
+    const cliOutput = [out, errOut].filter(Boolean).join('\n') || error.message || 'unknown error';
+    errors.push(`Weaver schema validation failed at ${schemaPath}: ${cliOutput}`);
     return { success: false, errors, warnings };
   }
 

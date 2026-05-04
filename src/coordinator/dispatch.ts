@@ -37,7 +37,7 @@ export async function validateRegistryCheck(
       execFile(
         'weaver',
         ['registry', 'check', '-r', registryDir],
-        { timeout: 30000 },
+        { timeout: 30000, env: { ...process.env, HOME: process.env.HOME || homedir() } },
         (error, stdout, stderr) => {
           if (error) {
             const stdoutStr = stdout?.trim() ?? '';
