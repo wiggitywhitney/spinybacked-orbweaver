@@ -13,6 +13,7 @@ import type {
   LanguagePromptSections,
   Example,
   InstrumentationDetectionResult,
+  PreScanResult,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -225,6 +226,52 @@ export class TypeScriptProvider implements LanguageProvider {
       }
       throw error;
     }
+  }
+
+  // ── Pre-instrumentation analysis ──────────────────────────────────────────
+
+  preInstrumentationAnalysis(originalCode: string): PreScanResult {
+    const functions = findTsFunctions(originalCode);
+
+    const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
+    const asyncFunctionsNeedingSpans: PreScanResult['asyncFunctionsNeedingSpans'] = [];
+    const pureSyncFunctions: PreScanResult['pureSyncFunctions'] = [];
+    const unexportedFunctions: PreScanResult['unexportedFunctions'] = [];
+    const entryPointStartLines = new Set<number>();
+
+    for (const fn of functions) {
+      const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
+      if (isEntryPoint) {
+        entryPointStartLines.add(fn.startLine);
+        entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+      }
+    }
+
+    for (const fn of functions) {
+      if (entryPointStartLines.has(fn.startLine)) continue;
+      if (fn.isAsync) {
+        asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+      } else {
+        pureSyncFunctions.push({ name: fn.name, startLine: fn.startLine });
+        if (!fn.isExported) {
+          unexportedFunctions.push({ name: fn.name, startLine: fn.startLine });
+        }
+      }
+    }
+
+    const hasInstrumentableFunctions = entryPointsNeedingSpans.length > 0 || asyncFunctionsNeedingSpans.length > 0;
+
+    return {
+      hasInstrumentableFunctions,
+      entryPointsNeedingSpans,
+      processExitEntryPoints: [],
+      asyncFunctionsNeedingSpans,
+      pureSyncFunctions,
+      unexportedFunctions,
+      outboundCallsNeedingSpans: [],
+      entryPointSubOperations: [],
+      alreadyInstrumentedImports: [],
+    };
   }
 
   // ── Feature parity check ──────────────────────────────────────────────────

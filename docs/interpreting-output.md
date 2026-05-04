@@ -41,20 +41,91 @@ The status line for each file shows:
 
 ### Verbose output (`--verbose`)
 
-Verbose mode adds per-function details, schema extensions, and agent reasoning notes below each file's status line:
+`--verbose` expands each file's output into a structured block. Default (non-verbose) mode shows a compact one-liner per file; verbose mode replaces that with:
+
+- A prominent status line with span count and attributes
+- Token usage for that file
+- Full validation failure messages (for failed files)
+- Schema extensions as a bulleted list
+- Agent notes explaining non-obvious instrumentation decisions
+- Path to the companion instrumentation report
 
 ```text
-  src/api-client.js: success (3 spans, 5.2K output tokens)
-    fetchUser: instrumented (1 spans)
-    fetchOrders: instrumented (2 spans)
-    formatResponse: skipped — sync utility
-    Extensions: span.myapp.api.fetch_user, span.myapp.api.fetch_orders
-    Note: Added context propagation for outgoing HTTP calls
-    Note: formatResponse skipped per RST-001 (No Utility Spans) — pure sync function
-    Note: Using @opentelemetry/instrumentation-http for fetch calls
+Processing file 1 of 4: src/api-client.js
+  ✅ SUCCESS — 1 span, 0 attributes
+  Tokens: 30.1K output
+
+  Schema extensions
+  ────────────────────────────────────────────────────────────
+  • span.myapp.context.collect_messages
+
+  Agent notes
+  ────────────────────────────────────────────────────────────
+
+  • Six synchronous helper functions (parseResponse, formatHeaders, buildUrl,
+    validateId, encodeParam, decodeResult) are pure sync operations with no async
+    I/O. They were skipped per RST-001 (No Utility Spans). Their execution is
+    covered by the parent span via context propagation.
+
+  • commit_story.context.source is used directly — no new attribute keys were
+    invented.
+
+  Report: src/api-client.instrumentation.md
 ```
 
-All agent notes are shown in verbose mode — no truncation.
+For a failed file, verbose mode also shows the full validation failure messages:
+
+```text
+Processing file 3 of 4: src/payment.js
+  ❌ FAILED — NDS-005 (Code Pattern Preserved) after 3 attempts
+  Tokens: 12.3K output
+
+  Validation failures (last attempt)
+  ────────────────────────────────────────────────────────────
+  • NDS-005b: Block at lines 47-52 was modified. Original block:
+      } catch (err) {
+        logger.error(err);
+      }
+    Received block:
+      } catch (err) {
+        span.recordException(err);
+        logger.error(err);
+      }
+```
+
+### Thinking blocks (`--thinking`)
+
+`--thinking` shows the agent's step-by-step reasoning for every attempt on **failed files**. Use it when a file fails repeatedly and you need to understand whether the agent is misreading the code, misapplying a rule, or oscillating between contradictory fixes.
+
+Thinking blocks are shown for failed files only — successful files produce no thinking output regardless of this flag.
+
+```text
+Processing file 3 of 4: src/payment.js
+  src/payment.js: failed (NDS-005 (Code Pattern Preserved) after 3 attempts)
+
+  Agent thinking
+  ────────────────────────────────────────────────────────────
+  Attempt 1
+    I need to add error recording to the catch block. The rule says to call
+    span.recordException(err) and span.setStatus({ code: SpanStatusCode.ERROR })
+    before rethrowing...
+
+  Attempt 2
+    The validator rejected my previous attempt because I modified the catch block.
+    NDS-005 requires preserving the original catch block exactly. But COV-003
+    requires an error-recording catch...
+```
+
+**Flag combinations and what they produce:**
+
+| Flags | Per-file output | Thinking blocks |
+|-------|----------------|-----------------|
+| _(none)_ | Compact one-liner | No |
+| `--verbose` | Structured multi-line | No |
+| `--thinking` | Compact one-liner | Yes, for failed files |
+| `--verbose --thinking` | Structured multi-line | Yes, for failed files |
+
+Use `--thinking` alone when you want to diagnose a failing file without the full verbose block for every other file. Use `--verbose --thinking` when you want the complete picture for every file alongside reasoning for failures.
 
 ### Recommended refactors
 

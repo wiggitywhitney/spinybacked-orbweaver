@@ -487,7 +487,7 @@ export async function handleRequest(req: Request, res: Response): Promise<void> 
   });
 }
 
-async function processData(data: string[]): Promise<string[]> {
+function processData(data: string[]): string[] {
   return data.map(item => item.trim());
 }`;
 
