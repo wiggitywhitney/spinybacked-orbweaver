@@ -74,6 +74,54 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
     return { filePath, originalCode };
   }
 
+  /**
+   * Write diagnostic artifacts for a FileResult to /tmp for post-failure analysis.
+   * Five diagnostic dimensions (per CLAUDE.md):
+   *   1. History — git log in CI
+   *   2. Instrumented code — written to /tmp/spiny-orb-debug-{label}
+   *   3. Validator error messages — result.lastError and result.lastErrorByAttempt
+   *   4. Agent notes — result.notes
+   *   5. Agent thinking — result.thinkingBlocksByAttempt (all attempts)
+   */
+  function dumpDiagnostics(label: string, result: FileResult): void {
+    const safeLabel = label.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const debugFilePath = join(tmpdir(), `spiny-orb-debug-${safeLabel}`);
+    const codeToCapture = result.lastInstrumentedCode ??
+      (existsSync(result.path) ? readFileSync(result.path, 'utf-8') : undefined);
+    if (codeToCapture) {
+      try {
+        writeFileSync(debugFilePath, codeToCapture, 'utf-8');
+        console.log(`[${label} instrumented file] ${debugFilePath}`);
+      } catch {
+        // Non-fatal
+      }
+    }
+
+    if (result.thinkingBlocksByAttempt) {
+      result.thinkingBlocksByAttempt.forEach((blocks, idx) => {
+        if (blocks.length > 0) {
+          const text = blocks.join('\n\n');
+          const preview = text.length > 2000
+            ? `${text.slice(0, 2000)}\n[... truncated at 2000 chars; full thinking in result.thinkingBlocksByAttempt[${idx}]]`
+            : text;
+          console.log(`[${label} thinking attempt ${idx + 1}]`, preview);
+        }
+      });
+    }
+
+    console.log(`[${label} diagnostics]`, JSON.stringify({
+      status: result.status,
+      reason: result.reason,
+      spansAdded: result.spansAdded,
+      validationAttempts: result.validationAttempts,
+      errorProgression: result.errorProgression,
+      lastError: result.lastError,
+      lastErrorByAttempt: result.lastErrorByAttempt,
+      notes: result.notes,
+      tokenUsage: result.tokenUsage,
+    }, null, 2));
+  }
+
   describe('successful instrumentation through fix loop', () => {
     it('instruments user-routes.js and produces a fully populated FileResult', { timeout: 1_200_000 }, async () => {
       const { filePath, originalCode } = setupTempFile('src/user-routes.js');
@@ -82,6 +130,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const result: FileResult = await instrumentWithRetry(
         filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
+      dumpDiagnostics('user-routes.js', result);
 
       // The fix loop should eventually succeed (possibly after retries)
       expect(result.status).toBe('success');
@@ -126,6 +175,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const result: FileResult = await instrumentWithRetry(
         filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
+      dumpDiagnostics('order-service.js', result);
 
       expect(result.status).toBe('success');
       expect(result.validationAttempts).toBeGreaterThanOrEqual(1);
@@ -146,6 +196,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const result: FileResult = await instrumentWithRetry(
         filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
+      dumpDiagnostics('user-routes.js-budget', result);
 
       // Should fail due to budget (pre-flight estimate or post-hoc check)
       expect(result.status).toBe('failed');
@@ -180,6 +231,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const result: FileResult = await instrumentWithRetry(
         filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
+      dumpDiagnostics('user-routes.js-exhaustion', result);
 
       // Whether success or failure, verify the contract:
       if (result.status === 'failed') {
@@ -221,6 +273,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const result: FileResult = await instrumentWithRetry(
         filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
+      dumpDiagnostics('user-routes.js-strategy', result);
 
       // The strategy must match the attempt number
       if (result.validationAttempts === 1) {
@@ -249,6 +302,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       const result: FileResult = await instrumentWithRetry(
         filePath, originalCode, resolvedSchema, config, { provider: jsProvider },
       );
+      dumpDiagnostics('format-helpers.js', result);
 
       // Whether success or failure, the snapshot file should be cleaned up.
       // We can't directly check tmpdir for our specific snapshot, but we verify

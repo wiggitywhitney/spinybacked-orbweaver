@@ -1,10 +1,16 @@
 // ABOUTME: Unit tests for prerequisite checks before instrumentation.
 // ABOUTME: Covers package.json, OTel API dependency, SDK init file, Weaver schema, and API key checks.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
+});
 import {
   checkPackageJson,
   checkOtelApiDependency,
@@ -224,6 +230,23 @@ describe('checkWeaverSchema', () => {
     } finally {
       process.env.PATH = originalPath;
     }
+  });
+
+  it('returns actionable HOME hint when weaver subprocess times out (ETIMEDOUT)', async () => {
+    vi.mocked(execFileSync).mockImplementationOnce(() => {
+      const err = new Error('spawnSync weaver ETIMEDOUT');
+      (err as NodeJS.ErrnoException).code = 'ETIMEDOUT';
+      throw err;
+    });
+
+    mkdirSync(join(testDir, 'telemetry', 'registry'), { recursive: true });
+
+    const result = await checkWeaverSchema(testDir, './telemetry/registry');
+
+    expect(result.passed).toBe(false);
+    expect(result.id).toBe('WEAVER_SCHEMA');
+    expect(result.message).toContain('timed out');
+    expect(result.message).toContain('HOME');
   });
 
   describe('empty schema gate', () => {
