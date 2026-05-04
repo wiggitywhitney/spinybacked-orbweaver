@@ -3,6 +3,7 @@
 
 import { readFile, access } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
+import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import type { AgentConfig } from './schema.ts';
 import { resolveSchema } from '../coordinator/dispatch.ts';
@@ -203,16 +204,18 @@ async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promi
     };
   }
 
-  // Run weaver registry check for schema validation
+  // Run weaver registry check for schema validation.
+  // HOME must be explicit so Weaver can locate ~/.weaver/vdir_cache when spiny-orb
+  // is launched through a runner that strips HOME (e.g. caffeinate -s + vals exec -i).
   try {
     execFileSync('weaver', ['registry', 'check', '-r', fullPath], {
       cwd: projectRoot,
       timeout: 30000,
       stdio: 'pipe',
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
     });
   } catch (err: unknown) {
-    // Distinguish between "weaver not installed" and "schema invalid"
-    const error = err as { status?: number; stderr?: Buffer; code?: string };
+    const error = err as { status?: number; stderr?: Buffer; stdout?: Buffer; code?: string };
     if (error.code === 'ENOENT') {
       return {
         id: PREREQUISITE_IDS.WEAVER_SCHEMA,
@@ -220,11 +223,22 @@ async function checkWeaverSchema(projectRoot: string, schemaPath: string): Promi
         message: `Weaver CLI not found. Install it: see https://github.com/open-telemetry/weaver. Schema path exists at ${fullPath} but cannot be validated.`,
       };
     }
-    const stderr = error.stderr ? error.stderr.toString().trim() : 'unknown error';
+    const out = error.stdout?.toString().trim() ?? '';
+    const errOut = error.stderr?.toString().trim() ?? '';
+    const output = [out, errOut].filter(Boolean).join('\n') || (err as Error).message;
+    if (error.code === 'ETIMEDOUT') {
+      return {
+        id: PREREQUISITE_IDS.WEAVER_SCHEMA,
+        passed: false,
+        message: `Weaver timed out validating the schema at ${fullPath} (30s limit). ` +
+          `This usually means Weaver could not find ~/.weaver/vdir_cache to cache a dependency download — ` +
+          `ensure HOME is in the environment when invoking spiny-orb. Weaver output:\n${output}`,
+      };
+    }
     return {
       id: PREREQUISITE_IDS.WEAVER_SCHEMA,
       passed: false,
-      message: `Weaver schema validation failed at ${fullPath}: ${stderr}`,
+      message: `Weaver schema validation failed at ${fullPath}:\n${output}`,
     };
   }
 

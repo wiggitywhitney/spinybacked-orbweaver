@@ -2,6 +2,7 @@
 // ABOUTME: Runs weaver registry check and passes raw CLI output as diagnostic message.
 
 import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import type { CheckResult } from '../types.ts';
 
 /**
@@ -35,6 +36,7 @@ export function checkWeaver(filePath: string, registryPath: string | undefined):
     execFileSync('weaver', ['registry', 'check', '-r', registryPath], {
       timeout: 30_000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
     });
 
     return {
@@ -50,10 +52,14 @@ export function checkWeaver(filePath: string, registryPath: string | undefined):
     // Extract CLI output for the diagnostic message
     let cliOutput = '';
     if (error !== null && typeof error === 'object') {
-      const execError = error as { stdout?: Buffer; stderr?: Buffer; message?: string };
+      const execError = error as { code?: string; stdout?: Buffer; stderr?: Buffer; message?: string };
       const stdout = execError.stdout?.toString().trim() ?? '';
       const stderr = execError.stderr?.toString().trim() ?? '';
-      cliOutput = [stdout, stderr].filter(Boolean).join('\n') || execError.message || String(error);
+      if (execError.code === 'ETIMEDOUT') {
+        cliOutput = 'weaver registry check timed out (30s limit). Ensure HOME is propagated to the subprocess so Weaver can access ~/.weaver/vdir_cache for dependency caching.';
+      } else {
+        cliOutput = [stdout, stderr].filter(Boolean).join('\n') || execError.message || String(error);
+      }
     } else {
       cliOutput = String(error);
     }

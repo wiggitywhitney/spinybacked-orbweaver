@@ -3,6 +3,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, basename } from 'node:path';
+import { homedir } from 'node:os';
 import { formatTestOutput } from './test-output.ts';
 import { execFile } from 'node:child_process';
 import type { LanguageProvider } from '../languages/types.ts';
@@ -36,9 +37,13 @@ export async function validateRegistryCheck(
       execFile(
         'weaver',
         ['registry', 'check', '-r', registryDir],
-        { timeout: 30000 },
+        { timeout: 30000, env: { ...process.env, HOME: process.env.HOME || homedir() } },
         (error, stdout, stderr) => {
           if (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+              resolve({ passed: false, error: 'weaver registry check timed out (30s limit). Ensure HOME is propagated to the subprocess so Weaver can access ~/.weaver/vdir_cache for dependency caching.' });
+              return;
+            }
             const stdoutStr = stdout?.trim() ?? '';
             const stderrStr = stderr?.trim() ?? '';
             const cliOutput = [stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message;
@@ -175,9 +180,16 @@ export async function resolveSchema(projectDir: string, schemaPath: string): Pro
     execFile('weaver', ['registry', 'resolve', '-r', fullSchemaPath, '--format', 'json'], {
       cwd: projectDir,
       timeout: 30000,
-    }, (error, stdout) => {
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
+    }, (error, stdout, stderr) => {
       if (error) {
-        reject(error);
+        if ((error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+          reject(new Error('weaver registry resolve timed out (30s limit). Ensure HOME is propagated to the subprocess so Weaver can access ~/.weaver/vdir_cache for dependency caching.'));
+          return;
+        }
+        const stdoutStr = stdout?.toString().trim() ?? '';
+        const stderrStr = stderr?.toString().trim() ?? '';
+        reject(new Error([stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message));
         return;
       }
       try {

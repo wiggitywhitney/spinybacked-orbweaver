@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-05-04) Fixed `checkWeaverSchema` in `src/config/prerequisites.ts` silently surfacing "unknown error" when Weaver hangs during prerequisite checks. The root cause: launchers like `caffeinate -s` + `vals exec -i` strip `HOME` from subprocess environments, preventing Weaver from finding `~/.weaver/vdir_cache` for dependency caching; Weaver then hangs until `execFileSync`'s 30-second timeout fires as `ETIMEDOUT`. The fix passes `HOME` explicitly in the `execFileSync` env options via `homedir()` fallback. Additionally, the error handling now joins stdout + stderr (Weaver writes failure details to stdout, not stderr) and distinguishes `ETIMEDOUT` with an actionable message directing users to check HOME propagation (#758).
+
+- (2026-05-04) Added `dumpDiagnostics` to every `it()` block in `test/fix-loop/acceptance-gate.test.ts` so future P3 fix-loop failures produce `/tmp/spiny-orb-debug-*.js` artifacts with all five diagnostic dimensions (instrumented code, `lastError`, `errorProgression`, `notes`, `thinkingBlocksByAttempt`). Previously, intermittent failures where `user-routes.js` returned `partial` instead of `success` left no diagnosable artifact because the P3 test bypassed the coordinator's dumpDiagnostics path (#759).
+
 - (2026-05-03) Strengthened attribute namespace enforcement in `src/agent/prompt.ts` to complete the span/attribute parallel that PRD #581 intended (#724). The attribute invention step previously used soft `Derive` language where the span naming section used hard `MUST`/`Do NOT` constraints. Changed to: all invented attribute keys MUST start with the registry namespace prefix; Do NOT derive namespace from URL domains, variable names, or code-local terminology (with explicit counter-example: `store.product.id` from a URL is wrong, `dd.store.product.id` is correct). Also added debug output to Test B in `test/acceptance-gate.test.ts` so CI artifact upload captures agent notes and schema extensions on both pass and fail — Test B previously bypassed the fix-loop's `dumpDiagnostics` path entirely.
 
 ### Added
