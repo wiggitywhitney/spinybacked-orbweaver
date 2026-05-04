@@ -18,6 +18,21 @@ export interface CostCeiling {
 }
 
 /**
+ * Diagnostic context surfaced when end-of-run tests fail with an ambiguous failure
+ * (committed files in call path, but failure is not a direct import/type error).
+ */
+export interface EndOfRunFlagContext {
+  /** Committed files that appear in the failing test's call path. */
+  filesInCallPath: string[];
+  /** First meaningful line of the test output — the actual error message. */
+  failureMessage: string;
+  /** Registry health at the time of failure. Present when a lockfile identifies the registry. */
+  apiHealth?: { registry: 'npm' | 'jsr'; reachable: boolean };
+  /** Whether the test suite passed on a delayed retry. */
+  retryResult?: { passed: boolean };
+}
+
+/**
  * Callback hooks for coordinator progress reporting.
  * The coordinator never writes to stdout/stderr directly — all user-facing
  * output flows through callbacks or the final RunResult.
@@ -32,6 +47,12 @@ export interface CoordinatorCallbacks {
   onValidationStart?: () => void;
   onValidationComplete?: (passed: boolean, complianceReport: string) => void;
   onRunComplete?: (results: FileResult[]) => void;
+  /**
+   * Fires when end-of-run tests fail with an ambiguous failure — committed files are in the
+   * call path but causation is unclear. The CLI should render a distinct block immediately.
+   * Fires once after registry health and retry results are collected.
+   */
+  onEndOfRunFlag?: (context: EndOfRunFlagContext) => void;
 }
 
 /**
@@ -56,6 +77,12 @@ export interface RunResult {
   schemaHashStart?: string;
   schemaHashEnd?: string;
   endOfRunValidation?: string;
+  /**
+   * Set when end-of-run tests fail with an ambiguous failure (committed files in call path,
+   * not a direct import/type error). Populated after all diagnostic context is collected.
+   * Rendered as ## Test Failure Analysis in the PR body.
+   */
+  endOfRunFlag?: EndOfRunFlagContext;
   /** Run-level advisory findings from cross-file checks. */
   runLevelAdvisory: import('../validation/types.ts').CheckResult[];
   warnings: string[];

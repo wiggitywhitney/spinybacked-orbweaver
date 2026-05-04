@@ -56,6 +56,8 @@ export interface LiveCheckResult {
   complianceReport?: string;
   /** Whether the test suite passed. */
   testsPassed?: boolean;
+  /** Combined stdout+stderr from the test suite run. Only present when tests fail. */
+  testOutput?: string;
   /** Warnings produced during the live-check workflow. */
   warnings: string[];
 }
@@ -235,11 +237,18 @@ export async function runLiveCheck(
 
   // Step 5: Run test suite with OTLP endpoint override
   let testsPassed = true;
+  let testOutput: string | undefined;
   try {
     await runTestSuite(testCommand, projectDir, grpcPort, execFileFn);
   } catch (err) {
     testsPassed = false;
     const message = err instanceof Error ? err.message : String(err);
+    // ExecFileException carries stdout/stderr on the error object — capture for call path analysis.
+    const errRecord = err as Record<string, unknown>;
+    const outStr = typeof errRecord['stdout'] === 'string' ? errRecord['stdout'] : '';
+    const errStr = typeof errRecord['stderr'] === 'string' ? errRecord['stderr'] : '';
+    const combined = [outStr, errStr].filter(Boolean).join('\n');
+    testOutput = combined || undefined;
     warnings.push(`End-of-run test suite failed: ${message}`);
   }
 
@@ -290,6 +299,7 @@ export async function runLiveCheck(
     skipped: false,
     complianceReport,
     testsPassed,
+    testOutput,
     warnings,
   };
 }

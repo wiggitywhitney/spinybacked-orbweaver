@@ -951,7 +951,13 @@ describe('coordinate', () => {
           testsPassed: false,
           complianceReport: 'some report',
           warnings: ['End-of-run test suite failed: tests exited with code 1'],
+          // testOutput includes both committed file paths (call path match) and a direct import
+          // error so existing rollback tests continue to exercise the direct-error rollback branch.
+          testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/a.js:2:20\n    at /project/b.js:10:5",
         }),
+        // Fast defaults for flag-and-surface diagnostics — avoid real network calls and 30s delays.
+        checkRegistryHealth: vi.fn().mockResolvedValue(null),
+        retryTestSuite: vi.fn().mockResolvedValue({ passed: false }),
         dispatchFiles: vi.fn().mockImplementation(
           async (filePaths: string[], _pd: string, _cfg: AgentConfig, _cb: unknown, options: Record<string, unknown>) => {
             const ref = options?.checkpointWindowRef as {
@@ -1200,6 +1206,301 @@ describe('coordinate', () => {
       // Files still marked as failed even if restore fails
       expect(result.fileResults.every(fr => fr.status === 'failed')).toBe(true);
       expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
+    });
+
+    // --- Call path analysis routing ---
+
+    it('does not roll back when failing test call path has no committed files (run-11 scenario)', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed'],
+          // Stack trace only mentions resolves.test.ts, not /project/a.js or /project/b.js
+          testOutput: 'AssertionError: expected true to be false\n    at resolves.test.ts:136:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
+      expect(result.filesSucceeded).toBe(2);
+    });
+
+    it('rolls back only the implicated call-path file on direct error (not unrelated window files)', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          // Only /project/a.js is in the call path — /project/b.js is not implicated
+          testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/a.js:2:20",
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Only the implicated file is rolled back, not the unrelated window file
+      expect(deps.writeFileForRollback).toHaveBeenCalledWith(
+        '/project/a.js',
+        '// original content of /project/a.js',
+      );
+      expect(deps.writeFileForRollback).not.toHaveBeenCalledWith(
+        '/project/b.js',
+        expect.anything(),
+      );
+      expect(result.filesFailed).toBe(1);
+      expect(result.filesSucceeded).toBe(1);
+    });
+
+    it('does not roll back when committed file is in call path with ambiguous failure (flag-and-surface)', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed'],
+          // Ambiguous failure: timeout error, no direct import/type error; /project/a.js in call path
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Ambiguous failure — committed files kept, no rollback
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
+      expect(result.filesSucceeded).toBe(2);
+    });
+
+    // --- Flag output surfaces (onEndOfRunFlag callback + endOfRunFlag RunResult field)
+
+    it('fires onEndOfRunFlag callback with filesInCallPath and failureMessage on ambiguous failure', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      expect(onEndOfRunFlag).toHaveBeenCalledOnce();
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.filesInCallPath).toContain('/project/a.js');
+      expect(ctx.failureMessage).toBe('Error: Timeout requesting "typescript"');
+    });
+
+    it('populates runResult.endOfRunFlag on ambiguous failure', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.endOfRunFlag).toBeDefined();
+      expect(result.endOfRunFlag?.filesInCallPath).toContain('/project/a.js');
+      expect(result.endOfRunFlag?.failureMessage).toBe('Error: Timeout requesting "typescript"');
+    });
+
+    it('does not put flag message in runResult.warnings on ambiguous failure', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed: Command failed'],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // runResult.warnings should only contain the live-check infrastructure warning, not flag content
+      const flagWarnings = result.warnings.filter((w: string) =>
+        w.includes('call path') || w.includes('human review') || w.includes('flag'),
+      );
+      expect(flagWarnings).toHaveLength(0);
+    });
+
+    it('does not fire onEndOfRunFlag on direct-error rollback', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/a.js:2:20",
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      expect(onEndOfRunFlag).not.toHaveBeenCalled();
+    });
+
+    // --- API health as diagnostic context ---
+
+    it('adds apiHealth reachable:false to flag context when registry is unhealthy', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+        checkRegistryHealth: vi.fn().mockResolvedValue({ registry: 'npm', reachable: false }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.apiHealth).toEqual({ registry: 'npm', reachable: false });
+    });
+
+    it('adds apiHealth reachable:true to flag context when registry is healthy', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+        checkRegistryHealth: vi.fn().mockResolvedValue({ registry: 'npm', reachable: true }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.apiHealth).toEqual({ registry: 'npm', reachable: true });
+    });
+
+    it('omits apiHealth from flag context when no registry is detected', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+        checkRegistryHealth: vi.fn().mockResolvedValue(null),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.apiHealth).toBeUndefined();
+    });
+
+    // --- Retry as diagnostic context ---
+
+    it('adds retryResult passed:true when retry passes', async () => {
+      const onEndOfRunFlag = vi.fn();
+      // First live-check call fails; retry (second executeProjectTests call) passes
+      let retryCallCount = 0;
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+        checkRegistryHealth: vi.fn().mockResolvedValue(null),
+        retryTestSuite: vi.fn().mockImplementation(async () => {
+          retryCallCount++;
+          return { passed: true };
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.retryResult).toEqual({ passed: true });
+      expect(retryCallCount).toBe(1);
+    });
+
+    it('adds retryResult passed:false when retry also fails', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+        checkRegistryHealth: vi.fn().mockResolvedValue(null),
+        retryTestSuite: vi.fn().mockResolvedValue({ passed: false }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.retryResult).toEqual({ passed: false });
+    });
+
+    it('fires onEndOfRunFlag exactly once after both health check and retry complete', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+        checkRegistryHealth: vi.fn().mockResolvedValue({ registry: 'npm', reachable: true }),
+        retryTestSuite: vi.fn().mockResolvedValue({ passed: true }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      expect(onEndOfRunFlag).toHaveBeenCalledOnce();
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.apiHealth).toEqual({ registry: 'npm', reachable: true });
+      expect(ctx.retryResult).toEqual({ passed: true });
+    });
+
+    it('runs health check and retry in parallel — both results present when both resolve', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+        checkRegistryHealth: vi.fn().mockResolvedValue({ registry: 'npm', reachable: false }),
+        retryTestSuite: vi.fn().mockResolvedValue({ passed: false }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      expect(onEndOfRunFlag).toHaveBeenCalledOnce();
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.apiHealth).toEqual({ registry: 'npm', reachable: false });
+      expect(ctx.retryResult).toEqual({ passed: false });
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
     });
   });
 
