@@ -359,19 +359,46 @@ Configuration not found — run 'spiny-orb init' to create spiny-orb.yaml
 --dry-run   Preview changes without writing
 --output    Output format: text (default) or json
 --yes       Skip cost ceiling confirmation
---verbose   Show additional diagnostic output
+--verbose   Show structured per-file output: status, token count, validation failures,
+            schema extensions, and agent notes. Use this when a file fails and you want
+            to understand why.
+--thinking  Show agent thinking blocks for failed files. Thinking blocks contain the
+            agent's step-by-step reasoning per attempt. Requires --verbose to see both
+            the structured output and the thinking blocks together.
 --debug     Show debug-level diagnostic output
 --no-pr     Skip PR creation (create branch and commits only)
 ```
 
-The `--verbose` flag shows the config file path being loaded:
+**Flag combinations:**
+
+| Flags | Per-file output | Thinking blocks (failed files only) |
+|-------|----------------|--------------------------------------|
+| _(none)_ | Compact one-liner | No |
+| `--verbose` | Structured multi-line | No |
+| `--thinking` | Compact one-liner | Yes |
+| `--verbose --thinking` | Structured multi-line | Yes |
+
+The `--verbose` flag expands each file's output into a structured block:
 
 ```text
 $ spiny-orb instrument src/ --verbose --yes
-Loading config from /path/to/your-project/spiny-orb.yaml
-Config loaded from /path/to/your-project/spiny-orb.yaml
-Processing file 1 of 1: src/order-service.js
-...
+Processing file 1 of 4: src/api-client.js
+  ✅ SUCCESS — 3 spans, 2 attributes
+  Tokens: 8.4K output
+
+  Schema extensions
+  ────────────────────────────────────────────────────────────
+  • span.myapp.api.fetch_user
+  • span.myapp.api.fetch_orders
+
+  Agent notes
+  ────────────────────────────────────────────────────────────
+
+  • fetchUser and fetchOrders are exported async functions — each receives its own span
+    per COV-004 (Async Operation Spans). formatResponse is a pure sync helper and is
+    skipped per RST-001 (No Utility Spans).
+
+  Report: src/api-client.instrumentation.md
 ```
 
 The `--debug` flag shows the full resolved configuration as JSON:

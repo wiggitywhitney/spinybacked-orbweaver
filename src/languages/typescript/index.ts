@@ -13,6 +13,7 @@ import type {
   LanguagePromptSections,
   Example,
   InstrumentationDetectionResult,
+  PreScanResult,
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
@@ -225,6 +226,26 @@ export class TypeScriptProvider implements LanguageProvider {
       }
       throw error;
     }
+  }
+
+  // ── Pre-instrumentation analysis ──────────────────────────────────────────
+
+  preInstrumentationAnalysis(originalCode: string): PreScanResult {
+    const functions = findTsFunctions(originalCode);
+    // A file is instrumentable when it has at least one async function.
+    // Pure re-export files, type-only files, and all-sync files have none.
+    const hasInstrumentableFunctions = functions.some(fn => fn.isAsync);
+    return {
+      hasInstrumentableFunctions,
+      entryPointsNeedingSpans: [],
+      processExitEntryPoints: [],
+      asyncFunctionsNeedingSpans: [],
+      pureSyncFunctions: [],
+      unexportedFunctions: [],
+      outboundCallsNeedingSpans: [],
+      entryPointSubOperations: [],
+      alreadyInstrumentedImports: [],
+    };
   }
 
   // ── Feature parity check ──────────────────────────────────────────────────
