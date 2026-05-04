@@ -69,7 +69,7 @@ Apply it there: when a test fails, parse the stack trace, identify source files 
 - **Committed files in call path, direct error** (import error or TS type error in agent-added span wrapper code): rollback. Causation is unambiguous.
 - **Committed files in call path, ambiguous failure**: proceed to Fixes 2–3 to build the diagnostic flag.
 
-**Open research question**: Is `parseFailingSourceFiles` lift-and-shift from `dispatch.ts` to `coordinate.ts`, or are there differences between the checkpoint context and the end-of-run context that require separate handling? The implementor should read both call sites before deciding.
+**M1 research finding**: `parseFailingSourceFiles` requires no modification. The only change needed is plumbing: `runTestSuite()` must expose stdout+stderr on the rejected error object so `runLiveCheck()` can capture it as `testOutput` in `LiveCheckResult`. See `docs/research/end-of-run-failure-taxonomy.md` Q3 for the full analysis.
 
 ### Fix 2: API health as diagnostic context
 
@@ -79,11 +79,9 @@ Check the health endpoint of the relevant external API:
 - npm: `GET registry.npmjs.org/-/ping` — healthy if response is `{}`
 - jsr: `GET jsr.io` — healthy if HTTP 200
 
-This is diagnostic context for the flag, not a rollback gate. Result feeds into the PR flag message:
-- API unhealthy: "Tests failed; [npm/jsr] was unreachable at test time — likely environmental."
-- API healthy: "Tests failed; [npm/jsr] was healthy — cause unclear, human review needed."
+This is diagnostic context for the flag, not a rollback gate. The result is added to `EndOfRunFlagContext.apiHealth` (see M3 for type definition) and surfaces in both the `onEndOfRunFlag` callback and the `## Test Failure Analysis` PR body section.
 
-**Open research question**: How do we identify "the external API this test depends on" generically when it's not npm or jsr? The implementor should research whether parsing timeout error messages for hostnames is feasible.
+**M1 research finding**: hostname extraction from timeout error messages is not feasible — npm timeouts surface the package name, not `registry.npmjs.org`. Hard-coding npm/jsr endpoints is the correct approach. See `docs/research/end-of-run-failure-taxonomy.md` Q2 for the full analysis.
 
 ### Fix 3: Retry as diagnostic context
 
@@ -91,9 +89,9 @@ Only reached when Fix 1 finds committed files in the call path with an ambiguous
 
 Wait ~30 seconds and retry the test suite once. This runs in parallel with Fix 2 (both feed diagnostic context, neither gates the other).
 
-Result feeds into the PR flag message:
-- Retry passes: "Tests passed on retry — likely transient, instrumentation probably fine. Human review recommended before merging."
-- Retry fails: "Tests failed on retry — persistent failure. See call path and diff for committed files."
+The result is added to `EndOfRunFlagContext.retryResult` (see M4 for type definition) and surfaces in both the `onEndOfRunFlag` callback and the `## Test Failure Analysis` PR body section.
+
+M4 owns the "fire once" aggregation: after both Fix 2 and Fix 3 complete, M4 fires `onEndOfRunFlag` once with the fully-populated context and sets `runResult.endOfRunFlag`.
 
 Either way: do not roll back. The flag is the output.
 
@@ -110,7 +108,7 @@ Either way: do not roll back. The flag is the output.
 ## Milestones
 
 - [x] M1: Research — answer the three open research questions before any implementation
-- [ ] M2: Implement Fix 1 (call path analysis + direct-error rollback + flag routing) with tests
+- [x] M2: Implement Fix 1 (call path analysis + direct-error rollback + flag routing) with tests
 - [ ] M3: Implement Fix 2 (API health as diagnostic context for flag) with tests
 - [ ] M4: Implement Fix 3 (retry as diagnostic context for flag) with tests
 - [ ] M5: Integration test — end-to-end scenario reproducing run-11 failure pattern with flag-and-surface output
@@ -144,64 +142,90 @@ When a test fails, implement this routing:
 2. Committed files in call path AND the error is a direct error (import error, TS type error in agent-added code) → rollback and report reason.
 3. Committed files in call path, ambiguous failure → flag-and-surface. Do not roll back.
 
-**Flag UX design (Decision 5 — do this before writing any flag output code)**: Before implementing the flag output, present the human with concrete UX options for how the flag surfaces — e.g., a section in the PR body, an inline PR comment on the affected file, console output at run time, a separate summary artifact. Get human approval on the format before writing any flag output code. The flag UX is not specified in this PRD.
+**Flag output implementation (per Decisions 7–9):**
+- Add `onEndOfRunFlag?: (context: EndOfRunFlagContext) => void` to `CoordinatorCallbacks` in `types.ts`. The CLI subscribes and renders a distinct block immediately when it fires.
+- Add `endOfRunFlag?: EndOfRunFlagContext` to `RunResult` in `types.ts`. The PR body reads this field for the `## Test Failure Analysis` section (implemented in `pr-summary.ts`).
+- Define `EndOfRunFlagContext` (in `types.ts`): `{ filesInCallPath: string[]; failureMessage: string }` where `failureMessage` is the first meaningful line of `testOutput` (per Decision 8). M3 and M4 will add `apiHealth` and `retryResult` fields to this type.
+- Do NOT use `runResult.warnings` for this flag. Remove any `runResult.warnings.push(...)` placeholder from the ambiguous-failure branch.
+- Add `renderEndOfRunFlag()` to `pr-summary.ts` and include it in the PR body sections list.
+- Fire `onEndOfRunFlag` and set `runResult.endOfRunFlag` in the ambiguous-failure branch of Step 7c.
 
 TDD: write failing unit tests for each of the three branches before implementing. Confirm each fails, implement, confirm all pass.
 
 Success criteria:
-- Unit test: failing test with no committed file in call path → no action (the run-11 scenario)
-- Unit test: failing test with committed file in call path + import error in agent code → rollback
-- Unit test: failing test with committed file in call path + timeout error → flag triggered, no rollback
-- Flag UX design approved by human before flag output code is written
-- Existing test suite passes with no regressions
+- [x] Unit test: failing test with no committed file in call path → no action (the run-11 scenario)
+- [x] Unit test: failing test with committed file in call path + import error in agent code → rollback
+- [x] Unit test: failing test with committed file in call path + timeout error → flag triggered, no rollback
+- [x] Unit test: `onEndOfRunFlag` callback fires with `filesInCallPath` and `failureMessage` when flag triggers
+- [x] Unit test: `runResult.endOfRunFlag` is populated when flag triggers
+- [x] Unit test: `runResult.warnings` does NOT contain the flag message (not using that channel)
+- [x] `pr-summary.ts` renders a `## Test Failure Analysis` section when `endOfRunFlag` is set
+- [x] Existing test suite passes with no regressions (2521 tests pass)
 
 ### M3: Implement Fix 2 — API health as diagnostic context
 
-**This milestone implements Fix 2, which only runs when Fix 1 (M2) routed to flag-and-surface (committed files in call path, ambiguous failure). It provides diagnostic context for the flag — it is not a rollback gate. Updated per Decision 4.**
+**This milestone implements Fix 2, which only runs when Fix 1 (M2) routed to flag-and-surface (committed files in call path, ambiguous failure). It provides diagnostic context for the flag — it is not a rollback gate. Updated per Decisions 4 and 9.**
 
 **Start by reading `docs/research/end-of-run-failure-taxonomy.md`** to use the documented API identification approach.
 
-When Fix 1 routes to flag-and-surface, check the health endpoint of the relevant external API: `registry.npmjs.org/-/ping` (npm), `jsr.io` (jsr). Record the result as diagnostic context available to the flag. Do not make a rollback decision based on this result.
+When Fix 1 routes to flag-and-surface, check the health endpoint of the relevant external API: `registry.npmjs.org/-/ping` (npm), `jsr.io` (jsr). Record the result as diagnostic context and add it to the flag surfaces.
+
+**Flag output integration (per Decisions 7–9):**
+- Add `apiHealth?: { registry: 'npm' | 'jsr'; reachable: boolean }` to `EndOfRunFlagContext` in `types.ts`.
+- M3 runs in parallel with M4. M3's job is to populate `apiHealth` in the context object — it does NOT fire `onEndOfRunFlag`. M4 owns the "fire once" aggregation: after both M3 and M4 complete, M4 fires `onEndOfRunFlag` once with the fully-populated context and sets `runResult.endOfRunFlag`.
+- The `## Test Failure Analysis` PR body section (added in M2) includes API health automatically when `apiHealth` is present in `endOfRunFlag`.
+- Do not make a rollback decision based on this result.
 
 TDD: write failing unit tests before implementing. Confirm failure, implement, confirm pass.
 
 Success criteria:
-- Unit test: unhealthy API → diagnostic context records API as unreachable, no rollback
-- Unit test: healthy API → diagnostic context records API as healthy, no rollback
-- Fix 2 result is available as structured data for the flag output (exact flag UX decided with human per Decision 5)
+- Unit test: unhealthy API → `EndOfRunFlagContext.apiHealth.reachable` is false, no rollback
+- Unit test: healthy API → `EndOfRunFlagContext.apiHealth.reachable` is true, no rollback
+- Fix 2 result is available in `EndOfRunFlagContext` for both the callback and PR body section
 - Existing test suite passes with no regressions
 
 ### M4: Implement Fix 3 — Retry as diagnostic context
 
-**This milestone implements Fix 3, which only runs when Fix 1 (M2) routed to flag-and-surface (committed files in call path, ambiguous failure). It runs in parallel with Fix 2 — neither gates the other. Both feed diagnostic context into the flag message. Updated per Decision 4.**
+**This milestone implements Fix 3, which only runs when Fix 1 (M2) routed to flag-and-surface (committed files in call path, ambiguous failure). It runs in parallel with Fix 2 — neither gates the other. Both feed diagnostic context into the flag message. Updated per Decisions 4 and 9.**
 
 **Start by reading `docs/research/end-of-run-failure-taxonomy.md`** to confirm the retry heuristic.
 
-Wait ~30 seconds and retry the test suite once. Record the result as diagnostic context available to the flag. Do not make a rollback decision based on this result.
+Wait ~30 seconds and retry the test suite once. Record the result as diagnostic context and add it to the flag surfaces.
+
+**Flag output integration (per Decisions 7–9):**
+- Add `retryResult?: { passed: boolean }` to `EndOfRunFlagContext` in `types.ts`.
+- M4 runs in parallel with M3. After both complete, fire `onEndOfRunFlag` once with the fully-populated `EndOfRunFlagContext` (files in call path + failure message + API health + retry result), and set `runResult.endOfRunFlag` to the same context.
+- The `## Test Failure Analysis` PR body section (added in M2) should include retry result when present.
+- Do not make a rollback decision based on this result.
 
 TDD: write failing unit tests before implementing. Use `SPINY_ORB_RETRY_DELAY_MS` env var to control delay so tests don't actually wait 30 seconds.
 
 Success criteria:
-- Unit test: transient failure (retry passes) → diagnostic context records retry as passed, no rollback
-- Unit test: persistent failure (retry fails) → diagnostic context records retry as failed, no rollback
+- Unit test: transient failure (retry passes) → `EndOfRunFlagContext.retryResult.passed` is true, no rollback
+- Unit test: persistent failure (retry fails) → `EndOfRunFlagContext.retryResult.passed` is false, no rollback
 - The delay is configurable via `SPINY_ORB_RETRY_DELAY_MS` (default 30000ms)
-- Fix 3 result is available as structured data for the flag output (exact flag UX decided with human per Decision 5)
+- Fix 3 result is available in `EndOfRunFlagContext` for both the callback and PR body section
+- `onEndOfRunFlag` fires once after both M3 and M4 complete, with all three diagnostic inputs populated
 - Existing test suite passes with no regressions
 
 ### M5: Integration test — end-of-run failure scenario with flag-and-surface output
 
-Write integration tests that cover the two primary end-of-run outcomes. Updated per Decision 4.
+Write integration tests that cover the two primary end-of-run outcomes. Updated per Decisions 4, 7–9.
 
 **Scenario A — Ambiguous failure (flag-and-surface)**:
 - Fixture with committed instrumented files
 - Test suite that fails with a timeout (ambiguous, not a direct code error)
 - Assert: committed files are NOT rolled back
-- Assert: structured diagnostic context is produced (call path, API health result, retry result) — exact flag UX asserted against the format approved by the human per Decision 5
+- Assert: `onEndOfRunFlag` callback fired with `filesInCallPath` populated and `failureMessage` matching the first line of test output
+- Assert: `runResult.endOfRunFlag` is set with the same context (includes `apiHealth` and `retryResult` once M3/M4 are complete)
+- Assert: `runResult.warnings` does NOT contain the flag message (wrong channel)
+- Assert: PR summary contains a `## Test Failure Analysis` section
 
 **Scenario B — Direct error (rollback)**:
 - Fixture with committed files containing an agent-introduced import error
 - Assert: committed files ARE rolled back
 - Assert: rollback reason is reported
+- Assert: `onEndOfRunFlag` callback did NOT fire (direct error routes to rollback, not flag)
 
 These are end-to-end integration tests against real coordinator logic. Place in `test/coordinator/acceptance-gate.test.ts`. Verify with:
 
@@ -230,5 +254,8 @@ Success criterion: both scenarios exist in `test/coordinator/acceptance-gate.tes
 | 2026-05-01 | `--exclude` flag workaround explicitly rejected | Hides real signal; masks symptoms without diagnosing cause |
 | 2026-05-01 | Fix ordering: smart-rollback runs first as gate; health-check and retry run in parallel for diagnostic context | Industry practices research spike confirms: check the cheapest deterministic gate first (Meta PFS model: a pass is strong evidence, a fail is weak evidence; Slack: pre-filter infrastructure categories before flakiness logic). Smart-rollback alone resolves run-11 without any external calls. When committed files are in the call path and the failure is ambiguous, health-check (Fix 2) and retry (Fix 3) run in parallel — neither gates the other; both feed diagnostic context into the flag output. |
 | 2026-05-01 | Flag-and-surface preferred over rollback for ambiguous failures; rollback reserved for direct errors | Rollback claims certainty spiny-orb doesn't have. When a test fails and committed files are in the call path, causation is usually ambiguous — the agent can't know if it was environmental, transient, or a real regression. A human reviewing the PR has context the agent doesn't (test history, performance characteristics, domain knowledge). Version control means nothing is lost. The PR is already the review surface — surface the problem there rather than silently discarding correct instrumentation. Rollback is preserved only for unambiguous direct errors the agent provably introduced: import errors or TS type errors in its added span wrapper code. API health and retry results become diagnostic inputs to the flag message, not rollback gates. PRD #3 (diagnostic agent) scope should be framed around producing flag content for human review, not explaining rollback decisions. |
-| 2026-05-01 | Flag UX deferred to implementation time with human in the loop | The exact format, content, and surface for the flag (PR comment, PR body section, console output, etc.) is a UX design decision that requires human input. It cannot be pre-decided in the PRD without knowing what options feel right at the moment of implementation. At M2 start, the implementor must present concrete UX options to the human and get approval before writing any flag output code. Fixes 2 and 3 produce structured diagnostic context as data; the UX layer on top of that data is designed with the human. |
+| 2026-05-01 | Flag UX deferred to implementation time with human in the loop — **resolved by Decisions 7–9** | The exact format, content, and surface for the flag was deferred to implementation time. Whitney approved the design during M2 implementation on 2026-05-04: two first-class surfaces (`onEndOfRunFlag` callback + `endOfRunFlag` RunResult field), actual error message from `testOutput`, no `runResult.warnings`. See Decisions 7–9 for the full rationale. Do NOT pause to re-discuss flag UX — it is decided. |
 | 2026-05-04 | "Direct error" rollback category is intentionally narrow; semantic errors route to flag-and-surface | The current direct-error boundary (import errors, TS type errors in agent-added code) may undercount: semantically wrong instrumentation that compiles fine but breaks behavior — wrong return value capture inside startActiveSpan, iterator wrapper that doesn't forward yields, broken async context propagation — would pass validators but fail tests. These currently route to flag-and-surface rather than rollback. This is deliberate: causation is still ambiguous (validators should have caught it, and the human reviewer can diff the instrumentation). The M1 taxonomy research should specifically survey whether any eval failures fall in this category. If multiple semantic failures are found, reopen this decision. |
+| 2026-05-04 | Flag output has two first-class surfaces: `onEndOfRunFlag` callback + `endOfRunFlag` RunResult field | The CLI needs to show the failure immediately — not after a 40-minute run when the user finally reads the PR. A new `onEndOfRunFlag` callback in `CoordinatorCallbacks` fires the moment the ambiguous-failure branch triggers, so the CLI can render a distinct block in real time. The PR body gets a dedicated `## Test Failure Analysis` section via a new `endOfRunFlag` field on `RunResult` and a `renderEndOfRunFlag()` function in `pr-summary.ts`. Both surfaces are first-class — neither is secondary. Flag output must NOT use `runResult.warnings`. Decision 5 resolved. |
+| 2026-05-04 | Flag must surface the actual error message from testOutput | The first meaningful line of `testOutput` (e.g., "Error: Timeout requesting \"typescript\"" or "AssertionError: expected true to be false") is what the user needs to understand why the tests failed. A generic "failure cause is ambiguous" phrase provides no actionable signal. Extract and surface the real message. |
+| 2026-05-04 | M3 and M4 enrich the same flag surfaces | API health (Fix 2) and retry result (Fix 3) feed into the same `onEndOfRunFlag` callback context and the same `endOfRunFlag` RunResult field. They do not create separate output channels. The callback context and RunResult field should be designed to hold all three diagnostic inputs: call path files, API health, and retry result. |

@@ -18,6 +18,23 @@ export interface CostCeiling {
 }
 
 /**
+ * Diagnostic context surfaced when end-of-run tests fail with an ambiguous failure
+ * (committed files in call path, but failure is not a direct import/type error).
+ *
+ * M3 adds apiHealth; M4 adds retryResult. Both are optional until those milestones ship.
+ */
+export interface EndOfRunFlagContext {
+  /** Committed files that appear in the failing test's call path. */
+  filesInCallPath: string[];
+  /** First meaningful line of the test output — the actual error message. */
+  failureMessage: string;
+  /** API health result from Fix 2 (added in M3). */
+  apiHealth?: { registry: 'npm' | 'jsr'; reachable: boolean };
+  /** Retry result from Fix 3 (added in M4). */
+  retryResult?: { passed: boolean };
+}
+
+/**
  * Callback hooks for coordinator progress reporting.
  * The coordinator never writes to stdout/stderr directly — all user-facing
  * output flows through callbacks or the final RunResult.
@@ -32,6 +49,12 @@ export interface CoordinatorCallbacks {
   onValidationStart?: () => void;
   onValidationComplete?: (passed: boolean, complianceReport: string) => void;
   onRunComplete?: (results: FileResult[]) => void;
+  /**
+   * Fires when end-of-run tests fail with an ambiguous failure — committed files are in the
+   * call path but causation is unclear. The CLI should render a distinct block immediately.
+   * Fires once after all diagnostic context (M3 API health, M4 retry) is collected.
+   */
+  onEndOfRunFlag?: (context: EndOfRunFlagContext) => void;
 }
 
 /**
@@ -56,6 +79,12 @@ export interface RunResult {
   schemaHashStart?: string;
   schemaHashEnd?: string;
   endOfRunValidation?: string;
+  /**
+   * Set when end-of-run tests fail with an ambiguous failure (committed files in call path,
+   * not a direct import/type error). Populated after all diagnostic context is collected.
+   * Rendered as ## Test Failure Analysis in the PR body.
+   */
+  endOfRunFlag?: EndOfRunFlagContext;
   /** Run-level advisory findings from cross-file checks. */
   runLevelAdvisory: import('../validation/types.ts').CheckResult[];
   warnings: string[];

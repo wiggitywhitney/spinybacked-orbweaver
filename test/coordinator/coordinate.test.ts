@@ -951,6 +951,9 @@ describe('coordinate', () => {
           testsPassed: false,
           complianceReport: 'some report',
           warnings: ['End-of-run test suite failed: tests exited with code 1'],
+          // testOutput includes both committed file paths (call path match) and a direct import
+          // error so existing rollback tests continue to exercise the direct-error rollback branch.
+          testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/a.js:2:20\n    at /project/b.js:10:5",
         }),
         dispatchFiles: vi.fn().mockImplementation(
           async (filePaths: string[], _pd: string, _cfg: AgentConfig, _cb: unknown, options: Record<string, unknown>) => {
@@ -1200,6 +1203,140 @@ describe('coordinate', () => {
       // Files still marked as failed even if restore fails
       expect(result.fileResults.every(fr => fr.status === 'failed')).toBe(true);
       expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
+    });
+
+    // --- Call path analysis routing (PRD #687 Fix 1) ---
+
+    it('does not roll back when failing test call path has no committed files (run-11 scenario)', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed'],
+          // Stack trace only mentions resolves.test.ts, not /project/a.js or /project/b.js
+          testOutput: 'AssertionError: expected true to be false\n    at resolves.test.ts:136:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
+      expect(result.filesSucceeded).toBe(2);
+    });
+
+    it('rolls back when committed file is in call path with direct error (import error)', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          // Direct error: Cannot find module; /project/a.js is in the call path
+          testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/a.js:2:20",
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(deps.writeFileForRollback).toHaveBeenCalled();
+      expect(result.filesFailed).toBe(2);
+    });
+
+    it('does not roll back when committed file is in call path with ambiguous failure (flag-and-surface)', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed'],
+          // Ambiguous failure: timeout error, no direct import/type error; /project/a.js in call path
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // Ambiguous failure — committed files kept, no rollback
+      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
+      expect(result.filesSucceeded).toBe(2);
+    });
+
+    // --- Flag output surfaces (onEndOfRunFlag callback + endOfRunFlag RunResult field) ---
+
+    it('fires onEndOfRunFlag callback with filesInCallPath and failureMessage on ambiguous failure', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      expect(onEndOfRunFlag).toHaveBeenCalledOnce();
+      const ctx = onEndOfRunFlag.mock.calls[0][0];
+      expect(ctx.filesInCallPath).toContain('/project/a.js');
+      expect(ctx.failureMessage).toBe('Error: Timeout requesting "typescript"');
+    });
+
+    it('populates runResult.endOfRunFlag on ambiguous failure', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      expect(result.endOfRunFlag).toBeDefined();
+      expect(result.endOfRunFlag?.filesInCallPath).toContain('/project/a.js');
+      expect(result.endOfRunFlag?.failureMessage).toBe('Error: Timeout requesting "typescript"');
+    });
+
+    it('does not put flag message in runResult.warnings on ambiguous failure', async () => {
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: ['End-of-run test suite failed: Command failed'],
+          testOutput: 'Error: Timeout requesting "typescript"\n    at /project/a.js:45:3',
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      const result = await coordinate('/project', config, undefined, deps);
+
+      // runResult.warnings should only contain the live-check infrastructure warning, not flag content
+      const flagWarnings = result.warnings.filter((w: string) =>
+        w.includes('call path') || w.includes('human review') || w.includes('flag'),
+      );
+      expect(flagWarnings).toHaveLength(0);
+    });
+
+    it('does not fire onEndOfRunFlag on direct-error rollback', async () => {
+      const onEndOfRunFlag = vi.fn();
+      const deps = makeRollbackDeps({
+        runLiveCheck: vi.fn().mockResolvedValue({
+          skipped: false,
+          testsPassed: false,
+          warnings: [],
+          testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/a.js:2:20",
+        }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run' });
+
+      await coordinate('/project', config, { onEndOfRunFlag }, deps);
+
+      expect(onEndOfRunFlag).not.toHaveBeenCalled();
     });
   });
 

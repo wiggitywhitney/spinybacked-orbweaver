@@ -6,11 +6,11 @@ import { resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
-import type { CoordinatorCallbacks, CostCeiling, RunResult } from './types.ts';
+import type { CoordinatorCallbacks, CostCeiling, RunResult, EndOfRunFlagContext } from './types.ts';
 import type { PrerequisitesResult } from '../config/prerequisites.ts';
 import type { DiscoverFilesOptions } from './discovery.ts';
 import { discoverFiles as defaultDiscoverFiles } from './discovery.ts';
-import { dispatchFiles as defaultDispatchFiles } from './dispatch.ts';
+import { dispatchFiles as defaultDispatchFiles, parseFailingSourceFiles } from './dispatch.ts';
 import { aggregateResults, finalizeResults as defaultFinalizeResults } from './aggregate.ts';
 import { checkPrerequisites as defaultCheckPrerequisites } from '../config/prerequisites.ts';
 import { collectSchemaExtensions } from './schema-extensions.ts';
@@ -154,6 +154,18 @@ async function computeCostCeiling(
     totalFileSizeBytes,
     maxTokensCeiling: filePaths.length * maxTokensPerFile,
   };
+}
+
+/**
+ * Return true when test output indicates an unambiguous direct error in agent-added code:
+ * an import error (cannot find module) or TypeScript type error. These are deterministic
+ * failures caused by the agent's instrumentation — rollback is warranted.
+ *
+ * Ambiguous failures (timeouts, assertion errors, flaky tests) return false and route to
+ * the flag-and-surface path instead.
+ */
+function isDirectError(output: string): boolean {
+  return /Cannot find module|SyntaxError: Unexpected token|error TS\d{4}/i.test(output);
 }
 
 /**
@@ -429,6 +441,7 @@ export async function coordinate(
   // Step 7b: End-of-run Weaver live-check (degrade and warn on failure)
   // Dry-run skips live-check — no persistent changes to validate
   let liveCheckTestsPassed: boolean | undefined;
+  let liveCheckTestOutput: string | undefined;
   if (!config.dryRun) {
     try {
       const liveCheckResult = await liveCheck(
@@ -440,6 +453,7 @@ export async function coordinate(
         callbacks,
       );
       liveCheckTestsPassed = liveCheckResult.testsPassed;
+      liveCheckTestOutput = liveCheckResult.testOutput;
       if (liveCheckResult.complianceReport) {
         runResult.endOfRunValidation = liveCheckResult.complianceReport;
       }
@@ -479,8 +493,8 @@ export async function coordinate(
     }
   }
 
-  // Step 7c: End-of-run test failure rollback (M4/NDS-002)
-  // When live-check tests fail, roll back files since the last passing checkpoint.
+  // Step 7c: End-of-run test failure analysis (PRD #687 Fix 1)
+  // When live-check tests fail, apply call path analysis before deciding whether to roll back.
   // Only triggered when: (1) tests explicitly failed, (2) checkpoint tracking was active,
   // (3) there are files in the window to roll back, (4) baseline tests passed.
   if (
@@ -488,50 +502,68 @@ export async function coordinate(
     checkpointWindowRef.files.length > 0 &&
     baselineTestPassed === true
   ) {
-    // Restore file content to pre-instrumentation state.
-    // Track per-file success: filesRolledBack counts only successful restores so
-    // the CLI summary doesn't claim a file was rolled back when its restore failed.
-    let rolledBackCount = 0;
-    let restoreFailures = 0;
-    for (const tracked of checkpointWindowRef.files) {
-      try {
-        await writeForRollback(tracked.path, tracked.originalContent);
-        rolledBackCount += 1;
-        fileResults[tracked.resultIndex].status = 'failed';
-        fileResults[tracked.resultIndex].reason = 'Rolled back: end-of-run test failure';
-      } catch {
-        restoreFailures += 1;
-        fileResults[tracked.resultIndex].status = 'failed';
-        fileResults[tracked.resultIndex].reason = 'Rollback failed: file restore error';
+    const windowPaths = checkpointWindowRef.files.map(f => f.path);
+    const filesInCallPath = parseFailingSourceFiles(liveCheckTestOutput ?? '', windowPaths);
+
+    if (filesInCallPath.length === 0) {
+      // No committed file appears in the failing test's call path — the failure is unrelated
+      // to instrumentation (e.g., run-11: npm timeout in resolves.test.ts, committed files
+      // were yarnWorkspaces.ts / pnpmWorkspaces.ts / packument.ts). No action taken.
+    } else if (isDirectError(liveCheckTestOutput ?? '')) {
+      // Direct error: import error or TypeScript type error in agent-added code — causation is
+      // unambiguous. Roll back all files in the checkpoint window.
+      let rolledBackCount = 0;
+      let restoreFailures = 0;
+      for (const tracked of checkpointWindowRef.files) {
+        try {
+          await writeForRollback(tracked.path, tracked.originalContent);
+          rolledBackCount += 1;
+          fileResults[tracked.resultIndex].status = 'failed';
+          fileResults[tracked.resultIndex].reason = 'Rolled back: end-of-run test failure';
+        } catch {
+          restoreFailures += 1;
+          fileResults[tracked.resultIndex].status = 'failed';
+          fileResults[tracked.resultIndex].reason = 'Rollback failed: file restore error';
+        }
       }
-    }
 
-    // Restore schema extensions to last passing checkpoint state
-    if (checkpointWindowRef.extensionsSnapshot !== undefined) {
+      // Restore schema extensions to last passing checkpoint state
+      if (checkpointWindowRef.extensionsSnapshot !== undefined) {
+        try {
+          await restoreExtensions(registryDir, checkpointWindowRef.extensionsSnapshot);
+        } catch { /* best-effort extension restore */ }
+      }
+
+      // Fire rollback callback
       try {
-        await restoreExtensions(registryDir, checkpointWindowRef.extensionsSnapshot);
-      } catch { /* best-effort extension restore */ }
-    }
+        callbacks?.onCheckpointRollback?.(checkpointWindowRef.files.map(f => f.path));
+      } catch { /* callback failure must not abort */ }
 
-    // Fire rollback callback
-    try {
-      callbacks?.onCheckpointRollback?.(checkpointWindowRef.files.map(f => f.path));
-    } catch { /* callback failure must not abort */ }
+      // Update aggregate counts to reflect rollback.
+      const totalWindowFiles = checkpointWindowRef.files.length;
+      runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - totalWindowFiles);
+      runResult.filesFailed += totalWindowFiles;
+      runResult.filesRolledBack = rolledBackCount;
 
-    // Update aggregate counts to reflect rollback.
-    // All files in the checkpoint window were successfully processed before rollback.
-    const totalWindowFiles = checkpointWindowRef.files.length;
-    runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - totalWindowFiles);
-    runResult.filesFailed += totalWindowFiles;
-    runResult.filesRolledBack = rolledBackCount;
-
-    runResult.warnings.push(
-      `Rolled back ${rolledBackCount} file(s) due to end-of-run test failure`,
-    );
-    if (restoreFailures > 0) {
       runResult.warnings.push(
-        `Rollback restore failed for ${restoreFailures} file(s) — content was not restored to pre-instrumentation state`,
+        `Rolled back ${rolledBackCount} file(s) due to end-of-run test failure`,
       );
+      if (restoreFailures > 0) {
+        runResult.warnings.push(
+          `Rollback restore failed for ${restoreFailures} file(s) — content was not restored to pre-instrumentation state`,
+        );
+      }
+    } else {
+      // Ambiguous failure — committed files are in the call path but causation is unclear
+      // (timeout, assertion error, flaky test). Flag-and-surface: keep committed files,
+      // surface diagnostic context for human review. Fixes 2 and 3 (M3/M4) will add
+      // API health and retry results to this context before firing the callback.
+      const failureMessage = (liveCheckTestOutput ?? '').trim().split('\n').find(l => l.trim().length > 0) ?? 'Unknown test failure';
+      const flagContext: EndOfRunFlagContext = { filesInCallPath, failureMessage };
+      runResult.endOfRunFlag = flagContext;
+      try {
+        callbacks?.onEndOfRunFlag?.(flagContext);
+      } catch { /* callback failure must not abort */ }
     }
   }
 

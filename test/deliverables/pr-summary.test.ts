@@ -1197,6 +1197,55 @@ describe('renderPrSummary', () => {
     });
   });
 
+  describe('test failure analysis section (endOfRunFlag)', () => {
+    it('renders ## Test Failure Analysis when endOfRunFlag is set', () => {
+      const result = _makeRunResult({
+        endOfRunFlag: {
+          filesInCallPath: ['/project/src/a.js'],
+          failureMessage: 'Error: Timeout requesting "typescript"',
+        },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Test Failure Analysis');
+      expect(md).toContain('Error: Timeout requesting "typescript"');
+      expect(md).toContain('a.js');
+    });
+
+    it('omits ## Test Failure Analysis when endOfRunFlag is absent', () => {
+      const result = _makeRunResult();
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('## Test Failure Analysis');
+    });
+
+    it('includes API health when present', () => {
+      const result = _makeRunResult({
+        endOfRunFlag: {
+          filesInCallPath: ['/project/src/a.js'],
+          failureMessage: 'Error: Timeout',
+          apiHealth: { registry: 'npm', reachable: false },
+        },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('npm registry was unreachable');
+    });
+
+    it('includes retry result when present', () => {
+      const result = _makeRunResult({
+        endOfRunFlag: {
+          filesInCallPath: ['/project/src/a.js'],
+          failureMessage: 'Error: Timeout',
+          retryResult: { passed: true },
+        },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('passed on retry');
+    });
+  });
+
   describe('live-check compliance report', () => {
     it('renders end-of-run validation when present', () => {
       const result = _makeRunResult({

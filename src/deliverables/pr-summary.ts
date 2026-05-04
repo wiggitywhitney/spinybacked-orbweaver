@@ -1,7 +1,7 @@
 // ABOUTME: Renders RunResult into a complete PR description in markdown.
 // ABOUTME: Produces all spec-required sections: per-file status, span categories, schema diff, review sensitivity, notes, token usage, version.
 
-import type { RunResult } from '../coordinator/types.ts';
+import type { RunResult, EndOfRunFlagContext } from '../coordinator/types.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CheckResult } from '../validation/types.ts';
@@ -34,6 +34,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderReviewSensitivity(runResult, config, display));
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderRecommendedRefactors(runResult, display));
+  sections.push(renderEndOfRunFlag(runResult, display));
   sections.push(renderRolledBackFiles(runResult, display));
   sections.push(renderCompanionPackages(runResult, config));
   sections.push(renderShortLivedSetupGuidance(config));
@@ -469,6 +470,43 @@ function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): s
   }
 
   return lines.join('\n').trimEnd();
+}
+
+function renderEndOfRunFlag(runResult: RunResult, display: DisplayFn): string {
+  const flag = runResult.endOfRunFlag;
+  if (!flag) return '';
+
+  const lines: string[] = ['## Test Failure Analysis'];
+  lines.push('');
+  lines.push(`**End-of-run tests failed.** Instrumented files were kept — this is not a direct error in agent-added code.`);
+  lines.push('');
+  lines.push(`**Failure:** \`${flag.failureMessage}\``);
+  lines.push('');
+  lines.push('**Files in call path:**');
+  for (const file of flag.filesInCallPath) {
+    lines.push(`- ${display(file)}`);
+  }
+
+  if (flag.apiHealth !== undefined) {
+    lines.push('');
+    const healthMsg = flag.apiHealth.reachable
+      ? `${flag.apiHealth.registry} registry was reachable — failure is unlikely environmental.`
+      : `${flag.apiHealth.registry} registry was unreachable at test time — likely environmental.`;
+    lines.push(`**API health:** ${healthMsg}`);
+  }
+
+  if (flag.retryResult !== undefined) {
+    lines.push('');
+    const retryMsg = flag.retryResult.passed
+      ? 'Test suite passed on retry — likely transient.'
+      : 'Test suite failed on retry — persistent failure.';
+    lines.push(`**Retry:** ${retryMsg}`);
+  }
+
+  lines.push('');
+  lines.push('Human review recommended before merging. Diff the files above against their pre-instrumentation state.');
+
+  return lines.join('\n');
 }
 
 function renderRolledBackFiles(runResult: RunResult, display: DisplayFn): string {
