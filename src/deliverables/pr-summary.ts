@@ -472,6 +472,11 @@ function renderRecommendedRefactors(runResult: RunResult, display: DisplayFn): s
   return lines.join('\n').trimEnd();
 }
 
+/** Make failureMessage safe for markdown inline code: first line only, no backticks. */
+function sanitizeForInlineCode(text: string): string {
+  return text.split('\n')[0].replace(/`/g, "'");
+}
+
 function renderEndOfRunFlag(runResult: RunResult, display: DisplayFn): string {
   const flag = runResult.endOfRunFlag;
   if (!flag) return '';
@@ -480,7 +485,7 @@ function renderEndOfRunFlag(runResult: RunResult, display: DisplayFn): string {
   lines.push('');
   lines.push(`**End-of-run tests failed.** Instrumented files were kept — this is not a direct error in agent-added code.`);
   lines.push('');
-  lines.push(`**Failure:** \`${flag.failureMessage}\``);
+  lines.push(`**Failure:** \`${sanitizeForInlineCode(flag.failureMessage)}\``);
   lines.push('');
   lines.push('**Files in call path:**');
   for (const file of flag.filesInCallPath) {

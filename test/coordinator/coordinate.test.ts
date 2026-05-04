@@ -1228,13 +1228,13 @@ describe('coordinate', () => {
       expect(result.filesSucceeded).toBe(2);
     });
 
-    it('rolls back when committed file is in call path with direct error (import error)', async () => {
+    it('rolls back only the implicated call-path file on direct error (not unrelated window files)', async () => {
       const deps = makeRollbackDeps({
         runLiveCheck: vi.fn().mockResolvedValue({
           skipped: false,
           testsPassed: false,
           warnings: [],
-          // Direct error: Cannot find module; /project/a.js is in the call path
+          // Only /project/a.js is in the call path — /project/b.js is not implicated
           testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/a.js:2:20",
         }),
       });
@@ -1242,8 +1242,17 @@ describe('coordinate', () => {
 
       const result = await coordinate('/project', config, undefined, deps);
 
-      expect(deps.writeFileForRollback).toHaveBeenCalled();
-      expect(result.filesFailed).toBe(2);
+      // Only the implicated file is rolled back, not the unrelated window file
+      expect(deps.writeFileForRollback).toHaveBeenCalledWith(
+        '/project/a.js',
+        '// original content of /project/a.js',
+      );
+      expect(deps.writeFileForRollback).not.toHaveBeenCalledWith(
+        '/project/b.js',
+        expect.anything(),
+      );
+      expect(result.filesFailed).toBe(1);
+      expect(result.filesSucceeded).toBe(1);
     });
 
     it('does not roll back when committed file is in call path with ambiguous failure (flag-and-surface)', async () => {

@@ -1598,9 +1598,15 @@ describe('Acceptance Gate — End-of-run failure handling', () => {
 
     const result = await coordinate('/project', config, { onEndOfRunFlag }, endOfRunDeps);
 
-    expect(endOfRunDeps.writeFileForRollback).toHaveBeenCalled();
-    expect(result.filesFailed).toBe(2);
-    expect(result.fileResults.every((fr: FileResult) => fr.reason?.includes('Rolled back'))).toBe(true);
+    // Only /project/src/a.js is in the call path — only it gets rolled back
+    expect(endOfRunDeps.writeFileForRollback).toHaveBeenCalledWith(
+      '/project/src/a.js',
+      expect.stringContaining('original content'),
+    );
+    expect(result.filesFailed).toBe(1);   // only a.js
+    expect(result.filesSucceeded).toBe(1); // b.js unaffected
+    const aResult = result.fileResults.find((fr: FileResult) => fr.path.endsWith('a.js'));
+    expect(aResult?.reason).toContain('Rolled back');
 
     expect(onEndOfRunFlag).not.toHaveBeenCalled();
     expect(result.endOfRunFlag).toBeUndefined();

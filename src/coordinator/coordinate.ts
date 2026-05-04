@@ -585,13 +585,20 @@ export async function coordinate(
       // were yarnWorkspaces.ts / pnpmWorkspaces.ts / packument.ts). No action taken.
     } else if (isDirectError(liveCheckTestOutput ?? '')) {
       // Direct error: import error or TypeScript type error in agent-added code — causation is
-      // unambiguous. Roll back all files in the checkpoint window.
+      // unambiguous. Roll back only the implicated call-path files, not the full window.
+      const trackedByPath = new Map(
+        checkpointWindowRef.files.map(t => [t.path, t] as const),
+      );
       let rolledBackCount = 0;
       let restoreFailures = 0;
-      for (const tracked of checkpointWindowRef.files) {
+      const rolledBackPaths: string[] = [];
+      for (const path of filesInCallPath) {
+        const tracked = trackedByPath.get(path);
+        if (!tracked) continue;
         try {
           await writeForRollback(tracked.path, tracked.originalContent);
           rolledBackCount += 1;
+          rolledBackPaths.push(tracked.path);
           fileResults[tracked.resultIndex].status = 'failed';
           fileResults[tracked.resultIndex].reason = 'Rolled back: end-of-run test failure';
         } catch {
@@ -605,18 +612,22 @@ export async function coordinate(
       if (checkpointWindowRef.extensionsSnapshot !== undefined) {
         try {
           await restoreExtensions(registryDir, checkpointWindowRef.extensionsSnapshot);
-        } catch { /* best-effort extension restore */ }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          runResult.warnings.push(
+            `Rollback restored source files, but schema extensions could not be restored: ${message}`,
+          );
+        }
       }
 
       // Fire rollback callback
       try {
-        callbacks?.onCheckpointRollback?.(checkpointWindowRef.files.map(f => f.path));
+        callbacks?.onCheckpointRollback?.(rolledBackPaths);
       } catch { /* callback failure must not abort */ }
 
-      // Update aggregate counts to reflect rollback.
-      const totalWindowFiles = checkpointWindowRef.files.length;
-      runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - totalWindowFiles);
-      runResult.filesFailed += totalWindowFiles;
+      // Update aggregate counts: only implicated call-path files change status.
+      runResult.filesSucceeded = Math.max(0, runResult.filesSucceeded - rolledBackPaths.length);
+      runResult.filesFailed += rolledBackPaths.length;
       runResult.filesRolledBack = rolledBackCount;
 
       runResult.warnings.push(

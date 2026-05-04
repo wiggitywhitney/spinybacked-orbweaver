@@ -116,9 +116,11 @@ For M3 implementation: use package-manager detection (presence of `pnpm-lock.yam
 
 **Vitest stack trace format is identical between checkpoint runs and end-of-run live-check runs.** Both use the same test runner. No adapter is needed. The function can be called from `coordinate.ts` Step 7c as-is.
 
-### The structural gap: test output is not plumbed to Step 7c
+### The structural gap: test output was not plumbed to Step 7c (resolved)
 
-This is the actual portability problem. `runLiveCheck()` in `live-check.ts` does NOT currently return the test output.
+> **Note (post-M2):** This gap was resolved. `LiveCheckResult` now includes `testOutput?: string`, captured from `ExecFileException.stdout/stderr` in the Step 5 catch block. `coordinate.ts` reads `liveCheckResult.testOutput` and passes it to `parseFailingSourceFiles`. The analysis below describes the pre-M2 state for historical context.
+
+This was the actual portability problem. `runLiveCheck()` in `live-check.ts` did NOT return the test output at the time of this research.
 
 Relevant section of `runLiveCheck` (Step 5):
 ```typescript
