@@ -109,8 +109,8 @@ Either way: do not roll back. The flag is the output.
 
 - [x] M1: Research — answer the three open research questions before any implementation
 - [x] M2: Implement Fix 1 (call path analysis + direct-error rollback + flag routing) with tests
-- [ ] M3: Implement Fix 2 (API health as diagnostic context for flag) with tests
-- [ ] M4: Implement Fix 3 (retry as diagnostic context for flag) with tests
+- [x] M3: Implement Fix 2 (API health as diagnostic context for flag) with tests
+- [x] M4: Implement Fix 3 (retry as diagnostic context for flag) with tests
 - [ ] M5: Integration test — end-to-end scenario reproducing run-11 failure pattern with flag-and-surface output
 
 ---
@@ -188,10 +188,10 @@ When Fix 1 routes to flag-and-surface, check the health endpoint of the relevant
 TDD: write failing unit tests before implementing. Confirm failure, implement, confirm pass.
 
 Success criteria:
-- Unit test: unhealthy API → `EndOfRunFlagContext.apiHealth.reachable` is false, no rollback
-- Unit test: healthy API → `EndOfRunFlagContext.apiHealth.reachable` is true, no rollback
-- Fix 2 result is available in `EndOfRunFlagContext` for both the callback and PR body section
-- Existing test suite passes with no regressions
+- [x] Unit test: unhealthy API → `EndOfRunFlagContext.apiHealth.reachable` is false, no rollback
+- [x] Unit test: healthy API → `EndOfRunFlagContext.apiHealth.reachable` is true, no rollback
+- [x] Fix 2 result is available in `EndOfRunFlagContext` for both the callback and PR body section
+- [x] Existing test suite passes with no regressions (2528 tests pass)
 
 ### M4: Implement Fix 3 — Retry as diagnostic context
 
@@ -210,12 +210,12 @@ Wait ~30 seconds and retry the test suite once. Record the result as diagnostic 
 TDD: write failing unit tests before implementing. Use `SPINY_ORB_RETRY_DELAY_MS` env var to control delay so tests don't actually wait 30 seconds.
 
 Success criteria:
-- Unit test: transient failure (retry passes) → `EndOfRunFlagContext.retryResult.passed` is true, no rollback
-- Unit test: persistent failure (retry fails) → `EndOfRunFlagContext.retryResult.passed` is false, no rollback
-- The delay is configurable via `SPINY_ORB_RETRY_DELAY_MS` (default 30000ms)
-- Fix 3 result is available in `EndOfRunFlagContext` for both the callback and PR body section
-- `onEndOfRunFlag` fires once after both M3 and M4 complete, with all three diagnostic inputs populated
-- Existing test suite passes with no regressions
+- [x] Unit test: transient failure (retry passes) → `EndOfRunFlagContext.retryResult.passed` is true, no rollback
+- [x] Unit test: persistent failure (retry fails) → `EndOfRunFlagContext.retryResult.passed` is false, no rollback
+- [x] The delay is configurable via `SPINY_ORB_RETRY_DELAY_MS` (default 30000ms)
+- [x] Fix 3 result is available in `EndOfRunFlagContext` for both the callback and PR body section
+- [x] `onEndOfRunFlag` fires once after both M3 and M4 complete, with all three diagnostic inputs populated
+- [x] Existing test suite passes with no regressions (2528 tests pass)
 
 ### M5: Integration test — end-of-run failure scenario with flag-and-surface output
 

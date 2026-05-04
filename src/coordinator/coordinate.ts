@@ -133,6 +133,12 @@ export interface CoordinateDeps {
    * Returns null when no recognized lockfile is present.
    */
   checkRegistryHealth?: (projectDir: string) => Promise<{ registry: 'npm' | 'jsr'; reachable: boolean } | null>;
+  /**
+   * Injectable retry runner for M4 flag context.
+   * Waits SPINY_ORB_RETRY_DELAY_MS (default 30000ms) then re-runs the test suite.
+   * Runs in parallel with checkRegistryHealth via Promise.all.
+   */
+  retryTestSuite?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean }>;
 }
 
 /**
@@ -160,6 +166,20 @@ async function computeCostCeiling(
     totalFileSizeBytes,
     maxTokensCeiling: filePaths.length * maxTokensPerFile,
   };
+}
+
+/**
+ * Wait SPINY_ORB_RETRY_DELAY_MS milliseconds then re-run the test suite.
+ * Runs in parallel with the registry health check (Promise.all in M4 aggregation).
+ */
+async function defaultRetryTestSuite(
+  projectDir: string,
+  testCommand: string,
+): Promise<{ passed: boolean }> {
+  const delayMs = parseInt(process.env['SPINY_ORB_RETRY_DELAY_MS'] ?? '30000', 10);
+  await new Promise<void>(r => setTimeout(r, delayMs));
+  const result = await executeProjectTests(projectDir, testCommand);
+  return { passed: result.passed };
 }
 
 /**
@@ -261,6 +281,7 @@ export async function coordinate(
   const restoreExtensions = deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
   const resolveTracerName = deps?.resolveTracerName ?? resolveCanonicalTracerName;
   const checkHealth = deps?.checkRegistryHealth ?? defaultCheckRegistryHealth;
+  const retryTests = deps?.retryTestSuite ?? defaultRetryTestSuite;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
@@ -608,18 +629,19 @@ export async function coordinate(
       }
     } else {
       // Ambiguous failure — committed files are in the call path but causation is unclear
-      // (timeout, assertion error, flaky test). Flag-and-surface: keep committed files,
-      // surface diagnostic context for human review.
-      // M3: adds apiHealth. M4: adds retryResult and owns the final fire-once callback.
+      // (timeout, assertion error, flaky test). Flag-and-surface: keep committed files.
+      // M3 (health check) and M4 (retry) run in parallel via Promise.all.
+      // M4 owns the fire-once aggregation: callback fires after both settle.
       const failureMessage = extractFailureMessage(liveCheckTestOutput ?? '');
       const flagContext: EndOfRunFlagContext = { filesInCallPath, failureMessage };
 
-      // M3: check registry health in parallel with M4 retry (M4 not yet implemented —
-      // callback fires here until M4 restructures to fire once after both complete).
-      const apiHealth = await checkHealth(projectDir).catch(() => null);
-      if (apiHealth) {
-        flagContext.apiHealth = apiHealth;
-      }
+      const [apiHealth, retryResult] = await Promise.all([
+        checkHealth(projectDir).catch(() => null),
+        retryTests(projectDir, config.testCommand).catch(() => ({ passed: false })),
+      ]);
+
+      if (apiHealth) flagContext.apiHealth = apiHealth;
+      flagContext.retryResult = retryResult;
 
       runResult.endOfRunFlag = flagContext;
       try {
