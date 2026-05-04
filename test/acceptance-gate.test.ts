@@ -262,6 +262,22 @@ module.exports = { fetchProduct };
         new JavaScriptProvider(),
       );
 
+      // Write debug artifact so CI failures are diagnosable via gh run download.
+      // instrumentFile() bypasses the fix-loop's dumpDiagnostics path, so we write
+      // the relevant fields manually. The artifact upload step in acceptance-gate.yml
+      // picks this file up on failure.
+      try {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync('/tmp/spiny-orb-debug-test-b.js', JSON.stringify({
+          testB: true,
+          success: result.success,
+          notes: result.success ? result.output.notes : null,
+          schemaExtensions: result.success ? result.output.schemaExtensions : null,
+          instrumentedCode: result.success ? result.output.instrumentedCode : null,
+          error: result.success ? null : (result as { success: false; error: string }).error,
+        }, null, 2));
+      } catch { /* best-effort — never block the test */ }
+
       expect(result.success).toBe(true);
       if (!result.success) throw new Error(`instrumentFile failed: ${result.error}`);
 
