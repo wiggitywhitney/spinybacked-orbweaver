@@ -40,6 +40,10 @@ export async function validateRegistryCheck(
         { timeout: 30000, env: { ...process.env, HOME: process.env.HOME || homedir() } },
         (error, stdout, stderr) => {
           if (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+              resolve({ passed: false, error: 'weaver registry check timed out (30s limit). Ensure HOME is propagated to the subprocess so Weaver can access ~/.weaver/vdir_cache for dependency caching.' });
+              return;
+            }
             const stdoutStr = stdout?.trim() ?? '';
             const stderrStr = stderr?.trim() ?? '';
             const cliOutput = [stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message;
@@ -177,9 +181,15 @@ export async function resolveSchema(projectDir: string, schemaPath: string): Pro
       cwd: projectDir,
       timeout: 30000,
       env: { ...process.env, HOME: process.env.HOME || homedir() },
-    }, (error, stdout) => {
+    }, (error, stdout, stderr) => {
       if (error) {
-        reject(error);
+        if ((error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+          reject(new Error('weaver registry resolve timed out (30s limit). Ensure HOME is propagated to the subprocess so Weaver can access ~/.weaver/vdir_cache for dependency caching.'));
+          return;
+        }
+        const stdoutStr = stdout?.toString().trim() ?? '';
+        const stderrStr = stderr?.toString().trim() ?? '';
+        reject(new Error([stdoutStr, stderrStr].filter(Boolean).join('\n') || error.message));
         return;
       }
       try {
