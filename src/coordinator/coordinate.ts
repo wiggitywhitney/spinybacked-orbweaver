@@ -2,7 +2,7 @@
 // ABOUTME: Implements three error categories: abort (unrecoverable), degrade-and-continue (isolated failure), degrade-and-warn (non-essential skip).
 
 import { stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import { execFile } from 'node:child_process';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
@@ -127,6 +127,12 @@ export interface CoordinateDeps {
   anthropicClient?: Anthropic;
   /** Injectable canonical tracer name resolver. Defaults to resolveCanonicalTracerName. */
   resolveTracerName?: (config: AgentConfig, registryDir: string) => Promise<string>;
+  /**
+   * Injectable registry health checker for M3 flag context.
+   * Detects npm/jsr registry from project lockfiles and checks its health endpoint.
+   * Returns null when no recognized lockfile is present.
+   */
+  checkRegistryHealth?: (projectDir: string) => Promise<{ registry: 'npm' | 'jsr'; reachable: boolean } | null>;
 }
 
 /**
@@ -154,6 +160,52 @@ async function computeCostCeiling(
     totalFileSizeBytes,
     maxTokensCeiling: filePaths.length * maxTokensPerFile,
   };
+}
+
+/**
+ * Detect which package registry a project uses by checking for known lockfiles,
+ * then check that registry's health endpoint.
+ * Returns null when no recognized lockfile is found (registry cannot be determined).
+ */
+async function defaultCheckRegistryHealth(
+  projectDir: string,
+): Promise<{ registry: 'npm' | 'jsr'; reachable: boolean } | null> {
+  const npmLockfiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lockb'];
+  const jsrMarkers = ['jsr.json', 'deno.json'];
+
+  let registry: 'npm' | 'jsr' | null = null;
+  for (const file of npmLockfiles) {
+    try { await stat(join(projectDir, file)); registry = 'npm'; break; } catch { /* not found */ }
+  }
+  if (!registry) {
+    for (const file of jsrMarkers) {
+      try { await stat(join(projectDir, file)); registry = 'jsr'; break; } catch { /* not found */ }
+    }
+  }
+  if (!registry) return null;
+
+  const url = registry === 'npm' ? 'https://registry.npmjs.org/-/ping' : 'https://jsr.io';
+  try {
+    const response = await globalThis.fetch(url, { signal: AbortSignal.timeout(5000) });
+    return { registry, reachable: response.ok };
+  } catch {
+    return { registry, reachable: false };
+  }
+}
+
+/**
+ * Extract the most informative failure message from test output for the flag context.
+ * Prefers lines with a recognised error-prefix (Error:, AssertionError:, etc.) over
+ * generic non-empty lines, and skips stack-frame lines entirely.
+ */
+function extractFailureMessage(testOutput: string): string {
+  const lines = testOutput.trim().split('\n');
+  const errorPrefix = /^(Error|AssertionError|TypeError|ReferenceError|RangeError|SyntaxError)[\s:]/;
+  const stackFrame = /^\s*at\s+/;
+  const prefixLine = lines.find(l => errorPrefix.test(l.trim()));
+  if (prefixLine) return prefixLine.trim();
+  const fallback = lines.find(l => l.trim().length > 0 && !stackFrame.test(l));
+  return fallback?.trim() ?? 'Unknown test failure';
 }
 
 /**
@@ -208,6 +260,7 @@ export async function coordinate(
   const writeForRollback = deps?.writeFileForRollback ?? ((fp: string, content: string) => defaultWriteFile(fp, content, 'utf-8'));
   const restoreExtensions = deps?.restoreExtensionsFile ?? defaultRestoreExtensionsFile;
   const resolveTracerName = deps?.resolveTracerName ?? resolveCanonicalTracerName;
+  const checkHealth = deps?.checkRegistryHealth ?? defaultCheckRegistryHealth;
   const schemaExtensionWarnings: string[] = [];
   const schemaHashWarnings: string[] = [];
   const schemaDiffWarnings: string[] = [];
@@ -556,10 +609,18 @@ export async function coordinate(
     } else {
       // Ambiguous failure — committed files are in the call path but causation is unclear
       // (timeout, assertion error, flaky test). Flag-and-surface: keep committed files,
-      // surface diagnostic context for human review. Fixes 2 and 3 (M3/M4) will add
-      // API health and retry results to this context before firing the callback.
-      const failureMessage = (liveCheckTestOutput ?? '').trim().split('\n').find(l => l.trim().length > 0) ?? 'Unknown test failure';
+      // surface diagnostic context for human review.
+      // M3: adds apiHealth. M4: adds retryResult and owns the final fire-once callback.
+      const failureMessage = extractFailureMessage(liveCheckTestOutput ?? '');
       const flagContext: EndOfRunFlagContext = { filesInCallPath, failureMessage };
+
+      // M3: check registry health in parallel with M4 retry (M4 not yet implemented —
+      // callback fires here until M4 restructures to fire once after both complete).
+      const apiHealth = await checkHealth(projectDir).catch(() => null);
+      if (apiHealth) {
+        flagContext.apiHealth = apiHealth;
+      }
+
       runResult.endOfRunFlag = flagContext;
       try {
         callbacks?.onEndOfRunFlag?.(flagContext);

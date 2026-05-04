@@ -145,7 +145,16 @@ When a test fails, implement this routing:
 **Flag output implementation (per Decisions 7–9):**
 - Add `onEndOfRunFlag?: (context: EndOfRunFlagContext) => void` to `CoordinatorCallbacks` in `types.ts`. The CLI subscribes and renders a distinct block immediately when it fires.
 - Add `endOfRunFlag?: EndOfRunFlagContext` to `RunResult` in `types.ts`. The PR body reads this field for the `## Test Failure Analysis` section (implemented in `pr-summary.ts`).
-- Define `EndOfRunFlagContext` (in `types.ts`): `{ filesInCallPath: string[]; failureMessage: string }` where `failureMessage` is the first meaningful line of `testOutput` (per Decision 8). M3 and M4 will add `apiHealth` and `retryResult` fields to this type.
+- Define `EndOfRunFlagContext` (in `types.ts`) with all fields up-front, optional fields marked `?`:
+  ```typescript
+  interface EndOfRunFlagContext {
+    filesInCallPath: string[];
+    failureMessage: string;
+    apiHealth?: { registry: 'npm' | 'jsr'; reachable: boolean };  // populated by M3
+    retryResult?: { passed: boolean };                              // populated by M4
+  }
+  ```
+  `failureMessage` is the first error-prefix line from `testOutput` (lines matching `Error:`, `AssertionError:`, etc., preferring those over generic non-empty lines; stack frames are skipped). See `extractFailureMessage()` in `coordinate.ts` for the extraction logic.
 - Do NOT use `runResult.warnings` for this flag. Remove any `runResult.warnings.push(...)` placeholder from the ambiguous-failure branch.
 - Add `renderEndOfRunFlag()` to `pr-summary.ts` and include it in the PR body sections list.
 - Fire `onEndOfRunFlag` and set `runResult.endOfRunFlag` in the ambiguous-failure branch of Step 7c.
@@ -194,7 +203,7 @@ Wait ~30 seconds and retry the test suite once. Record the result as diagnostic 
 
 **Flag output integration (per Decisions 7–9):**
 - Add `retryResult?: { passed: boolean }` to `EndOfRunFlagContext` in `types.ts`.
-- M4 runs in parallel with M3. After both complete, fire `onEndOfRunFlag` once with the fully-populated `EndOfRunFlagContext` (files in call path + failure message + API health + retry result), and set `runResult.endOfRunFlag` to the same context.
+- M4 runs in parallel with M3. Use `Promise.all([fix2Promise, fix4Promise])` to coordinate: M4 starts the retry, M3 runs the health check concurrently, and after both settle, M4 builds the fully-populated `EndOfRunFlagContext`, fires `onEndOfRunFlag` once, and sets `runResult.endOfRunFlag`. M3 must NOT fire the callback — it only returns its `apiHealth` result for M4 to include.
 - The `## Test Failure Analysis` PR body section (added in M2) should include retry result when present.
 - Do not make a rollback decision based on this result.
 
