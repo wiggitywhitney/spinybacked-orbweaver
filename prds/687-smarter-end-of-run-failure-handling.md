@@ -109,7 +109,7 @@ Either way: do not roll back. The flag is the output.
 
 ## Milestones
 
-- [ ] M1: Research — answer the three open research questions before any implementation
+- [x] M1: Research — answer the three open research questions before any implementation
 - [ ] M2: Implement Fix 1 (call path analysis + direct-error rollback + flag routing) with tests
 - [ ] M3: Implement Fix 2 (API health as diagnostic context for flag) with tests
 - [ ] M4: Implement Fix 3 (retry as diagnostic context for flag) with tests

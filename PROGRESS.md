@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-05-04) Researched failure taxonomy for end-of-run test rollback decisions (docs/research/end-of-run-failure-taxonomy.md). Surveyed taze eval runs 8–11 to classify failures as direct errors (TypeScript type errors in agent-added code, warranting rollback) vs. ambiguous failures (npm/jsr registry timeouts manifesting as assertion errors, warranting flag-and-surface). Found no semantic-error failures in the dataset (Decision 6 confirmed). Determined that npm timeout error messages do not expose the registry hostname in parseable form, making hard-coded npm/jsr health endpoints the right approach. Confirmed that `parseFailingSourceFiles` is lift-and-shift from the checkpoint path but needs `LiveCheckResult` extended with `testOutput` to plumb the test output through to the end-of-run Step 7c.
+
 ### Fixed
 
 - (2026-05-03) Strengthened attribute namespace enforcement in `src/agent/prompt.ts` to complete the span/attribute parallel that PRD #581 intended (#724). The attribute invention step previously used soft `Derive` language where the span naming section used hard `MUST`/`Do NOT` constraints. Changed to: all invented attribute keys MUST start with the registry namespace prefix; Do NOT derive namespace from URL domains, variable names, or code-local terminology (with explicit counter-example: `store.product.id` from a URL is wrong, `dd.store.product.id` is correct). Also added debug output to Test B in `test/acceptance-gate.test.ts` so CI artifact upload captures agent notes and schema extensions on both pass and fail — Test B previously bypassed the fix-loop's `dumpDiagnostics` path entirely.
