@@ -119,7 +119,7 @@ Inject SDK initialization into the test environment by modifying how spiny-orb i
 - Test runner worker isolation: Vitest runs tests in workers; the global tracer provider is process-global. Worker isolation can cause races or duplicate inits if the SDK init has module-level state.
 - Span lifecycle bugs: wrapping bugs that are invisible with no-op spans (wrong order of span.end(), context not restored) become visible when spans are real.
 
-When tests fail after SDK injection, record this as a distinct failure mode — "tests failed under SDK injection" — separate from "spans received, compliance failed." M4 must surface these differently. Updated per Decision 3.
+When tests fail after SDK injection, record this as a distinct failure mode by adding a `sdkInjectionTestsFailed: boolean` field (or equivalent named field) to the live-check result object — separate from the compliance pass/fail result. M4 reads this field to distinguish this state from compliance failures and "nothing received." Updated per Decision 3.
 
 TDD: write a failing unit test that confirms spans emitted during the test run are recording spans (not NonRecordingSpans) before implementing. Confirm it fails, implement, confirm it passes.
 
@@ -127,7 +127,7 @@ Success criteria:
 - Real spans reach Weaver during the live-check test run
 - `tracer.startActiveSpan()` produces recording spans, not NonRecordingSpans
 - Projects with pre-existing SDK init are detected (via `setGlobalTracerProvider()` return value) and not double-initialized
-- Test failures that occur after SDK injection are recorded as a distinct failure mode for M4 to surface
+- Test failures that occur after SDK injection are captured as `sdkInjectionTestsFailed: true` in the live-check result object so M4 can key off it
 - Existing tests pass with no regressions
 
 ### M4: PR summary distinction + `--verbose` output
@@ -137,7 +137,7 @@ Success criteria:
 Before implementing, search for all callsites that generate the live-check status line: `grep -ri "live-check" src/ --include="*.ts" -l`. Update every callsite found — do not update only the first one. Then update PR summary logic to distinguish three states:
 
 - **Tests passed with SDK, spans compliant**: `Live-Check: OK (N spans passed compliance)`
-- **Tests failed under SDK injection**: `Live-Check: WARNING — tests failed after SDK injection (N spans emitted before failure; see test output below)`. This means the project's test suite broke when the OTel SDK loaded — likely an auto-instrumentation conflict with test mocking infrastructure (nock, msw), async context patching, or span lifecycle bug. This is not a compliance failure; it is an instrumentation-environment conflict. Human review needed to determine whether the conflict is in the agent's added code or the project's existing test setup.
+- **Tests failed under SDK injection** (`sdkInjectionTestsFailed: true` from M3): `Live-Check: WARNING — tests failed after SDK injection (N spans emitted before failure; see test output below)`. This means the project's test suite broke when the OTel SDK loaded — likely an auto-instrumentation conflict with test mocking infrastructure (nock, msw), async context patching, or span lifecycle bug. This is not a compliance failure; it is an instrumentation-environment conflict. Human review needed to determine whether the conflict is in the agent's added code or the project's existing test setup.
 - **Nothing received**: `Live-Check: OK (no spans received — live-check did not validate any telemetry)`
 
 These three states imply different fixes: compliance failures are schema violations in instrumented code; SDK-injection failures are environment conflicts that may or may not be caused by the agent. Surface the distinction clearly so reviewers know what to look for.
