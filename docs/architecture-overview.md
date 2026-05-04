@@ -131,7 +131,7 @@ spiny-orb uses two execution contexts with different OTel SDK behavior. Understa
 During checkpoint tests (`testCommand` in Stage 3), the test suite runs **without** OTel SDK initialization — no `--require` or `--import` of the SDK init file. Every `tracer.startActiveSpan()` call in the instrumented code resolves to a no-op `NonRecordingSpan` via `@opentelemetry/api`'s default global provider. Zero spans are emitted.
 
 Consequences:
-- Instrumentation cannot cause checkpoint test failures. A timeout or assertion error during checkpoint tests is an environmental problem (slow network, missing dependency, flaky test), not a result of anything spiny-orb added to the code.
+- Missing SDK initialization means span emission/export cannot be the cause of checkpoint failures. Checkpoint failures can still come from non-telemetry code effects (incorrect transformations, added async logic that changes control flow, pre-existing test instability) — use stack traces and diffs to distinguish these from environmental failures.
 - Live-check during this phase always reports "OK" because Weaver receives nothing. Every "Live-check: OK" to date is a false positive — the compliance annotation in the PR summary notes this explicitly.
 
 ### Live-check context (planned — PRD #698)
@@ -144,7 +144,7 @@ When PRD #698 ships, the live-check step will inject SDK initialization so real 
 ### What this means for rollback decisions
 
 When the end-of-run test suite fails:
-- **If the failure occurs before PRD #698 ships**: The SDK is not initialized during the test run. Instrumentation code is structurally present but behaviorally inert. Failures are environmental — network timeouts, registry unavailability, pre-existing flakiness.
+- **If the failure occurs before PRD #698 ships**: The SDK is not initialized during the test run, so telemetry-export effects are absent. Use stack traces and diffs to distinguish environmental failures (network timeouts, registry unavailability, pre-existing flakiness) from code-level regressions introduced by the instrumentation.
 - **After PRD #698 ships**: Failures may reflect instrumentation behavior. The live-check compliance report becomes a meaningful diagnostic input.
 
 ## Key design decisions
