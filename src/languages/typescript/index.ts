@@ -232,16 +232,42 @@ export class TypeScriptProvider implements LanguageProvider {
 
   preInstrumentationAnalysis(originalCode: string): PreScanResult {
     const functions = findTsFunctions(originalCode);
-    // A file is instrumentable when it has at least one async function.
-    // Pure re-export files, type-only files, and all-sync files have none.
-    const hasInstrumentableFunctions = functions.some(fn => fn.isAsync);
+
+    const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
+    const asyncFunctionsNeedingSpans: PreScanResult['asyncFunctionsNeedingSpans'] = [];
+    const pureSyncFunctions: PreScanResult['pureSyncFunctions'] = [];
+    const unexportedFunctions: PreScanResult['unexportedFunctions'] = [];
+    const entryPointNames = new Set<string>();
+
+    for (const fn of functions) {
+      const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
+      if (isEntryPoint) {
+        entryPointNames.add(fn.name);
+        entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+      }
+    }
+
+    for (const fn of functions) {
+      if (entryPointNames.has(fn.name)) continue;
+      if (fn.isAsync) {
+        asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
+      } else {
+        pureSyncFunctions.push({ name: fn.name, startLine: fn.startLine });
+        if (!fn.isExported) {
+          unexportedFunctions.push({ name: fn.name, startLine: fn.startLine });
+        }
+      }
+    }
+
+    const hasInstrumentableFunctions = entryPointsNeedingSpans.length > 0 || asyncFunctionsNeedingSpans.length > 0;
+
     return {
       hasInstrumentableFunctions,
-      entryPointsNeedingSpans: [],
+      entryPointsNeedingSpans,
       processExitEntryPoints: [],
-      asyncFunctionsNeedingSpans: [],
-      pureSyncFunctions: [],
-      unexportedFunctions: [],
+      asyncFunctionsNeedingSpans,
+      pureSyncFunctions,
+      unexportedFunctions,
       outboundCallsNeedingSpans: [],
       entryPointSubOperations: [],
       alreadyInstrumentedImports: [],

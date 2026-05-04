@@ -115,4 +115,59 @@ export function add(a: number, b: number): number {
       expect(result.hasInstrumentableFunctions).toBe(false);
     });
   });
+
+  describe('semantic array population', () => {
+    it('populates entryPointsNeedingSpans for exported async functions', () => {
+      const source = `
+export async function handleRequest(req: Request): Promise<Response> {
+  return await process(req);
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.entryPointsNeedingSpans).toHaveLength(1);
+      expect(result.entryPointsNeedingSpans[0].name).toBe('handleRequest');
+    });
+
+    it('populates asyncFunctionsNeedingSpans for unexported async functions', () => {
+      const source = `
+async function internalFetch(url: string): Promise<string> {
+  return await fetch(url).then(r => r.text());
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.asyncFunctionsNeedingSpans).toHaveLength(1);
+      expect(result.asyncFunctionsNeedingSpans[0].name).toBe('internalFetch');
+      expect(result.entryPointsNeedingSpans).toHaveLength(0);
+    });
+
+    it('populates pureSyncFunctions for synchronous functions', () => {
+      const source = `
+export function formatDate(d: Date): string {
+  return d.toISOString();
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.pureSyncFunctions).toHaveLength(1);
+      expect(result.pureSyncFunctions[0].name).toBe('formatDate');
+    });
+
+    it('populates unexportedFunctions for unexported sync functions', () => {
+      const source = `
+function helper(x: number): number {
+  return x * 2;
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.unexportedFunctions).toHaveLength(1);
+      expect(result.unexportedFunctions[0].name).toBe('helper');
+    });
+  });
 });
