@@ -237,18 +237,18 @@ export class TypeScriptProvider implements LanguageProvider {
     const asyncFunctionsNeedingSpans: PreScanResult['asyncFunctionsNeedingSpans'] = [];
     const pureSyncFunctions: PreScanResult['pureSyncFunctions'] = [];
     const unexportedFunctions: PreScanResult['unexportedFunctions'] = [];
-    const entryPointNames = new Set<string>();
+    const entryPointStartLines = new Set<number>();
 
     for (const fn of functions) {
       const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
       if (isEntryPoint) {
-        entryPointNames.add(fn.name);
+        entryPointStartLines.add(fn.startLine);
         entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
       }
     }
 
     for (const fn of functions) {
-      if (entryPointNames.has(fn.name)) continue;
+      if (entryPointStartLines.has(fn.startLine)) continue;
       if (fn.isAsync) {
         asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
       } else {
