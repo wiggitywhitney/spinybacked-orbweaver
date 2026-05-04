@@ -180,6 +180,25 @@ export async function checkAttributeKeysMatchRegistry(
     for (const ext of declaredExtensions) {
       if (ext.startsWith('span.') || ext.startsWith('span:')) continue;
 
+      // Exact-match pre-check: if the extension key is already in the registry verbatim,
+      // emit a clear actionable message before the semantic dedup path runs. Without this,
+      // checkSemanticDuplicate would catch it via normalization and label it a
+      // "delimiter-variant duplicate" — misleading when the strings are identical.
+      if (registryNames.has(ext)) {
+        allResults.push({
+          ruleId: 'SCH-002',
+          passed: false,
+          filePath,
+          lineNumber: null,
+          message:
+            `SCH-002 check failed: "${ext}" is already a registered attribute. ` +
+            `Remove it from your schemaExtensions list and call span.setAttribute('${ext}', value) directly.`,
+          tier: 2,
+          blocking: true,
+        });
+        continue;
+      }
+
       // Look up how this extension is used in the code to get its inferred type.
       // When inferredType is provided, type-compat pre-filter prevents false positives
       // against type-mismatched registry entries (e.g., a string extension is not flagged

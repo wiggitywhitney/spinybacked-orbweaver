@@ -365,6 +365,40 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
       expect(extensionFailure).toBeUndefined();
     });
 
+    it('flags declared extension that exactly matches an existing registry attribute, with a clear actionable message', async () => {
+      // commit_story.journal.summaries_count is already in the registry — the agent should not
+      // declare it as a schemaExtension. The error must be distinct from the delimiter-variant
+      // case and must explicitly tell the agent to remove it from schemaExtensions.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function readSummaries() {',
+        '  return tracer.startActiveSpan("myapp.journal.read_summaries", async (span) => {',
+        '    try {',
+        '      const summaries = [];',
+        '      span.setAttribute("http.request.duration", 42.5);',
+        '      span.setAttribute("http.request.method", "GET");',
+        '      return summaries;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Agent mistakenly declares "http.request.duration" as a new extension — it's already registered
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, m3Schema, ['http.request.duration'],
+      );
+
+      const failure = results.find((r) => !r.passed);
+      expect(failure).toBeDefined();
+      expect(failure?.message).toContain('http.request.duration');
+      // Must NOT say "delimiter-variant duplicate" — the strings are identical, not delimiter-variants
+      expect(failure?.message).not.toContain('delimiter-variant');
+      // Must tell the agent explicitly what to do: remove from schemaExtensions
+      expect(failure?.message).toContain('schemaExtensions');
+      expect(failure?.message).toContain('setAttribute');
+    });
+
     it('accepts a genuinely novel attribute extension not semantically equivalent to any registry entry', async () => {
       // "commit.story.section.count" — unrelated to http.* or user.* registry entries
       const code = [
