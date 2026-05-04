@@ -224,7 +224,21 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span. **COV-001 takes priority over RST-006** — when a function is both an async entry point and calls \`process.exit()\` directly, add the span. Use the minimal wrapper only: \`startActiveSpan → try { original body } finally { span.end() }\`. Do NOT add \`span.end()\` before individual \`process.exit()\` calls (NDS-005 violation). Do NOT declare new intermediate variables for \`setAttribute\` (NDS-003 violation). Use only variables already in scope.
 - **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
-- **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`).
+- **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`). **Important distinction — inner graceful catches do not exempt the outer span**: when a span wrapper contains inner catches that handle expected conditions gracefully (NDS-007 — return without rethrowing), NDS-007 exempts those inner catches from error recording. It does NOT exempt the outer span wrapper itself. The outer \`startActiveSpan\` callback must still have its own error-recording catch for unexpected exceptions that bypass all inner handlers:
+  \`\`\`javascript
+  return tracer.startActiveSpan('myapp.service.operation', async (span) => {
+    try {
+      // code with inner graceful catches — NDS-007 applies to those inner catches only
+      return result;
+    } catch (error) {           // outer catch — required regardless of inner graceful catches
+      span.recordException(error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+  \`\`\`
 - **COV-004**: Long-running or async I/O operations should have spans. When multiple sibling functions share the same structure (e.g., async functions that receive state, call an LLM, and return state), instrument ALL of them consistently — do not instrument some and skip others. **Context propagation is NOT a valid COV-004 exemption for exported async functions.** Each exported async function must have its own span, even if called from within an instrumented parent. The only valid reason to skip an exported async function under COV-004 is RST-001 (it is synchronous with no I/O). **Exception — \`process.exit()\` functions: if the function calls \`process.exit()\` directly in its body (not only inside catch or finally blocks), do not add a span — \`process.exit()\` bypasses the span's \`finally\` block; instrument the async sub-operations inside it instead (RST-006).** RST-004 applies only to unexported functions and does not exempt exported ones.
 - **COV-005**: Use registry-defined attributes when the schema defines them for a span.
 - **COV-006**: Prefer auto-instrumentation libraries over manual spans for supported frameworks. Do NOT manually wrap calls that a library already covers.
@@ -255,7 +269,17 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **CDQ-002**: Acquire tracer with \`trace.getTracer()\` including a library name string.
 - **CDQ-003**: Record errors with \`span.recordException(error)\` + \`span.setStatus({ code: SpanStatusCode.ERROR })\`. Do NOT use ad-hoc \`setAttribute('error', ...)\`. (Exception: expected-condition catches — see Error Handling section.)
 - **CDQ-005**: Prefer \`tracer.startActiveSpan()\` over \`tracer.startSpan()\`. \`startActiveSpan()\` automatically sets the span as active in context so child operations are correctly parented. Use \`startSpan()\` only when: (1) the span is a sibling and should not parent subsequent operations; (2) the span is fire-and-forget background work that must not affect the calling trace hierarchy; (3) you need explicit, independent lifecycle control over parallel spans; (4) the span's lifetime must extend beyond a single function scope and be passed to another function to close. If you use \`startSpan()\`, confirm in your reasoning which of these four scenarios applies.
-- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.reduce\`) with \`span.isRecording()\`. **Exemption: CDQ-006 does not apply to root spans or spans created at the entry point of a traced operation — these always record.** Do not add \`isRecording()\` guards to root spans or entry-point spans. Do not cite CDQ-006 violations for root spans or entry-point spans in advisory notes or instrumentation reasoning.
+- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.filter\`, \`.reduce\`, \`.join\`, \`.flatMap\`, \`Object.keys()\`) with \`span.isRecording()\`. When a tracer uses head-based sampling, non-recording spans are no-ops — computations inside \`setAttribute\` still run even when the span will be dropped. Pattern:
+  \`\`\`javascript
+  // Wrong — computation runs even when span is not recording
+  span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
+
+  // Correct
+  if (span.isRecording()) {
+    span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
+  }
+  \`\`\`
+  **Exemption: CDQ-006 does not apply to root spans or spans created at the entry point of a traced operation.** Root spans can technically be non-recording when a sampler drops the trace, but adding \`isRecording()\` guards at entry points creates clutter for negligible gain — when a root span is dropped, all child work is dropped too, making the guard moot. Do not add \`isRecording()\` guards to root spans or entry-point spans. Do not cite CDQ-006 violations for root spans or entry-point spans in advisory notes or instrumentation reasoning.
 - **CDQ-007**: Do NOT set unbounded attributes (full object spreads, unsized arrays), PII fields, or undefined values. PII attribute names to avoid: \`author\`, \`committer\`, \`username\`, \`email\`, \`password\`, \`ssn\`, \`name\`, \`user\`. Do NOT pass raw filesystem paths (variables named \`filePath\`, \`outputDir\`, etc.) as attribute values — use \`path.basename()\` or a project-relative path instead. Watch for optional chaining (\`?.\`) in \`setAttribute\` value arguments — these can produce \`undefined\`. If the value is a member access like \`entries.length\`, guard with \`if (entries)\` or use optional chaining (\`entries?.length ?? 0\`). Import constraint: only apply these transformations when the required utility (e.g., \`basename\` from \`node:path\`) is already imported in the file. Do NOT add new non-OTel imports to comply with this advisory — if the utility is not already available, use the raw value and note it as a known limitation in \`notes\`.
 - **CDQ-009**: Do NOT use \`!== undefined\` to guard a variable before accessing its property as a \`setAttribute\` value. This guard passes when the variable is \`null\` and will throw a TypeError at runtime. Use \`if (x)\` (truthy check) or \`x != null\` (covers both null and undefined) instead.
 - **CDQ-010**: Do NOT call string methods (\`.split()\`, \`.slice()\`, \`.trim()\`, \`.replace()\`, \`.toLowerCase()\`, and similar string-only methods) directly on a property access expression without type coercion — unless the field's string type is evident from context (e.g., assigned from a string literal, a template literal, or a method whose name indicates a string return like \`.toString()\` or \`.getName()\`). If \`obj.field\` is not a string at runtime, this throws \`TypeError: obj.field.method is not a function\`. When the type is uncertain, use \`String(obj.field).method()\` or, for timestamps, \`new Date(obj.field).toISOString()\` instead.

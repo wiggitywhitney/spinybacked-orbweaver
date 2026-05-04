@@ -917,6 +917,44 @@ describe('buildUserMessage', () => {
       expect(message).not.toContain('Already instrumented');
     });
   });
+
+});
+
+describe('prompt rule guidance — COV-003 outer catch', () => {
+  const schema = makeSchema();
+  const jsProvider = new JavaScriptProvider();
+
+  it('distinguishes NDS-007 inner graceful catches from the outer span error-recording catch', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    expect(prompt).toMatch(/inner.*graceful|graceful.*inner/i);
+    expect(prompt).toMatch(/outer.*catch|outer span.*catch/i);
+  });
+});
+
+describe('prompt rule guidance — CDQ-006 isRecording patterns', () => {
+  const schema = makeSchema();
+  const jsProvider = new JavaScriptProvider();
+
+  it('includes filter, join, flatMap, and Object.keys in the guarded patterns', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    const cdq006Match = prompt.match(/CDQ-006[^]*?(?=\n- \*\*CDQ-007)/);
+    expect(cdq006Match).not.toBeNull();
+    const cdq006Text = cdq006Match![0];
+
+    expect(cdq006Text).toContain('.filter');
+    expect(cdq006Text).toContain('.join');
+    expect(cdq006Text).toContain('.flatMap');
+    expect(cdq006Text).toContain('Object.keys');
+  });
+
+  it('includes a concrete isRecording guard code example', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    expect(prompt).toContain('span.isRecording()');
+    expect(prompt).toMatch(/if \(span\.isRecording\(\)\)/);
+  });
 });
 
 // ---------------------------------------------------------------------------
