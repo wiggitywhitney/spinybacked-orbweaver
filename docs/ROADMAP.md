@@ -27,6 +27,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Medium-term
 
+- CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Make live-check actually validate something ([PRD #698](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/698)) — Weaver live-check has never received real spans; every "Live-check: OK" to date is a false positive. Prerequisite for PRD #699.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 AND PRD #687 — both must be complete before starting.
 - Dependency-aware file instrumentation ordering ([PRD #700](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/700)) — instrument leaves before callers so each agent sees the full instrumentation picture of its dependencies. Independent of PRDs #698, #687, #699; can run in parallel.
