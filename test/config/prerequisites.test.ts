@@ -247,6 +247,11 @@ describe('checkWeaverSchema', () => {
     expect(result.id).toBe('WEAVER_SCHEMA');
     expect(result.message).toContain('timed out');
     expect(result.message).toContain('HOME');
+    expect(vi.mocked(execFileSync)).toHaveBeenCalledWith(
+      'weaver',
+      ['registry', 'check', '-r', expect.any(String)],
+      expect.objectContaining({ env: expect.objectContaining({ HOME: expect.any(String) }) }),
+    );
   });
 
   describe('empty schema gate', () => {

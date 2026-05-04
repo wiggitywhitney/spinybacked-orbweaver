@@ -3,6 +3,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, join, basename } from 'node:path';
+import { homedir } from 'node:os';
 import { formatTestOutput } from './test-output.ts';
 import { execFile } from 'node:child_process';
 import type { LanguageProvider } from '../languages/types.ts';
@@ -175,6 +176,7 @@ export async function resolveSchema(projectDir: string, schemaPath: string): Pro
     execFile('weaver', ['registry', 'resolve', '-r', fullSchemaPath, '--format', 'json'], {
       cwd: projectDir,
       timeout: 30000,
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
     }, (error, stdout) => {
       if (error) {
         reject(error);

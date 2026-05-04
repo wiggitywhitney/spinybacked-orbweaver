@@ -2,6 +2,7 @@
 // ABOUTME: Checks prerequisites, detects project type, and creates spiny-orb.yaml config file.
 
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { stringify as stringifyYaml } from 'yaml';
 import { DEFAULT_GRPC_PORT, DEFAULT_ADMIN_PORT } from '../coordinator/live-check.ts';
 
@@ -179,6 +180,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
     const versionOutput = deps.execFileSync('weaver', ['--version'], {
       timeout: 10000,
       stdio: 'pipe',
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
     });
     const versionString = versionOutput.toString().trim();
     const versionMatch = versionString.match(/(\d+\.\d+\.\d+)/);
@@ -249,6 +251,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
       cwd: projectDir,
       timeout: 30000,
       stdio: 'pipe',
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
     });
   } catch (err: unknown) {
     const error = err as { stderr?: Buffer };

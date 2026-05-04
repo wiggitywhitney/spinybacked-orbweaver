@@ -85,7 +85,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
    */
   function dumpDiagnostics(label: string, result: FileResult): void {
     const safeLabel = label.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const debugFilePath = join(tmpdir(), `spiny-orb-debug-${safeLabel}`);
+    const fileLabel = safeLabel.endsWith('.js') ? safeLabel : `${safeLabel}.js`;
+    const debugFilePath = join(tmpdir(), `spiny-orb-debug-${fileLabel}`);
     const codeToCapture = result.lastInstrumentedCode ??
       (existsSync(result.path) ? readFileSync(result.path, 'utf-8') : undefined);
     if (codeToCapture) {

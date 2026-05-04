@@ -2,6 +2,7 @@
 // ABOUTME: Runs weaver registry check and passes raw CLI output as diagnostic message.
 
 import { execFileSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import type { CheckResult } from '../types.ts';
 
 /**
@@ -35,6 +36,7 @@ export function checkWeaver(filePath: string, registryPath: string | undefined):
     execFileSync('weaver', ['registry', 'check', '-r', registryPath], {
       timeout: 30_000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, HOME: process.env.HOME || homedir() },
     });
 
     return {
