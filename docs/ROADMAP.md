@@ -11,7 +11,7 @@ When a real-world eval run completes for a language provider, mark it using thes
 
 Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
 
-**Current status**: TypeScript — **Experimental** ✓ (*run-13 complete*: 14 committed, 19 correct skips, 0 failures, 93% quality). Known limitations: CDQ-006 isRecording guards are missing on ~35% of files (tracked in #728); attribute namespace inference requires prompt strengthening (tracked in #724).
+**Current status**: TypeScript — **Experimental** ✓ (*run-13 complete*: 14 committed, 19 correct skips, 0 failures, 93% quality). Known limitations: CDQ-006 isRecording guard gaps and attribute namespace inference addressed in prompt (PRs #746, #749); SCH-002 re-declaration at high token counts under investigation (tracked in #742).
 
 ---
 
@@ -20,10 +20,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 - Smarter end-of-run test failure handling ([PRD #687](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/687)) — rollback logic incorrectly attributes timeout failures to instrumentation; blocking clean eval runs. Three connected fixes: call path analysis (smart-rollback), API health check, and one retry with delay.
 - Document the SDK initialization boundary ([issue #685](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/685)) — checkpoint tests run without OTel SDK init (spans are no-ops); live-check post PRD #698 runs with SDK init (spans fire). Users debugging unexpected behavior need this distinction documented.
 - Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
-- Extend pre-scan deterministic skip patterns ([issue #714](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/714)) — avoid LLM calls for pure re-export files and other AST-detectable patterns; surfaced from run-12 eval data.
-- Complete PRD #581 attribute namespace enforcement ([issue #724](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/724)) — the attribute section of the agent prompt uses `Derive` where the span section uses `MUST start with`; this structural gap causes the agent to drift from registry namespace conventions. Phrasing TBD pending CI artifacts now available from the PR #725 acceptance gate run.
-- Document `--thinking` flag and update stale `--verbose` descriptions ([issue #738](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/738)) — `--thinking` is absent from the README flags table; `--verbose` no longer includes thinking blocks but this is undocumented; `docs/interpreting-output.md` doesn't cover the three flag combinations. Use `/write-docs` with real CLI output.
-- CDQ-006: diagnose advisory pass gap, then expand prompt pattern list ([issue #728](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/728)) — 5 of 14 taze run-13 TypeScript files shipped with unguarded `.reduce()`, `Object.keys()`, `.filter()` in `setAttribute()`. Diagnostic step required first: determine whether the PRD #546 advisory pass fired on the affected files before changing the prompt or blocking status.
+- Real-world fixture coverage for TypeScript validator ([issue #653](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/653)) — NDS-003 and checkSyntax() tests use synthetic strings; real-world taze fixtures would catch tsconfig propagation bugs before eval.
 
 ## Medium-term
 
