@@ -21,7 +21,8 @@ const jsProvider = new JavaScriptProvider();
 import { stat } from 'node:fs/promises';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
-import type { CoordinatorCallbacks, CostCeiling, RunResult } from '../../src/coordinator/types.ts';
+import type { CoordinatorCallbacks, CostCeiling, RunResult, EndOfRunFlagContext } from '../../src/coordinator/types.ts';
+import { renderPrSummary } from '../../src/deliverables/pr-summary.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'project');
 const WEAVER_REGISTRY_DIR = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'valid');
@@ -1474,5 +1475,135 @@ describe('Acceptance Gate — Phase 5 Checkpoint and Drift Integration', () => {
     expect(drift.warnings[0]).toContain('35');
     expect(drift.totalAttributesCreated).toBe(40);
     expect(drift.totalSpansAdded).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M5: End-of-run failure scenario integration tests (PRD #687)
+// Tests real coordinator logic — no LLM API calls required.
+// ---------------------------------------------------------------------------
+
+describe('M5 — End-of-run failure handling integration (PRD #687)', () => {
+  /** Build deps for end-of-run failure scenarios.
+   *  dispatchFiles populates checkpointWindowRef so coordinate() has files to analyse.
+   */
+  function makeEndOfRunDeps(overrides: Partial<CoordinateDeps> = {}): CoordinateDeps & {
+    writeFileForRollback: ReturnType<typeof vi.fn>;
+  } {
+    const writeFileForRollback = vi.fn().mockResolvedValue(undefined);
+
+    const deps: CoordinateDeps = {
+      checkPrerequisites: vi.fn().mockResolvedValue({ allPassed: true, checks: [] }),
+      discoverFiles: vi.fn().mockResolvedValue(['/project/src/a.js', '/project/src/b.js']),
+      statFile: vi.fn().mockResolvedValue({ size: 500 }),
+      dispatchFiles: vi.fn().mockImplementation(
+        async (filePaths: string[], _pd: string, _cfg: AgentConfig, _cb: unknown, options: Record<string, unknown>) => {
+          const ref = options?.checkpointWindowRef as {
+            files: { path: string; originalContent: string; resultIndex: number }[];
+            extensionsSnapshot: string | null | undefined;
+          } | undefined;
+          if (ref) {
+            ref.files = filePaths.map((fp, i) => ({
+              path: fp,
+              originalContent: `// original content of ${fp}`,
+              resultIndex: i,
+            }));
+            ref.extensionsSnapshot = undefined;
+          }
+          return filePaths.map(fp => ({
+            path: fp,
+            status: 'success' as const,
+            spansAdded: 2,
+            librariesNeeded: [],
+            schemaExtensions: [],
+            attributesCreated: 1,
+            validationAttempts: 1,
+            validationStrategyUsed: 'initial-generation' as const,
+            tokenUsage: { inputTokens: 100, outputTokens: 50, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+          }));
+        },
+      ),
+      finalizeResults: vi.fn().mockResolvedValue(undefined),
+      resolveSchemaForHash: vi.fn().mockResolvedValue({ groups: [] }),
+      createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+      cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
+      runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
+      checkGhAvailable: vi.fn().mockResolvedValue(true),
+      hasTestSuite: vi.fn().mockResolvedValue(true),
+      executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
+      writeFileForRollback,
+      restoreExtensionsFile: vi.fn().mockResolvedValue(undefined),
+      resolveTracerName: vi.fn().mockResolvedValue('test-service'),
+      checkRegistryHealth: vi.fn().mockResolvedValue(null),
+      retryTestSuite: vi.fn().mockResolvedValue({ passed: false }),
+      ...overrides,
+    };
+
+    return Object.assign(deps, { writeFileForRollback });
+  }
+
+  it('Scenario A — ambiguous failure: committed files kept, onEndOfRunFlag fires, PR body has ## Test Failure Analysis', async () => {
+    const onEndOfRunFlag = vi.fn();
+    const endOfRunDeps = makeEndOfRunDeps({
+      runLiveCheck: vi.fn().mockResolvedValue({
+        skipped: false,
+        testsPassed: false,
+        warnings: ['End-of-run test suite failed'],
+        testOutput: 'Error: Timeout requesting "typescript"\n    at /project/src/a.js:45:3',
+      }),
+      checkRegistryHealth: vi.fn().mockResolvedValue({ registry: 'npm', reachable: false }),
+      retryTestSuite: vi.fn().mockResolvedValue({ passed: true }),
+    });
+    const config = makeConfig({ testCommand: 'vitest run' });
+
+    const result = await coordinate('/project', config, { onEndOfRunFlag }, endOfRunDeps);
+
+    expect(endOfRunDeps.writeFileForRollback).not.toHaveBeenCalled();
+    expect(result.filesSucceeded).toBe(2);
+
+    expect(onEndOfRunFlag).toHaveBeenCalledOnce();
+    const ctx = onEndOfRunFlag.mock.calls[0][0] as EndOfRunFlagContext;
+    expect(ctx.filesInCallPath).toContain('/project/src/a.js');
+    expect(ctx.failureMessage).toBe('Error: Timeout requesting "typescript"');
+    expect(ctx.apiHealth).toEqual({ registry: 'npm', reachable: false });
+    expect(ctx.retryResult).toEqual({ passed: true });
+
+    expect(result.endOfRunFlag).toBeDefined();
+    expect(result.endOfRunFlag?.filesInCallPath).toContain('/project/src/a.js');
+
+    const flagWarnings = result.warnings.filter((w: string) =>
+      w.includes('call path') || w.includes('human review'),
+    );
+    expect(flagWarnings).toHaveLength(0);
+
+    const summary = renderPrSummary(result, config, '/project');
+    expect(summary).toContain('## Test Failure Analysis');
+    expect(summary).toContain('Error: Timeout requesting "typescript"');
+    expect(summary).toContain('npm registry was unreachable');
+    expect(summary).toContain('passed on retry');
+  });
+
+  it('Scenario B — direct error: committed files rolled back, onEndOfRunFlag does NOT fire', async () => {
+    const onEndOfRunFlag = vi.fn();
+    const endOfRunDeps = makeEndOfRunDeps({
+      runLiveCheck: vi.fn().mockResolvedValue({
+        skipped: false,
+        testsPassed: false,
+        warnings: ['End-of-run test suite failed'],
+        testOutput: "Cannot find module '@opentelemetry/api'\n    at /project/src/a.js:2:20",
+      }),
+    });
+    const config = makeConfig({ testCommand: 'vitest run' });
+
+    const result = await coordinate('/project', config, { onEndOfRunFlag }, endOfRunDeps);
+
+    expect(endOfRunDeps.writeFileForRollback).toHaveBeenCalled();
+    expect(result.filesFailed).toBe(2);
+    expect(result.fileResults.every((fr: FileResult) => fr.reason?.includes('Rolled back'))).toBe(true);
+
+    expect(onEndOfRunFlag).not.toHaveBeenCalled();
+    expect(result.endOfRunFlag).toBeUndefined();
+    expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
   });
 });

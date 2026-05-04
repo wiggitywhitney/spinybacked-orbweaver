@@ -111,7 +111,7 @@ Either way: do not roll back. The flag is the output.
 - [x] M2: Implement Fix 1 (call path analysis + direct-error rollback + flag routing) with tests
 - [x] M3: Implement Fix 2 (API health as diagnostic context for flag) with tests
 - [x] M4: Implement Fix 3 (retry as diagnostic context for flag) with tests
-- [ ] M5: Integration test — end-to-end scenario reproducing run-11 failure pattern with flag-and-surface output
+- [x] M5: Integration test — end-to-end scenario reproducing run-11 failure pattern with flag-and-surface output
 
 ---
 
@@ -242,7 +242,10 @@ These are end-to-end integration tests against real coordinator logic. Place in 
 vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run test/coordinator/acceptance-gate.test.ts'
 ```
 
-Success criterion: both scenarios exist in `test/coordinator/acceptance-gate.test.ts`, pass under the command above, and CI acceptance gate workflow passes.
+Success criterion:
+- [x] Scenario A exists in `test/coordinator/acceptance-gate.test.ts` and passes
+- [x] Scenario B exists in `test/coordinator/acceptance-gate.test.ts` and passes
+- [ ] CI acceptance gate workflow passes (triggered via PR `run-acceptance` label)
 
 ---
 
