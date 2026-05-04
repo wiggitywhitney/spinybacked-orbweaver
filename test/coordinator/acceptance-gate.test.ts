@@ -1479,11 +1479,11 @@ describe('Acceptance Gate — Phase 5 Checkpoint and Drift Integration', () => {
 });
 
 // ---------------------------------------------------------------------------
-// M5: End-of-run failure scenario integration tests (PRD #687)
+// End-of-run failure scenario integration tests
 // Tests real coordinator logic — no LLM API calls required.
 // ---------------------------------------------------------------------------
 
-describe('M5 — End-of-run failure handling integration (PRD #687)', () => {
+describe('Acceptance Gate — End-of-run failure handling', () => {
   /** Build deps for end-of-run failure scenarios.
    *  dispatchFiles populates checkpointWindowRef so coordinate() has files to analyse.
    */

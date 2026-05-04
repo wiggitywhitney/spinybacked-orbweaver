@@ -20,17 +20,15 @@ export interface CostCeiling {
 /**
  * Diagnostic context surfaced when end-of-run tests fail with an ambiguous failure
  * (committed files in call path, but failure is not a direct import/type error).
- *
- * M3 adds apiHealth; M4 adds retryResult. Both are optional until those milestones ship.
  */
 export interface EndOfRunFlagContext {
   /** Committed files that appear in the failing test's call path. */
   filesInCallPath: string[];
   /** First meaningful line of the test output — the actual error message. */
   failureMessage: string;
-  /** API health result from Fix 2 (added in M3). */
+  /** Registry health at the time of failure. Present when a lockfile identifies the registry. */
   apiHealth?: { registry: 'npm' | 'jsr'; reachable: boolean };
-  /** Retry result from Fix 3 (added in M4). */
+  /** Whether the test suite passed on a delayed retry. */
   retryResult?: { passed: boolean };
 }
 
@@ -52,7 +50,7 @@ export interface CoordinatorCallbacks {
   /**
    * Fires when end-of-run tests fail with an ambiguous failure — committed files are in the
    * call path but causation is unclear. The CLI should render a distinct block immediately.
-   * Fires once after all diagnostic context (M3 API health, M4 retry) is collected.
+   * Fires once after registry health and retry results are collected.
    */
   onEndOfRunFlag?: (context: EndOfRunFlagContext) => void;
 }

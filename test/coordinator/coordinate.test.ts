@@ -1208,7 +1208,7 @@ describe('coordinate', () => {
       expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
     });
 
-    // --- Call path analysis routing (PRD #687 Fix 1) ---
+    // --- Call path analysis routing ---
 
     it('does not roll back when failing test call path has no committed files (run-11 scenario)', async () => {
       const deps = makeRollbackDeps({
@@ -1265,7 +1265,7 @@ describe('coordinate', () => {
       expect(result.filesSucceeded).toBe(2);
     });
 
-    // --- Flag output surfaces (onEndOfRunFlag callback + endOfRunFlag RunResult field) ---
+    // --- Flag output surfaces (onEndOfRunFlag callback + endOfRunFlag RunResult field)
 
     it('fires onEndOfRunFlag callback with filesInCallPath and failureMessage on ambiguous failure', async () => {
       const onEndOfRunFlag = vi.fn();
@@ -1342,7 +1342,7 @@ describe('coordinate', () => {
       expect(onEndOfRunFlag).not.toHaveBeenCalled();
     });
 
-    // --- M3: API health as diagnostic context ---
+    // --- API health as diagnostic context ---
 
     it('adds apiHealth reachable:false to flag context when registry is unhealthy', async () => {
       const onEndOfRunFlag = vi.fn();
@@ -1401,7 +1401,7 @@ describe('coordinate', () => {
       expect(ctx.apiHealth).toBeUndefined();
     });
 
-    // --- M4: Retry as diagnostic context ---
+    // --- Retry as diagnostic context ---
 
     it('adds retryResult passed:true when retry passes', async () => {
       const onEndOfRunFlag = vi.fn();

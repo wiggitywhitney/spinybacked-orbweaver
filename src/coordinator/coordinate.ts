@@ -128,13 +128,13 @@ export interface CoordinateDeps {
   /** Injectable canonical tracer name resolver. Defaults to resolveCanonicalTracerName. */
   resolveTracerName?: (config: AgentConfig, registryDir: string) => Promise<string>;
   /**
-   * Injectable registry health checker for M3 flag context.
+   * Injectable registry health checker for end-of-run flag context.
    * Detects npm/jsr registry from project lockfiles and checks its health endpoint.
    * Returns null when no recognized lockfile is present.
    */
   checkRegistryHealth?: (projectDir: string) => Promise<{ registry: 'npm' | 'jsr'; reachable: boolean } | null>;
   /**
-   * Injectable retry runner for M4 flag context.
+   * Injectable retry runner for end-of-run flag context.
    * Waits SPINY_ORB_RETRY_DELAY_MS (default 30000ms) then re-runs the test suite.
    * Runs in parallel with checkRegistryHealth via Promise.all.
    */
@@ -170,7 +170,7 @@ async function computeCostCeiling(
 
 /**
  * Wait SPINY_ORB_RETRY_DELAY_MS milliseconds then re-run the test suite.
- * Runs in parallel with the registry health check (Promise.all in M4 aggregation).
+ * Runs in parallel with the registry health check to populate flag diagnostic context.
  */
 async function defaultRetryTestSuite(
   projectDir: string,
@@ -567,7 +567,7 @@ export async function coordinate(
     }
   }
 
-  // Step 7c: End-of-run test failure analysis (PRD #687 Fix 1)
+  // Step 7c: End-of-run test failure analysis
   // When live-check tests fail, apply call path analysis before deciding whether to roll back.
   // Only triggered when: (1) tests explicitly failed, (2) checkpoint tracking was active,
   // (3) there are files in the window to roll back, (4) baseline tests passed.
@@ -630,8 +630,8 @@ export async function coordinate(
     } else {
       // Ambiguous failure — committed files are in the call path but causation is unclear
       // (timeout, assertion error, flaky test). Flag-and-surface: keep committed files.
-      // M3 (health check) and M4 (retry) run in parallel via Promise.all.
-      // M4 owns the fire-once aggregation: callback fires after both settle.
+      // Registry health check and retry run in parallel via Promise.all.
+      // Callback fires once after both settle with the complete diagnostic context.
       const failureMessage = extractFailureMessage(liveCheckTestOutput ?? '');
       const flagContext: EndOfRunFlagContext = { filesInCallPath, failureMessage };
 
