@@ -113,27 +113,42 @@ Success criteria:
 
 Inject SDK initialization into the test environment by modifying how spiny-orb invokes the live-check test run — the exact files to change are determined by Research A output; read `docs/research/sdk-injection-approach.md` first to identify the correct callsite(s). Implement double-init detection: call `trace.setGlobalTracerProvider()` and check the return value — `false` means a provider is already registered, skip init. Do NOT use `setupFiles` for SDK init in Vitest contexts — use `experimental.openTelemetry.sdkPath`. Do NOT add any OTel SDK package imports that are not already present in `package.json` — the SDK must already be a dependency.
 
+**Important — this milestone introduces a new failure class (Decision 3).** When the SDK loads, M3 is the first time the test suite runs with active (recording) spans rather than no-ops. A new class of failures can surface here that no-op checkpoint tests cannot catch:
+- Auto-instrumentation packages (`@opentelemetry/instrumentation-http`, `-pg`, `-express`, etc.) monkey-patch modules at load time. Tests using `nock`, `msw`, or similar HTTP mocking libraries may conflict — whichever loads second wins, or they crash at the wrapper level.
+- Async context propagation patching: `@opentelemetry/context-async-hooks` patches `AsyncLocalStorage` and async hooks. Tests relying on specific async behavior (fake timers, context assertions) can break.
+- Test runner worker isolation: Vitest runs tests in workers; the global tracer provider is process-global. Worker isolation can cause races or duplicate inits if the SDK init has module-level state.
+- Span lifecycle bugs: wrapping bugs that are invisible with no-op spans (wrong order of span.end(), context not restored) become visible when spans are real.
+
+When tests fail after SDK injection, record this as a distinct failure mode — "tests failed under SDK injection" — separate from "spans received, compliance failed." M4 must surface these differently. Updated per Decision 3.
+
 TDD: write a failing unit test that confirms spans emitted during the test run are recording spans (not NonRecordingSpans) before implementing. Confirm it fails, implement, confirm it passes.
 
 Success criteria:
 - Real spans reach Weaver during the live-check test run
 - `tracer.startActiveSpan()` produces recording spans, not NonRecordingSpans
 - Projects with pre-existing SDK init are detected (via `setGlobalTracerProvider()` return value) and not double-initialized
+- Test failures that occur after SDK injection are recorded as a distinct failure mode for M4 to surface
 - Existing tests pass with no regressions
 
 ### M4: PR summary distinction + `--verbose` output
 
-Before implementing, search for all callsites that generate the live-check status line: `grep -ri "live-check" src/ --include="*.ts" -l`. Update every callsite found — do not update only the first one. Then update PR summary logic to distinguish two states based on the parsed JSON from M2:
+**Updated per Decision 3 — three states, not two.**
 
-- **Spans received**: `Live-Check: OK (N spans passed compliance)`
+Before implementing, search for all callsites that generate the live-check status line: `grep -ri "live-check" src/ --include="*.ts" -l`. Update every callsite found — do not update only the first one. Then update PR summary logic to distinguish three states:
+
+- **Tests passed with SDK, spans compliant**: `Live-Check: OK (N spans passed compliance)`
+- **Tests failed under SDK injection**: `Live-Check: WARNING — tests failed after SDK injection (N spans emitted before failure; see test output below)`. This means the project's test suite broke when the OTel SDK loaded — likely an auto-instrumentation conflict with test mocking infrastructure (nock, msw), async context patching, or span lifecycle bug. This is not a compliance failure; it is an instrumentation-environment conflict. Human review needed to determine whether the conflict is in the agent's added code or the project's existing test setup.
 - **Nothing received**: `Live-Check: OK (no spans received — live-check did not validate any telemetry)`
+
+These three states imply different fixes: compliance failures are schema violations in instrumented code; SDK-injection failures are environment conflicts that may or may not be caused by the agent. Surface the distinction clearly so reviewers know what to look for.
 
 Surface the full live-check compliance report in `--verbose` mode.
 
-TDD: write failing unit tests for each of the two PR summary states before implementing.
+TDD: write failing unit tests for each of the three PR summary states before implementing.
 
 Success criteria:
-- PR summary shows meaningful status in both cases
+- PR summary shows the correct state for all three cases
+- SDK-injection failures produce the WARNING message, not a compliance failure message
 - `--verbose` mode includes the full live-check compliance output
 - Existing PR summary tests pass with no regressions
 
@@ -165,3 +180,4 @@ Success criterion: test exists, passes locally, and CI acceptance gate workflow 
 |---|---|---|
 | 2026-05-01 | Research before implementation for both SDK injection and JSON schema | The right SDK injection approach is non-obvious and depends on the target test runner. The JSON schema must be captured from a real Weaver run — it cannot be assumed from documentation. Both unknowns must be resolved before writing implementation code. |
 | 2026-05-01 | jest, mocha, pytest framework interactions out of scope | This PRD establishes the general injection mechanism. Language-specific quirks belong in downstream language PRDs. Keeping scope narrow ensures this PRD can ship without blocking on every test runner. |
+| 2026-05-04 | M3 implicitly adds tier 1.5; two distinct live-check failure modes must be surfaced separately in M4 | When M3 injects the SDK, the test suite runs with recording spans for the first time — no-op checkpoint tests cannot catch this class of bugs. A new failure category emerges: tests breaking under SDK injection (auto-instrumentation conflicts with test mocking libraries, async context patching, worker isolation vs global tracer state, span lifecycle bugs). This is distinct from "tests passed with SDK, but emitted spans failed compliance." The two failure modes imply different fixes — SDK-injection failures are instrumentation-environment conflicts; compliance failures are schema violations. M4 must distinguish them in the PR summary and `--verbose` output. |
