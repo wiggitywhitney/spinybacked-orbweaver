@@ -363,8 +363,8 @@ Configuration not found — run 'spiny-orb init' to create spiny-orb.yaml
             schema extensions, and agent notes. Use this when a file fails and you want
             to understand why.
 --thinking  Show agent thinking blocks for failed files. Thinking blocks contain the
-            agent's step-by-step reasoning per attempt. Requires --verbose to see both
-            the structured output and the thinking blocks together.
+            agent's step-by-step reasoning per attempt. Combine with --verbose to see
+            structured output alongside thinking blocks.
 --debug     Show debug-level diagnostic output
 --no-pr     Skip PR creation (create branch and commits only)
 ```
