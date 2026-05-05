@@ -2,6 +2,7 @@
 // ABOUTME: Returns structured results with failure mode, triggering file, blast radius for diagnostic reporting.
 
 import { execFile as defaultExecFile } from 'node:child_process';
+import { homedir } from 'node:os';
 import type { FileResult } from '../fix-loop/types.ts';
 import { validateDiffChanges } from './schema-diff.ts';
 import { detectSchemaDrift } from './schema-drift.ts';
@@ -145,7 +146,7 @@ async function runRegistryCheck(
     execFileFn(
       'weaver',
       ['registry', 'check', '-r', registryDir],
-      { timeout: 30000 },
+      { timeout: 30000, env: { ...process.env, HOME: process.env.HOME || homedir() } },
       (error, stdout, stderr) => {
         if (error) {
           // Extract CLI output for diagnostics
@@ -173,7 +174,7 @@ async function runRegistryDiff(
     execFileFn(
       'weaver',
       ['registry', 'diff', '-r', registryDir, '--baseline-registry', baselineDir, '--diff-format', 'json'],
-      { timeout: 30000 },
+      { timeout: 30000, env: { ...process.env, HOME: process.env.HOME || homedir() } },
       (error, stdout, stderr) => {
         if (error) {
           const execError = error as Error & { stdout?: Buffer | string; stderr?: Buffer | string };

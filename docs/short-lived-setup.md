@@ -27,10 +27,13 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { resourceFromAttributes } from '@opentelemetry/resources';
+import { randomUUID } from 'node:crypto';
 
 const sdk = new NodeSDK({
   resource: resourceFromAttributes({
     'service.name': 'my-app',
+    'service.version': process.env.npm_package_version || '0.0.0',
+    'service.instance.id': randomUUID(),
   }),
   spanProcessors: [new SimpleSpanProcessor(new OTLPTraceExporter({
     url: 'http://localhost:4318/v1/traces',

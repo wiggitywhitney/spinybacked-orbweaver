@@ -1453,3 +1453,27 @@ describe('renderPrSummary', () => {
     });
   });
 });
+
+describe('renderPrSummary — SDK bootstrap checklist', () => {
+  it('includes service.instance.id in the PR body', () => {
+    const result = _makeRunResult();
+    const md = renderPrSummary(result, _makeConfig());
+
+    expect(md).toContain('service.instance.id');
+  });
+
+  it('includes randomUUID and node:crypto import guidance', () => {
+    const result = _makeRunResult();
+    const md = renderPrSummary(result, _makeConfig());
+
+    expect(md).toContain('randomUUID');
+    expect(md).toContain('node:crypto');
+  });
+
+  it('includes the SDK bootstrap checklist section heading', () => {
+    const result = _makeRunResult();
+    const md = renderPrSummary(result, _makeConfig());
+
+    expect(md).toContain('SDK Bootstrap');
+  });
+});

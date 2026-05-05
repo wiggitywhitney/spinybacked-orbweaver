@@ -12,6 +12,7 @@ import {
   validateDiffChanges,
   computeSchemaDiff,
 } from '../../src/coordinator/schema-diff.ts';
+import type { ExecFileFn } from '../../src/coordinator/schema-diff.ts';
 
 const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
 
@@ -364,5 +365,21 @@ describe('computeSchemaDiff (integration)', () => {
 
     expect(result.valid).toBe(false);
     expect(result.error).toBeDefined();
+  });
+});
+
+describe('runSchemaDiff — HOME propagation', () => {
+  it('passes HOME in subprocess env so Weaver can find vdir_cache', async () => {
+    let capturedOpts: unknown;
+    const mockExecFn: ExecFileFn = (_cmd, _args, opts, cb) => {
+      capturedOpts = opts;
+      cb(null, '{"changes":{}}', '');
+    };
+
+    await runSchemaDiff('/fake/registry', '/fake/baseline', 'json', mockExecFn);
+
+    const env = (capturedOpts as { env?: Record<string, string> }).env;
+    expect(env).toBeDefined();
+    expect(env!.HOME).toBeTruthy();
   });
 });
