@@ -537,3 +537,69 @@ describe('handleInit', () => {
     });
   });
 });
+
+describe('service.instance.id advisory', () => {
+  it('emits advisory warning when service.instance.id is absent from SDK init file', async () => {
+    const validPkg = JSON.stringify({
+      name: 'test-project',
+      private: true,
+      peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+    });
+    const deps = makeDeps({
+      readFile: vi.fn(async (path: string) => {
+        if (path.endsWith('package.json')) return validPkg;
+        if (path.includes('instrumentation')) {
+          return "import { NodeSDK } from '@opentelemetry/sdk-node';\nconst sdk = new NodeSDK({ resource: resourceFromAttributes({ 'service.name': 'my-app' }) });";
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      }),
+    });
+
+    const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings.some(w => w.includes('service.instance.id'))).toBe(true);
+  });
+
+  it('does not emit advisory when service.instance.id is already present in SDK init file', async () => {
+    const validPkg = JSON.stringify({
+      name: 'test-project',
+      private: true,
+      peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+    });
+    const deps = makeDeps({
+      readFile: vi.fn(async (path: string) => {
+        if (path.endsWith('package.json')) return validPkg;
+        if (path.includes('instrumentation')) {
+          return "import { randomUUID } from 'node:crypto';\nconst sdk = new NodeSDK({ resource: resourceFromAttributes({ 'service.name': 'my-app', 'service.instance.id': randomUUID() }) });";
+        }
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      }),
+    });
+
+    const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+    expect(result.success).toBe(true);
+    expect(result.warnings.some(w => w.includes('service.instance.id'))).toBe(false);
+  });
+
+  it('skips advisory when SDK init file cannot be read', async () => {
+    const validPkg = JSON.stringify({
+      name: 'test-project',
+      private: true,
+      peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+    });
+    const deps = makeDeps({
+      readFile: vi.fn(async (path: string) => {
+        if (path.endsWith('package.json')) return validPkg;
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      }),
+    });
+
+    const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+    // Should succeed without advisory (file unreadable — skip silently)
+    expect(result.success).toBe(true);
+    expect(result.warnings.some(w => w.includes('service.instance.id'))).toBe(false);
+  });
+});

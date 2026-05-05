@@ -233,6 +233,28 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   }
   const sdkInitFile = foundInitFiles[0];
 
+  // Advisory: check for service.instance.id in the detected SDK init file.
+  // Scoped regex: only fires when service.instance.id appears as a key inside a
+  // resourceFromAttributes({...}) call, avoiding false positives from comments or
+  // documentation strings that mention the attribute name without defining it.
+  try {
+    const sdkInitContent = await deps.readFile(join(projectDir, sdkInitFile));
+    const hasServiceInstanceId =
+      /resourceFromAttributes\s*\(\s*\{[\s\S]*?['"`]service\.instance\.id['"`]\s*:[\s\S]*?\}\s*\)/m.test(
+        sdkInitContent,
+      );
+    if (!hasServiceInstanceId) {
+      warnings.push(
+        `'service.instance.id' not found in ${sdkInitFile}. ` +
+        "Add it to your resourceFromAttributes() call: " +
+        "'service.instance.id': randomUUID() (imported from node:crypto). " +
+        "This attribute uniquely identifies a running instance and is required for RES-001 compliance.",
+      );
+    }
+  } catch {
+    // File not accessible — skip advisory silently
+  }
+
   // Detect schema directory
   deps.stderr('Detecting Weaver schema...');
   const schemaPath = deps.findSchemaDir(projectDir);

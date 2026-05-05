@@ -4,7 +4,7 @@
 import { cp, rm } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { execFile as defaultExecFile } from 'node:child_process';
 
 /** Result of computing a schema diff with both markdown and validation. */
@@ -78,7 +78,7 @@ export async function runSchemaDiff(
     execFileFn(
       'weaver',
       ['registry', 'diff', '-r', registryDir, '--baseline-registry', baselineDir, '--diff-format', format],
-      { timeout: 30000 },
+      { timeout: 30000, env: { ...process.env, HOME: process.env.HOME || homedir() } },
       (error, stdout) => {
         if (error) {
           reject(error);
