@@ -1,6 +1,6 @@
 # PRD #698: Make live-check actually validate something
 
-**Status**: Active
+**Status**: Complete (2026-05-05)
 **Priority**: Medium
 **GitHub Issue**: [#698](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/698)
 **Created**: 2026-05-01
