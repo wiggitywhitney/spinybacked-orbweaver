@@ -60,7 +60,7 @@ Framework interaction questions for jest, mocha, pytest, etc. belong in downstre
 
 ## Milestones
 
-- [ ] M1: Research — SDK injection approach (Research A) and Weaver JSON schema (Research B)
+- [x] M1: Research — SDK injection approach (Research A) and Weaver JSON schema (Research B)
 - [ ] M2: Implement `--format=json` + JSON compliance report parsing
 - [ ] M3: Implement SDK injection + double-init detection
 - [ ] M4: Update PR summary to distinguish real compliance from "nothing received" + surface output in `--verbose`
@@ -111,7 +111,19 @@ Success criteria:
 
 **Step 0**: Read `docs/research/sdk-injection-approach.md` before writing any code.
 
-Inject SDK initialization into the test environment by modifying how spiny-orb invokes the live-check test run — the exact files to change are determined by Research A output; read `docs/research/sdk-injection-approach.md` first to identify the correct callsite(s). Implement double-init detection: call `trace.setGlobalTracerProvider()` and check the return value — `false` means a provider is already registered, skip init. Do NOT use `setupFiles` for SDK init in Vitest contexts — use `experimental.openTelemetry.sdkPath`. Do NOT add any OTel SDK package imports that are not already present in `package.json` — the SDK must already be a dependency.
+Inject SDK initialization into the test environment by modifying how spiny-orb invokes the live-check test run — the exact files to change are determined by Research A output; read `docs/research/sdk-injection-approach.md` first to identify the correct callsite(s).
+
+**Chosen injection mechanism (from Research A):** `NODE_OPTIONS=--import <absolute-path>` where the path points to a temporary init file spiny-orb writes into the target project's directory (e.g., `<projectDir>/.spiny-orb-live-check-init.mjs`). Placing the file inside the target project's directory causes Node.js to resolve bare package specifiers (e.g., `@opentelemetry/sdk-node`) from the target project's `node_modules`. Delete the temp file after the test run completes.
+
+**Do NOT use `experimental.openTelemetry.sdkPath`** — it requires modifying the user-owned `vitest.config.ts`, is Vitest-specific, and must be reverted after the run. `NODE_OPTIONS=--import` is runner-agnostic and requires no config modifications.
+
+**No hook loader needed:** spiny-orb adds manual instrumentation (`tracer.startActiveSpan()`). The `--experimental-loader=@opentelemetry/instrumentation/hook.mjs` is only required for auto-instrumentation (monkey-patching). Do not add it.
+
+**Exporter protocol:** Weaver's live-check listens on gRPC OTLP only (no HTTP OTLP ingestion). Set `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` in the test run environment. With this env var, `NodeSDK` auto-selects `@opentelemetry/exporter-trace-otlp-grpc` from its own transitive deps — no explicit import of the gRPC exporter package is needed. The gRPC endpoint format is `http://localhost:<port>` (h2c, insecure gRPC).
+
+**SDK availability:** The target project must have `@opentelemetry/sdk-node` available in `node_modules` (it need not be in `package.json` — pnpm hoisting makes it accessible if it's a transitive dep). If `sdk-node` is absent, skip SDK injection and emit a warning rather than erroring.
+
+Implement double-init detection: call `trace.setGlobalTracerProvider()` and check the return value — `false` means a provider is already registered, skip init.
 
 **Important — this milestone introduces a new failure class (Decision 3).** When the SDK loads, M3 is the first time the test suite runs with active (recording) spans rather than no-ops. A new class of failures can surface here that no-op checkpoint tests cannot catch:
 - Auto-instrumentation packages (`@opentelemetry/instrumentation-http`, `-pg`, `-express`, etc.) monkey-patch modules at load time. Tests using `nock`, `msw`, or similar HTTP mocking libraries may conflict — whichever loads second wins, or they crash at the wrapper level.
@@ -181,3 +193,4 @@ Success criterion: test exists, passes locally, and CI acceptance gate workflow 
 | 2026-05-01 | Research before implementation for both SDK injection and JSON schema | The right SDK injection approach is non-obvious and depends on the target test runner. The JSON schema must be captured from a real Weaver run — it cannot be assumed from documentation. Both unknowns must be resolved before writing implementation code. |
 | 2026-05-01 | jest, mocha, pytest framework interactions out of scope | This PRD establishes the general injection mechanism. Language-specific quirks belong in downstream language PRDs. Keeping scope narrow ensures this PRD can ship without blocking on every test runner. |
 | 2026-05-04 | M3 implicitly adds tier 1.5; two distinct live-check failure modes must be surfaced separately in M4 | When M3 injects the SDK, the test suite runs with recording spans for the first time — no-op checkpoint tests cannot catch this class of bugs. A new failure category emerges: tests breaking under SDK injection (auto-instrumentation conflicts with test mocking libraries, async context patching, worker isolation vs global tracer state, span lifecycle bugs). This is distinct from "tests passed with SDK, but emitted spans failed compliance." The two failure modes imply different fixes — SDK-injection failures are instrumentation-environment conflicts; compliance failures are schema violations. M4 must distinguish them in the PR summary and `--verbose` output. |
+| 2026-05-05 | M3 injection: `NODE_OPTIONS=--import` with temp file inside target project dir, not `experimental.openTelemetry.sdkPath` | Research A validated against taze. `sdkPath` requires modifying user-owned `vitest.config.ts` and is Vitest-specific. `NODE_OPTIONS=--import` with the temp file placed inside the target project dir is runner-agnostic and avoids config modification — Node.js resolves bare specifiers from the file's own directory. Weaver is gRPC-only (no HTTP OTLP ingestion), so `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` must be set; NodeSDK auto-selects the gRPC exporter from its transitive deps. No hook loader needed for manual instrumentation. |
