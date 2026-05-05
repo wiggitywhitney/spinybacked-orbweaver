@@ -1265,6 +1265,101 @@ describe('renderPrSummary', () => {
     });
   });
 
+  describe('live-check compliance report — three-state status (M4)', () => {
+    it('renders OK with span count when spans were received', () => {
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: true, spanCount: 7, totalAdvisories: 2 },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Live-Check Compliance');
+      expect(md).toContain('Live-Check: OK');
+      expect(md).toContain('7 spans');
+    });
+
+    it('renders WARNING when tests failed after SDK injection', () => {
+      const result = _makeRunResult({
+        liveCheckStatus: {
+          spansReceived: false,
+          spanCount: 0,
+          totalAdvisories: 0,
+          sdkInjectionTestsFailed: true,
+        },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Live-Check Compliance');
+      expect(md).toContain('Live-Check: WARNING');
+      expect(md).toContain('tests failed after SDK injection');
+    });
+
+    it('WARNING message includes span count emitted before failure', () => {
+      const result = _makeRunResult({
+        liveCheckStatus: {
+          spansReceived: true,
+          spanCount: 3,
+          totalAdvisories: 0,
+          sdkInjectionTestsFailed: true,
+        },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('3 spans');
+    });
+
+    it('renders "no spans received" when no spans and no SDK injection failure', () => {
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: false, spanCount: 0, totalAdvisories: 0 },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Live-Check Compliance');
+      expect(md).toContain('Live-Check: OK');
+      expect(md).toContain('no spans received');
+    });
+
+    it('WARNING does NOT appear when tests passed (even if no spans received)', () => {
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: false, spanCount: 0, totalAdvisories: 0 },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('WARNING');
+    });
+
+    it('renders live-check section even without endOfRunValidation when liveCheckStatus is present', () => {
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: false, spanCount: 0, totalAdvisories: 0 },
+        // No endOfRunValidation
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Live-Check Compliance');
+    });
+
+    it('includes full compliance report when spans were received and endOfRunValidation present', () => {
+      const fullReport = JSON.stringify({ statistics: { total_entities: 5 } });
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: true, spanCount: 5, totalAdvisories: 0 },
+        endOfRunValidation: fullReport,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain(fullReport);
+    });
+
+    it('omits full compliance report when no spans received (nothing to show)', () => {
+      const fullReport = JSON.stringify({ statistics: { total_entities: 0 } });
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: false, spanCount: 0, totalAdvisories: 0 },
+        endOfRunValidation: fullReport,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain(fullReport);
+    });
+  });
+
   describe('companion packages section', () => {
     it('renders companion packages section when companionPackages is populated', () => {
       const result = _makeRunResult({

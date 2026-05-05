@@ -57,6 +57,22 @@ export interface CoordinatorCallbacks {
 
 /**
  * Complete result of a full instrumentation run.
+/**
+ * Parsed live-check status stored in RunResult for PR summary rendering.
+ * Derived from LiveCheckResult.parsedCompliance and sdkInjectionTestsFailed.
+ */
+export interface LiveCheckStatus {
+  /** Whether Weaver received any spans during the test run. */
+  spansReceived: boolean;
+  /** Number of spans received (from statistics.total_entities_by_type.span). */
+  spanCount: number;
+  /** Total advisory findings. 0 = fully compliant. */
+  totalAdvisories: number;
+  /** Whether the test suite failed after SDK injection was attempted. */
+  sdkInjectionTestsFailed?: boolean;
+}
+
+/**
  * This is what the coordinator returns and interfaces consume.
  */
 export interface RunResult {
@@ -77,6 +93,8 @@ export interface RunResult {
   schemaHashStart?: string;
   schemaHashEnd?: string;
   endOfRunValidation?: string;
+  /** Parsed live-check result for PR summary three-state rendering. */
+  liveCheckStatus?: LiveCheckStatus;
   /**
    * Set when end-of-run tests fail with an ambiguous failure (committed files in call path,
    * not a direct import/type error). Populated after all diagnostic context is collected.

@@ -531,6 +531,14 @@ export async function coordinate(
       if (liveCheckResult.complianceReport) {
         runResult.endOfRunValidation = liveCheckResult.complianceReport;
       }
+      if (liveCheckResult.parsedCompliance) {
+        runResult.liveCheckStatus = {
+          spansReceived: liveCheckResult.parsedCompliance.spansReceived,
+          spanCount: liveCheckResult.parsedCompliance.spanCount,
+          totalAdvisories: liveCheckResult.parsedCompliance.totalAdvisories,
+          sdkInjectionTestsFailed: liveCheckResult.sdkInjectionTestsFailed,
+        };
+      }
       if (liveCheckResult.warnings.length > 0) {
         runResult.warnings.push(...liveCheckResult.warnings);
       }

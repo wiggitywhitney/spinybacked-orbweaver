@@ -469,7 +469,23 @@ export async function handleInstrument(
         deps.stderr('  Run with --verbose for full diffs');
       }
     }
-    if (runResult.endOfRunValidation) {
+    if (runResult.liveCheckStatus) {
+      const s = runResult.liveCheckStatus;
+      let statusLine: string;
+      if (s.sdkInjectionTestsFailed) {
+        const spanInfo = s.spanCount > 0 ? ` (${s.spanCount} spans emitted before failure)` : '';
+        statusLine = `Live-check: WARNING — tests failed after SDK injection${spanInfo}`;
+      } else if (s.spansReceived) {
+        statusLine = `Live-check: OK (${s.spanCount} spans passed compliance)`;
+      } else {
+        statusLine = 'Live-check: OK (no spans received — live-check did not validate any telemetry)';
+      }
+      deps.stderr(statusLine);
+      if (options.verbose && runResult.endOfRunValidation) {
+        deps.stderr('Full compliance report:');
+        deps.stderr(runResult.endOfRunValidation);
+      }
+    } else if (runResult.endOfRunValidation) {
       deps.stderr(`Live-check: ${runResult.endOfRunValidation}`);
     }
     for (const warning of runResult.warnings) {

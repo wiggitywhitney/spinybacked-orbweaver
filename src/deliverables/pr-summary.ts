@@ -1,7 +1,7 @@
 // ABOUTME: Renders RunResult into a complete PR description in markdown.
 // ABOUTME: Produces all spec-required sections: per-file status, span categories, schema diff, review sensitivity, notes, token usage, version.
 
-import type { RunResult, EndOfRunFlagContext } from '../coordinator/types.ts';
+import type { RunResult, EndOfRunFlagContext, LiveCheckStatus } from '../coordinator/types.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CheckResult } from '../validation/types.ts';
@@ -687,13 +687,44 @@ function renderAgentVersion(runResult: RunResult): string {
 }
 
 function renderLiveCheckCompliance(runResult: RunResult): string {
-  if (!runResult.endOfRunValidation) return '';
+  const { liveCheckStatus, endOfRunValidation } = runResult;
+
+  // No live-check data at all — omit section
+  if (!liveCheckStatus && !endOfRunValidation) return '';
 
   const lines: string[] = ['## Live-Check Compliance'];
   lines.push('');
-  lines.push(runResult.endOfRunValidation);
+
+  if (liveCheckStatus) {
+    lines.push(formatLiveCheckStatusLine(liveCheckStatus));
+    // Include full report only when spans were received (data is meaningful)
+    if (liveCheckStatus.spansReceived && endOfRunValidation) {
+      lines.push('');
+      lines.push('<details>');
+      lines.push('<summary>Full compliance report</summary>');
+      lines.push('');
+      lines.push('```json');
+      lines.push(endOfRunValidation);
+      lines.push('```');
+      lines.push('</details>');
+    }
+  } else if (endOfRunValidation) {
+    // Backward compat: no liveCheckStatus but raw report present
+    lines.push(endOfRunValidation);
+  }
 
   return lines.join('\n');
+}
+
+function formatLiveCheckStatusLine(status: LiveCheckStatus): string {
+  if (status.sdkInjectionTestsFailed) {
+    const spanInfo = status.spanCount > 0 ? `${status.spanCount} spans emitted before failure; ` : '';
+    return `Live-Check: WARNING — tests failed after SDK injection (${spanInfo}see test output for details)`;
+  }
+  if (status.spansReceived) {
+    return `Live-Check: OK (${status.spanCount} spans passed compliance)`;
+  }
+  return 'Live-Check: OK (no spans received — live-check did not validate any telemetry)';
 }
 
 function renderWarnings(runResult: RunResult): string {

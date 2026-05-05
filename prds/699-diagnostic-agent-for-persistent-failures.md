@@ -114,7 +114,7 @@ Success criterion: Both research files exist and contain enough specificity to d
 Implement a diagnostic agent module at `src/coordinator/diagnostic-agent.ts`.
 
 The agent:
-1. Accepts the inputs defined in the Solution section (failing test, error output, serialized call graph, committed diffs, live-check compliance report)
+1. Accepts the inputs defined in the Solution section (failing test, error output, serialized call graph, committed diffs, live-check compliance report). **Note (from PRD #698 M4)**: the coordinator now exposes `runResult.liveCheckStatus` (typed `LiveCheckStatus` from `src/coordinator/types.ts`) with pre-parsed fields: `spansReceived`, `spanCount`, `totalAdvisories`, `sdkInjectionTestsFailed`. Use this structured data when constructing the evidence input rather than parsing `runResult.endOfRunValidation` (raw Weaver JSON) yourself. Pass `liveCheckStatus` to the agent so it can reason about whether spans actually fired vs. "no spans received" vs. "SDK injection failed" without doing its own JSON parsing.
 2. Applies the signal threshold logic from M1 Research Question 2 to determine whether to produce a specific claim or present evidence
 3. Returns a structured result:
    ```typescript
