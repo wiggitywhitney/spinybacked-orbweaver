@@ -4,10 +4,17 @@
 import { createServer as defaultCreateServer } from 'node:net';
 import { spawn as defaultSpawn } from 'node:child_process';
 import { execFile as defaultExecFile } from 'node:child_process';
+import { writeFile as defaultWriteFile, unlink as defaultUnlink } from 'node:fs/promises';
 import type { ChildProcess } from 'node:child_process';
 import type { Server } from 'node:net';
+import { join, basename } from 'node:path';
 import type { CoordinatorCallbacks } from './types.ts';
 import { hasTestSuite } from './test-suite-detection.ts';
+import {
+  LIVE_CHECK_INIT_FILENAME,
+  generateInitFileContent,
+  checkSdkNodeAvailable,
+} from './live-check-sdk-init.ts';
 
 /** Default Weaver OTLP receiver ports — non-standard to avoid conflicts with existing OTel collectors. */
 export const DEFAULT_GRPC_PORT = 14317;
@@ -38,6 +45,12 @@ export interface LiveCheckDeps {
   fetchFn: (url: string, init?: RequestInit) => Promise<Response>;
   setTimeout: (cb: () => void, ms: number) => unknown;
   clearTimeout: (id: unknown) => void;
+  /** Write a file (for init file creation). Defaults to node:fs/promises writeFile. */
+  writeFileFn?: (path: string, content: string) => Promise<void>;
+  /** Delete a file (for init file cleanup). Defaults to node:fs/promises unlink. */
+  deleteFileFn?: (path: string) => Promise<void>;
+  /** Check if @opentelemetry/sdk-node is available in the target project. */
+  checkSdkNodeFn?: (projectDir: string) => Promise<boolean>;
 }
 
 /** Result of port availability check. */
@@ -70,6 +83,8 @@ export interface LiveCheckResult {
   testsPassed?: boolean;
   /** Combined stdout+stderr from the test suite run. Only present when tests fail. */
   testOutput?: string;
+  /** Whether the test suite failed specifically after SDK injection was attempted. Undefined if injection wasn't attempted. */
+  sdkInjectionTestsFailed?: boolean;
   /** Warnings produced during the live-check workflow. */
   warnings: string[];
 }
@@ -203,6 +218,9 @@ export async function runLiveCheck(
   const spawnFn = deps?.spawnFn ?? defaultSpawn;
   const execFileFn = deps?.execFileFn ?? (defaultExecFile as unknown as LiveCheckDeps['execFileFn']);
   const fetchFn = deps?.fetchFn ?? globalThis.fetch;
+  const writeFileFn = deps?.writeFileFn ?? ((p: string, c: string) => defaultWriteFile(p, c, 'utf-8'));
+  const deleteFileFn = deps?.deleteFileFn ?? ((p: string) => defaultUnlink(p).catch(() => {}));
+  const checkSdkNodeFn = deps?.checkSdkNodeFn ?? checkSdkNodeAvailable;
 
   // Step 3: Start Weaver live-check
   let weaverProcess: ChildProcess;
@@ -248,13 +266,49 @@ export async function runLiveCheck(
     };
   }
 
-  // Step 5: Run test suite with OTLP endpoint override
+  // Step 5: Inject SDK init file if @opentelemetry/sdk-node is available
+  let sdkInjected = false;
+  const initFilePath = join(projectDir, LIVE_CHECK_INIT_FILENAME);
+
+  const sdkNodeAvailable = await checkSdkNodeFn(projectDir);
+  if (sdkNodeAvailable) {
+    const serviceName = basename(projectDir) || 'unknown';
+    try {
+      await writeFileFn(initFilePath, generateInitFileContent(serviceName));
+      sdkInjected = true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      warnings.push(`Failed to write SDK init file for live-check: ${message}. Proceeding without SDK injection.`);
+    }
+  } else {
+    warnings.push(
+      `@opentelemetry/sdk-node not found in ${projectDir}/node_modules. ` +
+      `SDK injection skipped — spans will not reach Weaver. ` +
+      `Install @opentelemetry/sdk-node in the target project to enable live-check telemetry validation.`,
+    );
+  }
+
+  // Build extra env vars for the test run
+  const extraEnv: Record<string, string> = {};
+  if (sdkInjected) {
+    const existingNodeOptions = process.env['NODE_OPTIONS'];
+    extraEnv['NODE_OPTIONS'] = existingNodeOptions
+      ? `${existingNodeOptions} --import ${initFilePath}`
+      : `--import ${initFilePath}`;
+  }
+
+  // Step 5b: Run test suite with OTLP endpoint override (+ SDK injection if available)
   let testsPassed = true;
   let testOutput: string | undefined;
+  let sdkInjectionTestsFailed: boolean | undefined;
+
   try {
-    await runTestSuite(testCommand, projectDir, grpcPort, execFileFn);
+    await runTestSuite(testCommand, projectDir, grpcPort, execFileFn, extraEnv);
   } catch (err) {
     testsPassed = false;
+    if (sdkInjected) {
+      sdkInjectionTestsFailed = true;
+    }
     const message = err instanceof Error ? err.message : String(err);
     // ExecFileException carries stdout/stderr on the error object — capture for call path analysis.
     const errRecord = err as Record<string, unknown>;
@@ -263,6 +317,11 @@ export async function runLiveCheck(
     const combined = [outStr, errStr].filter(Boolean).join('\n');
     testOutput = combined || undefined;
     warnings.push(`End-of-run test suite failed: ${message}`);
+  }
+
+  // Clean up the init file (always, even on failure)
+  if (sdkInjected) {
+    await deleteFileFn(initFilePath);
   }
 
   // Step 6: Stop Weaver via HTTP /stop endpoint
@@ -308,6 +367,7 @@ export async function runLiveCheck(
     parsedCompliance,
     testsPassed,
     testOutput,
+    sdkInjectionTestsFailed,
     warnings,
   };
 }
@@ -372,13 +432,14 @@ async function waitForWeaverReady(
 }
 
 /**
- * Run the test suite with OTEL_EXPORTER_OTLP_ENDPOINT override.
+ * Run the test suite with OTEL_EXPORTER_OTLP_ENDPOINT override and any extra env vars.
  */
 async function runTestSuite(
   testCommand: string,
   projectDir: string,
   grpcPort: number,
   execFileFn: LiveCheckDeps['execFileFn'],
+  extraEnv: Record<string, string> = {},
 ): Promise<{ stdout: string; stderr: string }> {
   const isWindows = process.platform === 'win32';
   const cmd = isWindows ? 'cmd.exe' : 'sh';
@@ -394,6 +455,7 @@ async function runTestSuite(
         env: {
           ...process.env,
           OTEL_EXPORTER_OTLP_ENDPOINT: `http://localhost:${grpcPort}`,
+          ...extraEnv,
         },
       },
       (error, stdout, stderr) => {

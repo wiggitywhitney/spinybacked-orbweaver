@@ -173,7 +173,9 @@ describe('runLiveCheck — real Weaver integration', { timeout: 60_000 }, () => 
     expect(result.testsPassed).toBe(true);
     expect(result.complianceReport).toBeDefined();
     expect(result.complianceReport!.length).toBeGreaterThan(0);
-    expect(result.warnings, `Unexpected warnings: ${JSON.stringify(result.warnings)}`).toHaveLength(0);
+    // Filter sdk-node availability warning — expected when spiny-orb itself is the target project
+    const unexpectedWarnings = result.warnings.filter(w => !w.includes('@opentelemetry/sdk-node'));
+    expect(unexpectedWarnings, `Unexpected warnings: ${JSON.stringify(unexpectedWarnings)}`).toHaveLength(0);
   });
 
   it('fires callbacks during the workflow', async () => {
@@ -317,6 +319,8 @@ describe('Weaver live-check — direct process verification', { timeout: 30_000 
     expect(result.testsPassed).toBe(true);
     expect(result.complianceReport).toBeDefined();
     expect(result.complianceReport!.length).toBeGreaterThan(0);
-    expect(result.warnings, `Unexpected warnings: ${JSON.stringify(result.warnings)}`).toHaveLength(0);
+    // Filter sdk-node availability warning — expected when spiny-orb itself is the target project
+    const unexpectedWarnings = result.warnings.filter(w => !w.includes('@opentelemetry/sdk-node'));
+    expect(unexpectedWarnings, `Unexpected warnings: ${JSON.stringify(unexpectedWarnings)}`).toHaveLength(0);
   });
 });

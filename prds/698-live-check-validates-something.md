@@ -62,7 +62,7 @@ Framework interaction questions for jest, mocha, pytest, etc. belong in downstre
 
 - [x] M1: Research — SDK injection approach (Research A) and Weaver JSON schema (Research B)
 - [x] M2: Implement `--format=json` + JSON compliance report parsing
-- [ ] M3: Implement SDK injection + double-init detection
+- [x] M3: Implement SDK injection + double-init detection
 - [ ] M4: Update PR summary to distinguish real compliance from "nothing received" + surface output in `--verbose`
 - [ ] M5: Acceptance gate test — confirm real spans reach Weaver and compliance report contains actual data
 
