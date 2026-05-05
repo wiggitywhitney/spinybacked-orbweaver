@@ -381,12 +381,11 @@ function parseComplianceReport(raw: string): ParsedCompliance | undefined {
     const json = JSON.parse(raw) as Record<string, unknown>;
     const stats = json['statistics'] as Record<string, unknown> | undefined;
     if (!stats || typeof stats !== 'object') return undefined;
-    const totalEntities = typeof stats['total_entities'] === 'number' ? stats['total_entities'] : 0;
     const entitiesByType = (stats['total_entities_by_type'] ?? {}) as Record<string, unknown>;
     const spanCount = typeof entitiesByType['span'] === 'number' ? entitiesByType['span'] : 0;
     const totalAdvisories = typeof stats['total_advisories'] === 'number' ? stats['total_advisories'] : 0;
     return {
-      spansReceived: totalEntities > 0,
+      spansReceived: spanCount > 0,
       spanCount,
       totalAdvisories,
     };
