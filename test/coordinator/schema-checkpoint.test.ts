@@ -229,6 +229,7 @@ describe('runSchemaCheckpoint — HOME propagation', () => {
     // Pass a baselineDir so both registry check and diff fire
     await runSchemaCheckpoint('/fake/registry', '/fake/baseline', 'file.js', 1, deps);
 
+    expect(capturedOpts).toHaveLength(2);
     for (const opts of capturedOpts) {
       const env = (opts as { env?: Record<string, string> }).env;
       expect(env).toBeDefined();
