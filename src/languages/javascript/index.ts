@@ -425,6 +425,8 @@ export class JavaScriptProvider implements LanguageProvider {
     const unexportedFunctions: PreScanResult['unexportedFunctions'] = [];
     const outboundCallsNeedingSpans: PreScanResult['outboundCallsNeedingSpans'] = [];
 
+    // Use composite keys (name|startLine) to avoid collisions when a free function
+    // and a class method share the same name.
     const entryPointNames = new Set<string>();
 
     // COV-001 + RST-006: identify entry points and process.exit() constraints
@@ -432,7 +434,7 @@ export class JavaScriptProvider implements LanguageProvider {
       const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
       if (!isEntryPoint) continue;
 
-      entryPointNames.add(fn.name);
+      entryPointNames.add(`${fn.name}|${fn.startLine}`);
       entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
 
       const fnNode = fnNodeByName.get(`${fn.name}|${fn.startLine}`) ?? fnNodeByName.get(fn.name);
@@ -467,7 +469,7 @@ export class JavaScriptProvider implements LanguageProvider {
 
     // COV-004 / RST-001 / RST-004: classify non-entry-point functions
     for (const fn of classified) {
-      if (entryPointNames.has(fn.name)) continue;
+      if (entryPointNames.has(`${fn.name}|${fn.startLine}`)) continue;
 
       if (fn.isAsync) {
         // COV-004: async non-entry-point functions need spans — but apply the same
