@@ -392,9 +392,11 @@ export class JavaScriptProvider implements LanguageProvider {
     // variable-assigned arrow/function expressions.
     const classified = classifyFunctions(sourceFile);
 
-    // Build a name → node map covering both FunctionDeclaration nodes and
-    // variable-assigned ArrowFunction/FunctionExpression nodes. The wide
-    // import('ts-morph').Node type lets hasDirectProcessExit work on both.
+    // Build a name → node map for hasDirectProcessExit and outbound-call lookups.
+    // Free functions (declarations and variable-assigned): keyed by name alone — names are
+    // unique at module scope. Class methods: keyed by "name|startLine" to prevent collisions
+    // when two classes define a method with the same name. Lookups use the composite key as
+    // a fallback (fnNodeByName.get(fn.name) ?? fnNodeByName.get(`${fn.name}|${fn.startLine}`)).
     const fnNodeByName = new Map<string, import('ts-morph').Node>();
     for (const node of sourceFile.getFunctions()) {
       const name = node.getName();
@@ -412,7 +414,7 @@ export class JavaScriptProvider implements LanguageProvider {
     }
     for (const cls of sourceFile.getClasses()) {
       for (const method of cls.getMethods()) {
-        fnNodeByName.set(method.getName(), method);
+        fnNodeByName.set(`${method.getName()}|${method.getStartLineNumber()}`, method);
       }
     }
 
@@ -433,7 +435,7 @@ export class JavaScriptProvider implements LanguageProvider {
       entryPointNames.add(fn.name);
       entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
 
-      const fnNode = fnNodeByName.get(fn.name);
+      const fnNode = fnNodeByName.get(fn.name) ?? fnNodeByName.get(`${fn.name}|${fn.startLine}`);
       if (fnNode && hasDirectProcessExit(fnNode)) {
         // Detect inner try/catch blocks that must be preserved when the function is wrapped.
         const innerTryStatements = fnNode.getDescendantsOfKind(SyntaxKind.TryStatement);
@@ -471,7 +473,7 @@ export class JavaScriptProvider implements LanguageProvider {
         // COV-004: async non-entry-point functions need spans — but apply the same
         // process.exit() exception as the prompt rule: if the function calls
         // process.exit() directly in its body, skip it (instrument sub-ops instead).
-        const fnNode = fnNodeByName.get(fn.name);
+        const fnNode = fnNodeByName.get(fn.name) ?? fnNodeByName.get(`${fn.name}|${fn.startLine}`);
         if (!fnNode || !hasDirectProcessExit(fnNode)) {
           asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
         }
@@ -515,7 +517,7 @@ export class JavaScriptProvider implements LanguageProvider {
 
     for (const fn of classified) {
       if (!fn.isAsync) continue;
-      const fnNode = fnNodeByName.get(fn.name);
+      const fnNode = fnNodeByName.get(fn.name) ?? fnNodeByName.get(`${fn.name}|${fn.startLine}`);
       if (!fnNode) continue;
       const bodyText = fnNode.getText();
       const calls = OUTBOUND_KEYWORDS
@@ -567,7 +569,7 @@ export class JavaScriptProvider implements LanguageProvider {
     // calls (not method calls). Categorize each as local or imported.
     const entryPointSubOperations: PreScanSubOperationGroup[] = [];
     for (const ep of entryPointsNeedingSpans) {
-      const fnNode = fnNodeByName.get(ep.name);
+      const fnNode = fnNodeByName.get(ep.name) ?? fnNodeByName.get(`${ep.name}|${ep.startLine}`);
       if (!fnNode) continue;
 
       const localSubOperations: string[] = [];

@@ -232,6 +232,34 @@ export class Api {
     });
   });
 
+  describe('RST-006: same-named methods across exported classes', () => {
+    it('resolves process.exit() correctly when two exported classes have a method with the same name', () => {
+      const source = `
+export class CliA {
+  async run() {
+    const result = await execute();
+    if (!result.ok) {
+      process.exit(1);
+    }
+  }
+}
+
+export class CliB {
+  async run() {
+    return await execute();
+  }
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      // Both run() methods are entry points
+      expect(result.entryPointsNeedingSpans.filter(ep => ep.name === 'run')).toHaveLength(2);
+      // Only CliA.run has process.exit() — should not be lost to a name collision
+      expect(result.processExitEntryPoints.filter(ep => ep.name === 'run')).toHaveLength(1);
+    });
+  });
+
   describe('empty / no functions', () => {
     it('returns empty arrays for a file with no function definitions', () => {
       const source = `const x = 42;\nexport default x;`;
