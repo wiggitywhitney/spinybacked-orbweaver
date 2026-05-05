@@ -11,16 +11,13 @@ When a real-world eval run completes for a language provider, mark it using thes
 
 Pass rate = files committed / files discovered. Syntax errors = files where `tsc --noEmit` (TypeScript) or equivalent fails on the instrumented output. All language provider PRDs reference these thresholds in their C7/D7/E7 eval milestones.
 
-**Current status**: TypeScript — **Experimental** ✓ (*run-13 complete*: 14 committed, 19 correct skips, 0 failures, 93% quality). Known limitations: CDQ-006 isRecording guard gaps and attribute namespace inference addressed in prompt (PRs #746, #749); SCH-002 re-declaration at high token counts blocking acceptance gate CI (tracked in #742 — PR #749 did not resolve it).
+**Current status**: TypeScript — **Experimental** ✓ (*run-13 complete*: 14 committed, 19 correct skips, 0 failures, 93% quality). Known limitations: CDQ-006 isRecording guard gaps and attribute namespace inference addressed in prompt (PRs #746, #749); SCH-002 re-declaration at high token counts intermittently blocks `summary-manager.js` in acceptance gate CI — exact-match pre-check and prompt guidance improved fix-loop recovery (PR #766), but the issue persists at high token counts (76K–91K).
 
 ---
 
 ## Short-term (current focus)
 
-- SCH-002: agent re-declares existing registry attribute as extension on high-token-count files ([issue #742](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/742)) — intermittently blocks acceptance gate CI: `summary-manager.js` (91K input tokens) and `summarize.js` oscillate on SCH-002 when the agent re-declares existing registry attributes as new extensions. PR #749 attempted a fix; the gate has since both passed and failed on different runs. Requires artifact analysis (five diagnostic dimensions) to determine whether registry context is dropping out of the attention window at high token counts, or whether SCH-002 feedback is insufficiently actionable. Artifacts from failed runs 25292462369 and 25318130344.
-- Document the SDK initialization boundary ([issue #685](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/685)) — checkpoint tests run without OTel SDK init (spans are no-ops); live-check post PRD #698 runs with SDK init (spans fire). Users debugging unexpected behavior need this distinction documented.
 - Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
-- Real-world fixture coverage for TypeScript validator ([issue #653](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/653)) — NDS-003 and checkSyntax() tests use synthetic strings; real-world taze fixtures would catch tsconfig propagation bugs before eval.
 
 ## Medium-term
 
