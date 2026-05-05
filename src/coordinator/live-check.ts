@@ -420,9 +420,14 @@ export async function runLiveCheck(
  * Returns undefined if the report lacks the expected structure.
  */
 function parseComplianceReport(raw: string): ParsedCompliance | undefined {
-  // Try 0.21.x format: single object with a "statistics" wrapper key
+  // Try parsing as a single JSON object — handles:
+  // - 0.21.x format: {"samples":[...],"statistics":{total_entities:N,...}}
+  // - 0.22.x single-object case: {total_entities:N,...} at top level
   try {
     const json = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof json['total_entities'] === 'number') {
+      return extractCompliance(json);
+    }
     const stats = json['statistics'] as Record<string, unknown> | undefined;
     if (stats && typeof stats === 'object') {
       return extractCompliance(stats);

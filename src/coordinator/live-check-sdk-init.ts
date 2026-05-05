@@ -2,7 +2,7 @@
 // ABOUTME: Checks @opentelemetry/sdk-node availability and provides the NodeSDK init template.
 
 import { access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { constants } from 'node:fs';
 
 /** Filename written into the target project's root directory before the live-check test run. */
@@ -76,11 +76,17 @@ export async function checkSdkNodeAvailable(
   projectDir: string,
   accessFn: (path: string, mode: number) => Promise<void> = (p, m) => access(p, m),
 ): Promise<boolean> {
-  const sdkNodePath = join(projectDir, 'node_modules', '@opentelemetry', 'sdk-node');
-  try {
-    await accessFn(sdkNodePath, constants.F_OK);
-    return true;
-  } catch {
-    return false;
+  // Walk up the directory tree matching Node's own module resolution, so hoisted
+  // or workspace-root-installed packages are found even when not in projectDir directly.
+  let currentDir = projectDir;
+  while (true) {
+    try {
+      await accessFn(join(currentDir, 'node_modules', '@opentelemetry', 'sdk-node'), constants.F_OK);
+      return true;
+    } catch {
+      const parentDir = dirname(currentDir);
+      if (parentDir === currentDir) return false;
+      currentDir = parentDir;
+    }
   }
 }

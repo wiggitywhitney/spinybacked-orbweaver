@@ -531,11 +531,12 @@ export async function coordinate(
       if (liveCheckResult.complianceReport) {
         runResult.endOfRunValidation = liveCheckResult.complianceReport;
       }
-      if (liveCheckResult.parsedCompliance) {
+      if (liveCheckResult.parsedCompliance || liveCheckResult.sdkInjectionTestsFailed) {
+        const parsed = liveCheckResult.parsedCompliance;
         runResult.liveCheckStatus = {
-          spansReceived: liveCheckResult.parsedCompliance.spansReceived,
-          spanCount: liveCheckResult.parsedCompliance.spanCount,
-          totalAdvisories: liveCheckResult.parsedCompliance.totalAdvisories,
+          spansReceived: parsed?.spansReceived ?? false,
+          spanCount: parsed?.spanCount ?? 0,
+          totalAdvisories: parsed?.totalAdvisories ?? 0,
           sdkInjectionTestsFailed: liveCheckResult.sdkInjectionTestsFailed,
         };
       }
