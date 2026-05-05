@@ -293,8 +293,8 @@ export async function runLiveCheck(
   if (sdkInjected) {
     const existingNodeOptions = process.env['NODE_OPTIONS'];
     extraEnv['NODE_OPTIONS'] = existingNodeOptions
-      ? `${existingNodeOptions} --import ${initFilePath}`
-      : `--import ${initFilePath}`;
+      ? `${existingNodeOptions} --import "${initFilePath}"`
+      : `--import "${initFilePath}"`;
   }
 
   // Step 5b: Run test suite with OTLP endpoint override (+ SDK injection if available)
