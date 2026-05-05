@@ -174,6 +174,20 @@ Place in `test/coordinator/acceptance-gate.test.ts`. Verify with:
 vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run test/coordinator/acceptance-gate.test.ts'
 ```
 
+**Target project for the test**: The test needs a `projectDir` whose `node_modules` contains `@opentelemetry/sdk-node` (so `checkSdkNodeAvailable` returns true), and a `testCommand` that actually runs a JavaScript file which uses `tracer.startActiveSpan()`. The validated approach from Research A uses the taze project at `~/Documents/Repositories/taze` — it has sdk-node installed (eval prep) and its `pnpm test` command runs Vitest which will load the init file via `NODE_OPTIONS=--import`. However, `pnpm test` in taze runs a full test suite (~300s) — too slow for acceptance gate.
+
+**Better approach**: Create a minimal fixture project under `test/fixtures/live-check-target/` with:
+- `package.json` (no sdk-node in dependencies — will rely on the init file to bring it)
+- A simple instrumented `.js` file that calls `tracer.startActiveSpan('test-span', span => { span.end(); })`
+- A test command that runs this file once: `node test-entry.js`
+- The test installs sdk-node via `npm install --no-save @opentelemetry/sdk-node` into the fixture before running
+
+OR: Use the existing `test/coordinator/live-check.integration.test.ts` pattern (already uses real Weaver) and add a new test that passes the spiny-orb project dir but with a `checkSdkNodeFn` that returns true and a `writeFileFn` that writes a real init file. Since spiny-orb doesn't have sdk-node, the real spans won't fire — this won't satisfy the success criterion.
+
+**Recommended approach**: The acceptance gate test should use a real `projectDir` that genuinely has sdk-node. The simplest path: add sdk-node as a devDependency to spiny-orb itself for the acceptance gate run (similar to how IS scoring works — see `docs/rules/is-scoring-gotchas.md`). The CI acceptance gate can install it with `npm install --save-dev @opentelemetry/sdk-node` before running. Alternatively, create a `test/fixtures/live-check-target/` directory with sdk-node pre-installed (committed `package.json` + `package-lock.json`, install step in CI).
+
+Read `test/coordinator/live-check.integration.test.ts` for the port allocation and Weaver startup pattern before implementing.
+
 Success criterion: test exists, passes locally, and CI acceptance gate workflow passes.
 
 ---
