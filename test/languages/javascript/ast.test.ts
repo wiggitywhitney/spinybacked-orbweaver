@@ -152,6 +152,82 @@ describe('classifyFunctions', () => {
     });
   });
 
+  describe('exported-class-methods.js — class body traversal', () => {
+    it('finds async methods on exported classes', () => {
+      const sourceFile = getSourceFile('exported-class-methods.js');
+      const result = classifyFunctions(sourceFile);
+
+      const names = result.map(f => f.name);
+      expect(names).toContain('release');
+      expect(names).toContain('publishRelease');
+      expect(names).toContain('getLatestRelease');
+      expect(names).toContain('commit');
+      expect(names).toContain('push');
+    });
+
+    it('sets isExported true for methods from exported classes', () => {
+      const sourceFile = getSourceFile('exported-class-methods.js');
+      const result = classifyFunctions(sourceFile);
+
+      const release = findByName(result, 'release')!;
+      expect(release).toBeDefined();
+      expect(release.isExported).toBe(true);
+      expect(release.isAsync).toBe(true);
+
+      const commit = findByName(result, 'commit')!;
+      expect(commit).toBeDefined();
+      expect(commit.isExported).toBe(true);
+      expect(commit.isAsync).toBe(true);
+    });
+
+    it('sets isExported false for methods from non-exported classes', () => {
+      const sourceFile = getSourceFile('exported-class-methods.js');
+      const result = classifyFunctions(sourceFile);
+
+      const process = findByName(result, 'process')!;
+      expect(process).toBeDefined();
+      expect(process.isExported).toBe(false);
+      expect(process.isAsync).toBe(true);
+    });
+
+    it('includes sync methods with isAsync false', () => {
+      const sourceFile = getSourceFile('exported-class-methods.js');
+      const result = classifyFunctions(sourceFile);
+
+      const syncHelper = findByName(result, 'syncHelper')!;
+      expect(syncHelper).toBeDefined();
+      expect(syncHelper.isAsync).toBe(false);
+      expect(syncHelper.isExported).toBe(true);
+    });
+
+    it('records correct line count and startLine for class methods', () => {
+      const sourceFile = getSourceFile('exported-class-methods.js');
+      const result = classifyFunctions(sourceFile);
+
+      const release = findByName(result, 'release')!;
+      expect(release.startLine).toBeGreaterThan(0);
+      expect(release.lineCount).toBeGreaterThan(0);
+    });
+
+    it('includes class methods in addition to top-level functions via inline source', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        useInMemoryFileSystem: true,
+      });
+      const sf = project.createSourceFile('test.js', [
+        'export class Api {',
+        '  async fetch() { return "data"; }',
+        '}',
+        'export function helper() { return 1; }',
+      ].join('\n'));
+      const result = classifyFunctions(sf);
+      const names = result.map(f => f.name);
+      expect(names).toContain('fetch');
+      expect(names).toContain('helper');
+      expect(result.length).toBe(2);
+    });
+  });
+
   describe('no-otel-imports.js', () => {
     it('identifies exported and non-exported functions', () => {
       const sourceFile = getSourceFile('no-otel-imports.js');

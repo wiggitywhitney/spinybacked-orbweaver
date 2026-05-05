@@ -1,7 +1,7 @@
 // ABOUTME: JavaScript-specific AST helpers: function classification, OTel import detection, and variable shadowing.
 // ABOUTME: Merged from src/ast/function-classification.ts, import-detection.ts, and variable-shadowing.ts.
 
-import type { SourceFile, FunctionDeclaration, VariableStatement, ArrowFunction, FunctionExpression, Node } from 'ts-morph';
+import type { SourceFile, FunctionDeclaration, VariableStatement, ArrowFunction, FunctionExpression, Node, MethodDeclaration } from 'ts-morph';
 import { SyntaxKind } from 'ts-morph';
 
 // ─── function-classification ─────────────────────────────────────────────────
@@ -55,6 +55,14 @@ export function classifyFunctions(sourceFile: SourceFile): FunctionInfo[] {
     }
   }
 
+  // Class methods: `class Foo { async bar() {} }`
+  for (const cls of sourceFile.getClasses()) {
+    const isExported = cls.isExported();
+    for (const method of cls.getMethods()) {
+      functions.push(classifyClassMethod(method, isExported));
+    }
+  }
+
   return functions;
 }
 
@@ -78,6 +86,16 @@ function classifyVariableFunction(
   const isAsync = initializer.isAsync();
   const startLine = initializer.getStartLineNumber();
   const endLine = initializer.getEndLineNumber();
+  const lineCount = endLine - startLine + 1;
+
+  return { name, isExported, isAsync, lineCount, startLine };
+}
+
+function classifyClassMethod(method: MethodDeclaration, isExported: boolean): FunctionInfo {
+  const name = method.getName();
+  const isAsync = method.isAsync();
+  const startLine = method.getStartLineNumber();
+  const endLine = method.getEndLineNumber();
   const lineCount = endLine - startLine + 1;
 
   return { name, isExported, isAsync, lineCount, startLine };

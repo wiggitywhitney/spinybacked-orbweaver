@@ -256,6 +256,32 @@ export async function checkGhAvailable(): Promise<{ available: boolean; warning?
 }
 
 /**
+ * Parse owner/repo from a git remote URL.
+ *
+ * Handles HTTPS (https://github.com/owner/repo.git), SCP-style SSH
+ * (git@github.com:owner/repo.git), and SSH URI (ssh://git@github.com/owner/repo.git)
+ * formats, including authenticated HTTPS URLs with embedded tokens. Strips .git suffix.
+ *
+ * @param url - Remote URL string
+ * @returns "owner/repo" or undefined if the URL cannot be parsed
+ */
+export function parseRepoFromRemoteUrl(url: string): string | undefined {
+  // HTTPS: https://[token@]github.com/owner/repo[.git]
+  const httpsMatch = url.match(/https?:\/\/[^/]*\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (httpsMatch) return httpsMatch[1];
+
+  // SCP-style SSH: git@github.com:owner/repo[.git]
+  const sshMatch = url.match(/git@[^:]+:([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (sshMatch) return sshMatch[1];
+
+  // SSH URI: ssh://[user@]host/owner/repo[.git]
+  const sshUriMatch = url.match(/^ssh:\/\/[^/]+\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (sshUriMatch) return sshUriMatch[1];
+
+  return undefined;
+}
+
+/**
  * Create a PR using the gh CLI.
  *
  * @param projectDir - Git repository directory
@@ -274,6 +300,20 @@ export async function createPr(
   if (options?.draft) {
     args.push('--draft');
   }
+
+  // Always pass --repo so gh targets the fork's origin rather than defaulting to the upstream.
+  // Without this, forks with both origin and upstream remotes will fail with a 403 because
+  // the fine-grained PAT is scoped to the fork, not the upstream.
+  try {
+    const originUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: projectDir }).toString().trim();
+    const repo = parseRepoFromRemoteUrl(originUrl);
+    if (repo) {
+      args.push('--repo', repo);
+    }
+  } catch {
+    // Couldn't read origin remote — gh will use its default repo resolution
+  }
+
   // Always pass --head so gh doesn't need upstream tracking.
   // Pushing to an authenticated URL (token path) doesn't create
   // remote-tracking refs, which causes gh to fail without --head.

@@ -392,9 +392,11 @@ export class JavaScriptProvider implements LanguageProvider {
     // variable-assigned arrow/function expressions.
     const classified = classifyFunctions(sourceFile);
 
-    // Build a name → node map covering both FunctionDeclaration nodes and
-    // variable-assigned ArrowFunction/FunctionExpression nodes. The wide
-    // import('ts-morph').Node type lets hasDirectProcessExit work on both.
+    // Build a name → node map for hasDirectProcessExit and outbound-call lookups.
+    // Free functions (declarations and variable-assigned): keyed by name alone — names are
+    // unique at module scope. Class methods: keyed by "name|startLine" to prevent collisions
+    // when two classes define a method with the same name. Lookups use the composite key as
+    // a fallback (fnNodeByName.get(`${fn.name}|${fn.startLine}`) ?? fnNodeByName.get(fn.name)).
     const fnNodeByName = new Map<string, import('ts-morph').Node>();
     for (const node of sourceFile.getFunctions()) {
       const name = node.getName();
@@ -410,6 +412,11 @@ export class JavaScriptProvider implements LanguageProvider {
         }
       }
     }
+    for (const cls of sourceFile.getClasses()) {
+      for (const method of cls.getMethods()) {
+        fnNodeByName.set(`${method.getName()}|${method.getStartLineNumber()}`, method);
+      }
+    }
 
     const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
     const processExitEntryPoints: PreScanResult['processExitEntryPoints'] = [];
@@ -418,6 +425,8 @@ export class JavaScriptProvider implements LanguageProvider {
     const unexportedFunctions: PreScanResult['unexportedFunctions'] = [];
     const outboundCallsNeedingSpans: PreScanResult['outboundCallsNeedingSpans'] = [];
 
+    // Use composite keys (name|startLine) to avoid collisions when a free function
+    // and a class method share the same name.
     const entryPointNames = new Set<string>();
 
     // COV-001 + RST-006: identify entry points and process.exit() constraints
@@ -425,10 +434,10 @@ export class JavaScriptProvider implements LanguageProvider {
       const isEntryPoint = fn.isAsync && (fn.isExported || fn.name === 'main');
       if (!isEntryPoint) continue;
 
-      entryPointNames.add(fn.name);
+      entryPointNames.add(`${fn.name}|${fn.startLine}`);
       entryPointsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
 
-      const fnNode = fnNodeByName.get(fn.name);
+      const fnNode = fnNodeByName.get(`${fn.name}|${fn.startLine}`) ?? fnNodeByName.get(fn.name);
       if (fnNode && hasDirectProcessExit(fnNode)) {
         // Detect inner try/catch blocks that must be preserved when the function is wrapped.
         const innerTryStatements = fnNode.getDescendantsOfKind(SyntaxKind.TryStatement);
@@ -460,13 +469,13 @@ export class JavaScriptProvider implements LanguageProvider {
 
     // COV-004 / RST-001 / RST-004: classify non-entry-point functions
     for (const fn of classified) {
-      if (entryPointNames.has(fn.name)) continue;
+      if (entryPointNames.has(`${fn.name}|${fn.startLine}`)) continue;
 
       if (fn.isAsync) {
         // COV-004: async non-entry-point functions need spans — but apply the same
         // process.exit() exception as the prompt rule: if the function calls
         // process.exit() directly in its body, skip it (instrument sub-ops instead).
-        const fnNode = fnNodeByName.get(fn.name);
+        const fnNode = fnNodeByName.get(`${fn.name}|${fn.startLine}`) ?? fnNodeByName.get(fn.name);
         if (!fnNode || !hasDirectProcessExit(fnNode)) {
           asyncFunctionsNeedingSpans.push({ name: fn.name, startLine: fn.startLine });
         }
@@ -510,7 +519,7 @@ export class JavaScriptProvider implements LanguageProvider {
 
     for (const fn of classified) {
       if (!fn.isAsync) continue;
-      const fnNode = fnNodeByName.get(fn.name);
+      const fnNode = fnNodeByName.get(`${fn.name}|${fn.startLine}`) ?? fnNodeByName.get(fn.name);
       if (!fnNode) continue;
       const bodyText = fnNode.getText();
       const calls = OUTBOUND_KEYWORDS
@@ -562,7 +571,7 @@ export class JavaScriptProvider implements LanguageProvider {
     // calls (not method calls). Categorize each as local or imported.
     const entryPointSubOperations: PreScanSubOperationGroup[] = [];
     for (const ep of entryPointsNeedingSpans) {
-      const fnNode = fnNodeByName.get(ep.name);
+      const fnNode = fnNodeByName.get(`${ep.name}|${ep.startLine}`) ?? fnNodeByName.get(ep.name);
       if (!fnNode) continue;
 
       const localSubOperations: string[] = [];

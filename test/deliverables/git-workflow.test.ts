@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   runGitWorkflow,
   checkGhAvailable,
+  parseRepoFromRemoteUrl,
 } from '../../src/deliverables/git-workflow.ts';
 import type {
   GitWorkflowDeps,
@@ -675,6 +676,48 @@ describe('runGitWorkflow', () => {
 
       expect(deps.writePrSummary).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('parseRepoFromRemoteUrl', () => {
+  it('parses HTTPS URL with .git suffix', () => {
+    expect(parseRepoFromRemoteUrl('https://github.com/owner/repo.git')).toBe('owner/repo');
+  });
+
+  it('parses HTTPS URL without .git suffix', () => {
+    expect(parseRepoFromRemoteUrl('https://github.com/owner/repo')).toBe('owner/repo');
+  });
+
+  it('parses SSH URL with .git suffix', () => {
+    expect(parseRepoFromRemoteUrl('git@github.com:owner/repo.git')).toBe('owner/repo');
+  });
+
+  it('parses SSH URL without .git suffix', () => {
+    expect(parseRepoFromRemoteUrl('git@github.com:owner/repo')).toBe('owner/repo');
+  });
+
+  it('handles org names with hyphens', () => {
+    expect(parseRepoFromRemoteUrl('git@github.com:wiggity-whitney/my-repo.git')).toBe('wiggity-whitney/my-repo');
+  });
+
+  it('handles authenticated HTTPS URLs (x-access-token format)', () => {
+    expect(parseRepoFromRemoteUrl('https://x-access-token:ghp_abc@github.com/owner/repo.git')).toBe('owner/repo');
+  });
+
+  it('parses ssh:// URI format with user', () => {
+    expect(parseRepoFromRemoteUrl('ssh://git@github.com/owner/repo.git')).toBe('owner/repo');
+  });
+
+  it('parses ssh:// URI without user or .git suffix', () => {
+    expect(parseRepoFromRemoteUrl('ssh://github.com/owner/repo')).toBe('owner/repo');
+  });
+
+  it('returns undefined for unrecognized URL format', () => {
+    expect(parseRepoFromRemoteUrl('not-a-url')).toBeUndefined();
+  });
+
+  it('returns undefined for empty string', () => {
+    expect(parseRepoFromRemoteUrl('')).toBeUndefined();
   });
 });
 
