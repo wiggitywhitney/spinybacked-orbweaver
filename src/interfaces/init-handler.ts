@@ -234,11 +234,15 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   const sdkInitFile = foundInitFiles[0];
 
   // Advisory: check for service.instance.id in the detected SDK init file.
-  // Regex check for a quoted property key followed by ':' avoids false positives from
-  // comments or strings that mention service.instance.id without defining it.
+  // Scoped regex: only fires when service.instance.id appears as a key inside a
+  // resourceFromAttributes({...}) call, avoiding false positives from comments or
+  // documentation strings that mention the attribute name without defining it.
   try {
     const sdkInitContent = await deps.readFile(join(projectDir, sdkInitFile));
-    const hasServiceInstanceId = /['"`]service\.instance\.id['"`]\s*:/.test(sdkInitContent);
+    const hasServiceInstanceId =
+      /resourceFromAttributes\s*\(\s*\{[\s\S]*?['"`]service\.instance\.id['"`]\s*:[\s\S]*?\}\s*\)/m.test(
+        sdkInitContent,
+      );
     if (!hasServiceInstanceId) {
       warnings.push(
         `'service.instance.id' not found in ${sdkInitFile}. ` +
