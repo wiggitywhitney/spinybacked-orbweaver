@@ -48,12 +48,24 @@ export interface PortCheckResult {
   processName?: string;
 }
 
+/** Parsed compliance data extracted from Weaver live-check JSON output. */
+export interface ParsedCompliance {
+  /** Whether any spans were received by Weaver. */
+  spansReceived: boolean;
+  /** Number of spans received (from statistics.total_entities_by_type.span). */
+  spanCount: number;
+  /** Total advisory findings across all entities. 0 = fully compliant. */
+  totalAdvisories: number;
+}
+
 /** Result of the end-of-run live-check workflow. */
 export interface LiveCheckResult {
   /** Whether the live-check was skipped (port conflict, missing tests, etc.). */
   skipped: boolean;
-  /** Weaver compliance report content (raw CLI output). */
+  /** Raw Weaver compliance report (JSON string from --format json). */
   complianceReport?: string;
+  /** Parsed compliance data extracted from the JSON report. Undefined if skipped or JSON parse failed. */
+  parsedCompliance?: ParsedCompliance;
   /** Whether the test suite passed. */
   testsPassed?: boolean;
   /** Combined stdout+stderr from the test suite run. Only present when tests fail. */
@@ -199,6 +211,7 @@ export async function runLiveCheck(
   try {
     weaverProcess = spawnFn('weaver', [
       'registry', 'live-check', '-r', registryDir,
+      '--format', 'json',
       '--inactivity-timeout', String(inactivityTimeoutSeconds),
       '--otlp-grpc-port', String(grpcPort),
       '--admin-port', String(adminPort),
@@ -279,14 +292,8 @@ export async function runLiveCheck(
     complianceReport = weaverStdout;
   }
 
-  // Annotate the report when Weaver received no spans — the OTel SDK does not
-  // initialize during checkpoint tests, so every live-check to date has been a
-  // false positive. Surface this clearly rather than letting "OK" mislead users.
-  if (complianceReport && reportIndicatesZeroSpans(complianceReport)) {
-    complianceReport =
-      complianceReport.trim() +
-      ' (no spans received — live-check did not validate any telemetry)';
-  }
+  // Parse the JSON compliance report to extract structured compliance data
+  const parsedCompliance = complianceReport ? parseComplianceReport(complianceReport) : undefined;
 
   // Fire onValidationComplete callback
   try {
@@ -298,6 +305,7 @@ export async function runLiveCheck(
   return {
     skipped: false,
     complianceReport,
+    parsedCompliance,
     testsPassed,
     testOutput,
     warnings,
@@ -305,17 +313,26 @@ export async function runLiveCheck(
 }
 
 /**
- * Return true when the Weaver compliance report indicates zero spans were received.
- * Weaver reports "OK" with no span details when it receives nothing; the SDK
- * does not initialize during checkpoint tests so this is always the case today.
+ * Parse the Weaver live-check JSON compliance report into structured compliance data.
+ * Returns undefined if the report is not valid JSON or lacks the expected structure.
  */
-function reportIndicatesZeroSpans(report: string): boolean {
-  // Strip ANSI escape codes before analysis
-  const stripped = report.replace(/\x1b\[[0-9;]*m/g, '').trim();
-  // Explicit zero span count in the report
-  if (/\b0\s+span/i.test(stripped)) return true;
-  // No positive span count found — Weaver received nothing meaningful
-  return !/\b[1-9]\d*\s+span/i.test(stripped);
+function parseComplianceReport(raw: string): ParsedCompliance | undefined {
+  try {
+    const json = JSON.parse(raw) as Record<string, unknown>;
+    const stats = json['statistics'] as Record<string, unknown> | undefined;
+    if (!stats || typeof stats !== 'object') return undefined;
+    const totalEntities = typeof stats['total_entities'] === 'number' ? stats['total_entities'] : 0;
+    const entitiesByType = (stats['total_entities_by_type'] ?? {}) as Record<string, unknown>;
+    const spanCount = typeof entitiesByType['span'] === 'number' ? entitiesByType['span'] : 0;
+    const totalAdvisories = typeof stats['total_advisories'] === 'number' ? stats['total_advisories'] : 0;
+    return {
+      spansReceived: totalEntities > 0,
+      spanCount,
+      totalAdvisories,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
