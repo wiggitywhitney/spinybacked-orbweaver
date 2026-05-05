@@ -258,7 +258,8 @@ export async function checkGhAvailable(): Promise<{ available: boolean; warning?
 /**
  * Parse owner/repo from a git remote URL.
  *
- * Handles HTTPS (https://github.com/owner/repo.git) and SSH (git@github.com:owner/repo.git)
+ * Handles HTTPS (https://github.com/owner/repo.git), SCP-style SSH
+ * (git@github.com:owner/repo.git), and SSH URI (ssh://git@github.com/owner/repo.git)
  * formats, including authenticated HTTPS URLs with embedded tokens. Strips .git suffix.
  *
  * @param url - Remote URL string
@@ -269,9 +270,13 @@ export function parseRepoFromRemoteUrl(url: string): string | undefined {
   const httpsMatch = url.match(/https?:\/\/[^/]*\/([^/]+\/[^/]+?)(?:\.git)?$/);
   if (httpsMatch) return httpsMatch[1];
 
-  // SSH: git@github.com:owner/repo[.git]
+  // SCP-style SSH: git@github.com:owner/repo[.git]
   const sshMatch = url.match(/git@[^:]+:([^/]+\/[^/]+?)(?:\.git)?$/);
   if (sshMatch) return sshMatch[1];
+
+  // SSH URI: ssh://[user@]host/owner/repo[.git]
+  const sshUriMatch = url.match(/^ssh:\/\/[^/]+\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (sshUriMatch) return sshUriMatch[1];
 
   return undefined;
 }

@@ -199,6 +199,39 @@ export async function fetchWithFallback(url) {
     });
   });
 
+  describe('RST-006: process.exit() detection for class methods', () => {
+    it('detects direct process.exit() in an exported async class method', () => {
+      const source = `
+export class Cli {
+  async run() {
+    const result = await execute();
+    if (!result.ok) {
+      process.exit(1);
+    }
+  }
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.processExitEntryPoints.some(ep => ep.name === 'run')).toBe(true);
+    });
+
+    it('does not flag class methods without process.exit() as processExitEntryPoints', () => {
+      const source = `
+export class Api {
+  async fetch() {
+    return await getData();
+  }
+}
+`.trim();
+
+      const result = provider.preInstrumentationAnalysis!(source);
+
+      expect(result.processExitEntryPoints).toHaveLength(0);
+    });
+  });
+
   describe('empty / no functions', () => {
     it('returns empty arrays for a file with no function definitions', () => {
       const source = `const x = 42;\nexport default x;`;

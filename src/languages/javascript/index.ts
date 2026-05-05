@@ -410,6 +410,11 @@ export class JavaScriptProvider implements LanguageProvider {
         }
       }
     }
+    for (const cls of sourceFile.getClasses()) {
+      for (const method of cls.getMethods()) {
+        fnNodeByName.set(method.getName(), method);
+      }
+    }
 
     const entryPointsNeedingSpans: PreScanResult['entryPointsNeedingSpans'] = [];
     const processExitEntryPoints: PreScanResult['processExitEntryPoints'] = [];

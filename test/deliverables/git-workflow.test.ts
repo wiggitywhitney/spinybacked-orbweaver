@@ -704,6 +704,14 @@ describe('parseRepoFromRemoteUrl', () => {
     expect(parseRepoFromRemoteUrl('https://x-access-token:ghp_abc@github.com/owner/repo.git')).toBe('owner/repo');
   });
 
+  it('parses ssh:// URI format with user', () => {
+    expect(parseRepoFromRemoteUrl('ssh://git@github.com/owner/repo.git')).toBe('owner/repo');
+  });
+
+  it('parses ssh:// URI without user or .git suffix', () => {
+    expect(parseRepoFromRemoteUrl('ssh://github.com/owner/repo')).toBe('owner/repo');
+  });
+
   it('returns undefined for unrecognized URL format', () => {
     expect(parseRepoFromRemoteUrl('not-a-url')).toBeUndefined();
   });
