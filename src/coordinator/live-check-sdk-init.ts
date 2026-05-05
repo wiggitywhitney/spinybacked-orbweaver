@@ -1,5 +1,5 @@
 // ABOUTME: Generates the temporary gRPC SDK init file for live-check test runs.
-// ABOUTME: Checks @opentelemetry/sdk-node availability and provides the NodeTracerProvider init template.
+// ABOUTME: Checks @opentelemetry/sdk-node availability and provides the NodeSDK init template.
 
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,34 +11,59 @@ export const LIVE_CHECK_INIT_FILENAME = '.spiny-orb-live-check-init.mjs';
 /**
  * Generate the content of the temporary SDK init file.
  *
- * Uses NodeTracerProvider (not NodeSDK) so we can call trace.setGlobalTracerProvider()
- * directly and check its return value for double-init detection.
- * OTLPTraceExporter reads OTEL_EXPORTER_OTLP_ENDPOINT from the environment.
+ * Uses NodeSDK (not NodeTracerProvider) because only @opentelemetry/sdk-node is
+ * guaranteed to be in the target project's top-level node_modules. In pnpm strict
+ * mode, transitive packages like sdk-trace-node and exporter-trace-otlp-grpc are
+ * NOT hoisted to the top level — importing them as bare specifiers fails.
+ *
+ * NodeSDK resolves the gRPC exporter from its own transitive deps when
+ * OTEL_EXPORTER_OTLP_PROTOCOL=grpc is set in the environment.
+ *
+ * Double-init detection: monkeypatch trace.setGlobalTracerProvider before calling
+ * sdk.start() to capture the return value NodeSDK produces internally.
  */
 export function generateInitFileContent(serviceName: string): string {
   const safe = serviceName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   return `// spiny-orb live-check SDK init — temporary file, deleted after live-check run
-// Resolves packages from this project's node_modules.
-import { trace } from '@opentelemetry/api';
-import { NodeTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+// Resolves @opentelemetry/sdk-node from this project's node_modules.
+import { NodeSDK } from '@opentelemetry/sdk-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
-// OTEL_EXPORTER_OTLP_ENDPOINT is read from the environment by OTLPTraceExporter
+import { trace } from '@opentelemetry/api';
+// OTEL_EXPORTER_OTLP_PROTOCOL=grpc and OTEL_EXPORTER_OTLP_ENDPOINT are set in env
+// NodeSDK auto-selects @opentelemetry/exporter-trace-otlp-grpc from its own deps
 
-const exporter = new OTLPTraceExporter();
-const provider = new NodeTracerProvider({
+const sdk = new NodeSDK({
   resource: resourceFromAttributes({ 'service.name': '${safe}' }),
-  spanProcessors: [new SimpleSpanProcessor(exporter)],
 });
 
-// Double-init detection: setGlobalTracerProvider returns false if already registered
-const registered = trace.setGlobalTracerProvider(provider);
-if (registered) {
-  process.on('SIGTERM', async () => { await provider.shutdown(); process.exit(143); });
-  process.on('SIGINT', async () => { await provider.shutdown(); process.exit(130); });
+// Double-init detection: intercept the setGlobalTracerProvider call NodeSDK makes
+// internally during start() to capture its return value (false = already registered).
+let registrationSucceeded = false;
+const _origSetProvider = trace.setGlobalTracerProvider.bind(trace);
+trace.setGlobalTracerProvider = (provider) => {
+  const result = _origSetProvider(provider);
+  registrationSucceeded = result;
+  trace.setGlobalTracerProvider = _origSetProvider;
+  return result;
+};
+
+sdk.start();
+
+if (registrationSucceeded) {
+  // beforeExit fires when the event loop empties; calling sdk.shutdown() here re-enters
+  // the event loop via async gRPC export, ensuring spans are flushed before process exits.
+  let _shutdownStarted = false;
+  process.on('beforeExit', () => {
+    if (!_shutdownStarted) {
+      _shutdownStarted = true;
+      sdk.shutdown().catch(() => {});
+    }
+  });
+  process.on('SIGTERM', async () => { await sdk.shutdown(); process.exit(143); });
+  process.on('SIGINT', async () => { await sdk.shutdown(); process.exit(130); });
 } else {
-  // A non-default provider is already active — shut down ours to avoid resource leaks
-  provider.shutdown().catch(() => {});
+  // A non-default provider is already active — shut down to avoid resource leaks
+  sdk.shutdown().catch(() => {});
 }
 `;
 }

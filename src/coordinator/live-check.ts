@@ -245,6 +245,12 @@ export async function runLiveCheck(
     };
   }
 
+  // Silently absorb 'error' events (e.g. ENOENT when weaver is not in PATH).
+  // The 'close' event fires after 'error' and is what drives waitForWeaverReady.
+  weaverProcess.on('error', (err: NodeJS.ErrnoException) => {
+    weaverStderr += `weaver spawn error: ${err.message}`;
+  });
+
   // Collect stderr for diagnostics
   weaverProcess.stderr?.on('data', (data: Buffer) => {
     weaverStderr += data.toString();
@@ -295,6 +301,11 @@ export async function runLiveCheck(
     extraEnv['NODE_OPTIONS'] = existingNodeOptions
       ? `${existingNodeOptions} --import "${initFilePath}"`
       : `--import "${initFilePath}"`;
+    // NodeSDK selects the gRPC exporter when this is set
+    extraEnv['OTEL_EXPORTER_OTLP_PROTOCOL'] = 'grpc';
+    // Force BatchSpanProcessor to export immediately (next tick) rather than after the
+    // default 5-second delay — critical for short-lived test processes that exit quickly
+    extraEnv['OTEL_BSP_SCHEDULE_DELAY'] = '0';
   }
 
   // Step 5b: Run test suite with OTLP endpoint override (+ SDK injection if available)
@@ -324,14 +335,27 @@ export async function runLiveCheck(
     await deleteFileFn(initFilePath);
   }
 
-  // Step 6: Stop Weaver via HTTP /stop endpoint
+  // Step 6: Stop Weaver via HTTP /stop endpoint and wait for process exit.
+  //
+  // Weaver writes the JSON compliance report to stdout as it shuts down — the
+  // /stop HTTP response is just an acknowledgment ("OK"). We wait briefly before
+  // calling /stop (to let in-flight gRPC span data arrive), then wait for the
+  // process to fully exit (to capture the statistics block written at shutdown).
+  const setTimeoutFn2: (cb: () => void, ms: number) => unknown = deps?.setTimeout ?? globalThis.setTimeout;
+  const clearTimeoutFn2: (id: unknown) => void = deps?.clearTimeout ?? ((id) => globalThis.clearTimeout(id as ReturnType<typeof globalThis.setTimeout>));
+
+  await new Promise<void>((resolve) => {
+    setTimeoutFn2(resolve, 2_000);
+  });
+
   let complianceReport: string | undefined;
+  let stopHttpBody: string | undefined;
   try {
     const stopResponse = await fetchFn(`http://localhost:${adminPort}/stop`, {
       method: 'POST',
       signal: AbortSignal.timeout(WEAVER_STOP_TIMEOUT_MS),
     });
-    complianceReport = await stopResponse.text();
+    stopHttpBody = await stopResponse.text();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     warnings.push(
@@ -346,9 +370,23 @@ export async function runLiveCheck(
     }
   }
 
-  // Use stdout if /stop didn't return a report
-  if (!complianceReport && weaverStdout) {
+  // Wait for Weaver to fully exit so all stdout (including statistics) is flushed.
+  await new Promise<void>((resolve) => {
+    const timer = setTimeoutFn2(() => resolve(), WEAVER_STOP_TIMEOUT_MS);
+    (weaverProcess as { once?: (event: string, cb: () => void) => void }).once?.('close', () => {
+      clearTimeoutFn2(timer);
+      resolve();
+    });
+  });
+
+  // Use stdout for the compliance report — Weaver 0.22.x streams individual
+  // entity JSON objects to stdout and writes statistics as the last object.
+  // Fall back to the /stop HTTP response body (for mocked tests and older
+  // Weaver versions that return JSON in the HTTP body).
+  if (weaverStdout) {
     complianceReport = weaverStdout;
+  } else if (stopHttpBody && stopHttpBody !== 'OK') {
+    complianceReport = stopHttpBody;
   }
 
   // Parse the JSON compliance report to extract structured compliance data
@@ -374,24 +412,54 @@ export async function runLiveCheck(
 
 /**
  * Parse the Weaver live-check JSON compliance report into structured compliance data.
- * Returns undefined if the report is not valid JSON or lacks the expected structure.
+ *
+ * Handles two output formats:
+ * - Weaver 0.21.x: single JSON object `{"samples":[...],"statistics":{...}}`
+ * - Weaver 0.22.x: streaming JSONL where the last object IS the statistics
+ *   `{"total_entities":N,"total_entities_by_type":{...},...}`
+ *
+ * Returns undefined if the report lacks the expected structure.
  */
 function parseComplianceReport(raw: string): ParsedCompliance | undefined {
+  // Try 0.21.x format: single object with a "statistics" wrapper key
   try {
     const json = JSON.parse(raw) as Record<string, unknown>;
     const stats = json['statistics'] as Record<string, unknown> | undefined;
-    if (!stats || typeof stats !== 'object') return undefined;
-    const entitiesByType = (stats['total_entities_by_type'] ?? {}) as Record<string, unknown>;
-    const spanCount = typeof entitiesByType['span'] === 'number' ? entitiesByType['span'] : 0;
-    const totalAdvisories = typeof stats['total_advisories'] === 'number' ? stats['total_advisories'] : 0;
-    return {
-      spansReceived: spanCount > 0,
-      spanCount,
-      totalAdvisories,
-    };
+    if (stats && typeof stats === 'object') {
+      return extractCompliance(stats);
+    }
   } catch {
-    return undefined;
+    // Not a single JSON — fall through to streaming format
   }
+
+  // Try 0.22.x streaming format: find the last JSON object in the output.
+  // Weaver streams individual entity objects, with the statistics object last.
+  // The statistics object has "total_entities" directly at the top level.
+  const lastNewlineBrace = raw.lastIndexOf('\n{');
+  if (lastNewlineBrace !== -1) {
+    try {
+      const candidate = raw.slice(lastNewlineBrace + 1);
+      const json = JSON.parse(candidate) as Record<string, unknown>;
+      if (typeof json['total_entities'] === 'number') {
+        return extractCompliance(json);
+      }
+    } catch {
+      // not parseable
+    }
+  }
+
+  return undefined;
+}
+
+function extractCompliance(stats: Record<string, unknown>): ParsedCompliance {
+  const entitiesByType = (stats['total_entities_by_type'] ?? {}) as Record<string, unknown>;
+  const spanCount = typeof entitiesByType['span'] === 'number' ? entitiesByType['span'] : 0;
+  const totalAdvisories = typeof stats['total_advisories'] === 'number' ? stats['total_advisories'] : 0;
+  return {
+    spansReceived: spanCount > 0,
+    spanCount,
+    totalAdvisories,
+  };
 }
 
 /**

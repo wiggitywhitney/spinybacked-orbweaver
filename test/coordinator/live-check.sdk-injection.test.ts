@@ -201,13 +201,14 @@ describe('runLiveCheck — sdk-node unavailable warning', () => {
 });
 
 describe('runLiveCheck — init file content', () => {
-  it('init file content contains NodeTracerProvider import', async () => {
+  it('init file content imports NodeSDK from @opentelemetry/sdk-node', async () => {
     const { deps, getWriteFileCalls } = makeEnvCapturingDeps({ sdkNodeAvailable: true });
 
     await runLiveCheck(VALID_REGISTRY, PROJECT_DIR, 'npm test', undefined, deps);
 
     const calls = getWriteFileCalls();
-    expect(calls[0].content).toContain('NodeTracerProvider');
+    expect(calls[0].content).toContain('NodeSDK');
+    expect(calls[0].content).toContain("'@opentelemetry/sdk-node'");
   });
 
   it('init file content contains setGlobalTracerProvider for double-init detection', async () => {
@@ -219,12 +220,15 @@ describe('runLiveCheck — init file content', () => {
     expect(calls[0].content).toContain('setGlobalTracerProvider');
   });
 
-  it('init file content uses OTLPTraceExporter for gRPC export', async () => {
-    const { deps, getWriteFileCalls } = makeEnvCapturingDeps({ sdkNodeAvailable: true });
+  it('init file content relies on OTEL_EXPORTER_OTLP_PROTOCOL env for gRPC export selection', async () => {
+    const { deps, getWriteFileCalls, getCapturedEnv } = makeEnvCapturingDeps({ sdkNodeAvailable: true });
 
     await runLiveCheck(VALID_REGISTRY, PROJECT_DIR, 'npm test', undefined, deps);
 
     const calls = getWriteFileCalls();
-    expect(calls[0].content).toContain('OTLPTraceExporter');
+    // NodeSDK approach: no explicit gRPC exporter import — relies on env var
+    expect(calls[0].content).not.toContain('OTLPTraceExporter');
+    // Coordinator injects the protocol env var
+    expect(getCapturedEnv()['OTEL_EXPORTER_OTLP_PROTOCOL']).toBe('grpc');
   });
 });
