@@ -38,6 +38,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderRolledBackFiles(runResult, display));
   sections.push(renderCompanionPackages(runResult, config));
   sections.push(renderShortLivedSetupGuidance(config));
+  sections.push(renderSdkBootstrapChecklist());
   sections.push(renderTokenUsage(runResult, config));
   sections.push(renderLiveCheckCompliance(runResult));
   sections.push(renderAgentVersion(runResult));
@@ -615,6 +616,33 @@ function renderShortLivedSetupGuidance(config: AgentConfig): string {
   lines.push('    .finally(() => originalExit.call(process, process.exitCode));');
   lines.push('};');
   lines.push('```');
+
+  return lines.join('\n');
+}
+
+function renderSdkBootstrapChecklist(): string {
+  const lines: string[] = ['## SDK Bootstrap Checklist'];
+  lines.push('');
+  lines.push(
+    'Verify that your SDK init file includes all required resource attributes. ' +
+    "Missing attributes reduce observability and cause RES-001 compliance failures.",
+  );
+  lines.push('');
+  lines.push('```javascript');
+  lines.push("import { randomUUID } from 'node:crypto';");
+  lines.push('');
+  lines.push('resource: resourceFromAttributes({');
+  lines.push("  'service.name': 'your-service-name',");
+  lines.push("  'service.version': process.env.npm_package_version || '0.0.0',");
+  lines.push("  'service.instance.id': randomUUID(),");
+  lines.push('}),');
+  lines.push('```');
+  lines.push('');
+  lines.push(
+    '> **`service.instance.id`** uniquely identifies a running process instance. ' +
+    'Without it, traces from different deployments share identical resource metadata — ' +
+    "spans are indistinguishable across restarts and parallel processes.",
+  );
 
   return lines.join('\n');
 }

@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import {
   runSchemaCheckpoint,
 } from '../../src/coordinator/schema-checkpoint.ts';
+import type { SchemaCheckpointDeps } from '../../src/coordinator/schema-checkpoint.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 
 const FIXTURES_DIR = resolve(import.meta.dirname, '../fixtures/weaver-registry');
@@ -195,5 +196,43 @@ describe('runSchemaCheckpoint — real Weaver integration', () => {
       expect(result.passed).toBe(true);
       expect(result.driftDetected).toBeUndefined();
     });
+  });
+});
+
+describe('runSchemaCheckpoint — HOME propagation', () => {
+  it('passes HOME in registry check subprocess env so Weaver can find vdir_cache', async () => {
+    let capturedOpts: unknown;
+    const deps: SchemaCheckpointDeps = {
+      execFileFn: (_cmd, _args, opts, cb) => {
+        capturedOpts = opts;
+        cb(null, '', '');
+      },
+    };
+
+    // Pass undefined baselineDir so only registry check fires (no diff step)
+    await runSchemaCheckpoint('/fake/registry', undefined, 'file.js', 1, deps);
+
+    const env = (capturedOpts as { env?: Record<string, string> }).env;
+    expect(env).toBeDefined();
+    expect(env!.HOME).toBeTruthy();
+  });
+
+  it('passes HOME in registry diff subprocess env so Weaver can find vdir_cache', async () => {
+    const capturedOpts: unknown[] = [];
+    const deps: SchemaCheckpointDeps = {
+      execFileFn: (_cmd, _args, opts, cb) => {
+        capturedOpts.push(opts);
+        cb(null, '{"changes":{}}', '');
+      },
+    };
+
+    // Pass a baselineDir so both registry check and diff fire
+    await runSchemaCheckpoint('/fake/registry', '/fake/baseline', 'file.js', 1, deps);
+
+    for (const opts of capturedOpts) {
+      const env = (opts as { env?: Record<string, string> }).env;
+      expect(env).toBeDefined();
+      expect(env!.HOME).toBeTruthy();
+    }
   });
 });
