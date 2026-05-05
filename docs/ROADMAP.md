@@ -17,10 +17,6 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Short-term (current focus)
 
-- Pre-scan false negative: async methods on exported classes not detected ([issue #772](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/772)) — P1 blocking run-4; 8 release-it lib/ files skipped, Q×F capped at 3.0.
-- `gh pr create` targets upstream repo in forks — missing `--repo` flag ([issue #773](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/773)) — P1 blocking run-4; PR creation fails on every forked eval target.
-- HOME not propagated to Weaver in schema-diff and schema-checkpoint ([issue #776](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/776)) — schema validation hangs under vals exec or caffeinate; two call sites missed in the original HOME fix.
-- `service.instance.id` discoverability: docs, PR summary guidance, and init advisory ([issue #777](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/777)) — users have no guidance on this required resource attribute; affects IS scoring for all targets.
 - Redirect e2e PR creation tests to a dedicated test-sink repo ([issue #627](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/627)) — CI test artifacts are polluting the main repo's PR history; blocked by needing to create the sink repo and store a fine-grained PAT.
 
 ## Medium-term
