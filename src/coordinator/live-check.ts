@@ -221,6 +221,8 @@ export async function runLiveCheck(
   const writeFileFn = deps?.writeFileFn ?? ((p: string, c: string) => defaultWriteFile(p, c, 'utf-8'));
   const deleteFileFn = deps?.deleteFileFn ?? ((p: string) => defaultUnlink(p).catch(() => {}));
   const checkSdkNodeFn = deps?.checkSdkNodeFn ?? checkSdkNodeAvailable;
+  const setTimeoutFn: (cb: () => void, ms: number) => unknown = deps?.setTimeout ?? globalThis.setTimeout;
+  const clearTimeoutFn: (id: unknown) => void = deps?.clearTimeout ?? ((id) => globalThis.clearTimeout(id as ReturnType<typeof globalThis.setTimeout>));
 
   // Step 3: Start Weaver live-check
   let weaverProcess: ChildProcess;
@@ -341,11 +343,8 @@ export async function runLiveCheck(
   // /stop HTTP response is just an acknowledgment ("OK"). We wait briefly before
   // calling /stop (to let in-flight gRPC span data arrive), then wait for the
   // process to fully exit (to capture the statistics block written at shutdown).
-  const setTimeoutFn2: (cb: () => void, ms: number) => unknown = deps?.setTimeout ?? globalThis.setTimeout;
-  const clearTimeoutFn2: (id: unknown) => void = deps?.clearTimeout ?? ((id) => globalThis.clearTimeout(id as ReturnType<typeof globalThis.setTimeout>));
-
   await new Promise<void>((resolve) => {
-    setTimeoutFn2(resolve, 2_000);
+    setTimeoutFn(resolve, 2_000);
   });
 
   let complianceReport: string | undefined;
@@ -372,9 +371,9 @@ export async function runLiveCheck(
 
   // Wait for Weaver to fully exit so all stdout (including statistics) is flushed.
   await new Promise<void>((resolve) => {
-    const timer = setTimeoutFn2(() => resolve(), WEAVER_STOP_TIMEOUT_MS);
+    const timer = setTimeoutFn(() => resolve(), WEAVER_STOP_TIMEOUT_MS);
     (weaverProcess as { once?: (event: string, cb: () => void) => void }).once?.('close', () => {
-      clearTimeoutFn2(timer);
+      clearTimeoutFn(timer);
       resolve();
     });
   });
