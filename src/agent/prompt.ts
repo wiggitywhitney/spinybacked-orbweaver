@@ -152,7 +152,7 @@ ${attributeNames.length > 0 ? `
 **Registered attribute keys from this project's schema** (prefer these — unregistered keys trigger SCH-002 rejection unless reported as a schemaExtension):
 ${attributeNames.map(n => `\`${n}\``).join(', ')}
 ` : ''}
-Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match.
+Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match. Do NOT include in \`schemaExtensions\` any attribute key that already appears in the registered attribute list above — those are already in the registry. Call \`span.setAttribute('existing.key', value)\` directly; no extension declaration is needed.
 
 ### Schema-Uncovered Files (COV-005)
 
@@ -260,7 +260,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 ### Schema Fidelity
 
 - **SCH-001**: Use registry-defined span names when they match the operation. Do NOT invent names when the registry already defines one. When declaring a new span as a schemaExtension: delimiter variants of existing operations (e.g., \`user_register\` vs \`user.register\`) are **blocking** — use the existing registry name instead. Semantic similarity (e.g., \`taze.cli.run\` vs \`taze.check.run\`) produces an **advisory** warning — if your operation is a different operation class, keep your name; if truly equivalent, reuse the existing name. When no registry span definitions exist (naming quality fallback), span names MUST follow structured dotted notation (e.g., \`namespace.category.operation\`) — single-component names without a dot separator are always rejected.
-- **SCH-002**: Use registry-defined attribute keys (the registry includes any OTel semantic conventions the org has imported as a dependency — check the registry only, do NOT apply OTel attribute names from training data that are absent from the resolved schema). Check for semantic equivalence, not just exact name matches.
+- **SCH-002**: Use registry-defined attribute keys (the registry includes any OTel semantic conventions the org has imported as a dependency — check the registry only, do NOT apply OTel attribute names from training data that are absent from the resolved schema). Check for semantic equivalence, not just exact name matches. Before listing any attribute key in \`schemaExtensions\`, verify it is NOT already in the registered attribute list. Including a registered key in \`schemaExtensions\` triggers a blocking SCH-002 failure — remove it from \`schemaExtensions\` and call \`span.setAttribute('registered.key', value)\` directly.
 - **SCH-003**: Attribute values must conform to registry-defined types and constraints. Count attributes (\`*_count\`) MUST use \`type: int\` in schema extensions and pass raw numbers to \`setAttribute\` — never wrap numeric values in \`String()\`.
 
 ### Code Quality
