@@ -5,7 +5,8 @@
  * Handles HTTPS (with or without .git), SSH, and token-authenticated HTTPS URLs.
  */
 export function targetRepoSlug(url: string): string {
-  const match = url.match(/github\.com[/:]([^/]+\/[^/.]+)/);
-  if (!match?.[1]) throw new Error(`Cannot parse owner/repo slug from URL: ${url}`);
+  const redactedUrl = url.replace(/\/\/[^/@:]+:[^/@]+@/, '//***:***@');
+  const match = url.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?(?:\/)?$/);
+  if (!match?.[1]) throw new Error(`Cannot parse owner/repo slug from URL: ${redactedUrl}`);
   return match[1];
 }

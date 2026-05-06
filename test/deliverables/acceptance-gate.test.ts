@@ -18,9 +18,16 @@ const REPO_ROOT = join(import.meta.dirname, '..', '..');
 
 // When SPINY_ORB_E2E_TEST_REPO is set, push test branches and create PRs there
 // instead of the main repo. Falls back to origin for local development without the var.
-const TARGET_REPO_URL: string = process.env.SPINY_ORB_E2E_TEST_REPO
-  ?? execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: REPO_ROOT }).toString().trim();
-const TARGET_REPO = targetRepoSlug(TARGET_REPO_URL);
+// Resolved lazily so the git remote lookup only runs when tests actually execute,
+// not during module import (which would fail in environments without an origin remote).
+let cachedTargetRepo: { url: string; slug: string } | undefined;
+function getTargetRepo(): { url: string; slug: string } {
+  if (cachedTargetRepo) return cachedTargetRepo;
+  const url = process.env.SPINY_ORB_E2E_TEST_REPO
+    ?? execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: REPO_ROOT }).toString().trim();
+  cachedTargetRepo = { url, slug: targetRepoSlug(url) };
+  return cachedTargetRepo;
+}
 
 /**
  * Create a temporary clone of the current repo for isolated push testing.
@@ -34,7 +41,7 @@ async function cloneTestRepo(): Promise<string> {
   const git = await makeTestRepo(dir);
 
   // Point the remote to the target repo for push
-  await git.remote(['set-url', 'origin', TARGET_REPO_URL]);
+  await git.remote(['set-url', 'origin', getTargetRepo().url]);
 
   return dir;
 }
@@ -50,7 +57,7 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
     for (const prUrl of cleanupPrs) {
       try {
         const prNumber = prUrl.split('/').pop();
-        execFileSync('gh', ['pr', 'close', prNumber!, '--delete-branch', '--repo', TARGET_REPO], {
+        execFileSync('gh', ['pr', 'close', prNumber!, '--delete-branch', '--repo', getTargetRepo().slug], {
           timeout: 15000,
         });
       } catch (err: unknown) {
@@ -66,7 +73,7 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
     for (const branch of cleanupBranches) {
       try {
         execFileSync('gh', ['api', '--method', 'DELETE',
-          `repos/${TARGET_REPO}/git/refs/heads/${branch}`], {
+          `repos/${getTargetRepo().slug}/git/refs/heads/${branch}`], {
           timeout: 10000,
         });
       } catch (err: unknown) {
@@ -145,7 +152,7 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
 
     // Verify it's a draft via gh API
     const prNumber = prUrl.split('/').pop()!;
-    const prJson = execFileSync('gh', ['pr', 'view', prNumber, '--json', 'isDraft', '--repo', TARGET_REPO], {
+    const prJson = execFileSync('gh', ['pr', 'view', prNumber, '--json', 'isDraft', '--repo', getTargetRepo().slug], {
       timeout: 10000,
     }).toString().trim();
     const pr = JSON.parse(prJson);

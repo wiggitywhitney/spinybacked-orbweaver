@@ -20,7 +20,15 @@ describe('targetRepoSlug', () => {
     expect(targetRepoSlug('https://x-access-token:TOKEN@github.com/owner/repo.git')).toBe('owner/repo');
   });
 
+  it('parses repo names containing dots', () => {
+    expect(targetRepoSlug('https://github.com/owner/repo.name.git')).toBe('owner/repo.name');
+  });
+
   it('throws for unrecognizable URL', () => {
     expect(() => targetRepoSlug('not-a-github-url')).toThrow('Cannot parse owner/repo slug');
+  });
+
+  it('redacts credentials in error messages', () => {
+    expect(() => targetRepoSlug('https://user:secret@example.com/owner/repo')).toThrow('***:***');
   });
 });
