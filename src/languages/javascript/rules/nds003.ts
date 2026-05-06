@@ -77,8 +77,21 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
  *   so the forward check doesn't flag catch-variable-binding as a modification.
  * - catch (e) and catch (error) etc. are normalized to catch (error)
  *   so renamed catch variables don't trigger false positives.
+ * - buildContext() preamble comments ("// Imports used by this function",
+ *   "// Module-level constants referenced by this function",
+ *   "// This function is exported (via re-export block)") are normalized to ''
+ *   so the forward check ignores them. These are LLM context annotations added
+ *   by extraction.ts, not user business logic the agent must preserve.
  */
 function normalizeLine(line: string): string {
+  const trimmed = line.trim();
+  if (
+    trimmed === '// Imports used by this function' ||
+    trimmed === '// Module-level constants referenced by this function' ||
+    trimmed.startsWith('// This function is exported')
+  ) {
+    return '';
+  }
   return line
     // Normalize catch {} → catch (error) {} and catch (e) {} → catch (error) {}
     .replace(/\}\s*catch\s*(?:\(\s*\w+\s*\))?\s*\{/, '} catch (error) {')
