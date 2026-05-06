@@ -842,6 +842,25 @@ async function executeRetryLoop(
           });
 
           if (advisoryValidation.passed) {
+            // Re-check namespace on the advisory output before accepting it.
+            // The advisory pass may add new startActiveSpan() calls with wrong-namespace
+            // span names that weren't present in the pre-advisory output.
+            if (expectedNamespacePrefix) {
+              const advisoryAll = supplementSchemaExtensions(advisoryOutput.schemaExtensions, advisoryCode);
+              const advisoryWrong = advisoryAll.filter((ext) => {
+                const pre = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
+                const checkPart = pre.startsWith('span.') ? pre.slice('span.'.length) : pre;
+                return !checkPart.startsWith(`${expectedNamespacePrefix}.`);
+              });
+              if (advisoryWrong.length > 0) {
+                // Advisory output has wrong-namespace extensions — revert and use pre-advisory result
+                await writeFile(filePath, passingCode, 'utf-8');
+                return buildSuccessResult(
+                  validation.advisoryFindings.length > 0 ? validation.advisoryFindings : undefined,
+                  cumulativeTokens,
+                );
+              }
+            }
             return buildSuccessResult(
               advisoryValidation.advisoryFindings.length > 0 ? advisoryValidation.advisoryFindings : undefined,
               cumulativeTokens,
