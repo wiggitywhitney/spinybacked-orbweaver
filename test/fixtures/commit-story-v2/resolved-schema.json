@@ -733,6 +733,84 @@
         }
       },
       "display_name": "Journal Attributes"
+    },
+    {
+      "id": "registry.commit_story.summarize",
+      "type": "attribute_group",
+      "brief": "Attributes for summary generation operations (daily, weekly, monthly)",
+      "attributes": [
+        {
+          "name": "commit_story.summarize.dates_count",
+          "type": "int",
+          "brief": "Number of dates requested for daily summary generation",
+          "examples": [7, 30],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.summarize.generated_count",
+          "type": "int",
+          "brief": "Number of summaries successfully generated and saved",
+          "examples": [5, 28],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.summarize.failed_count",
+          "type": "int",
+          "brief": "Number of summaries that failed during generation",
+          "examples": [0, 2],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.summarize.no_entries_count",
+          "type": "int",
+          "brief": "Number of dates skipped because no journal entries exist",
+          "examples": [0, 3],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.summarize.already_exists_count",
+          "type": "int",
+          "brief": "Number of dates skipped because a summary already exists",
+          "examples": [0, 10],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.summarize.force",
+          "type": "boolean",
+          "brief": "Whether --force was passed to overwrite existing summaries",
+          "examples": [false, true],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.summarize.weeks_count",
+          "type": "int",
+          "brief": "Number of weeks requested for weekly summary generation",
+          "examples": [4, 12],
+          "requirement_level": "recommended",
+          "stability": "development"
+        },
+        {
+          "name": "commit_story.summarize.months_count",
+          "type": "int",
+          "brief": "Number of months requested for monthly summary generation",
+          "examples": [1, 3],
+          "requirement_level": "recommended",
+          "stability": "development"
+        }
+      ],
+      "lineage": {
+        "provenance": {
+          "registry_id": "commit_story",
+          "path": "/Users/whitney.lee/Documents/Repositories/commit-story-v2/telemetry/registry/attributes.yaml"
+        }
+      },
+      "display_name": "Summarize Attributes"
     }
   ]
 }

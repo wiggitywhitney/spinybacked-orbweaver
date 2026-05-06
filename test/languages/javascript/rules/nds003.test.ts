@@ -649,6 +649,38 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
 
+    it('allows truthy optional-chaining guard around setAttribute (req.route?.path)', () => {
+      const original = [
+        'export async function getUsers(req, res) {',
+        '  const result = await pool.query("SELECT * FROM users");',
+        '  res.json(result.rows);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'export async function getUsers(req, res) {',
+        '  return tracer.startActiveSpan("fixture_service.user.get_users", async (span) => {',
+        '    try {',
+        '      span.setAttribute("http.request.method", req.method);',
+        '      if (req.route?.path) {',
+        '        span.setAttribute("http.route", req.route.path);',
+        '      }',
+        '      const result = await pool.query("SELECT * FROM users");',
+        '      res.json(result.rows);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
     it('still catches genuine business logic additions', () => {
       const original = [
         'function doWork() {',
@@ -1240,6 +1272,109 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       const results = checkNonInstrumentationDiff(original, instrumented, filePath);
       const failures = results.filter((r) => !r.passed);
       expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('function-level fallback context header (#784/#785)', () => {
+    // buildContext() in extraction.ts prepends "// Imports used by this function" + import
+    // lines to every function's contextHeader. functionLevelFallback passes contextHeader
+    // as originalCode to instrumentWithRetry, so NDS-003 sees that preamble as "original".
+    // The agent doesn't preserve the preamble comment → NDS-003 false positive fires.
+    // Fix: normalizeLine strips the preamble comment to '' so it's invisible to both
+    // the forward and reverse checks. The full contextHeader is still passed as originalCode
+    // so the LLM retains import context on all retry attempts.
+
+    // Shared context for both tests: what buildContext() produces as contextHeader
+    const contextHeader = [
+      '// Imports used by this function',
+      'import { readDayEntries } from "../managers/summary-manager.js";',
+      '',
+      'export async function runSummarize(options) {',
+      '  const { dates } = options;',
+      '  return dates;',
+      '}',
+    ].join('\n');
+
+    // What the agent produces: OTel imports + span wrapper; preserves project imports
+    // and function body, but drops the "// Imports used by this function" comment
+    const agentOutput = [
+      'import { trace } from "@opentelemetry/api";',
+      'import { readDayEntries } from "../managers/summary-manager.js";',
+      '',
+      'const tracer = trace.getTracer("my-service");',
+      'export async function runSummarize(options) {',
+      '  return tracer.startActiveSpan("runSummarize", (span) => {',
+      '    try {',
+      '      const { dates } = options;',
+      '      return dates;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    it('passes: preamble comment normalized to empty string so agent can drop it', () => {
+      const results = checkNonInstrumentationDiff(contextHeader, agentOutput, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('also strips "// Module-level constants referenced by this function" preamble', () => {
+      const contextWithConstants = [
+        '// Module-level constants referenced by this function',
+        'const BASE_PATH = "./journals";',
+        '',
+        'export async function runSummarize(options) {',
+        '  return BASE_PATH;',
+        '}',
+      ].join('\n');
+
+      const agentOutputConstants = [
+        'import { trace } from "@opentelemetry/api";',
+        'const BASE_PATH = "./journals";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runSummarize(options) {',
+        '  return tracer.startActiveSpan("runSummarize", (span) => {',
+        '    try {',
+        '      return BASE_PATH;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(contextWithConstants, agentOutputConstants, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('also strips "// This function is exported (via re-export block)" preamble', () => {
+      const contextWithExportPreamble = [
+        '// This function is exported (via re-export block)',
+        'export async function runSummarize(options) {',
+        '  return options;',
+        '}',
+      ].join('\n');
+
+      const agentOutputExportPreamble = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runSummarize(options) {',
+        '  return tracer.startActiveSpan("runSummarize", (span) => {',
+        '    try {',
+        '      return options;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(contextWithExportPreamble, agentOutputExportPreamble, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
     });
   });
 

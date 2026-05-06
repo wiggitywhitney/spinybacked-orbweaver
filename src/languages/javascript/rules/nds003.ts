@@ -47,11 +47,12 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // Same accepted trade-off as the single-condition form above.
   /^\s*if\s*\(\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*&&\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*\)\s*\{?\s*$/,
   // Truthy property-access guards wrapping setAttribute calls (#388).
-  // Matches: if (context.chat) {, if (result.data) {, etc.
+  // Matches: if (context.chat) {, if (result.data) {, if (req.route?.path) {, etc.
+  // Supports optional chaining (?.) for guards like if (req.route?.path) { (#785).
   // Requires at least one dot dereference to avoid matching bare identifier
   // guards (if (x) {) which are more likely to be business logic.
   // Same trade-off applies: also filters truthy guards wrapping business logic.
-  /^\s*if\s*\(\s*\w+(?:\.\w+)+\s*\)\s*\{?\s*$/,
+  /^\s*if\s*\(\s*\w+(?:(?:\??\.)\w+)+\s*\)\s*\{?\s*$/,
   // isRecording() guard for CDQ-006 compliance.
   // CDQ-006 recommends wrapping expensive span.setAttribute computations in this guard
   // to skip computation when the span is not sampling. Matches any span variable name
@@ -76,8 +77,21 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
  *   so the forward check doesn't flag catch-variable-binding as a modification.
  * - catch (e) and catch (error) etc. are normalized to catch (error)
  *   so renamed catch variables don't trigger false positives.
+ * - buildContext() preamble comments ("// Imports used by this function",
+ *   "// Module-level constants referenced by this function",
+ *   "// This function is exported (via re-export block)") are normalized to ''
+ *   so the forward check ignores them. These are LLM context annotations added
+ *   by extraction.ts, not user business logic the agent must preserve.
  */
 function normalizeLine(line: string): string {
+  const trimmed = line.trim();
+  if (
+    trimmed === '// Imports used by this function' ||
+    trimmed === '// Module-level constants referenced by this function' ||
+    trimmed.startsWith('// This function is exported')
+  ) {
+    return '';
+  }
   return line
     // Normalize catch {} → catch (error) {} and catch (e) {} → catch (error) {}
     .replace(/\}\s*catch\s*(?:\(\s*\w+\s*\))?\s*\{/, '} catch (error) {')

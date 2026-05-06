@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-05-06) Fixed NDS-003 false positive on optional chaining property access guards (issue #784). The truthy property-access guard pattern in `src/languages/javascript/rules/nds003.ts` matched `if (req.route.path) {` but rejected `if (req.route?.path) {` because the `?.` operator wasn't allowed in the regex. When the agent adds this guard to safely capture the `http.route` attribute from an Express request object, NDS-003 fired and the agent retreated from instrumenting the function entirely. The pattern now allows optional chaining with `(?:(?:\??\.)\w+)+`.
+
+- (2026-05-06) Fixed SCH-002 oscillation on `commit_story.summarize.*` attributes in the commit-story-v2 acceptance gate fixture (issue #785). The fixture schema had no entries for `commit_story.summarize.*` attributes. The agent created extensions, SCH-002 fired with 1 violation, and on retry escalated to 2 violations (oscillation), causing `runSummarize` and `runWeeklySummarize` to be skipped entirely. Added `registry.commit_story.summarize` attribute group with 8 attributes (`dates_count`, `generated_count`, `failed_count`, `no_entries_count`, `already_exists_count`, `force`, `weeks_count`, `months_count`) to the fixture schema.
+
 ### Added
 
 - (2026-05-05) Added an acceptance gate test confirming the full end-to-end live-check SDK injection path works: the test installs `@opentelemetry/sdk-node` into a fresh temporary project, runs a minimal Node.js entry file that creates one span, and asserts that `parsedCompliance.spansReceived === true` after Weaver receives the spans. This test uncovered two real bugs that were fixed as part of making it pass: (1) the `NodeTracerProvider` init file approach broke pnpm projects (transitive packages like `@opentelemetry/sdk-trace-node` aren't hoisted) — fixed by switching back to `NodeSDK` with a monkeypatch intercept to capture the `setGlobalTracerProvider()` return value; (2) Weaver 0.22.1 changed its output format — the `/stop` HTTP endpoint now returns "OK" as an acknowledgment only, and the actual JSON compliance report is written to stdout as a streaming JSONL format with the statistics object last. `parseComplianceReport` was updated to handle both the 0.21.x wrapped format and the 0.22.x streaming format, and `runLiveCheck` now reads from stdout (after waiting for process exit) rather than the HTTP response body.
