@@ -87,6 +87,15 @@ interface InstrumentWithRetryOptions {
    * Required — callers must supply a provider explicitly.
    */
   provider: LanguageProvider;
+  /**
+   * Expected namespace prefix for schema extensions (e.g. "commit_story").
+   * When set, extensions whose ID does not start with "<prefix>." are treated as
+   * a blocking failure and fed back into the retry loop — consistent with how other
+   * validation failures work. Without this option, no namespace check is performed.
+   *
+   * Populated by the coordinator from the registry manifest's `name` field.
+   */
+  expectedNamespacePrefix?: string;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -417,6 +426,7 @@ export async function instrumentWithRetry(
       options.existingSpanNames,
       options.processedFilesManifest,
       options.canonicalTracerName,
+      options.expectedNamespacePrefix,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -469,6 +479,7 @@ async function executeRetryLoop(
   existingSpanNames?: string[],
   processedFilesManifest?: Map<string, string[]>,
   canonicalTracerName?: string,
+  expectedNamespacePrefix?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient, canonicalTracerName);
@@ -683,6 +694,71 @@ async function executeRetryLoop(
     );
     llmRefactorsPerAttempt.push(output.suggestedRefactors ?? []);
 
+    // Namespace prefix check: extensions must start with the expected prefix.
+    // Runs only when validation.passed (no point checking if there are blocking errors).
+    // A wrong-namespace extension is treated as a blocking failure and fed back into
+    // the next retry attempt — consistent with how other validation failures work.
+    if (validation.passed && expectedNamespacePrefix) {
+      // Check ALL extensions the file will emit — both declared (output.schemaExtensions)
+      // and span names auto-extracted from the instrumented code by supplementSchemaExtensions.
+      // Checking only output.schemaExtensions would miss span names the agent embedded in
+      // startActiveSpan() calls without explicitly declaring them.
+      const allExtensions = supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode);
+      const wrongNamespace = allExtensions.filter((ext) => {
+        // Strip "span." or "span:" prefix before namespace check.
+        // normalizeSchemaExtension() converts span: → span. but runs after this check,
+        // so handle both forms here.
+        const preNormalized = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
+        const checkPart = preNormalized.startsWith('span.') ? preNormalized.slice('span.'.length) : preNormalized;
+        return !checkPart.startsWith(`${expectedNamespacePrefix}.`);
+      });
+      if (wrongNamespace.length > 0) {
+        const feedback =
+          `Schema extensions rejected: namespace must be "${expectedNamespacePrefix}" but got ${wrongNamespace.join(', ')}. ` +
+          `All extensions must start with "${expectedNamespacePrefix}." ` +
+          `(or "span.${expectedNamespacePrefix}." for span names). ` +
+          `Do not invent attributes with other namespace prefixes.`;
+        errorProgression.push(`${wrongNamespace.length} blocking errors (namespace-rejected: ${wrongNamespace.join(', ')})`);
+        lastErrorByAttempt.push(feedback);
+        nds003ViolationsPerAttempt.push([]);
+        llmRefactorsPerAttempt.push([]);
+        if (attempt < maxAttempts) {
+          // Route through fresh-regeneration so the agent sees the failure hint
+          // in a clean context. Multi-turn fix requires conversation history which
+          // isn't always available; fresh-regen reliably delivers the hint.
+          lastValidation = {
+            passed: false,
+            tier1Results: [],
+            tier2Results: [],
+            blockingFailures: [{
+              ruleId: 'SCH-NS',
+              passed: false,
+              filePath,
+              lineNumber: null,
+              message: feedback,
+              tier: 2,
+              blocking: true,
+            }],
+            advisoryFindings: [],
+          };
+          // Restore before jumping — if fresh-regen fails before writing its own output,
+          // the file should not be left with the wrong-namespace code.
+          try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
+          // Jump to the last attempt (fresh-regeneration) so the next loop
+          // iteration runs as fresh-regen with the namespace failure hint.
+          attempt = maxAttempts - 1;
+          continue;
+        }
+        // Already on last attempt — restore original file and return failure
+        try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
+        return buildFailedResult(
+          filePath, feedback, feedback,
+          cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+          undefined, undefined, thinkingBlocksByAttempt, lastErrorByAttempt,
+        );
+      }
+    }
+
     if (validation.passed) {
       const spansAdded = countSpansInCode(provider, output.instrumentedCode);
 
@@ -766,6 +842,25 @@ async function executeRetryLoop(
           });
 
           if (advisoryValidation.passed) {
+            // Re-check namespace on the advisory output before accepting it.
+            // The advisory pass may add new startActiveSpan() calls with wrong-namespace
+            // span names that weren't present in the pre-advisory output.
+            if (expectedNamespacePrefix) {
+              const advisoryAll = supplementSchemaExtensions(advisoryOutput.schemaExtensions, advisoryCode);
+              const advisoryWrong = advisoryAll.filter((ext) => {
+                const pre = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
+                const checkPart = pre.startsWith('span.') ? pre.slice('span.'.length) : pre;
+                return !checkPart.startsWith(`${expectedNamespacePrefix}.`);
+              });
+              if (advisoryWrong.length > 0) {
+                // Advisory output has wrong-namespace extensions — revert and use pre-advisory result
+                await writeFile(filePath, passingCode, 'utf-8');
+                return buildSuccessResult(
+                  validation.advisoryFindings.length > 0 ? validation.advisoryFindings : undefined,
+                  cumulativeTokens,
+                );
+              }
+            }
             return buildSuccessResult(
               advisoryValidation.advisoryFindings.length > 0 ? advisoryValidation.advisoryFindings : undefined,
               cumulativeTokens,

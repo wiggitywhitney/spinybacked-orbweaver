@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-05-06) Wired fix-loop feedback for wrong-namespace schema extensions (issue #722). When the agent declares schema extensions whose namespace prefix doesn't match the registry manifest's `name` field, the fix loop now detects this inside `instrumentWithRetry` and routes to a fresh-regeneration retry with a targeted failure hint ("namespace must be X but got Y"). Previously, wrong-namespace extensions were silently dropped by `writeSchemaExtensions` after the fix loop had already exited — the agent had no opportunity to correct them. The fix: `dispatch.ts` extracts the registry namespace prefix once via `extractNamespacePrefix` and passes it as `expectedNamespacePrefix` to each `instrumentWithRetry` call; `executeRetryLoop` checks each declared extension against the prefix after validation passes, and jumps to fresh-regeneration if any fail. The Test B annotation in `test/acceptance-gate.test.ts` was updated to reflect the resolved issue.
+
 ### Fixed
 
 - (2026-05-06) Fixed NDS-003 false positive on optional chaining property access guards (issue #784). The truthy property-access guard pattern in `src/languages/javascript/rules/nds003.ts` matched `if (req.route.path) {` but rejected `if (req.route?.path) {` because the `?.` operator wasn't allowed in the regex. When the agent adds this guard to safely capture the `http.route` attribute from an Express request object, NDS-003 fired and the agent retreated from instrumenting the function entirely. The pattern now allows optional chaining with `(?:(?:\??\.)\w+)+`.

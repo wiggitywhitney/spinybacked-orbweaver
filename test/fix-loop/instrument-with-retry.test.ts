@@ -3926,3 +3926,106 @@ describe('instrumentWithRetry — NDS-003 repeat-line escalation', () => {
     expect(capturedFailureHint).not.toContain('must be reproduced exactly');
   });
 });
+
+describe('instrumentWithRetry — namespace prefix enforcement (#722)', () => {
+  let testFilePath: string;
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'spiny-test-'));
+    testFilePath = join(tempDir, 'test-file.js');
+    writeFileSync(testFilePath, 'export async function fetchData() { return fetch("/api"); }');
+  });
+
+  afterEach(() => {
+    if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('retries with feedback when agent declares extensions with wrong namespace prefix', async () => {
+    let attempt = 0;
+    let capturedFeedback: string | undefined;
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_fp, _code, _schema, _config, _provider, callOptions) => {
+        attempt++;
+        if (attempt === 1) {
+          // Wrong namespace — generic.* instead of myapp.*
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              schemaExtensions: ['generic.request.id', 'span.generic.fetch_data'],
+              instrumentedCode: 'const x = 1;\n',
+            }),
+          } as InstrumentFileResult;
+        }
+        // Capture feedback so we can assert on it
+        capturedFeedback = callOptions?.feedbackMessage ?? callOptions?.failureHint;
+        // Correct namespace on retry
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            schemaExtensions: ['myapp.request.id', 'span.myapp.fetch_data'],
+            instrumentedCode: 'const x = 1;\n',
+          }),
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, 'export async function fetchData() {}', {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, provider: jsProvider, expectedNamespacePrefix: 'myapp' },
+    );
+
+    expect(result.status).toBe('success');
+    // Namespace failure on attempt 1 → jump to fresh-regen (attempt 3) → succeeds
+    expect(result.validationAttempts).toBe(3);
+    // failureHint on fresh-regen attempt contains the rejection details
+    expect(capturedFeedback).toBeDefined();
+    expect(capturedFeedback).toContain('generic.request.id');
+    expect(capturedFeedback).toContain('myapp');
+  });
+
+  it('passes on first attempt when all extensions match the expected namespace', async () => {
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({
+          schemaExtensions: ['myapp.request.id', 'span.myapp.fetch_data'],
+          instrumentedCode: 'const x = 1;\n',
+        }),
+      } as InstrumentFileResult),
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, 'export async function fetchData() {}', {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, provider: jsProvider, expectedNamespacePrefix: 'myapp' },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(1);
+  });
+
+  it('does not fire when expectedNamespacePrefix is not provided', async () => {
+    // Without a prefix, wrong-namespace extensions should not cause a retry
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({
+          schemaExtensions: ['generic.request.id'],
+          instrumentedCode: 'const x = 1;\n',
+        }),
+      } as InstrumentFileResult),
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, 'export async function fetchData() {}', {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(1);
+  });
+});

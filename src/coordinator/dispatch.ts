@@ -20,6 +20,7 @@ import {
   snapshotExtensionsFile as defaultSnapshotExtensionsFile,
   restoreExtensionsFile as defaultRestoreExtensionsFile,
   parseExtension,
+  tryExtractNamespacePrefix,
 } from './schema-extensions.ts';
 
 /**
@@ -314,6 +315,15 @@ export async function dispatchFiles(
     projectName = rawProjectName.trim();
   }
 
+  // Extract registry namespace prefix once — passed to each instrumentFn call so wrong-namespace
+  // extensions are caught inside the fix loop rather than silently dropped by writeSchemaExtensions.
+  // tryExtractNamespacePrefix returns undefined when the manifest is absent (ENOENT, registry not
+  // yet created), and throws on malformed manifest or permission errors so those aren't silently
+  // swallowed.
+  const registryNamespacePrefix = registryDir
+    ? await tryExtractNamespacePrefix(registryDir)
+    : undefined;
+
   // Take initial checkpoint window snapshot for rollback capability
   if (registryDir && !isDryRun && options.runTestCommand) {
     try {
@@ -380,7 +390,7 @@ export async function dispatchFiles(
       const existingSpanNames = accumulatedExtensions
         .filter(ext => ext.startsWith('span.'))
         .map(ext => ext.slice(5));
-      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames, provider, processedFilesManifest, canonicalTracerName: options.canonicalTracerName });
+      const result = await instrumentFn(filePath, fileContent, schema, config, { projectRoot: projectDir, existingSpanNames, provider, processedFilesManifest, canonicalTracerName: options.canonicalTracerName, expectedNamespacePrefix: registryNamespacePrefix });
       result.schemaHashBefore = schemaHash;
       result.schemaHashAfter = schemaHash;
       results.push(result);
