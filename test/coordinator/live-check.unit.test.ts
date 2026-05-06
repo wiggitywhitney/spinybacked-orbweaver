@@ -1,12 +1,80 @@
 // ABOUTME: Unit tests for live-check failure message format using injected mock dependencies.
 // ABOUTME: Covers Weaver shutdown failure message content — operation context, endpoint, and recovery action.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { runLiveCheck } from '../../src/coordinator/live-check.ts';
 import type { LiveCheckDeps } from '../../src/coordinator/live-check.ts';
 import { join } from 'node:path';
 
 const VALID_REGISTRY = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'valid');
+
+// ============================================================
+// JSON fixtures from Research B: Weaver live-check JSON output
+// ============================================================
+
+/** Zero-spans output: samples is empty, total_entities is 0. */
+const ZERO_SPANS_COMPLIANCE_JSON = JSON.stringify({
+  samples: [],
+  statistics: {
+    total_entities: 0,
+    total_entities_by_type: {},
+    total_advisories: 0,
+    advice_level_counts: {},
+    highest_advice_level_counts: {},
+    no_advice_count: 0,
+    advice_type_counts: {},
+    advice_message_counts: {},
+    seen_registry_attributes: { 'test_app.order.total': 0, 'test_app.order.id': 0 },
+    seen_non_registry_attributes: {},
+    seen_registry_metrics: {},
+    seen_non_registry_metrics: {},
+    seen_registry_events: {},
+    seen_non_registry_events: {},
+    registry_coverage: 0.0,
+  },
+});
+
+/** Real-spans output: 2 spans, 31 total advisories (from Research B sample run). */
+const REAL_SPANS_COMPLIANCE_JSON = JSON.stringify({
+  samples: [
+    {
+      resource: {
+        attributes: [],
+        live_check_result: { all_advice: [], highest_advice_level: null },
+      },
+    },
+    {
+      span: {
+        name: 'taze.research.operation',
+        kind: 'internal',
+        status: { code: 'unset', message: '' },
+        attributes: [
+          { name: 'test_app.order.id', value: 'order-001', type: 'string', live_check_result: { all_advice: [], highest_advice_level: null } },
+        ],
+        span_events: [],
+        span_links: [],
+        live_check_result: { all_advice: [], highest_advice_level: null },
+      },
+    },
+  ],
+  statistics: {
+    total_entities: 35,
+    total_entities_by_type: { span: 2, attribute: 31, resource: 2 },
+    total_advisories: 31,
+    advice_level_counts: { improvement: 2, violation: 29 },
+    highest_advice_level_counts: { improvement: 2, violation: 29 },
+    no_advice_count: 4,
+    advice_type_counts: { not_stable: 2, missing_attribute: 29 },
+    advice_message_counts: {},
+    seen_registry_attributes: { 'test_app.order.total': 1, 'test_app.order.id': 1 },
+    seen_non_registry_attributes: { 'service.name': 2, 'host.name': 2 },
+    seen_registry_metrics: {},
+    seen_non_registry_metrics: {},
+    seen_registry_events: {},
+    seen_non_registry_events: {},
+    registry_coverage: 1.0,
+  },
+});
 
 /** Build mock live-check deps — Weaver starts fine, but /stop fetch throws. */
 function makeShutdownFailDeps(shutdownError: Error): LiveCheckDeps {
@@ -20,6 +88,7 @@ function makeShutdownFailDeps(shutdownError: Error): LiveCheckDeps {
       stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
       stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
       on: (_: string, __: unknown) => {},
+      once: (_: string, cb: () => void) => { cb(); },
       kill: () => {},
     }),
     execFileFn: (_cmd: string, _args: string[], _opts: unknown, cb: (e: Error | null, stdout: string, stderr: string) => void) => {
@@ -119,6 +188,7 @@ function makeSuccessfulLiveCheckDeps(stopResponse: string): LiveCheckDeps {
       stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
       stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
       on: (_: string, __: unknown) => {},
+      once: (_: string, cb: () => void) => { cb(); },
       kill: () => {},
     }),
     execFileFn: (_cmd: string, _args: string[], _opts: unknown, cb: (e: Error | null, stdout: string, stderr: string) => void) => {
@@ -135,36 +205,102 @@ function makeSuccessfulLiveCheckDeps(stopResponse: string): LiveCheckDeps {
   };
 }
 
-const ZERO_SPAN_NOTE = '(no spans received — live-check did not validate any telemetry)';
+/** Build mock deps that capture the Weaver spawn args and return a given /stop response. */
+function makeSpawnCapturingDeps(stopResponse: string): { deps: LiveCheckDeps; getSpawnArgs: () => string[] } {
+  let spawnArgs: string[] = [];
+  const deps: LiveCheckDeps = {
+    createServerFn: () => ({
+      on: () => {},
+      listen: (_port: number, cb: () => void) => { cb(); return {}; },
+      close: (cb: () => void) => { cb(); },
+    }),
+    spawnFn: (_cmd: string, args: string[], _opts: object) => {
+      spawnArgs = [...args];
+      return {
+        stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
+        stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
+        on: (_: string, __: unknown) => {},
+        once: (_: string, cb: () => void) => { cb(); },
+        kill: () => {},
+      };
+    },
+    execFileFn: (_cmd: string, _args: string[], _opts: unknown, cb: (e: Error | null, stdout: string, stderr: string) => void) => {
+      cb(null, '', '');
+    },
+    fetchFn: async () => ({ text: async () => stopResponse } as Response),
+    setTimeout: (cb: () => void, _ms: number) => {
+      cb();
+      return 0;
+    },
+    clearTimeout: () => {},
+  };
+  return { deps, getSpawnArgs: () => spawnArgs };
+}
 
-describe('runLiveCheck — zero-span compliance report annotation', () => {
-  it('annotates the compliance report when Weaver output indicates zero spans received', async () => {
-    const deps = makeSuccessfulLiveCheckDeps('OK');
+describe('runLiveCheck — Weaver spawn arguments', () => {
+  it('passes --format json to the Weaver live-check spawn command', async () => {
+    const { deps, getSpawnArgs } = makeSpawnCapturingDeps(ZERO_SPANS_COMPLIANCE_JSON);
 
-    const result = await runLiveCheck(
-      VALID_REGISTRY,
-      '/project',
-      'npm test',
-      undefined,
-      deps,
-    );
+    await runLiveCheck(VALID_REGISTRY, '/project', 'npm test', undefined, deps);
+
+    const args = getSpawnArgs();
+    const formatIdx = args.indexOf('--format');
+    expect(formatIdx).toBeGreaterThanOrEqual(0);
+    expect(args[formatIdx + 1]).toBe('json');
+  });
+});
+
+describe('runLiveCheck — JSON compliance report parsing', () => {
+  it('sets parsedCompliance.spansReceived to false when statistics.total_entities is 0', async () => {
+    const deps = makeSuccessfulLiveCheckDeps(ZERO_SPANS_COMPLIANCE_JSON);
+
+    const result = await runLiveCheck(VALID_REGISTRY, '/project', 'npm test', undefined, deps);
 
     expect(result.skipped).toBe(false);
-    expect(result.complianceReport).toContain(ZERO_SPAN_NOTE);
+    expect(result.parsedCompliance).toBeDefined();
+    expect(result.parsedCompliance!.spansReceived).toBe(false);
   });
 
-  it('does not annotate when the compliance report includes a positive span count', async () => {
-    const deps = makeSuccessfulLiveCheckDeps('OK\n3 spans received');
+  it('sets parsedCompliance.spanCount to 0 when no spans received', async () => {
+    const deps = makeSuccessfulLiveCheckDeps(ZERO_SPANS_COMPLIANCE_JSON);
 
-    const result = await runLiveCheck(
-      VALID_REGISTRY,
-      '/project',
-      'npm test',
-      undefined,
-      deps,
-    );
+    const result = await runLiveCheck(VALID_REGISTRY, '/project', 'npm test', undefined, deps);
+
+    expect(result.parsedCompliance!.spanCount).toBe(0);
+  });
+
+  it('sets parsedCompliance.spansReceived to true when statistics.total_entities is > 0', async () => {
+    const deps = makeSuccessfulLiveCheckDeps(REAL_SPANS_COMPLIANCE_JSON);
+
+    const result = await runLiveCheck(VALID_REGISTRY, '/project', 'npm test', undefined, deps);
 
     expect(result.skipped).toBe(false);
-    expect(result.complianceReport).not.toContain(ZERO_SPAN_NOTE);
+    expect(result.parsedCompliance).toBeDefined();
+    expect(result.parsedCompliance!.spansReceived).toBe(true);
+  });
+
+  it('extracts spanCount from statistics.total_entities_by_type.span', async () => {
+    const deps = makeSuccessfulLiveCheckDeps(REAL_SPANS_COMPLIANCE_JSON);
+
+    const result = await runLiveCheck(VALID_REGISTRY, '/project', 'npm test', undefined, deps);
+
+    expect(result.parsedCompliance!.spanCount).toBe(2);
+  });
+
+  it('extracts totalAdvisories from statistics.total_advisories', async () => {
+    const deps = makeSuccessfulLiveCheckDeps(REAL_SPANS_COMPLIANCE_JSON);
+
+    const result = await runLiveCheck(VALID_REGISTRY, '/project', 'npm test', undefined, deps);
+
+    expect(result.parsedCompliance!.totalAdvisories).toBe(31);
+  });
+
+  it('sets parsedCompliance to undefined when compliance report is not valid JSON', async () => {
+    const deps = makeSuccessfulLiveCheckDeps('OK');
+
+    const result = await runLiveCheck(VALID_REGISTRY, '/project', 'npm test', undefined, deps);
+
+    expect(result.skipped).toBe(false);
+    expect(result.parsedCompliance).toBeUndefined();
   });
 });

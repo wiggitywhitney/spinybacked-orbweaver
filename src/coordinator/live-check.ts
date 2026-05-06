@@ -4,10 +4,17 @@
 import { createServer as defaultCreateServer } from 'node:net';
 import { spawn as defaultSpawn } from 'node:child_process';
 import { execFile as defaultExecFile } from 'node:child_process';
+import { writeFile as defaultWriteFile, unlink as defaultUnlink } from 'node:fs/promises';
 import type { ChildProcess } from 'node:child_process';
 import type { Server } from 'node:net';
+import { join, basename } from 'node:path';
 import type { CoordinatorCallbacks } from './types.ts';
 import { hasTestSuite } from './test-suite-detection.ts';
+import {
+  LIVE_CHECK_INIT_FILENAME,
+  generateInitFileContent,
+  checkSdkNodeAvailable,
+} from './live-check-sdk-init.ts';
 
 /** Default Weaver OTLP receiver ports — non-standard to avoid conflicts with existing OTel collectors. */
 export const DEFAULT_GRPC_PORT = 14317;
@@ -38,6 +45,12 @@ export interface LiveCheckDeps {
   fetchFn: (url: string, init?: RequestInit) => Promise<Response>;
   setTimeout: (cb: () => void, ms: number) => unknown;
   clearTimeout: (id: unknown) => void;
+  /** Write a file (for init file creation). Defaults to node:fs/promises writeFile. */
+  writeFileFn?: (path: string, content: string) => Promise<void>;
+  /** Delete a file (for init file cleanup). Defaults to node:fs/promises unlink. */
+  deleteFileFn?: (path: string) => Promise<void>;
+  /** Check if @opentelemetry/sdk-node is available in the target project. */
+  checkSdkNodeFn?: (projectDir: string) => Promise<boolean>;
 }
 
 /** Result of port availability check. */
@@ -48,16 +61,30 @@ export interface PortCheckResult {
   processName?: string;
 }
 
+/** Parsed compliance data extracted from Weaver live-check JSON output. */
+export interface ParsedCompliance {
+  /** Whether any spans were received by Weaver. */
+  spansReceived: boolean;
+  /** Number of spans received (from statistics.total_entities_by_type.span). */
+  spanCount: number;
+  /** Total advisory findings across all entities. 0 = fully compliant. */
+  totalAdvisories: number;
+}
+
 /** Result of the end-of-run live-check workflow. */
 export interface LiveCheckResult {
   /** Whether the live-check was skipped (port conflict, missing tests, etc.). */
   skipped: boolean;
-  /** Weaver compliance report content (raw CLI output). */
+  /** Raw Weaver compliance report (JSON string from --format json). */
   complianceReport?: string;
+  /** Parsed compliance data extracted from the JSON report. Undefined if skipped or JSON parse failed. */
+  parsedCompliance?: ParsedCompliance;
   /** Whether the test suite passed. */
   testsPassed?: boolean;
   /** Combined stdout+stderr from the test suite run. Only present when tests fail. */
   testOutput?: string;
+  /** Whether the test suite failed specifically after SDK injection was attempted. Undefined if injection wasn't attempted. */
+  sdkInjectionTestsFailed?: boolean;
   /** Warnings produced during the live-check workflow. */
   warnings: string[];
 }
@@ -122,11 +149,12 @@ export async function checkPortAvailable(
  * Workflow:
  * 1. Validate test command exists
  * 2. Check port availability (default: 14317 gRPC, 14320 HTTP)
- * 3. Start `weaver registry live-check -r <registryDir>`
+ * 3. Start `weaver registry live-check --format json -r <registryDir>`
  * 4. Wait for Weaver to be ready
- * 5. Run test suite with OTEL_EXPORTER_OTLP_ENDPOINT override
- * 6. Stop Weaver via HTTP /stop endpoint
- * 7. Capture compliance report
+ * 5. Write SDK init file; run test suite with NODE_OPTIONS=--import and gRPC env vars
+ * 6. Wait 2s for in-flight gRPC spans, then POST /stop; wait for Weaver process exit
+ * 7. Parse compliance report from weaverStdout (Weaver 0.22.x streams JSON to stdout;
+ *    fall back to /stop HTTP response body for Weaver 0.21.x compatibility)
  *
  * All failures degrade gracefully — the run is never aborted.
  *
@@ -191,6 +219,11 @@ export async function runLiveCheck(
   const spawnFn = deps?.spawnFn ?? defaultSpawn;
   const execFileFn = deps?.execFileFn ?? (defaultExecFile as unknown as LiveCheckDeps['execFileFn']);
   const fetchFn = deps?.fetchFn ?? globalThis.fetch;
+  const writeFileFn = deps?.writeFileFn ?? ((p: string, c: string) => defaultWriteFile(p, c, 'utf-8'));
+  const deleteFileFn = deps?.deleteFileFn ?? ((p: string) => defaultUnlink(p).catch(() => {}));
+  const checkSdkNodeFn = deps?.checkSdkNodeFn ?? checkSdkNodeAvailable;
+  const setTimeoutFn: (cb: () => void, ms: number) => unknown = deps?.setTimeout ?? globalThis.setTimeout;
+  const clearTimeoutFn: (id: unknown) => void = deps?.clearTimeout ?? ((id) => globalThis.clearTimeout(id as ReturnType<typeof globalThis.setTimeout>));
 
   // Step 3: Start Weaver live-check
   let weaverProcess: ChildProcess;
@@ -199,6 +232,7 @@ export async function runLiveCheck(
   try {
     weaverProcess = spawnFn('weaver', [
       'registry', 'live-check', '-r', registryDir,
+      '--format', 'json',
       '--inactivity-timeout', String(inactivityTimeoutSeconds),
       '--otlp-grpc-port', String(grpcPort),
       '--admin-port', String(adminPort),
@@ -213,6 +247,12 @@ export async function runLiveCheck(
       warnings: [`Failed to start Weaver live-check: ${message}`],
     };
   }
+
+  // Silently absorb 'error' events (e.g. ENOENT when weaver is not in PATH).
+  // The 'close' event fires after 'error' and is what drives waitForWeaverReady.
+  weaverProcess.on('error', (err: NodeJS.ErrnoException) => {
+    weaverStderr += `weaver spawn error: ${err.message}`;
+  });
 
   // Collect stderr for diagnostics
   weaverProcess.stderr?.on('data', (data: Buffer) => {
@@ -235,13 +275,54 @@ export async function runLiveCheck(
     };
   }
 
-  // Step 5: Run test suite with OTLP endpoint override
+  // Step 5: Inject SDK init file if @opentelemetry/sdk-node is available
+  let sdkInjected = false;
+  const initFilePath = join(projectDir, LIVE_CHECK_INIT_FILENAME);
+
+  try {
+    const sdkNodeAvailable = await checkSdkNodeFn(projectDir);
+    if (sdkNodeAvailable) {
+      const serviceName = basename(projectDir) || 'unknown';
+      await writeFileFn(initFilePath, generateInitFileContent(serviceName));
+      sdkInjected = true;
+    } else {
+      warnings.push(
+        `@opentelemetry/sdk-node not found in ${projectDir}/node_modules. ` +
+        `SDK injection skipped — spans will not reach Weaver. ` +
+        `Install @opentelemetry/sdk-node in the target project to enable live-check telemetry validation.`,
+      );
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnings.push(`SDK init setup failed: ${message}. Proceeding without SDK injection.`);
+  }
+
+  // Build extra env vars for the test run
+  const extraEnv: Record<string, string> = {};
+  if (sdkInjected) {
+    const existingNodeOptions = process.env['NODE_OPTIONS'];
+    extraEnv['NODE_OPTIONS'] = existingNodeOptions
+      ? `${existingNodeOptions} --import "${initFilePath}"`
+      : `--import "${initFilePath}"`;
+    // NodeSDK selects the gRPC exporter when this is set
+    extraEnv['OTEL_EXPORTER_OTLP_PROTOCOL'] = 'grpc';
+    // Force BatchSpanProcessor to export immediately (next tick) rather than after the
+    // default 5-second delay — critical for short-lived test processes that exit quickly
+    extraEnv['OTEL_BSP_SCHEDULE_DELAY'] = '0';
+  }
+
+  // Step 5b: Run test suite with OTLP endpoint override (+ SDK injection if available)
   let testsPassed = true;
   let testOutput: string | undefined;
+  let sdkInjectionTestsFailed: boolean | undefined;
+
   try {
-    await runTestSuite(testCommand, projectDir, grpcPort, execFileFn);
+    await runTestSuite(testCommand, projectDir, grpcPort, execFileFn, extraEnv);
   } catch (err) {
     testsPassed = false;
+    if (sdkInjected) {
+      sdkInjectionTestsFailed = true;
+    }
     const message = err instanceof Error ? err.message : String(err);
     // ExecFileException carries stdout/stderr on the error object — capture for call path analysis.
     const errRecord = err as Record<string, unknown>;
@@ -252,14 +333,29 @@ export async function runLiveCheck(
     warnings.push(`End-of-run test suite failed: ${message}`);
   }
 
-  // Step 6: Stop Weaver via HTTP /stop endpoint
+  // Clean up the init file (always, even on failure)
+  if (sdkInjected) {
+    await deleteFileFn(initFilePath).catch(() => {});
+  }
+
+  // Step 6: Stop Weaver via HTTP /stop endpoint and wait for process exit.
+  //
+  // Weaver writes the JSON compliance report to stdout as it shuts down — the
+  // /stop HTTP response is just an acknowledgment ("OK"). We wait briefly before
+  // calling /stop (to let in-flight gRPC span data arrive), then wait for the
+  // process to fully exit (to capture the statistics block written at shutdown).
+  await new Promise<void>((resolve) => {
+    setTimeoutFn(resolve, 2_000);
+  });
+
   let complianceReport: string | undefined;
+  let stopHttpBody: string | undefined;
   try {
     const stopResponse = await fetchFn(`http://localhost:${adminPort}/stop`, {
       method: 'POST',
       signal: AbortSignal.timeout(WEAVER_STOP_TIMEOUT_MS),
     });
-    complianceReport = await stopResponse.text();
+    stopHttpBody = await stopResponse.text();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     warnings.push(
@@ -274,19 +370,27 @@ export async function runLiveCheck(
     }
   }
 
-  // Use stdout if /stop didn't return a report
-  if (!complianceReport && weaverStdout) {
+  // Wait for Weaver to fully exit so all stdout (including statistics) is flushed.
+  await new Promise<void>((resolve) => {
+    const timer = setTimeoutFn(() => resolve(), WEAVER_STOP_TIMEOUT_MS);
+    (weaverProcess as { once?: (event: string, cb: () => void) => void }).once?.('close', () => {
+      clearTimeoutFn(timer);
+      resolve();
+    });
+  });
+
+  // Use stdout for the compliance report — Weaver 0.22.x streams individual
+  // entity JSON objects to stdout and writes statistics as the last object.
+  // Fall back to the /stop HTTP response body (for mocked tests and older
+  // Weaver versions that return JSON in the HTTP body).
+  if (weaverStdout) {
     complianceReport = weaverStdout;
+  } else if (stopHttpBody && stopHttpBody !== 'OK') {
+    complianceReport = stopHttpBody;
   }
 
-  // Annotate the report when Weaver received no spans — the OTel SDK does not
-  // initialize during checkpoint tests, so every live-check to date has been a
-  // false positive. Surface this clearly rather than letting "OK" mislead users.
-  if (complianceReport && reportIndicatesZeroSpans(complianceReport)) {
-    complianceReport =
-      complianceReport.trim() +
-      ' (no spans received — live-check did not validate any telemetry)';
-  }
+  // Parse the JSON compliance report to extract structured compliance data
+  const parsedCompliance = complianceReport ? parseComplianceReport(complianceReport) : undefined;
 
   // Fire onValidationComplete callback
   try {
@@ -298,24 +402,69 @@ export async function runLiveCheck(
   return {
     skipped: false,
     complianceReport,
+    parsedCompliance,
     testsPassed,
     testOutput,
+    sdkInjectionTestsFailed,
     warnings,
   };
 }
 
 /**
- * Return true when the Weaver compliance report indicates zero spans were received.
- * Weaver reports "OK" with no span details when it receives nothing; the SDK
- * does not initialize during checkpoint tests so this is always the case today.
+ * Parse the Weaver live-check JSON compliance report into structured compliance data.
+ *
+ * Handles two output formats:
+ * - Weaver 0.21.x: single JSON object `{"samples":[...],"statistics":{...}}`
+ * - Weaver 0.22.x: streaming JSONL where the last object IS the statistics
+ *   `{"total_entities":N,"total_entities_by_type":{...},...}`
+ *
+ * Returns undefined if the report lacks the expected structure.
  */
-function reportIndicatesZeroSpans(report: string): boolean {
-  // Strip ANSI escape codes before analysis
-  const stripped = report.replace(/\x1b\[[0-9;]*m/g, '').trim();
-  // Explicit zero span count in the report
-  if (/\b0\s+span/i.test(stripped)) return true;
-  // No positive span count found — Weaver received nothing meaningful
-  return !/\b[1-9]\d*\s+span/i.test(stripped);
+function parseComplianceReport(raw: string): ParsedCompliance | undefined {
+  // Try parsing as a single JSON object — handles:
+  // - 0.21.x format: {"samples":[...],"statistics":{total_entities:N,...}}
+  // - 0.22.x single-object case: {total_entities:N,...} at top level
+  try {
+    const json = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof json['total_entities'] === 'number') {
+      return extractCompliance(json);
+    }
+    const stats = json['statistics'] as Record<string, unknown> | undefined;
+    if (stats && typeof stats === 'object') {
+      return extractCompliance(stats);
+    }
+  } catch {
+    // Not a single JSON — fall through to streaming format
+  }
+
+  // Try 0.22.x streaming format: find the last JSON object in the output.
+  // Weaver streams individual entity objects, with the statistics object last.
+  // The statistics object has "total_entities" directly at the top level.
+  const lastNewlineBrace = raw.lastIndexOf('\n{');
+  if (lastNewlineBrace !== -1) {
+    try {
+      const candidate = raw.slice(lastNewlineBrace + 1);
+      const json = JSON.parse(candidate) as Record<string, unknown>;
+      if (typeof json['total_entities'] === 'number') {
+        return extractCompliance(json);
+      }
+    } catch {
+      // not parseable
+    }
+  }
+
+  return undefined;
+}
+
+function extractCompliance(stats: Record<string, unknown>): ParsedCompliance {
+  const entitiesByType = (stats['total_entities_by_type'] ?? {}) as Record<string, unknown>;
+  const spanCount = typeof entitiesByType['span'] === 'number' ? entitiesByType['span'] : 0;
+  const totalAdvisories = typeof stats['total_advisories'] === 'number' ? stats['total_advisories'] : 0;
+  return {
+    spansReceived: spanCount > 0,
+    spanCount,
+    totalAdvisories,
+  };
 }
 
 /**
@@ -355,13 +504,14 @@ async function waitForWeaverReady(
 }
 
 /**
- * Run the test suite with OTEL_EXPORTER_OTLP_ENDPOINT override.
+ * Run the test suite with OTEL_EXPORTER_OTLP_ENDPOINT override and any extra env vars.
  */
 async function runTestSuite(
   testCommand: string,
   projectDir: string,
   grpcPort: number,
   execFileFn: LiveCheckDeps['execFileFn'],
+  extraEnv: Record<string, string> = {},
 ): Promise<{ stdout: string; stderr: string }> {
   const isWindows = process.platform === 'win32';
   const cmd = isWindows ? 'cmd.exe' : 'sh';
@@ -377,6 +527,7 @@ async function runTestSuite(
         env: {
           ...process.env,
           OTEL_EXPORTER_OTLP_ENDPOINT: `http://localhost:${grpcPort}`,
+          ...extraEnv,
         },
       },
       (error, stdout, stderr) => {

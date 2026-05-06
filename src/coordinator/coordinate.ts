@@ -531,6 +531,15 @@ export async function coordinate(
       if (liveCheckResult.complianceReport) {
         runResult.endOfRunValidation = liveCheckResult.complianceReport;
       }
+      if (liveCheckResult.parsedCompliance || liveCheckResult.sdkInjectionTestsFailed) {
+        const parsed = liveCheckResult.parsedCompliance;
+        runResult.liveCheckStatus = {
+          spansReceived: parsed?.spansReceived ?? false,
+          spanCount: parsed?.spanCount ?? 0,
+          totalAdvisories: parsed?.totalAdvisories ?? 0,
+          sdkInjectionTestsFailed: liveCheckResult.sdkInjectionTestsFailed,
+        };
+      }
       if (liveCheckResult.warnings.length > 0) {
         runResult.warnings.push(...liveCheckResult.warnings);
       }

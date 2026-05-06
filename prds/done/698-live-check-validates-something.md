@@ -1,6 +1,6 @@
 # PRD #698: Make live-check actually validate something
 
-**Status**: Active
+**Status**: Complete (2026-05-05)
 **Priority**: Medium
 **GitHub Issue**: [#698](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/698)
 **Created**: 2026-05-01
@@ -60,11 +60,11 @@ Framework interaction questions for jest, mocha, pytest, etc. belong in downstre
 
 ## Milestones
 
-- [ ] M1: Research — SDK injection approach (Research A) and Weaver JSON schema (Research B)
-- [ ] M2: Implement `--format=json` + JSON compliance report parsing
-- [ ] M3: Implement SDK injection + double-init detection
-- [ ] M4: Update PR summary to distinguish real compliance from "nothing received" + surface output in `--verbose`
-- [ ] M5: Acceptance gate test — confirm real spans reach Weaver and compliance report contains actual data
+- [x] M1: Research — SDK injection approach (Research A) and Weaver JSON schema (Research B)
+- [x] M2: Implement `--format=json` + JSON compliance report parsing
+- [x] M3: Implement SDK injection + double-init detection
+- [x] M4: Update PR summary to distinguish real compliance from "nothing received" + surface output in `--verbose`
+- [x] M5: Acceptance gate test — confirm real spans reach Weaver and compliance report contains actual data
 
 ---
 
@@ -111,7 +111,19 @@ Success criteria:
 
 **Step 0**: Read `docs/research/sdk-injection-approach.md` before writing any code.
 
-Inject SDK initialization into the test environment by modifying how spiny-orb invokes the live-check test run — the exact files to change are determined by Research A output; read `docs/research/sdk-injection-approach.md` first to identify the correct callsite(s). Implement double-init detection: call `trace.setGlobalTracerProvider()` and check the return value — `false` means a provider is already registered, skip init. Do NOT use `setupFiles` for SDK init in Vitest contexts — use `experimental.openTelemetry.sdkPath`. Do NOT add any OTel SDK package imports that are not already present in `package.json` — the SDK must already be a dependency.
+Inject SDK initialization into the test environment by modifying how spiny-orb invokes the live-check test run — the exact files to change are determined by Research A output; read `docs/research/sdk-injection-approach.md` first to identify the correct callsite(s).
+
+**Chosen injection mechanism (from Research A):** `NODE_OPTIONS=--import <absolute-path>` where the path points to a temporary init file spiny-orb writes into the target project's directory (e.g., `<projectDir>/.spiny-orb-live-check-init.mjs`). Placing the file inside the target project's directory causes Node.js to resolve bare package specifiers (e.g., `@opentelemetry/sdk-node`) from the target project's `node_modules`. Delete the temp file after the test run completes.
+
+**Do NOT use `experimental.openTelemetry.sdkPath`** — it requires modifying the user-owned `vitest.config.ts`, is Vitest-specific, and must be reverted after the run. `NODE_OPTIONS=--import` is runner-agnostic and requires no config modifications.
+
+**No hook loader needed:** spiny-orb adds manual instrumentation (`tracer.startActiveSpan()`). The `--experimental-loader=@opentelemetry/instrumentation/hook.mjs` is only required for auto-instrumentation (monkey-patching). Do not add it.
+
+**Exporter protocol:** Weaver's live-check listens on gRPC OTLP only (no HTTP OTLP ingestion). Set `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` in the test run environment. With this env var, `NodeSDK` auto-selects `@opentelemetry/exporter-trace-otlp-grpc` from its own transitive deps — no explicit import of the gRPC exporter package is needed. The gRPC endpoint format is `http://localhost:<port>` (h2c, insecure gRPC).
+
+**SDK availability:** The target project must have `@opentelemetry/sdk-node` available in `node_modules` (it need not be in `package.json` — pnpm hoisting makes it accessible if it's a transitive dep). If `sdk-node` is absent, skip SDK injection and emit a warning rather than erroring.
+
+Implement double-init detection: call `trace.setGlobalTracerProvider()` and check the return value — `false` means a provider is already registered, skip init.
 
 **Important — this milestone introduces a new failure class (Decision 3).** When the SDK loads, M3 is the first time the test suite runs with active (recording) spans rather than no-ops. A new class of failures can surface here that no-op checkpoint tests cannot catch:
 - Auto-instrumentation packages (`@opentelemetry/instrumentation-http`, `-pg`, `-express`, etc.) monkey-patch modules at load time. Tests using `nock`, `msw`, or similar HTTP mocking libraries may conflict — whichever loads second wins, or they crash at the wrapper level.
@@ -162,6 +174,20 @@ Place in `test/coordinator/acceptance-gate.test.ts`. Verify with:
 vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run test/coordinator/acceptance-gate.test.ts'
 ```
 
+**Target project for the test**: The test needs a `projectDir` whose `node_modules` contains `@opentelemetry/sdk-node` (so `checkSdkNodeAvailable` returns true), and a `testCommand` that actually runs a JavaScript file which uses `tracer.startActiveSpan()`. The validated approach from Research A uses the taze project at `~/Documents/Repositories/taze` — it has sdk-node installed (eval prep) and its `pnpm test` command runs Vitest which will load the init file via `NODE_OPTIONS=--import`. However, `pnpm test` in taze runs a full test suite (~300s) — too slow for acceptance gate.
+
+**Better approach**: Create a minimal fixture project under `test/fixtures/live-check-target/` with:
+- `package.json` (no sdk-node in dependencies — will rely on the init file to bring it)
+- A simple instrumented `.js` file that calls `tracer.startActiveSpan('test-span', span => { span.end(); })`
+- A test command that runs this file once: `node test-entry.js`
+- The test installs sdk-node via `npm install --no-save @opentelemetry/sdk-node` into the fixture before running
+
+OR: Use the existing `test/coordinator/live-check.integration.test.ts` pattern (already uses real Weaver) and add a new test that passes the spiny-orb project dir but with a `checkSdkNodeFn` that returns true and a `writeFileFn` that writes a real init file. Since spiny-orb doesn't have sdk-node, the real spans won't fire — this won't satisfy the success criterion.
+
+**Recommended approach**: The acceptance gate test should use a real `projectDir` that genuinely has sdk-node. The simplest path: add sdk-node as a devDependency to spiny-orb itself for the acceptance gate run (similar to how IS scoring works — see `docs/rules/is-scoring-gotchas.md`). The CI acceptance gate can install it with `npm install --save-dev @opentelemetry/sdk-node` before running. Alternatively, create a `test/fixtures/live-check-target/` directory with sdk-node pre-installed (committed `package.json` + `package-lock.json`, install step in CI).
+
+Read `test/coordinator/live-check.integration.test.ts` for the port allocation and Weaver startup pattern before implementing.
+
 Success criterion: test exists, passes locally, and CI acceptance gate workflow passes.
 
 ---
@@ -181,3 +207,8 @@ Success criterion: test exists, passes locally, and CI acceptance gate workflow 
 | 2026-05-01 | Research before implementation for both SDK injection and JSON schema | The right SDK injection approach is non-obvious and depends on the target test runner. The JSON schema must be captured from a real Weaver run — it cannot be assumed from documentation. Both unknowns must be resolved before writing implementation code. |
 | 2026-05-01 | jest, mocha, pytest framework interactions out of scope | This PRD establishes the general injection mechanism. Language-specific quirks belong in downstream language PRDs. Keeping scope narrow ensures this PRD can ship without blocking on every test runner. |
 | 2026-05-04 | M3 implicitly adds tier 1.5; two distinct live-check failure modes must be surfaced separately in M4 | When M3 injects the SDK, the test suite runs with recording spans for the first time — no-op checkpoint tests cannot catch this class of bugs. A new failure category emerges: tests breaking under SDK injection (auto-instrumentation conflicts with test mocking libraries, async context patching, worker isolation vs global tracer state, span lifecycle bugs). This is distinct from "tests passed with SDK, but emitted spans failed compliance." The two failure modes imply different fixes — SDK-injection failures are instrumentation-environment conflicts; compliance failures are schema violations. M4 must distinguish them in the PR summary and `--verbose` output. |
+| 2026-05-05 | M3 injection: `NODE_OPTIONS=--import` with temp file inside target project dir, not `experimental.openTelemetry.sdkPath` | Research A validated against taze. `sdkPath` requires modifying user-owned `vitest.config.ts` and is Vitest-specific. `NODE_OPTIONS=--import` with the temp file placed inside the target project dir is runner-agnostic and avoids config modification — Node.js resolves bare specifiers from the file's own directory. Weaver is gRPC-only (no HTTP OTLP ingestion), so `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` must be set; NodeSDK auto-selects the gRPC exporter from its transitive deps. No hook loader needed for manual instrumentation. |
+| 2026-05-05 | M3 init file revised: use `NodeSDK` + monkeypatch `setGlobalTracerProvider` intercept (reverts NodeTracerProvider decision) | The earlier `NodeTracerProvider` decision assumed `@opentelemetry/sdk-trace-node` and `@opentelemetry/exporter-trace-otlp-grpc` would be importable from the target project's top-level node_modules. This assumption is false for pnpm projects (strict mode). In taze, `@opentelemetry/sdk-node` IS in top-level node_modules but `sdk-trace-node` and `exporter-trace-otlp-grpc` are NOT — they exist only inside sdk-node's own pnpm virtual store subtree. Importing them as bare specifiers from the init file fails with MODULE_NOT_FOUND. Fix: go back to `NodeSDK` (which IS importable from the top-level) with `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` (NodeSDK resolves the gRPC exporter from its own transitive deps, not from the project top-level). For double-init detection without losing the `setGlobalTracerProvider` return-value check: monkeypatch `trace.setGlobalTracerProvider` before calling `sdk.start()`, capture the return value, then restore the original. This gives the exact PRD-specified check without NodeTracerProvider. Also add `OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc'` to the coordinator's `extraEnv` injection. The 3 unit tests that check init file content are updated accordingly. |
+| 2026-05-05 | Weaver 0.22.1 changed live-check output format: streaming JSONL to stdout, /stop returns "OK" | In Weaver 0.21.2 (used in M1 research), /stop returned the full JSON compliance report as the HTTP response body. In Weaver 0.22.1, /stop returns "OK" (acknowledgment only) and Weaver streams individual entity JSON objects to stdout, with the statistics object written LAST as a standalone JSON object (not wrapped in a `"statistics"` key). `parseComplianceReport` was updated to handle both formats: (1) old format — single `{"samples":[...],"statistics":{...}}` object; (2) new format — find the last JSON object in stdout that has `total_entities` at top level. Additionally, `runLiveCheck` now reads the compliance report from `weaverStdout` (preferred) rather than the HTTP response body, and waits for the Weaver process to fully exit after /stop so all stdout is flushed before reading. |
+| 2026-05-05 | 2-second delay before /stop needed for async gRPC export to complete | When the test command exits, the OTel SDK has exported spans over gRPC (via BatchSpanProcessor with delay=0 + beforeExit shutdown), but the gRPC data may still be in transit. Calling /stop immediately catches Weaver before it has processed the spans, causing "OK" with no data. A 2-second delay gives the gRPC data time to arrive and be processed. Existing unit tests are unaffected because they mock `deps.setTimeout` to fire immediately. |
+| 2026-05-05 | M4 full compliance report: always in PR body `<details>` when spans received; `--verbose` gates terminal output only | The PRD said "surface the full live-check compliance report in `--verbose` mode." Interpreted as two independent surfaces: (1) PR body — always includes full JSON in a `<details>` collapsible when spans were received, because a reviewer reading the PR has no way to re-run with `--verbose`; gating this on a flag would make the data permanently inaccessible. (2) Terminal stderr — gated on `--verbose` as specified, since the operator can re-run if they want the detail. `renderPrSummary` has no access to a verbose flag, and adding one would require changes through `git-workflow.ts` and all callers; the always-include-in-`<details>` approach avoids the interface change while keeping the PR body readable by default. |

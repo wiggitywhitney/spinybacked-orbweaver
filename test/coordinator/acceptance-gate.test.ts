@@ -1,13 +1,15 @@
-// ABOUTME: Acceptance gate end-to-end tests for Phase 4, Phase 5, and PRD 31 coordinator.
-// ABOUTME: Phase 4: multi-file orchestration. Phase 5: schema integration. PRD 31: per-file extension writing.
+// ABOUTME: Acceptance gate end-to-end tests for Phase 4, Phase 5, PRD 31 coordinator, and PRD 698 live-check.
+// ABOUTME: Phase 4: multi-file orchestration. Phase 5: schema integration. PRD 31: per-file extension writing. PRD 698: SDK injection.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import {
   mkdtempSync, rmSync, mkdirSync, writeFileSync,
   copyFileSync, readFileSync, existsSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { basename, join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
+import { runLiveCheck } from '../../src/coordinator/live-check.ts';
 import { coordinate, CoordinatorAbortError } from '../../src/coordinator/coordinate.ts';
 import type { CoordinateDeps } from '../../src/coordinator/coordinate.ts';
 import { discoverFiles } from '../../src/coordinator/discovery.ts';
@@ -1612,4 +1614,93 @@ describe('Acceptance Gate — End-of-run failure handling', () => {
     expect(result.endOfRunFlag).toBeUndefined();
     expect(result.warnings.some((w: string) => w.includes('Rolled back'))).toBe(true);
   });
+});
+
+// ============================================================
+// PRD 698 M5: end-to-end SDK injection acceptance gate
+// ============================================================
+
+const LIVE_CHECK_REGISTRY = join(import.meta.dirname, '..', 'fixtures', 'weaver-registry', 'valid');
+
+describe('runLiveCheck — M5: end-to-end SDK injection', () => {
+  let m5TmpDir: string;
+
+  beforeAll(async () => {
+    // Ensure weaver (installed by cargo/the weaver installer) is findable.
+    // Some environments (e.g. vals exec) strip PATH to a minimal set that excludes
+    // ~/.cargo/bin. os.homedir() resolves the real home dir even when HOME is unset.
+    const cargoBin = join(homedir(), '.cargo', 'bin');
+    if (!process.env.PATH?.includes(cargoBin)) {
+      process.env.PATH = `${cargoBin}${process.env.PATH ? `:${process.env.PATH}` : ''}`;
+    }
+
+    // Create a minimal project and install @opentelemetry/sdk-node so
+    // checkSdkNodeAvailable returns true and the init file can be loaded.
+    m5TmpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-m5-'));
+
+    writeFileSync(
+      join(m5TmpDir, 'package.json'),
+      JSON.stringify({ name: 'live-check-target', type: 'module' }),
+    );
+
+    // test-entry.mjs: create one span then explicitly flush the global provider.
+    // Explicit forceFlush() is required because BatchSpanProcessor (NodeSDK default)
+    // is async — without it, a short-lived node process may exit before the batch
+    // exports. This is the same pattern taze's instrumentation.js uses with
+    // SimpleSpanProcessor, adapted for the batch case.
+    writeFileSync(
+      join(m5TmpDir, 'test-entry.mjs'),
+      `import { trace } from '@opentelemetry/api';
+const span = trace.getTracer('m5-test').startSpan('live-check-test-span');
+span.end();
+
+// Flush the global provider so spans reach Weaver before process exits.
+// The provider is set by the init file loaded via NODE_OPTIONS=--import.
+const provider = trace.getTracerProvider();
+if (typeof provider.forceFlush === 'function') {
+  await provider.forceFlush();
+}
+`,
+    );
+
+    // Install sdk-node and the gRPC exporter explicitly so NodeSDK's lazy-load
+    // of the exporter (when OTEL_EXPORTER_OTLP_PROTOCOL=grpc) succeeds.
+    execFileSync(
+      'npm',
+      ['install', '--no-save', '@opentelemetry/sdk-node', '@opentelemetry/exporter-trace-otlp-grpc'],
+      { cwd: m5TmpDir, timeout: 120_000, stdio: 'pipe' },
+    );
+  }, 180_000);
+
+  afterAll(() => {
+    if (m5TmpDir) rmSync(m5TmpDir, { recursive: true, force: true });
+  });
+
+  it('real spans reach Weaver when SDK is injected via NODE_OPTIONS', async () => {
+    const result = await runLiveCheck(
+      LIVE_CHECK_REGISTRY,
+      m5TmpDir,
+      'node test-entry.mjs',
+      { grpcPort: 14417, adminPort: 14420, inactivityTimeoutSeconds: 30 },
+    );
+
+    // Diagnostic dump — helps debug when spans don't reach Weaver
+    const diag = JSON.stringify({
+      skipped: result.skipped,
+      testsPassed: result.testsPassed,
+      sdkInjectionTestsFailed: result.sdkInjectionTestsFailed,
+      complianceReport: result.complianceReport?.slice(0, 300),
+      warnings: result.warnings,
+    }, null, 2);
+
+    // Verify the live-check ran and SDK injection succeeded
+    expect(result.skipped, `skipped=true; diagnostics: ${diag}`).toBe(false);
+    expect(result.testsPassed, `testsPassed=false; diagnostics: ${diag}`).toBe(true);
+    expect(result.sdkInjectionTestsFailed, `sdkInjectionTestsFailed=true; diagnostics: ${diag}`).not.toBe(true);
+
+    // The key assertion: real spans reached Weaver
+    expect(result.parsedCompliance, `Expected parsedCompliance to be defined — no compliance report received. Diagnostics: ${diag}`).toBeDefined();
+    expect(result.parsedCompliance!.spansReceived, `Expected spansReceived to be true — spans did not reach Weaver. Diagnostics: ${diag}`).toBe(true);
+    expect(result.parsedCompliance!.spanCount).toBeGreaterThan(0);
+  }, 60_000);
 });
