@@ -38,6 +38,7 @@ const RULE_NAMES: Record<string, string> = {
   'RST-006': 'No Spans on process.exit() Functions',
 
   // Tier 2 — Non-destructive
+  'NDS-002': 'Tests Pass',
   'NDS-003': 'Code Preserved',
   'NDS-004': 'Signatures Preserved',
   'NDS-005': 'Control Flow Preserved',
