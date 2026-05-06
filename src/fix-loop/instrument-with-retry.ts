@@ -87,6 +87,15 @@ interface InstrumentWithRetryOptions {
    * Required — callers must supply a provider explicitly.
    */
   provider: LanguageProvider;
+  /**
+   * Expected namespace prefix for schema extensions (e.g. "commit_story").
+   * When set, extensions whose ID does not start with "<prefix>." are treated as
+   * a blocking failure and fed back into the retry loop — consistent with how other
+   * validation failures work. Without this option, no namespace check is performed.
+   *
+   * Populated by the coordinator from the registry manifest's `name` field.
+   */
+  expectedNamespacePrefix?: string;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -417,6 +426,7 @@ export async function instrumentWithRetry(
       options.existingSpanNames,
       options.processedFilesManifest,
       options.canonicalTracerName,
+      options.expectedNamespacePrefix,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -469,6 +479,7 @@ async function executeRetryLoop(
   existingSpanNames?: string[],
   processedFilesManifest?: Map<string, string[]>,
   canonicalTracerName?: string,
+  expectedNamespacePrefix?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient, canonicalTracerName);
@@ -682,6 +693,59 @@ async function executeRetryLoop(
       validation.blockingFailures.filter(f => f.ruleId === 'NDS-003'),
     );
     llmRefactorsPerAttempt.push(output.suggestedRefactors ?? []);
+
+    // Namespace prefix check: extensions must start with the expected prefix.
+    // Runs only when validation.passed (no point checking if there are blocking errors).
+    // A wrong-namespace extension is treated as a blocking failure and fed back into
+    // the next retry attempt — consistent with how other validation failures work.
+    if (validation.passed && expectedNamespacePrefix && output.schemaExtensions.length > 0) {
+      const wrongNamespace = output.schemaExtensions.filter((ext) => {
+        // Strip "span." prefix before namespace check (span extensions use "span.<prefix>.<name>")
+        const checkPart = ext.startsWith('span.') ? ext.slice('span.'.length) : ext;
+        return !checkPart.startsWith(`${expectedNamespacePrefix}.`);
+      });
+      if (wrongNamespace.length > 0) {
+        const feedback =
+          `Schema extensions rejected: namespace must be "${expectedNamespacePrefix}" but got ${wrongNamespace.join(', ')}. ` +
+          `All extensions must start with "${expectedNamespacePrefix}." ` +
+          `(or "span.${expectedNamespacePrefix}." for span names). ` +
+          `Do not invent attributes with other namespace prefixes.`;
+        errorProgression.push(`${wrongNamespace.length} blocking errors (namespace-rejected: ${wrongNamespace.join(', ')})`);
+        lastErrorByAttempt.push(feedback);
+        nds003ViolationsPerAttempt.push([]);
+        llmRefactorsPerAttempt.push([]);
+        if (attempt < maxAttempts) {
+          // Route through fresh-regeneration so the agent sees the failure hint
+          // in a clean context. Multi-turn fix requires conversation history which
+          // isn't always available; fresh-regen reliably delivers the hint.
+          lastValidation = {
+            passed: false,
+            tier1Results: [],
+            tier2Results: [],
+            blockingFailures: [{
+              ruleId: 'SCH-NS',
+              passed: false,
+              filePath,
+              lineNumber: null,
+              message: feedback,
+              tier: 2,
+              blocking: true,
+            }],
+            advisoryFindings: [],
+          };
+          // Jump to the last attempt (fresh-regeneration) so the next loop
+          // iteration runs as fresh-regen with the namespace failure hint.
+          attempt = maxAttempts - 1;
+          continue;
+        }
+        // Already on last attempt — return failure
+        return buildFailedResult(
+          filePath, feedback, feedback,
+          cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
+          undefined, undefined, thinkingBlocksByAttempt, lastErrorByAttempt,
+        );
+      }
+    }
 
     if (validation.passed) {
       const spansAdded = countSpansInCode(provider, output.instrumentedCode);
