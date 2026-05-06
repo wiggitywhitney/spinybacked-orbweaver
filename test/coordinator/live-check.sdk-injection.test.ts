@@ -61,6 +61,7 @@ function makeEnvCapturingDeps(opts: {
       stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
       stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
       on: (_: string, __: unknown) => {},
+      once: (_: string, cb: () => void) => { cb(); },
       kill: () => {},
     }),
     execFileFn: (_cmd: string, _args: string[], opts: unknown, cb: (e: Error | null, stdout: string, stderr: string) => void) => {

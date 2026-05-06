@@ -149,11 +149,12 @@ export async function checkPortAvailable(
  * Workflow:
  * 1. Validate test command exists
  * 2. Check port availability (default: 14317 gRPC, 14320 HTTP)
- * 3. Start `weaver registry live-check -r <registryDir>`
+ * 3. Start `weaver registry live-check --format json -r <registryDir>`
  * 4. Wait for Weaver to be ready
- * 5. Run test suite with OTEL_EXPORTER_OTLP_ENDPOINT override
- * 6. Stop Weaver via HTTP /stop endpoint
- * 7. Capture compliance report
+ * 5. Write SDK init file; run test suite with NODE_OPTIONS=--import and gRPC env vars
+ * 6. Wait 2s for in-flight gRPC spans, then POST /stop; wait for Weaver process exit
+ * 7. Parse compliance report from weaverStdout (Weaver 0.22.x streams JSON to stdout;
+ *    fall back to /stop HTTP response body for Weaver 0.21.x compatibility)
  *
  * All failures degrade gracefully — the run is never aborted.
  *
@@ -334,7 +335,7 @@ export async function runLiveCheck(
 
   // Clean up the init file (always, even on failure)
   if (sdkInjected) {
-    await deleteFileFn(initFilePath);
+    await deleteFileFn(initFilePath).catch(() => {});
   }
 
   // Step 6: Stop Weaver via HTTP /stop endpoint and wait for process exit.

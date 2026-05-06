@@ -56,8 +56,6 @@ export interface CoordinatorCallbacks {
 }
 
 /**
- * Complete result of a full instrumentation run.
-/**
  * Parsed live-check status stored in RunResult for PR summary rendering.
  * Derived from LiveCheckResult.parsedCompliance and sdkInjectionTestsFailed.
  */

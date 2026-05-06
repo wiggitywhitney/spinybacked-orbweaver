@@ -281,15 +281,10 @@ When all registry attributes were seen in at least one span, `registry_coverage`
 
 ---
 
-## `/stop` Endpoint Returns the JSON Report
+## `/stop` Endpoint and Compliance Report Location
 
-Weaver's HTTP admin port `/stop` endpoint (POST) triggers shutdown and returns the compliance report body as the HTTP response. The current live-check.ts reads this response:
+**Weaver 0.21.x (researched here):** POST `/stop` returned the full JSON compliance report as the HTTP response body. `stopResponse.text()` contained the JSON string.
 
-```typescript
-const stopResponse = await fetchFn(`http://localhost:${adminPort}/stop`, { method: 'POST' });
-complianceReport = await stopResponse.text();
-```
+**Weaver 0.22.x (shipped behavior):** POST `/stop` returns `"OK"` as an acknowledgment only. The compliance report is streamed to **stdout** as individual entity JSON objects, with the statistics object written last. The implementation reads from `weaverStdout` (after waiting for the process to fully exit) and falls back to the HTTP response body only for backward compatibility with older Weaver versions.
 
-With `--format json`, `stopResponse.text()` returns the JSON string. Parse it with `JSON.parse()`.
-
-**If `/stop` fails:** fall back to `weaverStdout`, which also contains the report (Weaver writes the report to stdout after shutdown).
+See the Decision Log in `prds/done/698-live-check-validates-something.md` ("Weaver 0.22.1 changed live-check output format") and `src/coordinator/live-check.ts` for the current parsing logic (`parseComplianceReport`).

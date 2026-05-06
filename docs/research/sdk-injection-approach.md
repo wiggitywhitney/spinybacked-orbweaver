@@ -41,27 +41,9 @@ Spiny-orb writes a temporary init file into the target project's directory (e.g.
 
 **gRPC requirement:** Set `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` in the test environment. NodeSDK uses this to select `@opentelemetry/exporter-trace-otlp-grpc` from its own transitive deps. The init file does not need to import the gRPC exporter explicitly.
 
-**Template for the init file:**
+**Template for the init file (design iteration — see `src/coordinator/live-check-sdk-init.ts` for the shipped implementation):**
 
-```javascript
-// spiny-orb live-check SDK init — temporary file, deleted after live-check run
-// Resolves packages from this project's node_modules.
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { resourceFromAttributes } from '@opentelemetry/resources';
-// OTEL_EXPORTER_OTLP_PROTOCOL=grpc is set in the env — NodeSDK auto-selects gRPC exporter
-// OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:<port> is set in the env
-
-const sdk = new NodeSDK({
-  resource: resourceFromAttributes({ 'service.name': '<project-name>' }),
-  // SimpleSpanProcessor (not Batch) — synchronous, works with fake timers
-});
-
-sdk.start();
-
-process.on('SIGTERM', async () => { await sdk.shutdown(); process.exit(143); });
-process.on('SIGINT',  async () => { await sdk.shutdown(); process.exit(130); });
-```
+This early template used `SimpleSpanProcessor` and had no double-init detection. The shipped implementation switched to `NodeSDK` (without an explicit processor) with `BatchSpanProcessor` flushed via `process.on('beforeExit')`, plus a `trace.setGlobalTracerProvider` monkeypatch to capture the return value for double-init detection. See the Decision Log in `prds/done/698-live-check-validates-something.md` for the rationale.
 
 **SDK requirement:** `@opentelemetry/sdk-node` must be installed in the target project's `node_modules`. For the live-check to work, this package must be present. If it isn't, the live-check should degrade gracefully (skip SDK injection, emit a warning) rather than error.
 

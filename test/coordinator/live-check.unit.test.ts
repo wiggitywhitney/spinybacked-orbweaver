@@ -88,6 +88,7 @@ function makeShutdownFailDeps(shutdownError: Error): LiveCheckDeps {
       stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
       stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
       on: (_: string, __: unknown) => {},
+      once: (_: string, cb: () => void) => { cb(); },
       kill: () => {},
     }),
     execFileFn: (_cmd: string, _args: string[], _opts: unknown, cb: (e: Error | null, stdout: string, stderr: string) => void) => {
@@ -187,6 +188,7 @@ function makeSuccessfulLiveCheckDeps(stopResponse: string): LiveCheckDeps {
       stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
       stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
       on: (_: string, __: unknown) => {},
+      once: (_: string, cb: () => void) => { cb(); },
       kill: () => {},
     }),
     execFileFn: (_cmd: string, _args: string[], _opts: unknown, cb: (e: Error | null, stdout: string, stderr: string) => void) => {
@@ -218,6 +220,7 @@ function makeSpawnCapturingDeps(stopResponse: string): { deps: LiveCheckDeps; ge
         stderr: { on: (_: string, __: (data: Buffer) => void) => {} },
         stdout: { on: (_: string, __: (data: Buffer) => void) => {} },
         on: (_: string, __: unknown) => {},
+        once: (_: string, cb: () => void) => { cb(); },
         kill: () => {},
       };
     },
