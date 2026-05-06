@@ -1349,6 +1349,33 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       const failures = results.filter((r) => !r.passed);
       expect(failures).toHaveLength(0);
     });
+
+    it('also strips "// This function is exported (via re-export block)" preamble', () => {
+      const contextWithExportPreamble = [
+        '// This function is exported (via re-export block)',
+        'export async function runSummarize(options) {',
+        '  return options;',
+        '}',
+      ].join('\n');
+
+      const agentOutputExportPreamble = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runSummarize(options) {',
+        '  return tracer.startActiveSpan("runSummarize", (span) => {',
+        '    try {',
+        '      return options;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(contextWithExportPreamble, agentOutputExportPreamble, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
   });
 
   describe('CheckResult structure', () => {
