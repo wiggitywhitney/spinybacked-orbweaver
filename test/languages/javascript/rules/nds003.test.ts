@@ -649,6 +649,38 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
 
+    it('allows truthy optional-chaining guard around setAttribute (req.route?.path)', () => {
+      const original = [
+        'export async function getUsers(req, res) {',
+        '  const result = await pool.query("SELECT * FROM users");',
+        '  res.json(result.rows);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'export async function getUsers(req, res) {',
+        '  return tracer.startActiveSpan("fixture_service.user.get_users", async (span) => {',
+        '    try {',
+        '      span.setAttribute("http.request.method", req.method);',
+        '      if (req.route?.path) {',
+        '        span.setAttribute("http.route", req.route.path);',
+        '      }',
+        '      const result = await pool.query("SELECT * FROM users");',
+        '      res.json(result.rows);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
     it('still catches genuine business logic additions', () => {
       const original = [
         'function doWork() {',

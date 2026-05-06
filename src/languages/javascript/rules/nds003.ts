@@ -47,11 +47,12 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // Same accepted trade-off as the single-condition form above.
   /^\s*if\s*\(\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*&&\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*\)\s*\{?\s*$/,
   // Truthy property-access guards wrapping setAttribute calls (#388).
-  // Matches: if (context.chat) {, if (result.data) {, etc.
+  // Matches: if (context.chat) {, if (result.data) {, if (req.route?.path) {, etc.
+  // Supports optional chaining (?.) for guards like if (req.route?.path) { (#785).
   // Requires at least one dot dereference to avoid matching bare identifier
   // guards (if (x) {) which are more likely to be business logic.
   // Same trade-off applies: also filters truthy guards wrapping business logic.
-  /^\s*if\s*\(\s*\w+(?:\.\w+)+\s*\)\s*\{?\s*$/,
+  /^\s*if\s*\(\s*\w+(?:(?:\??\.)\w+)+\s*\)\s*\{?\s*$/,
   // isRecording() guard for CDQ-006 compliance.
   // CDQ-006 recommends wrapping expensive span.setAttribute computations in this guard
   // to skip computation when the span is not sampling. Matches any span variable name
