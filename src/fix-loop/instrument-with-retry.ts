@@ -700,8 +700,11 @@ async function executeRetryLoop(
     // the next retry attempt — consistent with how other validation failures work.
     if (validation.passed && expectedNamespacePrefix && output.schemaExtensions.length > 0) {
       const wrongNamespace = output.schemaExtensions.filter((ext) => {
-        // Strip "span." prefix before namespace check (span extensions use "span.<prefix>.<name>")
-        const checkPart = ext.startsWith('span.') ? ext.slice('span.'.length) : ext;
+        // Strip "span." or "span:" prefix before namespace check.
+        // normalizeSchemaExtension() converts span: → span. but runs after this check,
+        // so handle both forms here.
+        const normalized = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
+        const checkPart = normalized.startsWith('span.') ? normalized.slice('span.'.length) : normalized;
         return !checkPart.startsWith(`${expectedNamespacePrefix}.`);
       });
       if (wrongNamespace.length > 0) {
@@ -738,7 +741,8 @@ async function executeRetryLoop(
           attempt = maxAttempts - 1;
           continue;
         }
-        // Already on last attempt — return failure
+        // Already on last attempt — restore original file and return failure
+        try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
         return buildFailedResult(
           filePath, feedback, feedback,
           cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
