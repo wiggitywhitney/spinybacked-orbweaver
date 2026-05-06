@@ -9,7 +9,13 @@
 
 ## TL;DR
 
-`--format json` is the correct flag (not `--diagnostic-format`). The JSON output has two top-level keys: `samples` (array of per-entity compliance results) and `statistics` (aggregate counts). Zero spans received = `samples` is empty + `statistics.total_entities === 0`. Real spans = `samples` non-empty.
+`--format json` is the correct flag (not `--diagnostic-format`).
+
+**Weaver 0.21.x:** Output is a single JSON object with two top-level keys: `samples` (array of per-entity compliance results) and `statistics` (aggregate counts). Returned as the HTTP response body of the `/stop` endpoint.
+
+**Weaver 0.22.x (breaking change):** Output is JSONL streamed to stdout — one JSON object per entity, followed by a standalone statistics object as the final line. The `/stop` HTTP response returns only `"OK"`. The implementation must wait for process exit to read stdout in full. `parseComplianceReport` in `src/coordinator/live-check.ts` handles both formats.
+
+Zero spans received: `statistics.total_entities === 0`. Real spans: `statistics.total_entities > 0`.
 
 ---
 
