@@ -77,6 +77,34 @@ export async function extractNamespacePrefix(registryDir: string): Promise<strin
 }
 
 /**
+ * Like extractNamespacePrefix but returns undefined when registry_manifest.yaml does not
+ * exist yet (ENOENT) instead of throwing. Propagates all other errors (malformed manifest,
+ * permission errors) so callers can distinguish "not created yet" from "misconfigured".
+ *
+ * @param registryDir - Absolute path to the Weaver registry directory
+ * @returns The namespace prefix, or undefined if the manifest is absent
+ * @throws When the manifest exists but has no valid `name` field, or on permission errors
+ */
+export async function tryExtractNamespacePrefix(registryDir: string): Promise<string | undefined> {
+  const manifestPath = join(registryDir, 'registry_manifest.yaml');
+  let content: string;
+  try {
+    content = await readFile(manifestPath, 'utf-8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw err;
+  }
+  const manifest = parse(content) as Record<string, unknown>;
+  if (typeof manifest?.name !== 'string' || manifest.name.length === 0) {
+    throw new Error(
+      `registry_manifest.yaml at ${manifestPath} is missing a "name" field — ` +
+      'the name field defines the project namespace prefix for schema extensions.',
+    );
+  }
+  return manifest.name;
+}
+
+/**
  * Parse a schema extension YAML string into a structured attribute object.
  * Each extension string is expected to be a YAML list item (with leading "- ").
  *

@@ -698,13 +698,18 @@ async function executeRetryLoop(
     // Runs only when validation.passed (no point checking if there are blocking errors).
     // A wrong-namespace extension is treated as a blocking failure and fed back into
     // the next retry attempt — consistent with how other validation failures work.
-    if (validation.passed && expectedNamespacePrefix && output.schemaExtensions.length > 0) {
-      const wrongNamespace = output.schemaExtensions.filter((ext) => {
+    if (validation.passed && expectedNamespacePrefix) {
+      // Check ALL extensions the file will emit — both declared (output.schemaExtensions)
+      // and span names auto-extracted from the instrumented code by supplementSchemaExtensions.
+      // Checking only output.schemaExtensions would miss span names the agent embedded in
+      // startActiveSpan() calls without explicitly declaring them.
+      const allExtensions = supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode);
+      const wrongNamespace = allExtensions.filter((ext) => {
         // Strip "span." or "span:" prefix before namespace check.
         // normalizeSchemaExtension() converts span: → span. but runs after this check,
         // so handle both forms here.
-        const normalized = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
-        const checkPart = normalized.startsWith('span.') ? normalized.slice('span.'.length) : normalized;
+        const preNormalized = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
+        const checkPart = preNormalized.startsWith('span.') ? preNormalized.slice('span.'.length) : preNormalized;
         return !checkPart.startsWith(`${expectedNamespacePrefix}.`);
       });
       if (wrongNamespace.length > 0) {
@@ -736,6 +741,9 @@ async function executeRetryLoop(
             }],
             advisoryFindings: [],
           };
+          // Restore before jumping — if fresh-regen fails before writing its own output,
+          // the file should not be left with the wrong-namespace code.
+          try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
           // Jump to the last attempt (fresh-regeneration) so the next loop
           // iteration runs as fresh-regen with the namespace failure hint.
           attempt = maxAttempts - 1;

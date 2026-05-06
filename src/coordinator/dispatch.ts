@@ -20,7 +20,7 @@ import {
   snapshotExtensionsFile as defaultSnapshotExtensionsFile,
   restoreExtensionsFile as defaultRestoreExtensionsFile,
   parseExtension,
-  extractNamespacePrefix,
+  tryExtractNamespacePrefix,
 } from './schema-extensions.ts';
 
 /**
@@ -317,12 +317,12 @@ export async function dispatchFiles(
 
   // Extract registry namespace prefix once — passed to each instrumentFn call so wrong-namespace
   // extensions are caught inside the fix loop rather than silently dropped by writeSchemaExtensions.
-  let registryNamespacePrefix: string | undefined;
-  if (registryDir) {
-    try {
-      registryNamespacePrefix = await extractNamespacePrefix(registryDir);
-    } catch { /* non-fatal — namespace enforcement falls back to post-write rejection */ }
-  }
+  // tryExtractNamespacePrefix returns undefined when the manifest is absent (ENOENT, registry not
+  // yet created), and throws on malformed manifest or permission errors so those aren't silently
+  // swallowed.
+  const registryNamespacePrefix = registryDir
+    ? await tryExtractNamespacePrefix(registryDir)
+    : undefined;
 
   // Take initial checkpoint window snapshot for rollback capability
   if (registryDir && !isDryRun && options.runTestCommand) {
