@@ -118,7 +118,7 @@ The init file template should include this check before calling `sdk.start()`.
 | Temp file location | `<projectDir>/.spiny-orb-live-check-init.mjs` |
 | Exporter protocol | gRPC (`OTEL_EXPORTER_OTLP_PROTOCOL=grpc`) |
 | Exporter package | Auto-selected by NodeSDK; `exporter-trace-otlp-grpc` from sdk-node's transitive deps |
-| Span processor | `SimpleSpanProcessor` (synchronous; works with fake timers in tests) |
+| Span processor | `BatchSpanProcessor` (NodeSDK default; flushed via `process.on('beforeExit')` + `sdk.shutdown()`) |
 | Hook loader | Not needed (manual instrumentation only) |
 | vitest.config modification | None |
 | Fallback if sdk-node absent | Skip SDK injection, emit warning, proceed without telemetry |

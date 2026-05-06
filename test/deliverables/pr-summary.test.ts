@@ -1266,15 +1266,25 @@ describe('renderPrSummary', () => {
   });
 
   describe('live-check compliance report — three-state status (M4)', () => {
-    it('renders OK with span count when spans were received', () => {
+    it('renders "passed compliance" when spans received and zero advisories', () => {
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: true, spanCount: 7, totalAdvisories: 0 },
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('## Live-Check Compliance');
+      expect(md).toContain('Live-Check: OK (7 spans passed compliance)');
+    });
+
+    it('renders advisory finding count when spans received with advisories', () => {
       const result = _makeRunResult({
         liveCheckStatus: { spansReceived: true, spanCount: 7, totalAdvisories: 2 },
       });
       const md = renderPrSummary(result, _makeConfig());
 
       expect(md).toContain('## Live-Check Compliance');
-      expect(md).toContain('Live-Check: OK');
-      expect(md).toContain('7 spans');
+      expect(md).toContain('Live-Check: OK (7 spans, 2 advisory findings');
+      expect(md).not.toContain('passed compliance');
     });
 
     it('renders WARNING when tests failed after SDK injection', () => {

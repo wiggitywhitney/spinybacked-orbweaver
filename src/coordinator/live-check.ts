@@ -279,22 +279,22 @@ export async function runLiveCheck(
   let sdkInjected = false;
   const initFilePath = join(projectDir, LIVE_CHECK_INIT_FILENAME);
 
-  const sdkNodeAvailable = await checkSdkNodeFn(projectDir);
-  if (sdkNodeAvailable) {
-    const serviceName = basename(projectDir) || 'unknown';
-    try {
+  try {
+    const sdkNodeAvailable = await checkSdkNodeFn(projectDir);
+    if (sdkNodeAvailable) {
+      const serviceName = basename(projectDir) || 'unknown';
       await writeFileFn(initFilePath, generateInitFileContent(serviceName));
       sdkInjected = true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      warnings.push(`Failed to write SDK init file for live-check: ${message}. Proceeding without SDK injection.`);
+    } else {
+      warnings.push(
+        `@opentelemetry/sdk-node not found in ${projectDir}/node_modules. ` +
+        `SDK injection skipped — spans will not reach Weaver. ` +
+        `Install @opentelemetry/sdk-node in the target project to enable live-check telemetry validation.`,
+      );
     }
-  } else {
-    warnings.push(
-      `@opentelemetry/sdk-node not found in ${projectDir}/node_modules. ` +
-      `SDK injection skipped — spans will not reach Weaver. ` +
-      `Install @opentelemetry/sdk-node in the target project to enable live-check telemetry validation.`,
-    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    warnings.push(`SDK init setup failed: ${message}. Proceeding without SDK injection.`);
   }
 
   // Build extra env vars for the test run

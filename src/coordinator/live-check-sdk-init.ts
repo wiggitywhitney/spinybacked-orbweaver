@@ -23,7 +23,7 @@ export const LIVE_CHECK_INIT_FILENAME = '.spiny-orb-live-check-init.mjs';
  * sdk.start() to capture the return value NodeSDK produces internally.
  */
 export function generateInitFileContent(serviceName: string): string {
-  const safe = serviceName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const safe = serviceName.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/`/g, '\\`').replace(/\$\{/g, '\\${');;
   return `// spiny-orb live-check SDK init — temporary file, deleted after live-check run
 // Resolves @opentelemetry/sdk-node from this project's node_modules.
 import { NodeSDK } from '@opentelemetry/sdk-node';

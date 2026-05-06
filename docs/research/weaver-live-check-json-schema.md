@@ -216,7 +216,7 @@ Captured with two spans sent via gRPC OTLP. Full abbreviated structure:
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | Attribute name |
-| `value` | `string | number | boolean | string[]` | Attribute value |
+| `value` | `string \| number \| boolean \| string[]` | Attribute value |
 | `type` | `string` | `"string"`, `"int"`, `"double"`, `"bool"`, `"string[]"` |
 | `live_check_result` | `LiveCheckResult` | Compliance findings for this attribute |
 
@@ -225,7 +225,7 @@ Captured with two spans sent via gRPC OTLP. Full abbreviated structure:
 | Field | Type | Description |
 |---|---|---|
 | `all_advice` | `Advice[]` | All policy findings for this entity |
-| `highest_advice_level` | `string | null` | `"violation"`, `"improvement"`, `"information"`, or `null` if clean |
+| `highest_advice_level` | `string \| null` | `"violation"`, `"improvement"`, `"information"`, or `null` if clean |
 
 ### `Advice`
 
@@ -237,7 +237,7 @@ Captured with two spans sent via gRPC OTLP. Full abbreviated structure:
 | `message` | `string` | Human-readable description |
 | `level` | `string` | `"violation"`, `"improvement"`, `"information"` |
 | `signal_type` | `string` | `"resource"`, `"span"` |
-| `signal_name` | `string | null` | Span name for span-level findings; null for resource |
+| `signal_name` | `string \| null` | Span name for span-level findings; null for resource |
 
 ### `Statistics`
 

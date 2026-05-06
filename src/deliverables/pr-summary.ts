@@ -722,7 +722,11 @@ function formatLiveCheckStatusLine(status: LiveCheckStatus): string {
     return `Live-Check: WARNING — tests failed after SDK injection (${spanInfo}see test output for details)`;
   }
   if (status.spansReceived) {
-    return `Live-Check: OK (${status.spanCount} spans passed compliance)`;
+    if (status.totalAdvisories === 0) {
+      return `Live-Check: OK (${status.spanCount} spans passed compliance)`;
+    }
+    const plural = status.totalAdvisories === 1 ? 'finding' : 'findings';
+    return `Live-Check: OK (${status.spanCount} spans, ${status.totalAdvisories} advisory ${plural} — see compliance report)`;
   }
   return 'Live-Check: OK (no spans received — live-check did not validate any telemetry)';
 }
