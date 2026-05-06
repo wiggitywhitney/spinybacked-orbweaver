@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(coderabbit review *)",
-      "Bash(npm run typecheck)"
+      "Bash(npm run typecheck)",
+      "Bash(npx tsc --noEmit *)"
     ]
   }
 }
