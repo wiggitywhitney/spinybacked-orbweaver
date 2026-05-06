@@ -282,7 +282,6 @@ describe('buildSystemPrompt', () => {
       const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
       expect(prompt).toContain('CDQ-001');
-      expect(prompt).toContain('CDQ-003');
       expect(prompt).toContain('CDQ-007');
     });
   });

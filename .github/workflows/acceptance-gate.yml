@@ -100,7 +100,8 @@ jobs:
         run: npx vitest run --config vitest.acceptance.config.ts --reporter=verbose test/deliverables/acceptance-gate.test.ts
         timeout-minutes: 25
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_TEST_SINK }}
+          SPINY_ORB_E2E_TEST_REPO: https://github.com/wiggitywhitney/spinybacked-orbweaver-test-sink.git
 
       - name: Upload debug diagnostics
         if: always()
