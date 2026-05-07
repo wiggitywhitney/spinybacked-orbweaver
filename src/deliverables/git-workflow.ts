@@ -2,7 +2,9 @@
 // ABOUTME: Creates feature branch, wires per-file commits, aggregate commit, PR summary, and PR creation via gh CLI.
 
 import { execFile, execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { writeFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import type { FileResult } from '../fix-loop/types.ts';
@@ -303,7 +305,12 @@ export async function createPr(
   body: string,
   options?: { draft?: boolean; head?: string },
 ): Promise<string> {
-  const args = ['pr', 'create', '--title', title, '--body', body];
+  // Write body to a temp file to avoid E2BIG when the PR summary is large.
+  // gh pr create --body-file bypasses the OS argument length limit entirely.
+  const bodyFile = join(tmpdir(), `spiny-orb-pr-body-${Date.now()}.md`);
+  writeFileSync(bodyFile, body, 'utf-8');
+
+  const args = ['pr', 'create', '--title', title, '--body-file', bodyFile];
   if (options?.draft) {
     args.push('--draft');
   }
@@ -341,6 +348,7 @@ export async function createPr(
       args,
       { cwd: projectDir, timeout: 30000 },
       (error, stdout, stderr) => {
+        try { unlinkSync(bodyFile); } catch { /* cleanup is best-effort */ }
         if (error) {
           const errMsg = stderr?.trim() || error.message;
           reject(new Error(`gh pr create failed: ${errMsg}`));

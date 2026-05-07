@@ -906,7 +906,7 @@ export async function dispatchFiles(
  * @returns Deduplicated array of span name strings
  */
 export function extractSpanNamesFromCode(code: string): string[] {
-  const pattern = /\.(?:startActiveSpan|startSpan)\(\s*["']([^"']+)["']/g;
+  const pattern = /\.\s*(?:startActiveSpan|startSpan)\s*\(\s*["']([^"']+)["']/g;
   const names: string[] = [];
   let match;
   while ((match = pattern.exec(code)) !== null) {

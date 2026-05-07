@@ -577,6 +577,7 @@ async function executeRetryLoop(
         maxOutputTokens: outputBudget,
         effortOverride: 'low',
         existingSpanNames,
+        processedFilesManifest,
         canonicalTracerName,
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
@@ -821,7 +822,7 @@ async function executeRetryLoop(
           resolvedSchema,
           config,
           provider,
-          { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames, canonicalTracerName },
+          { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName },
         );
 
         if (advisoryInstrumentResult.success) {
