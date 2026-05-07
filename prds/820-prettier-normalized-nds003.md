@@ -59,10 +59,10 @@ This PRD has no dependency on open PRDs. It touches `src/languages/javascript/ru
 ## Milestones
 
 - [x] M1: Research — measure Prettier execution cost and choose Option A vs B
-- [ ] M2: Implement formatting normalization in NDS-003
-- [ ] M3: Graceful degrade when Prettier is unavailable
-- [ ] M4: Acceptance gate test — confirm plugin files that previously failed due to indentation now commit cleanly
-- [ ] M5: Update PROGRESS.md and docs/rules-reference.md
+- [x] M2: Implement formatting normalization in NDS-003
+- [x] M3: Graceful degrade when Prettier is unavailable
+- [x] M4: Acceptance gate test — confirm plugin files that previously failed due to indentation now commit cleanly
+- [x] M5: Update PROGRESS.md and docs/rules-reference.md
 
 ---
 

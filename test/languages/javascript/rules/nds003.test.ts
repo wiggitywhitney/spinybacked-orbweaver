@@ -1,8 +1,14 @@
 // ABOUTME: Tests for the NDS-003 Tier 2 check — non-instrumentation lines unchanged.
 // ABOUTME: Verifies diff-based analysis with instrumentation-pattern filtering.
 
-import { describe, it, expect } from 'vitest';
-import { checkNonInstrumentationDiff } from '../../../../src/languages/javascript/rules/nds003.ts';
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  checkNonInstrumentationDiff,
+  checkNonInstrumentationDiffNormalized,
+  drainNds003Warning,
+  _testResetPrettierCache,
+  _testSetPrettierAvailable,
+} from '../../../../src/languages/javascript/rules/nds003.ts';
 
 describe('checkNonInstrumentationDiff (NDS-003)', () => {
   const filePath = '/tmp/test-file.js';
@@ -1392,6 +1398,186 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         tier: 2,
         blocking: true,
       });
+    });
+  });
+
+  describe('graceful degrade when Prettier is unavailable (M3)', () => {
+    afterEach(() => {
+      _testResetPrettierCache();
+    });
+
+    it('falls back to raw-diff mode and emits warning when Prettier is unavailable', async () => {
+      _testSetPrettierAvailable(false);
+
+      const original = [
+        'async function fetchMetrics(client, options) {',
+        '  const data = await client.query("metrics", options.filter, { includeEmpty: false, timeout: 3000 });',
+        '  return data;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'async function fetchMetrics(client, options) {',
+        '  return tracer.startActiveSpan("metrics.fetch", async (span) => {',
+        '    try {',
+        '      const data = await client.query("metrics", options.filter, {',
+        '        includeEmpty: false,',
+        '        timeout: 3000,',
+        '      });',
+        '      return data;',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // When Prettier is unavailable, the normalized check falls back to raw diff.
+      // The raw diff sees the original single-line as missing — NDS-003 fails.
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+
+      // The warning is emitted for coordinator-level reporting.
+      const warning = drainNds003Warning();
+      expect(warning).toContain('NDS-003');
+      expect(warning).toContain('Prettier not available');
+    });
+
+    it('does not emit a warning when Prettier is available', async () => {
+      const original = 'async function doWork() { return 1; }';
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function doWork() {',
+        '  return tracer.startActiveSpan("doWork", async (span) => {',
+        '    try {',
+        '      return 1;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+
+      const warning = drainNds003Warning();
+      expect(warning).toBeNull();
+    });
+  });
+
+  describe('Prettier normalization for indentation-induced line breaks', () => {
+    // These tests cover the PRD #820 fix: when the agent splits a long line exactly as
+    // Prettier would (to comply with LINT after span indentation pushes it over printWidth),
+    // NDS-003 should pass after normalizing both sides through Prettier.
+
+    it('without normalization: fails when agent splits a long line to comply with LINT', () => {
+      // Demonstrates the root cause: without normalization, the original single-line form
+      // is "missing" from the instrumented multi-line form even though the content is identical.
+      const original = [
+        'async function fetchMetrics(client, options) {',
+        '  const data = await client.query("metrics", options.filter, { includeEmpty: false, timeout: 3000 });',
+        '  return data;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'async function fetchMetrics(client, options) {',
+        '  return tracer.startActiveSpan("metrics.fetch", async (span) => {',
+        '    try {',
+        '      const data = await client.query("metrics", options.filter, {',
+        '        includeEmpty: false,',
+        '        timeout: 3000,',
+        '      });',
+        '      return data;',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+
+    it('with normalization: passes when agent splits a long line to comply with LINT', async () => {
+      // The fix: normalizing both sides through Prettier makes the original's long line
+      // break the same way as the agent's split version. NDS-003 then sees matching content.
+      // The key line (101 chars at 2-space indent) exceeds Prettier's default printWidth: 80.
+      const original = [
+        'async function fetchMetrics(client, options) {',
+        '  const data = await client.query("metrics", options.filter, { includeEmpty: false, timeout: 3000 });',
+        '  return data;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'async function fetchMetrics(client, options) {',
+        '  return tracer.startActiveSpan("metrics.fetch", async (span) => {',
+        '    try {',
+        '      const data = await client.query("metrics", options.filter, {',
+        '        includeEmpty: false,',
+        '        timeout: 3000,',
+        '      });',
+        '      return data;',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('with normalization: still fails for real structural changes', async () => {
+      // Normalization must not suppress detection of genuine code modifications.
+      const original = [
+        'async function fetchMetrics(client, options) {',
+        '  return await client.query("metrics", options);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("my-service");',
+        'async function fetchMetrics(client, options) {',
+        '  return tracer.startActiveSpan("metrics.fetch", async (span) => {',
+        '    try {',
+        '      return await client.query("metrics", { extra: true });',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
     });
   });
 });
