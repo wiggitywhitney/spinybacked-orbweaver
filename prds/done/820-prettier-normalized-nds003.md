@@ -1,6 +1,6 @@
 # PRD #820: Prettier-normalized NDS-003 comparison
 
-**Status**: Complete (2026-05-07)
+**Status**: Complete (2026-05-07) — coordinator wiring of `drainNds003Warning()` into `RunResult.warnings` is a documented follow-up (see Decision Log)
 **Priority**: High
 **GitHub Issue**: [#820](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/820)
 **Created**: 2026-05-07
