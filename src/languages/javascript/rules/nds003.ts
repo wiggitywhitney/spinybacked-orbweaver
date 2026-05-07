@@ -509,6 +509,13 @@ export async function checkNonInstrumentationDiffNormalized(
     prettierNormalize(originalCode, filePath),
     prettierNormalize(instrumentedCode, filePath),
   ]);
+  // If one side fell back (Prettier failed) but the other normalized, comparing them
+  // would produce false positives from the format mismatch. Use raw diff for both.
+  const originalFellBack = normalizedOriginal === originalCode;
+  const instrumentedFellBack = normalizedInstrumented === instrumentedCode;
+  if (originalFellBack !== instrumentedFellBack) {
+    return checkNonInstrumentationDiff(originalCode, instrumentedCode, filePath);
+  }
   return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
 }
 
