@@ -377,7 +377,10 @@ describe('DX Verification — Milestone 8', () => {
 
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
-      expect(result.warnings).toEqual([]);
+      // Fake paths don't exist on disk; dep-graph degradation adds a warning.
+      // Filter it out to verify no file-failure warnings are present.
+      const fileWarnings = result.warnings.filter(w => !w.includes('Dependency graph ordering failed'));
+      expect(fileWarnings).toEqual([]);
     });
   });
 
@@ -452,10 +455,9 @@ describe('DX Verification — Milestone 8', () => {
       expect(result.filesSucceeded).toBe(1);
       expect(result.filesFailed).toBe(2);
 
-      // Each failed file has its own warning
-      expect(result.warnings).toHaveLength(2);
-      expect(result.warnings[0]).toContain('bad1.js');
-      expect(result.warnings[1]).toContain('bad2.js');
+      // Each failed file has its own warning (dep-graph degradation may add one more).
+      expect(result.warnings.some(w => w.includes('bad1.js'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('bad2.js'))).toBe(true);
 
       // Per-file detail is preserved in fileResults
       const bad1 = result.fileResults.find(r => r.path === '/project/bad1.js')!;
