@@ -360,7 +360,11 @@ export async function dispatchFiles(
         const names = [...new Set(
           earlyDetection.spanPatterns.map(p => p.enclosingFunction).filter((n): n is string => n !== undefined),
         )];
-        if (names.length > 0) processedFilesManifest.set(filePath, { functionNames: names, spanNames: extractSpanNamesFromCode(fileContent) });
+        const spanNames = extractSpanNamesFromCode(fileContent);
+        // Include files that have spans but no named enclosing functions (top-level/anonymous spans).
+        if (names.length > 0 || spanNames.length > 0) {
+          processedFilesManifest.set(filePath, { functionNames: names, spanNames });
+        }
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
         abortTracker.record(skipped);
@@ -548,8 +552,9 @@ export async function dispatchFiles(
                 .filter((name): name is string => name !== undefined),
             ),
           ];
-          if (functionNames.length > 0) {
-            processedFilesManifest.set(filePath, { functionNames, spanNames: extractSpanNamesFromCode(instrumentedCode) });
+          const spanNames = extractSpanNamesFromCode(instrumentedCode);
+          if (functionNames.length > 0 || spanNames.length > 0) {
+            processedFilesManifest.set(filePath, { functionNames, spanNames });
           }
         } catch {
           // Best-effort — manifest absence for this file is non-fatal
