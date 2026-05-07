@@ -208,14 +208,18 @@ export async function checkSemanticDuplicate(
   let candidates = activeEntries;
 
   if (options.inferredType !== undefined) {
-    // Namespace pre-filter: restrict to the same root namespace when candidate uses dot notation.
-    // Underscore-delimited candidates (e.g., "http_request_duration") bypass this filter — the
-    // normalization stage already catches most such cases as delimiter-variant duplicates.
-    const candidateRoot = candidate.includes('.') ? (candidate.split('.')[0] ?? '') : '';
-    if (candidateRoot) {
+    // Namespace pre-filter: restrict to the same namespace prefix when candidate uses dot notation.
+    // Uses all-but-last segments as the prefix so that sub-namespace siblings like
+    // "release_it.gitlab.*" and "release_it.github.*" are never compared — they differ at the
+    // second segment and are unrelated attributes in different plugin namespaces.
+    // Underscore-delimited candidates bypass this filter — normalization catches delimiter variants.
+    if (candidate.includes('.')) {
+      const parts = candidate.split('.');
+      const candidatePrefix = parts.slice(0, -1).join('.');
       candidates = candidates.filter((e) => {
-        const entryRoot = e.name.split('.')[0] ?? '';
-        return entryRoot === candidateRoot;
+        if (!e.name.includes('.')) return false;
+        const entryPrefix = e.name.split('.').slice(0, -1).join('.');
+        return entryPrefix === candidatePrefix;
       });
     }
   }

@@ -192,7 +192,10 @@ function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): 
       return true;
     });
   const hasThrow = throwStatements.length > 0;
-  if (!hasThrow) {
+  // `return Promise.reject(err)` propagates the error to the caller — semantically
+  // equivalent to `throw err` in an async function. Treat it as a rethrow.
+  const hasPromiseReject = bodyText.includes('return Promise.reject(');
+  if (!hasThrow && !hasPromiseReject) {
     return true;
   }
 
