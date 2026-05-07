@@ -58,7 +58,7 @@ This PRD has no dependency on open PRDs. It touches `src/languages/javascript/ru
 
 ## Milestones
 
-- [ ] M1: Research — measure Prettier execution cost and choose Option A vs B
+- [x] M1: Research — measure Prettier execution cost and choose Option A vs B
 - [ ] M2: Implement formatting normalization in NDS-003
 - [ ] M3: Graceful degrade when Prettier is unavailable
 - [ ] M4: Acceptance gate test — confirm plugin files that previously failed due to indentation now commit cleanly
@@ -161,3 +161,5 @@ Run `/write-docs` to validate the documentation before committing (per CLAUDE.md
 | Date | Decision | Rationale |
 |---|---|---|
 | 2026-05-07 | Research before choosing Option A vs B | Option A modifies disk state during fix loop; Option B keeps normalization inside the validator. The performance benchmark determines whether either option is viable; the side-effect concern determines which to prefer if both pass. |
+| 2026-05-07 | SCH-002 "high token count" concern in ROADMAP is not a real risk | Investigated the ROADMAP note "SCH-002 re-declaration intermittently blocks summary-manager.js at high token counts (76K–91K)." Traced the claim to a single data point from PR #766 — one failure at 91K tokens. The actual root cause was the agent re-declaring an already-registered key, fixed by the exact-match pre-check in #766. In today's acceptance gate, summary-manager.js passed. The GitLab.js run-4 failure (previously attributed to token count) was actually a cross-namespace false positive, fixed by PR #825. ROADMAP updated to remove the unvalidated claim. A separate acceptance gate regression exists on main (errorProgression.length assertion, unrelated to SCH-002 or token count) — tracked in its own issue. |
+| 2026-05-07 | Option B chosen: normalize in NDS-003 check only, no disk writes | Benchmark on a 631-line JS fixture (Prettier 3.8.1): `--check` median 150ms, `--write` median 139ms — both well under the 200ms threshold. Option B doubles the cost (two calls per NDS-003 invocation, ~280ms total), still acceptable. Option B is preferred over Option A because it keeps NDS-003 as a pure validation step with no disk side effects. `ValidationRule.check` already supports `Promise<RuleCheckResult>`, so making NDS-003 async requires no interface changes. Implementation uses `prettier --stdin-filepath <filePath>` via async `execFile`, piping source text to stdin. See `docs/research/prettier-normalization-cost.md`. |
