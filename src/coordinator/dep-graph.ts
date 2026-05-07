@@ -25,6 +25,7 @@ export function buildDepGraph(filePaths: string[]): DepGraph {
     compilerOptions: {
       skipLibCheck: true,
       noEmit: true,
+      allowJs: true,
     },
     skipAddingFilesFromTsConfig: true,
   });

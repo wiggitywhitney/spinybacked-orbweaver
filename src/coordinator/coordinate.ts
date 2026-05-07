@@ -33,6 +33,7 @@ import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
 import { getProviderByLanguage } from '../languages/registry.ts';
 import type { LanguageProvider } from '../languages/types.ts';
 import { resolveCanonicalTracerName } from './tracer-name.ts';
+import { buildDepGraph, topoSort } from './dep-graph.js';
 
 /**
  * Run a project's test suite without OTLP overrides.
@@ -343,6 +344,16 @@ export async function coordinate(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new CoordinatorAbortError(`File discovery failed: ${message}`);
+  }
+
+  // Step 2b: Reorder files by dependency graph (leaves first, callers last)
+  // Files with no local imports are processed first so each agent sees the full
+  // instrumentation picture of its dependencies before it runs.
+  // Falls back to alphabetical order from discovery if graph construction fails.
+  try {
+    filePaths = topoSort(buildDepGraph(filePaths));
+  } catch {
+    // Non-fatal: keep discovery order (alphabetical) on unexpected graph errors.
   }
 
   // Step 3: Compute cost ceiling
