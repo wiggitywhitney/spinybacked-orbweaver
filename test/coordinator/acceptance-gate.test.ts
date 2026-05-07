@@ -1,5 +1,5 @@
-// ABOUTME: Acceptance gate end-to-end tests for Phase 4, Phase 5, PRD 31 coordinator, and PRD 698 live-check.
-// ABOUTME: Phase 4: multi-file orchestration. Phase 5: schema integration. PRD 31: per-file extension writing. PRD 698: SDK injection.
+// ABOUTME: Acceptance gate end-to-end tests for Phase 4, Phase 5, PRD 31 coordinator, PRD 698 live-check, and PRD 700 dep-graph ordering.
+// ABOUTME: Phase 4: multi-file orchestration. Phase 5: schema integration. PRD 31: per-file extension writing. PRD 698: SDK injection. PRD 700: leaves-first dispatch order.
 
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import {
@@ -1703,4 +1703,57 @@ if (typeof provider.forceFlush === 'function') {
     expect(result.parsedCompliance!.spansReceived, `Expected spansReceived to be true — spans did not reach Weaver. Diagnostics: ${diag}`).toBe(true);
     expect(result.parsedCompliance!.spanCount).toBeGreaterThan(0);
   }, 60_000);
+});
+
+describe('Acceptance Gate — PRD 700 Dependency-aware file instrumentation ordering', () => {
+  const DEP_GRAPH_FIXTURES = join(import.meta.dirname, '..', 'fixtures', 'dep-graph');
+  const pathA = join(DEP_GRAPH_FIXTURES, 'a.ts'); // imports b.ts (caller)
+  const pathB = join(DEP_GRAPH_FIXTURES, 'b.ts'); // imports c.ts
+  const pathC = join(DEP_GRAPH_FIXTURES, 'c.ts'); // no local imports (leaf)
+
+  function makeOrderingResult(filePath: string): FileResult {
+    return {
+      path: filePath,
+      status: 'success',
+      spansAdded: 1,
+      librariesNeeded: [],
+      schemaExtensions: [],
+      attributesCreated: 0,
+      validationAttempts: 1,
+      validationStrategyUsed: 'initial-generation',
+      tokenUsage: { inputTokens: 100, outputTokens: 50, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+    };
+  }
+
+  it('coordinate() dispatches files leaves-first: c.ts before b.ts before a.ts, even when discovered alphabetically', async () => {
+    const dispatchedOrder: string[] = [];
+
+    const deps: CoordinateDeps = {
+      checkPrerequisites: vi.fn().mockResolvedValue({ allPassed: true, checks: [] }),
+      discoverFiles: vi.fn().mockResolvedValue([pathA, pathB, pathC]), // alphabetical — a before b before c
+      statFile: vi.fn().mockResolvedValue({ size: 500 }),
+      dispatchFiles: vi.fn().mockImplementation(async (filePaths: string[]) => {
+        dispatchedOrder.push(...filePaths);
+        return filePaths.map(fp => makeOrderingResult(fp));
+      }),
+      finalizeResults: vi.fn().mockResolvedValue(undefined),
+      resolveSchemaForHash: vi.fn().mockResolvedValue({ groups: [] }),
+      createBaselineSnapshot: vi.fn().mockResolvedValue('/tmp/baseline-mock'),
+      cleanupSnapshot: vi.fn().mockResolvedValue(undefined),
+      computeSchemaDiff: vi.fn().mockResolvedValue({ markdown: undefined, valid: true, violations: [] }),
+      runLiveCheck: vi.fn().mockResolvedValue({ skipped: true, warnings: [] }),
+      checkGhAvailable: vi.fn().mockResolvedValue(true),
+      hasTestSuite: vi.fn().mockResolvedValue(false),
+      resolveTracerName: vi.fn().mockResolvedValue('test-service'),
+    };
+
+    await coordinate(DEP_GRAPH_FIXTURES, makeConfig({ language: 'typescript' }), undefined, deps);
+
+    // dep-graph order: c.ts (leaf, imports nothing) → b.ts (imports c) → a.ts (imports b)
+    expect(dispatchedOrder).toContain(pathC);
+    expect(dispatchedOrder).toContain(pathB);
+    expect(dispatchedOrder).toContain(pathA);
+    expect(dispatchedOrder.indexOf(pathC)).toBeLessThan(dispatchedOrder.indexOf(pathB));
+    expect(dispatchedOrder.indexOf(pathB)).toBeLessThan(dispatchedOrder.indexOf(pathA));
+  });
 });

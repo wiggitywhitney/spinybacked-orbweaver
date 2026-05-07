@@ -43,11 +43,11 @@ No direct analog exists in the codemod or code-transformation space — ordering
 
 ## Milestones
 
-- [ ] M1: Research — ts-morph dep graph performance and cycle-handling algorithm
-- [ ] M2: Implement dependency graph builder using ts-morph
-- [ ] M3: Implement topological sort with cycle detection and alphabetical tiebreaker
-- [ ] M4: Wire ordering into the file dispatch pipeline
-- [ ] M5: Acceptance gate test — confirm leaves-first ordering is applied to a multi-file fixture with known dependencies
+- [x] M1: Research — ts-morph dep graph performance and cycle-handling algorithm
+- [x] M2: Implement dependency graph builder using ts-morph
+- [x] M3: Implement topological sort with cycle detection and alphabetical tiebreaker
+- [x] M4: Wire ordering into the file dispatch pipeline
+- [x] M5: Acceptance gate test — confirm leaves-first ordering is applied to a multi-file fixture with known dependencies
 
 ---
 
@@ -90,10 +90,12 @@ export type DepGraph = {
 export function buildDepGraph(filePaths: string[]): DepGraph
 ```
 
-Rules for `buildDepGraph`:
-- Use the ts-morph `Project` class to parse all `filePaths`
-- For each file, collect `getImportDeclarations()` — include only local imports (relative paths starting with `./` or `../`) that resolve to a path in `filePaths`
-- Exclude external package imports (e.g., `import { foo } from "ts-morph"`) — these are not in the instrumentation set
+Rules for `buildDepGraph` (Updated per Decisions 4–5):
+- Create a disk-backed `Project` (do NOT use `useInMemoryFileSystem: true`; cross-file resolution requires files on disk)
+- Use `skipAddingFilesFromTsConfig: true` so ts-morph doesn't auto-discover files outside `filePaths`
+- Add all `filePaths` via `project.addSourceFileAtPath(f)`
+- Build a `Set<string>` of `filePaths` for O(1) membership checks
+- For each source file, iterate `sf.getImportDeclarations()`. For each declaration, call `decl.getModuleSpecifierSourceFile()` — if it returns a `SourceFile` whose `.getFilePath()` is in the `Set`, it is a local dependency edge. Do NOT filter by `./` or `../` prefix — `getModuleSpecifierSourceFile()` handles external vs. local resolution automatically (returns `undefined` for npm packages, Node builtins, and JSON files)
 - Return the complete graph; do NOT sort here — sorting is M3's job
 
 TDD: write failing unit tests for `buildDepGraph` using a synthetic 3-file fixture (A imports B, B imports C, no cycles) before implementing. Create the fixture as real `.ts` files in `test/fixtures/dep-graph/` (create the directory if it doesn't exist) — do not inline source as strings; ts-morph's `Project` must be able to parse them from disk as it would in production. Confirm tests fail, implement, confirm tests pass.
@@ -178,3 +180,9 @@ Success criterion: test exists, passes locally, and CI acceptance gate workflow 
 | 2026-05-01 | Alphabetical ordering as tiebreaker within BFS waves | Preserves deterministic, predictable ordering for files with no dependency relationship. Reviewers can reason about ordering without a dep graph. |
 | 2026-05-01 | Cycle-breaking by removing one edge and re-running Kahn's | Simplest correct approach. Logging the removed edge gives users auditability without requiring interactive decisions. Crashing on cycles would block legitimate codebases that have intentional circular deps. |
 | 2026-05-01 | Research before implementation for both performance and cycle algorithm | ts-morph parse cost at 33 files is an unknown. If it exceeds ~2 seconds, caching or incremental builds may be needed before wiring into the pipeline. Cycle-handling correctness must be verified before implementation. |
+| 2026-05-06 | Use `getModuleSpecifierSourceFile()` over manual path resolution in `buildDepGraph` | M1 benchmark confirmed the API resolves directory imports (`./commands/check` → `index.ts`), extension-less specifiers, and external packages correctly without any path string manipulation. Checking `resolved.getFilePath()` against a `Set<string>` of `filePaths` is the complete local-vs-external filter — no `./` or `../` prefix check needed. |
+| 2026-05-06 | Use a disk-backed `Project` (not `useInMemoryFileSystem`) for `buildDepGraph` | Cross-file import resolution via `getModuleSpecifierSourceFile()` requires files to be loaded from disk so ts-morph can resolve between them. The existing `useInMemoryFileSystem: true` pattern in `src/languages/typescript/ast.ts` is correct for single-file parsing (no cross-file resolution needed there) but cannot resolve imports across files. |
+| 2026-05-06 | No caching needed for dep graph computation | M1 benchmark: 14.75ms median for 33 files. Acceptable as a synchronous pre-instrumentation step — negligible relative to LLM API call latency. Caching would add complexity with no meaningful benefit at this scale. |
+| 2026-05-06 | `topoSort` tracks `remainingImports` (out-degree) rather than standard in-degree | Standard Kahn's counts edges pointing IN to a node (in-degree), which gives callers-first ordering. Leaves-first requires tracking how many local imports each node still has (out-degree in the original graph = in-degree in the transposed graph). The research doc described "in-degree" loosely; the correct implementation uses `remainingImports[N] = edges.get(N).length` and a reverse `importedBy` map to decrement callers. Verified: A→B→C correctly returns [C, B, A]. |
+| 2026-05-06 | dep-graph step in `coordinate.ts` uses graceful try/catch fallback to alphabetical order | Existing coordinate unit tests pass fake file paths (`/project/a.js`) that don't exist on disk; `buildDepGraph` throws when `addSourceFileAtPath` fails on a non-existent path. Wrapping the step in try/catch matches the degrade-and-continue pattern used throughout coordinate.ts — the fallback is alphabetical order, which is the current behavior and leaves correctness unaffected for real runs where all discovered files exist. |
+| 2026-05-06 | Added `allowJs: true` to `buildDepGraph`'s ts-morph Project config | Without `allowJs`, ts-morph doesn't parse `.js` files, and `addSourceFileAtPath` on a `.js` file may fail or silently skip it. Setting `allowJs: true` ensures the Project accepts both `.ts` and `.js` files. For JavaScript targets, imports still resolve to empty edges (ts-morph's module resolution for `.js`-to-`.js` imports requires additional config), so `topoSort` returns alphabetical order — same as the current behavior. |

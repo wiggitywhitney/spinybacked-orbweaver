@@ -18,13 +18,11 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
-- Dependency-aware file instrumentation ordering ([PRD #700](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/700)) — instrument leaves before callers so each agent sees the full instrumentation picture of its dependencies. Independent of PRDs #698, #687, #699; can run in parallel.
-
 ## Medium-term
 
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
-- Enrich callee span-name context in processedFilesManifest ([issue #718](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/718)) — lets caller agents reason about span layer (not just function coverage) when callees are already instrumented; blocked by PRD #700.
+- Enrich callee span-name context in processedFilesManifest ([issue #718](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/718)) — lets caller agents reason about span layer (not just function coverage) when callees are already instrumented; PRD #700 ✓ unblocks this.
 - Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
 - Coordinator silent rejection should feed back into the fix loop ([issue #722](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/722)) — wrong-namespace extensions are currently silently dropped; routing the rejection back as feedback would give the agent a retry opportunity consistent with how other validation failures work. Independent of issues #723 and #724.

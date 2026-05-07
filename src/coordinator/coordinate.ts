@@ -33,6 +33,7 @@ import { hasTestSuite as defaultHasTestSuite } from './test-suite-detection.ts';
 import { getProviderByLanguage } from '../languages/registry.ts';
 import type { LanguageProvider } from '../languages/types.ts';
 import { resolveCanonicalTracerName } from './tracer-name.ts';
+import { buildDepGraph, topoSort } from './dep-graph.ts';
 
 /**
  * Run a project's test suite without OTLP overrides.
@@ -287,6 +288,7 @@ export async function coordinate(
   const schemaDiffWarnings: string[] = [];
   const checkpointTestWarnings: string[] = [];
   const tracerNameWarnings: string[] = [];
+  const depGraphWarnings: string[] = [];
 
   const language = config.language ?? 'javascript';
   const languageProvider: LanguageProvider | undefined = getProviderByLanguage(language);
@@ -343,6 +345,17 @@ export async function coordinate(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new CoordinatorAbortError(`File discovery failed: ${message}`);
+  }
+
+  // Step 2b: Reorder files by dependency graph (leaves first, callers last)
+  // Files with no local imports are processed first so each agent sees the full
+  // instrumentation picture of its dependencies before it runs.
+  // Falls back to alphabetical order from discovery if graph construction fails.
+  try {
+    filePaths = topoSort(buildDepGraph(filePaths));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    depGraphWarnings.push(`Dependency graph ordering failed (degraded to alphabetical): ${message}`);
   }
 
   // Step 3: Compute cost ceiling
@@ -503,6 +516,7 @@ export async function coordinate(
   runResult.warnings.push(...schemaDiffWarnings);
   runResult.warnings.push(...checkpointTestWarnings);
   runResult.warnings.push(...tracerNameWarnings);
+  runResult.warnings.push(...depGraphWarnings);
 
   // Step 7: Fire onRunComplete callback (guarded — must not abort completed work)
   try {
