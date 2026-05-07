@@ -444,9 +444,10 @@ describe('coordinate', () => {
 
       const result = await coordinate('/project', makeConfig(), undefined, deps);
 
-      expect(result.warnings).toHaveLength(2);
-      expect(result.warnings[0]).toContain('a.js');
-      expect(result.warnings[1]).toContain('b.js');
+      // Fake paths don't exist on disk, so the dep-graph step degrades and adds a warning.
+      // Check for file-failure warnings by content rather than exact array position.
+      expect(result.warnings.some(w => w.includes('a.js'))).toBe(true);
+      expect(result.warnings.some(w => w.includes('b.js'))).toBe(true);
     });
 
     it('RunResult is fully populated for a successful run', async () => {

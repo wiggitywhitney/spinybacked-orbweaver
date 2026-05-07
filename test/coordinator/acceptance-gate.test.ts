@@ -1750,6 +1750,9 @@ describe('Acceptance Gate — PRD 700 Dependency-aware file instrumentation orde
     await coordinate(DEP_GRAPH_FIXTURES, makeConfig({ language: 'typescript' }), undefined, deps);
 
     // dep-graph order: c.ts (leaf, imports nothing) → b.ts (imports c) → a.ts (imports b)
+    expect(dispatchedOrder).toContain(pathC);
+    expect(dispatchedOrder).toContain(pathB);
+    expect(dispatchedOrder).toContain(pathA);
     expect(dispatchedOrder.indexOf(pathC)).toBeLessThan(dispatchedOrder.indexOf(pathB));
     expect(dispatchedOrder.indexOf(pathB)).toBeLessThan(dispatchedOrder.indexOf(pathA));
   });

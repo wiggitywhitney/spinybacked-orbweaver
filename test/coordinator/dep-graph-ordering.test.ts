@@ -87,6 +87,8 @@ describe('dep-graph file ordering in coordinate()', () => {
     expect(dispatchMock).toHaveBeenCalledOnce();
     const [dispatchedPaths] = dispatchMock.mock.calls[0] as [string[], ...unknown[]];
 
+    expect(dispatchedPaths).toContain(pathA);
+    expect(dispatchedPaths).toContain(pathB);
     const idxA = dispatchedPaths.indexOf(pathA);
     const idxB = dispatchedPaths.indexOf(pathB);
     expect(idxB).toBeLessThan(idxA);
