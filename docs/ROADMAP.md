@@ -17,7 +17,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Short-term (current focus)
 
-- Prettier-normalized NDS-003 comparison ([PRD #820](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/820)) — normalize both instrumented output and original source through Prettier before NDS-003 diff, so the agent isn't penalized for indentation changes caused by startActiveSpan wrapping; fixes the P1 ceiling that blocked 5 of 6 files in release-it run-4.
+
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 - Acceptance gate regressions on main: errorProgression.length assertion + SCH-001 exact-match pre-check ([issue #831](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/831)) — function-level fallback appends entries to errorProgression beyond validationAttempts, breaking test assertion; SCH-001 flags identical extension strings as delimiter-variant duplicates (exact-match pre-check added to SCH-002 in PR #766 was never applied to SCH-001).
 
