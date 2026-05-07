@@ -482,6 +482,8 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
     const config = await prettier.resolveConfig(filePath);
     return await prettier.format(code, { ...config, filepath: filePath });
   } catch {
+    pendingNds003Warning =
+      'NDS-003: Prettier formatting failed — normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
     return code;
   }
 }
@@ -496,7 +498,7 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
  * indentation are recognized as preserved. Structural changes still differ.
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
- * Prettier availability caching is added in M3.
+ * Prettier availability is cached across calls within the same process.
  */
 export async function checkNonInstrumentationDiffNormalized(
   originalCode: string,
