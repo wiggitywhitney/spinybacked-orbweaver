@@ -18,6 +18,10 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 - Prettier-normalized NDS-003 comparison ([PRD #820](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/820)) — normalize both instrumented output and original source through Prettier before NDS-003 diff, so the agent isn't penalized for indentation changes caused by startActiveSpan wrapping; fixes the P1 ceiling that blocked 5 of 6 files in release-it run-4.
+- Fix E2BIG PR auto-creation: switch to `gh pr create --body-file` ([issue #821](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/821)) — short-term mitigation for oversized PR bodies; unblocks auto PR creation at any body size.
+- Refactor live-check compliance report to artifact file with deduplicated advisory counts ([issue #822](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/822)) — root cause of E2BIG; eliminates per-span repetition (7 attribute types × 2173 spans = 15389 raw count) and writes raw JSON to a file instead of inline.
+- COV-003: recognize `return Promise.reject(err)` as a rethrow pattern ([issue #823](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/823)) — false negative in release-it run-4 allowed shell.js to commit without error recording on the catch path.
+- SCH-002: restrict semantic duplicate detection to same namespace prefix ([issue #824](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/824)) — judge fired cross-namespace false positives (gitlab vs github attributes) producing contradictory findings that blocked GitLab.js in run-4.
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 ## Medium-term
 
