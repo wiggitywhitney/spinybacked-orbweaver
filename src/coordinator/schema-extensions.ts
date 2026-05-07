@@ -352,10 +352,11 @@ export async function restoreExtensionsFile(
  */
 export function extractSpanNamesFromCode(code: string): string[] {
   const names = new Set<string>();
-  // Match startActiveSpan('name', ...) and startActiveSpan("name", ...)
-  const pattern = /startActiveSpan\s*\(\s*(['"])([^'"]+)\1/g;
+  // Match tracer.startActiveSpan('name', ...), tracer.startSpan('name', ...),
+  // and bare startActiveSpan/startSpan calls (dot optional). Tolerates optional whitespace.
+  const pattern = /\.?\s*(?:startActiveSpan|startSpan)\s*\(\s*(['"])([^'"]+)\1/g;
   for (const match of code.matchAll(pattern)) {
-    names.add(match[2]);
+    names.add(match[2]!);
   }
   return [...names];
 }

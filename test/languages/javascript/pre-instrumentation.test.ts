@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { JavaScriptProvider } from '../../../src/languages/javascript/index.ts';
+import type { ManifestEntry } from '../../../src/languages/types.ts';
 
 describe('JavaScriptProvider.preInstrumentationAnalysis()', () => {
   const provider = new JavaScriptProvider();
@@ -786,7 +787,7 @@ export async function main() {
     });
 
     it('returns empty alreadyInstrumentedImports when manifest is empty', () => {
-      const manifest = new Map<string, string[]>();
+      const manifest = new Map<string, ManifestEntry>();
 
       const result = provider.preInstrumentationAnalysis!(
         fileWithImports,
@@ -798,8 +799,8 @@ export async function main() {
     });
 
     it('identifies imported functions that appear in the manifest as already instrumented', () => {
-      const manifest = new Map<string, string[]>([
-        ['/abs/services/orders.js', ['handleOrder', 'processPayment']],
+      const manifest = new Map<string, ManifestEntry>([
+        ['/abs/services/orders.js', { functionNames: ['handleOrder', 'processPayment'], spanNames: [] }],
       ]);
 
       const result = provider.preInstrumentationAnalysis!(
@@ -823,8 +824,8 @@ export async function main() {
 }
 `.trim();
 
-      const manifest = new Map<string, string[]>([
-        ['/abs/app/utils/users.js', ['fetchUser']],
+      const manifest = new Map<string, ManifestEntry>([
+        ['/abs/app/utils/users.js', { functionNames: ['fetchUser'], spanNames: [] }],
       ]);
 
       const result = provider.preInstrumentationAnalysis!(
@@ -839,8 +840,8 @@ export async function main() {
     });
 
     it('only marks functions that appear in the manifest — not all imports', () => {
-      const manifest = new Map<string, string[]>([
-        ['/abs/services/orders.js', ['handleOrder']],
+      const manifest = new Map<string, ManifestEntry>([
+        ['/abs/services/orders.js', { functionNames: ['handleOrder'], spanNames: [] }],
         // processPayment is NOT in the manifest for this file
       ]);
 
@@ -868,8 +869,8 @@ export async function entryB() {
 }
 `.trim();
 
-      const manifest = new Map<string, string[]>([
-        ['/abs/services/helpers.js', ['sharedHelper']],
+      const manifest = new Map<string, ManifestEntry>([
+        ['/abs/services/helpers.js', { functionNames: ['sharedHelper'], spanNames: [] }],
       ]);
 
       const result = provider.preInstrumentationAnalysis!(
@@ -883,13 +884,43 @@ export async function entryB() {
     });
 
     it('is unaffected by manifest when filePath is not provided', () => {
-      const manifest = new Map<string, string[]>([
-        ['/abs/services/orders.js', ['handleOrder']],
+      const manifest = new Map<string, ManifestEntry>([
+        ['/abs/services/orders.js', { functionNames: ['handleOrder'], spanNames: [] }],
       ]);
 
       const result = provider.preInstrumentationAnalysis!(fileWithImports, manifest);
 
       expect(result.alreadyInstrumentedImports).toHaveLength(0);
+    });
+
+    it('includes span names from manifest entry in alreadyInstrumentedImports', () => {
+      const manifest = new Map<string, ManifestEntry>([
+        ['/abs/services/orders.js', { functionNames: ['handleOrder'], spanNames: ['order.process', 'order.validate'] }],
+      ]);
+
+      const result = provider.preInstrumentationAnalysis!(
+        fileWithImports,
+        manifest,
+        '/abs/app/index.js',
+      );
+
+      expect(result.alreadyInstrumentedImports).toHaveLength(1);
+      expect(result.alreadyInstrumentedImports[0].name).toBe('handleOrder');
+      expect(result.alreadyInstrumentedImports[0].spanNames).toEqual(['order.process', 'order.validate']);
+    });
+
+    it('returns empty spanNames when manifest entry has no spans', () => {
+      const manifest = new Map<string, ManifestEntry>([
+        ['/abs/services/orders.js', { functionNames: ['handleOrder'], spanNames: [] }],
+      ]);
+
+      const result = provider.preInstrumentationAnalysis!(
+        fileWithImports,
+        manifest,
+        '/abs/app/index.js',
+      );
+
+      expect(result.alreadyInstrumentedImports[0].spanNames).toEqual([]);
     });
   });
 });

@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { isAlreadyInstrumented, buildSkippedResult } from '../../src/coordinator/dispatch.ts';
+import { extractSpanNamesFromCode } from '../../src/coordinator/schema-extensions.ts';
 
 describe('isAlreadyInstrumented', () => {
   describe('detects @opentelemetry/api imports', () => {
@@ -122,5 +123,38 @@ describe('buildSkippedResult', () => {
     const result = buildSkippedResult('/path/to/file.js');
     expect(result.errorProgression).toEqual([]);
     expect(result.notes).toEqual([]);
+  });
+});
+
+describe('extractSpanNamesFromCode', () => {
+  it('extracts startActiveSpan names from instrumented code', () => {
+    const code = `
+      tracer.startActiveSpan("order.process", (span) => {
+        tracer.startActiveSpan("order.validate", (inner) => {});
+      });
+    `;
+    const names = extractSpanNamesFromCode(code);
+    expect(names).toContain('order.process');
+    expect(names).toContain('order.validate');
+  });
+
+  it('extracts startSpan names from instrumented code', () => {
+    const code = `const span = tracer.startSpan('fetch.npm_package');`;
+    const names = extractSpanNamesFromCode(code);
+    expect(names).toContain('fetch.npm_package');
+  });
+
+  it('deduplicates repeated span names', () => {
+    const code = `
+      tracer.startActiveSpan("order.process", (s) => {});
+      tracer.startActiveSpan("order.process", (s) => {});
+    `;
+    const names = extractSpanNamesFromCode(code);
+    expect(names.filter(n => n === 'order.process')).toHaveLength(1);
+  });
+
+  it('returns empty array when no span calls exist', () => {
+    const code = 'function foo() { return 42; }';
+    expect(extractSpanNamesFromCode(code)).toEqual([]);
   });
 });

@@ -883,8 +883,8 @@ describe('buildUserMessage', () => {
         outboundCallsNeedingSpans: [],
         entryPointSubOperations: [],
         alreadyInstrumentedImports: [
-          { name: 'handleOrder', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js' },
-          { name: 'processPayment', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js' },
+          { name: 'handleOrder', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js', spanNames: [] },
+          { name: 'processPayment', sourceModule: './services/orders.js', sourceFile: '/app/services/orders.js', spanNames: [] },
         ],
       };
       const message = buildUserMessage(
@@ -895,6 +895,28 @@ describe('buildUserMessage', () => {
       expect(message).toContain('handleOrder');
       expect(message).toContain('processPayment');
       expect(message).toContain('./services/orders.js');
+    });
+
+    it('includes span names in the already-instrumented directive when present', () => {
+      const preScan = {
+        hasInstrumentableFunctions: true,
+        entryPointsNeedingSpans: [{ name: 'main', startLine: 1 }],
+        processExitEntryPoints: [],
+        asyncFunctionsNeedingSpans: [],
+        pureSyncFunctions: [],
+        unexportedFunctions: [],
+        outboundCallsNeedingSpans: [],
+        entryPointSubOperations: [],
+        alreadyInstrumentedImports: [
+          { name: 'fetchPackument', sourceModule: './packument.ts', sourceFile: '/app/packument.ts', spanNames: ['taze.fetch.npm'] },
+        ],
+      };
+      const message = buildUserMessage(
+        '/app/index.js', 'const x = 1;', config,
+        jsProvider, undefined, undefined, undefined, preScan,
+      );
+      expect(message).toContain('taze.fetch.npm');
+      expect(message).toContain('spans:');
     });
 
     it('does not emit already-instrumented directive when list is empty', () => {
