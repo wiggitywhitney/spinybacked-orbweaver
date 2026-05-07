@@ -45,7 +45,7 @@ No direct analog exists in the codemod or code-transformation space — ordering
 
 - [x] M1: Research — ts-morph dep graph performance and cycle-handling algorithm
 - [x] M2: Implement dependency graph builder using ts-morph
-- [ ] M3: Implement topological sort with cycle detection and alphabetical tiebreaker
+- [x] M3: Implement topological sort with cycle detection and alphabetical tiebreaker
 - [ ] M4: Wire ordering into the file dispatch pipeline
 - [ ] M5: Acceptance gate test — confirm leaves-first ordering is applied to a multi-file fixture with known dependencies
 
@@ -183,3 +183,4 @@ Success criterion: test exists, passes locally, and CI acceptance gate workflow 
 | 2026-05-06 | Use `getModuleSpecifierSourceFile()` over manual path resolution in `buildDepGraph` | M1 benchmark confirmed the API resolves directory imports (`./commands/check` → `index.ts`), extension-less specifiers, and external packages correctly without any path string manipulation. Checking `resolved.getFilePath()` against a `Set<string>` of `filePaths` is the complete local-vs-external filter — no `./` or `../` prefix check needed. |
 | 2026-05-06 | Use a disk-backed `Project` (not `useInMemoryFileSystem`) for `buildDepGraph` | Cross-file import resolution via `getModuleSpecifierSourceFile()` requires files to be loaded from disk so ts-morph can resolve between them. The existing `useInMemoryFileSystem: true` pattern in `src/languages/typescript/ast.ts` is correct for single-file parsing (no cross-file resolution needed there) but cannot resolve imports across files. |
 | 2026-05-06 | No caching needed for dep graph computation | M1 benchmark: 14.75ms median for 33 files. Acceptable as a synchronous pre-instrumentation step — negligible relative to LLM API call latency. Caching would add complexity with no meaningful benefit at this scale. |
+| 2026-05-06 | `topoSort` tracks `remainingImports` (out-degree) rather than standard in-degree | Standard Kahn's counts edges pointing IN to a node (in-degree), which gives callers-first ordering. Leaves-first requires tracking how many local imports each node still has (out-degree in the original graph = in-degree in the transposed graph). The research doc described "in-degree" loosely; the correct implementation uses `remainingImports[N] = edges.get(N).length` and a reverse `importedBy` map to decrement callers. Verified: A→B→C correctly returns [C, B, A]. |
