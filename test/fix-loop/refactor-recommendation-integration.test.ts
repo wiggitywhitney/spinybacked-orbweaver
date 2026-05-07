@@ -226,9 +226,10 @@ describe('instrumentWithRetry — refactor recommendation integration', () => {
     const nds003Failures = validation.blockingFailures.filter(f => f.ruleId === 'NDS-003');
     expect(nds003Failures.length).toBeGreaterThanOrEqual(1);
 
-    // Verify the forward check caught the missing original sendMessage line
+    // Verify the forward check caught the missing original sendMessage line.
+    // Prettier normalization changes single quotes to double quotes in error message content.
     const missingLine = nds003Failures.find(f =>
-      f.message.includes('missing/modified') && f.message.includes("sendMessage('Hello, ' + name)"),
+      f.message.includes('missing/modified') && f.message.includes('sendMessage(') && f.message.includes('Hello,'),
     );
     expect(missingLine).toBeDefined();
 

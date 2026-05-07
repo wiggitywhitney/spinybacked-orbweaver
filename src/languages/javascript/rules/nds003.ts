@@ -1,6 +1,7 @@
 // ABOUTME: NDS-003 Tier 2 check — non-instrumentation lines unchanged.
 // ABOUTME: Diff-based analysis filtering instrumentation additions to detect business logic changes.
 
+import * as prettier from 'prettier';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
 
@@ -69,6 +70,14 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // Return with span wrapper
   /^\s*return\s+tracer\./,
   /^\s*return\s+(?:span|otelSpan)\./,
+  // message property inside a span.setStatus() call broken across multiple lines by Prettier.
+  // Prettier breaks `span.setStatus({ code: SpanStatusCode.ERROR, message: '...' })` when
+  // the line exceeds printWidth after span indentation. The `code:` property is covered by
+  // /SpanStatusCode\./; this pattern covers the `message:` property.
+  // Accepted trade-off: also filters message: properties in business logic objects, but the
+  // agent should not add message: string literals to non-instrumentation code. The forward
+  // check still catches missing original `message:` lines when the agent removes them.
+  /^\s*message:\s*['"`]/,
 ];
 
 /**
@@ -406,6 +415,125 @@ export function checkNonInstrumentationDiff(
   return results;
 }
 
+/**
+ * Module-level Prettier availability cache.
+ * null = not yet checked; true = available; false = unavailable.
+ * Resets on each process start; caching avoids repeated probe overhead.
+ */
+let prettierAvailable: boolean | null = null;
+
+/**
+ * Warning set when Prettier is first detected as unavailable. Drained by the
+ * coordinator after dispatch and appended to RunResult.warnings.
+ */
+let pendingNds003Warning: string | null = null;
+
+/**
+ * Drain the pending NDS-003 Prettier availability warning.
+ * Called by the coordinator after dispatch to collect run-level warnings.
+ * Returns null when no warning is pending.
+ */
+export function drainNds003Warning(): string | null {
+  const w = pendingNds003Warning;
+  pendingNds003Warning = null;
+  return w;
+}
+
+/**
+ * Reset the Prettier availability cache and pending warning.
+ * For testing only — allows each test to exercise the availability probe.
+ */
+export function _testResetPrettierCache(): void {
+  prettierAvailable = null;
+  pendingNds003Warning = null;
+}
+
+/**
+ * Force-set Prettier availability without running the probe.
+ * For testing only — simulates an environment where Prettier is unavailable.
+ */
+export function _testSetPrettierAvailable(available: boolean): void {
+  prettierAvailable = available;
+}
+
+/**
+ * Infer whether the source uses single quotes predominantly.
+ * Used when no Prettier config specifies singleQuote, to avoid converting
+ * the quote style and causing forward-check mismatches against raw code.
+ */
+function inferSingleQuote(code: string): boolean {
+  const singles = (code.match(/'/g) ?? []).length;
+  const doubles = (code.match(/"/g) ?? []).length;
+  return singles > doubles;
+}
+
+/**
+ * Normalize source code through Prettier for NDS-003 comparison.
+ *
+ * On first call, probes Prettier availability and caches the result. When
+ * unavailable, falls back to the original code and sets the pending warning.
+ * Resolves Prettier config from the file path so target project settings
+ * (printWidth, tabWidth, etc.) are respected. When no project config specifies
+ * singleQuote, infers it from the source to avoid changing quote style —
+ * quote changes produce false positives when comparing against raw instrumented code.
+ */
+async function prettierNormalize(code: string, filePath: string): Promise<string> {
+  if (prettierAvailable === null) {
+    try {
+      await prettier.format('', { filepath: 'probe.js' });
+      prettierAvailable = true;
+    } catch {
+      prettierAvailable = false;
+    }
+  }
+  if (!prettierAvailable) {
+    pendingNds003Warning =
+      'NDS-003: Prettier not available — formatting normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
+    return code;
+  }
+  try {
+    const config = await prettier.resolveConfig(filePath) ?? {};
+    const singleQuoteOverride = 'singleQuote' in config ? undefined : inferSingleQuote(code);
+    const options: prettier.Options = {
+      ...config,
+      filepath: filePath,
+      ...(singleQuoteOverride !== undefined ? { singleQuote: singleQuoteOverride } : {}),
+    };
+    return await prettier.format(code, options);
+  } catch {
+    pendingNds003Warning =
+      'NDS-003: Prettier formatting failed — normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
+    return code;
+  }
+}
+
+/**
+ * Prettier-normalized NDS-003 check.
+ *
+ * Normalizes only the originalCode through Prettier before running the diff.
+ * This allows the agent to reformat business-logic lines that the startActiveSpan
+ * wrapper pushed past Prettier's printWidth (to pass LINT) without NDS-003
+ * flagging them as modifications — Prettier breaks both the original and the
+ * agent's reformatted version the same way, so the trimmed content matches.
+ *
+ * Only the original is normalized; the instrumented code is compared raw. This
+ * prevents Prettier from breaking long instrumentation lines (e.g., a
+ * startActiveSpan call with a long span name) into fragments whose inner parts
+ * (span name string, async callback declaration) aren't recognized as
+ * instrumentation patterns and would produce false positives.
+ *
+ * Falls back to the raw diff when Prettier is unavailable or formatting fails.
+ * Prettier availability is cached across calls within the same process.
+ */
+export async function checkNonInstrumentationDiffNormalized(
+  originalCode: string,
+  instrumentedCode: string,
+  filePath: string,
+): Promise<CheckResult[]> {
+  const normalizedOriginal = await prettierNormalize(originalCode, filePath);
+  return checkNonInstrumentationDiff(normalizedOriginal, instrumentedCode, filePath);
+}
+
 /** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */
 export const nds003Rule: ValidationRule = {
   ruleId: 'NDS-003',
@@ -415,6 +543,6 @@ export const nds003Rule: ValidationRule = {
     return language === 'javascript' || language === 'typescript';
   },
   check(input) {
-    return checkNonInstrumentationDiff(input.originalCode, input.instrumentedCode, input.filePath);
+    return checkNonInstrumentationDiffNormalized(input.originalCode, input.instrumentedCode, input.filePath);
   },
 };

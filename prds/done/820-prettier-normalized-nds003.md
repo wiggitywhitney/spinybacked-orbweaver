@@ -1,6 +1,6 @@
 # PRD #820: Prettier-normalized NDS-003 comparison
 
-**Status**: Active
+**Status**: Complete (2026-05-07) — coordinator wiring of `drainNds003Warning()` into `RunResult.warnings` is a documented follow-up (see Decision Log)
 **Priority**: High
 **GitHub Issue**: [#820](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/820)
 **Created**: 2026-05-07
@@ -58,11 +58,11 @@ This PRD has no dependency on open PRDs. It touches `src/languages/javascript/ru
 
 ## Milestones
 
-- [ ] M1: Research — measure Prettier execution cost and choose Option A vs B
-- [ ] M2: Implement formatting normalization in NDS-003
-- [ ] M3: Graceful degrade when Prettier is unavailable
-- [ ] M4: Acceptance gate test — confirm plugin files that previously failed due to indentation now commit cleanly
-- [ ] M5: Update PROGRESS.md and docs/rules-reference.md
+- [x] M1: Research — measure Prettier execution cost and choose Option A vs B
+- [x] M2: Implement formatting normalization in NDS-003
+- [x] M3: Graceful degrade when Prettier is unavailable
+- [x] M4: Acceptance gate test — confirm plugin files that previously failed due to indentation now commit cleanly
+- [x] M5: Update PROGRESS.md and docs/rules-reference.md
 
 ---
 
@@ -112,7 +112,7 @@ Add a Prettier availability check inside the NDS-003 rule module. Cache the resu
 - Push a warning to `RunResult.warnings`: `"NDS-003: Prettier not available — formatting normalization skipped. Files with indentation-width conflicts may fail NDS-003."`
 - Do NOT abort the run or change any other behavior
 
-The availability check: `execFileSync('npx', ['prettier', '--version'], ...)` inside a try/catch. If it throws or exits non-zero, Prettier is unavailable.
+The availability check: `await prettier.format('', { filepath: 'probe.js' })` inside a try/catch. If it throws, the Prettier library is unavailable at runtime. Note: this tests library availability, not project configuration — Prettier can always fall back to defaults when no `.prettierrc` is present. Implemented: module-level `prettierAvailable: boolean | null` variable caches the result so the probe runs only once per process. Actual formatting calls in M2 are also async via `prettier.format()`.
 
 TDD: Write a failing test that mocks Prettier as unavailable and confirms NDS-003 falls back to raw-diff mode and emits the warning. Confirm it fails, implement, confirm it passes.
 
@@ -161,3 +161,8 @@ Run `/write-docs` to validate the documentation before committing (per CLAUDE.md
 | Date | Decision | Rationale |
 |---|---|---|
 | 2026-05-07 | Research before choosing Option A vs B | Option A modifies disk state during fix loop; Option B keeps normalization inside the validator. The performance benchmark determines whether either option is viable; the side-effect concern determines which to prefer if both pass. |
+| 2026-05-07 | SCH-002 "high token count" concern in ROADMAP is not a real risk | Investigated the ROADMAP note "SCH-002 re-declaration intermittently blocks summary-manager.js at high token counts (76K–91K)." Traced the claim to a single data point from PR #766 — one failure at 91K tokens. The actual root cause was the agent re-declaring an already-registered key, fixed by the exact-match pre-check in #766. In today's acceptance gate, summary-manager.js passed. The GitLab.js run-4 failure (previously attributed to token count) was actually a cross-namespace false positive, fixed by PR #825. ROADMAP updated to remove the unvalidated claim. A separate acceptance gate regression exists on main (errorProgression.length assertion, unrelated to SCH-002 or token count) — tracked in its own issue. |
+| 2026-05-07 | Option B chosen: normalize in NDS-003 check only, no disk writes | Benchmark on a 631-line JS fixture (Prettier 3.8.1): `--check` median 150ms, `--write` median 139ms — both well under the 200ms threshold. Option B doubles the cost (two calls per NDS-003 invocation, ~280ms total), still acceptable. Option B is preferred over Option A because it keeps NDS-003 as a pure validation step with no disk side effects. `ValidationRule.check` already supports `Promise<RuleCheckResult>`, so making NDS-003 async requires no interface changes. Original plan: `prettier --stdin-filepath <filePath>` via async `execFile`. Actual implementation: `prettier.format()` API — see next entry. See `docs/research/prettier-normalization-cost.md`. |
+| 2026-05-07 | Used `prettier.format()` API instead of `execFile('npx', ['prettier', ...])` subprocess | The PRD's implementation notes prescribed a subprocess call, but `validation.ts` already imports `prettier` as a library (`import * as prettier from 'prettier'`) and uses `prettier.format()` / `prettier.resolveConfig()` directly. Using the same pattern avoids subprocess overhead and is consistent with the existing codebase. The Prettier availability probe uses `prettier.format('', { filepath: 'probe.js' })` inside a try/catch rather than `execFileSync('npx', ['prettier', '--version'])` — same result with no subprocess. |
+| 2026-05-07 | `checkNonInstrumentationDiff` kept synchronous; new `checkNonInstrumentationDiffNormalized` is the async variant | Making the existing function async would require adding `await` to ~40 existing unit tests. Keeping the sync function unchanged and adding an async wrapper preserves all existing tests and separates concerns: the pure diff logic stays sync (unit-testable in isolation), and the normalization wrapper layer is async. The rule's `check()` method calls the async version. |
+| 2026-05-07 | `drainNds003Warning()` exposed but coordinator wiring to `RunResult.warnings` deferred | The M3 mechanism (module-level warning, drain function) is in place and tested. Wiring `drainNds003Warning()` into `coordinate.ts` is a separate coordinator-level change, tracked in a follow-up issue rather than blocking this PRD. |

@@ -315,4 +315,58 @@ describe('Phase 2 acceptance gate', () => {
     expect(lines.length).toBeGreaterThanOrEqual(5);
     expect(lines.every((l) => l.includes('pass'))).toBe(true);
   });
+
+  it('NDS-003 passes when agent splits a line that span indentation pushed past printWidth', async () => {
+    // Root cause of release-it run-4 failures: when startActiveSpan adds indentation,
+    // a line near Prettier's printWidth (80 chars default) exceeds it. The agent must
+    // split the line (to pass LINT) but NDS-003 used to flag the split as a modification.
+    // With Prettier normalization, NDS-003 sees that both sides reformat the same way.
+    //
+    // The original long line (86 chars) is non-compliant at printWidth 80.
+    // The instrumented version, with the line correctly split, is Prettier-compliant.
+    // LINT: original non-compliant → instrumented compliant → PASS (not a new violation).
+    // NDS-003: Prettier normalizes both → same trimmed content → PASS.
+
+    const original = [
+      'async function createTag(git, options) {',
+      '  return await git.runCommand("tag", options.tagName, options.message, { push: true });',
+      '}',
+    ].join('\n');
+
+    const instrumented = [
+      'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+      'const tracer = trace.getTracer("git-service");',
+      'async function createTag(git, options) {',
+      '  return tracer.startActiveSpan("git.create-tag", async (span) => {',
+      '    try {',
+      '      return await git.runCommand("tag", options.tagName, options.message, {',
+      '        push: true,',
+      '      });',
+      '    } catch (error) {',
+      '      span.recordException(error);',
+      '      span.setStatus({ code: SpanStatusCode.ERROR });',
+      '      throw error;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const filePath = join(tempDir, 'create-tag.js');
+    writeFileSync(filePath, instrumented, 'utf-8');
+
+    const result = await validateFile({
+      originalCode: original,
+      instrumentedCode: instrumented,
+      filePath,
+      config: fullConfig,
+      provider: jsProvider,
+    });
+
+    expect(result.passed).toBe(true);
+    const nds003 = result.tier2Results.find((r) => r.ruleId === 'NDS-003');
+    expect(nds003).toBeDefined();
+    expect(nds003?.passed).toBe(true);
+  });
 });
