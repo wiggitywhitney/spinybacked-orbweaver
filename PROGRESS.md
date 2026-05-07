@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-06) Added an acceptance gate test confirming end-to-end that the dep-graph ordering is applied through the full coordinator pipeline. The test uses the real TypeScript fixture chain (a.ts imports b.ts imports c.ts), mocks discovery to return them alphabetically, and asserts that dispatch receives them in leaf-first order (c first, then b, then a). Passes in under 400ms without any LLM API calls.
+
 - (2026-05-06) Wired dependency-aware file ordering into the instrumentation pipeline. Files are now reordered between discovery and dispatch using the dep-graph topological sort — so a file that another file imports is always instrumented first. When the agent instruments the caller, it already has the complete instrumentation picture of everything it depends on. The reordering step falls back gracefully to alphabetical order if the dep-graph step fails (e.g., for non-existent test fixture paths), matching the degrade-and-continue pattern used throughout the coordinator.
 
 - (2026-05-06) Implemented topological sort (`topoSort`) on the dependency graph so files are processed in leaves-first order — a file's dependencies are always instrumented before the file itself. The algorithm tracks each file's remaining local imports (out-degree in the original graph, equivalent to in-degree in the transposed graph) and processes files with zero remaining imports first, alphabetically within each wave. When cycles exist (e.g., two files that import each other), one edge is removed and logged to stderr, and the sort restarts cleanly — no crashes, no infinite loops. Three TDD tests cover the linear chain [C→B→A], cycle termination, and alphabetical tiebreaker.

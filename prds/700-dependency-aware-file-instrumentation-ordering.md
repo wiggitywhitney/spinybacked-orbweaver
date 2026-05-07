@@ -47,7 +47,7 @@ No direct analog exists in the codemod or code-transformation space — ordering
 - [x] M2: Implement dependency graph builder using ts-morph
 - [x] M3: Implement topological sort with cycle detection and alphabetical tiebreaker
 - [x] M4: Wire ordering into the file dispatch pipeline
-- [ ] M5: Acceptance gate test — confirm leaves-first ordering is applied to a multi-file fixture with known dependencies
+- [x] M5: Acceptance gate test — confirm leaves-first ordering is applied to a multi-file fixture with known dependencies
 
 ---
 
