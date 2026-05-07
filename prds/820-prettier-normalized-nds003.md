@@ -112,7 +112,7 @@ Add a Prettier availability check inside the NDS-003 rule module. Cache the resu
 - Push a warning to `RunResult.warnings`: `"NDS-003: Prettier not available — formatting normalization skipped. Files with indentation-width conflicts may fail NDS-003."`
 - Do NOT abort the run or change any other behavior
 
-The availability check: `execFileSync('npx', ['prettier', '--version'], ...)` inside a try/catch. If it throws or exits non-zero, Prettier is unavailable.
+The availability check: `execFileSync('npx', ['prettier', '--version'], ...)` inside a try/catch. If it throws or exits non-zero, Prettier is unavailable. Using `execFileSync` here is intentional — this probe runs once per process and caches the result, so the synchronous cost is paid only once. The formatting calls in M2 use async `execFile`; the availability probe is the only sync call.
 
 TDD: Write a failing test that mocks Prettier as unavailable and confirms NDS-003 falls back to raw-diff mode and emits the warning. Confirm it fails, implement, confirm it passes.
 
