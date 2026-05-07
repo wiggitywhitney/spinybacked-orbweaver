@@ -114,6 +114,55 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
     });
   });
 
+  describe('return Promise.reject(err) as rethrow pattern', () => {
+    it('flags when catch uses return Promise.reject(err) without error recording', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export async function execCmd(cmd: string): Promise<string> {',
+        '  return tracer.startActiveSpan("execCmd", async (span) => {',
+        '    try {',
+        '      return await run(cmd);',
+        '    } catch (err: unknown) {',
+        '      return Promise.reject(err);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // return Promise.reject(err) propagates the error — semantically equivalent to throw.
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results.some((r) => !r.passed)).toBe(true);
+      expect(results[0].ruleId).toBe('COV-003');
+    });
+
+    it('passes when catch uses return Promise.reject(err) WITH error recording', () => {
+      const code = [
+        "import { trace, SpanStatusCode } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export async function execCmd(cmd: string): Promise<string> {',
+        '  return tracer.startActiveSpan("execCmd", async (span) => {',
+        '    try {',
+        '      return await run(cmd);',
+        '    } catch (err: unknown) {',
+        '      span.recordException(err instanceof Error ? err : new Error(String(err)));',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      return Promise.reject(err);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('no spans', () => {
     it('passes when no spans exist in file', () => {
       const code = [
