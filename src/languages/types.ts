@@ -315,6 +315,17 @@ export interface PreScanImportedSubOperation {
 }
 
 /**
+ * Per-file entry in the cross-file instrumentation manifest.
+ * Tracks which functions and span names were added to each processed file.
+ */
+export interface ManifestEntry {
+  /** Names of functions that have been instrumented in this file. */
+  functionNames: string[];
+  /** Span names added to this file (e.g., 'order.process'). */
+  spanNames: string[];
+}
+
+/**
  * An imported function identified as already instrumented in a previously-processed
  * file (M6 cross-file manifest lookup).
  */
@@ -325,6 +336,8 @@ export interface PreScanAlreadyInstrumentedImport {
   sourceModule: string;
   /** The absolute file path where this function was instrumented. */
   sourceFile: string;
+  /** Span names added to the source file, for span-layer context in the agent prompt. */
+  spanNames: string[];
 }
 
 /**
@@ -817,7 +830,7 @@ export interface LanguageProvider {
    * @param originalCode - Source code text before instrumentation
    * @returns Pre-scan findings, or `undefined` if the provider does not implement this method
    */
-  preInstrumentationAnalysis?(originalCode: string, processedFilesManifest?: Map<string, string[]>, filePath?: string): PreScanResult;
+  preInstrumentationAnalysis?(originalCode: string, processedFilesManifest?: Map<string, ManifestEntry>, filePath?: string): PreScanResult;
 }
 
 /**

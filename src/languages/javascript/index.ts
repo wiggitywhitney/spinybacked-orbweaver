@@ -381,7 +381,7 @@ export class JavaScriptProvider implements LanguageProvider {
 
   // ── Pre-instrumentation analysis ──────────────────────────────────────────
 
-  preInstrumentationAnalysis(originalCode: string, processedFilesManifest?: Map<string, string[]>, filePath?: string): PreScanResult {
+  preInstrumentationAnalysis(originalCode: string, processedFilesManifest?: Map<string, import('../types.ts').ManifestEntry>, filePath?: string): PreScanResult {
     const project = new Project({
       compilerOptions: { allowJs: true },
       useInMemoryFileSystem: true,
@@ -625,15 +625,16 @@ export class JavaScriptProvider implements LanguageProvider {
           if (seen.has(dedupeKey)) continue;
 
           const resolvedPath = resolve(fileDir, imported.sourceModule);
-          const instrumentedNames = processedFilesManifest.get(resolvedPath);
+          const manifestEntry = processedFilesManifest.get(resolvedPath);
           // Check by exported name (original symbol) when the import is aliased — the manifest
           // records the function name from the source file, not the local call-site alias.
           const lookupName = imported.exportedName ?? imported.name;
-          if (instrumentedNames?.includes(lookupName)) {
+          if (manifestEntry?.functionNames.includes(lookupName)) {
             alreadyInstrumentedImports.push({
               name: imported.name,
               sourceModule: imported.sourceModule,
               sourceFile: resolvedPath,
+              spanNames: manifestEntry.spanNames,
             });
             seen.add(dedupeKey);
           }

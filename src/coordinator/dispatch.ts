@@ -6,7 +6,7 @@ import { resolve, join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { formatTestOutput } from './test-output.ts';
 import { execFile } from 'node:child_process';
-import type { LanguageProvider } from '../languages/types.ts';
+import type { LanguageProvider, ManifestEntry } from '../languages/types.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';
@@ -300,10 +300,10 @@ export async function dispatchFiles(
   const rejectedExtensionIds = new Set<string>();
   // Track which file first declared each span name — detects cross-file collisions
   const spanNameOrigins = new Map<string, string>();
-  // Cross-file manifest — maps absolute file path to instrumented function names.
+  // Cross-file manifest — maps absolute file path to instrumented function names and span names.
   // Built incrementally as files succeed; passed to each subsequent instrumentFn call
   // so the pre-scan can identify imported functions already covered by earlier files.
-  const processedFilesManifest = new Map<string, string[]>();
+  const processedFilesManifest = new Map<string, ManifestEntry>();
   const abortTracker = new EarlyAbortTracker();
 
   // Read project name via provider for tracer naming fallback.
@@ -355,11 +355,11 @@ export async function dispatchFiles(
       // Check if already instrumented — skip without schema resolution or LLM call
       const earlyDetection = provider.detectOTelInstrumentation(fileContent);
       if (earlyDetection.hasExistingInstrumentation) {
-        // Seed manifest so downstream files know these functions are already covered.
+        // Seed manifest so downstream files know these functions and spans are already covered.
         const names = [...new Set(
           earlyDetection.spanPatterns.map(p => p.enclosingFunction).filter((n): n is string => n !== undefined),
         )];
-        if (names.length > 0) processedFilesManifest.set(filePath, names);
+        if (names.length > 0) processedFilesManifest.set(filePath, { functionNames: names, spanNames: extractSpanNamesFromCode(fileContent) });
         const skipped = buildSkippedResult(filePath);
         results.push(skipped);
         abortTracker.record(skipped);
@@ -548,7 +548,7 @@ export async function dispatchFiles(
             ),
           ];
           if (functionNames.length > 0) {
-            processedFilesManifest.set(filePath, functionNames);
+            processedFilesManifest.set(filePath, { functionNames, spanNames: extractSpanNamesFromCode(instrumentedCode) });
           }
         } catch {
           // Best-effort — manifest absence for this file is non-fatal
@@ -895,4 +895,22 @@ export async function dispatchFiles(
   }
 
   return results;
+}
+
+/**
+ * Extract span names from instrumented JavaScript/TypeScript source code.
+ * Finds all `startActiveSpan("name")` and `startSpan("name")` call sites via regex.
+ * Exported for unit testing.
+ *
+ * @param code - Instrumented source code
+ * @returns Deduplicated array of span name strings
+ */
+export function extractSpanNamesFromCode(code: string): string[] {
+  const pattern = /\.(?:startActiveSpan|startSpan)\(\s*["']([^"']+)["']/g;
+  const names: string[] = [];
+  let match;
+  while ((match = pattern.exec(code)) !== null) {
+    names.push(match[1]!);
+  }
+  return [...new Set(names)];
 }

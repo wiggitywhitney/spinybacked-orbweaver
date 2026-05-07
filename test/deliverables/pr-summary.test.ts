@@ -1347,7 +1347,7 @@ describe('renderPrSummary', () => {
       expect(md).toContain('## Live-Check Compliance');
     });
 
-    it('includes full compliance report when spans were received and endOfRunValidation present', () => {
+    it('references artifact file (not raw JSON) when spans received and endOfRunValidation present', () => {
       const fullReport = JSON.stringify({ statistics: { total_entities: 5 } });
       const result = _makeRunResult({
         liveCheckStatus: { spansReceived: true, spanCount: 5, totalAdvisories: 0 },
@@ -1355,7 +1355,10 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      expect(md).toContain(fullReport);
+      // Raw JSON must NOT be embedded in the PR body (prevents E2BIG on large reports)
+      expect(md).not.toContain(fullReport);
+      // Artifact file reference must appear instead
+      expect(md).toContain('spiny-orb-live-check-report.json');
     });
 
     it('omits full compliance report when no spans received (nothing to show)', () => {
@@ -1580,5 +1583,26 @@ describe('renderPrSummary — SDK bootstrap checklist', () => {
     const md = renderPrSummary(result, _makeConfig());
 
     expect(md).toContain('SDK Bootstrap');
+  });
+});
+
+describe('writeLiveCheckArtifact', () => {
+  it('writes report to spiny-orb-live-check-report.json in projectDir', async () => {
+    const { writeLiveCheckArtifact, LIVE_CHECK_ARTIFACT_FILENAME } = await import('../../src/deliverables/pr-summary.ts');
+    const { mkdtemp, rm, readFile } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+
+    const dir = await mkdtemp(join(tmpdir(), 'spiny-orb-test-'));
+    try {
+      const report = JSON.stringify({ statistics: { total_entities: 3 } });
+      const writtenPath = await writeLiveCheckArtifact(dir, report);
+
+      expect(writtenPath).toBe(join(dir, LIVE_CHECK_ARTIFACT_FILENAME));
+      const contents = await readFile(writtenPath, 'utf-8');
+      expect(contents).toBe(report);
+    } finally {
+      await rm(dir, { recursive: true });
+    }
   });
 });

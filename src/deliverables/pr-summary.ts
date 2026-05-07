@@ -697,16 +697,11 @@ function renderLiveCheckCompliance(runResult: RunResult): string {
 
   if (liveCheckStatus) {
     lines.push(formatLiveCheckStatusLine(liveCheckStatus));
-    // Include full report only when spans were received (data is meaningful)
+    // Link to artifact file when spans were received — never embed raw JSON in the PR body
+    // (raw reports can reach hundreds of megabytes and cause E2BIG on gh pr create).
     if (liveCheckStatus.spansReceived && endOfRunValidation) {
       lines.push('');
-      lines.push('<details>');
-      lines.push('<summary>Full compliance report</summary>');
-      lines.push('');
-      lines.push('```json');
-      lines.push(endOfRunValidation);
-      lines.push('```');
-      lines.push('</details>');
+      lines.push(`Full compliance report: \`${LIVE_CHECK_ARTIFACT_FILENAME}\``);
     }
   } else if (endOfRunValidation) {
     // Backward compat: no liveCheckStatus but raw report present
@@ -754,5 +749,22 @@ function renderWarnings(runResult: RunResult): string {
 export async function writePrSummary(projectDir: string, content: string): Promise<string> {
   const filePath = join(projectDir, 'spiny-orb-pr-summary.md');
   await writeFile(filePath, content, 'utf-8');
+  return filePath;
+}
+
+/** Filename for the raw Weaver live-check compliance report artifact. */
+export const LIVE_CHECK_ARTIFACT_FILENAME = 'spiny-orb-live-check-report.json';
+
+/**
+ * Write the raw Weaver compliance report JSON to a named artifact file.
+ * Separates the full report from the PR body so the body stays small.
+ *
+ * @param projectDir - Project root directory
+ * @param report - Raw compliance report JSON string from Weaver
+ * @returns Absolute path to the written artifact file
+ */
+export async function writeLiveCheckArtifact(projectDir: string, report: string): Promise<string> {
+  const filePath = join(projectDir, LIVE_CHECK_ARTIFACT_FILENAME);
+  await writeFile(filePath, report, 'utf-8');
   return filePath;
 }

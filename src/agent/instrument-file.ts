@@ -4,7 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { AgentConfig } from '../config/schema.ts';
-import type { LanguageProvider, PreScanResult } from '../languages/types.ts';
+import type { LanguageProvider, PreScanResult, ManifestEntry } from '../languages/types.ts';
 import { LlmOutputSchema } from './schema.ts';
 import type { InstrumentationOutput, TokenUsage } from './schema.ts';
 import { buildSystemPrompt, buildUserMessage } from './prompt.ts';
@@ -74,8 +74,8 @@ interface InstrumentFileOptions {
   effortOverride?: AgentConfig['agentEffort'];
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
-  /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
-  processedFilesManifest?: Map<string, string[]>;
+  /** Instrumented function names and span names per processed file, keyed by absolute file path. */
+  processedFilesManifest?: Map<string, ManifestEntry>;
   /** Canonical tracer name resolved by the coordinator. When provided, used in all trace.getTracer() calls. */
   canonicalTracerName?: string;
 }

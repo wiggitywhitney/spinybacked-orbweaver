@@ -53,6 +53,7 @@ export interface GitWorkflowDeps {
   pushBranch: (dir: string, branchName: string) => Promise<void>;
   renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
   writePrSummary: (projectDir: string, content: string) => Promise<string>;
+  writeLiveCheckArtifact: (projectDir: string, report: string) => Promise<string>;
   commitPrSummary: (projectDir: string, summaryPath: string) => Promise<void>;
   createPr: (projectDir: string, title: string, body: string, options?: { draft?: boolean; head?: string }) => Promise<string>;
   checkGhAvailable: () => Promise<boolean | { available: boolean; warning?: string }>;
@@ -168,6 +169,12 @@ export async function runGitWorkflow(
 
     prSummaryPath = await deps.writePrSummary(projectDir, prBody);
     deps.stderr(`PR summary saved to ${prSummaryPath}`);
+
+    // Write raw live-check compliance report to artifact file so the PR body stays small.
+    if (runResult.endOfRunValidation) {
+      const artifactPath = await deps.writeLiveCheckArtifact(projectDir, runResult.endOfRunValidation);
+      deps.stderr(`Live-check report saved to ${artifactPath}`);
+    }
 
     // Commit the PR summary on the instrument branch so it survives push failures.
     await deps.commitPrSummary(projectDir, prSummaryPath);

@@ -97,6 +97,7 @@ function makeDeps(overrides?: Partial<GitWorkflowDeps>): GitWorkflowDeps {
     pushBranch: vi.fn().mockResolvedValue(undefined),
     renderPrSummary: vi.fn().mockReturnValue('# PR Summary\n\nMock summary'),
     writePrSummary: vi.fn().mockResolvedValue('/project/spiny-orb-pr-summary.md'),
+    writeLiveCheckArtifact: vi.fn().mockResolvedValue('/project/spiny-orb-live-check-report.json'),
     commitPrSummary: vi.fn().mockResolvedValue(undefined),
     createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
     checkGhAvailable: vi.fn().mockResolvedValue(true),

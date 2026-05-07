@@ -132,6 +132,7 @@ describe('git workflow integration', () => {
       pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
       writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/spiny-orb-pr-summary.md`),
+      writeLiveCheckArtifact: vi.fn().mockResolvedValue(`${repoDir}/spiny-orb-live-check-report.json`),
       commitPrSummary: vi.fn().mockResolvedValue(undefined),
       createPr: vi.fn().mockResolvedValue('https://github.com/test/repo/pull/1'),
       checkGhAvailable: vi.fn().mockResolvedValue(false),
@@ -191,6 +192,7 @@ describe('git workflow integration', () => {
       pushBranch: vi.fn().mockResolvedValue(undefined),
       renderPrSummary,
       writePrSummary: vi.fn().mockResolvedValue(`${repoDir}/spiny-orb-pr-summary.md`),
+      writeLiveCheckArtifact: vi.fn().mockResolvedValue(`${repoDir}/spiny-orb-live-check-report.json`),
       commitPrSummary: vi.fn().mockResolvedValue(undefined),
       createPr: vi.fn(),
       checkGhAvailable: vi.fn().mockResolvedValue(true),
@@ -248,6 +250,7 @@ describe('git workflow integration', () => {
         capturedPrBody = content;
         return `${repoDir}/spiny-orb-pr-summary.md`;
       }),
+      writeLiveCheckArtifact: vi.fn().mockResolvedValue(`${repoDir}/spiny-orb-live-check-report.json`),
       commitPrSummary: vi.fn().mockResolvedValue(undefined),
       createPr: vi.fn().mockImplementation(async (_dir, _title, body) => {
         capturedPrBody = body;

@@ -474,15 +474,22 @@ ${existingSpanNames.map(n => `- \`${n}\``).join('\n')}`;
 
     // Already-instrumented imports from cross-file manifest lookup
     if (preScanResult.alreadyInstrumentedImports.length > 0) {
-      const byModule = new Map<string, string[]>();
+      const byModule = new Map<string, { names: string[]; spanNames: string[] }>();
       for (const imp of preScanResult.alreadyInstrumentedImports) {
-        const existing = byModule.get(imp.sourceModule) ?? [];
-        existing.push(imp.name);
+        const existing = byModule.get(imp.sourceModule) ?? { names: [], spanNames: [] };
+        existing.names.push(imp.name);
+        // Accumulate unique span names across all imports from this module
+        for (const s of imp.spanNames) {
+          if (!existing.spanNames.includes(s)) existing.spanNames.push(s);
+        }
         byModule.set(imp.sourceModule, existing);
       }
-      for (const [sourceModule, names] of byModule) {
+      for (const [sourceModule, { names, spanNames }] of byModule) {
         const nameList = names.map(n => `\`${sanitize(n)}\``).join(', ');
-        directives.push(`- Already instrumented in \`${sanitize(sourceModule)}\`: ${nameList}. Do not re-instrument these.`);
+        const spanInfo = spanNames.length > 0
+          ? ` (spans: ${spanNames.map(s => `\`${sanitize(s)}\``).join(', ')})`
+          : '';
+        directives.push(`- Already instrumented in \`${sanitize(sourceModule)}\`: ${nameList}${spanInfo}. Do not add spans for these calls — the callee already owns that layer.`);
       }
     }
 

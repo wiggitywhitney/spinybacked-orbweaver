@@ -10,7 +10,7 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { InstrumentationOutput, TokenUsage } from '../agent/schema.ts';
 import type { InstrumentFileResult, ConversationContext } from '../agent/instrument-file.ts';
 import type { ValidateFileInput, ValidationResult } from '../validation/types.ts';
-import type { LanguageProvider } from '../languages/types.ts';
+import type { LanguageProvider, ManifestEntry } from '../languages/types.ts';
 import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
@@ -39,7 +39,7 @@ export interface InstrumentFileCallOptions {
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
   /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
-  processedFilesManifest?: Map<string, string[]>;
+  processedFilesManifest?: Map<string, ManifestEntry>;
   /** Canonical tracer name resolved by the coordinator. When provided, used in all trace.getTracer() calls. */
   canonicalTracerName?: string;
 }
@@ -77,7 +77,7 @@ interface InstrumentWithRetryOptions {
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
   /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
-  processedFilesManifest?: Map<string, string[]>;
+  processedFilesManifest?: Map<string, ManifestEntry>;
   /** Canonical tracer name resolved by the coordinator. When provided, used in all trace.getTracer() calls. */
   canonicalTracerName?: string;
   /**
@@ -477,7 +477,7 @@ async function executeRetryLoop(
   anthropicClient?: Anthropic,
   clock?: () => number,
   existingSpanNames?: string[],
-  processedFilesManifest?: Map<string, string[]>,
+  processedFilesManifest?: Map<string, ManifestEntry>,
   canonicalTracerName?: string,
   expectedNamespacePrefix?: string,
 ): Promise<FileResult> {
