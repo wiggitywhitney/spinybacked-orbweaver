@@ -140,8 +140,9 @@ export function isTypeCompatible(novelType: InferredType, registryType?: string)
  *    obvious delimiter-style variants before paying for a judge call while avoiding false
  *    positives on pairs that share only a single common token.
  * 3. LLM judge (if options.judgeDeps): semantic equivalence with namespace pre-filter applied
- *    when candidate has dots (restricts to same root namespace — cross-domain pairs like
- *    "commit_story.*" vs "gen_ai.*" are never semantic duplicates).
+ *    when candidate has dots (restricts to same namespace prefix, all-but-last segments —
+ *    sub-namespace siblings like "release_it.gitlab.*" vs "release_it.github.*" are never
+ *    compared, and cross-domain pairs like "commit_story.*" vs "gen_ai.*" are excluded too).
  *    SCH-001 passes all entries without namespace pre-filtering (span names are short).
  *
  * @param candidate - The extension name being declared (e.g., "user_registration" or "http_request_duration").
@@ -202,8 +203,9 @@ export async function checkSemanticDuplicate(
   // Stage 3: LLM judge (optional — requires judgeDeps)
   if (!options.judgeDeps) return noMatch;
 
-  // Namespace pre-filter for judge: restrict to the same root namespace when candidate has dots.
-  // A "commit_story.*" attribute is never a semantic duplicate of a "gen_ai.*" attribute.
+  // Namespace pre-filter for judge: restrict to the same namespace prefix (all-but-last segments)
+  // when candidate has dots. Sub-namespace siblings like "release_it.gitlab.*" vs
+  // "release_it.github.*" are excluded, as are cross-domain pairs like "commit_story.*" vs "gen_ai.*".
   // SCH-001 span names are short and need no namespace pre-filtering.
   let candidates = activeEntries;
 

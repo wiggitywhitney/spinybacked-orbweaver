@@ -229,7 +229,24 @@ export function isExpectedConditionCatch(catchClause: import('ts-morph').CatchCl
   const hasThrow = throwStatements.length > 0;
   // `return Promise.reject(err)` propagates the error to the caller — semantically
   // equivalent to `throw err` in an async function. Treat it as a rethrow.
-  const hasPromiseReject = bodyText.includes('return Promise.reject(');
+  // Uses AST traversal with the same scope filtering as throw detection to avoid
+  // false positives from Promise.reject inside nested functions or string literals.
+  const hasPromiseReject = block.getDescendantsOfKind(SyntaxKind.ReturnStatement)
+    .some((ret) => {
+      let parent: import('ts-morph').Node | undefined = ret.getParent();
+      while (parent && parent !== block) {
+        if (Node.isArrowFunction(parent) || Node.isFunctionExpression(parent) || Node.isFunctionDeclaration(parent)) {
+          return false;
+        }
+        parent = parent.getParent();
+      }
+      const expr = ret.getExpression();
+      if (!expr || !Node.isCallExpression(expr)) return false;
+      const callee = expr.getExpression();
+      return Node.isPropertyAccessExpression(callee)
+        && callee.getExpression().getText() === 'Promise'
+        && callee.getName() === 'reject';
+    });
   if (!hasThrow && !hasPromiseReject) {
     return true;
   }
