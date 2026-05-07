@@ -429,6 +429,25 @@ describe('checkSemanticDuplicate — judge stage', () => {
     expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
     expect(result.isDuplicate).toBe(false);
   });
+
+  it('does not flag attributes in different sub-namespaces (release_it.gitlab vs release_it.github)', async () => {
+    // SCH-002 run-4 false positive: the judge fired "semantic duplicate" on attributes in
+    // different plugin sub-namespaces. Use compatible types (both int) so only the namespace
+    // filter prevents the judge call — confirming the namespace fix is what blocks it.
+    const entries: RegistryEntry[] = [
+      { name: 'release_it.github.assets_count', type: 'int' },
+    ];
+
+    const result = await checkSemanticDuplicate('release_it.gitlab.assets_count', entries, {
+      ruleId: 'SCH-002',
+      useJaccard: false,
+      inferredType: 'int',
+      judgeDeps: { client: {} as any },
+    });
+
+    expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+    expect(result.isDuplicate).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

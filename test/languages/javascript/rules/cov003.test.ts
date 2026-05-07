@@ -394,6 +394,55 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('flags catch that uses return Promise.reject(err) without error recording', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function execWithArguments(cmd, args) {',
+        '  return tracer.startActiveSpan("execWithArguments", async (span) => {',
+        '    try {',
+        '      return await exec(cmd, args);',
+        '    } catch (err) {',
+        '      return Promise.reject(err);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // return Promise.reject(err) propagates the error to the caller — semantically
+      // equivalent to throw. Error recording is required.
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-003');
+    });
+
+    it('passes when catch uses return Promise.reject(err) WITH error recording', () => {
+      const code = [
+        'const { trace, SpanStatusCode } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function execWithArguments(cmd, args) {',
+        '  return tracer.startActiveSpan("execWithArguments", async (span) => {',
+        '    try {',
+        '      return await exec(cmd, args);',
+        '    } catch (err) {',
+        '      span.recordException(err);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      return Promise.reject(err);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('manual startSpan (span variable) pattern', () => {
