@@ -106,9 +106,8 @@ Guard: if restart iterations > total original edge count, throw:
 - Queue: [] — nobody has in-degree 0
 - Kahn's completes with result=[], which is < 2 nodes — cycle detected
 - Find A (never dequeued), remove edge A → B, log it
-- Restart Kahn's: in-degrees A=0 (no incoming now, since B→A still exists), B=0 (A→B removed)
-  - Actually: remaining edges after removal = {B → A}
-  - In-degrees: A=1, B=0
+- Restart Kahn's on remaining edges {B → A}:
+  - In-degrees: A=1 (B→A still exists), B=0 (A→B removed)
   - Queue: [B], process B → A in-degree → 0, process A
   - Output: [B, A] ✓
 
