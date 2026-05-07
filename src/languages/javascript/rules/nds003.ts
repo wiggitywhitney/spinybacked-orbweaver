@@ -457,12 +457,25 @@ export function _testSetPrettierAvailable(available: boolean): void {
 }
 
 /**
+ * Infer whether the source uses single quotes predominantly.
+ * Used when no Prettier config specifies singleQuote, to avoid converting
+ * the quote style and causing forward-check mismatches against raw code.
+ */
+function inferSingleQuote(code: string): boolean {
+  const singles = (code.match(/'/g) ?? []).length;
+  const doubles = (code.match(/"/g) ?? []).length;
+  return singles > doubles;
+}
+
+/**
  * Normalize source code through Prettier for NDS-003 comparison.
  *
  * On first call, probes Prettier availability and caches the result. When
  * unavailable, falls back to the original code and sets the pending warning.
  * Resolves Prettier config from the file path so target project settings
- * (printWidth, tabWidth, etc.) are respected.
+ * (printWidth, tabWidth, etc.) are respected. When no project config specifies
+ * singleQuote, infers it from the source to avoid changing quote style —
+ * quote changes produce false positives when comparing against raw instrumented code.
  */
 async function prettierNormalize(code: string, filePath: string): Promise<string> {
   if (prettierAvailable === null) {
@@ -479,8 +492,14 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
     return code;
   }
   try {
-    const config = await prettier.resolveConfig(filePath);
-    return await prettier.format(code, { ...config, filepath: filePath });
+    const config = await prettier.resolveConfig(filePath) ?? {};
+    const singleQuoteOverride = 'singleQuote' in config ? undefined : inferSingleQuote(code);
+    const options: prettier.Options = {
+      ...config,
+      filepath: filePath,
+      ...(singleQuoteOverride !== undefined ? { singleQuote: singleQuoteOverride } : {}),
+    };
+    return await prettier.format(code, options);
   } catch {
     pendingNds003Warning =
       'NDS-003: Prettier formatting failed — normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
@@ -491,11 +510,17 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
 /**
  * Prettier-normalized NDS-003 check.
  *
- * Normalizes both originalCode and instrumentedCode through Prettier before
- * running the diff, so that indentation-induced line breaks caused by the
- * startActiveSpan wrapper do not produce false positives. When Prettier
- * formats both sides identically (trimmed), lines that only changed due to
- * indentation are recognized as preserved. Structural changes still differ.
+ * Normalizes only the originalCode through Prettier before running the diff.
+ * This allows the agent to reformat business-logic lines that the startActiveSpan
+ * wrapper pushed past Prettier's printWidth (to pass LINT) without NDS-003
+ * flagging them as modifications — Prettier breaks both the original and the
+ * agent's reformatted version the same way, so the trimmed content matches.
+ *
+ * Only the original is normalized; the instrumented code is compared raw. This
+ * prevents Prettier from breaking long instrumentation lines (e.g., a
+ * startActiveSpan call with a long span name) into fragments whose inner parts
+ * (span name string, async callback declaration) aren't recognized as
+ * instrumentation patterns and would produce false positives.
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
  * Prettier availability is cached across calls within the same process.
@@ -505,18 +530,8 @@ export async function checkNonInstrumentationDiffNormalized(
   instrumentedCode: string,
   filePath: string,
 ): Promise<CheckResult[]> {
-  const [normalizedOriginal, normalizedInstrumented] = await Promise.all([
-    prettierNormalize(originalCode, filePath),
-    prettierNormalize(instrumentedCode, filePath),
-  ]);
-  // If one side fell back (Prettier failed) but the other normalized, comparing them
-  // would produce false positives from the format mismatch. Use raw diff for both.
-  const originalFellBack = normalizedOriginal === originalCode;
-  const instrumentedFellBack = normalizedInstrumented === instrumentedCode;
-  if (originalFellBack !== instrumentedFellBack) {
-    return checkNonInstrumentationDiff(originalCode, instrumentedCode, filePath);
-  }
-  return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
+  const normalizedOriginal = await prettierNormalize(originalCode, filePath);
+  return checkNonInstrumentationDiff(normalizedOriginal, instrumentedCode, filePath);
 }
 
 /** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */
