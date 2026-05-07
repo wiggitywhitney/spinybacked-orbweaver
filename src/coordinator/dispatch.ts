@@ -12,6 +12,7 @@ import type { FileResult } from '../fix-loop/types.ts';
 import type { CoordinatorCallbacks, DispatchFilesDeps, DispatchCheckpointConfig } from './types.ts';
 import { computeSchemaHash } from './schema-hash.ts';
 import { runSchemaCheckpoint } from './schema-checkpoint.ts';
+import { extractSpanNamesFromCode } from './schema-extensions.ts';
 import { EarlyAbortTracker } from './early-abort.ts';
 import { hasTestSuite } from './test-suite-detection.ts';
 import type { SchemaCheckpointDeps } from './schema-checkpoint.ts';
@@ -897,20 +898,3 @@ export async function dispatchFiles(
   return results;
 }
 
-/**
- * Extract span names from instrumented JavaScript/TypeScript source code.
- * Finds all `startActiveSpan("name")` and `startSpan("name")` call sites via regex.
- * Exported for unit testing.
- *
- * @param code - Instrumented source code
- * @returns Deduplicated array of span name strings
- */
-export function extractSpanNamesFromCode(code: string): string[] {
-  const pattern = /\.\s*(?:startActiveSpan|startSpan)\s*\(\s*["']([^"']+)["']/g;
-  const names: string[] = [];
-  let match;
-  while ((match = pattern.exec(code)) !== null) {
-    names.push(match[1]!);
-  }
-  return [...new Set(names)];
-}

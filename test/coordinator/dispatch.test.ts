@@ -2,7 +2,8 @@
 // ABOUTME: Covers OTel import detection, span call detection, skipped FileResult creation, and false-positive avoidance.
 
 import { describe, it, expect } from 'vitest';
-import { isAlreadyInstrumented, buildSkippedResult, extractSpanNamesFromCode } from '../../src/coordinator/dispatch.ts';
+import { isAlreadyInstrumented, buildSkippedResult } from '../../src/coordinator/dispatch.ts';
+import { extractSpanNamesFromCode } from '../../src/coordinator/schema-extensions.ts';
 
 describe('isAlreadyInstrumented', () => {
   describe('detects @opentelemetry/api imports', () => {
