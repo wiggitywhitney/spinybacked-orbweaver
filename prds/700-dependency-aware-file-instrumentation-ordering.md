@@ -43,7 +43,7 @@ No direct analog exists in the codemod or code-transformation space — ordering
 
 ## Milestones
 
-- [ ] M1: Research — ts-morph dep graph performance and cycle-handling algorithm
+- [x] M1: Research — ts-morph dep graph performance and cycle-handling algorithm
 - [ ] M2: Implement dependency graph builder using ts-morph
 - [ ] M3: Implement topological sort with cycle detection and alphabetical tiebreaker
 - [ ] M4: Wire ordering into the file dispatch pipeline
