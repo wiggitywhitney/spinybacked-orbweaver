@@ -742,7 +742,13 @@ if (typeof provider.forceFlush === 'function') {
   }, 180_000);
 
   afterAll(() => {
-    process.env.PATH = originalPath;
+    // Restore PATH: use delete when originalPath was undefined (assigning undefined
+    // coerces it to the string "undefined" in Node.js rather than unsetting it).
+    if (originalPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = originalPath;
+    }
     if (m5TmpDir) rmSync(m5TmpDir, { recursive: true, force: true });
   });
 

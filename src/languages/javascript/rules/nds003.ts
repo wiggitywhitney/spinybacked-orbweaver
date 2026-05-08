@@ -453,7 +453,13 @@ export function checkNonInstrumentationDiff(
   // — the key and value lines appear in addedLines as unexplained additions.
   // This reconciler removes matched key+value pairs when the surrounding lines
   // confirm the 4-line setAttribute call pattern.
-  reconcileSetAttributeMultilineArgs(addedLines, instrumentedLines);
+  //
+  // Must pass RAW trimmed lines (NOT filtered): addedLines[*].instrumentedLineNum is
+  // 1-indexed relative to rawInstrumentedLines, so the N-2 / N+1 lookups are only
+  // correct against the unfiltered array. Passing instrumentedLines (blank lines
+  // dropped) shifts the indices whenever a blank line precedes the setAttribute call.
+  const rawTrimmedInstrumentedLines = rawInstrumentedLines.map(l => normalizeLine(l.trim()));
+  reconcileSetAttributeMultilineArgs(addedLines, rawTrimmedInstrumentedLines);
 
   if (missingLines.length === 0 && addedLines.length === 0) {
     return [{
