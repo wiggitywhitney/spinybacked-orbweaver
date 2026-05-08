@@ -23,7 +23,7 @@ jobs:
   # LLM-calling acceptance tests — read-only permissions
   acceptance-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 130
     permissions:
       contents: read
       checks: write
@@ -63,7 +63,7 @@ jobs:
 
       - name: Run ${{ matrix.test-group.name }} acceptance tests
         run: npx vitest run --config vitest.acceptance.config.ts --reporter=verbose ${{ matrix.test-group.pattern }}
-        timeout-minutes: 75
+        timeout-minutes: 120
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 

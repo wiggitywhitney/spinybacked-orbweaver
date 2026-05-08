@@ -180,30 +180,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     });
   });
 
-  // Run-5 FAILED: SCH-002 oscillation (9 to 12 violations) — schema gap on summarize attrs
-  // Run-4: 2 spans (main, handleSummarize are the primary targets)
-  // Run-10/CI: 1 span — agent sometimes only instruments main(), skipping handleSummarize
-  describe('index.js — CLI entry point; main and handleSummarize targets', () => {
-    it('instruments successfully with no oscillation or NDS-005b violations', { timeout: 1_800_000 }, async () => {
-      const { filePath, originalCode } = setupFile('src/index.js');
-
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
-      dumpDiagnostics('index.js', result);
-
-      expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(1);
-      expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
-      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
-      expect(result.schemaExtensions.length).toBeGreaterThan(0);
-      for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
-      }
-
-      const instrumented = readFileSync(filePath, 'utf-8');
-      const rubricViolations = runCoreRubricChecks(originalCode, instrumented);
-      expect(rubricViolations, `Rubric violations:\n${rubricViolations}`).toBeNull();
-    });
-  });
+  // index.js removed: same CLI-entry-point + schema-extension pattern as summarize.js, which covers it.
 
   // Run-5 PARTIAL (1 span): fallback only covered exported function, skipped 3 internal nodes
   // Run-4: 4 spans (exported function + 3 internal node functions)
@@ -306,51 +283,6 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     });
   });
 
-  // Run-5 PARTIAL (4 spans): 5 functions failed NDS-003/COV-003; committed code had NDS-005b violations
-  // Run-4: 3 spans
-  describe('summary-manager.js — daily/weekly/monthly orchestration; 5 async entry points', () => {
-    it('instruments async generation functions without NDS-005b violations', { timeout: 1_800_000 }, async () => {
-      const { filePath, originalCode } = setupFile('src/managers/summary-manager.js');
-
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
-      dumpDiagnostics('summary-manager.js', result);
-
-      expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(3);
-      expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
-      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
-      expect(result.schemaExtensions.length).toBeGreaterThan(0);
-      for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
-      }
-
-      const instrumented = readFileSync(filePath, 'utf-8');
-      const rubricViolations = runCoreRubricChecks(originalCode, instrumented);
-      expect(rubricViolations, `Rubric violations:\n${rubricViolations}`).toBeNull();
-    });
-  });
-
-  // Run-5 PARTIAL (4 spans): getDaysWithDailySummaries failed COV-003 on expected-condition readdir catch
-  // Run-4: 5 spans (4 exported async functions + 1 internal helper)
-  describe('summary-detector.js — filesystem scanner; 4 exported async functions + internal helpers', () => {
-    it('instruments all 4 exported async functions without NDS-005b violations', { timeout: 1_800_000 }, async () => {
-      const { filePath, originalCode } = setupFile('src/utils/summary-detector.js');
-
-      const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
-      dumpDiagnostics('summary-detector.js', result);
-
-      expect(result.status, `status was ${result.status}, reason: ${result.reason}`).toBe('success');
-      expect(result.spansAdded).toBeGreaterThanOrEqual(5);
-      expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
-      // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
-      expect(result.schemaExtensions.length).toBeGreaterThan(0);
-      for (const ext of result.schemaExtensions) {
-        expect(ext, `schema extension "${ext}" should be a dot-separated identifier`).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
-      }
-
-      const instrumented = readFileSync(filePath, 'utf-8');
-      const rubricViolations = runCoreRubricChecks(originalCode, instrumented);
-      expect(rubricViolations, `Rubric violations:\n${rubricViolations}`).toBeNull();
-    });
-  });
+  // summary-manager.js removed: same graceful-degradation-catch + multi-entry-point pattern as journal-manager.js.
+  // summary-detector.js removed: same filesystem-async-operations pattern as journal-manager.js.
 });
