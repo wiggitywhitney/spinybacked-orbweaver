@@ -20,8 +20,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 - Move mocked coordinator tests out of acceptance-gate CI job into unit test suite ([issue #835](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/835)) — 23 of 33 tests in \`test/coordinator/acceptance-gate.test.ts\` use \`vi.fn()\` mocks and run in milliseconds; moving them to \`npm test\` reduces the LLM-calling acceptance gate job to its 10 real API tests.
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
-- Acceptance gate regressions on main: errorProgression.length assertion + SCH-001 exact-match pre-check ([issue #831](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/831)) — function-level fallback appends entries to errorProgression beyond validationAttempts, breaking test assertion; SCH-001 flags identical extension strings as delimiter-variant duplicates (exact-match pre-check added to SCH-002 in PR #766 was never applied to SCH-001).
-- NDS-003 multi-line code joining oscillation ([issue #833](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/833)) — agent collapses developer-style multi-line code (method chains, function call args, long assignments) to single lines; NDS-003 catches the originals as missing; agent oscillates without recovering. Fix: either strengthen NDS-003 feedback to explicitly prohibit joining, or add a reconciler that treats single-line and multi-line forms of the same expression as equivalent.
+
 
 ## Medium-term
 
@@ -30,7 +29,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 - Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
 - CDQ-007: skip nullable check for non-nullable typed TypeScript parameters ([issue #729](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/729)) — Check 3 flags non-optional TypeScript parameters as needing null guards, but TypeScript's type system guarantees non-nullability. Cheap AST path to explore first; may escalate to PRD if rule needs type info from the provider. Wait for 2+ eval runs to confirm.
-- SCH-001: calibrate LLM judge for namespace-prefixed span names ([issue #730](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/730)) — judge fires on hierarchically-distinct operations sharing a namespace prefix (e.g., `taze.pnpm_workspace.load` vs `taze.io.load_package`) as semantic duplicates; not TypeScript-specific. Advisories are non-blocking; wait for 2+ eval runs before calibrating.
+
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 produced 164 INTERNAL spans against 38 packages (structurally correct, but fails IS SPA-001 limit). Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections. One run of data; wait for 2+ CLI evals before deciding.
 
 ## Long-term
