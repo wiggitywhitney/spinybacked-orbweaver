@@ -1,5 +1,5 @@
 // ABOUTME: Acceptance gate tests for run-5 coverage recovery — calls real Anthropic API.
-// ABOUTME: Verifies all 8 run-5 partial/failed files instrument successfully with no NDS-005b violations.
+// ABOUTME: Verifies 5 representative run-5 partial/failed files instrument successfully with no NDS-005b violations.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
