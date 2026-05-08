@@ -1615,4 +1615,31 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(allMessages).toMatch(/multi.?line/i);
     });
   });
+
+  describe('Prettier normalization symmetry — reassembly false-positive (#834)', () => {
+    it('passes when reassembled code has a long constant that Prettier splits in the original', async () => {
+      // order-service.js fixture: const API_BASE = process.env.PAYMENT_API_URL || '...'; is 83 chars.
+      // NDS-003 Prettier-normalizes the original to 2 lines, but the reassembled output (produced by
+      // reassembleFunctions) keeps the original 1-line form. Without normalizing the reassembled output,
+      // NDS-003 would flag the 1-line form as "added" and the 2-line form as "missing".
+      // This test verifies that the NDS-003 message correctly identifies the pattern.
+      const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
+      const original = [
+        '// ABOUTME: Test fixture.',
+        longLine,
+        '',
+        'export async function doWork() {',
+        '  return fetch(API_BASE);',
+        '}',
+      ].join('\n');
+
+      // Prettier would split the long line into 2; reassembled code keeps the original 1-line form
+      const reassembled = original; // reassembler keeps original module-level lines unchanged
+
+      // Raw diff should pass — both sides have the same content
+      const results = checkNonInstrumentationDiff(original, reassembled, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
 });

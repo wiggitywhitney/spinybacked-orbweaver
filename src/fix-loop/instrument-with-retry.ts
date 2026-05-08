@@ -1048,6 +1048,19 @@ async function functionLevelFallback(
   // Reassemble: replace instrumented functions in the original file via provider
   let reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
 
+  // Normalize the reassembled output through Prettier before validation.
+  // NDS-003 (checkNonInstrumentationDiffNormalized) normalizes the ORIGINAL through
+  // Prettier but compares against the RAW instrumented output. When a module-level
+  // constant exceeds Prettier's printWidth (e.g. 83 chars > 80), Prettier splits the
+  // original into 2 lines — but the reassembled output keeps the original 1-line form.
+  // NDS-003 sees the 2-line form "missing" and the 1-line form as an unexplained
+  // addition, producing a false failure. Normalizing both sides through the same Prettier
+  // pass eliminates this asymmetry.
+  {
+    const { prettierNormalizeForComparison } = await import('../languages/javascript/rules/nds003.ts');
+    reassembledCode = await prettierNormalizeForComparison(reassembledCode, filePath);
+  }
+
   // Write reassembled code and check syntax before running full validation
   await writeFile(filePath, reassembledCode, 'utf-8');
 
