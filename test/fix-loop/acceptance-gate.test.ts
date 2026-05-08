@@ -286,11 +286,11 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       }
 
       // errorProgression has one entry per attempt that reached validation or
-      // hit an instrument failure. May be fewer than validationAttempts if
-      // budget was exceeded between instrument and validation.
+      // hit an instrument failure. When function-level fallback runs, it appends
+      // additional entries ("function-level: N/M functions instrumented" and
+      // possibly "reassembly: ..."), so length can exceed validationAttempts.
       expect(result.errorProgression).toBeDefined();
       expect(result.errorProgression!.length).toBeGreaterThanOrEqual(1);
-      expect(result.errorProgression!.length).toBeLessThanOrEqual(result.validationAttempts);
     });
   });
 

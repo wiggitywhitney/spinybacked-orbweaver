@@ -551,6 +551,33 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('does not flag an extension that is identical to an existing registry operation (#831)', async () => {
+      // Function-level fallback aggregates extensions from multiple functions, which can
+      // produce duplicate entries in declaredExtensions. SCH-001 must not fire
+      // "delimiter-variant duplicate" when the extension string exactly matches a registry entry.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function getUsers() {',
+        '  return tracer.startActiveSpan("myapp.user.get_users", (span) => {',
+        '    try { return []; } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // myapp.user.get_users is already in resolvedSchema — declaring it as an extension again
+      // (e.g., from a second function in the fallback) must not produce a duplicate error.
+      const declaredExtensions = ['span.myapp.user.get_users', 'span.myapp.user.get_users'];
+
+      const { results } = await checkSpanNamesMatchRegistry(
+        code, filePath, resolvedSchema, undefined, declaredExtensions,
+      );
+
+      // Should pass — no "delimiter-variant duplicate" for identical strings
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
   });
 
   describe('CheckResult structure', () => {

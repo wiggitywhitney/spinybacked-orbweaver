@@ -393,7 +393,9 @@ export function checkNonInstrumentationDiff(
       lineNumber: m.originalLineNum,
       message:
         `NDS-003: original line ${m.originalLineNum} missing/modified: ${m.line}\n` +
-        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
+        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code. ` +
+        `If lines are missing because you joined a multi-line expression (method chain, chained calls, multi-line arguments) onto a single line, ` +
+        `restore them to their original multi-line form — do not collapse multi-line code.`,
       tier: 2,
       blocking: true,
     });
@@ -406,7 +408,9 @@ export function checkNonInstrumentationDiff(
       lineNumber: a.instrumentedLineNum,
       message:
         `NDS-003: non-instrumentation line added at instrumented line ${a.instrumentedLineNum}: ${a.line}\n` +
-        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
+        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code. ` +
+        `If you collapsed a multi-line expression (method chain, chained calls, multi-line arguments) onto a single line, ` +
+        `restore it to its original multi-line form — do not collapse multi-line code.`,
       tier: 2,
       blocking: true,
     });

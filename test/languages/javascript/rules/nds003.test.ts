@@ -1580,4 +1580,39 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures.length).toBeGreaterThan(0);
     });
   });
+
+  describe('multi-line method chain oscillation (#833)', () => {
+    it('error message mentions multi-line when a method chain is collapsed to one line', () => {
+      // The agent collapses a 4-line method chain onto one line, causing NDS-003 to fire.
+      // The message must guide the agent to restore the original multi-line form.
+      const original = [
+        'function slugify(text) {',
+        '  return text',
+        '    .toLowerCase()',
+        '    .replace(/\\s+/g, \'-\')',
+        '    .replace(/[^\\w-]+/g, \'\');',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function slugify(text) {',
+        '  return tracer.startActiveSpan("str.slugify", (span) => {',
+        '    try {',
+        // Agent collapsed the chain to one line — NDS-003 should fire with multi-line guidance
+        '      return text.toLowerCase().replace(/\\s+/g, \'-\').replace(/[^\\w-]+/g, \'\');',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+
+      expect(failures.length).toBeGreaterThan(0);
+      const allMessages = failures.map(f => f.message).join('\n');
+      expect(allMessages).toMatch(/multi.?line/i);
+    });
+  });
 });
