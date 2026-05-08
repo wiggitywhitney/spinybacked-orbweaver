@@ -1582,6 +1582,51 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('multi-line span.setAttribute() argument reconciliation (#785 regression)', () => {
+    it('passes when the agent formats span.setAttribute across 3 lines (key and value on separate lines)', () => {
+      // Agent writes:
+      //   span.setAttribute(
+      //     'some.attribute.key',   ← plain string — would be flagged without reconciler
+      //     result.count,           ← plain expression — would be flagged without reconciler
+      //   );
+      const original = [
+        'export async function runSummarize(result) {',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runSummarize(result) {',
+        '  return tracer.startActiveSpan("svc.run_summarize", async (span) => {',
+        '    try {',
+        '      span.setAttribute(',
+        "        'commit_story.summarize.generated_count',",
+        '        result.generated.length,',
+        '      );',
+        '      span.setAttribute(',
+        "        'commit_story.summarize.failed_count',",
+        '        result.failed.length,',
+        '      );',
+        '      return result;',
+        '    } catch (err) {',
+        '      span.recordException(err);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('multi-line method chain oscillation (#833)', () => {
     it('error message mentions multi-line when a method chain is collapsed to one line', () => {
       // The agent collapses a 4-line method chain onto one line, causing NDS-003 to fire.
