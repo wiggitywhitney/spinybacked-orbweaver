@@ -434,6 +434,14 @@ describe('Acceptance Gate — PRD 31 Per-File Schema Extension Writing', () => {
 
     expect(schemasReceived).toHaveLength(3);
 
+    // Explicitly assert schema propagation: later files must see earlier extensions.
+    // File 2 sees file 1's ext1; file 3 sees both ext1 and ext2.
+    const schema2 = JSON.stringify(schemasReceived[1]);
+    const schema3 = JSON.stringify(schemasReceived[2]);
+    expect(schema2).toContain('test_app.payment.amount');
+    expect(schema3).toContain('test_app.payment.amount');
+    expect(schema3).toContain('test_app.shipping.weight');
+
     expect(results[0].schemaHashBefore).not.toBe(results[0].schemaHashAfter);
     expect(results[0].schemaHashAfter).toBe(results[1].schemaHashBefore);
     expect(results[1].schemaHashBefore).not.toBe(results[1].schemaHashAfter);

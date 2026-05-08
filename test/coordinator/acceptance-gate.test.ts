@@ -691,11 +691,13 @@ const LIVE_CHECK_REGISTRY = join(import.meta.dirname, '..', 'fixtures', 'weaver-
 
 describe('runLiveCheck — M5: end-to-end SDK injection', () => {
   let m5TmpDir: string;
+  let originalPath: string | undefined;
 
   beforeAll(async () => {
     // Ensure weaver (installed by cargo/the weaver installer) is findable.
     // Some environments (e.g. vals exec) strip PATH to a minimal set that excludes
     // ~/.cargo/bin. os.homedir() resolves the real home dir even when HOME is unset.
+    originalPath = process.env.PATH;
     const cargoBin = join(homedir(), '.cargo', 'bin');
     if (!process.env.PATH?.includes(cargoBin)) {
       process.env.PATH = `${cargoBin}${process.env.PATH ? `:${process.env.PATH}` : ''}`;
@@ -740,6 +742,7 @@ if (typeof provider.forceFlush === 'function') {
   }, 180_000);
 
   afterAll(() => {
+    process.env.PATH = originalPath;
     if (m5TmpDir) rmSync(m5TmpDir, { recursive: true, force: true });
   });
 
