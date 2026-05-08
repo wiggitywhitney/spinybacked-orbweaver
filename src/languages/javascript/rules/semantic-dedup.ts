@@ -203,27 +203,23 @@ export async function checkSemanticDuplicate(
   // Stage 3: LLM judge (optional — requires judgeDeps)
   if (!options.judgeDeps) return noMatch;
 
-  // Namespace pre-filter for judge: restrict to the same namespace prefix (all-but-last segments)
-  // when candidate has dots. Sub-namespace siblings like "release_it.gitlab.*" vs
-  // "release_it.github.*" are excluded, as are cross-domain pairs like "commit_story.*" vs "gen_ai.*".
-  // SCH-001 span names are short and need no namespace pre-filtering.
+  // Namespace pre-filter for judge: restrict to entries sharing the same namespace prefix
+  // (all-but-last dot-separated segments) when the candidate uses dot notation.
+  // "taze.check.run" is only compared against "taze.check.*" entries, not "taze.io.*" or
+  // "taze.cli.*" — sub-namespace siblings are unrelated operations. Cross-domain pairs like
+  // "commit_story.*" vs "gen_ai.*" are excluded too. Applies to both SCH-001 span names and
+  // SCH-002 attribute keys. Underscore-delimited candidates bypass this filter — normalization
+  // catches delimiter variants before reaching the judge.
   let candidates = activeEntries;
 
-  if (options.inferredType !== undefined) {
-    // Namespace pre-filter: restrict to the same namespace prefix when candidate uses dot notation.
-    // Uses all-but-last segments as the prefix so that sub-namespace siblings like
-    // "release_it.gitlab.*" and "release_it.github.*" are never compared — they differ at the
-    // second segment and are unrelated attributes in different plugin namespaces.
-    // Underscore-delimited candidates bypass this filter — normalization catches delimiter variants.
-    if (candidate.includes('.')) {
-      const parts = candidate.split('.');
-      const candidatePrefix = parts.slice(0, -1).join('.');
-      candidates = candidates.filter((e) => {
-        if (!e.name.includes('.')) return false;
-        const entryPrefix = e.name.split('.').slice(0, -1).join('.');
-        return entryPrefix === candidatePrefix;
-      });
-    }
+  if (candidate.includes('.')) {
+    const parts = candidate.split('.');
+    const candidatePrefix = parts.slice(0, -1).join('.');
+    candidates = candidates.filter((e) => {
+      if (!e.name.includes('.')) return false;
+      const entryPrefix = e.name.split('.').slice(0, -1).join('.');
+      return entryPrefix === candidatePrefix;
+    });
   }
 
   if (candidates.length === 0) return noMatch;

@@ -393,7 +393,10 @@ export function checkNonInstrumentationDiff(
       lineNumber: m.originalLineNum,
       message:
         `NDS-003: original line ${m.originalLineNum} missing/modified: ${m.line}\n` +
-        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
+        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code. ` +
+        `If lines are missing because you joined a multi-line statement or expression onto fewer lines ` +
+        `(variable declarations, method chains, function call arguments, conditional expressions, or any other code spanning multiple lines), ` +
+        `restore every line to its exact original form — each original line must appear as its own line.`,
       tier: 2,
       blocking: true,
     });
@@ -406,7 +409,10 @@ export function checkNonInstrumentationDiff(
       lineNumber: a.instrumentedLineNum,
       message:
         `NDS-003: non-instrumentation line added at instrumented line ${a.instrumentedLineNum}: ${a.line}\n` +
-        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code.`,
+        `The agent must preserve all original business logic. Only add instrumentation — do not modify, remove, or reorder existing code. ` +
+        `If you collapsed a multi-line statement or expression onto fewer lines ` +
+        `(variable declarations, method chains, function call arguments, conditional expressions, or any other code spanning multiple lines), ` +
+        `restore every line to its exact original form — each original line must appear as its own line.`,
       tier: 2,
       blocking: true,
     });
@@ -427,6 +433,16 @@ let prettierAvailable: boolean | null = null;
  * coordinator after dispatch and appended to RunResult.warnings.
  */
 let pendingNds003Warning: string | null = null;
+
+/**
+ * Normalize source code through Prettier for NDS-003 comparison.
+ * Exported so callers (e.g., reassembly validation) can normalize both sides
+ * of a comparison to avoid false NDS-003 failures caused by Prettier
+ * reformatting long lines (> printWidth) when only one side is normalized.
+ */
+export async function prettierNormalizeForComparison(code: string, filePath: string): Promise<string> {
+  return prettierNormalize(code, filePath);
+}
 
 /**
  * Drain the pending NDS-003 Prettier availability warning.

@@ -5,6 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   checkNonInstrumentationDiff,
   checkNonInstrumentationDiffNormalized,
+  prettierNormalizeForComparison,
   drainNds003Warning,
   _testResetPrettierCache,
   _testSetPrettierAvailable,
@@ -1578,6 +1579,87 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
       const failures = results.filter((r) => !r.passed);
       expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('multi-line method chain oscillation (#833)', () => {
+    it('error message mentions multi-line when a method chain is collapsed to one line', () => {
+      // The agent collapses a 4-line method chain onto one line, causing NDS-003 to fire.
+      // The message must guide the agent to restore the original multi-line form.
+      const original = [
+        'function slugify(text) {',
+        '  return text',
+        '    .toLowerCase()',
+        '    .replace(/\\s+/g, \'-\')',
+        '    .replace(/[^\\w-]+/g, \'\');',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function slugify(text) {',
+        '  return tracer.startActiveSpan("str.slugify", (span) => {',
+        '    try {',
+        // Agent collapsed the chain to one line — NDS-003 should fire with multi-line guidance
+        '      return text.toLowerCase().replace(/\\s+/g, \'-\').replace(/[^\\w-]+/g, \'\');',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+
+      expect(failures.length).toBeGreaterThan(0);
+      const allMessages = failures.map(f => f.message).join('\n');
+      expect(allMessages).toMatch(/multi.?line/i);
+    });
+  });
+
+  describe('Prettier normalization symmetry — reassembly false-positive (#834)', () => {
+    it('fails without pre-normalization when a long constant Prettier splits in the original', async () => {
+      // Demonstrates the root problem: NDS-003 Prettier-normalizes the original (83-char line splits
+      // to 2 lines) but compares against the raw reassembled output (still 1 line). Without
+      // normalizing the reassembled side first, NDS-003 flags the 1-line form as "added"
+      // and the Prettier-split 2-line form as "missing" — a false failure.
+      const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
+      const original = [
+        '// ABOUTME: Test fixture.',
+        longLine,
+        '',
+        'export async function doWork() {',
+        '  return fetch(API_BASE);',
+        '}',
+      ].join('\n');
+
+      // Reassembler keeps the original 1-line constant; without normalization NDS-003 should fail
+      const results = await checkNonInstrumentationDiffNormalized(original, original, filePath);
+      const failures = results.filter(r => !r.passed);
+      // Prettier(original) splits the 83-char line → 2 lines; raw original still has 1 line
+      // The mismatch causes NDS-003 to fire (the false positive this fix addresses)
+      expect(failures.length).toBeGreaterThan(0);
+    });
+
+    it('passes after pre-normalizing the reassembled output through Prettier', async () => {
+      // Demonstrates the fix: normalizing the reassembled code through the same Prettier pass
+      // makes both sides identical (both 2-line after normalization) and NDS-003 passes.
+      const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
+      const original = [
+        '// ABOUTME: Test fixture.',
+        longLine,
+        '',
+        'export async function doWork() {',
+        '  return fetch(API_BASE);',
+        '}',
+      ].join('\n');
+
+      // Pre-normalize the reassembled output — this is what functionLevelFallback now does
+      const normalizedReassembled = await prettierNormalizeForComparison(original, filePath);
+
+      const results = await checkNonInstrumentationDiffNormalized(original, normalizedReassembled, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
     });
   });
 });

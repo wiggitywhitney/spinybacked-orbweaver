@@ -203,6 +203,15 @@ async function checkRegistryConformance(
 
       const spanOpName = normalized.slice(5);
 
+      // Exact-match pre-check: if the span extension is already in the valid operations set,
+      // it is a duplicate entry in declaredExtensions (e.g., from function-level fallback
+      // aggregating the same span from multiple functions). Skip without error — it is already
+      // registered. Without this, checkSemanticDuplicate would normalize the identical strings
+      // and label them a "delimiter-variant duplicate" of each other.
+      if (validOperations.has(spanOpName)) {
+        continue;
+      }
+
       const dedupResult = await checkSemanticDuplicate(spanOpName, registryEntries, {
         ruleId: 'SCH-001',
         useJaccard: false, // Span names are short — Jaccard adds noise without value

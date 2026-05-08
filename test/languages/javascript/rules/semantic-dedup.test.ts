@@ -448,6 +448,35 @@ describe('checkSemanticDuplicate — judge stage', () => {
     expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
     expect(result.isDuplicate).toBe(false);
   });
+
+  it('applies namespace pre-filter for SCH-001 span names even without inferredType (#730)', async () => {
+    // taze run-13: ~78% SCH-001 advisory contradictions because the judge fired on span names
+    // sharing only a namespace prefix (taze.check.run vs taze.io.run). The namespace pre-filter
+    // should apply to span names (SCH-001 mode, no inferredType) just like it does for attributes.
+    vi.mocked(callJudge).mockResolvedValueOnce({
+      verdict: { answer: true, suggestion: undefined, confidence: 0.95 },
+      tokenUsage: MOCK_TOKEN_USAGE,
+    });
+
+    const entries: RegistryEntry[] = [
+      { name: 'taze.check.status' },      // same namespace prefix — should be passed to judge
+      { name: 'taze.io.run' },            // different sub-namespace — should be filtered out
+      { name: 'taze.cli.run' },           // different sub-namespace — should be filtered out
+    ];
+
+    await checkSemanticDuplicate('taze.check.run', entries, {
+      ruleId: 'SCH-001',
+      useJaccard: false,
+      // No inferredType — SCH-001 mode
+      judgeDeps: { client: {} as any },
+    });
+
+    expect(vi.mocked(callJudge)).toHaveBeenCalledOnce();
+    const [question] = vi.mocked(callJudge).mock.calls[0]!;
+    expect(question.candidates).toContain('taze.check.status');
+    expect(question.candidates).not.toContain('taze.io.run');
+    expect(question.candidates).not.toContain('taze.cli.run');
+  });
 });
 
 // ---------------------------------------------------------------------------

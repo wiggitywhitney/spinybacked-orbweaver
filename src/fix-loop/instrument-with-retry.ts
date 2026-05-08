@@ -1048,6 +1048,18 @@ async function functionLevelFallback(
   // Reassemble: replace instrumented functions in the original file via provider
   let reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
 
+  // Import once — reused by every reassembly path below.
+  // NDS-003 (checkNonInstrumentationDiffNormalized) normalizes the ORIGINAL through
+  // Prettier but compares against the RAW instrumented output. When a module-level
+  // constant exceeds Prettier's printWidth (e.g. 83 chars > 80), Prettier splits the
+  // original into 2 lines — but the reassembled output keeps the original 1-line form.
+  // NDS-003 sees the 2-line form "missing" and the 1-line form as an unexplained
+  // addition, producing a false failure. Normalizing both sides through the same Prettier
+  // pass eliminates this asymmetry. Applied to every reassembly path (initial, syntax-
+  // failure retry, and partial-results) so the fix holds on all exit paths.
+  const { prettierNormalizeForComparison } = await import('../languages/javascript/rules/nds003.ts');
+  reassembledCode = await prettierNormalizeForComparison(reassembledCode, filePath);
+
   // Write reassembled code and check syntax before running full validation
   await writeFile(filePath, reassembledCode, 'utf-8');
 
@@ -1087,6 +1099,7 @@ async function functionLevelFallback(
     }
 
     reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
+    reassembledCode = await prettierNormalizeForComparison(reassembledCode, filePath);
     await writeFile(filePath, reassembledCode, 'utf-8');
     try {
       const retryCheck = await fnProvider.checkSyntax(filePath);
@@ -1193,7 +1206,8 @@ async function functionLevelFallback(
   const partialResults = fnResults.map(r =>
     r.success ? r : { ...r, instrumentedCode: undefined },
   );
-  const partialCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
+  let partialCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
+  partialCode = await prettierNormalizeForComparison(partialCode, filePath);
 
   await writeFile(filePath, partialCode, 'utf-8');
   const partialValidation = await validateFileFn({
