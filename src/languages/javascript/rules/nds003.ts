@@ -283,6 +283,89 @@ function reconcileSetAttributeCaptures(
 }
 
 /**
+ * Reconcile multi-line method chain collapse.
+ *
+ * When the agent collapses a multi-line method chain onto a single line —
+ *   return text        ← missingLine (originalLineNum N)
+ *     .toLowerCase()   ← missingLine (N+1, starts with '.')
+ *     .replace(...)    ← missingLine (N+2, starts with '.')
+ *     .replace(...);   ← missingLine (N+3, starts with '.')
+ * into:
+ *   return text.toLowerCase().replace(...).replace(...);  ← addedLine
+ *
+ * — NDS-003 fires because the original multi-line form is "missing" and the
+ * single-line form is "added". The two forms are semantically identical —
+ * same chain, different whitespace. This reconciler joins consecutive
+ * missing lines into a candidate collapsed form and removes matched pairs
+ * from both missingLines and addedLines.
+ *
+ * Safety: removal only happens when the joined form exactly matches an
+ * entry in addedLines. Content changes (different method names, arguments,
+ * or receiver) will not match and are still flagged normally.
+ */
+function reconcileMethodChainCollapse(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  // Build content → indices map for addedLines (consume indices to handle duplicates)
+  const addedByContent = new Map<string, number[]>();
+  for (let i = 0; i < addedLines.length; i++) {
+    const key = addedLines[i].line;
+    const existing = addedByContent.get(key);
+    if (existing) existing.push(i);
+    else addedByContent.set(key, [i]);
+  }
+
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  let i = 0;
+  while (i < missingLines.length) {
+    if (missingToRemove.has(i)) { i++; continue; }
+
+    // Build a consecutive group starting at i where lines 2+ start with '.'
+    const group: number[] = [i]; // indices into missingLines
+
+    for (let j = i + 1; j < missingLines.length; j++) {
+      if (missingToRemove.has(j)) break;
+      const prev = missingLines[group[group.length - 1]];
+      const curr = missingLines[j];
+
+      // Must be consecutive in the original source
+      if (curr.originalLineNum !== prev.originalLineNum + 1) break;
+      // Continuation lines must start with '.' (chained method call)
+      if (!curr.line.startsWith('.')) break;
+
+      group.push(j);
+    }
+
+    // Need at least 2 lines (receiver + one method call) for a chain
+    if (group.length >= 2) {
+      // Join all lines — this is the collapsed single-line form the agent produced
+      const collapsed = group.map(idx => missingLines[idx].line).join('');
+
+      const addedIndices = addedByContent.get(collapsed);
+      if (addedIndices && addedIndices.length > 0) {
+        const addedIdx = addedIndices.shift()!;
+        for (const idx of group) missingToRemove.add(idx);
+        addedToRemove.add(addedIdx);
+        i += group.length;
+        continue;
+      }
+    }
+
+    i++;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) {
+    missingLines.splice(idx, 1);
+  }
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
  * Reconcile multi-line span.setAttribute() argument lines.
  *
  * When the agent formats a setAttribute call across four lines:
@@ -436,6 +519,13 @@ export function checkNonInstrumentationDiff(
   // as missing and the `const <var> = <expr>` + `return <var>` as added.
   // This is a safe instrumentation-motivated transformation (like catch-variable binding).
   reconcileReturnCaptures(missingLines, addedLines);
+
+  // Reconcile multi-line method chain collapse: when the agent collapses a
+  // developer-style method chain (return text\n  .toLowerCase()\n  .replace(...))
+  // onto a single line, NDS-003 sees the original lines as missing and the
+  // collapsed form as added. The two are semantically identical — only whitespace
+  // differs. Safety: exact content match required; any argument change still fires.
+  reconcileMethodChainCollapse(missingLines, addedLines);
 
   // Reconcile aggregation variable captures: when the agent introduces a const solely
   // to compute a span attribute value (e.g. const total = arr.reduce(...);

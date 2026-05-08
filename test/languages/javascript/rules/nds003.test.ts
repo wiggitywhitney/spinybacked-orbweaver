@@ -1582,6 +1582,60 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('multi-line method chain collapse reconciliation (#833 Option B)', () => {
+    it('passes when agent collapses a 4-line method chain to one line', () => {
+      // format-helpers.js: agent collapses slugify's return chain
+      const original = [
+        'export function slugify(text) {',
+        '  return text',
+        '    .toLowerCase()',
+        "    .replace(/\\s+/g, '-')",
+        "    .replace(/[^\\w-]+/g, '');",
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export function slugify(text) {',
+        '  return tracer.startActiveSpan("str.slugify", (span) => {',
+        '    try {',
+        // Agent collapsed the 4-line chain to 1 line
+        "      return text.toLowerCase().replace(/\\s+/g, '-').replace(/[^\\w-]+/g, '');",
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still fails when the agent changes the method chain content, not just formatting', () => {
+      const original = [
+        'function process(text) {',
+        '  return text',
+        '    .toLowerCase()',
+        "    .replace(/x/g, 'y');",
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function process(text) {',
+        // Agent changed replace pattern — content change, not just formatting
+        "  return text.toLowerCase().replace(/a/g, 'b');",
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('multi-line span.setAttribute() argument reconciliation (#785 regression)', () => {
     it('passes when the agent formats span.setAttribute across 3 lines (key and value on separate lines)', () => {
       // Agent writes:
