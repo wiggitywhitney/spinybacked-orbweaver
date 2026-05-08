@@ -5,6 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   checkNonInstrumentationDiff,
   checkNonInstrumentationDiffNormalized,
+  prettierNormalizeForComparison,
   drainNds003Warning,
   _testResetPrettierCache,
   _testSetPrettierAvailable,
@@ -1617,12 +1618,11 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('Prettier normalization symmetry — reassembly false-positive (#834)', () => {
-    it('passes when reassembled code has a long constant that Prettier splits in the original', async () => {
-      // order-service.js fixture: const API_BASE = process.env.PAYMENT_API_URL || '...'; is 83 chars.
-      // NDS-003 Prettier-normalizes the original to 2 lines, but the reassembled output (produced by
-      // reassembleFunctions) keeps the original 1-line form. Without normalizing the reassembled output,
-      // NDS-003 would flag the 1-line form as "added" and the 2-line form as "missing".
-      // This test verifies that the NDS-003 message correctly identifies the pattern.
+    it('fails without pre-normalization when a long constant Prettier splits in the original', async () => {
+      // Demonstrates the root problem: NDS-003 Prettier-normalizes the original (83-char line splits
+      // to 2 lines) but compares against the raw reassembled output (still 1 line). Without
+      // normalizing the reassembled side first, NDS-003 flags the 1-line form as "added"
+      // and the Prettier-split 2-line form as "missing" — a false failure.
       const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
       const original = [
         '// ABOUTME: Test fixture.',
@@ -1633,11 +1633,31 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      // Prettier would split the long line into 2; reassembled code keeps the original 1-line form
-      const reassembled = original; // reassembler keeps original module-level lines unchanged
+      // Reassembler keeps the original 1-line constant; without normalization NDS-003 should fail
+      const results = await checkNonInstrumentationDiffNormalized(original, original, filePath);
+      const failures = results.filter(r => !r.passed);
+      // Prettier(original) splits the 83-char line → 2 lines; raw original still has 1 line
+      // The mismatch causes NDS-003 to fire (the false positive this fix addresses)
+      expect(failures.length).toBeGreaterThan(0);
+    });
 
-      // Raw diff should pass — both sides have the same content
-      const results = checkNonInstrumentationDiff(original, reassembled, filePath);
+    it('passes after pre-normalizing the reassembled output through Prettier', async () => {
+      // Demonstrates the fix: normalizing the reassembled code through the same Prettier pass
+      // makes both sides identical (both 2-line after normalization) and NDS-003 passes.
+      const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
+      const original = [
+        '// ABOUTME: Test fixture.',
+        longLine,
+        '',
+        'export async function doWork() {',
+        '  return fetch(API_BASE);',
+        '}',
+      ].join('\n');
+
+      // Pre-normalize the reassembled output — this is what functionLevelFallback now does
+      const normalizedReassembled = await prettierNormalizeForComparison(original, filePath);
+
+      const results = await checkNonInstrumentationDiffNormalized(original, normalizedReassembled, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures).toHaveLength(0);
     });
