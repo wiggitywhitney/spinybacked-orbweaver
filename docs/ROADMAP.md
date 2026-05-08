@@ -18,7 +18,8 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 
-- Move mocked coordinator tests out of acceptance-gate CI job into unit test suite ([issue #835](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/835)) — 23 of 33 tests in \`test/coordinator/acceptance-gate.test.ts\` use \`vi.fn()\` mocks and run in milliseconds; moving them to \`npm test\` reduces the LLM-calling acceptance gate job to its 10 real API tests.
+- Move mocked coordinator tests out of acceptance-gate CI job into unit test suite ([issue #835](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/835)) — in PR #836.
+- summarize.js run-5-coverage: parseSummarizeArgs NDS-003 oscillation (163 violations) + NDS-005 missing try/catch ([issue #837](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/837)) — recurring partial failure on commit-story-v2/summarize.js; pre-scan RST-001 classification and NDS-005 root cause need investigation. — 23 of 33 tests in \`test/coordinator/acceptance-gate.test.ts\` use \`vi.fn()\` mocks and run in milliseconds; moving them to \`npm test\` reduces the LLM-calling acceptance gate job to its 10 real API tests.
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 
 
