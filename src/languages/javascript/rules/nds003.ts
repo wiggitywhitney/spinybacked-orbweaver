@@ -78,18 +78,6 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // agent should not add message: string literals to non-instrumentation code. The forward
   // check still catches missing original `message:` lines when the agent removes them.
   /^\s*message:\s*['"`]/,
-  // Span callback declaration lines produced when Prettier breaks a long startActiveSpan call
-  // across multiple lines:
-  //   tracer.startActiveSpan('very.long.span.name', async (span) => {   ← too long → split
-  // becomes:
-  //   tracer.startActiveSpan(
-  //     'very.long.span.name',    ← filtered by reconcileSetAttributeMultilineArgs-style logic
-  //     async (span) => {         ← filtered here
-  //   );
-  // These callback forms only appear as startActiveSpan arguments; they cannot be
-  // business logic (no code path has a bare `async (span) => {` standalone line).
-  /^\s*async\s*\(\s*\w+\s*\)\s*=>\s*\{\s*$/,
-  /^\s*\(\s*\w+\s*\)\s*=>\s*\{\s*$/,
 ];
 
 /**
@@ -287,6 +275,65 @@ function reconcileSetAttributeCaptures(
     if (totalUses !== 2) continue;
 
     toRemove.add(i);
+  }
+
+  for (const idx of [...toRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
+ * Reconcile multi-line startActiveSpan() argument lines.
+ *
+ * When Prettier breaks a long startActiveSpan call across multiple lines:
+ *   tracer.startActiveSpan(      ← filtered (matches \.startActiveSpan\s*\()
+ *     'span.name',               ← NOT filtered (plain string)
+ *     async (span) => {          ← NOT filtered (bare arrow callback)
+ *
+ * The span name and callback lines appear in addedLines as unexplained additions.
+ * This reconciler requires the full 3-line shape — span name followed by an
+ * arrow callback — where the preceding line in the raw instrumented output is
+ * a startActiveSpan( call (already filtered by INSTRUMENTATION_PATTERNS).
+ *
+ * Safer than a broad INSTRUMENTATION_PATTERNS entry for arrow callbacks, which
+ * would match any single-parameter arrow function including business logic.
+ */
+function reconcileStartActiveSpanMultilineArgs(
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+  allInstrumentedLines: string[],
+): void {
+  const attributeKeyPattern = /^['"`][a-z][a-z0-9._]+['"`],?$/;
+  const startActiveSpanPattern = /\.startActiveSpan\s*\(\s*$/;
+  const arrowCallbackPattern = /^\s*(?:async\s*)?\(\s*\w+\s*\)\s*=>\s*\{\s*$/;
+
+  const toRemove = new Set<number>();
+  const addedByLineNum = new Map<number, number>();
+  for (let i = 0; i < addedLines.length; i++) {
+    addedByLineNum.set(addedLines[i].instrumentedLineNum, i);
+  }
+
+  for (let i = 0; i < addedLines.length; i++) {
+    if (toRemove.has(i)) continue;
+    const entry = addedLines[i];
+
+    // Must be a span name string
+    if (!attributeKeyPattern.test(entry.line)) continue;
+
+    const N = entry.instrumentedLineNum;
+
+    // Line before the span name must be a startActiveSpan( call
+    const prevLine = allInstrumentedLines[N - 2];
+    if (!prevLine || !startActiveSpanPattern.test(prevLine)) continue;
+
+    // The callback line (N+1) must also be in addedLines
+    const callbackIdx = addedByLineNum.get(N + 1);
+    if (callbackIdx === undefined || toRemove.has(callbackIdx)) continue;
+
+    // The callback line must be an arrow function declaration
+    if (!arrowCallbackPattern.test(addedLines[callbackIdx].line)) continue;
+
+    toRemove.add(i);
+    toRemove.add(callbackIdx);
   }
 
   for (const idx of [...toRemove].sort((a, b) => b - a)) {
@@ -546,22 +593,18 @@ export function checkNonInstrumentationDiff(
   // (setAttribute is already filtered from addedLines by isInstrumentationLine).
   reconcileSetAttributeCaptures(addedLines, instrumentedLines);
 
-  // Reconcile multi-line span.setAttribute() argument lines: when the agent formats a
-  // setAttribute call across 3 lines —
-  //   span.setAttribute(        ← filtered (isInstrumentationLine ✓)
-  //     'some.attribute.key',   ← NOT filtered (plain string literal)
-  //     someValue,              ← NOT filtered (plain expression)
-  //   );                        ← filtered (isInstrumentationLine ✓)
-  // — the key and value lines appear in addedLines as unexplained additions.
-  // This reconciler removes matched key+value pairs when the surrounding lines
-  // confirm the 4-line setAttribute call pattern.
-  //
-  // Must pass RAW trimmed lines (NOT filtered): addedLines[*].instrumentedLineNum is
-  // 1-indexed relative to rawInstrumentedLines, so the N-2 / N+1 lookups are only
-  // correct against the unfiltered array. Passing instrumentedLines (blank lines
-  // dropped) shifts the indices whenever a blank line precedes the setAttribute call.
+  // Both reconcilers below use raw trimmed lines (NOT filtered blank lines):
+  // addedLines[*].instrumentedLineNum is 1-indexed relative to rawInstrumentedLines,
+  // so N-2 / N+1 lookups are only correct against the unfiltered array.
   const rawTrimmedInstrumentedLines = rawInstrumentedLines.map(l => normalizeLine(l.trim()));
+
+  // Reconcile multi-line span.setAttribute() argument lines (key + value as separate lines).
   reconcileSetAttributeMultilineArgs(addedLines, rawTrimmedInstrumentedLines);
+
+  // Reconcile multi-line startActiveSpan() argument lines (span name + arrow callback).
+  // Safer than a broad INSTRUMENTATION_PATTERNS entry for arrow callbacks, which would
+  // match any single-param arrow function including business logic.
+  reconcileStartActiveSpanMultilineArgs(addedLines, rawTrimmedInstrumentedLines);
 
   if (missingLines.length === 0 && addedLines.length === 0) {
     return [{
@@ -634,6 +677,35 @@ let pendingNds003Warning: string | null = null;
  */
 export async function prettierNormalizeForComparison(code: string, filePath: string): Promise<string> {
   return prettierNormalize(code, filePath);
+}
+
+/**
+ * Normalize code through Prettier using the quote style inferred from a reference source.
+ * Used when normalizing both sides of a comparison to ensure the same quote style is applied
+ * to both — preventing asymmetric diffs when the two inputs happen to use different quotes.
+ */
+async function prettierNormalizeWithQuoteStyle(code: string, filePath: string, quoteStyleSource: string): Promise<string> {
+  if (prettierAvailable === null) {
+    try {
+      await prettier.format('', { filepath: 'probe.js' });
+      prettierAvailable = true;
+    } catch {
+      prettierAvailable = false;
+    }
+  }
+  if (!prettierAvailable) return code;
+  try {
+    const config = await prettier.resolveConfig(filePath) ?? {};
+    const singleQuoteOverride = 'singleQuote' in config ? undefined : inferSingleQuote(quoteStyleSource);
+    const options: prettier.Options = {
+      ...config,
+      filepath: filePath,
+      ...(singleQuoteOverride !== undefined ? { singleQuote: singleQuoteOverride } : {}),
+    };
+    return await prettier.format(code, options);
+  } catch {
+    return code;
+  }
 }
 
 /**
@@ -729,9 +801,9 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
  * Previously only the original was normalized. The concern was that normalizing
  * the instrumented side would break long startActiveSpan calls into fragments
  * (span name string, callback declaration) that weren't recognized as
- * instrumentation patterns. Those continuation lines are now covered by
- * INSTRUMENTATION_PATTERNS (`async (span) => {` and `(span) => {`), eliminating
- * that false-positive path.
+ * instrumentation patterns. Those continuation lines are now handled by
+ * reconcileStartActiveSpanMultilineArgs, which detects the full 3-line shape
+ * rather than allowlisting bare arrow callbacks (which would match business logic).
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
  * Prettier availability is cached across calls within the same process.
@@ -741,8 +813,12 @@ export async function checkNonInstrumentationDiffNormalized(
   instrumentedCode: string,
   filePath: string,
 ): Promise<CheckResult[]> {
+  // Both sides must use the same quote style so the normalized forms are directly
+  // comparable. Infer from the original (not from each side independently) — if the
+  // original uses single quotes and the instrumented uses double quotes, independent
+  // inference would normalize them differently and produce spurious findings.
   const normalizedOriginal = await prettierNormalize(originalCode, filePath);
-  const normalizedInstrumented = await prettierNormalize(instrumentedCode, filePath);
+  const normalizedInstrumented = await prettierNormalizeWithQuoteStyle(instrumentedCode, filePath, originalCode);
   return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
 }
 
