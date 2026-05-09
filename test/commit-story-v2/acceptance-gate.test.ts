@@ -246,7 +246,9 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.spansAdded, 'runSummarize must receive at least one span').toBeGreaterThan(0);
       // The per-date catch block (result.failed.push) must still be present in the instrumented output.
       // This is the specific invariant that NDS-005 catches when the agent removes the inner catch.
-      const instrumented = result.lastInstrumentedCode ?? '';
+      // Read from fnFilePath (the actual instrumented file) rather than lastInstrumentedCode,
+      // which is only populated on failure.
+      const instrumented = readFileSync(fnFilePath, 'utf-8');
       expect(
         instrumented,
         'inner per-date catch block (result.failed.push) must survive span wrapping',

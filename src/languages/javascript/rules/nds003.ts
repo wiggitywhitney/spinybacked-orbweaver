@@ -375,17 +375,20 @@ function reconcileAgentSplitLines(
   while (i < addedLines.length) {
     if (addedToRemove.has(i)) { i++; continue; }
 
-    // Build a consecutive group starting at i
+    // Try prefixes of consecutive addedLines from shortest to longest — stops at the first match.
+    // Trying the shortest first means adjacent split statements each get reconciled independently
+    // rather than being merged into a single over-long candidate that matches nothing.
     const group: number[] = [i];
+    let matched = false;
     for (let j = i + 1; j < addedLines.length; j++) {
       if (addedToRemove.has(j)) break;
       const prev = addedLines[group[group.length - 1]];
       const curr = addedLines[j];
       if (curr.instrumentedLineNum !== prev.instrumentedLineNum + 1) break;
       group.push(j);
-    }
 
-    if (group.length >= 2) {
+      if (group.length < 2) continue;
+
       const joined = group.map(idx => addedLines[idx].line).join(' ');
 
       // Try (a): direct join — handles assignment continuations and call arg splits
@@ -403,10 +406,12 @@ function reconcileAgentSplitLines(
         for (const idx of group) addedToRemove.add(idx);
         missingToRemove.add(missingIdx);
         i += group.length;
-        continue;
+        matched = true;
+        break;
       }
     }
 
+    if (matched) continue;
     i++;
   }
 
