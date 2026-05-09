@@ -213,11 +213,10 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       const runSummarizeFn = extractedFunctions.find(f => f.name === 'runSummarize');
       expect(runSummarizeFn, 'runSummarize must be extracted').toBeDefined();
 
-      const { mkdtempSync: mkd, writeFileSync: wf } = await import('node:fs');
-      const { tmpdir } = await import('node:os');
+      // Place the function file inside tempDir so afterEach cleans it up.
+      const { writeFileSync: wf } = await import('node:fs');
       const { join: j } = await import('node:path');
-      const fnTmpDir = mkd(j(tmpdir(), 'spiny-orb-runSummarize-'));
-      const fnFilePath = j(fnTmpDir, 'runSummarize.js');
+      const fnFilePath = j(tempDir, 'runSummarize.js');
       wf(fnFilePath, runSummarizeFn!.contextHeader, 'utf-8');
 
       const { instrumentWithRetry: iwr } = await import('../../src/fix-loop/instrument-with-retry.ts');
@@ -243,6 +242,15 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       // NDS-005 fires (reassembly validation detects structural changes). Success means the
       // agent correctly nested the span wrapper without disturbing the per-date catch block.
       expect(result.status).toBe('success');
+      // runSummarize is an async entry point — at least one span must be added.
+      expect(result.spansAdded, 'runSummarize must receive at least one span').toBeGreaterThan(0);
+      // The per-date catch block (result.failed.push) must still be present in the instrumented output.
+      // This is the specific invariant that NDS-005 catches when the agent removes the inner catch.
+      const instrumented = result.lastInstrumentedCode ?? '';
+      expect(
+        instrumented,
+        'inner per-date catch block (result.failed.push) must survive span wrapping',
+      ).toMatch(/result\.failed\.push/);
     });
   });
 
