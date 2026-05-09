@@ -280,14 +280,35 @@ function reconcileObjectLiteralExpansion(
 
     if (group.length >= 2) {
       const joined = group.map(idx => missingLines[idx].line).join(' ');
+      const lastGroupLine = missingLines[group[group.length - 1]].line;
 
       // Try (a): direct join — handles assignment continuations like `usage =\n'...'`
       let addedIndices = addedByContent.get(joined);
       if (!addedIndices || addedIndices.length === 0) {
-        // Try (b): remove trailing comma before closing `};` or `}` — handles object literals
-        const withoutTrailingComma = joined.replace(/,(\s*\}[;]?\s*)$/, '$1');
+        // Try (b): remove trailing comma before closing `}`, `};`, `})`, `});`, etc.
+        // `[;)]*` handles any combination of semicolons and parens after the closing brace,
+        // so `});` (function-call argument ending) is matched in addition to `}` and `};`.
+        const withoutTrailingComma = joined.replace(/,(\s*\}[;)]*\s*)$/, '$1');
         if (withoutTrailingComma !== joined) {
           addedIndices = addedByContent.get(withoutTrailingComma);
+        }
+      }
+
+      // Try (c): incomplete group where the closing `});` / `})` was consumed by the
+      // instrumented code's span-callback closing brace. When the group ends with a non-`}`
+      // line (e.g., `force,`), the `});` that closed the original function call was not in
+      // missingLines because it matched the span-callback `});`. Try appending the known
+      // closing patterns and re-applying the trailing-comma removal.
+      if ((!addedIndices || addedIndices.length === 0) && !lastGroupLine.startsWith('}')) {
+        for (const closing of [' });', ' })', ' }']) {
+          const withClosing = joined + closing;
+          addedIndices = addedByContent.get(withClosing);
+          if (addedIndices && addedIndices.length > 0) break;
+          const withoutTrailingComma = withClosing.replace(/,(\s*\}[;)]*\s*)$/, '$1');
+          if (withoutTrailingComma !== withClosing) {
+            addedIndices = addedByContent.get(withoutTrailingComma);
+            if (addedIndices && addedIndices.length > 0) break;
+          }
         }
       }
 
@@ -295,6 +316,92 @@ function reconcileObjectLiteralExpansion(
         const addedIdx = addedIndices.shift()!;
         for (const idx of group) missingToRemove.add(idx);
         addedToRemove.add(addedIdx);
+        i += group.length;
+        continue;
+      }
+    }
+
+    i++;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) {
+    missingLines.splice(idx, 1);
+  }
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
+ * Reconcile agent-split lines against their single-line originals.
+ *
+ * The reverse of reconcileObjectLiteralExpansion: when the agent wraps a function
+ * in a startActiveSpan callback (adding 2+ spaces of indent), lines that were
+ * under Prettier's printWidth at their original indentation may now exceed it at
+ * the new indentation. The agent then splits the line, producing two or more
+ * consecutive addedLines for a single missingLine.
+ *
+ * Example (original at 4-space, 78 chars — Prettier keeps as-is):
+ *   const formattedSummaries = formatDailySummariesForWeekly(dailySummaries);
+ *
+ * Agent output at 6-space inside span callback (80 chars — agent splits):
+ *   const formattedSummaries =
+ *     formatDailySummariesForWeekly(dailySummaries);
+ *
+ * NDS-003 sees the single-line as "missing" and the two split lines as "added".
+ * This reconciler joins consecutive addedLines groups and checks if:
+ *   (a) the direct join appears in missingLines, OR
+ *   (b) the join with trailing comma removed before closing `}`, `})`, `});` etc.
+ *       appears in missingLines (handles object-argument-style splits)
+ *
+ * Safety: exact content match required — any content change still fires.
+ */
+function reconcileAgentSplitLines(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  const missingByContent = new Map<string, number[]>();
+  for (let i = 0; i < missingLines.length; i++) {
+    const key = missingLines[i].line;
+    const existing = missingByContent.get(key);
+    if (existing) existing.push(i);
+    else missingByContent.set(key, [i]);
+  }
+
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  let i = 0;
+  while (i < addedLines.length) {
+    if (addedToRemove.has(i)) { i++; continue; }
+
+    // Build a consecutive group starting at i
+    const group: number[] = [i];
+    for (let j = i + 1; j < addedLines.length; j++) {
+      if (addedToRemove.has(j)) break;
+      const prev = addedLines[group[group.length - 1]];
+      const curr = addedLines[j];
+      if (curr.instrumentedLineNum !== prev.instrumentedLineNum + 1) break;
+      group.push(j);
+    }
+
+    if (group.length >= 2) {
+      const joined = group.map(idx => addedLines[idx].line).join(' ');
+
+      // Try (a): direct join — handles assignment continuations and call arg splits
+      let missingIndices = missingByContent.get(joined);
+      if (!missingIndices || missingIndices.length === 0) {
+        // Try (b): remove trailing comma before closing brace variants
+        const withoutTrailingComma = joined.replace(/,(\s*\}[;)]*\s*)$/, '$1');
+        if (withoutTrailingComma !== joined) {
+          missingIndices = missingByContent.get(withoutTrailingComma);
+        }
+      }
+
+      if (missingIndices && missingIndices.length > 0) {
+        const missingIdx = missingIndices.shift()!;
+        for (const idx of group) addedToRemove.add(idx);
+        missingToRemove.add(missingIdx);
         i += group.length;
         continue;
       }
@@ -667,6 +774,13 @@ export function checkNonInstrumentationDiff(
   // the LLM preserved the single-line form. The reconciler joins the expanded group
   // back to single-line and checks if that form appears in addedLines.
   reconcileObjectLiteralExpansion(missingLines, addedLines);
+
+  // Reconcile agent-split lines vs their single-line originals: when the agent adds
+  // a startActiveSpan wrapper (increasing indent by 2+ spaces), lines that fit within
+  // Prettier's printWidth at their original indent may exceed it inside the span callback.
+  // The agent then splits the line, producing consecutive addedLines for a single missingLine.
+  // This is the reverse of reconcileObjectLiteralExpansion (missing=single, added=multi).
+  reconcileAgentSplitLines(missingLines, addedLines);
 
   // Reconcile return-value captures: when the agent extracts a return expression
   // to a variable for setAttribute, NDS-003 sees the original `return <expr>`
