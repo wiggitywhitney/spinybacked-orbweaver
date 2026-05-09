@@ -693,7 +693,12 @@ async function prettierNormalizeWithQuoteStyle(code: string, filePath: string, q
       prettierAvailable = false;
     }
   }
-  if (!prettierAvailable) return code;
+  if (!prettierAvailable) {
+    // Mirror prettierNormalize: set the same warning so both sides degrade together
+    pendingNds003Warning =
+      'NDS-003: Prettier not available — formatting normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
+    return code;
+  }
   try {
     const config = await prettier.resolveConfig(filePath) ?? {};
     const singleQuoteOverride = 'singleQuote' in config ? undefined : inferSingleQuote(quoteStyleSource);
@@ -704,6 +709,9 @@ async function prettierNormalizeWithQuoteStyle(code: string, filePath: string, q
     };
     return await prettier.format(code, options);
   } catch {
+    // Mirror prettierNormalize: set the same warning so both sides degrade together
+    pendingNds003Warning =
+      'NDS-003: Prettier formatting failed — normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
     return code;
   }
 }
