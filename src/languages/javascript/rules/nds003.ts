@@ -775,43 +775,6 @@ export async function prettierNormalizeForComparison(code: string, filePath: str
 }
 
 /**
- * Normalize code through Prettier using the quote style inferred from a reference source.
- * Used when normalizing both sides of a comparison to ensure the same quote style is applied
- * to both — preventing asymmetric diffs when the two inputs happen to use different quotes.
- */
-async function prettierNormalizeWithQuoteStyle(code: string, filePath: string, quoteStyleSource: string): Promise<string> {
-  if (prettierAvailable === null) {
-    try {
-      await prettier.format('', { filepath: 'probe.js' });
-      prettierAvailable = true;
-    } catch {
-      prettierAvailable = false;
-    }
-  }
-  if (!prettierAvailable) {
-    // Mirror prettierNormalize: set the same warning so both sides degrade together
-    pendingNds003Warning =
-      'NDS-003: Prettier not available — formatting normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
-    return code;
-  }
-  try {
-    const config = await prettier.resolveConfig(filePath) ?? {};
-    const singleQuoteOverride = 'singleQuote' in config ? undefined : inferSingleQuote(quoteStyleSource);
-    const options: prettier.Options = {
-      ...config,
-      filepath: filePath,
-      ...(singleQuoteOverride !== undefined ? { singleQuote: singleQuoteOverride } : {}),
-    };
-    return await prettier.format(code, options);
-  } catch {
-    // Mirror prettierNormalize: set the same warning so both sides degrade together
-    pendingNds003Warning =
-      'NDS-003: Prettier formatting failed — normalization skipped. Files with indentation-width conflicts may fail NDS-003.';
-    return code;
-  }
-}
-
-/**
  * Drain the pending NDS-003 Prettier availability warning.
  * Called by the coordinator after dispatch to collect run-level warnings.
  * Returns null when no warning is pending.
