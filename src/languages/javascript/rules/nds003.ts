@@ -821,13 +821,8 @@ export async function checkNonInstrumentationDiffNormalized(
   instrumentedCode: string,
   filePath: string,
 ): Promise<CheckResult[]> {
-  // Both sides must use the same quote style so the normalized forms are directly
-  // comparable. Infer from the original (not from each side independently) — if the
-  // original uses single quotes and the instrumented uses double quotes, independent
-  // inference would normalize them differently and produce spurious findings.
   const normalizedOriginal = await prettierNormalize(originalCode, filePath);
-  const normalizedInstrumented = await prettierNormalizeWithQuoteStyle(instrumentedCode, filePath, originalCode);
-  return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
+  return checkNonInstrumentationDiff(normalizedOriginal, instrumentedCode, filePath);
 }
 
 /** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */

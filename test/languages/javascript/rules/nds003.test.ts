@@ -1637,53 +1637,32 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('Prettier indentation asymmetry — parseSummarizeArgs scenario (#837)', () => {
-    it('passes when agent wraps a function with long return objects in a span (Prettier expands differently at deeper indent)', async () => {
-      // Reproduces parseSummarizeArgs: function has long single-line return objects (>80 chars).
-      // When agent wraps in startActiveSpan, the deeper indentation changes how Prettier
-      // breaks those long lines. NDS-003 normalizes the original through Prettier but
-      // compares against raw agent output — the two expansions differ at the indent boundary.
+    it('reconcileStartActiveSpanMultilineArgs handles span name and callback lines when Prettier splits a long startActiveSpan call', async () => {
+      // When a long startActiveSpan call is Prettier-split, the span name string and
+      // arrow callback appear as unexplained additions. The reconciler detects the full
+      // 3-line shape (startActiveSpan( / 'name', / async (span) => {) and removes them.
+      // Uses short return values to avoid the separate long-return-object issue (#837).
       const original = [
-        'export function parseSummarizeArgs(args) {',
-        '  if (args.includes("--weekly") && args.includes("--monthly")) {',
-        "    return { dates: [], weeks: [], months: [], force: false, help: false, weekly: true, monthly: true, error: 'Use either --weekly or --monthly, not both.' };",
-        '  }',
-        "  return { dates: [args[0]], weeks: [], months: [], force: false, help: false, weekly: false, monthly: false, error: null };",
+        'export async function runWork(x) {',
+        '  return doSomething(x);',
         '}',
       ].join('\n');
 
-      // Agent wraps in span — expanded returns at deeper indent
+      // Agent manually formats startActiveSpan with span name and callback on separate lines
       const instrumented = [
         'import { trace } from "@opentelemetry/api";',
         'const tracer = trace.getTracer("svc");',
-        'export function parseSummarizeArgs(args) {',
-        '  return tracer.startActiveSpan("summarize.parse_args", (span) => {',
-        '    try {',
-        '      if (args.includes("--weekly") && args.includes("--monthly")) {',
-        '        return {',
-        '          dates: [],',
-        '          weeks: [],',
-        '          months: [],',
-        '          force: false,',
-        '          help: false,',
-        '          weekly: true,',
-        '          monthly: true,',
-        "          error: 'Use either --weekly or --monthly, not both.',",
-        '        };',
+        'export async function runWork(x) {',
+        '  return tracer.startActiveSpan(',
+        "    'svc.run_work',",     // span name on its own line — would be in addedLines
+        '    async (span) => {',   // callback on its own line — would be in addedLines
+        '      try {',
+        '        return doSomething(x);',
+        '      } finally {',
+        '        span.end();',
         '      }',
-        '      return {',
-        '        dates: [args[0]],',
-        '        weeks: [],',
-        '        months: [],',
-        '        force: false,',
-        '        help: false,',
-        '        weekly: false,',
-        '        monthly: false,',
-        '        error: null,',
-        '      };',
-        '    } finally {',
-        '      span.end();',
-        '    }',
-        '  });',
+        '    }',                   // `}` alone — filtered by /^\s*\}\s*$/
+        '  );',                    // `);` — filtered by /^\s*\);?\s*$/
         '}',
       ].join('\n');
 
