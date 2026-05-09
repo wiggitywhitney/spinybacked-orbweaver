@@ -156,6 +156,50 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     }, null, 2));
   }
 
+  // Diagnostic: what does the LLM actually produce for parseSummarizeArgs in function-level fallback?
+  // This isolated test reveals the 163 NDS-003 violations that block summarize.js from success.
+  describe('parseSummarizeArgs — isolated function-level instrumentation (#837 diagnostic)', () => {
+    it('instruments parseSummarizeArgs and dumps NDS-003 violations', { timeout: 600_000 }, async () => {
+      const { filePath, originalCode } = setupFile('src/commands/summarize.js');
+      const jsProvider = new (await import('../../src/languages/javascript/index.ts')).JavaScriptProvider();
+
+      // Extract just parseSummarizeArgs using the same extraction path as function-level fallback
+      const extractedFunctions = jsProvider.extractFunctions(originalCode);
+      const parseSummarizeArgsFn = extractedFunctions.find(f => f.name === 'parseSummarizeArgs');
+      expect(parseSummarizeArgsFn, 'parseSummarizeArgs must be extracted').toBeDefined();
+
+      const { mkdtempSync: mkd, writeFileSync: wf } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join: j } = await import('node:path');
+      const fnTmpDir = mkd(j(tmpdir(), 'spiny-orb-parseSummarize-'));
+      const fnFilePath = j(fnTmpDir, 'parseSummarizeArgs.js');
+      wf(fnFilePath, parseSummarizeArgsFn!.contextHeader, 'utf-8');
+
+      const { instrumentWithRetry: iwr } = await import('../../src/fix-loop/instrument-with-retry.ts');
+      const result = await iwr(fnFilePath, parseSummarizeArgsFn!.contextHeader, resolvedSchema, makeConfig(), {
+        provider: jsProvider,
+        _skipFunctionFallback: true,
+      });
+
+      dumpDiagnostics('parseSummarizeArgs-isolated', result);
+
+      console.log('\n=== parseSummarizeArgs isolation result ===');
+      console.log('status:', result.status);
+      console.log('spansAdded:', result.spansAdded);
+      console.log('validationAttempts:', result.validationAttempts);
+      console.log('errorProgression:', result.errorProgression);
+      if (result.lastError) {
+        const lines = result.lastError.split('\n');
+        console.log('First 10 error lines:');
+        lines.slice(0, 10).forEach(l => console.log(' ', l.slice(0, 120)));
+      }
+
+      // We expect success — parseSummarizeArgs is a pure sync utility (RST-001)
+      // If it fails, the error log above shows exactly what the LLM produced and why
+      expect(result.status).toBe('success');
+    });
+  });
+
   // Run-5 FAILED: SCH-002 oscillation on commit_story.summarize.* attrs
   // Run-4: 3 spans (runSummarize, runWeeklySummarize, runMonthlySummarize are async entry points)
   describe('summarize.js — CLI handler; 3 async entry points', () => {

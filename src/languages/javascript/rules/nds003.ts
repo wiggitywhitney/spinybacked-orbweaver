@@ -224,6 +224,94 @@ function reconcileReturnCaptures(
 }
 
 /**
+ * Reconcile Prettier-expanded lines against their single-line originals.
+ *
+ * When the LLM returns a function unchanged (e.g. RST-001 pure utility — no span added),
+ * the original code may have long lines (>80 chars) that Prettier expands in the
+ * normalizedOriginal but the LLM preserves as single-line in its output. Two patterns:
+ *
+ *   Object literals:            Assignment continuations:
+ *     return {                    usage =
+ *       dates: [],                  'Missing month argument...';
+ *       ...
+ *     };
+ *   ↔ return { dates: [], ... };  ↔ usage = 'Missing month argument...';
+ *
+ * NDS-003 flags the expanded lines as "missing" and the single-line form as "added".
+ * This reconciler joins consecutive missingLines groups and checks if:
+ *   (a) the direct join appears in addedLines, OR
+ *   (b) the join with trailing comma removed before closing `}` appears in addedLines
+ *       (Prettier adds trailing commas in multi-line object/array literals)
+ *
+ * Safety: both sides must be present — the expanded group in missingLines AND the
+ * reconstructed single-line in addedLines. Content changes produce different single-line
+ * forms that won't match → NDS-003 still fires correctly.
+ */
+function reconcileObjectLiteralExpansion(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  const addedByContent = new Map<string, number[]>();
+  for (let i = 0; i < addedLines.length; i++) {
+    const key = addedLines[i].line;
+    const existing = addedByContent.get(key);
+    if (existing) existing.push(i);
+    else addedByContent.set(key, [i]);
+  }
+
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  let i = 0;
+  while (i < missingLines.length) {
+    if (missingToRemove.has(i)) { i++; continue; }
+
+    // Build a consecutive group starting at i
+    const group: number[] = [i];
+    for (let j = i + 1; j < missingLines.length; j++) {
+      if (missingToRemove.has(j)) break;
+      const prev = missingLines[group[group.length - 1]];
+      const curr = missingLines[j];
+      if (curr.originalLineNum !== prev.originalLineNum + 1) break;
+      group.push(j);
+      // Object literals: stop at the closing brace so we don't over-consume
+      if (curr.line.startsWith('}')) break;
+    }
+
+    if (group.length >= 2) {
+      const joined = group.map(idx => missingLines[idx].line).join(' ');
+
+      // Try (a): direct join — handles assignment continuations like `usage =\n'...'`
+      let addedIndices = addedByContent.get(joined);
+      if (!addedIndices || addedIndices.length === 0) {
+        // Try (b): remove trailing comma before closing `};` or `}` — handles object literals
+        const withoutTrailingComma = joined.replace(/,(\s*\}[;]?\s*)$/, '$1');
+        if (withoutTrailingComma !== joined) {
+          addedIndices = addedByContent.get(withoutTrailingComma);
+        }
+      }
+
+      if (addedIndices && addedIndices.length > 0) {
+        const addedIdx = addedIndices.shift()!;
+        for (const idx of group) missingToRemove.add(idx);
+        addedToRemove.add(addedIdx);
+        i += group.length;
+        continue;
+      }
+    }
+
+    i++;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) {
+    missingLines.splice(idx, 1);
+  }
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
  * Reconcile aggregation variable captures that exist solely to feed span.setAttribute().
  *
  * When the agent computes an intermediate value for setAttribute:
@@ -572,6 +660,13 @@ export function checkNonInstrumentationDiff(
       addedLines.push({ line: trimmed, instrumentedLineNum: i + 1 });
     }
   }
+
+  // Reconcile Prettier-expanded object literals vs their original single-line form:
+  // when the LLM returns a function unchanged (e.g. RST-001 — no span added),
+  // Prettier(original) may have expanded long single-line returns to multi-line while
+  // the LLM preserved the single-line form. The reconciler joins the expanded group
+  // back to single-line and checks if that form appears in addedLines.
+  reconcileObjectLiteralExpansion(missingLines, addedLines);
 
   // Reconcile return-value captures: when the agent extracts a return expression
   // to a variable for setAttribute, NDS-003 sees the original `return <expr>`
