@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-05-09) Fixed NDS-003 (Code Preserved) false failures caused by Prettier formatting asymmetry (issue #837). Root cause: when the agent wraps a function with long lines (>80 chars) in a `startActiveSpan` callback, the extra indentation shifts where Prettier breaks those lines. `checkNonInstrumentationDiffNormalized` was normalizing only the original through Prettier and comparing against the raw agent output — the same content broke at different points on each side. Fix: normalize both sides symmetrically through Prettier before comparing. Also added `async (span) => {` and `(span) => {` to the instrumentation pattern allowlist so callback declaration lines produced by Prettier-splitting a long `startActiveSpan` call are not flagged as unexplained additions.
+
 ### Changed
 
 - (2026-05-08) Moved 21 deterministic mocked tests out of the acceptance-gate CI job into the regular unit test suite (issue #835). The coordinator acceptance gate file contained 33 tests but only 10 required real Anthropic API calls; the remaining 23 used `vi.fn().mockImplementation()` for `instrumentWithRetry` and ran in milliseconds. Moved blocks: Phase 5 SCH Tier 2 Checks (6 tests), SCH-001/002 unconditionally blocking (4 tests), PRD 31 Per-File Schema Extension Writing (5 tests), Phase 5 Checkpoint and Drift Integration (3 tests), End-of-run failure handling (2 tests), PRD 700 Dependency-aware file ordering (1 test). These now live in `test/coordinator/coordinator.test.ts` and run under `npm test`, freeing the coordinator acceptance-gate job to contain only its 10 LLM-calling tests and the runLiveCheck M5 integration test. Two test assertions were corrected in the process: `flagCtx.testOutput` renamed to `flagCtx.failureMessage` (matching the current `EndOfRunFlagContext` type), and Scenario B's `directError` field renamed to `testOutput` (matching what `isDirectError()` actually reads).

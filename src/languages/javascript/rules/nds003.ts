@@ -78,6 +78,18 @@ const INSTRUMENTATION_PATTERNS: RegExp[] = [
   // agent should not add message: string literals to non-instrumentation code. The forward
   // check still catches missing original `message:` lines when the agent removes them.
   /^\s*message:\s*['"`]/,
+  // Span callback declaration lines produced when Prettier breaks a long startActiveSpan call
+  // across multiple lines:
+  //   tracer.startActiveSpan('very.long.span.name', async (span) => {   ← too long → split
+  // becomes:
+  //   tracer.startActiveSpan(
+  //     'very.long.span.name',    ← filtered by reconcileSetAttributeMultilineArgs-style logic
+  //     async (span) => {         ← filtered here
+  //   );
+  // These callback forms only appear as startActiveSpan arguments; they cannot be
+  // business logic (no code path has a bare `async (span) => {` standalone line).
+  /^\s*async\s*\(\s*\w+\s*\)\s*=>\s*\{\s*$/,
+  /^\s*\(\s*\w+\s*\)\s*=>\s*\{\s*$/,
 ];
 
 /**
@@ -706,17 +718,20 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
 /**
  * Prettier-normalized NDS-003 check.
  *
- * Normalizes only the originalCode through Prettier before running the diff.
- * This allows the agent to reformat business-logic lines that the startActiveSpan
- * wrapper pushed past Prettier's printWidth (to pass LINT) without NDS-003
- * flagging them as modifications — Prettier breaks both the original and the
- * agent's reformatted version the same way, so the trimmed content matches.
+ * Normalizes both originalCode and instrumentedCode through Prettier before
+ * running the diff. This eliminates false NDS-003 failures caused by Prettier
+ * formatting asymmetry: when the agent wraps business logic in a startActiveSpan
+ * callback, the extra indentation level changes where Prettier breaks long lines
+ * (e.g. 140-char return objects in parseSummarizeArgs). Without symmetric
+ * normalization, Prettier(original) and raw(instrumented) break those lines at
+ * different columns, producing spurious "missing/added" findings.
  *
- * Only the original is normalized; the instrumented code is compared raw. This
- * prevents Prettier from breaking long instrumentation lines (e.g., a
- * startActiveSpan call with a long span name) into fragments whose inner parts
- * (span name string, async callback declaration) aren't recognized as
- * instrumentation patterns and would produce false positives.
+ * Previously only the original was normalized. The concern was that normalizing
+ * the instrumented side would break long startActiveSpan calls into fragments
+ * (span name string, callback declaration) that weren't recognized as
+ * instrumentation patterns. Those continuation lines are now covered by
+ * INSTRUMENTATION_PATTERNS (`async (span) => {` and `(span) => {`), eliminating
+ * that false-positive path.
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
  * Prettier availability is cached across calls within the same process.
@@ -727,7 +742,8 @@ export async function checkNonInstrumentationDiffNormalized(
   filePath: string,
 ): Promise<CheckResult[]> {
   const normalizedOriginal = await prettierNormalize(originalCode, filePath);
-  return checkNonInstrumentationDiff(normalizedOriginal, instrumentedCode, filePath);
+  const normalizedInstrumented = await prettierNormalize(instrumentedCode, filePath);
+  return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
 }
 
 /** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */

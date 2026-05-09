@@ -1636,6 +1636,63 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('Prettier indentation asymmetry — parseSummarizeArgs scenario (#837)', () => {
+    it('passes when agent wraps a function with long return objects in a span (Prettier expands differently at deeper indent)', async () => {
+      // Reproduces parseSummarizeArgs: function has long single-line return objects (>80 chars).
+      // When agent wraps in startActiveSpan, the deeper indentation changes how Prettier
+      // breaks those long lines. NDS-003 normalizes the original through Prettier but
+      // compares against raw agent output — the two expansions differ at the indent boundary.
+      const original = [
+        'export function parseSummarizeArgs(args) {',
+        '  if (args.includes("--weekly") && args.includes("--monthly")) {',
+        "    return { dates: [], weeks: [], months: [], force: false, help: false, weekly: true, monthly: true, error: 'Use either --weekly or --monthly, not both.' };",
+        '  }',
+        "  return { dates: [args[0]], weeks: [], months: [], force: false, help: false, weekly: false, monthly: false, error: null };",
+        '}',
+      ].join('\n');
+
+      // Agent wraps in span — expanded returns at deeper indent
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export function parseSummarizeArgs(args) {',
+        '  return tracer.startActiveSpan("summarize.parse_args", (span) => {',
+        '    try {',
+        '      if (args.includes("--weekly") && args.includes("--monthly")) {',
+        '        return {',
+        '          dates: [],',
+        '          weeks: [],',
+        '          months: [],',
+        '          force: false,',
+        '          help: false,',
+        '          weekly: true,',
+        '          monthly: true,',
+        "          error: 'Use either --weekly or --monthly, not both.',",
+        '        };',
+        '      }',
+        '      return {',
+        '        dates: [args[0]],',
+        '        weeks: [],',
+        '        months: [],',
+        '        force: false,',
+        '        help: false,',
+        '        weekly: false,',
+        '        monthly: false,',
+        '        error: null,',
+        '      };',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('multi-line span.setAttribute() argument reconciliation (#785 regression)', () => {
     it('passes when the agent formats span.setAttribute across 3 lines (key and value on separate lines)', () => {
       // Agent writes:
@@ -1717,11 +1774,11 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('Prettier normalization symmetry — reassembly false-positive (#834)', () => {
-    it('fails without pre-normalization when a long constant Prettier splits in the original', async () => {
-      // Demonstrates the root problem: NDS-003 Prettier-normalizes the original (83-char line splits
-      // to 2 lines) but compares against the raw reassembled output (still 1 line). Without
-      // normalizing the reassembled side first, NDS-003 flags the 1-line form as "added"
-      // and the Prettier-split 2-line form as "missing" — a false failure.
+    it('fails with the raw (non-normalized) diff when Prettier splits a long line on one side only', async () => {
+      // Demonstrates the asymmetry: when the original and instrumented have the same
+      // 83-char line, Prettier(original) splits it to 2 lines but the raw instrumented
+      // still has 1 line. The raw checkNonInstrumentationDiff sees a mismatch.
+      // (checkNonInstrumentationDiffNormalized fixes this by normalizing both sides.)
       const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
       const original = [
         '// ABOUTME: Test fixture.',
@@ -1731,12 +1788,11 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '  return fetch(API_BASE);',
         '}',
       ].join('\n');
+      const prettierNorm = await prettierNormalizeForComparison(original, filePath);
 
-      // Reassembler keeps the original 1-line constant; without normalization NDS-003 should fail
-      const results = await checkNonInstrumentationDiffNormalized(original, original, filePath);
+      // Raw diff: Prettier(original) has 2-line form, raw original has 1-line form → mismatch
+      const results = checkNonInstrumentationDiff(prettierNorm, original, filePath);
       const failures = results.filter(r => !r.passed);
-      // Prettier(original) splits the 83-char line → 2 lines; raw original still has 1 line
-      // The mismatch causes NDS-003 to fire (the false positive this fix addresses)
       expect(failures.length).toBeGreaterThan(0);
     });
 
