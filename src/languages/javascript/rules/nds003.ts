@@ -893,20 +893,14 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
 /**
  * Prettier-normalized NDS-003 check.
  *
- * Normalizes both originalCode and instrumentedCode through Prettier before
- * running the diff. This eliminates false NDS-003 failures caused by Prettier
- * formatting asymmetry: when the agent wraps business logic in a startActiveSpan
- * callback, the extra indentation level changes where Prettier breaks long lines
- * (e.g. 140-char return objects in parseSummarizeArgs). Without symmetric
- * normalization, Prettier(original) and raw(instrumented) break those lines at
- * different columns, producing spurious "missing/added" findings.
+ * Normalizes originalCode through Prettier before running the diff. The instrumented
+ * code is compared raw. This allows the agent to reformat business-logic lines pushed
+ * past Prettier's print width by the startActiveSpan wrapper — Prettier breaks both
+ * the original and the reformatted version the same way, so the trimmed content matches.
  *
- * Previously only the original was normalized. The concern was that normalizing
- * the instrumented side would break long startActiveSpan calls into fragments
- * (span name string, callback declaration) that weren't recognized as
- * instrumentation patterns. Those continuation lines are now handled by
- * reconcileStartActiveSpanMultilineArgs, which detects the full 3-line shape
- * rather than allowlisting bare arrow callbacks (which would match business logic).
+ * Long lines that the LLM preserves as single-line (e.g. when RST-001 skips a function)
+ * are handled by reconcileObjectLiteralExpansion, which joins consecutive missingLines
+ * groups and checks if the joined single-line form appears in addedLines.
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
  * Prettier availability is cached across calls within the same process.
