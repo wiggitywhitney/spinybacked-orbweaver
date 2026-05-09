@@ -224,6 +224,94 @@ function reconcileReturnCaptures(
 }
 
 /**
+ * Reconcile Prettier-expanded lines against their single-line originals.
+ *
+ * When the LLM returns a function unchanged (e.g. RST-001 pure utility — no span added),
+ * the original code may have long lines (>80 chars) that Prettier expands in the
+ * normalizedOriginal but the LLM preserves as single-line in its output. Two patterns:
+ *
+ *   Object literals:            Assignment continuations:
+ *     return {                    usage =
+ *       dates: [],                  'Missing month argument...';
+ *       ...
+ *     };
+ *   ↔ return { dates: [], ... };  ↔ usage = 'Missing month argument...';
+ *
+ * NDS-003 flags the expanded lines as "missing" and the single-line form as "added".
+ * This reconciler joins consecutive missingLines groups and checks if:
+ *   (a) the direct join appears in addedLines, OR
+ *   (b) the join with trailing comma removed before closing `}` appears in addedLines
+ *       (Prettier adds trailing commas in multi-line object/array literals)
+ *
+ * Safety: both sides must be present — the expanded group in missingLines AND the
+ * reconstructed single-line in addedLines. Content changes produce different single-line
+ * forms that won't match → NDS-003 still fires correctly.
+ */
+function reconcileObjectLiteralExpansion(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  const addedByContent = new Map<string, number[]>();
+  for (let i = 0; i < addedLines.length; i++) {
+    const key = addedLines[i].line;
+    const existing = addedByContent.get(key);
+    if (existing) existing.push(i);
+    else addedByContent.set(key, [i]);
+  }
+
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  let i = 0;
+  while (i < missingLines.length) {
+    if (missingToRemove.has(i)) { i++; continue; }
+
+    // Build a consecutive group starting at i
+    const group: number[] = [i];
+    for (let j = i + 1; j < missingLines.length; j++) {
+      if (missingToRemove.has(j)) break;
+      const prev = missingLines[group[group.length - 1]];
+      const curr = missingLines[j];
+      if (curr.originalLineNum !== prev.originalLineNum + 1) break;
+      group.push(j);
+      // Object literals: stop at the closing brace so we don't over-consume
+      if (curr.line.startsWith('}')) break;
+    }
+
+    if (group.length >= 2) {
+      const joined = group.map(idx => missingLines[idx].line).join(' ');
+
+      // Try (a): direct join — handles assignment continuations like `usage =\n'...'`
+      let addedIndices = addedByContent.get(joined);
+      if (!addedIndices || addedIndices.length === 0) {
+        // Try (b): remove trailing comma before closing `};` or `}` — handles object literals
+        const withoutTrailingComma = joined.replace(/,(\s*\}[;]?\s*)$/, '$1');
+        if (withoutTrailingComma !== joined) {
+          addedIndices = addedByContent.get(withoutTrailingComma);
+        }
+      }
+
+      if (addedIndices && addedIndices.length > 0) {
+        const addedIdx = addedIndices.shift()!;
+        for (const idx of group) missingToRemove.add(idx);
+        addedToRemove.add(addedIdx);
+        i += group.length;
+        continue;
+      }
+    }
+
+    i++;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) {
+    missingLines.splice(idx, 1);
+  }
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
  * Reconcile aggregation variable captures that exist solely to feed span.setAttribute().
  *
  * When the agent computes an intermediate value for setAttribute:
@@ -275,6 +363,65 @@ function reconcileSetAttributeCaptures(
     if (totalUses !== 2) continue;
 
     toRemove.add(i);
+  }
+
+  for (const idx of [...toRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
+ * Reconcile multi-line startActiveSpan() argument lines.
+ *
+ * When Prettier breaks a long startActiveSpan call across multiple lines:
+ *   tracer.startActiveSpan(      ← filtered (matches \.startActiveSpan\s*\()
+ *     'span.name',               ← NOT filtered (plain string)
+ *     async (span) => {          ← NOT filtered (bare arrow callback)
+ *
+ * The span name and callback lines appear in addedLines as unexplained additions.
+ * This reconciler requires the full 3-line shape — span name followed by an
+ * arrow callback — where the preceding line in the raw instrumented output is
+ * a startActiveSpan( call (already filtered by INSTRUMENTATION_PATTERNS).
+ *
+ * Safer than a broad INSTRUMENTATION_PATTERNS entry for arrow callbacks, which
+ * would match any single-parameter arrow function including business logic.
+ */
+function reconcileStartActiveSpanMultilineArgs(
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+  allInstrumentedLines: string[],
+): void {
+  const attributeKeyPattern = /^['"`][a-z][a-z0-9._]+['"`],?$/;
+  const startActiveSpanPattern = /\.startActiveSpan\s*\(\s*$/;
+  const arrowCallbackPattern = /^\s*(?:async\s*)?\(\s*\w+\s*\)\s*=>\s*\{\s*$/;
+
+  const toRemove = new Set<number>();
+  const addedByLineNum = new Map<number, number>();
+  for (let i = 0; i < addedLines.length; i++) {
+    addedByLineNum.set(addedLines[i].instrumentedLineNum, i);
+  }
+
+  for (let i = 0; i < addedLines.length; i++) {
+    if (toRemove.has(i)) continue;
+    const entry = addedLines[i];
+
+    // Must be a span name string
+    if (!attributeKeyPattern.test(entry.line)) continue;
+
+    const N = entry.instrumentedLineNum;
+
+    // Line before the span name must be a startActiveSpan( call
+    const prevLine = allInstrumentedLines[N - 2];
+    if (!prevLine || !startActiveSpanPattern.test(prevLine)) continue;
+
+    // The callback line (N+1) must also be in addedLines
+    const callbackIdx = addedByLineNum.get(N + 1);
+    if (callbackIdx === undefined || toRemove.has(callbackIdx)) continue;
+
+    // The callback line must be an arrow function declaration
+    if (!arrowCallbackPattern.test(addedLines[callbackIdx].line)) continue;
+
+    toRemove.add(i);
+    toRemove.add(callbackIdx);
   }
 
   for (const idx of [...toRemove].sort((a, b) => b - a)) {
@@ -514,6 +661,13 @@ export function checkNonInstrumentationDiff(
     }
   }
 
+  // Reconcile Prettier-expanded object literals vs their original single-line form:
+  // when the LLM returns a function unchanged (e.g. RST-001 — no span added),
+  // Prettier(original) may have expanded long single-line returns to multi-line while
+  // the LLM preserved the single-line form. The reconciler joins the expanded group
+  // back to single-line and checks if that form appears in addedLines.
+  reconcileObjectLiteralExpansion(missingLines, addedLines);
+
   // Reconcile return-value captures: when the agent extracts a return expression
   // to a variable for setAttribute, NDS-003 sees the original `return <expr>`
   // as missing and the `const <var> = <expr>` + `return <var>` as added.
@@ -534,22 +688,18 @@ export function checkNonInstrumentationDiff(
   // (setAttribute is already filtered from addedLines by isInstrumentationLine).
   reconcileSetAttributeCaptures(addedLines, instrumentedLines);
 
-  // Reconcile multi-line span.setAttribute() argument lines: when the agent formats a
-  // setAttribute call across 3 lines —
-  //   span.setAttribute(        ← filtered (isInstrumentationLine ✓)
-  //     'some.attribute.key',   ← NOT filtered (plain string literal)
-  //     someValue,              ← NOT filtered (plain expression)
-  //   );                        ← filtered (isInstrumentationLine ✓)
-  // — the key and value lines appear in addedLines as unexplained additions.
-  // This reconciler removes matched key+value pairs when the surrounding lines
-  // confirm the 4-line setAttribute call pattern.
-  //
-  // Must pass RAW trimmed lines (NOT filtered): addedLines[*].instrumentedLineNum is
-  // 1-indexed relative to rawInstrumentedLines, so the N-2 / N+1 lookups are only
-  // correct against the unfiltered array. Passing instrumentedLines (blank lines
-  // dropped) shifts the indices whenever a blank line precedes the setAttribute call.
+  // Both reconcilers below use raw trimmed lines (NOT filtered blank lines):
+  // addedLines[*].instrumentedLineNum is 1-indexed relative to rawInstrumentedLines,
+  // so N-2 / N+1 lookups are only correct against the unfiltered array.
   const rawTrimmedInstrumentedLines = rawInstrumentedLines.map(l => normalizeLine(l.trim()));
+
+  // Reconcile multi-line span.setAttribute() argument lines (key + value as separate lines).
   reconcileSetAttributeMultilineArgs(addedLines, rawTrimmedInstrumentedLines);
+
+  // Reconcile multi-line startActiveSpan() argument lines (span name + arrow callback).
+  // Safer than a broad INSTRUMENTATION_PATTERNS entry for arrow callbacks, which would
+  // match any single-param arrow function including business logic.
+  reconcileStartActiveSpanMultilineArgs(addedLines, rawTrimmedInstrumentedLines);
 
   if (missingLines.length === 0 && addedLines.length === 0) {
     return [{
@@ -706,17 +856,14 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
 /**
  * Prettier-normalized NDS-003 check.
  *
- * Normalizes only the originalCode through Prettier before running the diff.
- * This allows the agent to reformat business-logic lines that the startActiveSpan
- * wrapper pushed past Prettier's printWidth (to pass LINT) without NDS-003
- * flagging them as modifications — Prettier breaks both the original and the
- * agent's reformatted version the same way, so the trimmed content matches.
+ * Normalizes originalCode through Prettier before running the diff. The instrumented
+ * code is compared raw. This allows the agent to reformat business-logic lines pushed
+ * past Prettier's print width by the startActiveSpan wrapper — Prettier breaks both
+ * the original and the reformatted version the same way, so the trimmed content matches.
  *
- * Only the original is normalized; the instrumented code is compared raw. This
- * prevents Prettier from breaking long instrumentation lines (e.g., a
- * startActiveSpan call with a long span name) into fragments whose inner parts
- * (span name string, async callback declaration) aren't recognized as
- * instrumentation patterns and would produce false positives.
+ * Long lines that the LLM preserves as single-line (e.g. when RST-001 skips a function)
+ * are handled by reconcileObjectLiteralExpansion, which joins consecutive missingLines
+ * groups and checks if the joined single-line form appears in addedLines.
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
  * Prettier availability is cached across calls within the same process.

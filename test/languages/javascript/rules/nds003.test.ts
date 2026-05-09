@@ -1636,6 +1636,122 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('object literal expansion reconciliation (#837 — parseSummarizeArgs root cause)', () => {
+    it('passes when LLM preserves single-line returns that Prettier expands in the original', async () => {
+      // Root cause of parseSummarizeArgs 163 violations: LLM returns the function unchanged
+      // (RST-001 — no span added). Prettier(original) expands long returns to multi-line.
+      // NDS-003 then says the expanded lines are "missing" and the single-line form is "added".
+      // The reconciler joins consecutive missing lines back to single-line and matches them.
+      // Use single quotes throughout so inferSingleQuote returns true (Prettier preserves them)
+      const longReturn = "return { dates: [], weeks: [], months: [], force, help: false, weekly, monthly, error: 'Use either --weekly or --monthly, not both.' };";
+      const original = [
+        'export function parseSummarizeArgs(args) {',
+        "  if (args.includes('--weekly') && args.includes('--monthly')) {",
+        `    ${longReturn}`,  // 135 chars — Prettier WILL expand this
+        '  }',
+        "  return { dates: [args[0]], weeks: [], months: [], force: false, help: false, weekly: false, monthly: false, error: null };",
+        '}',
+      ].join('\n');
+
+      // LLM output: unchanged (RST-001 respected), single-line returns preserved
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',  // filtered by TRACER_INIT_PATTERN
+        'export function parseSummarizeArgs(args) {',
+        "  if (args.includes('--weekly') && args.includes('--monthly')) {",
+        `    ${longReturn}`,  // single-line form preserved by LLM
+        '  }',
+        "  return { dates: [args[0]], weeks: [], months: [], force: false, help: false, weekly: false, monthly: false, error: null };",
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when LLM preserves single-line variable assignment that Prettier splits (usage = long string)', async () => {
+      // Prettier splits: `usage = 'long string';` → `usage =\n  'long string';`
+      // LLM preserves the single-line form. The reconciler joins them back.
+      const longUsage = "usage = 'Missing month argument. Usage: commit-story summarize --monthly <YYYY-MM> [--force]';";
+      const original = [
+        'export function f(monthly) {',
+        '  if (!monthly) {',
+        `    ${longUsage}`,  // over 80 chars — Prettier splits this
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export function f(monthly) {',
+        '  if (!monthly) {',
+        `    ${longUsage}`,  // single-line preserved by LLM
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still fires when properties are changed (content change, not just formatting)', async () => {
+      const original = [
+        'function f() {',
+        '  return { dates: [], weeks: [], force: false };',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'function f() {',
+        '  return { dates: [], weeks: [], force: true };',  // force changed!
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Prettier indentation asymmetry — parseSummarizeArgs scenario (#837)', () => {
+    it('reconcileStartActiveSpanMultilineArgs handles span name and callback lines when Prettier splits a long startActiveSpan call', async () => {
+      // When a long startActiveSpan call is Prettier-split, the span name string and
+      // arrow callback appear as unexplained additions. The reconciler detects the full
+      // 3-line shape (startActiveSpan( / 'name', / async (span) => {) and removes them.
+      // Uses short return values to avoid the separate long-return-object issue (#837).
+      const original = [
+        'export async function runWork(x) {',
+        '  return doSomething(x);',
+        '}',
+      ].join('\n');
+
+      // Agent manually formats startActiveSpan with span name and callback on separate lines
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runWork(x) {',
+        '  return tracer.startActiveSpan(',
+        "    'svc.run_work',",     // span name on its own line — would be in addedLines
+        '    async (span) => {',   // callback on its own line — would be in addedLines
+        '      try {',
+        '        return doSomething(x);',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    }',                   // `}` alone — filtered by /^\s*\}\s*$/
+        '  );',                    // `);` — filtered by /^\s*\);?\s*$/
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('multi-line span.setAttribute() argument reconciliation (#785 regression)', () => {
     it('passes when the agent formats span.setAttribute across 3 lines (key and value on separate lines)', () => {
       // Agent writes:
@@ -1717,11 +1833,10 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('Prettier normalization symmetry — reassembly false-positive (#834)', () => {
-    it('fails without pre-normalization when a long constant Prettier splits in the original', async () => {
-      // Demonstrates the root problem: NDS-003 Prettier-normalizes the original (83-char line splits
-      // to 2 lines) but compares against the raw reassembled output (still 1 line). Without
-      // normalizing the reassembled side first, NDS-003 flags the 1-line form as "added"
-      // and the Prettier-split 2-line form as "missing" — a false failure.
+    it('passes via reconcileObjectLiteralExpansion even in the raw diff when Prettier splits a long line', async () => {
+      // The reconcileObjectLiteralExpansion reconciler now handles this case:
+      // Prettier(original) splits a long const into 2 lines, raw instrumented has 1 line.
+      // The reconciler joins the 2 missingLines back to the single-line addedLine → passes.
       const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
       const original = [
         '// ABOUTME: Test fixture.',
@@ -1731,13 +1846,13 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '  return fetch(API_BASE);',
         '}',
       ].join('\n');
+      const prettierNorm = await prettierNormalizeForComparison(original, filePath);
 
-      // Reassembler keeps the original 1-line constant; without normalization NDS-003 should fail
-      const results = await checkNonInstrumentationDiffNormalized(original, original, filePath);
+      // Raw diff: Prettier(original) has 2-line form, raw instrumented has 1-line form.
+      // The reconciler joins them → 0 failures (demonstrates reconciler coverage).
+      const results = checkNonInstrumentationDiff(prettierNorm, original, filePath);
       const failures = results.filter(r => !r.passed);
-      // Prettier(original) splits the 83-char line → 2 lines; raw original still has 1 line
-      // The mismatch causes NDS-003 to fire (the false positive this fix addresses)
-      expect(failures.length).toBeGreaterThan(0);
+      expect(failures).toHaveLength(0);
     });
 
     it('passes after pre-normalizing the reassembled output through Prettier', async () => {
