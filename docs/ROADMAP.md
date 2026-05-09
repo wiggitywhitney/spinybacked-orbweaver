@@ -18,7 +18,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 
-- summarize.js run-5-coverage: NDS-003 Prettier asymmetry causes 163 false violations + possible NDS-005 missing try/catch ([issue #837](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/837)) — root cause diagnosed: agent Prettier-formats whole-file output expanding long return objects; NDS-003 normalizes original through Prettier but compares against raw agent output, creating a mismatch. Fix: normalize both sides symmetrically.
+
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 
 
