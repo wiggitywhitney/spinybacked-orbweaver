@@ -283,6 +283,162 @@ function reconcileSetAttributeCaptures(
 }
 
 /**
+ * Reconcile multi-line method chain collapse.
+ *
+ * When the agent collapses a multi-line method chain onto a single line —
+ *   return text        ← missingLine (originalLineNum N)
+ *     .toLowerCase()   ← missingLine (N+1, starts with '.')
+ *     .replace(...)    ← missingLine (N+2, starts with '.')
+ *     .replace(...);   ← missingLine (N+3, starts with '.')
+ * into:
+ *   return text.toLowerCase().replace(...).replace(...);  ← addedLine
+ *
+ * — NDS-003 fires because the original multi-line form is "missing" and the
+ * single-line form is "added". The two forms are semantically identical —
+ * same chain, different whitespace. This reconciler joins consecutive
+ * missing lines into a candidate collapsed form and removes matched pairs
+ * from both missingLines and addedLines.
+ *
+ * Safety: removal only happens when the joined form exactly matches an
+ * entry in addedLines. Content changes (different method names, arguments,
+ * or receiver) will not match and are still flagged normally.
+ */
+function reconcileMethodChainCollapse(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  // Build content → indices map for addedLines (consume indices to handle duplicates)
+  const addedByContent = new Map<string, number[]>();
+  for (let i = 0; i < addedLines.length; i++) {
+    const key = addedLines[i].line;
+    const existing = addedByContent.get(key);
+    if (existing) existing.push(i);
+    else addedByContent.set(key, [i]);
+  }
+
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  let i = 0;
+  while (i < missingLines.length) {
+    if (missingToRemove.has(i)) { i++; continue; }
+
+    // Build a consecutive group starting at i where lines 2+ start with '.'
+    const group: number[] = [i]; // indices into missingLines
+
+    for (let j = i + 1; j < missingLines.length; j++) {
+      if (missingToRemove.has(j)) break;
+      const prev = missingLines[group[group.length - 1]];
+      const curr = missingLines[j];
+
+      // Must be consecutive in the original source
+      if (curr.originalLineNum !== prev.originalLineNum + 1) break;
+      // Continuation lines must start with '.' (chained method call)
+      if (!curr.line.startsWith('.')) break;
+
+      group.push(j);
+    }
+
+    // Need at least 2 lines (receiver + one method call) for a chain
+    if (group.length >= 2) {
+      // Join all lines — this is the collapsed single-line form the agent produced
+      const collapsed = group.map(idx => missingLines[idx].line).join('');
+
+      const addedIndices = addedByContent.get(collapsed);
+      if (addedIndices && addedIndices.length > 0) {
+        const addedIdx = addedIndices.shift()!;
+        for (const idx of group) missingToRemove.add(idx);
+        addedToRemove.add(addedIdx);
+        i += group.length;
+        continue;
+      }
+    }
+
+    i++;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) {
+    missingLines.splice(idx, 1);
+  }
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
+ * Reconcile multi-line span.setAttribute() argument lines.
+ *
+ * When the agent formats a setAttribute call across four lines:
+ *   span.setAttribute(          ← filtered by isInstrumentationLine
+ *     'some.attribute.key',     ← plain string literal — NOT filtered
+ *     someValue,                ← plain expression — NOT filtered
+ *   );                          ← filtered by isInstrumentationLine
+ *
+ * The key and value lines appear in addedLines as unexplained additions.
+ * This reconciler verifies the full 4-line pattern and removes matched
+ * key+value pairs from addedLines when the surrounding context confirms
+ * they are inside a span.setAttribute() call.
+ *
+ * Safety: requires all four lines in exact sequence — the key line must be
+ * a quoted dotted-lowercase identifier (OTel attribute name format), the
+ * surrounding lines must be the filtered setAttribute opening and closing.
+ *
+ * @param addedLines - Non-instrumentation added lines (mutated in place)
+ * @param allInstrumentedLines - All non-empty trimmed lines from the instrumented output
+ */
+function reconcileSetAttributeMultilineArgs(
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+  allInstrumentedLines: string[],
+): void {
+  // OTel attribute key: quoted lowercase dotted name, e.g. 'some.attribute.key',
+  const attributeKeyPattern = /^['"`][a-z][a-z0-9._]+['"`],?$/;
+  // span.setAttribute( call — trailing open paren, no closing
+  const setAttrCallPattern = /\.setAttribute\(\s*$/;
+  // Closing standalone paren with optional semicolon
+  const closingParenPattern = /^\);\s*$|^\)\s*$/;
+
+  const toRemove = new Set<number>();
+
+  // Build a map from 1-indexed instrumentedLineNum to index in addedLines
+  const addedByLineNum = new Map<number, number>();
+  for (let i = 0; i < addedLines.length; i++) {
+    addedByLineNum.set(addedLines[i].instrumentedLineNum, i);
+  }
+
+  for (let i = 0; i < addedLines.length; i++) {
+    if (toRemove.has(i)) continue;
+    const entry = addedLines[i];
+
+    // Must look like an OTel attribute key string
+    if (!attributeKeyPattern.test(entry.line)) continue;
+
+    const N = entry.instrumentedLineNum; // 1-indexed line number in instrumented output
+
+    // Line before the key (N-1 in 1-indexed = index N-2 in 0-indexed array)
+    // must be a span.setAttribute( call
+    const prevLine = allInstrumentedLines[N - 2];
+    if (!prevLine || !setAttrCallPattern.test(prevLine)) continue;
+
+    // The value line (N+1 in 1-indexed) must also be in addedLines
+    const valueIdx = addedByLineNum.get(N + 1);
+    if (valueIdx === undefined || toRemove.has(valueIdx)) continue;
+
+    // Line after the value (N+2 in 1-indexed = index N+1 in 0-indexed array)
+    // must be the closing );
+    const closingLine = allInstrumentedLines[N + 1];
+    if (!closingLine || !closingParenPattern.test(closingLine)) continue;
+
+    // All four lines confirmed — key and value are setAttribute arguments
+    toRemove.add(i);        // key line
+    toRemove.add(valueIdx); // value line
+  }
+
+  for (const idx of [...toRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
  * NDS-003: Verify that non-instrumentation lines are unchanged.
  *
  * Two-directional check:
@@ -364,12 +520,36 @@ export function checkNonInstrumentationDiff(
   // This is a safe instrumentation-motivated transformation (like catch-variable binding).
   reconcileReturnCaptures(missingLines, addedLines);
 
+  // Reconcile multi-line method chain collapse: when the agent collapses a
+  // developer-style method chain (return text\n  .toLowerCase()\n  .replace(...))
+  // onto a single line, NDS-003 sees the original lines as missing and the
+  // collapsed form as added. The two are semantically identical — only whitespace
+  // differs. Safety: exact content match required; any argument change still fires.
+  reconcileMethodChainCollapse(missingLines, addedLines);
+
   // Reconcile aggregation variable captures: when the agent introduces a const solely
   // to compute a span attribute value (e.g. const total = arr.reduce(...);
   // span.setAttribute('key', total)), NDS-003 sees the capture as a non-instrumentation
   // addition. Remove matched captures from addedLines using the full instrumented output
   // (setAttribute is already filtered from addedLines by isInstrumentationLine).
   reconcileSetAttributeCaptures(addedLines, instrumentedLines);
+
+  // Reconcile multi-line span.setAttribute() argument lines: when the agent formats a
+  // setAttribute call across 3 lines —
+  //   span.setAttribute(        ← filtered (isInstrumentationLine ✓)
+  //     'some.attribute.key',   ← NOT filtered (plain string literal)
+  //     someValue,              ← NOT filtered (plain expression)
+  //   );                        ← filtered (isInstrumentationLine ✓)
+  // — the key and value lines appear in addedLines as unexplained additions.
+  // This reconciler removes matched key+value pairs when the surrounding lines
+  // confirm the 4-line setAttribute call pattern.
+  //
+  // Must pass RAW trimmed lines (NOT filtered): addedLines[*].instrumentedLineNum is
+  // 1-indexed relative to rawInstrumentedLines, so the N-2 / N+1 lookups are only
+  // correct against the unfiltered array. Passing instrumentedLines (blank lines
+  // dropped) shifts the indices whenever a blank line precedes the setAttribute call.
+  const rawTrimmedInstrumentedLines = rawInstrumentedLines.map(l => normalizeLine(l.trim()));
+  reconcileSetAttributeMultilineArgs(addedLines, rawTrimmedInstrumentedLines);
 
   if (missingLines.length === 0 && addedLines.length === 0) {
     return [{
