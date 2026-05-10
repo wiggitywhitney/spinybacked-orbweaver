@@ -200,6 +200,64 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
     });
   });
 
+  // Diagnostic: does the agent preserve the inner try/catch in runSummarize when adding an outer span?
+  // Per issue #839 Problem C: the agent removes the inner catch (per-date failure handler) when adding
+  // the outer span wrapper. The inner catch at lines ~200-245 catches individual-date failures gracefully
+  // (catches and continues the loop) — it must survive intact nested inside the outer span wrapper.
+  describe('runSummarize — isolated function-level instrumentation (#839 Problem C diagnostic)', () => {
+    it('instruments runSummarize and verifies inner try/catch survives the outer span wrapper', { timeout: 600_000 }, async () => {
+      const { filePath, originalCode } = setupFile('src/commands/summarize.js');
+      const jsProvider = new (await import('../../src/languages/javascript/index.ts')).JavaScriptProvider();
+
+      const extractedFunctions = jsProvider.extractFunctions(originalCode);
+      const runSummarizeFn = extractedFunctions.find(f => f.name === 'runSummarize');
+      expect(runSummarizeFn, 'runSummarize must be extracted').toBeDefined();
+
+      // Place the function file inside tempDir so afterEach cleans it up.
+      const { writeFileSync: wf } = await import('node:fs');
+      const { join: j } = await import('node:path');
+      const fnFilePath = j(tempDir, 'runSummarize.js');
+      wf(fnFilePath, runSummarizeFn!.contextHeader, 'utf-8');
+
+      const { instrumentWithRetry: iwr } = await import('../../src/fix-loop/instrument-with-retry.ts');
+      const result = await iwr(fnFilePath, runSummarizeFn!.contextHeader, resolvedSchema, makeConfig(), {
+        provider: jsProvider,
+        _skipFunctionFallback: true,
+      });
+
+      dumpDiagnostics('runSummarize.js', result);
+
+      console.log('\n=== runSummarize isolation result ===');
+      console.log('status:', result.status);
+      console.log('spansAdded:', result.spansAdded);
+      console.log('validationAttempts:', result.validationAttempts);
+      console.log('errorProgression:', result.errorProgression);
+      if (result.lastError) {
+        const lines = result.lastError.split('\n');
+        console.log('First 15 error lines:');
+        lines.slice(0, 15).forEach(l => console.log(' ', l.slice(0, 120)));
+      }
+
+      // The inner try/catch (per-date failure handler) must survive — if the agent removes it,
+      // NDS-005 fires (reassembly validation detects structural changes). Success means the
+      // agent correctly nested the span wrapper without disturbing the per-date catch block.
+      expect(result.status).toBe('success');
+      // runSummarize is an async entry point — at least one span must be added.
+      expect(result.spansAdded, 'runSummarize must receive at least one span').toBeGreaterThan(0);
+      // The per-date catch block (result.failed.push) must still be present in the instrumented output.
+      // This is the specific invariant that NDS-005 catches when the agent removes the inner catch.
+      // Use result.path (set by buildSuccessResult to the filePath passed to executeRetryLoop)
+      // as the primary source; fall back to lastInstrumentedCode (set on failure) so that
+      // on CI — where readFileSync(fnFilePath) has returned '' despite the file being present
+      // at result.path — the assertion still reflects the actual agent output.
+      const instrumented = readFileSync(result.path, 'utf-8') || result.lastInstrumentedCode || '';
+      expect(
+        instrumented,
+        'inner per-date catch block (result.failed.push) must survive span wrapping',
+      ).toMatch(/result\.failed\.push/);
+    });
+  });
+
   // Run-5 FAILED: SCH-002 oscillation on commit_story.summarize.* attrs
   // Run-4: 3 spans (runSummarize, runWeeklySummarize, runMonthlySummarize are async entry points)
   describe('summarize.js — CLI handler; 3 async entry points', () => {

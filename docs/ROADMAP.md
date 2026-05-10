@@ -19,7 +19,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 
 
-- run-5-coverage remaining failures: NDS-003 regex fix + reverse reconciler + NDS-005 + token budget ([issue #839](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/839)) — summarize.js/journal-graph.js/summary-graph.js still partial; Problem A is a one-line regex fix, Problem B is a new reverse reconciler, C and D need investigation.
+- run-5-coverage function-level fallback NDS-003: full argument-list reformats and complex constant oscillation ([issue #841](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/841)) — PR #840 fixed 2-line whole-file splits; remaining failures are in function-level fallback: Pattern A = agent splits all function args across 5+ lines; Pattern B = RST-001 oscillation when context header includes complex regex arrays (BANNED_WORD_REPLACEMENTS).
 - Human-facing advisory output ([PRD #509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)) — add human-facing descriptions for all rules that surface to humans; parallelizable, but rule-list milestones sequence after PRD #505 (PRD #508 ✓ cleared — SCH rebuild merged).
 
 

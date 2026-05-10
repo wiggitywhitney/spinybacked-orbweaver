@@ -1876,4 +1876,181 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
   });
+
+  describe('Problem A — reconcileObjectLiteralExpansion handles }); and }) closings (#839)', () => {
+    it('passes when agent adds span wrapper but keeps { force } arg single-line while Prettier splits in normalized original', async () => {
+      // summarize.js: `await generateAndSaveWeeklySummary(weekStr, basePath, { force });`
+      // is 87 chars at 4-space → Prettier splits to 3 lines in the normalized original.
+      // The agent adds a span wrapper but keeps { force } as a single line in its output.
+      // The span callback's `});` consumes the normalized original's `});` in the frequency
+      // map, leaving 2 missingLines: the `{` line + `force,`. The reconciler must append
+      // the consumed `});` closing variants and try comma-removal to recover the match.
+      const original = [
+        'export async function runWeeklySummarize(options) {',
+        '  const { weeks, force, basePath } = options;',
+        '  for (const weekStr of weeks) {',
+        '    const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '  }',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      // Agent adds span (2 extra spaces of indent), preserves { force } as single-line
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runWeeklySummarize(options) {',
+        '  return tracer.startActiveSpan("summarize.run_weekly", async (span) => {',
+        '    try {',
+        '      const { weeks, force, basePath } = options;',
+        '      for (const weekStr of weeks) {',
+        // Single-line form at 8-space indent — agent didn't split it
+        '        const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '      }',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when normalized original has complete 3-line split with }); and agent has single-line form (RST-001 path, no span added)', async () => {
+      // When the agent returns a function unchanged (RST-001), there is no span callback
+      // `});` to consume the normalized original's function-call `});`. All 3 split lines
+      // are in missingLines. The reconciler joins them to `...{ force, });` and must remove
+      // the trailing comma — the old regex `,(\s*\}[;]?\s*)$` failed because `[;]?` does not
+      // match the `)` in `});`. Fixed to `/,(\s*\}[;)]*\s*)$/`.
+      const original = [
+        'export async function runSomething(options) {',
+        '  const { force } = options;',
+        '    const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '}',
+      ].join('\n');
+
+      // Agent returns function unchanged (just adds OTel imports for other file parts)
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runSomething(options) {',
+        '  const { force } = options;',
+        // Preserved as single-line (no span callback to add extra `});`)
+        '    const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('Problem B — reconcileAgentSplitLines handles agent-split single-line expressions (#839)', () => {
+    it('passes when agent splits a single-line variable assignment that fits in original but not in span callback', () => {
+      // `const formattedSummaries = formatDailySummariesForWeekly(dailySummaries);`
+      // Fits at 4-space (78 chars) — Prettier does NOT split it in the original.
+      // Inside span callback at 6-space (80 chars) — agent splits it onto 2 lines.
+      // missingLines: single-line form; addedLines: 2 consecutive split lines.
+      const original = [
+        'export async function generateWeeklySummary(data) {',
+        '  const dailySummaries = data.dailySummaries;',
+        '  const formattedSummaries = formatDailySummariesForWeekly(dailySummaries);',
+        '  return formattedSummaries;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function generateWeeklySummary(data) {',
+        '  return tracer.startActiveSpan("svc.generate_weekly_summary", async (span) => {',
+        '    try {',
+        '      const dailySummaries = data.dailySummaries;',
+        // Agent split this line because at 6-space it's 80 chars:
+        '      const formattedSummaries =',
+        '        formatDailySummariesForWeekly(dailySummaries);',
+        '      return formattedSummaries;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when agent splits a 2-line assignment continuation (const x =\\n  value) that was single-line in the original', () => {
+      // journal-graph.js: `const formattedSummaries = formatDailySummariesForWeekly(dailySummaries);`
+      // is 78 chars at 4-space indent → Prettier keeps as single line in normalized original.
+      // Inside span callback at 6-space the line becomes 80 chars → agent splits onto 2 lines.
+      // missingLines: single-line form; addedLines: 2 consecutive split lines.
+      // reconcileAgentSplitLines joins the 2 addedLines and matches against the missingLine.
+      const original = [
+        'export async function generateWeeklySummary(data) {',
+        '    const formattedSummaries = formatDailySummariesForWeekly(dailySummaries);',
+        '  return formattedSummaries;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function generateWeeklySummary(data) {',
+        '  return tracer.startActiveSpan("svc.generate_weekly", async (span) => {',
+        '    try {',
+        // Agent split the assignment: const x =\n  value; (both lines are addedLines)
+        '      const formattedSummaries =',
+        '        formatDailySummariesForWeekly(dailySummaries);',
+        '      return formattedSummaries;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still fires when agent changes content while splitting (not just reformatting)', () => {
+      // If the agent splits AND changes content, NDS-003 must still fire.
+      const original = [
+        'async function processData(data) {',
+        '  const result = processLongFunctionName(data);',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function processData(data) {',
+        '  return tracer.startActiveSpan("svc.process_data", async (span) => {',
+        '    try {',
+        // Agent changed `data` to `data.items` — content change, not just formatting
+        '      const result =',
+        '        processLongFunctionName(data.items);',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
 });
