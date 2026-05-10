@@ -246,9 +246,11 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       expect(result.spansAdded, 'runSummarize must receive at least one span').toBeGreaterThan(0);
       // The per-date catch block (result.failed.push) must still be present in the instrumented output.
       // This is the specific invariant that NDS-005 catches when the agent removes the inner catch.
-      // Read from fnFilePath (the actual instrumented file) rather than lastInstrumentedCode,
-      // which is only populated on failure.
-      const instrumented = readFileSync(fnFilePath, 'utf-8');
+      // Use result.path (set by buildSuccessResult to the filePath passed to executeRetryLoop)
+      // as the primary source; fall back to lastInstrumentedCode (set on failure) so that
+      // on CI — where readFileSync(fnFilePath) has returned '' despite the file being present
+      // at result.path — the assertion still reflects the actual agent output.
+      const instrumented = readFileSync(result.path, 'utf-8') || result.lastInstrumentedCode || '';
       expect(
         instrumented,
         'inner per-date catch block (result.failed.push) must survive span wrapping',
