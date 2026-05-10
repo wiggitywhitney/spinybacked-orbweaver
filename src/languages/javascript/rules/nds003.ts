@@ -355,6 +355,13 @@ function reconcileObjectLiteralExpansion(
  *       appears in missingLines (handles object-argument-style splits)
  *
  * Safety: exact content match required — any content change still fires.
+ *
+ * Note: a "consumed-closing recovery" variant (appending `});`, `})`, `}` and
+ * retrying) was considered and deliberately omitted. It was too broad — it matched
+ * multi-line object literals like `{ includeEmpty: false, timeout: 3000 }` and
+ * caused the "without normalization: fails" regression test to silently pass.
+ * The object-literal-with-consumed-closing case is already handled in
+ * `reconcileObjectLiteralExpansion` (try-c). Do not re-add it here.
  */
 function reconcileAgentSplitLines(
   missingLines: Array<{ line: string; originalLineNum: number }>,
