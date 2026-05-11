@@ -2268,6 +2268,69 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('Problem C — reconcilePartialArgument suffix match without 50% length constraint (#841)', () => {
+    it('passes when function arg is suffix of missing line but shorter than 50% of it', async () => {
+      // saveJournalEntry has a multi-line Prettier signature with `sections,` and `commit,`
+      // as standalone lines — these cancel. But `reflections = [],` (with default) does NOT
+      // cancel `reflections,` (without default) because they strip to different strings.
+      // After wrapping in startActiveSpan, the 1-liner formatJournalEntry call exceeds
+      // Prettier's printWidth and gets re-split to multi-line. Only `reflections,` remains
+      // as an uncancelled added line (11 chars) — which is the suffix of the missing line
+      // but far less than 50% of its length. The suffix match must fire without the
+      // 50% constraint.
+      const original = [
+        // Multi-line signature: sections, and commit, will be in originalSet
+        'export async function saveJournalEntry(',
+        '  sections,',
+        '  commit,',
+        '  reflections = [],',  // stripped: 'reflections=[]' — does NOT cancel 'reflections,'
+        '  basePath = \'.\',',
+        ') {',
+        // 79 chars total at 2-space indent — under printWidth=80, stays 1 line in original
+        '  const formattedEntry = formatJournalEntry(sections, commit, reflections);',
+        '  await appendFile(basePath, formattedEntry);',
+        '}',
+      ].join('\n');
+
+      // The instrumented code represents what the agent + Prettier produce after reassembly:
+      // the call is at 10-space indent (81 chars > printWidth=80) so Prettier splits it.
+      // sections, and commit, cancel against signature params. reflections, doesn't cancel
+      // because signature has `reflections = [],` (strips to `reflections=[]`) not `reflections,`.
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function saveJournalEntry(',
+        '  sections,',
+        '  commit,',
+        '  reflections = [],',
+        '  basePath = \'.\',',
+        ') {',
+        '  return tracer.startActiveSpan("svc.save", async (span) => {',
+        '    try {',
+        // Prettier-split form: at 10-space indent this call is 81 chars (>80), so it splits
+        '      const formattedEntry = formatJournalEntry(',
+        '        sections,',
+        '        commit,',
+        '        reflections,',
+        '      );',
+        '      await appendFile(basePath, formattedEntry);',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('Problem C — reconcileIndentReformat handles Prettier re-split at deeper indent (#841)', () => {
     it('passes when agent wraps function and Prettier re-splits a call differently at deeper indent', async () => {
       // `const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });`

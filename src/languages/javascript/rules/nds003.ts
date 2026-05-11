@@ -663,11 +663,12 @@ function reconcilePartialArgument(
       const aStripped = stripForComparison(addedLines[ai].line);
       if (!aStripped) continue;
 
-      // Case A: suffix — the stripped addedLine is the trailing argument, the
-      // function call wrapper was consumed from instrFreq elsewhere.
-      // Require ≥10 chars (longer than typical short param names) and ≥50% length.
-      if (aStripped.length >= 10 && aStripped.length >= mStripped.length * 0.5
-          && mStripped.endsWith(aStripped)) {
+      // Case A: suffix — the stripped addedLine is the trailing argument.
+      // Require ≥10 chars (longer than typical short param names). No 50% length
+      // constraint: the argument can be much shorter than the full original 1-liner.
+      // e.g., `reflections,` (11 chars) is the suffix of `formatJournalEntry(sections,
+      // commit, reflections);` (66 chars stripped) but only ~17% of its length.
+      if (aStripped.length >= 10 && mStripped.endsWith(aStripped)) {
         matchedAdded.push(ai);
         continue;
       }
