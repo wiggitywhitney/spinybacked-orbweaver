@@ -98,7 +98,21 @@ PRD #505 and PRD #508 have both merged — the rule list above is final.
 
 ## Decision Log
 
-_Decisions will be added as design questions are resolved during implementation._
+### M1 — Mechanism: Option 3 (description registry in `rule-names.ts`)
+
+**Decision**: Extend `src/validation/rule-names.ts` with a `getRuleHumanDescription(ruleId: string): string | undefined` function. Output paths use `getRuleHumanDescription(ruleId) ?? message` as the human-facing text.
+
+**Why not Option 1** (`humanMessage` on `CheckResult`): `CheckResult`'s own docstring says "Designed for LLM consumption — every field provides actionable information that an agent can use." Adding a human-facing field to an agent-facing type creates semantic confusion. All 20+ rule files would need touching to add the field — a wide-surface change for what is fundamentally a lookup.
+
+**Why not Option 2** (dedicated report module): Introduces a new module plus import updates in both `pr-summary.ts` and `reasoning-report.ts`. More moving parts than necessary.
+
+**Why Option 3**: `rule-names.ts` is already a registry (it has `formatRuleId` and `expandRuleCodesInText`). Both human-facing output paths (`pr-summary.ts` and `reasoning-report.ts`) already import from it — zero new imports needed in output paths. `CheckResult` stays clean. Description drift risk is equivalent to `formatRuleId` drift: same file, same update discipline. Descriptions can be added incrementally; missing ones fall back to `message` gracefully.
+
+**Implementation sketch**:
+- Add `RULE_HUMAN_DESCRIPTIONS: Record<string, string>` map to `rule-names.ts`
+- Export `getRuleHumanDescription(ruleId: string): string | undefined`
+- In `pr-summary.ts` line 372: replace `expandRuleCodesInText(messageBody)` with `getRuleHumanDescription(ann.ruleId) ?? expandRuleCodesInText(messageBody)`
+- In `reasoning-report.ts` line 88: replace `finding.message` with `getRuleHumanDescription(finding.ruleId) ?? finding.message`
 
 ---
 
@@ -121,31 +135,32 @@ _Decisions will be added as design questions are resolved during implementation.
 
 Evaluate the three mechanisms against this project's existing patterns. Consider: (a) how the rule check functions currently return `CheckResult` — does adding a `humanMessage` field fit cleanly?; (b) whether output paths already have a shared formatting layer (if yes, a report module fits naturally); (c) long-term maintenance cost of keeping descriptions in sync with rule behavior (registry-based approach has highest drift risk; in-check-function approach has lowest).
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Read `src/validation/types.ts` for the current `CheckResult` shape
-- [ ] Read at least three existing rule check functions (e.g., `cov004.ts`, `rst001.ts`, `sch001.ts`) to understand how they currently build `message`
-- [ ] Read the CLI verbose output code and the PR summary generator to understand how `message` currently reaches humans
-- [ ] Decision recorded in this PRD's Decision Log: Option 1 (`humanMessage` field), Option 2 (dedicated report module), or Option 3 (description registry), with rationale covering maintenance, drift risk, and integration cost
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Read `src/validation/types.ts` for the current `CheckResult` shape
+- [x] Read at least three existing rule check functions (e.g., `cov004.ts`, `rst001.ts`, `sch001.ts`) to understand how they currently build `message`
+- [x] Read the CLI verbose output code and the PR summary generator to understand how `message` currently reaches humans
+- [x] Decision recorded in this PRD's Decision Log: Option 3 (description registry in `rule-names.ts`), with rationale covering maintenance, drift risk, and integration cost
 
 ### Milestone M2: Implement the chosen mechanism (infrastructure only)
 
-Build the infrastructure for the mechanism chosen in M1. No rule text written yet — this milestone wires up the plumbing and adds one placeholder description for a single rule to prove the mechanism works end-to-end.
+Build the description registry in `src/validation/rule-names.ts` (Option 3 chosen in M1). No rule text written yet — this milestone wires up the plumbing and adds one placeholder description for COV-005 to prove the mechanism works end-to-end.
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Mechanism implemented per M1's decision (new field on `CheckResult`, new report module, or new description registry)
-- [ ] A single placeholder human-facing description wired up for one rule (e.g., COV-005) as a smoke test — verify it reaches the intended output without changing agent-facing message behavior
-- [ ] Existing `message` fields unchanged — agent behavior in the fix-loop is unaffected (verified by running the acceptance gate and confirming no regression)
-- [ ] Unit tests for the new mechanism (type checks, presence checks, fallback behavior when a rule has no human-facing description yet)
+- [ ] Add `RULE_HUMAN_DESCRIPTIONS: Record<string, string>` to `src/validation/rule-names.ts` with a single placeholder entry for COV-005
+- [ ] Export `getRuleHumanDescription(ruleId: string): string | undefined` from `rule-names.ts`
+- [ ] `CheckResult` in `src/validation/types.ts` is NOT modified — no new fields
+- [ ] Existing `message` fields unchanged — agent behavior in the fix-loop is unaffected
+- [ ] Unit tests for `getRuleHumanDescription`: presence check for COV-005, `undefined` return for an unknown rule ID, type check
 - [ ] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M3: Wire the first output path to use the new mechanism
 
-Pick one output path (CLI verbose output OR PR summary file) and wire it to display human-facing descriptions when present. If a rule doesn't have a human-facing description yet (pre-M4), the output path falls back to the agent-facing `message` gracefully — no broken UI.
+Wire `src/deliverables/pr-summary.ts` (the PR summary file, which already imports `rule-names.ts`) to prefer `getRuleHumanDescription` over the agent-facing `message`. `src/coordinator/reasoning-report.ts` is the second path (M6). If a rule has no description yet, the output falls back to `message` gracefully.
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Chosen output path updated to prefer `humanMessage` / description-registry lookup / report-module output over the agent-facing `message`
+- [ ] In `pr-summary.ts` around line 372: replace `expandRuleCodesInText(messageBody)` with `getRuleHumanDescription(ann.ruleId) ?? expandRuleCodesInText(messageBody)` — import `getRuleHumanDescription` from `rule-names.ts` (already imported)
 - [ ] Fallback to agent-facing `message` when no human description is registered — tested
-- [ ] Integration test covering both cases: a rule with a human description (COV-005 from M2) and a rule without one (pick any)
+- [ ] Integration test covering both cases: COV-005 (has description from M2) and another rule without one
 - [ ] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M4: Write human-facing descriptions for all advisory rules
