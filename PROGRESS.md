@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-11) Updated docs/rules-reference.md to document the human-facing description mechanism — where the descriptions live, how to add one, and what they're for. Also removed the roadmap entry for this work (completed) and marked the advisory rules audit action item as done.
+
 - (2026-05-11) Per-file reasoning reports (the companion `.md` files committed alongside instrumented code) now also show human-readable rule descriptions for advisory findings, matching what PR summaries show. Both output paths now use descriptions from the same registry, so adding a new description in one place updates both.
 
 - (2026-05-11) Wrote human-readable descriptions for all 12 advisory validation rules (CDQ-006/007/009/010, COV-004/005, RST-001/002/003/004/005, API-002). These descriptions are now shown in PR summaries instead of the terse agent-facing messages. Each one explains what the rule checks, why it matters in practice, and what a reviewer should do.

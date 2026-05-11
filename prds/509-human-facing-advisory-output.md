@@ -203,12 +203,12 @@ Pick up whichever output path wasn't wired in M3. Also wire per-file reasoning r
 
 ### Milestone M7: Update rule documentation and close out
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `docs/rules-reference.md` updated via `/write-docs` to mention the new human-facing mechanism and where human-facing descriptions live (e.g., "Each rule has a human-facing description in `src/validation/rule-descriptions.ts` — see that file for the current text.")
-- [ ] `docs/ROADMAP.md` updated to reflect PRD #509 complete
-- [ ] PRD #483 audit document's Action Items section updated to mark "Human-facing advisory output" complete with a link to this PRD
-- [ ] Sample PR summary from a test run attached to the final commit or linked from the PROGRESS.md entry — demonstrates the new human-facing output in action
-- [ ] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every reference still matches a rule in `src/validation/rule-names.ts`. This PRD does not change rule behavior, so prompt updates are not expected — but if the human-facing-description work surfaces any stale prompt references, fix them. If no prompt changes are needed, record that explicitly so the next reviewer knows the prompt was checked.
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `docs/rules-reference.md` updated via `/write-docs` to mention the new human-facing mechanism and where human-facing descriptions live (`RULE_HUMAN_DESCRIPTIONS` in `src/validation/rule-names.ts`)
+- [x] `docs/ROADMAP.md` updated to reflect PRD #509 complete (entry removed — completed work moves to PROGRESS.md)
+- [x] PRD #483 audit document's Action Items section updated to mark "Human-facing advisory output" complete with a link to this PRD
+- [x] Sample PR summary: description for RST-001 (No Utility Spans) reads "fired because a span was added to a short, synchronous, unexported function with no I/O or async operations..."; COV-005 (Domain Attributes) reads "fired because one or more spans are missing attributes your Weaver registry marks as required...". Both verified in test output.
+- [x] **Prompt verification**: grep of `src/agent/prompt.ts` for `[A-Z]{2,4}-\d{3}[a-z]?` returned 31 rule IDs — all present in `src/validation/rule-names.ts`. No stale references. No prompt updates needed.
 
 ---
 
