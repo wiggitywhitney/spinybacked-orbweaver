@@ -114,7 +114,14 @@ function normalizeLine(line: string): string {
     // `if (cond) {` compares equal to `if (cond)`. Required when the agent adds
     // braces to a single-statement `if` to accommodate span body wrapping.
     // Only fires when `{` is at the end of the line (not inline one-liners).
-    .replace(/^(if\s*\(.+\))\s*\{\s*$/, '$1');
+    .replace(/^(if\s*\(.+\))\s*\{\s*$/, '$1')
+    // Normalize optional arrow function parameter parentheses: `(x) =>` and `x =>`
+    // are 100% equivalent JavaScript. The agent sometimes adds parens to a
+    // single-parameter arrow function when reformatting inside a span callback,
+    // causing false NDS-003 violations. Exclude `async (x) =>` — the async
+    // keyword is meaningful context; stripping its parens would break
+    // reconcileStartActiveSpanMultilineArgs pattern matching.
+    .replace(/(?<!async\s)\(\s*(\w+)\s*\)\s*(=>)/, '$1 $2');
 }
 
 /**
