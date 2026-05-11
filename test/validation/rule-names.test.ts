@@ -84,8 +84,8 @@ describe('getRuleHumanDescription', () => {
   });
 
   it('returns undefined for rule IDs that exist in RULE_NAMES but have no human description yet', () => {
-    // RST-001 through RST-005 will get descriptions in M4, not M2
-    expect(getRuleHumanDescription('RST-001')).toBeUndefined();
+    // CDQ-001 (Spans Closed) is a blocking rule; M5 will add its description
+    expect(getRuleHumanDescription('CDQ-001')).toBeUndefined();
   });
 
   it('does not affect agent-facing messages — CheckResult.message is unrelated', () => {

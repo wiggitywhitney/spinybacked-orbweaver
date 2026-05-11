@@ -670,9 +670,10 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // COV-004 for a function NOT mentioned as skipped should still appear
+      // COV-004 for a function NOT mentioned as skipped should still appear.
+      // Human description replaces agent-facing message — check rule ID and description text.
       expect(md).toContain('COV-004');
-      expect(md).toContain('handleRequest');
+      expect(md).toContain('Async Operation Spans');
     });
 
     it('does not suppress COV-004 for "process" when notes only mention "processOrder" (word boundary)', () => {
@@ -721,9 +722,10 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // Notes mention doFetch but not as a skip — advisory should still appear
+      // Notes mention doFetch but not as a skip — advisory should still appear.
+      // Human description replaces agent-facing message (which had the function name).
       expect(md).toContain('COV-004');
-      expect(md).toContain('doFetch');
+      expect(md).toContain('Async Operation Spans');
     });
   });
 
@@ -907,7 +909,8 @@ describe('renderPrSummary', () => {
       const md = renderPrSummary(result, _makeConfig());
 
       expect(md).toContain('CDQ-006');
-      expect(md).toContain('Expensive computation not guarded');
+      // Human description replaces agent-facing message for CDQ-006
+      expect(md).toContain('isRecording Guard');
     });
   });
 

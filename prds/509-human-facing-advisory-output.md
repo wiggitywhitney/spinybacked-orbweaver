@@ -175,11 +175,11 @@ Wire `src/deliverables/pr-summary.ts` (the PR summary file, which already import
 
 Write human-facing descriptions for every advisory rule per the writing-style guide in Design Notes. The advisory rule list in the "Rule scope" section is final — PRD #505 and PRD #508 have both merged.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above)
-- [ ] Each description follows the writing style from Design Notes (updated per Decision 2): (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Tone: friendly, direct, concrete. Length: fits in a PR annotation without scrolling — typically 3-4 sentences, adjust to rule complexity; do not pad or truncate. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
-- [ ] Descriptions surface correctly in the output path wired in M3 — manually verified on a test run
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above)
+- [x] Each description follows the writing style from Design Notes (updated per Decision 2): (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Tone: friendly, direct, concrete. Length: fits in a PR annotation without scrolling — typically 3-4 sentences, adjust to rule complexity; do not pad or truncate. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
+- [x] Descriptions surface correctly in the output path wired in M3 — manually verified on a test run
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M5: Write human-facing descriptions for all blocking rules
 

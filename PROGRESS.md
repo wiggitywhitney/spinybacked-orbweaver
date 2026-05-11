@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-11) Wrote human-readable descriptions for all 12 advisory validation rules (CDQ-006/007/009/010, COV-004/005, RST-001/002/003/004/005, API-002). These descriptions are now shown in PR summaries instead of the terse agent-facing messages. Each one explains what the rule checks, why it matters in practice, and what a reviewer should do.
+
 - (2026-05-11) PR summaries now show human-readable descriptions for validation rule findings instead of the terse agent-facing messages, when a description is available. The first wired output path is the `spiny-orb-pr-summary.md` file committed alongside instrumentation changes. Rules without a description yet fall back to the current message automatically. The first description covers COV-005 (missing domain attributes), with the rest coming in a subsequent step.
 
 - (2026-05-11) Added `getRuleHumanDescription()` to `src/validation/rule-names.ts` — the first piece of infrastructure for human-readable validation rule descriptions. The PR summary and reasoning report currently show terse agent-facing messages (e.g., "Required (must add): db.query.text") to developers reviewing PRs; this function will let those output paths show friendlier context instead. Descriptions are added incrementally — missing ones fall back to the current message automatically, so nothing breaks before the descriptions are written.
