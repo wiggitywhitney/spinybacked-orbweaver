@@ -196,6 +196,11 @@ function reconcileReturnCaptures(
     const returnExpr = extractReturnExpr(missingLines[mi].line);
     if (!returnExpr) continue;
 
+    // Object-literal returns (`return { ... }`) must not be reconciled — the agent
+    // must preserve the original return statement exactly; extracting the object to
+    // a capture variable changes code structure and is explicitly forbidden in the prompt.
+    if (returnExpr.trimStart().startsWith('{')) continue;
+
     // Strip leading `await` for comparison — matches captures where await was added.
     const normalizedReturnExpr = returnExpr.replace(/^await\s+/, '');
     const captureIndices = capturesByExpr.get(normalizedReturnExpr);
@@ -561,6 +566,14 @@ function reconcileIndentReformat(
   const addedToRemove = new Set<number>();
 
   // Pre-build all consecutive addedLine groups (≥2 lines) with their token strings.
+  // One group per starting index: the full consecutive run from that index.
+  //
+  // Known limitation: when two adjacent re-split statements occupy consecutive added
+  // lines, the addedGroup for the first statement's start covers both statements
+  // combined. The combined-group tokens won't match either statement's missing-group
+  // tokens exactly, but the prefix match (below) handles the case where the combined
+  // tokens have the first statement's tokens as a leading prefix.
+  // Tracked for redesign in PRD #845.
   const addedGroups: Array<{ indices: number[]; tokens: string }> = [];
   for (let ai = 0; ai < addedLines.length; ai++) {
     if (addedToRemove.has(ai)) continue;
@@ -576,6 +589,7 @@ function reconcileIndentReformat(
   }
 
   // For each consecutive missingLines group (≥2 lines), find a matching addedLines group.
+  // Advancing by 1 on no-match lets the next iteration try a shorter starting subset.
   let mi = 0;
   while (mi < missingLines.length) {
     if (missingToRemove.has(mi)) { mi++; continue; }

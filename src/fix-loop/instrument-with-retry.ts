@@ -1030,6 +1030,11 @@ async function functionLevelFallback(
     // functions) can cause the pre-scan AST parser to throw, bypassing the early
     // exit and triggering an unnecessary LLM call. That call then oscillates because
     // the agent modifies the regex constant and NDS-003 fires on every attempt.
+    //
+    // Known limitation: this also skips sync entry points (COV-001) and sync I/O
+    // functions (COV-002) in function-level fallback. A stronger skip signal —
+    // specific to the pre-scan-throw/oscillation pattern — would be more correct,
+    // but requires detecting the exact failure mode. Tracked in PRD #845.
     if (!fn.isAsync) {
       fnResults.push({
         name: fn.name,
@@ -1095,7 +1100,10 @@ async function functionLevelFallback(
             cumulativeSchema = appendAttributeExtensionsToSchema(cumulativeSchema, attrExts);
           }
           if (spanExts.length > 0) {
-            cumulativeSpanExtensions.push(...spanExts);
+            // Strip schema ID prefix (span. / span:) — cumulativeSpanExtensions holds
+            // bare runtime span names (e.g. "foo.bar"), not schema IDs ("span.foo.bar"),
+            // so startActiveSpan() duplicate-name warnings match what the agent emits.
+            cumulativeSpanExtensions.push(...spanExts.map(e => e.replace(/^span[.:]/u, '')));
           }
         }
       } else {
