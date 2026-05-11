@@ -1439,13 +1439,15 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      // When Prettier is unavailable, the normalized check falls back to raw diff.
-      // The raw diff sees the original single-line as missing — NDS-003 fails.
+      // When Prettier is unavailable the normalized check falls back to raw diff.
+      // reconcileAgentSplitLines try-c (whitespace-stripped comparison) now handles
+      // this pattern even in raw-diff mode, so the check passes.
       const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
       const failures = results.filter((r) => !r.passed);
-      expect(failures.length).toBeGreaterThan(0);
+      expect(failures).toHaveLength(0);
 
-      // The warning is emitted for coordinator-level reporting.
+      // The warning is still emitted for coordinator-level reporting even when the
+      // check passes — it signals that Prettier normalization was unavailable.
       const warning = drainNds003Warning();
       expect(warning).toContain('NDS-003');
       expect(warning).toContain('Prettier not available');
@@ -1479,9 +1481,11 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     // Prettier would (to comply with LINT after span indentation pushes it over printWidth),
     // NDS-003 should pass after normalizing both sides through Prettier.
 
-    it('without normalization: fails when agent splits a long line to comply with LINT', () => {
-      // Demonstrates the root cause: without normalization, the original single-line form
-      // is "missing" from the instrumented multi-line form even though the content is identical.
+    it('without normalization: passes via try-c whitespace comparison when agent splits a long line', () => {
+      // reconcileAgentSplitLines try-c (whitespace-stripped comparison) handles this pattern
+      // even in raw-diff mode — joins addedLines, strips whitespace, and compares against
+      // the stripped single-line original. Prettier normalization remains the primary path
+      // (both sides normalized → same split), but try-c serves as a reliable fallback.
       const original = [
         'async function fetchMetrics(client, options) {',
         '  const data = await client.query("metrics", options.filter, { includeEmpty: false, timeout: 3000 });',
@@ -1513,7 +1517,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
 
       const results = checkNonInstrumentationDiff(original, instrumented, '/tmp/test.js');
       const failures = results.filter((r) => !r.passed);
-      expect(failures.length).toBeGreaterThan(0);
+      expect(failures).toHaveLength(0);
     });
 
     it('with normalization: passes when agent splits a long line to comply with LINT', async () => {

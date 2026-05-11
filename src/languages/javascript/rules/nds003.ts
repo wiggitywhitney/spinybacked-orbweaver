@@ -214,6 +214,48 @@ function reconcileReturnCaptures(
     }
   }
 
+  // Handle multi-line object literal return-value capture:
+  // Original: `return {` (start of a multi-line object literal return)
+  // Agent: `const <var> = {` + (object properties cancel) + `return <var>;`
+  // The prompt now discourages this pattern, but when it appears the validator
+  // should recognize the return-value capture and not fire NDS-003.
+  // `extractReturnExpr` requires a semicolon so `return {` (no semicolon) is
+  // handled here as a separate case.
+  for (let mi = 0; mi < missingLines.length; mi++) {
+    if (missingToRemove.includes(mi)) continue;
+    const line = missingLines[mi].line;
+    if (line !== 'return {' && !line.match(/^return\s*\{$/)) continue;
+
+    // Look for `const <var> = {` in addedLines (open-brace assignment, no semicolon)
+    for (let ai = 0; ai < addedLines.length; ai++) {
+      if (addedToRemove.has(ai)) continue;
+      const captureMatch = addedLines[ai].line.match(/^(?:const|let|var)\s+(\w+)\s*=\s*\{$/);
+      if (!captureMatch) continue;
+      const varName = captureMatch[1];
+
+      // Look for `return <var>;` after the capture
+      const returnIdx = addedLines.findIndex(
+        (a, idx) => idx > ai && !addedToRemove.has(idx) &&
+          (a.line === `return ${varName}` || a.line === `return ${varName};`),
+      );
+      if (returnIdx < 0) continue;
+
+      // Match found: reconcile the `return {` opening with the capture
+      missingToRemove.push(mi);
+      addedToRemove.add(ai);
+      addedToRemove.add(returnIdx);
+      // Also remove any string literal setAttribute array args between capture and return
+      // (e.g. `'summary',`, `'dialogue',` from `span.setAttribute('key', ['a', 'b'])`)
+      for (let si = ai + 1; si < returnIdx; si++) {
+        if (addedToRemove.has(si)) continue;
+        if (/^['"`][^'"`]*['"`],?$/.test(addedLines[si].line)) {
+          addedToRemove.add(si);
+        }
+      }
+      break;
+    }
+  }
+
   // Remove in reverse order to maintain indices
   for (const idx of missingToRemove.sort((a, b) => b - a)) {
     missingLines.splice(idx, 1);
@@ -429,6 +471,27 @@ function reconcileAgentSplitLines(
         const withoutTrailingComma = joined.replace(/,(\s*\}[;)]*\s*)$/, '$1');
         if (withoutTrailingComma !== joined) {
           missingIndices = missingByContent.get(withoutTrailingComma);
+        }
+      }
+
+      // Try (c): whitespace-stripped comparison. When a 1-line original (under printWidth)
+      // is expanded to N lines at a deeper indent (over printWidth), the join has a space
+      // after `(` and a trailing comma that prevent tries (a)/(b) from matching. Strip all
+      // whitespace and trailing delimiters from both sides before comparing.
+      // Example: `join(basePath, 'journal', 'reflections', yearMonth)` at 4-space (79 chars)
+      // → expanded at 6-space (81 chars). Join: `join( basePath, 'journal', ...yearMonth,`
+      // vs missing: `join(basePath, 'journal', 'reflections', yearMonth);`
+      if (!missingIndices || missingIndices.length === 0) {
+        const strippedJoined = stripForComparison(joined);
+        if (strippedJoined) {
+          // Build stripped map of missingLines on first use (lazy)
+          for (const [content, indices] of missingByContent) {
+            const strippedContent = stripForComparison(content);
+            if (strippedContent === strippedJoined && indices.length > 0) {
+              missingIndices = indices;
+              break;
+            }
+          }
         }
       }
 

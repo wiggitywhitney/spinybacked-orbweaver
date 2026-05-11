@@ -963,6 +963,33 @@ async function executeRetryLoop(
  *
  * This path activates only after the whole-file retry loop has been exhausted.
  */
+
+/**
+ * Add accepted attribute extensions to the schema so subsequent functions' agents
+ * see them as registered — mirrors how the coordinator updates the working registry
+ * between files. Appends a synthetic group to schema.groups; parseResolvedRegistry
+ * and extractAttributeNames both read from groups[*].attributes[*].name and will
+ * include these entries. Span extensions (span.*) are threaded via existingSpanNames
+ * on retryOptions instead, since they affect SCH-001 not SCH-002.
+ */
+function appendAttributeExtensionsToSchema(schema: object, attributeExtensions: string[]): object {
+  if (attributeExtensions.length === 0) return schema;
+  const existing = (schema as Record<string, unknown>).groups;
+  const existingGroups = Array.isArray(existing) ? existing : [];
+  return {
+    ...schema,
+    groups: [
+      ...existingGroups,
+      {
+        id: 'spiny_orb_function_fallback_extensions',
+        type: 'attribute_group',
+        brief: 'Attribute extensions accepted by earlier functions in this fallback run',
+        attributes: attributeExtensions.map(name => ({ name })),
+      },
+    ],
+  };
+}
+
 async function functionLevelFallback(
   filePath: string,
   originalCode: string,
@@ -984,6 +1011,15 @@ async function functionLevelFallback(
   // Instrument each function through the full retry loop
   const fnResults: FunctionResult[] = [];
   const tmpBase = tmpdir();
+
+  // Progressive schema threading: mirrors how the coordinator updates the working registry
+  // between files. When function A accepts a new extension, subsequent functions' agents
+  // see it as already registered — they use span.setAttribute() directly rather than
+  // re-declaring. This prevents the double-declaration SCH-002 false positive that fires
+  // when two functions independently choose the same extension name.
+  let cumulativeSchema: object = resolvedSchema;
+  // Accumulate accepted span extensions to pass as existingSpanNames to subsequent functions.
+  const cumulativeSpanExtensions: string[] = [...(retryOptions.existingSpanNames ?? [])];
 
   for (const fn of extractedFunctions) {
     const functionContext = fn.contextHeader;
@@ -1017,10 +1053,17 @@ async function functionLevelFallback(
       // Write function context to temp file for instrumentWithRetry
       await writeFile(tmpFilePath, functionContext, 'utf-8');
 
-      // Run the full retry loop on this function (with fallback disabled to prevent recursion)
+      // Run the full retry loop on this function (with fallback disabled to prevent recursion).
+      // Pass cumulativeSchema so the agent's system prompt shows extensions accepted by
+      // earlier functions as registered attributes, and pass cumulativeSpanExtensions so
+      // the agent doesn't reuse span names already established in this run.
       const fileResult = await instrumentWithRetry(
-        tmpFilePath, functionContext, resolvedSchema, config,
-        { ...retryOptions, _skipFunctionFallback: true },
+        tmpFilePath, functionContext, cumulativeSchema, config,
+        {
+          ...retryOptions,
+          _skipFunctionFallback: true,
+          existingSpanNames: cumulativeSpanExtensions,
+        },
       );
 
       // Convert FileResult → FunctionResult
@@ -1038,6 +1081,23 @@ async function functionLevelFallback(
           notes: fileResult.notes,
           tokenUsage: fileResult.tokenUsage,
         });
+
+        // Thread accepted extensions into subsequent function calls — mirrors coordinator
+        // behavior where the working registry is updated between file instrumentations.
+        if (fileResult.schemaExtensions.length > 0) {
+          const attrExts = fileResult.schemaExtensions.filter(
+            e => !e.startsWith('span.') && !e.startsWith('span:'),
+          );
+          const spanExts = fileResult.schemaExtensions.filter(
+            e => e.startsWith('span.') || e.startsWith('span:'),
+          );
+          if (attrExts.length > 0) {
+            cumulativeSchema = appendAttributeExtensionsToSchema(cumulativeSchema, attrExts);
+          }
+          if (spanExts.length > 0) {
+            cumulativeSpanExtensions.push(...spanExts);
+          }
+        }
       } else {
         fnResults.push({
           name: fn.name,
@@ -1138,9 +1198,15 @@ async function functionLevelFallback(
   successful = fnResults.filter(r => r.success);
 
   const validationConfig = buildValidationConfig(config, retryOptions.projectRoot, resolvedSchema, retryOptions.anthropicClient, retryOptions.canonicalTracerName);
-  // Collect schema extensions from successful functions so SCH-001 accepts
-  // span names the agent declared as extensions (not just base registry names).
-  const fnExtensions = fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions);
+  // Collect schema extensions from successful functions so SCH-001/SCH-002 accept
+  // span names and attribute keys the agent declared as extensions.
+  // Deduplicate: multiple functions in the same file may independently declare the same
+  // extension (each function's individual pass sees the same original schema). The
+  // cumulativeSchema threading reduces this for subsequent functions, but dedup is the
+  // safety net when the agent still re-declares despite seeing the updated schema.
+  // Uses original resolvedSchema (not cumulativeSchema) for reassembly — accepted
+  // extensions appear once in fnExtensions and are accepted cleanly by the validators.
+  const fnExtensions = [...new Set(fnResults.filter(r => r.success).flatMap(r => r.schemaExtensions))];
   const validation = await validateFileFn({
     originalCode,
     instrumentedCode: reassembledCode,
