@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-11) Per-file reasoning reports (the companion `.md` files committed alongside instrumented code) now also show human-readable rule descriptions for advisory findings, matching what PR summaries show. Both output paths now use descriptions from the same registry, so adding a new description in one place updates both.
+
 - (2026-05-11) Wrote human-readable descriptions for all 12 advisory validation rules (CDQ-006/007/009/010, COV-004/005, RST-001/002/003/004/005, API-002). These descriptions are now shown in PR summaries instead of the terse agent-facing messages. Each one explains what the rule checks, why it matters in practice, and what a reviewer should do.
 
 - (2026-05-11) PR summaries now show human-readable descriptions for validation rule findings instead of the terse agent-facing messages, when a description is available. The first wired output path is the `spiny-orb-pr-summary.md` file committed alongside instrumentation changes. Rules without a description yet fall back to the current message automatically. The first description covers COV-005 (missing domain attributes), with the rest coming in a subsequent step.

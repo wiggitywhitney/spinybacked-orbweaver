@@ -195,11 +195,11 @@ Same as M4 but for blocking rules. Blocking rules surface to humans via CLI erro
 
 Pick up whichever output path wasn't wired in M3. Also wire per-file reasoning reports if they don't already reuse the M3 wiring through shared infrastructure.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Remaining output path wired (whichever of CLI verbose / PR summary wasn't done in M3)
-- [ ] Per-file reasoning reports wired if needed
-- [ ] Integration tests cover end-to-end flow from rule fire through the new output path
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Remaining output path wired (whichever of CLI verbose / PR summary wasn't done in M3)
+- [x] Per-file reasoning reports wired if needed
+- [x] Integration tests cover end-to-end flow from rule fire through the new output path
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M7: Update rule documentation and close out
 

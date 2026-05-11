@@ -3,7 +3,7 @@
 
 import { basename, relative } from 'node:path';
 import type { FileResult } from '../fix-loop/types.ts';
-import { formatRuleId } from '../validation/rule-names.ts';
+import { formatRuleId, getRuleHumanDescription } from '../validation/rule-names.ts';
 
 /**
  * Render a markdown reasoning report for an instrumented file.
@@ -85,7 +85,9 @@ export function renderReasoningReport(result: FileResult, projectDir?: string): 
     sections.push('## Advisory Findings');
     for (const finding of result.advisoryAnnotations) {
       const location = finding.lineNumber ? `:${finding.lineNumber}` : '';
-      sections.push(`- ${formatRuleId(finding.ruleId)}${location}: ${finding.message}`);
+      // Prefer human-facing description; fall back to agent-facing message when none registered
+      const displayText = getRuleHumanDescription(finding.ruleId) ?? finding.message;
+      sections.push(`- ${formatRuleId(finding.ruleId)}${location}: ${displayText}`);
     }
     sections.push('');
   }

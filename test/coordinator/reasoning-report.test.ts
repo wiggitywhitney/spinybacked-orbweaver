@@ -117,6 +117,46 @@ describe('renderReasoningReport', () => {
       ],
     }));
     expect(report).toContain('RST-001 (No Utility Spans)');
+    // RST-001 now has a human description — verify it appears instead of agent message
+    expect(report).toContain('No Utility Spans');
+    expect(report).toContain('synchronous');
+  });
+
+  it('uses getRuleHumanDescription for advisory findings when available (RST-001)', () => {
+    const report = renderReasoningReport(makeResult({
+      advisoryAnnotations: [
+        {
+          ruleId: 'RST-001',
+          passed: false,
+          filePath: '/project/src/order-service.js',
+          lineNumber: 10,
+          message: 'Utility function has a span',
+          tier: 2,
+          blocking: false,
+        },
+      ],
+    }));
+    // Human description replaces agent-facing message
+    expect(report).toContain('synchronous, unexported function');
+    expect(report).not.toContain('Utility function has a span');
+  });
+
+  it('falls back to agent-facing message when no human description registered (CDQ-002)', () => {
+    const report = renderReasoningReport(makeResult({
+      advisoryAnnotations: [
+        {
+          ruleId: 'CDQ-002',
+          passed: false,
+          filePath: '/project/src/svc.js',
+          lineNumber: 5,
+          message: 'Tracer must be at module scope',
+          tier: 2,
+          blocking: false,
+        },
+      ],
+    }));
+    // CDQ-002 has no human description — falls back to agent message
+    expect(report).toContain('Tracer must be at module scope');
   });
 
   it('includes agent notes', () => {
