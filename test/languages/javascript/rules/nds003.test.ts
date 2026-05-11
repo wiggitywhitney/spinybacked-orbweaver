@@ -2054,6 +2054,107 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('Problem C — reconcileObjectLiteralExpansion try-d: 4-line original → agent 1-line (#841)', () => {
+    it('passes when Prettier expands original to 4-line form but agent returns 1-line form', async () => {
+      // `generateAndSaveMonthlySummary(monthStr, basePath, { force })` at 6-space (89 chars)
+      // → Prettier 4-line form in normalized original (Monthly is 2 chars longer than Weekly):
+      //   const genResult = await generateAndSaveMonthlySummary(
+      //     monthStr,
+      //     basePath,
+      //     { force },
+      //   );         ← filtered as /^\s*\);?\s*$/
+      // Agent (following the "don't increase line count" directive) returns it as 1-line.
+      // reconcileObjectLiteralExpansion try-d: strip whitespace from joined missingLines and
+      // from the addedLine, compare — they match.
+      const original = [
+        'export async function runMonthlySummarize(options) {',
+        '  const { months, force, basePath } = options;',
+        '  for (const monthStr of months) {',
+        '    try {',
+        '      const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '      if (genResult.saved) result.generated.push(monthStr);',
+        '    } catch (err) {',
+        '      result.failed.push(monthStr);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Agent adds span but keeps the call on ONE line (following the no-expand directive)
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runMonthlySummarize(options) {',
+        '  return tracer.startActiveSpan("svc.run_monthly", async (span) => {',
+        '    try {',
+        '      const { months, force, basePath } = options;',
+        '      for (const monthStr of months) {',
+        '        try {',
+        // Agent kept call on 1 line — but at 12-space it exceeds printWidth
+        '          const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '          if (genResult.saved) result.generated.push(monthStr);',
+        '        } catch (err) {',
+        '          result.failed.push(monthStr);',
+        '        }',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when span callback closing },  does not leak into addedLines', async () => {
+      // When Prettier puts the span callback's closing `},` on its own line before `);`,
+      // that `},` must not fire as a non-instrumentation addition.
+      const original = [
+        'export async function runWeeklySummarize(options) {',
+        '  const { weeks, force, basePath } = options;',
+        '  for (const weekStr of weeks) {',
+        '    const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runWeeklySummarize(options) {',
+        '  return tracer.startActiveSpan(',
+        '    "svc.run_weekly",',
+        '    async (span) => {',
+        '      try {',
+        '        const { weeks, force, basePath } = options;',
+        '        for (const weekStr of weeks) {',
+        '          const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '        }',
+        '      } catch (error) {',
+        '        span.recordException(error);',
+        '        span.setStatus({ code: SpanStatusCode.ERROR });',
+        '        throw error;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    },',   // ← this is the `},` the span callback closes with before `);`
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('Problem C — reconcileIndentReformat handles Prettier re-split at deeper indent (#841)', () => {
     it('passes when agent wraps function and Prettier re-splits a call differently at deeper indent', async () => {
       // `const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });`

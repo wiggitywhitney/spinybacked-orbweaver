@@ -252,11 +252,21 @@ function reconcileObjectLiteralExpansion(
   addedLines: Array<{ line: string; instrumentedLineNum: number }>,
 ): void {
   const addedByContent = new Map<string, number[]>();
+  // Also index by stripped form for try-d (whitespace-normalized comparison).
+  // Handles 4-line Prettier-expanded original vs agent's 1-line form where spacing
+  // prevents exact string match (e.g. joined form `func( a, b, {c,}` vs `func(a, b, { c })`).
+  const addedByStripped = new Map<string, number[]>();
   for (let i = 0; i < addedLines.length; i++) {
     const key = addedLines[i].line;
     const existing = addedByContent.get(key);
     if (existing) existing.push(i);
     else addedByContent.set(key, [i]);
+    const stripped = stripForComparison(key);
+    if (stripped) {
+      const existingStripped = addedByStripped.get(stripped);
+      if (existingStripped) existingStripped.push(i);
+      else addedByStripped.set(stripped, [i]);
+    }
   }
 
   const missingToRemove = new Set<number>();
@@ -309,6 +319,20 @@ function reconcileObjectLiteralExpansion(
             addedIndices = addedByContent.get(withoutTrailingComma);
             if (addedIndices && addedIndices.length > 0) break;
           }
+        }
+      }
+
+      // Try (d): whitespace-normalized comparison — handles the case where a Prettier
+      // N-line expansion of the original matches the agent's 1-line preserved form, but
+      // spacing differences (the join uses spaces between lines, the 1-line form doesn't)
+      // prevent tries (a)–(c) from matching. Strip all whitespace and trailing delimiter
+      // characters from both the joined missingLines and each addedLine, then compare.
+      // Example: 4-line Prettier form (`func(`, `a,`, `b,`, `{ c },`) vs agent's 1-line
+      // `func(a, b, { c })` — after stripping: `func(a,b,{c` vs `func(a,b,{c` → match.
+      if (!addedIndices || addedIndices.length === 0) {
+        const strippedJoined = stripForComparison(joined);
+        if (strippedJoined) {
+          addedIndices = addedByStripped.get(strippedJoined);
         }
       }
 
@@ -868,7 +892,14 @@ export function checkNonInstrumentationDiff(
   for (let i = 0; i < rawInstrumentedLines.length; i++) {
     const trimmed = normalizeLine(rawInstrumentedLines[i].trim());
     if (trimmed.length === 0) continue;
-    if (!isInstrumentationLine(trimmed) && !originalSet.has(trimmed)) {
+    // `},` (brace+comma) is the span callback's trailing argument separator when Prettier
+    // puts it on its own line before `);`. It matches neither `/^\s*\}\s*$/` (no comma)
+    // nor `/^\s*\}\);?\s*$/` (no paren), so isInstrumentationLine() misses it.
+    // Since `!originalSet.has(trimmed)` already ensures business-logic `},` cancels out
+    // (it IS in the original → excluded), the only unmatched `},` left here is from
+    // span callbacks — filter it as instrumentation.
+    const isSpanCallbackComma = /^\},\s*$/.test(trimmed) && !originalSet.has(trimmed);
+    if (!isInstrumentationLine(trimmed) && !isSpanCallbackComma && !originalSet.has(trimmed)) {
       addedLines.push({ line: trimmed, instrumentedLineNum: i + 1 });
     }
   }
