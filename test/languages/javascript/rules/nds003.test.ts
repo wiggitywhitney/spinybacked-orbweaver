@@ -2163,6 +2163,13 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
+      // Verify Prettier actually splits the call to the expected 4-line form so the
+      // reconciler is genuinely exercised (test fails if Prettier behavior changes).
+      const normalizedOriginal = await prettierNormalizeForComparison(original, filePath);
+      expect(normalizedOriginal).toContain('generateAndSaveMonthlySummary(');
+      expect(normalizedOriginal).toContain('\n        monthStr,');
+      expect(normalizedOriginal).toContain('\n        basePath,');
+
       const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures).toHaveLength(0);
