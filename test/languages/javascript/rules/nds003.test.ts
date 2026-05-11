@@ -2053,4 +2053,116 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures.length).toBeGreaterThan(0);
     });
   });
+
+  describe('Problem C — reconcileIndentReformat handles Prettier re-split at deeper indent (#841)', () => {
+    it('passes when agent wraps function and Prettier re-splits a call differently at deeper indent', async () => {
+      // `const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });`
+      // At 6-space indent (89 chars total) — Prettier splits to 3 lines in the normalized original:
+      //   const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, {
+      //     force,
+      //   });                ← consumed by span callback's `});` in instrumented
+      // Agent wraps in startActiveSpan (12-space indent) — Prettier re-splits to 4 lines:
+      //   const genResult = await generateAndSaveMonthlySummary(
+      //     monthStr,
+      //     basePath,
+      //     { force },
+      //   );                 ← consumed as instrumentation pattern /^\s*\);?\s*$/
+      // NDS-003 sees 2 missingLines (3rd `});` consumed) and 4 addedLines (closing `);` consumed).
+      // reconcileIndentReformat matches by stripping whitespace + trailing delimiters from both groups.
+      const original = [
+        'export async function runMonthlySummarize(options) {',
+        '  const { months, force, basePath } = options;',
+        '  for (const monthStr of months) {',
+        '    try {',
+        '      const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '      if (genResult.saved) result.generated.push(monthStr);',
+        '    } catch (err) {',
+        '      result.failed.push(monthStr);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Agent wraps in span; at 12-space indent the call is over printWidth — Prettier splits to 4 lines
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runMonthlySummarize(options) {',
+        '  return tracer.startActiveSpan("svc.run_monthly", async (span) => {',
+        '    try {',
+        '      const { months, force, basePath } = options;',
+        '      for (const monthStr of months) {',
+        '        try {',
+        '          const genResult = await generateAndSaveMonthlySummary(',
+        '            monthStr,',
+        '            basePath,',
+        '            { force },',
+        '          );',
+        '          if (genResult.saved) result.generated.push(monthStr);',
+        '        } catch (err) {',
+        '          result.failed.push(monthStr);',
+        '        }',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Use the Normalized variant: Prettier-normalizes original so the call becomes 3-line,
+      // making missingLines have ≥2 entries that reconcileIndentReformat can match.
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still fires when agent changes argument content while reformatting (not just indentation)', async () => {
+      // If the agent changes an argument (monthStr → monthStr.trim()), NDS-003 must still fire.
+      const original = [
+        'export async function runMonthlySummarize(options) {',
+        '  const { months, force, basePath } = options;',
+        '  for (const monthStr of months) {',
+        '    try {',
+        '      const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '      if (genResult.saved) result.generated.push(monthStr);',
+        '    } catch (err) { result.failed.push(monthStr); }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runMonthlySummarize(options) {',
+        '  return tracer.startActiveSpan("svc.run_monthly", async (span) => {',
+        '    try {',
+        '      const { months, force, basePath } = options;',
+        '      for (const monthStr of months) {',
+        '        try {',
+        // Agent changed monthStr → monthStr.trim() — content change, not just reformatting
+        '          const genResult = await generateAndSaveMonthlySummary(',
+        '            monthStr.trim(),',
+        '            basePath,',
+        '            { force },',
+        '          );',
+        '          if (genResult.saved) result.generated.push(monthStr);',
+        '        } catch (err) { result.failed.push(monthStr); }',
+        '      }',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
 });

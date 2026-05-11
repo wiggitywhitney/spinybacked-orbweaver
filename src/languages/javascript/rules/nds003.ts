@@ -431,6 +431,99 @@ function reconcileAgentSplitLines(
 }
 
 /**
+ * Reconcile function calls that Prettier re-splits differently at different indentation depths.
+ *
+ * When a span callback adds indentation, a call that Prettier formatted as N lines at the
+ * original indent gets re-formatted as M lines (M ≠ N) at the deeper indent. Both are valid
+ * Prettier output of the SAME call — only the indentation changed, not the code semantics.
+ *
+ * Example (summarize.js #841):
+ *   Original at 6-space (Prettier 3-line form):
+ *     const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, {
+ *       force,
+ *     });       ← consumed by span callback's });
+ *
+ *   Agent output at 12-space (Prettier 4-line form):
+ *     const genResult = await generateAndSaveMonthlySummary(
+ *       monthStr,
+ *       basePath,
+ *       { force },
+ *     );        ← consumed as instrumentation pattern
+ *
+ * NDS-003 sees: missingLines=[line1, line2], addedLines=[lineA, lineB, lineC, lineD].
+ * Approach: strip all whitespace from both groups and compare token sequences,
+ * then strip trailing delimiters (commas, braces, parens, semicolons) that were
+ * consumed on either side. If the stripped sequences match, the groups represent
+ * the same code reformatted for indentation.
+ *
+ * Safety: any content change (different argument, reordered args) produces different
+ * token sequences and still fires.
+ */
+function reconcileIndentReformat(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  // Pre-build all consecutive addedLine groups (≥2 lines) with their token strings.
+  const addedGroups: Array<{ indices: number[]; tokens: string }> = [];
+  for (let ai = 0; ai < addedLines.length; ai++) {
+    if (addedToRemove.has(ai)) continue;
+    const aGroup = [ai];
+    for (let j = ai + 1; j < addedLines.length; j++) {
+      if (addedLines[j].instrumentedLineNum !== addedLines[aGroup[aGroup.length - 1]].instrumentedLineNum + 1) break;
+      aGroup.push(j);
+    }
+    if (aGroup.length >= 2) {
+      const tokens = stripForComparison(aGroup.map(idx => addedLines[idx].line).join(''));
+      if (tokens) addedGroups.push({ indices: aGroup, tokens });
+    }
+  }
+
+  // For each consecutive missingLines group (≥2 lines), find a matching addedLines group.
+  let mi = 0;
+  while (mi < missingLines.length) {
+    if (missingToRemove.has(mi)) { mi++; continue; }
+
+    const mGroup = [mi];
+    for (let j = mi + 1; j < missingLines.length; j++) {
+      if (missingToRemove.has(j)) break;
+      if (missingLines[j].originalLineNum !== missingLines[mGroup[mGroup.length - 1]].originalLineNum + 1) break;
+      mGroup.push(j);
+    }
+
+    if (mGroup.length < 2) { mi++; continue; }
+
+    const missingTokens = stripForComparison(mGroup.map(idx => missingLines[idx].line).join(''));
+    if (!missingTokens) { mi++; continue; }
+
+    let matched = false;
+    for (const aGroup of addedGroups) {
+      if (aGroup.indices.some(idx => addedToRemove.has(idx))) continue;
+      if (aGroup.tokens === missingTokens) {
+        for (const idx of mGroup) missingToRemove.add(idx);
+        for (const idx of aGroup.indices) addedToRemove.add(idx);
+        matched = true;
+        break;
+      }
+    }
+
+    mi += matched ? mGroup.length : 1;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) missingLines.splice(idx, 1);
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) addedLines.splice(idx, 1);
+}
+
+/** Strip whitespace and trailing delimiters for token-sequence comparison. */
+function stripForComparison(code: string): string {
+  return code
+    .replace(/\s+/g, '')         // collapse all whitespace
+    .replace(/[,});]+$/, '');    // strip trailing commas, braces, parens, semicolons (consumed)
+}
+
+/**
  * Reconcile aggregation variable captures that exist solely to feed span.setAttribute().
  *
  * When the agent computes an intermediate value for setAttribute:
@@ -793,6 +886,13 @@ export function checkNonInstrumentationDiff(
   // The agent then splits the line, producing consecutive addedLines for a single missingLine.
   // This is the reverse of reconcileObjectLiteralExpansion (missing=single, added=multi).
   reconcileAgentSplitLines(missingLines, addedLines);
+
+  // Reconcile Prettier re-splits at different indentation depths: when a span callback adds
+  // indentation, a call Prettier split N ways at the original indent gets split M ways (M ≠ N)
+  // at the deeper indent. Both are valid Prettier output of the same code — only formatting
+  // changed. Compares whitespace-stripped token sequences with trailing delimiters removed
+  // to handle "consumed" closing tokens (}); or ); filtered as instrumentation patterns).
+  reconcileIndentReformat(missingLines, addedLines);
 
   // Reconcile return-value captures: when the agent extracts a return expression
   // to a variable for setAttribute, NDS-003 sees the original `return <expr>`
