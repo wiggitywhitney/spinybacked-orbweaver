@@ -901,11 +901,9 @@ function reconcileSetAttributeMultilineArgs(
   addedLines: Array<{ line: string; instrumentedLineNum: number }>,
   allInstrumentedLines: string[],
 ): void {
-  // OTel attribute key: quoted lowercase dotted name, e.g. 'some.attribute.key',
-  const attributeKeyPattern = /^['"`][a-z][a-z0-9._]+['"`],?$/;
   // span.setAttribute( call — trailing open paren, no closing
   const setAttrCallPattern = /\.setAttribute\(\s*$/;
-  // Closing standalone paren with optional semicolon
+  // Closing standalone paren with optional semicolon (end of setAttribute call)
   const closingParenPattern = /^\);\s*$|^\)\s*$/;
 
   const toRemove = new Set<number>();
@@ -916,32 +914,28 @@ function reconcileSetAttributeMultilineArgs(
     addedByLineNum.set(addedLines[i].instrumentedLineNum, i);
   }
 
-  for (let i = 0; i < addedLines.length; i++) {
-    if (toRemove.has(i)) continue;
-    const entry = addedLines[i];
+  // Find all spans [P1, P2] in raw instrumented lines where:
+  //   allInstrumentedLines[P1] (0-indexed) matches setAttrCallPattern
+  //   allInstrumentedLines[P2] (0-indexed) matches closingParenPattern
+  // All addedLines with instrumentedLineNum in range [P1+2, P2+1] (1-indexed)
+  // are setAttribute arguments and should be removed. Handles both the simple
+  // 2-line case (key + value) and N-line cases (complex array/conditional args).
+  for (let p1 = 0; p1 < allInstrumentedLines.length; p1++) {
+    if (!setAttrCallPattern.test(allInstrumentedLines[p1])) continue;
 
-    // Must look like an OTel attribute key string
-    if (!attributeKeyPattern.test(entry.line)) continue;
-
-    const N = entry.instrumentedLineNum; // 1-indexed line number in instrumented output
-
-    // Line before the key (N-1 in 1-indexed = index N-2 in 0-indexed array)
-    // must be a span.setAttribute( call
-    const prevLine = allInstrumentedLines[N - 2];
-    if (!prevLine || !setAttrCallPattern.test(prevLine)) continue;
-
-    // The value line (N+1 in 1-indexed) must also be in addedLines
-    const valueIdx = addedByLineNum.get(N + 1);
-    if (valueIdx === undefined || toRemove.has(valueIdx)) continue;
-
-    // Line after the value (N+2 in 1-indexed = index N+1 in 0-indexed array)
-    // must be the closing );
-    const closingLine = allInstrumentedLines[N + 1];
-    if (!closingLine || !closingParenPattern.test(closingLine)) continue;
-
-    // All four lines confirmed — key and value are setAttribute arguments
-    toRemove.add(i);        // key line
-    toRemove.add(valueIdx); // value line
+    // Scan forward to find the matching closing paren (up to 20 lines to avoid runaway)
+    for (let p2 = p1 + 1; p2 < Math.min(p1 + 21, allInstrumentedLines.length); p2++) {
+      if (closingParenPattern.test(allInstrumentedLines[p2])) {
+        // Lines p1+2 through p2+1 in 1-indexed correspond to 0-indexed p1+1 through p2-1
+        for (let lineNum = p1 + 2; lineNum <= p2 + 1; lineNum++) {
+          const idx = addedByLineNum.get(lineNum);
+          if (idx !== undefined) {
+            toRemove.add(idx);
+          }
+        }
+        break;
+      }
+    }
   }
 
   for (const idx of [...toRemove].sort((a, b) => b - a)) {
