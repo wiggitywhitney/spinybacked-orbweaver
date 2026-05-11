@@ -237,12 +237,19 @@ function findBestMatch(
     const strippedOriginal = original.bodyAnchor.replace(/\s+/g, '');
     for (let i = 0; i < candidates.length; i++) {
       if (usedIndices.has(i)) continue;
-      const strippedCandidate = candidates[i].bodyAnchor.replace(/\s+/g, '');
+      const candidate = candidates[i];
+      const strippedCandidate = candidate.bodyAnchor.replace(/\s+/g, '');
       if (!strippedCandidate) continue;
-      // Require the shorter anchor to be at least 20 chars to avoid trivial matches.
+      // Require structural shape to match to prevent cross-matching unrelated blocks.
+      if (candidate.hasCatch !== original.hasCatch) continue;
+      if (candidate.hasFinally !== original.hasFinally) continue;
+      if (Boolean(candidate.catchParamName) !== Boolean(original.catchParamName)) continue;
+      if (candidate.catchThrows.length !== original.catchThrows.length) continue;
+      if (!original.catchThrows.every((t, idx) => candidate.catchThrows[idx] === t)) continue;
+      // Require the shorter anchor to be at least 20 chars and ≥50% overlap to avoid trivial matches.
       const shorter = strippedOriginal.length < strippedCandidate.length ? strippedOriginal : strippedCandidate;
       const longer = strippedOriginal.length < strippedCandidate.length ? strippedCandidate : strippedOriginal;
-      if (shorter.length >= 20 && longer.startsWith(shorter)) {
+      if (shorter.length >= 20 && shorter.length >= longer.length * 0.5 && longer.startsWith(shorter)) {
         return i;
       }
     }
