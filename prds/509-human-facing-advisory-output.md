@@ -153,13 +153,13 @@ Evaluate the three mechanisms against this project's existing patterns. Consider
 
 Build the description registry in `src/validation/rule-names.ts` (Option 3 chosen in M1). No rule text written yet — this milestone wires up the plumbing and adds one placeholder description for COV-005 to prove the mechanism works end-to-end.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Add `RULE_HUMAN_DESCRIPTIONS: Record<string, string>` to `src/validation/rule-names.ts` with a single placeholder entry for COV-005
-- [ ] Export `getRuleHumanDescription(ruleId: string): string | undefined` from `rule-names.ts`
-- [ ] `CheckResult` in `src/validation/types.ts` is NOT modified — no new fields
-- [ ] Existing `message` fields unchanged — agent behavior in the fix-loop is unaffected
-- [ ] Unit tests for `getRuleHumanDescription`: presence check for COV-005, `undefined` return for an unknown rule ID, type check
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Add `RULE_HUMAN_DESCRIPTIONS: Record<string, string>` to `src/validation/rule-names.ts` with a single placeholder entry for COV-005
+- [x] Export `getRuleHumanDescription(ruleId: string): string | undefined` from `rule-names.ts`
+- [x] `CheckResult` in `src/validation/types.ts` is NOT modified — no new fields
+- [x] Existing `message` fields unchanged — agent behavior in the fix-loop is unaffected
+- [x] Unit tests for `getRuleHumanDescription`: presence check for COV-005, `undefined` return for an unknown rule ID, type check
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M3: Wire the first output path to use the new mechanism
 

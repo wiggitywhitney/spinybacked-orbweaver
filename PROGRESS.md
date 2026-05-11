@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-11) Added `getRuleHumanDescription()` to `src/validation/rule-names.ts` — the first piece of infrastructure for human-readable validation rule descriptions. The PR summary and reasoning report currently show terse agent-facing messages (e.g., "Required (must add): db.query.text") to developers reviewing PRs; this function will let those output paths show friendlier context instead. Descriptions are added incrementally — missing ones fall back to the current message automatically, so nothing breaks before the descriptions are written.
+
 - (2026-05-11) Decided the mechanism for adding human-readable validation rule descriptions to CLI and PR output. Every rule message is currently written for the instrumentation agent to read during the fix-loop — terse and directive. Those same messages surface to developers in PR summaries and reasoning reports, where they read like robot instructions rather than useful context. Chose to extend `src/validation/rule-names.ts` (already a rule registry) with a `getRuleHumanDescription()` lookup rather than adding a new field to `CheckResult` (which is documented as agent-facing) or creating a separate module. Output paths will fall back to the agent-facing message when no human description is registered yet, so descriptions can be added incrementally without breaking anything.
 
 ### Fixed
