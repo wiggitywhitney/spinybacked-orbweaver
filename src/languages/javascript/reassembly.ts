@@ -231,7 +231,7 @@ function extractFunctionFromInstrumentedCode(
       if (ch === '(') {
         parenDepth++;
       } else if (ch === ')') {
-        parenDepth--;
+        if (parenDepth > 0) parenDepth--;
       } else if (ch === '{') {
         braceDepth++;
         if (parenDepth === 0) sawFunctionBodyBrace = true;
