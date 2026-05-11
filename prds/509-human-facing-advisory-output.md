@@ -165,11 +165,11 @@ Build the description registry in `src/validation/rule-names.ts` (Option 3 chose
 
 Wire `src/deliverables/pr-summary.ts` (the PR summary file, which already imports `rule-names.ts`) to prefer `getRuleHumanDescription` over the agent-facing `message`. `src/coordinator/reasoning-report.ts` is the second path (M6). If a rule has no description yet, the output falls back to `message` gracefully.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] In `pr-summary.ts` around line 372: replace `expandRuleCodesInText(messageBody)` with `getRuleHumanDescription(ann.ruleId) ?? expandRuleCodesInText(messageBody)` — import `getRuleHumanDescription` from `rule-names.ts` (already imported)
-- [ ] Fallback to agent-facing `message` when no human description is registered — tested
-- [ ] Integration test covering both cases: COV-005 (has description from M2) and another rule without one
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] In `pr-summary.ts` around line 372: replace `expandRuleCodesInText(messageBody)` with `getRuleHumanDescription(ann.ruleId) ?? expandRuleCodesInText(messageBody)` — import `getRuleHumanDescription` from `rule-names.ts` (already imported)
+- [x] Fallback to agent-facing `message` when no human description is registered — tested
+- [x] Integration test covering both cases: COV-005 (has description from M2) and another rule without one
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M4: Write human-facing descriptions for all advisory rules
 

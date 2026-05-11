@@ -568,6 +568,60 @@ describe('renderPrSummary', () => {
       expect(md).toContain('CDQ-001 (Spans Closed)');
     });
 
+    it('uses getRuleHumanDescription when available (COV-005) instead of agent-facing message', () => {
+      // COV-005 has a human description registered in RULE_HUMAN_DESCRIPTIONS.
+      // The PR summary should show that description, not the terse agent-facing message.
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'COV-005',
+                passed: false,
+                filePath: '/project/src/db.js',
+                lineNumber: 5,
+                message: 'COV-005: Required (must add): db.query.text. Add setAttribute() calls.',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Human description should appear
+      expect(md).toContain('COV-005 (Domain Attributes)');
+      expect(md).toContain('Weaver registry');
+      // Agent-facing message body should NOT appear
+      expect(md).not.toContain('Required (must add): db.query.text');
+    });
+
+    it('falls back to agent-facing message when no human description is registered (CDQ-001)', () => {
+      // CDQ-001 has no human description yet — should fall back to expandRuleCodesInText(message).
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'CDQ-001',
+                passed: false,
+                filePath: '/project/src/api-client.js',
+                lineNumber: 42,
+                message: 'Span name uses camelCase',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Falls back: agent-facing message body still present
+      expect(md).toContain('camelCase');
+    });
+
     it('suppresses COV-004 advisories for functions deliberately skipped in notes', () => {
       const result = _makeRunResult({
         fileResults: [
