@@ -185,11 +185,11 @@ Write human-facing descriptions for every advisory rule per the writing-style gu
 
 Same as M4 but for blocking rules. Blocking rules surface to humans via CLI error output and PR summary when they fire; their descriptions need the same clarity.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Human-facing descriptions written for each blocking rule (list from the "Rule scope" section above)
-- [ ] Each description follows the writing-style guide from M4 (Decision 2: fits in PR annotation, adjust to complexity, no padding)
-- [ ] Descriptions surface correctly in the output path wired in M3 for a blocking-rule fixture (manually verified)
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Human-facing descriptions written for each blocking rule (list from the "Rule scope" section above)
+- [x] Each description follows the writing-style guide from M4 (Decision 2: fits in PR annotation, adjust to complexity, no padding)
+- [x] Descriptions surface correctly in the output path wired in M3 for a blocking-rule fixture (manually verified)
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M6: Wire the remaining output path(s)
 
