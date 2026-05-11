@@ -177,7 +177,7 @@ Write human-facing descriptions for every advisory rule per the writing-style gu
 
 - [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
 - [x] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above)
-- [x] Each description follows the writing style from Design Notes (updated per Decision 2): (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Tone: friendly, direct, concrete. Length: fits in a PR annotation without scrolling — typically 3-4 sentences, adjust to rule complexity; do not pad or truncate. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
+- [x] Each description follows the writing style from Design Notes (updated per M4/M5 writing-style decision — see Decision Log): (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Tone: friendly, direct, concrete. Length: fits in a PR annotation without scrolling — typically 3-4 sentences, adjust to rule complexity; do not pad or truncate. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
 - [x] Descriptions surface correctly in the output path wired in M3 — manually verified on a test run
 - [x] `npm test` passes; `npm run typecheck` passes
 
@@ -187,7 +187,7 @@ Same as M4 but for blocking rules. Blocking rules surface to humans via CLI erro
 
 - [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
 - [x] Human-facing descriptions written for each blocking rule (list from the "Rule scope" section above)
-- [x] Each description follows the writing-style guide from M4 (Decision 2: fits in PR annotation, adjust to complexity, no padding)
+- [x] Each description follows the writing-style guide from M4 (M4/M5 writing-style decision: fits in PR annotation, adjust to complexity, no padding)
 - [x] Descriptions surface correctly in the output path wired in M3 for a blocking-rule fixture (manually verified)
 - [x] `npm test` passes; `npm run typecheck` passes
 

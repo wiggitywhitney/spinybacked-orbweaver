@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-11) Added human-readable descriptions for three previously missing rules: NDS-002 (instrumentation must not break existing tests), RST-006 (why process.exit() functions can't be spanned), and CDQ-011 (canonical tracer name enforcement). All registered rules now have human-facing descriptions.
+
 - (2026-05-11) Updated docs/rules-reference.md to document the human-facing description mechanism — where the descriptions live, how to add one, and what they're for. Also removed the roadmap entry for this work (completed) and marked the advisory rules audit action item as done.
 
 - (2026-05-11) Wrote human-readable descriptions for all blocking validation rules (20 rules: NDS-001/003/004/005/006/007, COV-001/002/003/006, API-001/004, SCH-001/002/003, ELISION/LINT/WEAVER, CDQ-001/003/005), completing the full rule description set. All rules that surface to humans — both advisory and blocking — now have descriptions that explain what the rule checks, why it matters, and what a reviewer should do.

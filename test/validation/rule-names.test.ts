@@ -91,7 +91,7 @@ describe('getRuleHumanDescription', () => {
   it('does not affect agent-facing messages — CheckResult.message is unrelated', () => {
     // Verify that missing descriptions return undefined rather than falling back to anything
     // The caller is responsible for the ?? fallback (gets message from CheckResult directly)
-    // CDQ-011 (Canonical Tracer Name) has no human description
-    expect(getRuleHumanDescription('CDQ-011')).toBeUndefined();
+    // CDQ-002 (Tracer Acquired) has no human description
+    expect(getRuleHumanDescription('CDQ-002')).toBeUndefined();
   });
 });

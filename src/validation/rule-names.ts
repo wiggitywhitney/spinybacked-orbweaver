@@ -92,7 +92,7 @@ export function formatRuleId(ruleId: string): string {
  * M4 (advisory rules) and M5 (blocking rules) fill out the remaining entries.
  * Add one entry at a time — the fallback ensures nothing breaks before M4/M5.
  */
-const RULE_HUMAN_DESCRIPTIONS: Record<string, string> = {
+const RULE_HUMAN_DESCRIPTIONS: Partial<Record<string, string>> = {
 
   // ── Advisory: Coverage ────────────────────────────────────────────────────
 
@@ -159,6 +159,12 @@ const RULE_HUMAN_DESCRIPTIONS: Record<string, string> = {
     'function that already had instrumentation. This creates duplicate spans for the same ' +
     'operation. Remove the newly added spans and keep the existing ones.',
 
+  'RST-006': 'RST-006 (No process.exit Spans) fired because the agent added a span to a ' +
+    'function that calls process.exit() directly in its body. process.exit() bypasses the ' +
+    'span\'s finally block — the span never closes and is never exported. Instrument the ' +
+    'async sub-operations inside this function instead. Exception: if process.exit() only ' +
+    'appears in a catch or finally block, the function can still receive a span.',
+
   // ── Advisory: API ────────────────────────────────────────────────────────
 
   'API-002': 'API-002 (Dependency Placement) fired because @opentelemetry/api is in the ' +
@@ -172,6 +178,10 @@ const RULE_HUMAN_DESCRIPTIONS: Record<string, string> = {
   'NDS-001': 'NDS-001 (Syntax Valid) fired because the instrumented file is no longer valid ' +
     'JavaScript/TypeScript — the agent introduced a syntax error. The file was reverted. The ' +
     'agent will retry.',
+
+  'NDS-002': 'NDS-002 (Tests Pass) fired because the agent\'s changes caused one or more ' +
+    'pre-existing tests to fail. Instrumentation must not change behavior — if tests broke, the ' +
+    'agent modified code it shouldn\'t have. The file was reverted; the agent will retry.',
 
   'NDS-003': 'NDS-003 (Code Preserved) fired because the agent modified, removed, or reordered ' +
     'lines that weren\'t instrumentation. Instrumentation should only ADD spans and attributes — ' +
@@ -254,6 +264,12 @@ const RULE_HUMAN_DESCRIPTIONS: Record<string, string> = {
   'CDQ-001': 'CDQ-001 (Spans Closed) fired because a span isn\'t guaranteed to close. ' +
     'span.end() must be in a finally block — placing it only in the try body means exceptions ' +
     'leave the span open forever.',
+
+  'CDQ-011': 'CDQ-011 (Canonical Tracer Name) fired because the tracer name passed to ' +
+    'trace.getTracer() doesn\'t match the canonical name configured for this project. ' +
+    'Inconsistent tracer names split your service\'s traces into disconnected service entries ' +
+    'in your observability backend. Use exactly the specified tracer name in all ' +
+    'trace.getTracer() calls throughout this file.',
 
   'CDQ-003': 'CDQ-003 (Standard Error Recording) fired because the error recording pattern in ' +
     'a catch block is incorrect. The correct pattern is span.recordException(error) followed by ' +
