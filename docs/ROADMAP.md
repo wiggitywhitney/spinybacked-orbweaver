@@ -35,6 +35,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Long-term
 
+- NDS-003 content-aware diff — eliminate reconciler whack-a-mole ([PRD #845](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/845)) — starts with research spike to validate whether current reconcilers are sufficient; if not, redesigns NDS-003 to accept lexical reorganizations without per-pattern reconcilers.
 - Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)) — multi-language rule architecture ✓ cleared (PRD #507 merged).
 - SDK bootstrap scaffold generation ([PRD #778](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/778)) — generate an SDK init file when none is detected; defines multi-language `BootstrapGenerator` interface for Python/Go providers to implement.
 - Publish to GitHub Actions Marketplace ([issue #369](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/369)).
