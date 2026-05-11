@@ -215,8 +215,13 @@ function extractFunctionFromInstrumentedCode(
     }
   }
 
-  // Find the end of the function by counting braces
+  // Find the end of the function by counting braces.
+  // maxDepth tracks the highest depth seen so far. We require maxDepth > 1 before
+  // accepting depth===0 as the function end. This prevents `options = {}` in a
+  // multi-line parameter list (which reaches depth 1 then back to 0 on the SAME
+  // line, before the actual function body opens) from falsely terminating the scan.
   let braceDepth = 0;
+  let maxDepth = 0;
   let foundOpenBrace = false;
   let functionEndIdx = functionStartIdx;
 
@@ -224,12 +229,13 @@ function extractFunctionFromInstrumentedCode(
     for (const ch of lines[i]) {
       if (ch === '{') {
         braceDepth++;
+        if (braceDepth > maxDepth) maxDepth = braceDepth;
         foundOpenBrace = true;
       } else if (ch === '}') {
         braceDepth--;
       }
     }
-    if (foundOpenBrace && braceDepth === 0) {
+    if (foundOpenBrace && braceDepth === 0 && maxDepth > 1) {
       functionEndIdx = i;
       // Check if the next character after the closing brace is a semicolon
       // (for arrow function assignments like `export const fn = () => { ... };`)
