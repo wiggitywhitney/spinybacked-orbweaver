@@ -215,21 +215,31 @@ function extractFunctionFromInstrumentedCode(
     }
   }
 
-  // Find the end of the function by counting braces
+  // Find the end of the function by counting braces.
+  // Track parenDepth to distinguish default-value braces in parameter lists
+  // (e.g. `options = {}`) from the function body brace. sawFunctionBodyBrace
+  // is set only on the first `{` encountered while parenDepth === 0 — that is
+  // the function body opening brace. Until that point, brace depth returning
+  // to 0 (e.g. the `}` in `options = {}`) is ignored.
   let braceDepth = 0;
-  let foundOpenBrace = false;
+  let parenDepth = 0;
+  let sawFunctionBodyBrace = false;
   let functionEndIdx = functionStartIdx;
 
   for (let i = functionStartIdx; i < lines.length; i++) {
     for (const ch of lines[i]) {
-      if (ch === '{') {
+      if (ch === '(') {
+        parenDepth++;
+      } else if (ch === ')') {
+        if (parenDepth > 0) parenDepth--;
+      } else if (ch === '{') {
         braceDepth++;
-        foundOpenBrace = true;
+        if (parenDepth === 0) sawFunctionBodyBrace = true;
       } else if (ch === '}') {
         braceDepth--;
       }
     }
-    if (foundOpenBrace && braceDepth === 0) {
+    if (sawFunctionBodyBrace && braceDepth === 0) {
       functionEndIdx = i;
       // Check if the next character after the closing brace is a semicolon
       // (for arrow function assignments like `export const fn = () => { ... };`)

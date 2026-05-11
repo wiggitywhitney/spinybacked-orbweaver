@@ -114,7 +114,14 @@ function normalizeLine(line: string): string {
     // `if (cond) {` compares equal to `if (cond)`. Required when the agent adds
     // braces to a single-statement `if` to accommodate span body wrapping.
     // Only fires when `{` is at the end of the line (not inline one-liners).
-    .replace(/^(if\s*\(.+\))\s*\{\s*$/, '$1');
+    .replace(/^(if\s*\(.+\))\s*\{\s*$/, '$1')
+    // Normalize optional arrow function parameter parentheses: `(x) =>` and `x =>`
+    // are 100% equivalent JavaScript. The agent sometimes adds parens to a
+    // single-parameter arrow function when reformatting inside a span callback,
+    // causing false NDS-003 violations. Exclude `async (x) =>` — the async
+    // keyword is meaningful context; stripping its parens would break
+    // reconcileStartActiveSpanMultilineArgs pattern matching.
+    .replace(/(?<!async\s)\(\s*(\w+)\s*\)\s*(=>)/, '$1 $2');
 }
 
 /**
@@ -189,6 +196,11 @@ function reconcileReturnCaptures(
     const returnExpr = extractReturnExpr(missingLines[mi].line);
     if (!returnExpr) continue;
 
+    // Object-literal returns (`return { ... }`) must not be reconciled — the agent
+    // must preserve the original return statement exactly; extracting the object to
+    // a capture variable changes code structure and is explicitly forbidden in the prompt.
+    if (returnExpr.trimStart().startsWith('{')) continue;
+
     // Strip leading `await` for comparison — matches captures where await was added.
     const normalizedReturnExpr = returnExpr.replace(/^await\s+/, '');
     const captureIndices = capturesByExpr.get(normalizedReturnExpr);
@@ -211,6 +223,48 @@ function reconcileReturnCaptures(
       missingToRemove.push(mi);
       addedToRemove.add(captureIdx);
       addedToRemove.add(bareReturnIdx);
+    }
+  }
+
+  // Handle multi-line object literal return-value capture:
+  // Original: `return {` (start of a multi-line object literal return)
+  // Agent: `const <var> = {` + (object properties cancel) + `return <var>;`
+  // The prompt now discourages this pattern, but when it appears the validator
+  // should recognize the return-value capture and not fire NDS-003.
+  // `extractReturnExpr` requires a semicolon so `return {` (no semicolon) is
+  // handled here as a separate case.
+  for (let mi = 0; mi < missingLines.length; mi++) {
+    if (missingToRemove.includes(mi)) continue;
+    const line = missingLines[mi].line;
+    if (line !== 'return {' && !line.match(/^return\s*\{$/)) continue;
+
+    // Look for `const <var> = {` in addedLines (open-brace assignment, no semicolon)
+    for (let ai = 0; ai < addedLines.length; ai++) {
+      if (addedToRemove.has(ai)) continue;
+      const captureMatch = addedLines[ai].line.match(/^(?:const|let|var)\s+(\w+)\s*=\s*\{$/);
+      if (!captureMatch) continue;
+      const varName = captureMatch[1];
+
+      // Look for `return <var>;` after the capture
+      const returnIdx = addedLines.findIndex(
+        (a, idx) => idx > ai && !addedToRemove.has(idx) &&
+          (a.line === `return ${varName}` || a.line === `return ${varName};`),
+      );
+      if (returnIdx < 0) continue;
+
+      // Match found: reconcile the `return {` opening with the capture
+      missingToRemove.push(mi);
+      addedToRemove.add(ai);
+      addedToRemove.add(returnIdx);
+      // Also remove any string literal setAttribute array args between capture and return
+      // (e.g. `'summary',`, `'dialogue',` from `span.setAttribute('key', ['a', 'b'])`)
+      for (let si = ai + 1; si < returnIdx; si++) {
+        if (addedToRemove.has(si)) continue;
+        if (/^['"`][^'"`]*['"`],?$/.test(addedLines[si].line)) {
+          addedToRemove.add(si);
+        }
+      }
+      break;
     }
   }
 
@@ -252,11 +306,21 @@ function reconcileObjectLiteralExpansion(
   addedLines: Array<{ line: string; instrumentedLineNum: number }>,
 ): void {
   const addedByContent = new Map<string, number[]>();
+  // Also index by stripped form for try-d (whitespace-normalized comparison).
+  // Handles 4-line Prettier-expanded original vs agent's 1-line form where spacing
+  // prevents exact string match (e.g. joined form `func( a, b, {c,}` vs `func(a, b, { c })`).
+  const addedByStripped = new Map<string, number[]>();
   for (let i = 0; i < addedLines.length; i++) {
     const key = addedLines[i].line;
     const existing = addedByContent.get(key);
     if (existing) existing.push(i);
     else addedByContent.set(key, [i]);
+    const stripped = stripForComparison(key);
+    if (stripped) {
+      const existingStripped = addedByStripped.get(stripped);
+      if (existingStripped) existingStripped.push(i);
+      else addedByStripped.set(stripped, [i]);
+    }
   }
 
   const missingToRemove = new Set<number>();
@@ -309,6 +373,20 @@ function reconcileObjectLiteralExpansion(
             addedIndices = addedByContent.get(withoutTrailingComma);
             if (addedIndices && addedIndices.length > 0) break;
           }
+        }
+      }
+
+      // Try (d): whitespace-normalized comparison — handles the case where a Prettier
+      // N-line expansion of the original matches the agent's 1-line preserved form, but
+      // spacing differences (the join uses spaces between lines, the 1-line form doesn't)
+      // prevent tries (a)–(c) from matching. Strip all whitespace and trailing delimiter
+      // characters from both the joined missingLines and each addedLine, then compare.
+      // Example: 4-line Prettier form (`func(`, `a,`, `b,`, `{ c },`) vs agent's 1-line
+      // `func(a, b, { c })` — after stripping: `func(a,b,{c` vs `func(a,b,{c` → match.
+      if (!addedIndices || addedIndices.length === 0) {
+        const strippedJoined = stripForComparison(joined);
+        if (strippedJoined) {
+          addedIndices = addedByStripped.get(strippedJoined);
         }
       }
 
@@ -408,6 +486,27 @@ function reconcileAgentSplitLines(
         }
       }
 
+      // Try (c): whitespace-stripped comparison. When a 1-line original (under printWidth)
+      // is expanded to N lines at a deeper indent (over printWidth), the join has a space
+      // after `(` and a trailing comma that prevent tries (a)/(b) from matching. Strip all
+      // whitespace and trailing delimiters from both sides before comparing.
+      // Example: `join(basePath, 'journal', 'reflections', yearMonth)` at 4-space (79 chars)
+      // → expanded at 6-space (81 chars). Join: `join( basePath, 'journal', ...yearMonth,`
+      // vs missing: `join(basePath, 'journal', 'reflections', yearMonth);`
+      if (!missingIndices || missingIndices.length === 0) {
+        const strippedJoined = stripForComparison(joined);
+        if (strippedJoined) {
+          // Build stripped map of missingLines on first use (lazy)
+          for (const [content, indices] of missingByContent) {
+            const strippedContent = stripForComparison(content);
+            if (strippedContent === strippedJoined && indices.length > 0) {
+              missingIndices = indices;
+              break;
+            }
+          }
+        }
+      }
+
       if (missingIndices && missingIndices.length > 0) {
         const missingIdx = missingIndices.shift()!;
         for (const idx of group) addedToRemove.add(idx);
@@ -428,6 +527,189 @@ function reconcileAgentSplitLines(
   for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
     addedLines.splice(idx, 1);
   }
+}
+
+/**
+ * Reconcile function calls that Prettier re-splits differently at different indentation depths.
+ *
+ * When a span callback adds indentation, a call that Prettier formatted as N lines at the
+ * original indent gets re-formatted as M lines (M ≠ N) at the deeper indent. Both are valid
+ * Prettier output of the SAME call — only the indentation changed, not the code semantics.
+ *
+ * Example (summarize.js #841):
+ *   Original at 6-space (Prettier 3-line form):
+ *     const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, {
+ *       force,
+ *     });       ← consumed by span callback's });
+ *
+ *   Agent output at 12-space (Prettier 4-line form):
+ *     const genResult = await generateAndSaveMonthlySummary(
+ *       monthStr,
+ *       basePath,
+ *       { force },
+ *     );        ← consumed as instrumentation pattern
+ *
+ * NDS-003 sees: missingLines=[line1, line2], addedLines=[lineA, lineB, lineC, lineD].
+ * Approach: strip all whitespace from both groups and compare token sequences,
+ * then strip trailing delimiters (commas, braces, parens, semicolons) that were
+ * consumed on either side. If the stripped sequences match, the groups represent
+ * the same code reformatted for indentation.
+ *
+ * Safety: any content change (different argument, reordered args) produces different
+ * token sequences and still fires.
+ */
+function reconcileIndentReformat(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  // Pre-build all consecutive addedLine groups (≥2 lines) with their token strings.
+  // One group per starting index: the full consecutive run from that index.
+  //
+  // Known limitation: when two adjacent re-split statements occupy consecutive added
+  // lines, the addedGroup for the first statement's start covers both statements
+  // combined. The combined-group tokens won't match either statement's missing-group
+  // tokens exactly, but the prefix match (below) handles the case where the combined
+  // tokens have the first statement's tokens as a leading prefix.
+  // Tracked for redesign in PRD #845.
+  const addedGroups: Array<{ indices: number[]; tokens: string }> = [];
+  for (let ai = 0; ai < addedLines.length; ai++) {
+    if (addedToRemove.has(ai)) continue;
+    const aGroup = [ai];
+    for (let j = ai + 1; j < addedLines.length; j++) {
+      if (addedLines[j].instrumentedLineNum !== addedLines[aGroup[aGroup.length - 1]].instrumentedLineNum + 1) break;
+      aGroup.push(j);
+    }
+    if (aGroup.length >= 2) {
+      const tokens = stripForComparison(aGroup.map(idx => addedLines[idx].line).join(''));
+      if (tokens) addedGroups.push({ indices: aGroup, tokens });
+    }
+  }
+
+  // For each consecutive missingLines group (≥2 lines), find a matching addedLines group.
+  // Advancing by 1 on no-match lets the next iteration try a shorter starting subset.
+  let mi = 0;
+  while (mi < missingLines.length) {
+    if (missingToRemove.has(mi)) { mi++; continue; }
+
+    const mGroup = [mi];
+    for (let j = mi + 1; j < missingLines.length; j++) {
+      if (missingToRemove.has(j)) break;
+      if (missingLines[j].originalLineNum !== missingLines[mGroup[mGroup.length - 1]].originalLineNum + 1) break;
+      mGroup.push(j);
+    }
+
+    if (mGroup.length < 2) { mi++; continue; }
+
+    const missingTokens = stripForComparison(mGroup.map(idx => missingLines[idx].line).join(''));
+    if (!missingTokens) { mi++; continue; }
+
+    let matched = false;
+    for (const aGroup of addedGroups) {
+      if (aGroup.indices.some(idx => addedToRemove.has(idx))) continue;
+
+      // Exact token match
+      if (aGroup.tokens === missingTokens) {
+        for (const idx of mGroup) missingToRemove.add(idx);
+        for (const idx of aGroup.indices) addedToRemove.add(idx);
+        matched = true;
+        break;
+      }
+
+      // Prefix match: when some lines of the N-line form were consumed by identical
+      // calls in other functions (e.g. `basePath,` and `{ force },` consumed by
+      // Monthly's identical 4-line call), the addedGroup tokens are a leading prefix
+      // of the missingGroup tokens. Require the prefix to be at least 20 chars and
+      // at least 50% of the missing token length to avoid trivially short matches.
+      const shorter = missingTokens.length < aGroup.tokens.length ? missingTokens : aGroup.tokens;
+      const longer = missingTokens.length < aGroup.tokens.length ? aGroup.tokens : missingTokens;
+      if (shorter.length >= 20 && shorter.length >= longer.length * 0.5 && longer.startsWith(shorter)) {
+        for (const idx of mGroup) missingToRemove.add(idx);
+        for (const idx of aGroup.indices) addedToRemove.add(idx);
+        matched = true;
+        break;
+      }
+    }
+
+    mi += matched ? mGroup.length : 1;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) missingLines.splice(idx, 1);
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) addedLines.splice(idx, 1);
+}
+
+/**
+ * Reconcile a single missingLine full function call against one or more addedLines
+ * that are fragments of that call (opening, trailing argument, or both).
+ *
+ * Two cases handled:
+ *
+ * Case A — suffix: `func(arg);` is missingLine but only `arg,` is in addedLines.
+ * `func(` was consumed from instrFreq by another call site. Match: stripped addedLine
+ * is a suffix of stripped missingLine (≥10 chars, ≥50% of missing length).
+ *
+ * Case B — prefix: `func(a, b, c);` is missingLine but `func(` is in addedLines.
+ * `a,`, `b,` cancelled (appeared in originalSet as parameter names), leaving only
+ * the call opening and one trailing arg. Match: stripped addedLine is a prefix of
+ * stripped missingLine (≥20 chars). Collect all matching prefix AND suffix addedLines
+ * for the same missingLine and reconcile them together.
+ */
+function reconcilePartialArgument(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  if (missingLines.length === 0 || addedLines.length === 0) return;
+
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  for (let mi = 0; mi < missingLines.length; mi++) {
+    if (missingToRemove.has(mi)) continue;
+    const mStripped = stripForComparison(missingLines[mi].line);
+    if (!mStripped || mStripped.length < 20) continue;
+
+    const matchedAdded: number[] = [];
+
+    for (let ai = 0; ai < addedLines.length; ai++) {
+      if (addedToRemove.has(ai)) continue;
+      const aStripped = stripForComparison(addedLines[ai].line);
+      if (!aStripped) continue;
+
+      // Case A: suffix — the stripped addedLine is the trailing argument.
+      // Require ≥10 chars (longer than typical short param names). No 50% length
+      // constraint: the argument can be much shorter than the full original 1-liner.
+      // e.g., `reflections,` (11 chars) is the suffix of `formatJournalEntry(sections,
+      // commit, reflections);` (66 chars stripped) but only ~17% of its length.
+      if (aStripped.length >= 10 && mStripped.endsWith(aStripped)) {
+        matchedAdded.push(ai);
+        continue;
+      }
+
+      // Case B: prefix — the stripped addedLine is the function call opening
+      // (e.g. `constformattedEntry=formatJournalEntry(`). Middle arguments were
+      // consumed (appeared in originalSet as parameter names). Require ≥20 chars.
+      if (aStripped.length >= 20 && mStripped.startsWith(aStripped)) {
+        matchedAdded.push(ai);
+      }
+    }
+
+    if (matchedAdded.length > 0) {
+      missingToRemove.add(mi);
+      for (const ai of matchedAdded) addedToRemove.add(ai);
+    }
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) missingLines.splice(idx, 1);
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) addedLines.splice(idx, 1);
+}
+
+/** Strip whitespace and trailing delimiters for token-sequence comparison. */
+function stripForComparison(code: string): string {
+  return code
+    .replace(/\s+/g, '')         // collapse all whitespace
+    .replace(/[,});]+$/, '');    // strip trailing commas, braces, parens, semicolons (consumed)
 }
 
 /**
@@ -656,12 +938,12 @@ function reconcileSetAttributeMultilineArgs(
   addedLines: Array<{ line: string; instrumentedLineNum: number }>,
   allInstrumentedLines: string[],
 ): void {
-  // OTel attribute key: quoted lowercase dotted name, e.g. 'some.attribute.key',
-  const attributeKeyPattern = /^['"`][a-z][a-z0-9._]+['"`],?$/;
-  // span.setAttribute( call — trailing open paren, no closing
-  const setAttrCallPattern = /\.setAttribute\(\s*$/;
-  // Closing standalone paren with optional semicolon
-  const closingParenPattern = /^\);\s*$|^\)\s*$/;
+  // span.setAttribute( call — trailing open paren OR open bracket (array arg).
+  // Matches both: `span.setAttribute(` and `span.setAttribute('key', [`
+  const setAttrCallPattern = /\.setAttribute\(\s*$|\.setAttribute\s*\([^)]*\[\s*$/;
+  // Closing standalone paren/bracket with optional semicolon (end of setAttribute call).
+  // Handles both ); / ) and ]); / ]) for array-argument forms.
+  const closingParenPattern = /^\);\s*$|^\)\s*$|^\]\);\s*$|^\]\)\s*$/;
 
   const toRemove = new Set<number>();
 
@@ -671,32 +953,28 @@ function reconcileSetAttributeMultilineArgs(
     addedByLineNum.set(addedLines[i].instrumentedLineNum, i);
   }
 
-  for (let i = 0; i < addedLines.length; i++) {
-    if (toRemove.has(i)) continue;
-    const entry = addedLines[i];
+  // Find all spans [P1, P2] in raw instrumented lines where:
+  //   allInstrumentedLines[P1] (0-indexed) matches setAttrCallPattern
+  //   allInstrumentedLines[P2] (0-indexed) matches closingParenPattern
+  // All addedLines with instrumentedLineNum in range [P1+2, P2+1] (1-indexed)
+  // are setAttribute arguments and should be removed. Handles both the simple
+  // 2-line case (key + value) and N-line cases (complex array/conditional args).
+  for (let p1 = 0; p1 < allInstrumentedLines.length; p1++) {
+    if (!setAttrCallPattern.test(allInstrumentedLines[p1])) continue;
 
-    // Must look like an OTel attribute key string
-    if (!attributeKeyPattern.test(entry.line)) continue;
-
-    const N = entry.instrumentedLineNum; // 1-indexed line number in instrumented output
-
-    // Line before the key (N-1 in 1-indexed = index N-2 in 0-indexed array)
-    // must be a span.setAttribute( call
-    const prevLine = allInstrumentedLines[N - 2];
-    if (!prevLine || !setAttrCallPattern.test(prevLine)) continue;
-
-    // The value line (N+1 in 1-indexed) must also be in addedLines
-    const valueIdx = addedByLineNum.get(N + 1);
-    if (valueIdx === undefined || toRemove.has(valueIdx)) continue;
-
-    // Line after the value (N+2 in 1-indexed = index N+1 in 0-indexed array)
-    // must be the closing );
-    const closingLine = allInstrumentedLines[N + 1];
-    if (!closingLine || !closingParenPattern.test(closingLine)) continue;
-
-    // All four lines confirmed — key and value are setAttribute arguments
-    toRemove.add(i);        // key line
-    toRemove.add(valueIdx); // value line
+    // Scan forward to find the matching closing paren (up to 20 lines to avoid runaway)
+    for (let p2 = p1 + 1; p2 < Math.min(p1 + 21, allInstrumentedLines.length); p2++) {
+      if (closingParenPattern.test(allInstrumentedLines[p2])) {
+        // Lines p1+2 through p2+1 in 1-indexed correspond to 0-indexed p1+1 through p2-1
+        for (let lineNum = p1 + 2; lineNum <= p2 + 1; lineNum++) {
+          const idx = addedByLineNum.get(lineNum);
+          if (idx !== undefined) {
+            toRemove.add(idx);
+          }
+        }
+        break;
+      }
+    }
   }
 
   for (const idx of [...toRemove].sort((a, b) => b - a)) {
@@ -775,7 +1053,14 @@ export function checkNonInstrumentationDiff(
   for (let i = 0; i < rawInstrumentedLines.length; i++) {
     const trimmed = normalizeLine(rawInstrumentedLines[i].trim());
     if (trimmed.length === 0) continue;
-    if (!isInstrumentationLine(trimmed) && !originalSet.has(trimmed)) {
+    // `},` (brace+comma) is the span callback's trailing argument separator when Prettier
+    // puts it on its own line before `);`. It matches neither `/^\s*\}\s*$/` (no comma)
+    // nor `/^\s*\}\);?\s*$/` (no paren), so isInstrumentationLine() misses it.
+    // Since `!originalSet.has(trimmed)` already ensures business-logic `},` cancels out
+    // (it IS in the original → excluded), the only unmatched `},` left here is from
+    // span callbacks — filter it as instrumentation.
+    const isSpanCallbackComma = /^\},\s*$/.test(trimmed) && !originalSet.has(trimmed);
+    if (!isInstrumentationLine(trimmed) && !isSpanCallbackComma && !originalSet.has(trimmed)) {
       addedLines.push({ line: trimmed, instrumentedLineNum: i + 1 });
     }
   }
@@ -793,6 +1078,20 @@ export function checkNonInstrumentationDiff(
   // The agent then splits the line, producing consecutive addedLines for a single missingLine.
   // This is the reverse of reconcileObjectLiteralExpansion (missing=single, added=multi).
   reconcileAgentSplitLines(missingLines, addedLines);
+
+  // Reconcile Prettier re-splits at different indentation depths: when a span callback adds
+  // indentation, a call Prettier split N ways at the original indent gets split M ways (M ≠ N)
+  // at the deeper indent. Both are valid Prettier output of the same code — only formatting
+  // changed. Compares whitespace-stripped token sequences with trailing delimiters removed
+  // to handle "consumed" closing tokens (}); or ); filtered as instrumentation patterns).
+  reconcileIndentReformat(missingLines, addedLines);
+
+  // Reconcile partial single-line argument: when `func(arg);` is in missingLines but
+  // only `arg,` appears in addedLines because `func(` was consumed via instrFreq (it
+  // appeared in both the original and instrumented from other call sites). Checks if the
+  // single addedLine's stripped form is a non-trivial suffix of the single missingLine's
+  // stripped form — indicating the argument content is preserved, only the wrapper was consumed.
+  reconcilePartialArgument(missingLines, addedLines);
 
   // Reconcile return-value captures: when the agent extracts a return expression
   // to a variable for setAttribute, NDS-003 sees the original `return <expr>`

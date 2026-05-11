@@ -1439,13 +1439,15 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '}',
       ].join('\n');
 
-      // When Prettier is unavailable, the normalized check falls back to raw diff.
-      // The raw diff sees the original single-line as missing — NDS-003 fails.
+      // When Prettier is unavailable the normalized check falls back to raw diff.
+      // reconcileAgentSplitLines try-c (whitespace-stripped comparison) now handles
+      // this pattern even in raw-diff mode, so the check passes.
       const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
       const failures = results.filter((r) => !r.passed);
-      expect(failures.length).toBeGreaterThan(0);
+      expect(failures).toHaveLength(0);
 
-      // The warning is emitted for coordinator-level reporting.
+      // The warning is still emitted for coordinator-level reporting even when the
+      // check passes — it signals that Prettier normalization was unavailable.
       const warning = drainNds003Warning();
       expect(warning).toContain('NDS-003');
       expect(warning).toContain('Prettier not available');
@@ -1479,9 +1481,11 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     // Prettier would (to comply with LINT after span indentation pushes it over printWidth),
     // NDS-003 should pass after normalizing both sides through Prettier.
 
-    it('without normalization: fails when agent splits a long line to comply with LINT', () => {
-      // Demonstrates the root cause: without normalization, the original single-line form
-      // is "missing" from the instrumented multi-line form even though the content is identical.
+    it('without normalization: passes via try-c whitespace comparison when agent splits a long line', () => {
+      // reconcileAgentSplitLines try-c (whitespace-stripped comparison) handles this pattern
+      // even in raw-diff mode — joins addedLines, strips whitespace, and compares against
+      // the stripped single-line original. Prettier normalization remains the primary path
+      // (both sides normalized → same split), but try-c serves as a reliable fallback.
       const original = [
         'async function fetchMetrics(client, options) {',
         '  const data = await client.query("metrics", options.filter, { includeEmpty: false, timeout: 3000 });',
@@ -1513,7 +1517,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
 
       const results = checkNonInstrumentationDiff(original, instrumented, '/tmp/test.js');
       const failures = results.filter((r) => !r.passed);
-      expect(failures.length).toBeGreaterThan(0);
+      expect(failures).toHaveLength(0);
     });
 
     it('with normalization: passes when agent splits a long line to comply with LINT', async () => {
@@ -1797,6 +1801,57 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('multi-line span.setAttribute() with array argument (#841 journal-graph regression)', () => {
+    it('passes when agent adds span.setAttribute with a multi-line array argument', () => {
+      // Agent adds:
+      //   span.setAttribute('commit_story.journal.sections', [
+      //     'summary',        ← string literal element — would be flagged without reconciler
+      //     'dialogue',
+      //     'technical_decisions',
+      //   ]);
+      // The opening span.setAttribute line is already filtered by isInstrumentationLine.
+      // The closing ]); cancels via originalSet. But the string array elements are not
+      // filtered and appear as addedLines. reconcileSetAttributeMultilineArgs must handle
+      // this case where the line ends with [ rather than just (.
+      const original = [
+        'export async function generateJournalSections(context) {',
+        '  const graph = getGraph();',
+        '  const result = await graph.invoke({ context });',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function generateJournalSections(context) {',
+        '  return tracer.startActiveSpan("svc.generate", async (span) => {',
+        '    try {',
+        '      const graph = getGraph();',
+        '      const result = await graph.invoke({ context });',
+        '      span.setAttribute(\'commit_story.journal.sections\', [',
+        '        \'summary\',',
+        '        \'dialogue\',',
+        '        \'technical_decisions\',',
+        '      ]);',
+        '      return result;',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('multi-line method chain oscillation (#833)', () => {
     it('error message mentions multi-line when a method chain is collapsed to one line', () => {
       // The agent collapses a 4-line method chain onto one line, causing NDS-003 to fire.
@@ -2049,6 +2104,398 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       ].join('\n');
 
       const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Problem C — reconcileObjectLiteralExpansion try-d: 4-line original → agent 1-line (#841)', () => {
+    it('passes when Prettier expands original to 4-line form but agent returns 1-line form', async () => {
+      // `generateAndSaveMonthlySummary(monthStr, basePath, { force })` at 6-space (89 chars)
+      // → Prettier 4-line form in normalized original (Monthly is 2 chars longer than Weekly):
+      //   const genResult = await generateAndSaveMonthlySummary(
+      //     monthStr,
+      //     basePath,
+      //     { force },
+      //   );         ← filtered as /^\s*\);?\s*$/
+      // Agent (following the "don't increase line count" directive) returns it as 1-line.
+      // reconcileObjectLiteralExpansion try-d: strip whitespace from joined missingLines and
+      // from the addedLine, compare — they match.
+      const original = [
+        'export async function runMonthlySummarize(options) {',
+        '  const { months, force, basePath } = options;',
+        '  for (const monthStr of months) {',
+        '    try {',
+        '      const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '      if (genResult.saved) result.generated.push(monthStr);',
+        '    } catch (err) {',
+        '      result.failed.push(monthStr);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Agent adds span but keeps the call on ONE line (following the no-expand directive)
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runMonthlySummarize(options) {',
+        '  return tracer.startActiveSpan("svc.run_monthly", async (span) => {',
+        '    try {',
+        '      const { months, force, basePath } = options;',
+        '      for (const monthStr of months) {',
+        '        try {',
+        // Agent kept call on 1 line — but at 12-space it exceeds printWidth
+        '          const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '          if (genResult.saved) result.generated.push(monthStr);',
+        '        } catch (err) {',
+        '          result.failed.push(monthStr);',
+        '        }',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Verify Prettier actually splits the call to the expected 4-line form so the
+      // reconciler is genuinely exercised (test fails if Prettier behavior changes).
+      const normalizedOriginal = await prettierNormalizeForComparison(original, filePath);
+      expect(normalizedOriginal).toContain('generateAndSaveMonthlySummary(');
+      expect(normalizedOriginal).toContain('\n        monthStr,');
+      expect(normalizedOriginal).toContain('\n        basePath,');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when span callback closing },  does not leak into addedLines', async () => {
+      // When Prettier puts the span callback's closing `},` on its own line before `);`,
+      // that `},` must not fire as a non-instrumentation addition.
+      const original = [
+        'export async function runWeeklySummarize(options) {',
+        '  const { weeks, force, basePath } = options;',
+        '  for (const weekStr of weeks) {',
+        '    const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runWeeklySummarize(options) {',
+        '  return tracer.startActiveSpan(',
+        '    "svc.run_weekly",',
+        '    async (span) => {',
+        '      try {',
+        '        const { weeks, force, basePath } = options;',
+        '        for (const weekStr of weeks) {',
+        '          const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '        }',
+        '      } catch (error) {',
+        '        span.recordException(error);',
+        '        span.setStatus({ code: SpanStatusCode.ERROR });',
+        '        throw error;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    },',   // ← this is the `},` the span callback closes with before `);`
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('Problem C — reconcilePartialArgument and prefix matching (#841)', () => {
+    it('passes when func(arg); is a missingLine but only arg, is in addedLines (func( consumed via instrFreq)', () => {
+      // reconcilePartialArgument: `func(arg);` is 1 missingLine, only `arg,` is in
+      // addedLines because `func(` appeared in BOTH the original (from another call
+      // that Prettier already split) and the instrumented — so it cancels out.
+      //
+      // Setup: original has `onProgress(` already split (from a long call) AND a short
+      // onProgress call on 1 line. Instrumented has both split (at same depth), so
+      // the long call's arg cancels, the short call's onProgress( cancels, leaving
+      // only the short call's arg template as addedLine.
+      const original = [
+        'async function run() {',
+        // Already split in original (long string forces Prettier to split at this indent)
+        '  onProgress(',
+        '    `Generated summary for ${m} (${genResult.dayCount} daily summaries)`,',
+        '  );',
+        // Short call: 1 line in original (under printWidth)
+        '  onProgress(`Skipped ${m}: monthly summary already exists`);',
+        '}',
+      ].join('\n');
+
+      // Instrumented: both calls split (same structure).
+      // instrFreq has `onProgress(` ×2. originalSet has `onProgress(` ×1 (from the long split).
+      // Forward: original's `onProgress(` (×1) consumed by instrFreq (count 2→1). OK.
+      // Forward: original's short 1-line form → NOT in instrFreq → MISSING.
+      // Reverse: instrumented's 1st `onProgress(` → in originalSet → filtered.
+      // Reverse: instrumented's 2nd `onProgress(` → in originalSet → filtered.
+      // Reverse: instrumented's long arg → in originalSet → filtered.
+      // Reverse: instrumented's short arg → NOT in originalSet → ADDED.
+      // Result: missingLines=[`onProgress(`Skipped...`);`], addedLines=[`` `Skipped...`, ``]
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function run() {',
+        '  onProgress(',
+        '    `Generated summary for ${m} (${genResult.dayCount} daily summaries)`,',
+        '  );',
+        '  onProgress(',
+        '    `Skipped ${m}: monthly summary already exists`,',
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when weekly-call partial groups match via prefix (basePath consumed by Monthly)', async () => {
+      // Weekly: original 3-line form `(weekStr, basePath, {` at 6-space.
+      // Instrumented 4-line form at 12-space. `basePath,` and `{ force },` are consumed
+      // by Monthly's identical 4-line form in BOTH the original and instrumented.
+      // Remaining: missingLines=[`...Weekly(weekStr, basePath, {`, `force,`],
+      //            addedLines=[`...Weekly(`, `weekStr,`].
+      // reconcileIndentReformat prefix match: addedTokens is a prefix of missingTokens.
+      const original = [
+        'export async function runBoth(options) {',
+        '  const { weeks, months, force, basePath } = options;',
+        '  for (const weekStr of weeks) {',
+        // At 6-space: (weekStr, basePath, { = 79 chars → 3-line form
+        '    const wResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '  }',
+        '  for (const monthStr of months) {',
+        // At 6-space: (monthStr, basePath, { = 81 chars → 4-line form
+        '    const mResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runBoth(options) {',
+        '  return tracer.startActiveSpan("svc.runBoth", async (span) => {',
+        '    try {',
+        '      const { weeks, months, force, basePath } = options;',
+        '      for (const weekStr of weeks) {',
+        // At 12-space: (weekStr, basePath, { = 85 chars → 4-line form
+        '        const wResult = await generateAndSaveWeeklySummary(',
+        '          weekStr,',
+        '          basePath,',
+        '          { force },',
+        '        );',
+        '      }',
+        '      for (const monthStr of months) {',
+        // At 12-space: Monthly also → 4-line form
+        '        const mResult = await generateAndSaveMonthlySummary(',
+        '          monthStr,',
+        '          basePath,',
+        '          { force },',
+        '        );',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('Problem C — reconcilePartialArgument suffix match without 50% length constraint (#841)', () => {
+    it('passes when function arg is suffix of missing line but shorter than 50% of it', async () => {
+      // saveJournalEntry has a multi-line Prettier signature with `sections,` and `commit,`
+      // as standalone lines — these cancel. But `reflections = [],` (with default) does NOT
+      // cancel `reflections,` (without default) because they strip to different strings.
+      // After wrapping in startActiveSpan, the 1-liner formatJournalEntry call exceeds
+      // Prettier's printWidth and gets re-split to multi-line. Only `reflections,` remains
+      // as an uncancelled added line (11 chars) — which is the suffix of the missing line
+      // but far less than 50% of its length. The suffix match must fire without the
+      // 50% constraint.
+      const original = [
+        // Multi-line signature: sections, and commit, will be in originalSet
+        'export async function saveJournalEntry(',
+        '  sections,',
+        '  commit,',
+        '  reflections = [],',  // stripped: 'reflections=[]' — does NOT cancel 'reflections,'
+        '  basePath = \'.\',',
+        ') {',
+        // 79 chars total at 2-space indent — under printWidth=80, stays 1 line in original
+        '  const formattedEntry = formatJournalEntry(sections, commit, reflections);',
+        '  await appendFile(basePath, formattedEntry);',
+        '}',
+      ].join('\n');
+
+      // The instrumented code represents what the agent + Prettier produce after reassembly:
+      // the call is at 10-space indent (81 chars > printWidth=80) so Prettier splits it.
+      // sections, and commit, cancel against signature params. reflections, doesn't cancel
+      // because signature has `reflections = [],` (strips to `reflections=[]`) not `reflections,`.
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function saveJournalEntry(',
+        '  sections,',
+        '  commit,',
+        '  reflections = [],',
+        '  basePath = \'.\',',
+        ') {',
+        '  return tracer.startActiveSpan("svc.save", async (span) => {',
+        '    try {',
+        // Prettier-split form: at 10-space indent this call is 81 chars (>80), so it splits
+        '      const formattedEntry = formatJournalEntry(',
+        '        sections,',
+        '        commit,',
+        '        reflections,',
+        '      );',
+        '      await appendFile(basePath, formattedEntry);',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('Problem C — reconcileIndentReformat handles Prettier re-split at deeper indent (#841)', () => {
+    it('passes when agent wraps function and Prettier re-splits a call differently at deeper indent', async () => {
+      // `const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });`
+      // At 6-space indent (89 chars total) — Prettier splits to 3 lines in the normalized original:
+      //   const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, {
+      //     force,
+      //   });                ← consumed by span callback's `});` in instrumented
+      // Agent wraps in startActiveSpan (12-space indent) — Prettier re-splits to 4 lines:
+      //   const genResult = await generateAndSaveMonthlySummary(
+      //     monthStr,
+      //     basePath,
+      //     { force },
+      //   );                 ← consumed as instrumentation pattern /^\s*\);?\s*$/
+      // NDS-003 sees 2 missingLines (3rd `});` consumed) and 4 addedLines (closing `);` consumed).
+      // reconcileIndentReformat matches by stripping whitespace + trailing delimiters from both groups.
+      const original = [
+        'export async function runMonthlySummarize(options) {',
+        '  const { months, force, basePath } = options;',
+        '  for (const monthStr of months) {',
+        '    try {',
+        '      const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '      if (genResult.saved) result.generated.push(monthStr);',
+        '    } catch (err) {',
+        '      result.failed.push(monthStr);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Agent wraps in span; at 12-space indent the call is over printWidth — Prettier splits to 4 lines
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runMonthlySummarize(options) {',
+        '  return tracer.startActiveSpan("svc.run_monthly", async (span) => {',
+        '    try {',
+        '      const { months, force, basePath } = options;',
+        '      for (const monthStr of months) {',
+        '        try {',
+        '          const genResult = await generateAndSaveMonthlySummary(',
+        '            monthStr,',
+        '            basePath,',
+        '            { force },',
+        '          );',
+        '          if (genResult.saved) result.generated.push(monthStr);',
+        '        } catch (err) {',
+        '          result.failed.push(monthStr);',
+        '        }',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Use the Normalized variant: Prettier-normalizes original so the call becomes 3-line,
+      // making missingLines have ≥2 entries that reconcileIndentReformat can match.
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still fires when agent changes argument content while reformatting (not just indentation)', async () => {
+      // If the agent changes an argument (monthStr → monthStr.trim()), NDS-003 must still fire.
+      const original = [
+        'export async function runMonthlySummarize(options) {',
+        '  const { months, force, basePath } = options;',
+        '  for (const monthStr of months) {',
+        '    try {',
+        '      const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '      if (genResult.saved) result.generated.push(monthStr);',
+        '    } catch (err) { result.failed.push(monthStr); }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runMonthlySummarize(options) {',
+        '  return tracer.startActiveSpan("svc.run_monthly", async (span) => {',
+        '    try {',
+        '      const { months, force, basePath } = options;',
+        '      for (const monthStr of months) {',
+        '        try {',
+        // Agent changed monthStr → monthStr.trim() — content change, not just reformatting
+        '          const genResult = await generateAndSaveMonthlySummary(',
+        '            monthStr.trim(),',
+        '            basePath,',
+        '            { force },',
+        '          );',
+        '          if (genResult.saved) result.generated.push(monthStr);',
+        '        } catch (err) { result.failed.push(monthStr); }',
+        '      }',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
       expect(failures.length).toBeGreaterThan(0);
     });
