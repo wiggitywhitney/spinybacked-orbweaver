@@ -541,7 +541,8 @@ describe('renderPrSummary', () => {
       const md = renderPrSummary(result, _makeConfig());
 
       expect(md).toContain('CDQ-001');
-      expect(md).toContain('camelCase');
+      // CDQ-001 now has a human description — check for its content instead of agent message
+      expect(md).toContain('Spans Closed');
     });
 
     it('formats advisory rule IDs with human-readable labels', () => {
@@ -597,18 +598,18 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain('Required (must add): db.query.text');
     });
 
-    it('falls back to agent-facing message when no human description is registered (CDQ-001)', () => {
-      // CDQ-001 has no human description yet — should fall back to expandRuleCodesInText(message).
+    it('falls back to agent-facing message when no human description is registered (CDQ-002)', () => {
+      // CDQ-002 (Tracer Acquired) has no human description — should fall back to expandRuleCodesInText(message).
       const result = _makeRunResult({
         fileResults: [
           _makeFileResult({
             advisoryAnnotations: [
               {
-                ruleId: 'CDQ-001',
+                ruleId: 'CDQ-002',
                 passed: false,
                 filePath: '/project/src/api-client.js',
                 lineNumber: 42,
-                message: 'Span name uses camelCase',
+                message: 'Tracer should be initialized at module scope',
                 tier: 2,
                 blocking: false,
               },
@@ -618,8 +619,8 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // Falls back: agent-facing message body still present
-      expect(md).toContain('camelCase');
+      // Falls back: agent-facing message body still present (CDQ-002 has no human description)
+      expect(md).toContain('Tracer should be initialized');
     });
 
     it('suppresses COV-004 advisories for functions deliberately skipped in notes', () => {

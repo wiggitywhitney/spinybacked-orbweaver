@@ -84,13 +84,14 @@ describe('getRuleHumanDescription', () => {
   });
 
   it('returns undefined for rule IDs that exist in RULE_NAMES but have no human description yet', () => {
-    // CDQ-001 (Spans Closed) is a blocking rule; M5 will add its description
-    expect(getRuleHumanDescription('CDQ-001')).toBeUndefined();
+    // CDQ-002 (Tracer Acquired) has no human description
+    expect(getRuleHumanDescription('CDQ-002')).toBeUndefined();
   });
 
   it('does not affect agent-facing messages — CheckResult.message is unrelated', () => {
     // Verify that missing descriptions return undefined rather than falling back to anything
     // The caller is responsible for the ?? fallback (gets message from CheckResult directly)
-    expect(getRuleHumanDescription('NDS-003')).toBeUndefined();
+    // CDQ-011 (Canonical Tracer Name) has no human description
+    expect(getRuleHumanDescription('CDQ-011')).toBeUndefined();
   });
 });
