@@ -1801,6 +1801,57 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('multi-line span.setAttribute() with array argument (#841 journal-graph regression)', () => {
+    it('passes when agent adds span.setAttribute with a multi-line array argument', () => {
+      // Agent adds:
+      //   span.setAttribute('commit_story.journal.sections', [
+      //     'summary',        ← string literal element — would be flagged without reconciler
+      //     'dialogue',
+      //     'technical_decisions',
+      //   ]);
+      // The opening span.setAttribute line is already filtered by isInstrumentationLine.
+      // The closing ]); cancels via originalSet. But the string array elements are not
+      // filtered and appear as addedLines. reconcileSetAttributeMultilineArgs must handle
+      // this case where the line ends with [ rather than just (.
+      const original = [
+        'export async function generateJournalSections(context) {',
+        '  const graph = getGraph();',
+        '  const result = await graph.invoke({ context });',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function generateJournalSections(context) {',
+        '  return tracer.startActiveSpan("svc.generate", async (span) => {',
+        '    try {',
+        '      const graph = getGraph();',
+        '      const result = await graph.invoke({ context });',
+        '      span.setAttribute(\'commit_story.journal.sections\', [',
+        '        \'summary\',',
+        '        \'dialogue\',',
+        '        \'technical_decisions\',',
+        '      ]);',
+        '      return result;',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('multi-line method chain oscillation (#833)', () => {
     it('error message mentions multi-line when a method chain is collapsed to one line', () => {
       // The agent collapses a 4-line method chain onto one line, causing NDS-003 to fire.

@@ -938,10 +938,12 @@ function reconcileSetAttributeMultilineArgs(
   addedLines: Array<{ line: string; instrumentedLineNum: number }>,
   allInstrumentedLines: string[],
 ): void {
-  // span.setAttribute( call — trailing open paren, no closing
-  const setAttrCallPattern = /\.setAttribute\(\s*$/;
-  // Closing standalone paren with optional semicolon (end of setAttribute call)
-  const closingParenPattern = /^\);\s*$|^\)\s*$/;
+  // span.setAttribute( call — trailing open paren OR open bracket (array arg).
+  // Matches both: `span.setAttribute(` and `span.setAttribute('key', [`
+  const setAttrCallPattern = /\.setAttribute\(\s*$|\.setAttribute\s*\([^)]*\[\s*$/;
+  // Closing standalone paren/bracket with optional semicolon (end of setAttribute call).
+  // Handles both ); / ) and ]); / ]) for array-argument forms.
+  const closingParenPattern = /^\);\s*$|^\)\s*$|^\]\);\s*$|^\]\)\s*$/;
 
   const toRemove = new Set<number>();
 
