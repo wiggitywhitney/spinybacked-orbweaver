@@ -32,6 +32,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 - CDQ-007: skip nullable check for non-nullable typed TypeScript parameters ([issue #729](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/729)) — Check 3 flags non-optional TypeScript parameters as needing null guards, but TypeScript's type system guarantees non-nullability. Cheap AST path to explore first; may escalate to PRD if rule needs type info from the provider. Wait for 2+ eval runs to confirm.
 
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 produced 164 INTERNAL spans against 38 packages (structurally correct, but fails IS SPA-001 limit). Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections. One run of data; wait for 2+ CLI evals before deciding.
+- P4 coordinator: ExpressInstrumentation missing from SDK init file after successful instrumentation ([issue #846](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/846)) — `librariesNeeded` for express not reaching SDK init update; investigate `src/coordinator/aggregate.ts` → `src/coordinator/sdk-init.ts` path.
 
 ## Long-term
 
