@@ -1,6 +1,6 @@
 # PRD #509: Human-facing advisory output
 
-**Status**: Draft
+**Status**: Complete (2026-05-11)
 **Priority**: Medium
 **GitHub Issue**: [#509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)
 **Created**: 2026-04-20
