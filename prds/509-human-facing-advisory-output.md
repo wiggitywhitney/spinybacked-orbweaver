@@ -98,6 +98,14 @@ PRD #505 and PRD #508 have both merged — the rule list above is final.
 
 ## Decision Log
 
+### M4/M5 — Writing style: soft length guideline, not a sentence count
+
+**Decision**: Keep "fits in a PR annotation without scrolling" as the real constraint. The sentence count (3-4) is a soft guideline — adjust down for simple rules (RST-002 may need 2), adjust up for complex ones (NDS-003, COV-005 may need 4). Do not pad to hit a target or truncate to stay under it. Tone: friendly and direct, concrete and conversational, no buzzwords. Source: project external-reader accessibility guidelines (write for someone with no project context, concrete language, skip internal references).
+
+**Why not 4-5 sentences**: Lengthening the *target* makes every description default to longer, and weaker descriptions get padded rather than tightened. The reviewer won't read past a wall of text in a PR annotation. The three required elements (what/why/what-to-do) can each be one well-crafted sentence.
+
+**Impact on M4/M5**: Descriptions should be evaluated against the visual test ("does this fit in a PR annotation?") not a sentence count. A worked example in M2's description guide file (if created) should demonstrate this principle.
+
 ### M1 — Mechanism: Option 3 (description registry in `rule-names.ts`)
 
 **Decision**: Extend `src/validation/rule-names.ts` with a `getRuleHumanDescription(ruleId: string): string | undefined` function. Output paths use `getRuleHumanDescription(ruleId) ?? message` as the human-facing text.
@@ -119,7 +127,7 @@ PRD #505 and PRD #508 have both merged — the rule list above is final.
 ## Design Notes
 
 - **Critical constraint (inherited from PRD #483 Action Items):** Do NOT modify existing `message` fields. The agent depends on the current terse, directive format for fix-loop correction. Adding human-facing text inline to existing messages would change the text the agent reads and could alter its correction behavior. Human-facing descriptions are strictly additive.
-- **Writing style for human-facing descriptions**: each description explains (1) what the rule checks, (2) why a fired finding matters in practical terms, and (3) what the human should do about it — fix, accept, or ignore. Target length: 3-4 sentences, terse enough to fit in a PR annotation. Avoid jargon that requires cross-referencing another document; if a term must be used, briefly gloss it the first time.
+- **Writing style for human-facing descriptions**: each description explains (1) what the rule checks, (2) why a fired finding matters in practical terms, and (3) what the human should do about it — fix, accept, or ignore. **Tone**: friendly and direct — write for a developer who has no context about spiny-orb, using concrete and conversational language. No buzzwords or corporate speak. **Length**: fits in a PR annotation without scrolling — typically 3-4 sentences, but adjust to the rule's complexity. Simple rules (RST-002, trivial accessors) may need only 2. Complex rules (NDS-003, COV-005) may need 4. Do not pad shorter descriptions to hit a sentence count, and do not truncate longer ones to stay under it. Avoid jargon that requires cross-referencing another document; if a term must be used, briefly gloss it the first time.
 - **Rule ID introduction convention** (from project CLAUDE.md): each human-facing description introduces the rule by its plain-English meaning alongside the ID on first use — e.g., "COV-005 (domain attributes present) fired because…" not "COV-005 fired because…".
 - **Sequencing with #505 and #508**: Both PRDs have merged. CDQ-008, SCH-004, and SCH-005 are deleted; SCH-001/002 are now unconditionally blocking. All milestones (M1–M6) can proceed.
 - **Rules-related PRD** per the project CLAUDE.md convention. Both rules-related conventions apply: read the audit document at the start of every milestone; update `docs/rules-reference.md` as the final PRD step.
@@ -169,7 +177,7 @@ Write human-facing descriptions for every advisory rule per the writing-style gu
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
 - [ ] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above)
-- [ ] Each description follows the writing style: (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Length: 3-4 sentences. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
+- [ ] Each description follows the writing style from Design Notes (updated per Decision 2): (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Tone: friendly, direct, concrete. Length: fits in a PR annotation without scrolling — typically 3-4 sentences, adjust to rule complexity; do not pad or truncate. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
 - [ ] Descriptions surface correctly in the output path wired in M3 — manually verified on a test run
 - [ ] `npm test` passes; `npm run typecheck` passes
 
@@ -179,7 +187,7 @@ Same as M4 but for blocking rules. Blocking rules surface to humans via CLI erro
 
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
 - [ ] Human-facing descriptions written for each blocking rule (list from the "Rule scope" section above)
-- [ ] Each description follows the writing-style guide from M4
+- [ ] Each description follows the writing-style guide from M4 (Decision 2: fits in PR annotation, adjust to complexity, no padding)
 - [ ] Descriptions surface correctly in the output path wired in M3 for a blocking-rule fixture (manually verified)
 - [ ] `npm test` passes; `npm run typecheck` passes
 
