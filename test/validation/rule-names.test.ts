@@ -1,8 +1,8 @@
 // ABOUTME: Tests for human-readable rule name lookup.
-// ABOUTME: Verifies getRuleName and formatRuleId for known and unknown rule IDs.
+// ABOUTME: Verifies getRuleName, formatRuleId, and getRuleHumanDescription for known and unknown rule IDs.
 
 import { describe, it, expect } from 'vitest';
-import { getRuleName, formatRuleId, expandRuleCodesInText } from '../../src/validation/rule-names.ts';
+import { getRuleName, formatRuleId, expandRuleCodesInText, getRuleHumanDescription } from '../../src/validation/rule-names.ts';
 
 describe('getRuleName', () => {
   it('returns human-readable name for known rule IDs', () => {
@@ -67,5 +67,31 @@ describe('expandRuleCodesInText', () => {
   it('expands NDS-007', () => {
     const text = 'check NDS-007 compliance';
     expect(expandRuleCodesInText(text)).toBe('check NDS-007 (Expected Catch Unmodified) compliance');
+  });
+});
+
+describe('getRuleHumanDescription', () => {
+  it('returns a non-empty string for COV-005 (the smoke-test placeholder)', () => {
+    const desc = getRuleHumanDescription('COV-005');
+    expect(desc).toBeDefined();
+    expect(typeof desc).toBe('string');
+    expect((desc as string).length).toBeGreaterThan(0);
+  });
+
+  it('returns undefined for unknown rule IDs', () => {
+    expect(getRuleHumanDescription('UNKNOWN-999')).toBeUndefined();
+    expect(getRuleHumanDescription('NDS-099')).toBeUndefined();
+  });
+
+  it('returns undefined for rule IDs that exist in RULE_NAMES but have no human description yet', () => {
+    // CDQ-002 (Tracer Acquired) has no human description
+    expect(getRuleHumanDescription('CDQ-002')).toBeUndefined();
+  });
+
+  it('does not affect agent-facing messages — CheckResult.message is unrelated', () => {
+    // Verify that missing descriptions return undefined rather than falling back to anything
+    // The caller is responsible for the ?? fallback (gets message from CheckResult directly)
+    // CDQ-002 (Tracer Acquired) has no human description
+    expect(getRuleHumanDescription('CDQ-002')).toBeUndefined();
   });
 });

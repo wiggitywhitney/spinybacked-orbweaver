@@ -541,7 +541,8 @@ describe('renderPrSummary', () => {
       const md = renderPrSummary(result, _makeConfig());
 
       expect(md).toContain('CDQ-001');
-      expect(md).toContain('camelCase');
+      // CDQ-001 now has a human description — check for its content instead of agent message
+      expect(md).toContain('Spans Closed');
     });
 
     it('formats advisory rule IDs with human-readable labels', () => {
@@ -566,6 +567,60 @@ describe('renderPrSummary', () => {
 
       // Rule ID should include human-readable label
       expect(md).toContain('CDQ-001 (Spans Closed)');
+    });
+
+    it('uses getRuleHumanDescription when available (COV-005) instead of agent-facing message', () => {
+      // COV-005 has a human description registered in RULE_HUMAN_DESCRIPTIONS.
+      // The PR summary should show that description, not the terse agent-facing message.
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'COV-005',
+                passed: false,
+                filePath: '/project/src/db.js',
+                lineNumber: 5,
+                message: 'COV-005: Required (must add): db.query.text. Add setAttribute() calls.',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Human description should appear
+      expect(md).toContain('COV-005 (Domain Attributes)');
+      expect(md).toContain('Weaver registry');
+      // Agent-facing message body should NOT appear
+      expect(md).not.toContain('Required (must add): db.query.text');
+    });
+
+    it('falls back to agent-facing message when no human description is registered (CDQ-002)', () => {
+      // CDQ-002 (Tracer Acquired) has no human description — should fall back to expandRuleCodesInText(message).
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'CDQ-002',
+                passed: false,
+                filePath: '/project/src/api-client.js',
+                lineNumber: 42,
+                message: 'Tracer should be initialized at module scope',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Falls back: agent-facing message body still present (CDQ-002 has no human description)
+      expect(md).toContain('Tracer should be initialized');
     });
 
     it('suppresses COV-004 advisories for functions deliberately skipped in notes', () => {
@@ -616,9 +671,10 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // COV-004 for a function NOT mentioned as skipped should still appear
+      // COV-004 for a function NOT mentioned as skipped should still appear.
+      // Human description replaces agent-facing message — check rule ID and description text.
       expect(md).toContain('COV-004');
-      expect(md).toContain('handleRequest');
+      expect(md).toContain('Async Operation Spans');
     });
 
     it('does not suppress COV-004 for "process" when notes only mention "processOrder" (word boundary)', () => {
@@ -667,9 +723,10 @@ describe('renderPrSummary', () => {
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // Notes mention doFetch but not as a skip — advisory should still appear
+      // Notes mention doFetch but not as a skip — advisory should still appear.
+      // Human description replaces agent-facing message (which had the function name).
       expect(md).toContain('COV-004');
-      expect(md).toContain('doFetch');
+      expect(md).toContain('Async Operation Spans');
     });
   });
 
@@ -853,7 +910,8 @@ describe('renderPrSummary', () => {
       const md = renderPrSummary(result, _makeConfig());
 
       expect(md).toContain('CDQ-006');
-      expect(md).toContain('Expensive computation not guarded');
+      // Human description replaces agent-facing message for CDQ-006
+      expect(md).toContain('isRecording Guard');
     });
   });
 

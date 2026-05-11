@@ -8,7 +8,7 @@ import type { CheckResult } from '../validation/types.ts';
 import { tokensToDollars, ceilingToDollars, formatDollars } from './cost-formatting.ts';
 import { writeFile } from 'node:fs/promises';
 import { relative, basename, join } from 'node:path';
-import { formatRuleId, expandRuleCodesInText } from '../validation/rule-names.ts';
+import { formatRuleId, expandRuleCodesInText, getRuleHumanDescription } from '../validation/rule-names.ts';
 
 /** A function that converts a file path to a display string. */
 type DisplayFn = (filePath: string) => string;
@@ -366,10 +366,13 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
       const [, { fileDisplay, annotations }] = fileEntries[i];
       lines.push(`**${fileDisplay}**`);
       for (const ann of annotations) {
-        // Strip leading "RULE-NNN: " prefix from message — already rendered via formatRuleId above.
-        // Then expand any other rule codes in the body to include their human-readable labels.
-        const messageBody = ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, '');
-        lines.push(`- ${formatRuleId(ann.ruleId)}: ${expandRuleCodesInText(messageBody)}`);
+        // Prefer human-facing description when registered; fall back to the agent-facing message.
+        // Agent-facing messages are terse and directive (written for the fix-loop, not for humans).
+        // Human descriptions are registered in RULE_HUMAN_DESCRIPTIONS in rule-names.ts (M4/M5).
+        const humanDesc = getRuleHumanDescription(ann.ruleId);
+        const displayText = humanDesc
+          ?? expandRuleCodesInText(ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, ''));
+        lines.push(`- ${formatRuleId(ann.ruleId)}: ${displayText}`);
       }
       if (i < fileEntries.length - 1) {
         lines.push('');

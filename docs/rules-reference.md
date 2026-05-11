@@ -13,6 +13,19 @@ Rules run in two tiers:
 
 When a rule appears in output, it uses the format `RULE-ID (Human Name)` — for example, `RST-001 (No Utility Spans)`.
 
+### Human-facing descriptions
+
+Each rule optionally has a human-facing description registered in `RULE_HUMAN_DESCRIPTIONS` in `src/validation/rule-names.ts`. These descriptions are retrieved by `getRuleHumanDescription(ruleId)` and surface in two output paths:
+
+- **PR summary files** (`spiny-orb-pr-summary.md`) — advisory findings under "Review Attention"
+- **Per-file reasoning reports** — companion `.md` files committed alongside instrumented code
+
+When a description is registered, it replaces the terse agent-facing message in those output paths. When no description is registered, the output falls back to the agent-facing message automatically — nothing breaks.
+
+**Agent-facing messages** are terse and directive, written for the instrumentation fix-loop (e.g., "Required (must add): db.query.text. Add setAttribute() calls."). **Human-facing descriptions** explain what the rule checks, why a finding matters in practical terms, and what a reviewer should do — fix it, accept it, or ignore it.
+
+To add or update a description, add an entry to `RULE_HUMAN_DESCRIPTIONS` in `src/validation/rule-names.ts`. Every advisory rule and blocking rule has a description; see that file for the current text.
+
 ### OTel spec relationship
 
 Each rule is labeled with its relationship to the OpenTelemetry specification. The audit recorded in [`docs/reviews/advisory-rules-audit-2026-04-15.md`](reviews/advisory-rules-audit-2026-04-15.md) assessed this relationship for most advisory and advisory-candidate rules. Values:

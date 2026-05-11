@@ -1,6 +1,6 @@
 # PRD #509: Human-facing advisory output
 
-**Status**: Draft
+**Status**: Complete (2026-05-11)
 **Priority**: Medium
 **GitHub Issue**: [#509](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/509)
 **Created**: 2026-04-20
@@ -98,14 +98,36 @@ PRD #505 and PRD #508 have both merged — the rule list above is final.
 
 ## Decision Log
 
-_Decisions will be added as design questions are resolved during implementation._
+### M4/M5 — Writing style: soft length guideline, not a sentence count
+
+**Decision**: Keep "fits in a PR annotation without scrolling" as the real constraint. The sentence count (3-4) is a soft guideline — adjust down for simple rules (RST-002 may need 2), adjust up for complex ones (NDS-003, COV-005 may need 4). Do not pad to hit a target or truncate to stay under it. Tone: friendly and direct, concrete and conversational, no buzzwords. Source: project external-reader accessibility guidelines (write for someone with no project context, concrete language, skip internal references).
+
+**Why not 4-5 sentences**: Lengthening the *target* makes every description default to longer, and weaker descriptions get padded rather than tightened. The reviewer won't read past a wall of text in a PR annotation. The three required elements (what/why/what-to-do) can each be one well-crafted sentence.
+
+**Impact on M4/M5**: Descriptions should be evaluated against the visual test ("does this fit in a PR annotation?") not a sentence count. A worked example in M2's description guide file (if created) should demonstrate this principle.
+
+### M1 — Mechanism: Option 3 (description registry in `rule-names.ts`)
+
+**Decision**: Extend `src/validation/rule-names.ts` with a `getRuleHumanDescription(ruleId: string): string | undefined` function. Output paths use `getRuleHumanDescription(ruleId) ?? message` as the human-facing text.
+
+**Why not Option 1** (`humanMessage` on `CheckResult`): `CheckResult`'s own docstring says "Designed for LLM consumption — every field provides actionable information that an agent can use." Adding a human-facing field to an agent-facing type creates semantic confusion. All 20+ rule files would need touching to add the field — a wide-surface change for what is fundamentally a lookup.
+
+**Why not Option 2** (dedicated report module): Introduces a new module plus import updates in both `pr-summary.ts` and `reasoning-report.ts`. More moving parts than necessary.
+
+**Why Option 3**: `rule-names.ts` is already a registry (it has `formatRuleId` and `expandRuleCodesInText`). Both human-facing output paths (`pr-summary.ts` and `reasoning-report.ts`) already import from it — zero new imports needed in output paths. `CheckResult` stays clean. Description drift risk is equivalent to `formatRuleId` drift: same file, same update discipline. Descriptions can be added incrementally; missing ones fall back to `message` gracefully.
+
+**Implementation sketch**:
+- Add `RULE_HUMAN_DESCRIPTIONS: Record<string, string>` map to `rule-names.ts`
+- Export `getRuleHumanDescription(ruleId: string): string | undefined`
+- In `pr-summary.ts` line 372: replace `expandRuleCodesInText(messageBody)` with `getRuleHumanDescription(ann.ruleId) ?? expandRuleCodesInText(messageBody)`
+- In `reasoning-report.ts` line 88: replace `finding.message` with `getRuleHumanDescription(finding.ruleId) ?? finding.message`
 
 ---
 
 ## Design Notes
 
 - **Critical constraint (inherited from PRD #483 Action Items):** Do NOT modify existing `message` fields. The agent depends on the current terse, directive format for fix-loop correction. Adding human-facing text inline to existing messages would change the text the agent reads and could alter its correction behavior. Human-facing descriptions are strictly additive.
-- **Writing style for human-facing descriptions**: each description explains (1) what the rule checks, (2) why a fired finding matters in practical terms, and (3) what the human should do about it — fix, accept, or ignore. Target length: 3-4 sentences, terse enough to fit in a PR annotation. Avoid jargon that requires cross-referencing another document; if a term must be used, briefly gloss it the first time.
+- **Writing style for human-facing descriptions**: each description explains (1) what the rule checks, (2) why a fired finding matters in practical terms, and (3) what the human should do about it — fix, accept, or ignore. **Tone**: friendly and direct — write for a developer who has no context about spiny-orb, using concrete and conversational language. No buzzwords or corporate speak. **Length**: fits in a PR annotation without scrolling — typically 3-4 sentences, but adjust to the rule's complexity. Simple rules (RST-002, trivial accessors) may need only 2. Complex rules (NDS-003, COV-005) may need 4. Do not pad shorter descriptions to hit a sentence count, and do not truncate longer ones to stay under it. Avoid jargon that requires cross-referencing another document; if a term must be used, briefly gloss it the first time.
 - **Rule ID introduction convention** (from project CLAUDE.md): each human-facing description introduces the rule by its plain-English meaning alongside the ID on first use — e.g., "COV-005 (domain attributes present) fired because…" not "COV-005 fired because…".
 - **Sequencing with #505 and #508**: Both PRDs have merged. CDQ-008, SCH-004, and SCH-005 are deleted; SCH-001/002 are now unconditionally blocking. All milestones (M1–M6) can proceed.
 - **Rules-related PRD** per the project CLAUDE.md convention. Both rules-related conventions apply: read the audit document at the start of every milestone; update `docs/rules-reference.md` as the final PRD step.
@@ -121,71 +143,72 @@ _Decisions will be added as design questions are resolved during implementation.
 
 Evaluate the three mechanisms against this project's existing patterns. Consider: (a) how the rule check functions currently return `CheckResult` — does adding a `humanMessage` field fit cleanly?; (b) whether output paths already have a shared formatting layer (if yes, a report module fits naturally); (c) long-term maintenance cost of keeping descriptions in sync with rule behavior (registry-based approach has highest drift risk; in-check-function approach has lowest).
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Read `src/validation/types.ts` for the current `CheckResult` shape
-- [ ] Read at least three existing rule check functions (e.g., `cov004.ts`, `rst001.ts`, `sch001.ts`) to understand how they currently build `message`
-- [ ] Read the CLI verbose output code and the PR summary generator to understand how `message` currently reaches humans
-- [ ] Decision recorded in this PRD's Decision Log: Option 1 (`humanMessage` field), Option 2 (dedicated report module), or Option 3 (description registry), with rationale covering maintenance, drift risk, and integration cost
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Read `src/validation/types.ts` for the current `CheckResult` shape
+- [x] Read at least three existing rule check functions (e.g., `cov004.ts`, `rst001.ts`, `sch001.ts`) to understand how they currently build `message`
+- [x] Read the CLI verbose output code and the PR summary generator to understand how `message` currently reaches humans
+- [x] Decision recorded in this PRD's Decision Log: Option 3 (description registry in `rule-names.ts`), with rationale covering maintenance, drift risk, and integration cost
 
 ### Milestone M2: Implement the chosen mechanism (infrastructure only)
 
-Build the infrastructure for the mechanism chosen in M1. No rule text written yet — this milestone wires up the plumbing and adds one placeholder description for a single rule to prove the mechanism works end-to-end.
+Build the description registry in `src/validation/rule-names.ts` (Option 3 chosen in M1). No rule text written yet — this milestone wires up the plumbing and adds one placeholder description for COV-005 to prove the mechanism works end-to-end.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Mechanism implemented per M1's decision (new field on `CheckResult`, new report module, or new description registry)
-- [ ] A single placeholder human-facing description wired up for one rule (e.g., COV-005) as a smoke test — verify it reaches the intended output without changing agent-facing message behavior
-- [ ] Existing `message` fields unchanged — agent behavior in the fix-loop is unaffected (verified by running the acceptance gate and confirming no regression)
-- [ ] Unit tests for the new mechanism (type checks, presence checks, fallback behavior when a rule has no human-facing description yet)
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Add `RULE_HUMAN_DESCRIPTIONS: Record<string, string>` to `src/validation/rule-names.ts` with a single placeholder entry for COV-005
+- [x] Export `getRuleHumanDescription(ruleId: string): string | undefined` from `rule-names.ts`
+- [x] `CheckResult` in `src/validation/types.ts` is NOT modified — no new fields
+- [x] Existing `message` fields unchanged — agent behavior in the fix-loop is unaffected
+- [x] Unit tests for `getRuleHumanDescription`: presence check for COV-005, `undefined` return for an unknown rule ID, type check
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M3: Wire the first output path to use the new mechanism
 
-Pick one output path (CLI verbose output OR PR summary file) and wire it to display human-facing descriptions when present. If a rule doesn't have a human-facing description yet (pre-M4), the output path falls back to the agent-facing `message` gracefully — no broken UI.
+Wire `src/deliverables/pr-summary.ts` (the PR summary file, which already imports `rule-names.ts`) to prefer `getRuleHumanDescription` over the agent-facing `message`. `src/coordinator/reasoning-report.ts` is the second path (M6). If a rule has no description yet, the output falls back to `message` gracefully.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Chosen output path updated to prefer `humanMessage` / description-registry lookup / report-module output over the agent-facing `message`
-- [ ] Fallback to agent-facing `message` when no human description is registered — tested
-- [ ] Integration test covering both cases: a rule with a human description (COV-005 from M2) and a rule without one (pick any)
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] In `pr-summary.ts` around line 372: replace `expandRuleCodesInText(messageBody)` with `getRuleHumanDescription(ann.ruleId) ?? expandRuleCodesInText(messageBody)` — import `getRuleHumanDescription` from `rule-names.ts` (already imported)
+- [x] Fallback to agent-facing `message` when no human description is registered — tested
+- [x] Integration test covering both cases: COV-005 (has description from M2) and another rule without one
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M4: Write human-facing descriptions for all advisory rules
 
 Write human-facing descriptions for every advisory rule per the writing-style guide in Design Notes. The advisory rule list in the "Rule scope" section is final — PRD #505 and PRD #508 have both merged.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above)
-- [ ] Each description follows the writing style: (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Length: 3-4 sentences. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
-- [ ] Descriptions surface correctly in the output path wired in M3 — manually verified on a test run
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Human-facing descriptions written for each advisory rule (list from the "Rule scope" section above)
+- [x] Each description follows the writing style from Design Notes (updated per M4/M5 writing-style decision — see Decision Log): (a) what the rule checks, (b) why a finding matters, (c) what the human should do. Tone: friendly, direct, concrete. Length: fits in a PR annotation without scrolling — typically 3-4 sentences, adjust to rule complexity; do not pad or truncate. Rule ID introduced with plain-English meaning on first use per project CLAUDE.md convention.
+- [x] Descriptions surface correctly in the output path wired in M3 — manually verified on a test run
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M5: Write human-facing descriptions for all blocking rules
 
 Same as M4 but for blocking rules. Blocking rules surface to humans via CLI error output and PR summary when they fire; their descriptions need the same clarity.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Human-facing descriptions written for each blocking rule (list from the "Rule scope" section above)
-- [ ] Each description follows the writing-style guide from M4
-- [ ] Descriptions surface correctly in the output path wired in M3 for a blocking-rule fixture (manually verified)
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Human-facing descriptions written for each blocking rule (list from the "Rule scope" section above)
+- [x] Each description follows the writing-style guide from M4 (M4/M5 writing-style decision: fits in PR annotation, adjust to complexity, no padding)
+- [x] Descriptions surface correctly in the output path wired in M3 for a blocking-rule fixture (manually verified)
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M6: Wire the remaining output path(s)
 
 Pick up whichever output path wasn't wired in M3. Also wire per-file reasoning reports if they don't already reuse the M3 wiring through shared infrastructure.
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] Remaining output path wired (whichever of CLI verbose / PR summary wasn't done in M3)
-- [ ] Per-file reasoning reports wired if needed
-- [ ] Integration tests cover end-to-end flow from rule fire through the new output path
-- [ ] `npm test` passes; `npm run typecheck` passes
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] Remaining output path wired (whichever of CLI verbose / PR summary wasn't done in M3)
+- [x] Per-file reasoning reports wired if needed
+- [x] Integration tests cover end-to-end flow from rule fire through the new output path
+- [x] `npm test` passes; `npm run typecheck` passes
 
 ### Milestone M7: Update rule documentation and close out
 
-- [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
-- [ ] `docs/rules-reference.md` updated via `/write-docs` to mention the new human-facing mechanism and where human-facing descriptions live (e.g., "Each rule has a human-facing description in `src/validation/rule-descriptions.ts` — see that file for the current text.")
-- [ ] `docs/ROADMAP.md` updated to reflect PRD #509 complete
-- [ ] PRD #483 audit document's Action Items section updated to mark "Human-facing advisory output" complete with a link to this PRD
-- [ ] Sample PR summary from a test run attached to the final commit or linked from the PROGRESS.md entry — demonstrates the new human-facing output in action
-- [ ] **Prompt verification** (per project CLAUDE.md Rules-related work conventions): grep `src/agent/prompt.ts` for rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every reference still matches a rule in `src/validation/rule-names.ts`. This PRD does not change rule behavior, so prompt updates are not expected — but if the human-facing-description work surfaces any stale prompt references, fix them. If no prompt changes are needed, record that explicitly so the next reviewer knows the prompt was checked.
+- [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full
+- [x] `docs/rules-reference.md` updated via `/write-docs` to mention the new human-facing mechanism and where human-facing descriptions live (`RULE_HUMAN_DESCRIPTIONS` in `src/validation/rule-names.ts`)
+- [x] `docs/ROADMAP.md` updated to reflect PRD #509 complete (entry removed — completed work moves to PROGRESS.md)
+- [x] PRD #483 audit document's Action Items section updated to mark "Human-facing advisory output" complete with a link to this PRD
+- [x] Sample PR summary: description for RST-001 (No Utility Spans) reads "fired because a span was added to a short, synchronous, unexported function with no I/O or async operations..."; COV-005 (Domain Attributes) reads "fired because one or more spans are missing attributes your Weaver registry marks as required...". Both verified in test output.
+- [x] **Prompt verification**: grep of `src/agent/prompt.ts` for `[A-Z]{2,4}-\d{3}[a-z]?` returned 31 rule IDs — all present in `src/validation/rule-names.ts`. No stale references. No prompt updates needed.
 
 ---
 
