@@ -704,4 +704,107 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
       expect(failure!.filePath).toBe(filePath);
     });
   });
+
+  describe('body anchor: Prettier re-splits first statement at deeper indent (#841)', () => {
+    it('passes when the try body first statement splits differently at deeper indent (3-line → 4-line)', () => {
+      // runWeeklySummarize case: at 6-space, `generateAndSaveWeeklySummary(weekStr, basePath, {`
+      // fits in 79 chars → Prettier uses 3-line form. The body anchor is the first line:
+      //   `const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, {`
+      // Inside the span callback at 12-space, the same call is 85 chars → Prettier uses
+      // 4-line form. The body anchor is now just:
+      //   `const genResult = await generateAndSaveWeeklySummary(`
+      // Primary anchor match fails (different first lines). This test verifies that
+      // findBestMatch falls back to a stripped-prefix comparison so NDS-005 does not
+      // fire for what is a valid Prettier reformat, not a try/catch removal.
+      const original = [
+        'export async function runWeeklySummarize(options) {',
+        '  const { weeks, force, basePath } = options;',
+        '  for (const weekStr of weeks) {',
+        '    try {',
+        // At 6-space: `(weekStr, basePath, {` = 79 chars → 3-line form, first line has args
+        '      const genResult = await generateAndSaveWeeklySummary(weekStr, basePath, {',
+        '        force,',
+        '      });',
+        '      result.generated.push(weekStr);',
+        '    } catch (err) {',
+        '      result.failed.push(weekStr);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runWeeklySummarize(options) {',
+        '  return tracer.startActiveSpan("svc.run_weekly", async (span) => {',
+        '    try {',
+        '      const { weeks, force, basePath } = options;',
+        '      for (const weekStr of weeks) {',
+        '        try {',
+        // At 12-space: `(weekStr, basePath, {` = 85 chars → 4-line form, first line has no args
+        '          const genResult = await generateAndSaveWeeklySummary(',
+        '            weekStr,',
+        '            basePath,',
+        '            { force },',
+        '          );',
+        '          result.generated.push(weekStr);',
+        '        } catch (err) {',
+        '          result.failed.push(weekStr);',
+        '        }',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.every(r => r.passed)).toBe(true);
+    });
+
+    it('still fires when the try/catch is genuinely removed', () => {
+      const original = [
+        'async function doWork() {',
+        '  for (const item of items) {',
+        '    try {',
+        '      const result = await processItem(item, config, { retries: 3 });',
+        '      results.push(result);',
+        '    } catch (err) {',
+        '      errors.push(err);',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+
+      // Agent removed the inner try/catch entirely
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function doWork() {',
+        '  return tracer.startActiveSpan("svc.doWork", async (span) => {',
+        '    try {',
+        '      for (const item of items) {',
+        '        const result = await processItem(item, config, { retries: 3 });',
+        '        results.push(result);',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.some(r => !r.passed)).toBe(true);
+    });
+  });
 });

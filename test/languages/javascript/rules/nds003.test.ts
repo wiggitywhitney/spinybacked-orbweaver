@@ -2155,6 +2155,115 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
+  describe('Problem C — reconcilePartialArgument and prefix matching (#841)', () => {
+    it('passes when func(arg); is a missingLine but only arg, is in addedLines (func( consumed via instrFreq)', () => {
+      // reconcilePartialArgument: `func(arg);` is 1 missingLine, only `arg,` is in
+      // addedLines because `func(` appeared in BOTH the original (from another call
+      // that Prettier already split) and the instrumented — so it cancels out.
+      //
+      // Setup: original has `onProgress(` already split (from a long call) AND a short
+      // onProgress call on 1 line. Instrumented has both split (at same depth), so
+      // the long call's arg cancels, the short call's onProgress( cancels, leaving
+      // only the short call's arg template as addedLine.
+      const original = [
+        'async function run() {',
+        // Already split in original (long string forces Prettier to split at this indent)
+        '  onProgress(',
+        '    `Generated summary for ${m} (${genResult.dayCount} daily summaries)`,',
+        '  );',
+        // Short call: 1 line in original (under printWidth)
+        '  onProgress(`Skipped ${m}: monthly summary already exists`);',
+        '}',
+      ].join('\n');
+
+      // Instrumented: both calls split (same structure).
+      // instrFreq has `onProgress(` ×2. originalSet has `onProgress(` ×1 (from the long split).
+      // Forward: original's `onProgress(` (×1) consumed by instrFreq (count 2→1). OK.
+      // Forward: original's short 1-line form → NOT in instrFreq → MISSING.
+      // Reverse: instrumented's 1st `onProgress(` → in originalSet → filtered.
+      // Reverse: instrumented's 2nd `onProgress(` → in originalSet → filtered.
+      // Reverse: instrumented's long arg → in originalSet → filtered.
+      // Reverse: instrumented's short arg → NOT in originalSet → ADDED.
+      // Result: missingLines=[`onProgress(`Skipped...`);`], addedLines=[`` `Skipped...`, ``]
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function run() {',
+        '  onProgress(',
+        '    `Generated summary for ${m} (${genResult.dayCount} daily summaries)`,',
+        '  );',
+        '  onProgress(',
+        '    `Skipped ${m}: monthly summary already exists`,',
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when weekly-call partial groups match via prefix (basePath consumed by Monthly)', async () => {
+      // Weekly: original 3-line form `(weekStr, basePath, {` at 6-space.
+      // Instrumented 4-line form at 12-space. `basePath,` and `{ force },` are consumed
+      // by Monthly's identical 4-line form in BOTH the original and instrumented.
+      // Remaining: missingLines=[`...Weekly(weekStr, basePath, {`, `force,`],
+      //            addedLines=[`...Weekly(`, `weekStr,`].
+      // reconcileIndentReformat prefix match: addedTokens is a prefix of missingTokens.
+      const original = [
+        'export async function runBoth(options) {',
+        '  const { weeks, months, force, basePath } = options;',
+        '  for (const weekStr of weeks) {',
+        // At 6-space: (weekStr, basePath, { = 79 chars → 3-line form
+        '    const wResult = await generateAndSaveWeeklySummary(weekStr, basePath, { force });',
+        '  }',
+        '  for (const monthStr of months) {',
+        // At 6-space: (monthStr, basePath, { = 81 chars → 4-line form
+        '    const mResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace, SpanStatusCode } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'export async function runBoth(options) {',
+        '  return tracer.startActiveSpan("svc.runBoth", async (span) => {',
+        '    try {',
+        '      const { weeks, months, force, basePath } = options;',
+        '      for (const weekStr of weeks) {',
+        // At 12-space: (weekStr, basePath, { = 85 chars → 4-line form
+        '        const wResult = await generateAndSaveWeeklySummary(',
+        '          weekStr,',
+        '          basePath,',
+        '          { force },',
+        '        );',
+        '      }',
+        '      for (const monthStr of months) {',
+        // At 12-space: Monthly also → 4-line form
+        '        const mResult = await generateAndSaveMonthlySummary(',
+        '          monthStr,',
+        '          basePath,',
+        '          { force },',
+        '        );',
+        '      }',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
   describe('Problem C — reconcileIndentReformat handles Prettier re-split at deeper indent (#841)', () => {
     it('passes when agent wraps function and Prettier re-splits a call differently at deeper indent', async () => {
       // `const genResult = await generateAndSaveMonthlySummary(monthStr, basePath, { force });`

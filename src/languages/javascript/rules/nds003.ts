@@ -525,7 +525,23 @@ function reconcileIndentReformat(
     let matched = false;
     for (const aGroup of addedGroups) {
       if (aGroup.indices.some(idx => addedToRemove.has(idx))) continue;
+
+      // Exact token match
       if (aGroup.tokens === missingTokens) {
+        for (const idx of mGroup) missingToRemove.add(idx);
+        for (const idx of aGroup.indices) addedToRemove.add(idx);
+        matched = true;
+        break;
+      }
+
+      // Prefix match: when some lines of the N-line form were consumed by identical
+      // calls in other functions (e.g. `basePath,` and `{ force },` consumed by
+      // Monthly's identical 4-line call), the addedGroup tokens are a leading prefix
+      // of the missingGroup tokens. Require the prefix to be at least 20 chars and
+      // at least 50% of the missing token length to avoid trivially short matches.
+      const shorter = missingTokens.length < aGroup.tokens.length ? missingTokens : aGroup.tokens;
+      const longer = missingTokens.length < aGroup.tokens.length ? aGroup.tokens : missingTokens;
+      if (shorter.length >= 20 && shorter.length >= longer.length * 0.5 && longer.startsWith(shorter)) {
         for (const idx of mGroup) missingToRemove.add(idx);
         for (const idx of aGroup.indices) addedToRemove.add(idx);
         matched = true;
@@ -534,6 +550,55 @@ function reconcileIndentReformat(
     }
 
     mi += matched ? mGroup.length : 1;
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) missingLines.splice(idx, 1);
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) addedLines.splice(idx, 1);
+}
+
+/**
+ * Reconcile a single missingLine full function call against a single addedLine
+ * that is just the argument content.
+ *
+ * When `func(arg);` is in missingLines but only `arg,` is in addedLines, it
+ * means `func(` was consumed from instrFreq by another call site that also opens
+ * with `func(` (e.g., long onProgress calls at other indent levels). The argument
+ * content is preserved — only the function call wrapper was consumed.
+ *
+ * Match condition: stripped addedLine is a suffix of stripped missingLine, the
+ * addedLine is at least 15 chars (non-trivial), and the addedLine is at least
+ * half the length of the missingLine.
+ */
+function reconcilePartialArgument(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+): void {
+  if (missingLines.length === 0 || addedLines.length === 0) return;
+
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  for (let mi = 0; mi < missingLines.length; mi++) {
+    if (missingToRemove.has(mi)) continue;
+    const mStripped = stripForComparison(missingLines[mi].line);
+    if (!mStripped || mStripped.length < 20) continue;
+
+    for (let ai = 0; ai < addedLines.length; ai++) {
+      if (addedToRemove.has(ai)) continue;
+      const aStripped = stripForComparison(addedLines[ai].line);
+      if (!aStripped || aStripped.length < 15) continue;
+
+      // Require the addedLine to be at least 50% of the missingLine length
+      if (aStripped.length < mStripped.length * 0.5) continue;
+
+      // The addedLine's content must be a suffix of the missingLine's content —
+      // it is the argument inside the function call that the missingLine wraps
+      if (mStripped.endsWith(aStripped)) {
+        missingToRemove.add(mi);
+        addedToRemove.add(ai);
+        break;
+      }
+    }
   }
 
   for (const idx of [...missingToRemove].sort((a, b) => b - a)) missingLines.splice(idx, 1);
@@ -924,6 +989,13 @@ export function checkNonInstrumentationDiff(
   // changed. Compares whitespace-stripped token sequences with trailing delimiters removed
   // to handle "consumed" closing tokens (}); or ); filtered as instrumentation patterns).
   reconcileIndentReformat(missingLines, addedLines);
+
+  // Reconcile partial single-line argument: when `func(arg);` is in missingLines but
+  // only `arg,` appears in addedLines because `func(` was consumed via instrFreq (it
+  // appeared in both the original and instrumented from other call sites). Checks if the
+  // single addedLine's stripped form is a non-trivial suffix of the single missingLine's
+  // stripped form — indicating the argument content is preserved, only the wrapper was consumed.
+  reconcilePartialArgument(missingLines, addedLines);
 
   // Reconcile return-value captures: when the agent extracts a return expression
   // to a variable for setAttribute, NDS-003 sees the original `return <expr>`

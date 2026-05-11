@@ -224,6 +224,30 @@ function findBestMatch(
     }
   }
 
+  // Second fallback: stripped-prefix comparison for body anchors.
+  // When instrumentation adds a span callback that increases indentation, Prettier
+  // may reformat the try block's first statement differently. For a function call
+  // that fits within printWidth at 6-space (3-line form, first line includes args:
+  // `func(a, b, {`), the same call at 12-space may exceed printWidth and use
+  // 4-line form (first line is just `func(`). The body anchor captures only the
+  // first line, so the anchors differ even though the statement is unchanged.
+  // Strip whitespace from both anchors and check if one is a prefix of the other —
+  // this safely identifies reformatted-but-preserved first statements.
+  if (original.bodyAnchor) {
+    const strippedOriginal = original.bodyAnchor.replace(/\s+/g, '');
+    for (let i = 0; i < candidates.length; i++) {
+      if (usedIndices.has(i)) continue;
+      const strippedCandidate = candidates[i].bodyAnchor.replace(/\s+/g, '');
+      if (!strippedCandidate) continue;
+      // Require the shorter anchor to be at least 20 chars to avoid trivial matches.
+      const shorter = strippedOriginal.length < strippedCandidate.length ? strippedOriginal : strippedCandidate;
+      const longer = strippedOriginal.length < strippedCandidate.length ? strippedCandidate : strippedOriginal;
+      if (shorter.length >= 20 && longer.startsWith(shorter)) {
+        return i;
+      }
+    }
+  }
+
   return -1;
 }
 
