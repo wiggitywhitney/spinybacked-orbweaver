@@ -987,6 +987,27 @@ async function functionLevelFallback(
 
   for (const fn of extractedFunctions) {
     const functionContext = fn.contextHeader;
+
+    // Sync functions (RST-001) don't need spans — skip the LLM call entirely.
+    // The pre-scan inside instrumentWithRetry would also early-exit for async-free
+    // contexts, but complex module-level constants (e.g. regex arrays with arrow
+    // functions) can cause the pre-scan AST parser to throw, bypassing the early
+    // exit and triggering an unnecessary LLM call. That call then oscillates because
+    // the agent modifies the regex constant and NDS-003 fires on every attempt.
+    if (!fn.isAsync) {
+      fnResults.push({
+        name: fn.name,
+        success: true,
+        instrumentedCode: functionContext,
+        spansAdded: 0,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        attributesCreated: 0,
+        tokenUsage: { ...ZERO_TOKENS },
+      });
+      continue;
+    }
+
     // Use the source file's own extension for the temp file so ts-morph (and other
     // language-specific parsers) use the correct parsing mode (e.g. .jsx vs .js).
     const fnExt = extname(filePath) || (fnProvider.fileExtensions[0] ?? '.js');
