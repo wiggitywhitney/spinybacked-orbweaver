@@ -627,17 +627,20 @@ function reconcileIndentReformat(
 }
 
 /**
- * Reconcile a single missingLine full function call against a single addedLine
- * that is just the argument content.
+ * Reconcile a single missingLine full function call against one or more addedLines
+ * that are fragments of that call (opening, trailing argument, or both).
  *
- * When `func(arg);` is in missingLines but only `arg,` is in addedLines, it
- * means `func(` was consumed from instrFreq by another call site that also opens
- * with `func(` (e.g., long onProgress calls at other indent levels). The argument
- * content is preserved — only the function call wrapper was consumed.
+ * Two cases handled:
  *
- * Match condition: stripped addedLine is a suffix of stripped missingLine, the
- * addedLine is at least 15 chars (non-trivial), and the addedLine is at least
- * half the length of the missingLine.
+ * Case A — suffix: `func(arg);` is missingLine but only `arg,` is in addedLines.
+ * `func(` was consumed from instrFreq by another call site. Match: stripped addedLine
+ * is a suffix of stripped missingLine (≥10 chars, ≥50% of missing length).
+ *
+ * Case B — prefix: `func(a, b, c);` is missingLine but `func(` is in addedLines.
+ * `a,`, `b,` cancelled (appeared in originalSet as parameter names), leaving only
+ * the call opening and one trailing arg. Match: stripped addedLine is a prefix of
+ * stripped missingLine (≥20 chars). Collect all matching prefix AND suffix addedLines
+ * for the same missingLine and reconcile them together.
  */
 function reconcilePartialArgument(
   missingLines: Array<{ line: string; originalLineNum: number }>,
@@ -653,21 +656,33 @@ function reconcilePartialArgument(
     const mStripped = stripForComparison(missingLines[mi].line);
     if (!mStripped || mStripped.length < 20) continue;
 
+    const matchedAdded: number[] = [];
+
     for (let ai = 0; ai < addedLines.length; ai++) {
       if (addedToRemove.has(ai)) continue;
       const aStripped = stripForComparison(addedLines[ai].line);
-      if (!aStripped || aStripped.length < 15) continue;
+      if (!aStripped) continue;
 
-      // Require the addedLine to be at least 50% of the missingLine length
-      if (aStripped.length < mStripped.length * 0.5) continue;
-
-      // The addedLine's content must be a suffix of the missingLine's content —
-      // it is the argument inside the function call that the missingLine wraps
-      if (mStripped.endsWith(aStripped)) {
-        missingToRemove.add(mi);
-        addedToRemove.add(ai);
-        break;
+      // Case A: suffix — the stripped addedLine is the trailing argument, the
+      // function call wrapper was consumed from instrFreq elsewhere.
+      // Require ≥10 chars (longer than typical short param names) and ≥50% length.
+      if (aStripped.length >= 10 && aStripped.length >= mStripped.length * 0.5
+          && mStripped.endsWith(aStripped)) {
+        matchedAdded.push(ai);
+        continue;
       }
+
+      // Case B: prefix — the stripped addedLine is the function call opening
+      // (e.g. `constformattedEntry=formatJournalEntry(`). Middle arguments were
+      // consumed (appeared in originalSet as parameter names). Require ≥20 chars.
+      if (aStripped.length >= 20 && mStripped.startsWith(aStripped)) {
+        matchedAdded.push(ai);
+      }
+    }
+
+    if (matchedAdded.length > 0) {
+      missingToRemove.add(mi);
+      for (const ai of matchedAdded) addedToRemove.add(ai);
     }
   }
 
