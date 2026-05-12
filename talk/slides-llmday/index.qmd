@@ -748,6 +748,587 @@ On a pass, the orchestrator writes any new schema conventions back to the Weaver
 ```{mermaid}
 %%| mermaid-format: js
 flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 0,1,2,3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,D1,ACCEPT,R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+When validation fails — something structurally or semantically wrong — we don't give up on the file. The fix loop runs.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 1,2,3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1 flai
+    class D1,ACCEPT,R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+First: the same agent gets the full failure report and retries.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2,3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1 flai
+    class D1 flcheck
+    class ACCEPT,R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+Validator checks again.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1 flai
+    class D1 flcheck
+    class ACCEPT flaccept
+    class R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+If it passes — great. Most files do.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2 flai
+    class D1 flcheck
+    class ACCEPT flaccept
+    class D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+If not — a fresh agent takes over with clean context. Key: it receives the same file and schema, and a failure category hint. It does NOT receive the broken output. Showing a model its own broken code causes oscillation — it anchors on the failure rather than reasoning from scratch. Olausson et al., ICLR 2024, MIT/Microsoft Research.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2 flai
+    class D1,D2 flcheck
+    class ACCEPT flaccept
+    class R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+Validator checks again.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2 flai
+    class D1,D2 flcheck
+    class ACCEPT flaccept
+    class R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+The fresh context often breaks the loop.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2 flcheck
+    class ACCEPT flaccept
+    class D3,PARTIAL flhidden
+```
+
+::: {.notes}
+Still failing — the orchestrator decomposes the file. Each function is instrumented and validated independently.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2,D3 flcheck
+    class ACCEPT flaccept
+    class PARTIAL flhidden
+```
+
+::: {.notes}
+Each function is validated on its own.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+    linkStyle 9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2,D3 flcheck
+    class ACCEPT flaccept
+    class PARTIAL flhidden
+```
+
+::: {.notes}
+Most functions pass individually even when the whole file didn't.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+    linkStyle 9 stroke:#C62828
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2,D3 flcheck
+    class ACCEPT flaccept
+    class PARTIAL flpartial
+```
+
+::: {.notes}
+If some functions still can't be resolved — a partial result is surfaced to the user, or the file is skipped. This is a deliberate design choice for complex files, not a failure mode.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
     START(["`Next file`"])
     LOAD["`Load file
 re-resolve schema`"]

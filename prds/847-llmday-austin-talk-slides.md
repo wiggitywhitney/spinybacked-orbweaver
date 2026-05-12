@@ -102,7 +102,7 @@ All slides follow the pattern in `talk/slides/index.qmd`:
 - [x] M3: Demo transition
 - [x] M4: Architecture — orchestration diagram
 - [x] M5: Architecture — per-file processing sequence
-- [ ] M6: Architecture — fix loop diagram
+- [x] M6: Architecture — fix loop diagram
 - [ ] M7: Architecture — deterministic validation diagram
 - [ ] M8: Wrap section
 - [ ] M9: Render verification and final review
@@ -267,6 +267,8 @@ The design insight to surface in speaker notes: showing a model its own broken o
 
 ### M7: Architecture — deterministic validation diagram
 
+**Updated per Decision 15:** Validation pipeline slides must be inserted **before** the fix loop slides in `talk/slides-llmday/index.qmd`. The deck order is: orchestration → validation pipeline → fix loop → per-file. After writing the slides, find the first fix-loop slide (search for `FAIL(["Validation fails"])`) and insert the new slides immediately before it.
+
 **Step 1:** Read the source files table, `docs/rules-reference.md` (for rule categories — do not use rule IDs in slides), and current state of `talk/slides-llmday/index.qmd`. Also view: `/Users/whitney.lee/Documents/Journal/spinybacked-orbweaver/images/validation-pipeline-with-advisory.png` and `/Users/whitney.lee/Documents/Journal/spinybacked-orbweaver/images/tldr-deterministic-vs-llm.png`.
 
 **Step 2:** Design the final diagram showing the two-tier validation pipeline:
@@ -351,7 +353,7 @@ Slide 2 (final) — Spider illustration:
 |---|----------|-----------|
 | 1 | New file `talk/slides-llmday/index.qmd` separate from `talk/slides/index.qmd` | Keeps KubeCon slides intact; LLM Day talk is a different audience and narrative |
 | 2 | Section order: Problem → Agent intro → Demo transition → Architecture diagrams → Wrap | Problem earns the attention; demo payoff before architecture explanation; diagrams are the meaty LLM Day content; wrap closes with open source CTA |
-| 3 | Architecture diagram order: Orchestration → Per-file sequence → Fix loop → Deterministic validation | Macro to micro; thesis lands on the last diagram |
+| 3 | Architecture diagram order: Orchestration → Validation pipeline → Fix loop → Per-file sequence | Per-file is the most granular diagram and lands hardest as a capstone. Validation pipeline precedes fix loop so the audience understands what "validation fails" means before seeing the escalation logic. Updated per Decision 15. |
 | 4 | Demo is pre-run results only — no live code execution | Agent run takes ~40 minutes; showing results is more reliable and faster |
 | 5 | No deep Weaver explanation | LLM Day audience doesn't need it; "your telemetry schema" is sufficient |
 | 6 | Thesis statement on a dedicated slide at the end of M7 | "AI does the creative step. Deterministic code enforces quality." — the single most important idea for an LLM Day audience |
@@ -363,6 +365,7 @@ Slide 2 (final) — Spider illustration:
 | 12 | Complex per-file TD diagrams required `%%\| mermaid-format: js` per-block | When ≥22 mermaid blocks share the same HTML document, Quarto's SVG pre-renderer leaves `<div class="cell">` wrappers unclosed, causing Reveal.js slide nesting. `%%\| mermaid-format: js` delegates rendering to the browser, bypassing the issue. Requires `.center` on slide headers for vertical centering. Note: Quarto warns "not recommended in format revealjs" but it works. |
 | 13 | `%%{init}%%` directives must not be used in `{mermaid}` blocks in this deck | Causes the same unclosed-div nesting as decision 12. See `mmdc-gotchas.md` for details. |
 | 14 | classDef names must be unique across all diagrams in the same deck | When `mermaid-format: svg` renders many diagrams into the same HTML document, duplicate CSS class names from classDef can conflict. Prefix per-file slide classNames with `pf` to distinguish from orchestration slide class names. |
+| 15 | Per-file sequence moved to last position in architecture section | Per-file is the most detailed/granular diagram and works best as a capstone that synthesizes the prior three. Validation pipeline now precedes fix loop so the audience understands what "validation fails" means before encountering the escalation logic. Slides already reordered in `talk/slides-llmday/index.qmd`. |
 
 ---
 
