@@ -110,7 +110,7 @@ Add the classifier to `nds003.ts`. Do NOT delete any reconcilers in this milesto
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
 - [ ] Failing tests written for all known reorganization patterns (drawn from M0 and historical record)
 - [ ] **Mandatory fixture**: failing test written for `technicalNode` from `journal-graph.js` (commit-story-v2) — a pre-confirmed case where attempt 3 regeneration increased NDS-003 error count from 1 to 5 (lines 29, 30, 54, 57, 31). This fixture must pass before M2 can close.
-- [ ] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), and `main()` (index.js) from commit-story-v2 — all `startActiveSpan`-in-nested-callback pattern; the reconciler inflates the cumulative offset when the wrapped function body sits inside an outer callback. Each must pass before M2 can close.
+- [ ] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), `main()` (index.js), `generateAndSaveDailySummary`, `generateAndSaveWeeklySummary`, and `generateAndSaveMonthlySummary` (all three from summary-manager.js) — all `startActiveSpan`-in-nested-callback pattern; the reconciler inflates the cumulative offset when the wrapped function body sits inside an outer callback. Each must pass before M2 can close.
 - [ ] Failing tests written for all known false-negative risks (from M1 design)
 - [ ] Classifier implemented in `src/languages/javascript/rules/nds003.ts`
 - [ ] All reconcilers still present and unchanged (removal deferred to M3)
