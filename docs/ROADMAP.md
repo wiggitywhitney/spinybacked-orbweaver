@@ -17,8 +17,6 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Short-term (current focus)
 
-- LLM Day Austin talk slides ([PRD #847](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/847)) — new `talk/slides-llmday/index.qmd` for May 12, 2026; reframed for AI/LLM audience with updated architecture diagrams.
-
 - run-5-coverage function-level fallback NDS-003: full argument-list reformats and complex constant oscillation ([issue #841](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/841)) — PR #840 fixed 2-line whole-file splits; remaining failures are in function-level fallback: Pattern A = agent splits all function args across 5+ lines; Pattern B = RST-001 oscillation when context header includes complex regex arrays (BANNED_WORD_REPLACEMENTS).
 
 
