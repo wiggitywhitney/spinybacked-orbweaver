@@ -103,9 +103,9 @@ All slides follow the pattern in `talk/slides/index.qmd`:
 - [x] M4: Architecture — orchestration diagram
 - [x] M5: Architecture — per-file processing sequence
 - [x] M6: Architecture — fix loop diagram
-- [ ] M7: Architecture — deterministic validation diagram
-- [ ] M8: Wrap section
-- [ ] M9: Render verification and final review
+- [x] M7: Architecture — deterministic validation diagram
+- [x] M8: Wrap section
+- [x] M9: Render verification and final review
 
 ---
 
@@ -366,6 +366,9 @@ Slide 2 (final) — Spider illustration:
 | 13 | `%%{init}%%` directives must not be used in `{mermaid}` blocks in this deck | Causes the same unclosed-div nesting as decision 12. See `mmdc-gotchas.md` for details. |
 | 14 | classDef names must be unique across all diagrams in the same deck | When `mermaid-format: svg` renders many diagrams into the same HTML document, duplicate CSS class names from classDef can conflict. Prefix per-file slide classNames with `pf` to distinguish from orchestration slide class names. |
 | 15 | Per-file sequence moved to last position in architecture section | Per-file is the most detailed/granular diagram and works best as a capstone that synthesizes the prior three. Validation pipeline now precedes fix loop so the audience understands what "validation fails" means before encountering the escalation logic. Slides already reordered in `talk/slides-llmday/index.qmd`. |
+| 16 | Thesis slide ("AI does the creative step. Deterministic code enforces quality.") omitted | Whitney's decision — the message lands through the diagrams themselves; a dedicated text slide was not needed. |
+| 17 | Section intro slides added before each architecture diagram ("How it works" small + diagram name large) | Not in original PRD scope; added to give the audience a visual breath and orient them to each section. "How it works" at 1.1em/opacity 0.65; diagram name at 2.8em teal. |
+| 18 | Validation pipeline diagram must show parallel blocking + advisory checks, advisory polish pass, and two commit outcomes | Initial implementation simplified to a linear two-check structure, which was incorrect. Corrected to match the source diagram: GATE → parallel BLOCKING + ADVISORY → FAIL or POLISH → RERUN → IMPROVED or PRIOR. |
 
 ---
 

@@ -447,6 +447,12 @@ Built on community projects
 The Instrumentation Score is an open specification that defines what good OTel instrumentation looks like — a 0-to-100 quality rubric with standardized rules. It's what makes quality measurable rather than subjective. Both of these projects are what make Spinybacked Orbweaver possible.
 :::
 
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Orchestration]{style="font-size:2.8em; display:block; color:#00897B;"}
+
 ## {data-transition="none"}
 
 ```{mermaid}
@@ -742,6 +748,796 @@ mostly deterministic`"]
 ::: {.notes}
 On a pass, the orchestrator writes any new schema conventions back to the Weaver schema and advances to the next file. The loop closes.
 :::
+
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Validation]{style="font-size:2.8em; display:block; color:#00897B;"}
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,REJECT,BLOCKING,ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Instrumented file comes out of the AI agent. Now it hits the validator.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1,2,3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE dvblock
+    class REJECT,BLOCKING,ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+First: the blocking structural gate. Four checks, all deterministic.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2,3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE dvblock
+    class REJECT dvfail
+    class BLOCKING,ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Any fail — structural fail, file rejected.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class REJECT dvfail
+    class ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+All pass — blocking quality checks run.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT dvfail
+    class FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Non-blocking advisory checks run in parallel.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Blocking quality fail — findings returned.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Advisory findings surface in the fail output too — blocking failures plus advisory.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+All blocking checks pass — the agent gets one improvement pass: the passing file plus all advisory findings.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Advisory findings feed the improvement pass from both paths.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING,RERUN dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Full validation re-run on the improved file.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 9 stroke:#2E7D32
+    linkStyle 10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING,RERUN dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class IMPROVED dvaccept
+    class PRIOR dvhidden
+```
+
+::: {.notes}
+All blocking checks pass — improved file committed.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 9 stroke:#2E7D32
+    linkStyle 10 stroke:#C62828
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING,RERUN dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class IMPROVED dvaccept
+    class PRIOR dvprior
+```
+
+::: {.notes}
+Any blocking check still fails — prior passing file committed. Either way, something good goes out.
+:::
+
+
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Fix Loop]{style="font-size:2.8em; display:block; color:#00897B;"}
 
 ## {.center data-transition="none"}
 
@@ -1323,6 +2119,12 @@ or file skipped`"])
 ::: {.notes}
 If some functions still can't be resolved — a partial result is surfaced to the user, or the file is skipped. This is a deliberate design choice for complex files, not a failure mode.
 :::
+
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Per-File Flow]{style="font-size:2.8em; display:block; color:#00897B;"}
 
 ## {.center data-transition="none"}
 
@@ -2045,6 +2847,8 @@ Each file inherits every convention set by all prior files — this is why files
 Thank you
 :::
 
+![](images/spinybacked-orbweaver-spider.png){style="width:30%; margin-top:0.5em;"}
+
 ::: {.notes}
 Whitney introduces herself here — Senior Technical Advocate at Datadog.
 :::
@@ -2054,3 +2858,5 @@ Whitney introduces herself here — Senior Technical Advocate at Datadog.
 ::: {.r-fit-text}
 [whitneylee.com](https://whitneylee.com)
 :::
+
+![](images/spinybacked-orbweaver-spider.png){style="width:30%; margin-top:0.5em;"}
