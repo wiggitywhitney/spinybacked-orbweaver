@@ -487,12 +487,6 @@ export async function handleInstrument(
         statusLine = 'Live-check: OK (no spans received — live-check did not validate any telemetry)';
       }
       deps.stderr(statusLine);
-      if (options.verbose && runResult.endOfRunValidation) {
-        deps.stderr('Full compliance report:');
-        deps.stderr(runResult.endOfRunValidation);
-      }
-    } else if (runResult.endOfRunValidation) {
-      deps.stderr(`Live-check: ${runResult.endOfRunValidation}`);
     }
     for (const warning of runResult.warnings) {
       deps.stderr(`Warning: ${warning}`);
