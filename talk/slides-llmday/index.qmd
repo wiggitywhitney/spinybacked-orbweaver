@@ -403,6 +403,1061 @@ And it produces: the instrumented file on a branch, a reasoning report explainin
 Navigate to the GitHub PR. Walk through: the instrumented files, the companion reasoning reports, the PR overview with cost breakdown and advisory findings. Show the Datadog backend with the new spans visible.
 :::
 
+## {.center data-transition="none"}
+
+::: {style="color: #00897B; font-size: 0.9em; margin-bottom: 0.5em;"}
+Built on community projects
+:::
+
+<div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
+<span style="color:white;">OpenTelemetry Weaver</span><br>
+<span style="color:white;">Instrumentation Score</span>
+</div>
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+::: {style="color: #00897B; font-size: 0.9em; margin-bottom: 0.5em;"}
+Built on community projects
+:::
+
+<div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
+<a href="https://github.com/open-telemetry/weaver" style="color:#E91E63; text-decoration:none;">OpenTelemetry Weaver</a><br>
+<span style="color:white;">Instrumentation Score</span>
+</div>
+
+::: {.notes}
+OpenTelemetry Weaver is the tool that lets you define your team's telemetry standards as a machine-readable schema. Spinybacked Orbweaver uses it to validate every generated span before anything commits.
+:::
+
+## {.center data-transition="none"}
+
+::: {style="color: #00897B; font-size: 0.9em; margin-bottom: 0.5em;"}
+Built on community projects
+:::
+
+<div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
+<a href="https://github.com/open-telemetry/weaver" style="color:#E91E63; text-decoration:none;">OpenTelemetry Weaver</a><br>
+<a href="https://github.com/instrumentation-score/spec" style="color:#F57C00; text-decoration:none;">Instrumentation Score</a>
+</div>
+
+::: {.notes}
+The Instrumentation Score is an open specification that defines what good OTel instrumentation looks like — a 0-to-100 quality rubric with standardized rules. It's what makes quality measurable rather than subjective. Both of these projects are what make Spinybacked Orbweaver possible.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 0,1,2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA,AGENT,VAL hidden
+```
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 1,2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT,VAL hidden
+```
+
+::: {.notes}
+The orchestrator is fully deterministic. It loads your source files and resolves your Weaver schema.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT,VAL hidden
+```
+
+::: {.notes}
+It packages the file, the resolved schema, and pre-scan rules for the AI agent.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL hidden
+```
+
+::: {.notes}
+A fresh AI agent. Isolated — no tools, no file system access. It receives only what the orchestrator provides and does one thing: instrument the file.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL hidden
+```
+
+::: {.notes}
+The agent returns its instrumented output. The orchestrator receives it — deterministically.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL val
+```
+
+::: {.notes}
+The orchestrator sends the output to the Validator — mostly deterministic. AST parsing, diff analysis, schema checks.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL val
+```
+
+::: {.notes}
+The validator returns its result and findings. Pass — the file is committed. Fail — the fix loop runs.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL val
+```
+
+::: {.notes}
+On a pass, the orchestrator writes any new schema conventions back to the Weaver schema and advances to the next file. The loop closes.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN,COMMIT,SCHEMA,AGENT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY,NEXT pfhidden
+```
+
+::: {.notes}
+
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 1,2,3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD pfdet
+    class PRESCAN,COMMIT,SCHEMA,AGENT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY,NEXT pfhidden
+```
+
+::: {.notes}
+Each file starts fresh. The orchestrator loads the file and re-resolves the schema — picking up any conventions set by prior files.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 2,3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class COMMIT,SCHEMA,AGENT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY,NEXT pfhidden
+```
+
+::: {.notes}
+A deterministic pre-scan runs first — AST analysis that injects function-level directives into the agent's instructions.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class COMMIT,SCHEMA,NEXT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY pfhidden
+```
+
+::: {.notes}
+The AI agent instruments the file — isolated, no tools, no file access.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT pfval
+    class VAL,PASS,FIX,ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+The agent returns its instrumented output and reasoning.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL pfval
+    class PASS,FIX,ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+The output goes to the validator. Two-tier checks: structural gate first, then semantic quality checks.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX,ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6 stroke:#C62828
+    linkStyle 8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+Fail — the fix loop runs. M6 covers that in detail.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+    linkStyle 9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+    class COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+    class COMMIT pfdet
+    class SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+Pass — commit the file with a reasoning report.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN,COMMIT,SCHEMA pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+    class NEXT pfhidden
+```
+
+::: {.notes}
+Update the schema and re-resolve for the next file.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+
+    class START,NEXT pfentry
+    class LOAD,PRESCAN,COMMIT,SCHEMA pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+```
+
+::: {.notes}
+Each file inherits every convention set by all prior files — this is why files must be processed one at a time.
+:::
+
 ## {.center}
 
 ::: {.r-fit-text}
