@@ -1,0 +1,2862 @@
+---
+title: "The Best Laid Spans"
+subtitle: "An AI Agent That Instruments Your Code with OpenTelemetry"
+author: "Whitney Lee"
+format: revealjs
+---
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF automated
+    class KN,SM,FW,BL hidden
+```
+
+::: {.notes}
+Every automated telemetry layer that can be built has been built. Starting from the bottom: Infrastructure — host and cluster metrics.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN automated
+    class SM,FW,BL hidden
+```
+
+::: {.notes}
+Kernel — system calls via eBPF. Cilium.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN,SM automated
+    class FW,BL hidden
+```
+
+::: {.notes}
+Service Mesh — L7 proxy telemetry. Istio, Linkerd.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN,SM,FW automated
+    class BL hidden
+```
+
+::: {.notes}
+Framework — HTTP, databases, messaging via OTel auto-instrumentation. No code changes needed.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN,SM,FW automated
+    class BL gap
+```
+
+::: {.notes}
+Business Logic — the code that differentiates your company from every other company. Which discount applied, which path ran, what state was read. No automated layer reaches it. This is the gap.
+:::
+
+## {background-image="images/trace-before.png" background-size="contain" background-color="white"}
+
+::: {.notes}
+A checkout request takes 3 seconds. Framework instrumentation shows the HTTP call and a slow database query. But there's a gap — we can see the request is slow, we cannot see why.
+:::
+
+## {background-image="images/trace-after.png" background-size="contain" background-color="white"}
+
+::: {.notes}
+Add business logic spans from Spinybacked Orbweaver, and the root cause becomes visible: a synchronous call to a third-party warehouse API on every request, not reading from local cache.
+:::
+
+## {.center data-transition="none"}
+
+::: {style="font-size: 1.6em; font-weight: bold; color: #00897B; text-align: center;"}
+Spinybacked Orbweaver
+:::
+
+::: {style="text-align: center;"}
+![](images/spinybacked-orbweaver-spider.png){width="38%" style="opacity: 0;"}
+:::
+
+::: {style="color: white;"}
+An AI agent that instruments code with OpenTelemetry
+:::
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+::: {style="font-size: 1.6em; font-weight: bold; color: #00897B; text-align: center;"}
+Spinybacked Orbweaver
+:::
+
+::: {style="text-align: center;"}
+![](images/spinybacked-orbweaver-spider.png){width="38%"}
+:::
+
+::: {style="color: white;"}
+An AI agent that instruments code with OpenTelemetry
+:::
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+::: {style="font-size: 1.6em; font-weight: bold; color: #00897B; text-align: center;"}
+Spinybacked Orbweaver
+:::
+
+::: {style="text-align: center;"}
+![](images/spinybacked-orbweaver-spider.png){width="38%"}
+:::
+
+An AI agent that instruments code with OpenTelemetry
+
+::: {.notes}
+Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. It analyzes your JavaScript code, adds OpenTelemetry spans, validates its own output, and opens a pull request.
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">source file →</span><br>
+<span style="color:white;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:white;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your resolved telemetry schema — the machine-readable definition of what your telemetry should look like — and a set of validation rules.
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:#9C27B0;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:#9C27B0;">→ reasoning report</span><br>
+<span style="color:#0097A7;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:#9C27B0;">→ reasoning report</span><br>
+<span style="color:#0097A7;">→ passing tests</span><br>
+<span style="color:#E91E63;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+And it produces: the instrumented file on a branch, a reasoning report explaining every instrumentation decision, confirmation the test suite still passes, and a live telemetry check confirming output conforms to your schema.
+:::
+
+## {.center}
+
+[Demo]{style="font-size: 3em; color: #00897B; font-weight: bold;"}
+
+::: {.notes}
+Navigate to the GitHub PR. Walk through: the instrumented files, the companion reasoning reports, the PR overview with cost breakdown and advisory findings. Show the Datadog backend with the new spans visible.
+:::
+
+## {.center data-transition="none"}
+
+::: {style="color: #00897B; font-size: 0.9em; margin-bottom: 0.5em;"}
+Built on community projects
+:::
+
+<div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
+<span style="color:white;">OpenTelemetry Weaver</span><br>
+<span style="color:white;">Instrumentation Score</span>
+</div>
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+::: {style="color: #00897B; font-size: 0.9em; margin-bottom: 0.5em;"}
+Built on community projects
+:::
+
+<div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
+<a href="https://github.com/open-telemetry/weaver" style="color:#E91E63; text-decoration:none;">OpenTelemetry Weaver</a><br>
+<span style="color:white;">Instrumentation Score</span>
+</div>
+
+::: {.notes}
+OpenTelemetry Weaver is the tool that lets you define your team's telemetry standards as a machine-readable schema. Spinybacked Orbweaver uses it to validate every generated span before anything commits.
+:::
+
+## {.center data-transition="none"}
+
+::: {style="color: #00897B; font-size: 0.9em; margin-bottom: 0.5em;"}
+Built on community projects
+:::
+
+<div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
+<a href="https://github.com/open-telemetry/weaver" style="color:#E91E63; text-decoration:none;">OpenTelemetry Weaver</a><br>
+<a href="https://github.com/instrumentation-score/spec" style="color:#F57C00; text-decoration:none;">Instrumentation Score</a>
+</div>
+
+::: {.notes}
+The Instrumentation Score is an open specification that defines what good OTel instrumentation looks like — a 0-to-100 quality rubric with standardized rules. It's what makes quality measurable rather than subjective. Both of these projects are what make Spinybacked Orbweaver possible.
+:::
+
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Orchestration]{style="font-size:2.8em; display:block; color:#00897B;"}
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 0,1,2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA,AGENT,VAL hidden
+```
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 1,2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT,VAL hidden
+```
+
+::: {.notes}
+The orchestrator is fully deterministic. It loads your source files and resolves your Weaver schema.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT,VAL hidden
+```
+
+::: {.notes}
+It packages the file, the resolved schema, and pre-scan rules for the AI agent.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 2,3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL hidden
+```
+
+::: {.notes}
+A fresh AI agent. Isolated — no tools, no file system access. It receives only what the orchestrator provides and does one thing: instrument the file.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 3,4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL hidden
+```
+
+::: {.notes}
+The agent returns its instrumented output. The orchestrator receives it — deterministically.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 4,5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL val
+```
+
+::: {.notes}
+The orchestrator sends the output to the Validator — mostly deterministic. AST parsing, diff analysis, schema checks.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    linkStyle 5 stroke:white,fill:none,color:white
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+    classDef hidden fill:white,stroke:white,color:white
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL val
+```
+
+::: {.notes}
+The validator returns its result and findings. Pass — the file is committed. Fail — the fix loop runs.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 50}}}%%
+flowchart LR
+    SCHEMA["`Weaver Schema`"]
+    ORCH["`**Orchestrator**
+deterministic`"]
+    AGENT["`**AI Agent**
+instrumentation only`"]
+    VAL["`Validator
+mostly deterministic`"]
+
+    SCHEMA -->|resolved schema| ORCH
+    ORCH -->|"file + schema + rules"| AGENT
+    AGENT -->|"instrumented output"| ORCH
+    ORCH -->|instrumented output| VAL
+    VAL -->|result + findings| ORCH
+    ORCH -->|schema extensions| SCHEMA
+
+    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
+
+    class ORCH det
+    class SCHEMA io
+    class AGENT ai
+    class VAL val
+```
+
+::: {.notes}
+On a pass, the orchestrator writes any new schema conventions back to the Weaver schema and advances to the next file. The loop closes.
+:::
+
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Validation]{style="font-size:2.8em; display:block; color:#00897B;"}
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,REJECT,BLOCKING,ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Instrumented file comes out of the AI agent. Now it hits the validator.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1,2,3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE dvblock
+    class REJECT,BLOCKING,ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+First: the blocking structural gate. Four checks, all deterministic.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2,3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE dvblock
+    class REJECT dvfail
+    class BLOCKING,ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Any fail — structural fail, file rejected.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3,4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class REJECT dvfail
+    class ADVISORY,FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+All pass — blocking quality checks run.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4,5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT dvfail
+    class FAIL,POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Non-blocking advisory checks run in parallel.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 5,6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Blocking quality fail — findings returned.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6,7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH,RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Advisory findings surface in the fail output too — blocking failures plus advisory.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 7,8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+All blocking checks pass — the agent gets one improvement pass: the passing file plus all advisory findings.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 8,9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class RERUN,IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Advisory findings feed the improvement pass from both paths.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 9,10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING,RERUN dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class IMPROVED,PRIOR dvhidden
+```
+
+::: {.notes}
+Full validation re-run on the improved file.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 9 stroke:#2E7D32
+    linkStyle 10 stroke:white,fill:none,color:white
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING,RERUN dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class IMPROVED dvaccept
+    class PRIOR dvhidden
+```
+
+::: {.notes}
+All blocking checks pass — improved file committed.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    IN["Instrumented file"]
+    GATE["`**Blocking structural gate**
+Syntax · Elision
+Lint · Weaver`"]
+    REJECT(["`Structural fail
+file rejected`"])
+    BLOCKING["`**Blocking quality checks**
+Schema fidelity · Coverage
+Code quality · API-only
+LLM judge (if new names)`"]
+    ADVISORY["`**Non-blocking advisory**
+No Utility Spans · Async
+Attribute quality · etc.`"]
+    FAIL(["`Fail — findings returned
+blocking + advisory`"])
+    POLISH["`**Agent: one improvement pass**
+passing file + advisory findings`"]
+    RERUN["Full validation re-run"]
+    IMPROVED(["`Improved file
+committed`"])
+    PRIOR(["`Prior passing file
+committed`"])
+
+    IN --> GATE
+    GATE -->|any fail| REJECT
+    GATE --> BLOCKING
+    GATE --> ADVISORY
+    BLOCKING -->|any fail| FAIL
+    ADVISORY --> FAIL
+    BLOCKING -->|"all pass"| POLISH
+    ADVISORY --> POLISH
+    POLISH --> RERUN
+    RERUN -->|"all blocking pass"| IMPROVED
+    RERUN -->|"any blocking fail"| PRIOR
+
+    linkStyle 1 stroke:#C62828
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 4 stroke:#C62828
+    linkStyle 6 stroke:#2E7D32
+    linkStyle 9 stroke:#2E7D32
+    linkStyle 10 stroke:#C62828
+
+    classDef dvin fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef dvblock fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef dvadvisory fill:#EDE7F6,stroke:#4527A0,stroke-width:2px,color:#1A237E
+    classDef dvfail fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef dvagent fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvaccept fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef dvprior fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef dvhidden fill:white,stroke:white,color:white
+
+    class IN dvin
+    class GATE,BLOCKING,RERUN dvblock
+    class ADVISORY dvadvisory
+    class REJECT,FAIL dvfail
+    class POLISH dvagent
+    class IMPROVED dvaccept
+    class PRIOR dvprior
+```
+
+::: {.notes}
+Any blocking check still fails — prior passing file committed. Either way, something good goes out.
+:::
+
+
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Fix Loop]{style="font-size:2.8em; display:block; color:#00897B;"}
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 0,1,2,3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,D1,ACCEPT,R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+When validation fails — something structurally or semantically wrong — we don't give up on the file. The fix loop runs.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 1,2,3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1 flai
+    class D1,ACCEPT,R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+First: the same agent gets the full failure report and retries.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2,3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1 flai
+    class D1 flcheck
+    class ACCEPT,R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+Validator checks again.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3,4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1 flai
+    class D1 flcheck
+    class ACCEPT flaccept
+    class R2,D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+If it passes — great. Most files do.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 4,5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2 flai
+    class D1 flcheck
+    class ACCEPT flaccept
+    class D2,R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+If not — a fresh agent takes over with clean context. Key: it receives the same file and schema, and a failure category hint. It does NOT receive the broken output. Showing a model its own broken code causes oscillation — it anchors on the failure rather than reasoning from scratch. Olausson et al., ICLR 2024, MIT/Microsoft Research.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5,6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2 flai
+    class D1,D2 flcheck
+    class ACCEPT flaccept
+    class R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+Validator checks again.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6,7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2 flai
+    class D1,D2 flcheck
+    class ACCEPT flaccept
+    class R3,D3,PARTIAL flhidden
+```
+
+::: {.notes}
+The fresh context often breaks the loop.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 7,8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2 flcheck
+    class ACCEPT flaccept
+    class D3,PARTIAL flhidden
+```
+
+::: {.notes}
+Still failing — the orchestrator decomposes the file. Each function is instrumented and validated independently.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 8,9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2,D3 flcheck
+    class ACCEPT flaccept
+    class PARTIAL flhidden
+```
+
+::: {.notes}
+Each function is validated on its own.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+    linkStyle 9 stroke:white,fill:none,color:white
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2,D3 flcheck
+    class ACCEPT flaccept
+    class PARTIAL flhidden
+```
+
+::: {.notes}
+Most functions pass individually even when the whole file didn't.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    FAIL(["Validation fails"])
+    R1["`**Retry**: same agent
++ failure report`"]
+    D1{Pass?}
+    ACCEPT(["File accepted"])
+    R2["`**Fresh agent** + failure-category
+hint (not broken output)`"]
+    D2{Pass?}
+    R3["`**Function-by-function
+fallback**`"]
+    D3{Pass?}
+    PARTIAL(["`Partial result
+(surfaced to user)
+or file skipped`"])
+
+    FAIL --> R1
+    R1 --> D1
+    D1 -->|yes| ACCEPT
+    D1 -->|no| R2
+    R2 --> D2
+    D2 -->|yes| ACCEPT
+    D2 -->|no| R3
+    R3 --> D3
+    D3 -->|yes| ACCEPT
+    D3 -->|no| PARTIAL
+
+    linkStyle 2 stroke:#2E7D32
+    linkStyle 3 stroke:#C62828
+    linkStyle 5 stroke:#2E7D32
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+    linkStyle 9 stroke:#C62828
+
+    classDef flentry fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef flai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef flcheck fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef flaccept fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef flpartial fill:#EEEEEE,stroke:#616161,stroke-width:2px,color:#212121
+    classDef flhidden fill:white,stroke:white,color:white
+
+    class FAIL flentry
+    class R1,R2,R3 flai
+    class D1,D2,D3 flcheck
+    class ACCEPT flaccept
+    class PARTIAL flpartial
+```
+
+::: {.notes}
+If some functions still can't be resolved — a partial result is surfaced to the user, or the file is skipped. This is a deliberate design choice for complex files, not a failure mode.
+:::
+
+## {.center}
+
+[How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
+
+[Per-File Flow]{style="font-size:2.8em; display:block; color:#00897B;"}
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 0,1,2,3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN,COMMIT,SCHEMA,AGENT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY,NEXT pfhidden
+```
+
+::: {.notes}
+
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 1,2,3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD pfdet
+    class PRESCAN,COMMIT,SCHEMA,AGENT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY,NEXT pfhidden
+```
+
+::: {.notes}
+Each file starts fresh. The orchestrator loads the file and re-resolves the schema — picking up any conventions set by prior files.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 2,3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class COMMIT,SCHEMA,AGENT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY,NEXT pfhidden
+```
+
+::: {.notes}
+A deterministic pre-scan runs first — AST analysis that injects function-level directives into the agent's instructions.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 3,4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class COMMIT,SCHEMA,NEXT pfhidden
+    class OUT,VAL,PASS,FIX,ADVISORY pfhidden
+```
+
+::: {.notes}
+The AI agent instruments the file — isolated, no tools, no file access.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 4,5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT pfval
+    class VAL,PASS,FIX,ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+The agent returns its instrumented output and reasoning.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 5,6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL pfval
+    class PASS,FIX,ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+The output goes to the validator. Two-tier checks: structural gate first, then semantic quality checks.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6,7,8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX,ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6 stroke:#C62828
+    linkStyle 8,9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY,COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+Fail — the fix loop runs. M6 covers that in detail.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+    linkStyle 9,10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+    class COMMIT,SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 10,11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+    class COMMIT pfdet
+    class SCHEMA,NEXT pfhidden
+```
+
+::: {.notes}
+Pass — commit the file with a reasoning report.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 11 stroke:white,fill:none,color:white
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+    classDef pfhidden fill:white,stroke:white,color:white
+
+    class START pfentry
+    class LOAD,PRESCAN,COMMIT,SCHEMA pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+    class NEXT pfhidden
+```
+
+::: {.notes}
+Update the schema and re-resolve for the next file.
+:::
+
+## {.center data-transition="none"}
+
+```{mermaid}
+%%| mermaid-format: js
+flowchart LR
+    START(["`Next file`"])
+    LOAD["`Load file
+re-resolve schema`"]
+    PRESCAN["`Pre-scan
+AST directives`"]
+    AGENT["`**AI Agent**
+instrument file`"]
+    OUT["`Instrumented output
+reasoning`"]
+    VAL["`Validator
+two-tier checks`"]
+    PASS{Pass?}
+    FIX["`Fix loop`"]
+    ADVISORY["`Advisory pass`"]
+    COMMIT["`Commit file +
+reasoning report`"]
+    SCHEMA["`Update schema
++ re-resolve`"]
+    NEXT(["`Next file`"])
+
+    START --> LOAD
+    LOAD --> PRESCAN
+    PRESCAN --> AGENT
+    AGENT --> OUT
+    OUT --> VAL
+    VAL --> PASS
+    PASS -->|no| FIX
+    FIX --> VAL
+    PASS -->|yes| ADVISORY
+    ADVISORY --> COMMIT
+    COMMIT --> SCHEMA
+    SCHEMA --> NEXT
+
+    linkStyle 6 stroke:#C62828
+    linkStyle 8 stroke:#2E7D32
+
+    classDef pfdet fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef pfai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef pfval fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef pffix fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
+    classDef pfpass fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
+    classDef pfentry fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
+
+    class START,NEXT pfentry
+    class LOAD,PRESCAN,COMMIT,SCHEMA pfdet
+    class AGENT pfai
+    class OUT,VAL,PASS pfval
+    class FIX pffix
+    class ADVISORY pfpass
+```
+
+::: {.notes}
+Each file inherits every convention set by all prior files — this is why files must be processed one at a time.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+Thank you
+:::
+
+![](images/spinybacked-orbweaver-spider.png){style="width:30%; margin-top:0.5em;"}
+
+::: {.notes}
+Whitney introduces herself here — Senior Technical Advocate at Datadog.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+[whitneylee.com](https://whitneylee.com)
+:::
+
+![](images/spinybacked-orbweaver-spider.png){style="width:30%; margin-top:0.5em;"}

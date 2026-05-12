@@ -1,8 +1,9 @@
 # PRD #847: LLM Day Austin Talk — Slides
 
-**Status**: In Progress
+**Status**: Complete
 **Priority**: High
 **Created**: 2026-05-11
+**Completed**: 2026-05-12
 **GitHub Issue**: wiggitywhitney/spinybacked-orbweaver#847
 **Branch**: `feature/prd-847-llmday-austin-talk-slides`
 
@@ -97,15 +98,15 @@ All slides follow the pattern in `talk/slides/index.qmd`:
 
 ## Milestones
 
-- [ ] M1: Problem section slides
-- [ ] M2: Agent intro section slides
-- [ ] M3: Demo transition
-- [ ] M4: Architecture — orchestration diagram
-- [ ] M5: Architecture — per-file processing sequence
-- [ ] M6: Architecture — fix loop diagram
-- [ ] M7: Architecture — deterministic validation diagram
-- [ ] M8: Wrap section
-- [ ] M9: Render verification and final review
+- [x] M1: Problem section slides
+- [x] M2: Agent intro section slides
+- [x] M3: Demo transition
+- [x] M4: Architecture — orchestration diagram
+- [x] M5: Architecture — per-file processing sequence
+- [x] M6: Architecture — fix loop diagram
+- [x] M7: Architecture — deterministic validation diagram
+- [x] M8: Wrap section
+- [x] M9: Render verification and final review
 
 ---
 
@@ -201,6 +202,7 @@ Create `talk/slides-llmday/index.qmd` if it doesn't exist. Copy the Quarto heade
 - Copy the diagram from `talk/slides/index.qmd` — it is outdated (missing pre-scan, wrong rule count)
 - Mention specific rule counts — use "validation rules" or "quality rubric"
 - Use `\n` in Mermaid node labels — use markdown string syntax or short labels (≤ ~18 chars)
+- Use `minNodeWidth` — it is not implemented in Mermaid v11.6.0 and has no effect. To get wider nodes, use `%%{init: {'flowchart': {'wrappingWidth': 700}}}%%` at the top of the diagram block. For horizontal-bar-style nodes, use single-line labels (no literal newlines in the markdown string). See Decision Log #9.
 
 **Success criteria:** Whitney approves the final diagram shape. Progressive slides build correctly. `quarto render` succeeds with diagrams readable at conference resolution.
 
@@ -227,6 +229,8 @@ Key message to land: files are processed one at a time, and the schema evolves �
 
 **Step 5:** Tell Whitney to run `quarto render` and wait for approval.
 
+**Mermaid node sizing**: `minNodeWidth` is not implemented in Mermaid v11.6.0. Use `%%{init: {'flowchart': {'wrappingWidth': 700}}}%%` for wider nodes. See Decision Log #9.
+
 **Success criteria:** Whitney approves. `quarto render` succeeds.
 
 ---
@@ -250,12 +254,21 @@ The design insight to surface in speaker notes: showing a model its own broken o
 
 **Do NOT:**
 - Frame function-level fallback as a failure or last-ditch effort — it is a deliberate design choice for complex files
+- Use `%%{init}%%` in any mermaid block — causes unclosed div nesting. See Decision Log #13.
+- Use `%%| mermaid-format: js` unless the slide nesting issue appears (check section depth in rendered HTML). If needed, also add `.center` to the slide header. See Decision Log #12.
+- Use classDef names that conflict with other diagrams in the deck — prefix with `fl` (fix loop). See Decision Log #14.
 
-**Success criteria:** Whitney approves. `quarto render` succeeds.
+**Use `flowchart LR`** (not TD) — fills the landscape slide better. See Decision Log #11.
+
+**Mermaid node sizing**: `wrappingWidth` (documented) controls foreignObject width. Do NOT use `minNodeWidth` (not implemented). Do NOT use `%%{init}%%` — see above.
+
+**Success criteria:** Whitney approves. `quarto render` succeeds with no div-nesting warnings (section max depth = 1).
 
 ---
 
 ### M7: Architecture — deterministic validation diagram
+
+**Updated per Decision 15:** Validation pipeline slides must be inserted **before** the fix loop slides in `talk/slides-llmday/index.qmd`. The deck order is: orchestration → validation pipeline → fix loop → per-file. After writing the slides, find the first fix-loop slide (search for `FAIL(["Validation fails"])`) and insert the new slides immediately before it.
 
 **Step 1:** Read the source files table, `docs/rules-reference.md` (for rule categories — do not use rule IDs in slides), and current state of `talk/slides-llmday/index.qmd`. Also view: `/Users/whitney.lee/Documents/Journal/spinybacked-orbweaver/images/validation-pipeline-with-advisory.png` and `/Users/whitney.lee/Documents/Journal/spinybacked-orbweaver/images/tldr-deterministic-vs-llm.png`.
 
@@ -283,6 +296,12 @@ End with a dedicated text slide landing the thesis: "AI does the creative step. 
 **Do NOT:**
 - List individual rule IDs (CDQ-001, NDS-003, etc.) — meaningless to this audience
 - List all 36 rules — categories only
+- Use `%%{init}%%` in any mermaid block — causes unclosed div nesting. See Decision Log #13.
+- Use classDef names that conflict with other diagrams in the deck — prefix with `dv` (deterministic validation). See Decision Log #14.
+
+**Use `flowchart LR`** (not TD). See Decision Log #11.
+
+**Use `%%| mermaid-format: js`** inside every mermaid block and `.center` on every slide header — the deck is already at 36 mermaid blocks (well past the ≥22 threshold), so div nesting is guaranteed without it. See Decision Log #12.
 
 **Success criteria:** Whitney approves. `quarto render` succeeds. The thesis statement "AI does the creative step. Deterministic code enforces quality." appears on a dedicated slide.
 
@@ -335,11 +354,22 @@ Slide 2 (final) — Spider illustration:
 |---|----------|-----------|
 | 1 | New file `talk/slides-llmday/index.qmd` separate from `talk/slides/index.qmd` | Keeps KubeCon slides intact; LLM Day talk is a different audience and narrative |
 | 2 | Section order: Problem → Agent intro → Demo transition → Architecture diagrams → Wrap | Problem earns the attention; demo payoff before architecture explanation; diagrams are the meaty LLM Day content; wrap closes with open source CTA |
-| 3 | Architecture diagram order: Orchestration → Per-file sequence → Fix loop → Deterministic validation | Macro to micro; thesis lands on the last diagram |
+| 3 | Architecture diagram order: Orchestration → Validation pipeline → Fix loop → Per-file sequence | Per-file is the most granular diagram and lands hardest as a capstone. Validation pipeline precedes fix loop so the audience understands what "validation fails" means before seeing the escalation logic. Updated per Decision 15. |
 | 4 | Demo is pre-run results only — no live code execution | Agent run takes ~40 minutes; showing results is more reliable and faster |
 | 5 | No deep Weaver explanation | LLM Day audience doesn't need it; "your telemetry schema" is sufficient |
 | 6 | Thesis statement on a dedicated slide at the end of M7 | "AI does the creative step. Deterministic code enforces quality." — the single most important idea for an LLM Day audience |
 | 7 | Diagrams built as Mermaid (not static PNGs) | Allows progressive unfurling across slides; consistent with existing talk style |
+| 8 | Beat 2 ("AI agents alone don't solve it") omitted from M1 | Whitney's explicit decision during implementation — the before/after trace slides carry the same message more viscerally; the LLM Day audience can infer the gap without a dedicated beat |
+| 9 | Observability stack diagram uses `wrappingWidth: 700` + single-line labels for wider nodes | `minNodeWidth` is not implemented in Mermaid v11.6.0; `wrappingWidth` is the documented config that controls foreignObject width and therefore box width |
+| 10 | Inputs/outputs slide uses HTML flexbox layout, not Mermaid | Mermaid `mermaid-format: svg` disables htmlLabels, making image embedding in nodes impossible; HTML flexbox gives full control over spider-centric layout |
+| 11 | Architecture diagrams use `flowchart LR` (not TD) | LR fills the 1050×700 landscape slide aspect ratio; TD produces tall, narrow diagrams that feel small on slides |
+| 12 | Complex per-file TD diagrams required `%%\| mermaid-format: js` per-block | When ≥22 mermaid blocks share the same HTML document, Quarto's SVG pre-renderer leaves `<div class="cell">` wrappers unclosed, causing Reveal.js slide nesting. `%%\| mermaid-format: js` delegates rendering to the browser, bypassing the issue. Requires `.center` on slide headers for vertical centering. Note: Quarto warns "not recommended in format revealjs" but it works. |
+| 13 | `%%{init}%%` directives must not be used in `{mermaid}` blocks in this deck | Causes the same unclosed-div nesting as decision 12. See `mmdc-gotchas.md` for details. |
+| 14 | classDef names must be unique across all diagrams in the same deck | When `mermaid-format: svg` renders many diagrams into the same HTML document, duplicate CSS class names from classDef can conflict. Prefix per-file slide classNames with `pf` to distinguish from orchestration slide class names. |
+| 15 | Per-file sequence moved to last position in architecture section | Per-file is the most detailed/granular diagram and works best as a capstone that synthesizes the prior three. Validation pipeline now precedes fix loop so the audience understands what "validation fails" means before encountering the escalation logic. Slides already reordered in `talk/slides-llmday/index.qmd`. |
+| 16 | Thesis slide ("AI does the creative step. Deterministic code enforces quality.") omitted | Whitney's decision — the message lands through the diagrams themselves; a dedicated text slide was not needed. |
+| 17 | Section intro slides added before each architecture diagram ("How it works" small + diagram name large) | Not in original PRD scope; added to give the audience a visual breath and orient them to each section. "How it works" at 1.1em/opacity 0.65; diagram name at 2.8em teal. |
+| 18 | Validation pipeline diagram must show parallel blocking + advisory checks, advisory polish pass, and two commit outcomes | Initial implementation simplified to a linear two-check structure, which was incorrect. Corrected to match the source diagram: GATE → parallel BLOCKING + ADVISORY → FAIL or POLISH → RERUN → IMPROVED or PRIOR. |
 
 ---
 
