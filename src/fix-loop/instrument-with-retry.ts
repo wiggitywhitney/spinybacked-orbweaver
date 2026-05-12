@@ -1134,6 +1134,44 @@ async function functionLevelFallback(
     return null; // All functions failed — fall through to whole-file failure
   }
 
+  // Short-circuit: if no spans were added, return the original file unchanged.
+  // Reassembly has no valid purpose when nothing was instrumented and can corrupt
+  // code structure (e.g. stripping try/catch blocks). The check at the end of the
+  // success path restores the original too, but only after reassembly and validation
+  // have already run — the partial-results fallback path does not restore cleanly.
+  const preReassemblySpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
+  if (preReassemblySpans === 0) {
+    await writeFile(filePath, originalCode, 'utf-8');
+    let shortCircuitTokens = { ...wholeFileResult.tokenUsage };
+    for (const r of fnResults) {
+      shortCircuitTokens = addTokenUsage(shortCircuitTokens, r.tokenUsage);
+    }
+    return {
+      path: filePath,
+      status: 'success',
+      spansAdded: 0,
+      librariesNeeded: [],
+      schemaExtensions: [],
+      attributesCreated: 0,
+      validationAttempts: wholeFileResult.validationAttempts,
+      validationStrategyUsed: wholeFileResult.validationStrategyUsed,
+      errorProgression: [
+        ...(wholeFileResult.errorProgression ?? []),
+        `function-level: 0/${extractedFunctions.length} functions instrumented (no spans needed)`,
+      ],
+      notes: [
+        ...(wholeFileResult.notes ?? []),
+        `Function-level fallback: 0/${extractedFunctions.length} functions instrumented`,
+        ...fnResults.filter(r => !r.success).map(r => `  skipped: ${r.name} — ${r.error}`),
+      ],
+      agentVersion: AGENT_VERSION,
+      tokenUsage: shortCircuitTokens,
+      functionsInstrumented: 0,
+      functionsSkipped: extractedFunctions.length,
+      functionResults: fnResults,
+    };
+  }
+
   // Reassemble: replace instrumented functions in the original file via provider
   let reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
 

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-05-11) Fixed live-check compliance report JSON flooding the terminal on every run (issue #849, RUN16-2): the full JSON blob was being emitted to stderr even though it is already written to disk as `spiny-orb-live-check-report.json`. The one-line summary (`Live-check: OK (N spans, N advisory findings — see compliance report)`) is preserved. Fixed function-level fallback corrupting committed code when no spans are added (issue #849, RUN16-3): reassembly was running even when all per-function calls added 0 spans, stripping try/catch blocks from the committed output. When 0 spans are added, the fallback now returns the original file unchanged without reassembly.
+
 ### Added
 
 - (2026-05-11) Recorded run-16 eval findings: added a pre-confirmed NDS-003 gap entry for `technicalNode` in `journal-graph.js` (3 consecutive failures, error count 1→5 on attempt 3) to PRD #845's Decision Log, with cascaded updates to M0 (start gap count at 1) and M2 (mandatory regression fixture). Created issues #848 (adaptive thinking token exhaustion — switch to `enabled+budget_tokens`, raise MIN_OUTPUT_BUDGET, tighten COV-003 guidance) and #849 (live-check JSON stdout flood + 0-span file reassembly corruption). Both issues added to ROADMAP short-term section.

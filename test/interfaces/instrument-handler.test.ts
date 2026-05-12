@@ -1067,4 +1067,43 @@ describe('handleInstrument', () => {
       expect(result.exitCode).toBe(3);
     });
   });
+
+  describe('live-check compliance report output', () => {
+    it('does not print compliance report JSON to stderr when verbose is true', async () => {
+      const complianceJson = '{"spans":[{"name":"test"}],"statistics":{"total_entities":1}}';
+      const deps = makeDeps({
+        coordinate: vi.fn().mockResolvedValue(makeRunResult({
+          liveCheckStatus: {
+            spansReceived: true,
+            spanCount: 1,
+            totalAdvisories: 0,
+          },
+          endOfRunValidation: complianceJson,
+        })),
+      });
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0] as string);
+      const stderrOutput = stderrCalls.join('\n');
+      // One-line summary should be printed
+      expect(stderrCalls.some(s => s.includes('Live-check:'))).toBe(true);
+      // Full JSON blob must NOT be printed — check for stable key names present in any compliance JSON
+      expect(stderrOutput).not.toContain('"statistics"');
+      expect(stderrOutput).not.toContain('"total_entities"');
+      expect(stderrOutput).not.toContain('Full compliance report');
+    });
+
+    it('does not print compliance report JSON to stderr when liveCheckStatus is absent', async () => {
+      const complianceJson = '{"spans":[{"name":"test"}]}';
+      const deps = makeDeps({
+        coordinate: vi.fn().mockResolvedValue(makeRunResult({
+          endOfRunValidation: complianceJson,
+        })),
+      });
+      await handleInstrument(makeOptions(), deps);
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0] as string);
+      const stderrOutput = stderrCalls.join('\n');
+      expect(stderrOutput).not.toContain('"spans"');
+      expect(stderrOutput).not.toContain('"name":"test"');
+    });
+  });
 });

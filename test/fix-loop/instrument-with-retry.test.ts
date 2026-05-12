@@ -3029,7 +3029,10 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
           return {
             success: true,
             output: makeInstrumentationOutput({
-              instrumentedCode: 'const x = 1;\n',
+              // Must include startActiveSpan so spansAdded > 0 — otherwise the 0-span
+              // short-circuit skips reassembly before this test's partial path is exercised.
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function fn() { return trace.getTracer('svc').startActiveSpan('op', async (span) => { try { return null; } finally { span.end(); } }); }\n`,
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
             }),
           };
         }
@@ -3075,7 +3078,9 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
           return {
             success: true,
             output: makeInstrumentationOutput({
-              instrumentedCode: 'const x = 1;\n',
+              // Must include startActiveSpan so spansAdded > 0 — otherwise the 0-span
+              // short-circuit skips reassembly before this test's partial path is exercised.
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function fn() { return trace.getTracer('svc').startActiveSpan('op', async (span) => { try { return null; } finally { span.end(); } }); }\n`,
               spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
             }),
           };
@@ -3156,6 +3161,41 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(result.status).toBe('success');
     // countSpansInCode: no startActiveSpan in fixture code
     expect(result.spansAdded).toBe(0);
+  });
+
+  it('returns original file unchanged and skips reassembly when all per-function calls add 0 spans', async () => {
+    // Count only reassembly-level validation (original file path), not per-function validation (temp paths)
+    let reassemblyValidateCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          // Succeed but return code with no startActiveSpan → 0 spansAdded
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: FALLBACK_FIXTURE,
+              spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 2 },
+            }),
+          };
+        }
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => {
+        if (input.filePath === filePath) {
+          reassemblyValidateCount++;
+        }
+        return makePassingValidation(input.filePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.spansAdded).toBe(0);
+    expect(result.status).toBe('success');
+    // File must be identical to original — no reassembly should have run
+    expect(readFileSync(filePath, 'utf-8')).toBe(FALLBACK_FIXTURE);
+    // Reassembly-level validation must not be called — short-circuit happened before reassembly
+    expect(reassemblyValidateCount).toBe(0);
   });
 });
 
