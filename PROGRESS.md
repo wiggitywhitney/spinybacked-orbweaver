@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-05-12) Created LLM Day Austin talk slides (`talk/slides-llmday/`) as a separate deck from the KubeCon EU version, reframed for an AI/LLM-focused audience with no assumed OpenTelemetry background. The problem section uses a 5-slide progressive Mermaid diagram revealing the observability stack gap layer by layer, followed by before/after trace images showing what business logic instrumentation unlocks. The agent intro uses a 3-slide reveal (name → spider → tagline) and an 8-slide inputs/outputs sequence with the spider centered and items appearing one at a time with color-coded arrows. A Demo transition slide bridges to the live pre-run results walkthrough.
+
 ### Fixed
 
 - (2026-05-11) Fixed adaptive thinking token exhaustion on complex-catch-pattern files (issue #848, RUN16-1): switched from `type: 'adaptive'` to `type: 'enabled', budget_tokens: N` in instrument-file.ts so thinking has a hard cap and the remainder is guaranteed for structured output. File-level calls reserve 35% for output (`Math.floor(max_tokens * 0.65)`); per-function calls reserve 4096 tokens (`max_tokens - 4096`). Also raised MIN_OUTPUT_BUDGET from 16,384 to 24,576 for better headroom on complex files, and simplified COV-003 guidance to be more mechanical — "the catch that pairs with `finally { span.end() }` always gets error recording" — reducing the catch-block classification reasoning that triggered exhaustion in run-16.

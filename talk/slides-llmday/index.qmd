@@ -1,0 +1,420 @@
+---
+title: "The Best Laid Spans"
+subtitle: "An AI Agent That Instruments Your Code with OpenTelemetry"
+author: "Whitney Lee"
+format: revealjs
+---
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF automated
+    class KN,SM,FW,BL hidden
+```
+
+::: {.notes}
+Every automated telemetry layer that can be built has been built. Starting from the bottom: Infrastructure — host and cluster metrics.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN automated
+    class SM,FW,BL hidden
+```
+
+::: {.notes}
+Kernel — system calls via eBPF. Cilium.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN,SM automated
+    class FW,BL hidden
+```
+
+::: {.notes}
+Service Mesh — L7 proxy telemetry. Istio, Linkerd.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN,SM,FW automated
+    class BL hidden
+```
+
+::: {.notes}
+Framework — HTTP, databases, messaging via OTel auto-instrumentation. No code changes needed.
+:::
+
+## {data-transition="none"}
+
+```{mermaid}
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
+flowchart TB
+    BL["`**Business Logic** — ❌ no automation — the code unique to your business`"]
+    FW["`**Framework** — ✅ HTTP, databases, messaging via OTel auto-instrumentation`"]
+    SM["`**Service Mesh** — ✅ L7 proxy telemetry via Istio, Linkerd`"]
+    KN["`**Kernel** — ✅ system calls via eBPF — Cilium`"]
+    INF["`**Infrastructure** — ✅ host and cluster metrics`"]
+
+    BL --- FW
+    FW --- SM
+    SM --- KN
+    KN --- INF
+
+    linkStyle 0,1,2,3 stroke:white,fill:none
+
+    classDef automated fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef gap fill:#FFEBEE,stroke:#C62828,stroke-width:2px,stroke-dasharray:5 5,color:#B71C1C
+    classDef hidden fill:white,stroke:white,color:white
+
+    class INF,KN,SM,FW automated
+    class BL gap
+```
+
+::: {.notes}
+Business Logic — the code that differentiates your company from every other company. Which discount applied, which path ran, what state was read. No automated layer reaches it. This is the gap.
+:::
+
+## {background-image="images/trace-before.png" background-size="contain" background-color="white"}
+
+::: {.notes}
+A checkout request takes 3 seconds. Framework instrumentation shows the HTTP call and a slow database query. But there's a gap — we can see the request is slow, we cannot see why.
+:::
+
+## {background-image="images/trace-after.png" background-size="contain" background-color="white"}
+
+::: {.notes}
+Add business logic spans from Spinybacked Orbweaver, and the root cause becomes visible: a synchronous call to a third-party warehouse API on every request, not reading from local cache.
+:::
+
+## {.center data-transition="none"}
+
+::: {style="font-size: 1.6em; font-weight: bold; color: #00897B; text-align: center;"}
+Spinybacked Orbweaver
+:::
+
+::: {style="text-align: center;"}
+![](images/spinybacked-orbweaver-spider.png){width="38%" style="opacity: 0;"}
+:::
+
+::: {style="color: white;"}
+An AI agent that instruments code with OpenTelemetry
+:::
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+::: {style="font-size: 1.6em; font-weight: bold; color: #00897B; text-align: center;"}
+Spinybacked Orbweaver
+:::
+
+::: {style="text-align: center;"}
+![](images/spinybacked-orbweaver-spider.png){width="38%"}
+:::
+
+::: {style="color: white;"}
+An AI agent that instruments code with OpenTelemetry
+:::
+
+::: {.notes}
+:::
+
+## {.center data-transition="none"}
+
+::: {style="font-size: 1.6em; font-weight: bold; color: #00897B; text-align: center;"}
+Spinybacked Orbweaver
+:::
+
+::: {style="text-align: center;"}
+![](images/spinybacked-orbweaver-spider.png){width="38%"}
+:::
+
+An AI agent that instruments code with OpenTelemetry
+
+::: {.notes}
+Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. It analyzes your JavaScript code, adds OpenTelemetry spans, validates its own output, and opens a pull request.
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">source file →</span><br>
+<span style="color:white;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:white;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your resolved telemetry schema — the machine-readable definition of what your telemetry should look like — and a set of validation rules.
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:#9C27B0;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:#9C27B0;">→ reasoning report</span><br>
+<span style="color:#0097A7;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#E91E63;">source file →</span><br>
+<span style="color:#F57C00;">schema →</span><br>
+<a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:#2196F3;">→ instrumented file</span><br>
+<span style="color:#9C27B0;">→ reasoning report</span><br>
+<span style="color:#0097A7;">→ passing tests</span><br>
+<span style="color:#E91E63;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+And it produces: the instrumented file on a branch, a reasoning report explaining every instrumentation decision, confirmation the test suite still passes, and a live telemetry check confirming output conforms to your schema.
+:::
+
+## {.center}
+
+[Demo]{style="font-size: 3em; color: #00897B; font-weight: bold;"}
+
+::: {.notes}
+Navigate to the GitHub PR. Walk through: the instrumented files, the companion reasoning reports, the PR overview with cost breakdown and advisory findings. Show the Datadog backend with the new spans visible.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+Thank you
+:::
+
+::: {.notes}
+Whitney introduces herself here — Senior Technical Advocate at Datadog.
+:::
+
+## {.center}
+
+::: {.r-fit-text}
+[whitneylee.com](https://whitneylee.com)
+:::

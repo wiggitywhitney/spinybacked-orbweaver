@@ -97,9 +97,9 @@ All slides follow the pattern in `talk/slides/index.qmd`:
 
 ## Milestones
 
-- [ ] M1: Problem section slides
-- [ ] M2: Agent intro section slides
-- [ ] M3: Demo transition
+- [x] M1: Problem section slides
+- [x] M2: Agent intro section slides
+- [x] M3: Demo transition
 - [ ] M4: Architecture — orchestration diagram
 - [ ] M5: Architecture — per-file processing sequence
 - [ ] M6: Architecture — fix loop diagram
@@ -201,6 +201,7 @@ Create `talk/slides-llmday/index.qmd` if it doesn't exist. Copy the Quarto heade
 - Copy the diagram from `talk/slides/index.qmd` — it is outdated (missing pre-scan, wrong rule count)
 - Mention specific rule counts — use "validation rules" or "quality rubric"
 - Use `\n` in Mermaid node labels — use markdown string syntax or short labels (≤ ~18 chars)
+- Use `minNodeWidth` — it is not implemented in Mermaid v11.6.0 and has no effect. To get wider nodes, use `%%{init: {'flowchart': {'wrappingWidth': 700}}}%%` at the top of the diagram block. For horizontal-bar-style nodes, use single-line labels (no literal newlines in the markdown string). See Decision Log #9.
 
 **Success criteria:** Whitney approves the final diagram shape. Progressive slides build correctly. `quarto render` succeeds with diagrams readable at conference resolution.
 
@@ -227,6 +228,8 @@ Key message to land: files are processed one at a time, and the schema evolves �
 
 **Step 5:** Tell Whitney to run `quarto render` and wait for approval.
 
+**Mermaid node sizing**: `minNodeWidth` is not implemented in Mermaid v11.6.0. Use `%%{init: {'flowchart': {'wrappingWidth': 700}}}%%` for wider nodes. See Decision Log #9.
+
 **Success criteria:** Whitney approves. `quarto render` succeeds.
 
 ---
@@ -250,6 +253,8 @@ The design insight to surface in speaker notes: showing a model its own broken o
 
 **Do NOT:**
 - Frame function-level fallback as a failure or last-ditch effort — it is a deliberate design choice for complex files
+
+**Mermaid node sizing**: `minNodeWidth` is not implemented in Mermaid v11.6.0. Use `%%{init: {'flowchart': {'wrappingWidth': 700}}}%%` for wider nodes. See Decision Log #9.
 
 **Success criteria:** Whitney approves. `quarto render` succeeds.
 
@@ -283,6 +288,7 @@ End with a dedicated text slide landing the thesis: "AI does the creative step. 
 **Do NOT:**
 - List individual rule IDs (CDQ-001, NDS-003, etc.) — meaningless to this audience
 - List all 36 rules — categories only
+- Use `minNodeWidth` — not implemented in Mermaid v11.6.0. Use `%%{init: {'flowchart': {'wrappingWidth': 700}}}%%` instead. See Decision Log #9.
 
 **Success criteria:** Whitney approves. `quarto render` succeeds. The thesis statement "AI does the creative step. Deterministic code enforces quality." appears on a dedicated slide.
 
@@ -340,6 +346,9 @@ Slide 2 (final) — Spider illustration:
 | 5 | No deep Weaver explanation | LLM Day audience doesn't need it; "your telemetry schema" is sufficient |
 | 6 | Thesis statement on a dedicated slide at the end of M7 | "AI does the creative step. Deterministic code enforces quality." — the single most important idea for an LLM Day audience |
 | 7 | Diagrams built as Mermaid (not static PNGs) | Allows progressive unfurling across slides; consistent with existing talk style |
+| 8 | Beat 2 ("AI agents alone don't solve it") omitted from M1 | Whitney's explicit decision during implementation — the before/after trace slides carry the same message more viscerally; the LLM Day audience can infer the gap without a dedicated beat |
+| 9 | Observability stack diagram uses `wrappingWidth: 700` + single-line labels for wider nodes | `minNodeWidth` is not implemented in Mermaid v11.6.0; `wrappingWidth` is the documented config that controls foreignObject width and therefore box width |
+| 10 | Inputs/outputs slide uses HTML flexbox layout, not Mermaid | Mermaid `mermaid-format: svg` disables htmlLabels, making image embedding in nodes impossible; HTML flexbox gives full control over spider-centric layout |
 
 ---
 
