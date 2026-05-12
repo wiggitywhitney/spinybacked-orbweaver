@@ -85,7 +85,7 @@ Spike protocol (self-contained): (1) confirm PR #841's acceptance gate has compl
 - [ ] PR #841's acceptance gate completed; pass/partial/fail rates recorded in Decision Log as the M4 baseline
 - [ ] At least one new eval target from `~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/` run with #841 fixes applied
 - [ ] Every `partial` result cataloged by NDS-003 violation type: gap (new pattern, no reconciler handles it) vs. known (existing reconciler covers it)
-- [ ] New gap count recorded: N gaps found. **Start count at 1** — `technicalNode` in `journal-graph.js` (commit-story-v2) is a pre-confirmed gap from 3 consecutive eval runs (see Decision Log entry "Run-16 eval finding"). Do not re-evaluate it; add it directly to the gap tally.
+- [ ] New gap count recorded: N gaps found. **Start count at 2** — two gaps are pre-confirmed before M0 runs: (1) `technicalNode` in `journal-graph.js` — 3+ consecutive eval runs of oscillation (see Decision Log "Run-16 eval finding"); (2) `startActiveSpan`-in-nested-callback re-indentation — run-17 confirms 4 files blocked by the same root cause (see Decision Log "Run-17 eval finding"). Do not re-evaluate either; add both directly to the gap tally.
 - [ ] Decision recorded in Decision Log: redesign warranted (3+ gaps) or not (< 3 gaps)
 - [ ] If < 3 gaps: issue closed with comment summarizing findings
 - [ ] If 3+ gaps: M1 begins
@@ -110,6 +110,7 @@ Add the classifier to `nds003.ts`. Do NOT delete any reconcilers in this milesto
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
 - [ ] Failing tests written for all known reorganization patterns (drawn from M0 and historical record)
 - [ ] **Mandatory fixture**: failing test written for `technicalNode` from `journal-graph.js` (commit-story-v2) — a pre-confirmed case where attempt 3 regeneration increased NDS-003 error count from 1 to 5 (lines 29, 30, 54, 57, 31). This fixture must pass before M2 can close.
+- [ ] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), and `main()` (index.js) from commit-story-v2 — all `startActiveSpan`-in-nested-callback pattern; the reconciler inflates the cumulative offset when the wrapped function body sits inside an outer callback. Each must pass before M2 can close.
 - [ ] Failing tests written for all known false-negative risks (from M1 design)
 - [ ] Classifier implemented in `src/languages/javascript/rules/nds003.ts`
 - [ ] All reconcilers still present and unchanged (removal deferred to M3)
@@ -162,6 +163,31 @@ Validate that the new classifier handles the patterns M0 cataloged, matches or i
 **Why not redesign immediately**: The Prettier normalization PRD (#820) was expected to eliminate most false positives, and largely did. PRD #841 addressed the remaining ones for the commit-story-v2 eval target. Without data from a second eval target, we don't know whether these patterns generalize or are target-specific.
 
 **How to apply**: Do not open M1 until M0's Decision Log entry is written and the gap count is confirmed ≥ 3.
+
+---
+
+### Run-17 eval finding: startActiveSpan nested callback — second confirmed gap pattern
+
+**Finding**: Run-17 (commit-story-v2) shows 4 distinct files failing NDS-003 with the same root cause: `startActiveSpan` wrapping adds 2 indentation levels to a function body that is itself inside a callback (e.g., `server.tool()` handler, LangGraph node). The reconciler counts re-indented original lines as both "removed" and "added," inflating the cumulative offset until it diverges past the end of the original file — producing phantom "original line N missing" errors for lines that don't exist.
+
+Blocked functions in run-17: `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), `main()` (index.js), `generateAndSaveDailySummary` / `generateAndSaveWeeklySummary` / `generateAndSaveMonthlySummary` (summary-manager.js). The agent's instrumented code is semantically correct in every case.
+
+**M0 implications**: This is a second distinct gap type from commit-story-v2 alone — one affecting LangGraph internal node functions (technicalNode pattern), another affecting any async function wrapped inside an outer callback at additional nesting depth. The two patterns are structurally different: `technicalNode` oscillation is a fresh-regeneration path failure; `startActiveSpan` nesting is a line-offset calculation failure. Structural difference between confirmed gaps is the evidence of generality the M0 protocol was designed to find. The M0 implementer should record these 2 pre-confirmed gaps, then run the new eval target as designed. If the new target produces 1+ additional gap, the threshold is exceeded and M1 begins immediately. If no additional gaps are found, the total remains 2 — below 3 — and M0 closes without proceeding to M1.
+
+**How to apply**:
+- **M0**: Record `startActiveSpan`-in-nested-callback as gap 2 alongside `technicalNode`. Pre-confirmed gap count starts at 2, not 1.
+- **M2**: Add `saveContext`, `saveReflection`, and `main()` from commit-story-v2 as mandatory regression fixtures. These are distinct from the `technicalNode` fixture — they test the re-indentation path specifically, while `technicalNode` tests the fresh-regeneration oscillation path.
+
+---
+
+### Acceptance gate run #25731096315: dialogueNode oscillation — confirms gap generalizes to any LangGraph node
+
+**Finding**: Acceptance gate run #25731096315 (main branch, 2026-05-12) failed `journal-graph.js` with NDS-003 oscillation on `dialogueNode`. The same code passed in run #281 (feature/848 branch), confirming LLM non-determinism rather than a code regression. The failing node varies by run — runs 14–16 saw `technicalNode`, this run saw `dialogueNode` — but the failure mechanism is identical: attempt-3 fresh regeneration increases the NDS-003 error count instead of reducing it.
+
+**How to apply**:
+- This confirms the `technicalNode` gap generalizes to any LangGraph node function body wrapped inside a callback at additional nesting depth. The content-aware classifier in M2 must handle this class of function regardless of which specific node is affected.
+- The mandatory `technicalNode` fixture in M2 already covers this failure class. No additional fixture is needed for `dialogueNode` specifically — the fixture tests the pattern, not the node name.
+- No change to the M0 gap count: `dialogueNode` oscillation is the same gap as `technicalNode` oscillation, not a third independent pattern.
 
 ---
 

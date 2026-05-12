@@ -18,6 +18,8 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 - run-5-coverage function-level fallback NDS-003: full argument-list reformats and complex constant oscillation ([issue #841](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/841)) — PR #840 fixed 2-line whole-file splits; remaining failures are in function-level fallback: Pattern A = agent splits all function args across 5+ lines; Pattern B = RST-001 oscillation when context header includes complex regex arrays (BANNED_WORD_REPLACEMENTS).
+- Thinking budget cap may cause content corruption on large or complex files ([issue #854](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/854)) — run-17 first content corruption observed after PR #852 capped thinking at 65%; journal-graph.js dropped a closing `}` from a template literal; investigate whether cap is too low for 500+ line files.
+- Agent misses primary exported function in git-collector (COV-001) and uses wrong attribute domain in summary-graph (SCH-002) ([issue #855](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/855)) — getCommitData missing span across 8+ runs; messages_count/quotes_count reused for journal entry counts since run-12.
 
 
 ## Medium-term
@@ -33,7 +35,8 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Long-term
 
-- NDS-003 content-aware diff — eliminate reconciler whack-a-mole ([PRD #845](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/845)) — starts with research spike to validate whether current reconcilers are sufficient; if not, redesigns NDS-003 to accept lexical reorganizations without per-pattern reconcilers.
+- NDS-003 content-aware diff — eliminate reconciler whack-a-mole ([PRD #845](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/845)) — starts with research spike; 2 gap patterns now pre-confirmed (technicalNode oscillation + startActiveSpan nesting); M0 spike count starts at 2, one more gap from a new eval target triggers M1.
+- Advisory pass rollback path untested; PR title file count is wrong ([issue #856](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/856)) — rollback to prior passing version on advisory re-run failure has no test coverage; PR title counts an unexplained number of files instead of total processed.
 - Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)) — multi-language rule architecture ✓ cleared (PRD #507 merged).
 - SDK bootstrap scaffold generation ([PRD #778](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/778)) — generate an SDK init file when none is detected; defines multi-language `BootstrapGenerator` interface for Python/Go providers to implement.
 - Publish to GitHub Actions Marketplace ([issue #369](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/369)).
