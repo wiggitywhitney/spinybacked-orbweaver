@@ -275,8 +275,8 @@ export async function instrumentFile(
     //   file-level: reserve 35% for output (handles ~14-16K token instrumented files)
     //   per-function: reserve 4096 tokens (single function output is 1-2K tokens)
     const thinkingBudget = options?.isPerFunctionCall
-      ? maxTokens - 4096
-      : Math.floor(maxTokens * 0.65);
+      ? Math.max(maxTokens - 4096, 1)
+      : Math.max(Math.floor(maxTokens * 0.65), 1);
     const stream = client.messages.stream({
       model: config.agentModel,
       max_tokens: maxTokens,

@@ -829,7 +829,7 @@ async function executeRetryLoop(
           resolvedSchema,
           config,
           provider,
-          { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName },
+          { feedbackMessage: advisoryMessage, maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName, isPerFunctionCall: !!isPerFunctionCall },
         );
 
         if (advisoryInstrumentResult.success) {
