@@ -173,7 +173,7 @@ describe('instrumentFile', () => {
 
       const call = client.messages.stream.mock.calls[0][0];
       expect(call.model).toBe('claude-sonnet-4-6');
-      expect(call.thinking).toEqual({ type: 'adaptive' });
+      expect(call.thinking.type).toBe('enabled');
       expect(call.output_config.effort).toBe('high');
       // System is an array of cache-controlled blocks
       expect(call.system[0].text).toContain('instrumentation engineer');
@@ -847,6 +847,44 @@ export async function getUsers(req, res) {
 
       const pgEntries = result.output.librariesNeeded.filter(l => l.package === '@opentelemetry/instrumentation-pg');
       expect(pgEntries).toHaveLength(1);
+    });
+  });
+
+  describe('thinking budget configuration', () => {
+    it('uses enabled thinking with file-level budget formula for regular calls', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+      const maxTokens = 65536;
+
+      await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any, maxOutputTokens: maxTokens },
+      );
+
+      const call = client.messages.stream.mock.calls[0][0];
+      expect(call.thinking.type).toBe('enabled');
+      expect(call.thinking.budget_tokens).toBe(Math.floor(maxTokens * 0.65));
+    });
+
+    it('uses per-function budget formula when isPerFunctionCall is true', async () => {
+      const client = makeMockClient(makeValidLlmOutput());
+      const maxTokens = 24576;
+
+      await instrumentFile(
+        '/project/src/handler.js',
+        SAMPLE_JS,
+        SAMPLE_SCHEMA,
+        makeConfig(),
+        jsProvider,
+        { client: client as any, maxOutputTokens: maxTokens, isPerFunctionCall: true },
+      );
+
+      const call = client.messages.stream.mock.calls[0][0];
+      expect(call.thinking.type).toBe('enabled');
+      expect(call.thinking.budget_tokens).toBe(maxTokens - 4096);
     });
   });
 });

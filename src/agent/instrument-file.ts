@@ -1,5 +1,5 @@
 // ABOUTME: Core instrumentFile function — calls the Anthropic API to instrument a single JS file.
-// ABOUTME: Uses structured output (zodOutputFormat), adaptive thinking, and prompt caching.
+// ABOUTME: Uses structured output (zodOutputFormat), enabled thinking with budget cap, and prompt caching.
 
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
@@ -78,6 +78,9 @@ interface InstrumentFileOptions {
   processedFilesManifest?: Map<string, ManifestEntry>;
   /** Canonical tracer name resolved by the coordinator. When provided, used in all trace.getTracer() calls. */
   canonicalTracerName?: string;
+  /** When true, use the per-function thinking budget formula (max_tokens - 4096).
+   *  When false/absent, use the file-level formula (Math.floor(max_tokens * 0.65)). */
+  isPerFunctionCall?: boolean;
 }
 
 /**
@@ -264,10 +267,23 @@ export async function instrumentFile(
     // Streaming is required for max_tokens > 21,333 with extended thinking.
     // stream() accepts the same params as parse(); finalMessage() returns the
     // same response shape including parsed_output.
+    const requestedMaxTokens = options?.maxOutputTokens ?? MAX_OUTPUT_TOKENS_PER_CALL;
+    const maxTokens = Number.isFinite(requestedMaxTokens) && requestedMaxTokens > 0
+      ? Math.floor(requestedMaxTokens)
+      : MAX_OUTPUT_TOKENS_PER_CALL;
+    // Use enabled thinking with a hard cap to guarantee output budget.
+    // Adaptive thinking has no cap — on complex files (e.g. MCP handlers with
+    // inner graceful catches) the model can exhaust the entire budget on reasoning
+    // before producing structured output. The cap formula differs by call type:
+    //   file-level: reserve 35% for output (handles ~14-16K token instrumented files)
+    //   per-function: reserve 4096 tokens (single function output is 1-2K tokens)
+    const thinkingBudget = options?.isPerFunctionCall
+      ? Math.max(maxTokens - 4096, 1)
+      : Math.max(Math.floor(maxTokens * 0.65), 1);
     const stream = client.messages.stream({
       model: config.agentModel,
-      max_tokens: options?.maxOutputTokens ?? MAX_OUTPUT_TOKENS_PER_CALL,
-      thinking: { type: 'adaptive' },
+      max_tokens: maxTokens,
+      thinking: { type: 'enabled', budget_tokens: thinkingBudget },
       output_config: {
         effort: options?.effortOverride ?? config.agentEffort,
         format: zodOutputFormat(LlmOutputSchema),

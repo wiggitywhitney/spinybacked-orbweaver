@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-05-11) Fixed adaptive thinking token exhaustion on complex-catch-pattern files (issue #848, RUN16-1): switched from `type: 'adaptive'` to `type: 'enabled', budget_tokens: N` in instrument-file.ts so thinking has a hard cap and the remainder is guaranteed for structured output. File-level calls reserve 35% for output (`Math.floor(max_tokens * 0.65)`); per-function calls reserve 4096 tokens (`max_tokens - 4096`). Also raised MIN_OUTPUT_BUDGET from 16,384 to 24,576 for better headroom on complex files, and simplified COV-003 guidance to be more mechanical — "the catch that pairs with `finally { span.end() }` always gets error recording" — reducing the catch-block classification reasoning that triggered exhaustion in run-16.
+
 - (2026-05-11) Fixed live-check compliance report JSON flooding the terminal on every run (issue #849, RUN16-2): the full JSON blob was being emitted to stderr even though it is already written to disk as `spiny-orb-live-check-report.json`. The one-line summary (`Live-check: OK (N spans, N advisory findings — see compliance report)`) is preserved. Fixed function-level fallback corrupting committed code when no spans are added (issue #849, RUN16-3): reassembly was running even when all per-function calls added 0 spans, stripping try/catch blocks from the committed output. When 0 spans are added, the fallback now returns the original file unchanged without reassembly.
 
 ### Added

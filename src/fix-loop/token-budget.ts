@@ -74,7 +74,7 @@ export function estimateMinTokens(sourceCodeLength: number): number {
  */
 export const TOKENS_PER_LINE = 100;
 export const THINKING_OVERHEAD = 8_000;
-export const MIN_OUTPUT_BUDGET = 16_384;
+export const MIN_OUTPUT_BUDGET = 24_576;
 export const MAX_OUTPUT_BUDGET = 65_536;
 
 /**
@@ -84,10 +84,11 @@ export const MAX_OUTPUT_BUDGET = 65_536;
  * Formula: max(MIN_OUTPUT_BUDGET, fileLines * TOKENS_PER_LINE + THINKING_OVERHEAD),
  * capped at MAX_OUTPUT_BUDGET (65K = Sonnet 4.6 capacity).
  *
- * The budget covers both adaptive thinking tokens and JSON output — these share
+ * The budget covers enabled thinking tokens and JSON output — these share
  * the same ceiling in the Messages API. THINKING_OVERHEAD reserves space for
  * the model's reasoning, and TOKENS_PER_LINE accounts for output that scales
- * with file size.
+ * with file size. MIN_OUTPUT_BUDGET raised from 16,384 to 24,576 after run-16
+ * showed token exhaustion on complex-catch-pattern files hitting the minimum.
  *
  * @param fileLines - Number of lines in the source file
  * @returns Output token budget for the Messages API max_tokens parameter

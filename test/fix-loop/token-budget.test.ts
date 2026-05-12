@@ -125,20 +125,20 @@ describe('estimateOutputBudget — deterministic output token sizing (#210)', ()
   });
 
   it('returns MIN_OUTPUT_BUDGET for small files below the floor', () => {
-    // 50 lines × 100 tokens/line + 8000 overhead = 13000 < 16384
+    // 50 lines × 100 tokens/line + 8000 overhead = 13000 < 24576
     expect(estimateOutputBudget(50)).toBe(MIN_OUTPUT_BUDGET);
   });
 
   it('returns MIN_OUTPUT_BUDGET at the exact floor boundary', () => {
-    // (MIN_OUTPUT_BUDGET - THINKING_OVERHEAD) / TOKENS_PER_LINE = (16384 - 8000) / 100 = 83.84
-    // At 83 lines: 83 × 100 + 8000 = 16300 < 16384 → MIN
-    expect(estimateOutputBudget(83)).toBe(MIN_OUTPUT_BUDGET);
+    // (MIN_OUTPUT_BUDGET - THINKING_OVERHEAD) / TOKENS_PER_LINE = (24576 - 8000) / 100 = 165.76
+    // At 165 lines: 165 × 100 + 8000 = 24500 < 24576 → MIN
+    expect(estimateOutputBudget(165)).toBe(MIN_OUTPUT_BUDGET);
   });
 
   it('exceeds MIN_OUTPUT_BUDGET just above the floor boundary', () => {
-    // At 84 lines: 84 × 100 + 8000 = 16400 > 16384
-    expect(estimateOutputBudget(84)).toBe(84 * TOKENS_PER_LINE + THINKING_OVERHEAD);
-    expect(estimateOutputBudget(84)).toBeGreaterThan(MIN_OUTPUT_BUDGET);
+    // At 166 lines: 166 × 100 + 8000 = 24600 > 24576
+    expect(estimateOutputBudget(166)).toBe(166 * TOKENS_PER_LINE + THINKING_OVERHEAD);
+    expect(estimateOutputBudget(166)).toBeGreaterThan(MIN_OUTPUT_BUDGET);
   });
 
   it('scales linearly for medium files', () => {
@@ -199,7 +199,7 @@ describe('estimateOutputBudget — deterministic output token sizing (#210)', ()
   it('exports the calibration constants', () => {
     expect(TOKENS_PER_LINE).toBe(100);
     expect(THINKING_OVERHEAD).toBe(8000);
-    expect(MIN_OUTPUT_BUDGET).toBe(16384);
+    expect(MIN_OUTPUT_BUDGET).toBe(24576);
     expect(MAX_OUTPUT_BUDGET).toBe(65536);
   });
 });
