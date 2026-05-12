@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-05-11) Fixed adaptive thinking token exhaustion on complex-catch-pattern files (issue #848, RUN16-1): switched from `type: 'adaptive'` to `type: 'enabled', budget_tokens: N` in instrument-file.ts so thinking has a hard cap and the remainder is guaranteed for structured output. File-level calls reserve 35% for output (`Math.floor(max_tokens * 0.65)`); per-function calls reserve 4096 tokens (`max_tokens - 4096`). Also raised MIN_OUTPUT_BUDGET from 16,384 to 24,576 for better headroom on complex files, and simplified COV-003 guidance to be more mechanical — "the catch that pairs with `finally { span.end() }` always gets error recording" — reducing the catch-block classification reasoning that triggered exhaustion in run-16.
+
 ### Added
 
 - (2026-05-11) Recorded run-16 eval findings: added a pre-confirmed NDS-003 gap entry for `technicalNode` in `journal-graph.js` (3 consecutive failures, error count 1→5 on attempt 3) to PRD #845's Decision Log, with cascaded updates to M0 (start gap count at 1) and M2 (mandatory regression fixture). Created issues #848 (adaptive thinking token exhaustion — switch to `enabled+budget_tokens`, raise MIN_OUTPUT_BUDGET, tighten COV-003 guidance) and #849 (live-check JSON stdout flood + 0-span file reassembly corruption). Both issues added to ROADMAP short-term section.
