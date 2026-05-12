@@ -20,6 +20,8 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 - LLM Day Austin talk slides ([PRD #847](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/847)) — new `talk/slides-llmday/index.qmd` for May 12, 2026; reframed for AI/LLM audience with updated architecture diagrams.
 
 - run-5-coverage function-level fallback NDS-003: full argument-list reformats and complex constant oscillation ([issue #841](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/841)) — PR #840 fixed 2-line whole-file splits; remaining failures are in function-level fallback: Pattern A = agent splits all function args across 5+ lines; Pattern B = RST-001 oscillation when context header includes complex regex arrays (BANNED_WORD_REPLACEMENTS).
+- Adaptive thinking token exhaustion on complex-catch-pattern files ([issue #848](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/848)) — switch `type: 'adaptive'` to `type: 'enabled', budget_tokens: N`; raise MIN_OUTPUT_BUDGET; tighten COV-003 guidance. Three files failed in run-16 with `stop_reason: max_tokens, raw_preview: <no text content>`.
+- Live-check JSON stdout flood and 0-span file reassembly corruption ([issue #849](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/849)) — suppress live-check compliance JSON from stdout (write to disk only); short-circuit function-level fallback reassembly when 0 spans added to avoid stripping try/catch blocks.
 
 
 ## Medium-term

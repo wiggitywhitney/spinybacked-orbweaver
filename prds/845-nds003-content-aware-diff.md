@@ -85,7 +85,7 @@ Spike protocol (self-contained): (1) confirm PR #841's acceptance gate has compl
 - [ ] PR #841's acceptance gate completed; pass/partial/fail rates recorded in Decision Log as the M4 baseline
 - [ ] At least one new eval target from `~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/` run with #841 fixes applied
 - [ ] Every `partial` result cataloged by NDS-003 violation type: gap (new pattern, no reconciler handles it) vs. known (existing reconciler covers it)
-- [ ] New gap count recorded: N gaps found
+- [ ] New gap count recorded: N gaps found. **Start count at 1** — `technicalNode` in `journal-graph.js` (commit-story-v2) is a pre-confirmed gap from 3 consecutive eval runs (see Decision Log entry "Run-16 eval finding"). Do not re-evaluate it; add it directly to the gap tally.
 - [ ] Decision recorded in Decision Log: redesign warranted (3+ gaps) or not (< 3 gaps)
 - [ ] If < 3 gaps: issue closed with comment summarizing findings
 - [ ] If 3+ gaps: M1 begins
@@ -109,6 +109,7 @@ Add the classifier to `nds003.ts`. Do NOT delete any reconcilers in this milesto
 
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
 - [ ] Failing tests written for all known reorganization patterns (drawn from M0 and historical record)
+- [ ] **Mandatory fixture**: failing test written for `technicalNode` from `journal-graph.js` (commit-story-v2) — a pre-confirmed case where attempt 3 regeneration increased NDS-003 error count from 1 to 5 (lines 29, 30, 54, 57, 31). This fixture must pass before M2 can close.
 - [ ] Failing tests written for all known false-negative risks (from M1 design)
 - [ ] Classifier implemented in `src/languages/javascript/rules/nds003.ts`
 - [ ] All reconcilers still present and unchanged (removal deferred to M3)
@@ -139,6 +140,18 @@ Validate that the new classifier handles the patterns M0 cataloged, matches or i
 ---
 
 ## Decision Log
+
+### Run-16 eval finding: technicalNode — pre-confirmed NDS-003 gap
+
+**Finding**: `technicalNode` in `src/utils/journal-graph.js` (commit-story-v2) has failed NDS-003 validation in 3 consecutive eval runs (run-14, run-15, run-16). On attempt 3, fresh regeneration increased the error count from 1 to 5 (lines 29, 30, 54, 57, 31). The Prettier normalization fix (PRD #820) did not resolve this pattern. This is a confirmed gap in the current reconciler approach.
+
+**Impact**: `generate_technical_decisions` span has been absent from 3 consecutive eval runs, capping commit-story-v2 quality at 24/25.
+
+**How to apply**:
+- **M0**: Record `technicalNode` as 1 pre-confirmed gap in the spike Decision Log entry. Do not re-evaluate it as if it were unknown. If M0 finds no other new gaps (total = 1), the spike criteria still apply: 1 < 3 gaps = redesign not yet warranted. If any new target produces 2+ additional gaps, `technicalNode` pushes the total past the threshold.
+- **M2**: Add `technicalNode` from `journal-graph.js` (commit-story-v2) as a mandatory regression fixture. This is a concrete, reproducible minimal-reproduction case for NDS-003 oscillation. The content-aware classifier must handle it before M2 can close.
+
+---
 
 ### Pre-PRD: Research spike required before any redesign
 
