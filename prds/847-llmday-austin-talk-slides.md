@@ -300,7 +300,7 @@ End with a dedicated text slide landing the thesis: "AI does the creative step. 
 
 **Use `flowchart LR`** (not TD). See Decision Log #11.
 
-**If slide nesting appears** (section max depth > 1 in rendered HTML): add `%%| mermaid-format: js` inside the mermaid block and `.center` to the slide header. See Decision Log #12.
+**Use `%%| mermaid-format: js`** inside every mermaid block and `.center` on every slide header — the deck is already at 36 mermaid blocks (well past the ≥22 threshold), so div nesting is guaranteed without it. See Decision Log #12.
 
 **Success criteria:** Whitney approves. `quarto render` succeeds. The thesis statement "AI does the creative step. Deterministic code enforces quality." appears on a dedicated slide.
 
