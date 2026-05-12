@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-11) Recorded run-16 eval findings: added a pre-confirmed NDS-003 gap entry for `technicalNode` in `journal-graph.js` (3 consecutive failures, error count 1→5 on attempt 3) to PRD #845's Decision Log, with cascaded updates to M0 (start gap count at 1) and M2 (mandatory regression fixture). Created issues #848 (adaptive thinking token exhaustion — switch to `enabled+budget_tokens`, raise MIN_OUTPUT_BUDGET, tighten COV-003 guidance) and #849 (live-check JSON stdout flood + 0-span file reassembly corruption). Both issues added to ROADMAP short-term section.
+
 - (2026-05-11) Added human-readable descriptions for three previously missing rules: NDS-002 (instrumentation must not break existing tests), RST-006 (why process.exit() functions can't be spanned), and CDQ-011 (canonical tracer name enforcement). All registered rules now have human-facing descriptions.
 
 - (2026-05-11) Updated docs/rules-reference.md to document the human-facing description mechanism — where the descriptions live, how to add one, and what they're for. Also removed the roadmap entry for this work (completed) and marked the advisory rules audit action item as done.
