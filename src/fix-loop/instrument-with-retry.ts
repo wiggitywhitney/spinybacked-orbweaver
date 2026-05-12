@@ -36,6 +36,9 @@ export interface InstrumentFileCallOptions {
   maxOutputTokens?: number;
   /** Override effort level for this call. Used to lower effort on retry attempts. */
   effortOverride?: AgentConfig['agentEffort'];
+  /** When true, use the per-function thinking budget formula (max_tokens - 4096).
+   *  When false/absent, use the file-level formula (Math.floor(max_tokens * 0.65)). */
+  isPerFunctionCall?: boolean;
   /** Span names already declared by earlier files in this run. Prevents cross-file collisions. */
   existingSpanNames?: string[];
   /** Function names already instrumented in previously-processed files, keyed by absolute file path. */
@@ -427,6 +430,7 @@ export async function instrumentWithRetry(
       options.processedFilesManifest,
       options.canonicalTracerName,
       options.expectedNamespacePrefix,
+      !!options._skipFunctionFallback,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -480,6 +484,7 @@ async function executeRetryLoop(
   processedFilesManifest?: Map<string, ManifestEntry>,
   canonicalTracerName?: string,
   expectedNamespacePrefix?: string,
+  isPerFunctionCall?: boolean,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient, canonicalTracerName);
@@ -579,6 +584,7 @@ async function executeRetryLoop(
         existingSpanNames,
         processedFilesManifest,
         canonicalTracerName,
+        isPerFunctionCall: !!isPerFunctionCall,
       };
     } else if (plannedStrategy === 'fresh-regeneration' && lastValidation) {
       // Fresh regeneration: new conversation with failure category hint.
@@ -593,16 +599,17 @@ async function executeRetryLoop(
         existingSpanNames,
         processedFilesManifest,
         canonicalTracerName,
+        isPerFunctionCall: !!isPerFunctionCall,
       };
     } else if (plannedStrategy !== 'initial-generation') {
       // No conversation context or validation available — this is a retry
       // of initial generation triggered by a retryable failure, not a real
       // multi-turn fix or fresh regeneration.
       actualStrategy = 'retry-initial';
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName, isPerFunctionCall: !!isPerFunctionCall };
     } else {
       // Initial generation
-      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName };
+      callOptions = { maxOutputTokens: outputBudget, existingSpanNames, processedFilesManifest, canonicalTracerName, isPerFunctionCall: !!isPerFunctionCall };
     }
     lastStrategy = actualStrategy;
 

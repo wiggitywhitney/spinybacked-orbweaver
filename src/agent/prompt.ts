@@ -224,13 +224,13 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **COV-001**: Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans. Every application has at least one root span — CLI apps should have a root span on the main/entry function. **Root span requirements override RST-003 thin-wrapper exclusions** — a main() function that delegates to another function still needs a span. **COV-001 takes priority over RST-006** — when a function is both an async entry point and calls \`process.exit()\` directly, add the span. Use the minimal wrapper only: \`startActiveSpan → try { original body } finally { span.end() }\`. Do NOT add \`span.end()\` before individual \`process.exit()\` calls (NDS-005 violation). Do NOT declare new intermediate variables for \`setAttribute\` (NDS-003 violation). Use only variables already in scope.
 - **COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
-- **COV-003**: Every failable operation inside a span MUST have error recording (\`recordException\` + \`setStatus\`). **Important distinction — inner graceful catches do not exempt the outer span**: when a span wrapper contains inner catches that handle expected conditions gracefully (NDS-007 — return without rethrowing), NDS-007 exempts those inner catches from error recording. It does NOT exempt the outer span wrapper itself. The outer \`startActiveSpan\` callback must still have its own error-recording catch for unexpected exceptions that bypass all inner handlers:
+- **COV-003**: Every span's wrapping try/catch MUST have error recording (\`recordException\` + \`setStatus\`). **Mechanical rule**: the catch block that pairs with \`finally { span.end() }\` always needs error recording — write it unconditionally, regardless of what catch blocks appear inside the function body. Inner catches governed by NDS-007 (they return without rethrowing) are separate; they do not affect the outer span-level catch requirement. When you see \`startActiveSpan → try → finally { span.end() }\`, the catch for that try block must record the error:
   \`\`\`javascript
   return tracer.startActiveSpan('myapp.service.operation', async (span) => {
     try {
-      // code with inner graceful catches — NDS-007 applies to those inner catches only
+      // inner graceful catches here are governed by NDS-007, not COV-003
       return result;
-    } catch (error) {           // outer catch — required regardless of inner graceful catches
+    } catch (error) {           // this catch pairs with span.end() — always record error
       span.recordException(error);
       span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
