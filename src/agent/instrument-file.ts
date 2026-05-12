@@ -267,7 +267,10 @@ export async function instrumentFile(
     // Streaming is required for max_tokens > 21,333 with extended thinking.
     // stream() accepts the same params as parse(); finalMessage() returns the
     // same response shape including parsed_output.
-    const maxTokens = options?.maxOutputTokens ?? MAX_OUTPUT_TOKENS_PER_CALL;
+    const requestedMaxTokens = options?.maxOutputTokens ?? MAX_OUTPUT_TOKENS_PER_CALL;
+    const maxTokens = Number.isFinite(requestedMaxTokens) && requestedMaxTokens > 0
+      ? Math.floor(requestedMaxTokens)
+      : MAX_OUTPUT_TOKENS_PER_CALL;
     // Use enabled thinking with a hard cap to guarantee output budget.
     // Adaptive thinking has no cap — on complex files (e.g. MCP handlers with
     // inner graceful catches) the model can exhaust the entire budget on reasoning
