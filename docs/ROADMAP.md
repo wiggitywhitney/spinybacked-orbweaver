@@ -18,7 +18,6 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 ## Short-term (current focus)
 
 - **Validation infrastructure audit** — NDS-003 reconcilers, agent prompt quality, acceptance gate calibration ([PRD #857](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/857)) — three distinct structural problems found via code audit: 12 accumulated reconcilers with no principled design, prompt rules with ambiguities causing LLM non-determinism, and acceptance gate tests not calibrated for probabilistic output. Subsumes PRD #845 M0; pauses issue #841 and tentatively #855.
-- Thinking budget cap may cause content corruption on large or complex files ([issue #854](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/854)) — run-17 first content corruption observed after PR #852 capped thinking at 65%; journal-graph.js dropped a closing `}` from a template literal; investigate whether cap is too low for 500+ line files.
 - Agent misses primary exported function in git-collector (COV-001) and uses wrong attribute domain in summary-graph (SCH-002) ([issue #855](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/855)) — **tentatively paused pending PRD #857 M1**; revisit after M1 determines whether git-collector gap is targeting logic or rule interpretation.
 
 
