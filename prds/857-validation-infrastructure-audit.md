@@ -255,7 +255,6 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 **Items in scope**:
 - PRD #845 ([prds/845-nds003-content-aware-diff.md](prds/845-nds003-content-aware-diff.md)): NDS-003 content-aware diff
-- Issue #841: run-5-coverage function-level fallback NDS-003 reconcilers (paused)
 - Issue #854: thinking budget cap content corruption (active)
 - Issue #855: git-collector COV-001 + summary-graph SCH-002 (tentatively paused)
 - Issue #856: advisory pass rollback untested + PR title count bug (low priority)
@@ -270,7 +269,6 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 | Item | Verdict | One-line rationale |
 |---|---|---|
 | PRD #845 | keep / close / expand / merge / revise-M1-design | ... |
-| Issue #841 | keep / close / expand / merge | ... |
 | Issue #854 | keep / close / expand / merge | ... |
 | Issue #855 | keep / close / expand / merge | ... |
 | Issue #856 | keep / close / expand / merge | ... |
@@ -313,7 +311,6 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 ## Related open items (status as of PRD creation)
 
 - **PRD #845** (NDS-003 content-aware diff): paused at M0. This audit's M1 determines whether M1 design still holds. Do not start PRD #845 M1 until M6 of this PRD assigns a verdict.
-- **Issue #841** (run-5-coverage NDS-003 reconcilers): paused. Adding reconcilers before the audit is waste.
 - **Issue #854** (thinking budget cap): active and independent. Not blocked by this audit.
 - **Issue #855** (git-collector COV-001 + summary-graph SCH-002): tentatively paused. M1 of this audit will determine whether the git-collector gap is a targeting logic issue or a rule interpretation issue. Revisit after M1 completes.
 - **Issue #856** (advisory rollback + PR title): low priority, long-term, unaffected.
@@ -330,7 +327,7 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 **Eval team input**: Confirmed the three-problem framing. Noted that prompt ambiguity downstream effects match the ~39% advisory contradiction rate and oscillation patterns observed in eval runs. Confirmed that journal-graph.js treating `status === 'success'` as a hard requirement while the reconciler gap is open mixes validator quality and agent quality signals.
 
-**How to apply**: Do not start PRD #845 M1 until M1 and M6 of this PRD are complete. Do not add new NDS-003 reconcilers (issue #841 is paused). Lower-risk fixes (M3 prompt clarifications, M5 test calibration) proceed in parallel — they are independent of the NDS-003 redesign decision.
+**How to apply**: Do not start PRD #845 M1 until M1 and M6 of this PRD are complete. Do not add new NDS-003 reconcilers while the audit is open. Lower-risk fixes (M3 prompt clarifications, M5 test calibration) proceed in parallel — they are independent of the NDS-003 redesign decision.
 
 ---
 
