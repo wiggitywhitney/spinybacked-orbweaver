@@ -277,6 +277,7 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 - If PRD #845's M1 design needs revision based on M1 findings, edit `prds/845-nds003-content-aware-diff.md` now. Record the change in PRD #845's Decision Log.
 - If an issue should be closed, close it via `gh issue close` with a comment referencing this audit.
 - If an issue should be expanded, edit it now.
+- **When expanding an issue or editing a PRD milestone**: include a reference to all relevant `audit-findings/` file(s) that contain the relevant analysis. A future implementing AI reading that issue or PRD will have no memory of this audit — give it a direct pointer. Example addition to an expanded issue body: "When implementing this, read `audit-findings/nds003-reconcilers.md` for the reconciler analysis that motivated this work." Example addition to a PRD milestone's "What to read" list: add the relevant `audit-findings/` file(s).
 
 **Completion criteria**:
 - `audit-findings/issue-verdicts.md` exists with a verdict for every item
@@ -288,15 +289,16 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 ### M7: Create new work for untracked findings
 
-**What to read**: All five `audit-findings/` files. All open issues and PRDs in `prds/`.
+**What to read**: All `audit-findings/` files — the five produced by M1–M5 (`nds003-reconcilers.md`, `prompt-rules.md`, `prompt-clarifications.md`, `test-calibration.md`, `test-calibration-deferred.md` if it exists) plus `audit-findings/issue-verdicts.md` produced by M6. All open issues and PRDs in `prds/`.
 
 **Scope**: Create issues or PRDs only for findings that have no home after M6. If a finding is already tracked (even if just updated), it is NOT new work.
 
 **For each new item**:
 1. Confirm the finding has no existing issue or PRD (search `gh issue list` and `prds/`)
 2. Draft the issue or PRD body
-3. Run `/write-prompt` on the body before creating
-4. Create with `gh issue create` or `/prd-create`
+3. Include in the body a direct reference to all relevant `audit-findings/` file(s) that contain the relevant analysis — a future implementing AI has no memory of this audit and needs a pointer. For issues: add a note like "When implementing this, read `audit-findings/nds003-reconcilers.md` for the analysis that motivated this work." For PRDs: add the relevant file(s) to the milestone's "What to read" list.
+4. Run `/write-prompt` on the body before creating
+5. Create with `gh issue create` or `/prd-create`
 
 **Completion criteria**:
 - Every finding from the audit files that has no tracking home has an issue or PRD
@@ -336,6 +338,16 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 **Why**: Vague milestone descriptions like "audit the prompt for ambiguous rules" cause the implementing AI to spend half its context inferring what the milestone means. The eval team confirmed this is the same lesson learned building eval PRDs. Structured output artifacts (named files, column schemas) make milestones executable cold.
 
 **How to apply**: Each milestone in this PRD names a specific file in `audit-findings/` with a table structure. Completion criteria reference that file's contents. Downstream milestones (M3, M5, M6, M7) read the upstream audit files as their input — they do not re-audit.
+
+---
+
+### 2026-05-13: Downstream items must reference audit source files
+
+**Decision**: When M6 expands an issue or edits a PRD milestone, and when M7 creates new issues or PRDs, each item must include a direct pointer to the `audit-findings/` file(s) that contain the relevant analysis.
+
+**Why**: A future implementing AI reading a downstream issue or PRD has no memory of this audit session. Without a pointer, it has no way to access the analysis that motivated the work — it can only read the issue/PRD body and the current codebase. The audit documents contain the "why" (specific reconciler patterns, specific prompt ambiguities, specific test assertion problems) that gives a future agent enough context to implement the work correctly rather than re-discovering the same problems.
+
+**How to apply**: M6's rules now include: when expanding or editing, add a reference like "When implementing this, read `audit-findings/<file>.md` for the analysis that motivated this work." M7's per-item steps now include: before running `/write-prompt`, add the relevant audit file pointer to the draft body. This applies to all new issues and PRDs created by M7, and to all issue expansions and PRD milestone edits made by M6.
 
 ---
 
