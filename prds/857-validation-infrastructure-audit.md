@@ -41,7 +41,7 @@ PRD #845 does not address any of these. Fixing the NDS-003 reconciler architectu
 - `filesProcessed === 5` hard-coded: adding or removing any fixture file breaks the test
 - Phase 5 hash assertions check format only (`/^[0-9a-f]{64}$/`), not correctness; two wrong hashes that are valid hex pass
 - Test B asserts the agent WILL invent at least one attribute: this tests LLM capability, not output correctness; the agent may correctly decide no custom attributes are needed
-- `journal-graph.js` has been `partial` or `failed` in 4 consecutive acceptance gate runs; the test asserts `status === 'success'`; while the reconciler gap (PRD #845) is open, this assertion simultaneously tests agent quality and validator quality with no way to distinguish which is failing
+- `journal-graph.js` has been `partial` or `failed` in 5+ consecutive acceptance gate runs; the test asserts `status === 'success'`; while the reconciler gap (PRD #845) is open, this assertion simultaneously tests agent quality and validator quality with no way to distinguish which is failing. Most recent failing run: 25743948323 (2026-05-12, test file: test/commit-story-v2/acceptance-gate.test.ts, test: "journal-graph.js — instruments exported function and internal nodes", error: `expected 'partial' to be 'success'`)
 
 ---
 
