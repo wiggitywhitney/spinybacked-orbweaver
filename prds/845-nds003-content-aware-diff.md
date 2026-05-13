@@ -1,6 +1,6 @@
 # PRD #845: NDS-003 content-aware diff — eliminate reconciler whack-a-mole
 
-**Status**: Not started
+**Status**: Blocked — paused pending PRD #857 (validation infrastructure audit). M1 of PRD #857 will assess whether the content-aware classifier design in this PRD's M1 still holds. M6 of PRD #857 will assign an explicit verdict on this PRD. Do not start M1 of this PRD until both are complete.
 **Priority**: Low
 **GitHub Issue**: [#845](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/845)
 **Created**: 2026-05-11
