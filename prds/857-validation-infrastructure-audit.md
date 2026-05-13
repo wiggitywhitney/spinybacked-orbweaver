@@ -251,7 +251,7 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 ### M6: Re-evaluate open issues and PRDs
 
-**What to read**: `audit-findings/nds003-reconcilers.md`, `audit-findings/prompt-rules.md`, `audit-findings/test-calibration.md`, `audit-findings/test-calibration-deferred.md` (if it exists — M5 creates it only when fixes were deferred). Then read each open item listed below.
+**What to read**: `audit-findings/nds003-reconcilers.md`, `audit-findings/prompt-rules.md`, `audit-findings/prompt-clarifications.md`, `audit-findings/test-calibration.md`, `audit-findings/test-calibration-deferred.md` (if it exists — M5 creates it only when fixes were deferred). Then read each open item listed below.
 
 **Items in scope**:
 - PRD #845 ([prds/845-nds003-content-aware-diff.md](prds/845-nds003-content-aware-diff.md)): NDS-003 content-aware diff
@@ -268,7 +268,6 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 | Item | Verdict | One-line rationale |
 |---|---|---|
 | PRD #845 | keep / close / expand / merge / revise-M1-design | ... |
-| Issue #854 | keep / close / expand / merge | ... |
 | Issue #855 | keep / close / expand / merge | ... |
 | Issue #856 | keep / close / expand / merge | ... |
 ```
