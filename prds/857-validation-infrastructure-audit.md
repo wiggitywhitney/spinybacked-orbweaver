@@ -143,7 +143,9 @@ Audit all three areas with structured output artifacts (named files, defined col
 
 **What to read**: `audit-findings/prompt-rules.md` (M2 output). `src/agent/prompt.ts`.
 
-**Scope**: Fix every high-severity ambiguity from M2. Do NOT fix medium or low severity in this milestone — those require more design thought and belong in a future PRD. Do NOT redesign rules or change what they require. Only make existing requirements unambiguous. Do NOT reorder, restructure, or remove any rule text beyond the minimum needed for the specific ambiguity fix. Each fix's diff should touch only the lines that contain the ambiguous wording.
+**Scope**: Fix all ambiguities identified in M2 — high, medium, and low severity. (Updated per Decision 2026-05-14: fix all 10, not just the 5 high-severity ones.) Do NOT redesign rules or change what they require. Only make existing requirements unambiguous. Do NOT reorder, restructure, or remove any rule text beyond the minimum needed for the specific ambiguity fix. Each fix's diff should touch only the lines that contain the ambiguous wording.
+
+The 5 high-severity fixes were implemented in the initial M3 commit. The remaining 5 medium/low-severity fixes are additional M3 work to complete before proceeding to M4.
 
 **For each fix**:
 1. Write the before-wording (exact quote from current prompt)
@@ -171,7 +173,7 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 ```
 
 **Completion criteria**:
-- Every high-severity ambiguity from M2 has a corresponding before/after entry in `audit-findings/prompt-clarifications.md`
+- Every ambiguity from M2 has a corresponding before/after entry in `audit-findings/prompt-clarifications.md`, OR a "M3 deferred — requires rule redesign" note in `audit-findings/prompt-rules.md` for any ambiguity that cannot be resolved without changing what the rule requires
 - `src/agent/prompt.ts` is edited
 - `npm run typecheck` passes
 - Acceptance gate run completes (push with `--label run-acceptance`); record pass/partial/fail rates in `audit-findings/prompt-clarifications.md` as post-fix baseline
@@ -255,10 +257,11 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 **What to read**: `audit-findings/nds003-reconcilers.md`, `audit-findings/prompt-rules.md`, `audit-findings/prompt-clarifications.md`, `audit-findings/test-calibration.md`, `audit-findings/test-calibration-deferred.md` (if it exists — M5 creates it only when fixes were deferred). Then read each open item listed below.
 
-**Items in scope**:
-- PRD #845 ([prds/845-nds003-content-aware-diff.md](prds/845-nds003-content-aware-diff.md)): NDS-003 content-aware diff
-- Issue #855: git-collector COV-001 + summary-graph SCH-002 (tentatively paused)
-- Issue #856: advisory pass rollback untested + PR title count bug (low priority)
+**Items in scope** (Updated per Decision 2026-05-14: all open PRDs and all open GitHub issues, not just pre-named items):
+- Every open PRD in `prds/` — run `ls prds/*.md` (exclude `prds/done/`)
+- Every open GitHub issue — run `gh issue list --state open --limit 200 --repo wiggitywhitney/spinybacked-orbweaver`
+
+Read each item before giving a verdict. Do not skip items because they appear unrelated to the audit topics — the purpose is a complete backlog review.
 
 **What to produce**: `audit-findings/issue-verdicts.md`
 
@@ -269,23 +272,25 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 | Item | Verdict | One-line rationale |
 |---|---|---|
-| PRD #845 | keep / close / expand / merge / revise-M1-design | ... |
-| Issue #855 | keep / close / expand / merge | ... |
-| Issue #856 | keep / close / expand / merge | ... |
+| PRD #NNN — [title] | keep / close / expand / revise | ... |
+| Issue #NNN — [title] | keep / close / expand | ... |
+| ... | | |
 ```
+
+One row per open PRD, one row per open GitHub issue.
 
 **Rules**:
 - No hedging. Every item gets a verdict — not "needs more discussion."
-- If PRD #845's M1 design needs revision based on M1 findings, edit `prds/845-nds003-content-aware-diff.md` now. Record the change in PRD #845's Decision Log.
+- If a PRD's design needs revision based on audit findings, edit that PRD file now and record the change in its Decision Log.
 - If an issue should be closed, close it via `gh issue close` with a comment referencing this audit.
 - If an issue should be expanded, edit it now.
 - **When expanding an issue or editing a PRD milestone**: include a reference to all relevant `audit-findings/` file(s) that contain the relevant analysis. A future implementing AI reading that issue or PRD will have no memory of this audit — give it a direct pointer. Example addition to an expanded issue body: "When implementing this, read `audit-findings/nds003-reconcilers.md` for the reconciler analysis that motivated this work." Example addition to a PRD milestone's "What to read" list: add the relevant `audit-findings/` file(s).
 
 **Completion criteria**:
-- `audit-findings/issue-verdicts.md` exists with a verdict for every item
-- All "close" verdicts are executed (gh issue close called)
-- All "expand" verdicts are executed (issue body edited)
-- PRD #845 updated if M1 design needs revision
+- `audit-findings/issue-verdicts.md` exists with a verdict for every open PRD and every open GitHub issue
+- All "close" verdicts are executed (`gh issue close` called with a comment referencing this audit)
+- All "expand" verdicts are executed (issue or PRD body edited)
+- All "revise" verdicts for PRDs are executed (PRD file updated, Decision Log entry added)
 
 ---
 
@@ -350,6 +355,26 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 **Why**: A future implementing AI reading a downstream issue or PRD has no memory of this audit session. Without a pointer, it has no way to access the analysis that motivated the work — it can only read the issue/PRD body and the current codebase. The audit documents contain the "why" (specific reconciler patterns, specific prompt ambiguities, specific test assertion problems) that gives a future agent enough context to implement the work correctly rather than re-discovering the same problems.
 
 **How to apply**: M6's rules now include: when expanding or editing, add a reference like "When implementing this, read `audit-findings/<file>.md` for the analysis that motivated this work." M7's per-item steps now include: before running `/write-prompt`, add the relevant audit file pointer to the draft body. This applies to all new issues and PRDs created by M7, and to all issue expansions and PRD milestone edits made by M6.
+
+---
+
+### 2026-05-14: Fix all prompt ambiguities in M3, not just high-severity
+
+**Decision**: M3 scope expanded to cover all 10 ambiguities from M2 — high, medium, and low severity.
+
+**Why**: The original high/medium/low split was overly conservative. Several medium-severity items (notes format "3-5 vs empty array", CDQ-007 PII exact-match clarification, RST-004 vs COV-004 consolidation) are straightforward wording changes that don't require design decisions. Keeping a future PRD open for those additions delays needlessly. The constraint that "if a fix requires changing what a rule requires, defer it with a note" remains in force — the expansion just means we attempt all 10 rather than skipping medium/low by default.
+
+**How to apply**: M3's scope, constraint, and completion criteria are updated. The 5 high-severity fixes already committed count. The remaining 5 are added work within M3 before proceeding to M4. Any item where the fix would require a rule redesign gets a "M3 deferred — requires rule redesign" note in `audit-findings/prompt-rules.md` rather than being silently skipped.
+
+---
+
+### 2026-05-14: M6 evaluates all open PRDs and all open GitHub issues
+
+**Decision**: M6's scope expanded from 3 named items (PRD #845, Issue #855, Issue #856) to every open PRD in `prds/` and every open GitHub issue.
+
+**Why**: The audit was done to understand the full state of the codebase's work queue — not just three items. Evaluating only the pre-named items misses any issue or PRD that the audit findings might change, contradict, or supersede. A complete verdict table is the only way to know what work is correctly scoped, what's stale, and what's missing.
+
+**How to apply**: M6's Items in scope, verdict table, and completion criteria are updated to require one verdict per open PRD and one verdict per open GitHub issue. The specific PRD #845 handling rule (edit the PRD if M1 design needs revision) still applies — it's now one instance of the general rule that "revise" verdicts must be executed.
 
 ---
 
