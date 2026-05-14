@@ -32,7 +32,7 @@
 | Issue #855 — git-collector COV-001 miss + summary-graph SCH-002 | expand | Audit M1 conclusively classified the git-collector miss as targeting-logic in `instrument-with-retry.ts` (8+ consecutive misses = deterministic selector, not LLM interpretation drift); M3 clarifications (Fix 5: namespace inference, Fix 6: COV-001 boundary) may help SCH-002 but do not fix the git-collector miss; add audit-findings references |
 | Issue #846 — P4 coordinator: ExpressInstrumentation missing from SDK init | keep | Independent of audit findings; root cause is in `librariesNeeded` field population logic, unaffected by prompt or test changes |
 | Issue #845 — PRD tracking issue for PRD #845 | revise | Same as PRD #845 verdict — see revise action for the PRD file; add a comment to the issue pointing to the audit revisions |
-| Issue #843 — Update pinned GitHub Actions to Node.js 24 | keep | Urgent (Node.js 24 becomes default June 2, 2026, ~3 weeks); independent of audit; should be implemented immediately |
+| Issue #843 — Update pinned GitHub Actions to Node.js 24 | keep | Urgent (Node.js 24 becomes default June 2, 2026, 19 days from audit date); independent of audit; should be implemented immediately |
 | Issue #778 — PRD tracking issue for SDK Bootstrap | keep | Active PRD tracking issue |
 | Issue #752 — PRD tracking issue for CLI Flag Redesign | keep | Active PRD tracking issue |
 | Issue #731 — SPA-001: span granularity for CLI tools | keep | Independent of audit; waiting for 2nd TypeScript CLI eval run before acting |
@@ -50,7 +50,7 @@
 
 Actions taken as part of M6 (recorded as they are executed):
 
-- [x] PRD #679 — already closed (confirmed via `gh issue close`)
+- [x] PRD #679 — already closed (verified via `gh issue view --json state`)
 - [x] PRD #845 — PRD file revised: status updated, M0 marked complete, M1–M4 scopes updated, Proposed Solution and Research Spike sections corrected, Decision Log entry added, `/write-prompt` review completed
 - [x] Issue #845 — comment added explaining PRD revisions
 - [x] Issue #855 — body expanded: added "Relevant audit findings (PRD #857)" section referencing `audit-findings/nds003-reconcilers.md` (targeting-logic verdict) and `audit-findings/prompt-clarifications.md` (Fixes 5 and 6)
