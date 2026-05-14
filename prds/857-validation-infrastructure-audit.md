@@ -203,7 +203,7 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 ## Explicit questions
 
 ### journal-graph.js fixture
-[Is `status === 'success'` a realistic assertion for journal-graph.js given 4 consecutive partial/fail runs with the NDS-003 reconciler gap still open? State a verdict: keep / change to partial-acceptable / remove fixture / other. Give rationale.]
+[Is `status === 'success'` a realistic assertion for journal-graph.js given 5+ consecutive partial/fail runs with the NDS-003 reconciler gap still open? State a verdict: keep / change to partial-acceptable / remove fixture / other. Give rationale.]
 
 ### Schema extensions assertion
 [Should the Phase 5 schema extensions hash-change assertion be required or conditional? State a verdict: required / conditional-acceptable / restructure. Give rationale.]
