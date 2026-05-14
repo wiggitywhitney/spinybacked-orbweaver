@@ -235,13 +235,15 @@ module.exports = { fetchProduct };
       // instrumentWithRetry (Issue #722, now fixed), which enforces it inside the fix loop
       // so wrong-namespace extensions trigger a fresh-regeneration retry rather than being
       // silently dropped. The two layers enforce different theories of correctness and are
-      // not redundant — this test is the only coverage for the prompt's theory (visible
-      // schema pattern inference). A Test B failure is an agent output quality signal, not
-      // a registry integrity risk. See Issue #724 (complete PRD #581 attribute namespace
-      // parallel) for the remaining prompt-layer gap.
+      // not redundant — this test is coverage for namespace consistency: if the agent
+      // invents attributes, they must use the registry's established dd.* namespace.
+      // Zero extensions is a valid agent outcome (agent correctly decides no custom
+      // attributes are needed). A namespace mismatch on any produced extension is an
+      // agent output quality signal, not a registry integrity risk. See Issue #724
+      // (complete PRD #581 attribute namespace parallel) for the remaining prompt-layer gap.
 
-      // Schema has only dd.* attributes, no HTTP-specific one.
-      // Agent must invent an HTTP attribute — it must start with dd.
+      // Schema has only dd.* attributes, no HTTP-specific one. The agent may
+      // invent HTTP-specific attributes; if it does, they must start with dd.
       const schemaB = {
         groups: [
           {
