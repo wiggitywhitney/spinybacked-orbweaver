@@ -15,10 +15,17 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ---
 
+## Eval cadence
+
+Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 reconcilers, or acceptance gate tests — before starting the next PRD that changes agent behavior. PRD #857's prompt clarifications have not yet been validated by a full eval run; run one after the Short-term items below before opening PRD #845 M1.
+
 ## Short-term (current focus)
 
-- Agent misses primary exported function in git-collector (COV-001, 8+ consecutive runs) ([issue #855](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/855)) — PRD #857 M1 audit verdict: targeting-logic issue in `instrument-with-retry.ts`, not a prompt interpretation problem. Issue expanded with audit findings pointers.
+Work these in order:
 
+1. Agent misses primary exported function in git-collector (COV-001, 8+ consecutive runs) ([issue #855](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/855)) — PRD #857 M1 audit verdict: targeting-logic issue in `instrument-with-retry.ts`, not a prompt interpretation problem. Issue expanded with audit findings pointers.
+2. Add missing unit tests for three NDS-003 reconciler patterns ([issue #861](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/861)) — `normalizeLine` arrow-paren-strip, `reconcileReturnCaptures` multi-line object literal sub-case, and `isSpanCallbackComma` inline filter all lack dedicated tests; identified in PRD #857 M1 audit.
+3. **Run a commit-story-v2 eval** to validate PRD #857 prompt changes before opening PRD #845 M1.
 
 ## Medium-term
 
@@ -30,7 +37,6 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 produced 164 INTERNAL spans against 38 packages (structurally correct, but fails IS SPA-001 limit). Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections. One run of data; wait for 2+ CLI evals before deciding.
 - P4 coordinator: ExpressInstrumentation missing from SDK init file after successful instrumentation ([issue #846](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/846)) — `librariesNeeded` for express not reaching SDK init update; investigate `src/coordinator/aggregate.ts` → `src/coordinator/sdk-init.ts` path.
-- Add missing unit tests for three NDS-003 reconciler patterns ([issue #861](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/861)) — `normalizeLine` arrow-paren-strip, `reconcileReturnCaptures` multi-line object literal sub-case, and `isSpanCallbackComma` inline filter all lack dedicated tests; identified in PRD #857 M1 audit.
 
 ## Long-term
 
