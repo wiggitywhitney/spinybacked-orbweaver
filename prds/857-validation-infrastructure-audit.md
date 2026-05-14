@@ -1,6 +1,6 @@
 # PRD #857: Validation infrastructure audit — NDS-003 reconcilers, agent prompt quality, acceptance gate calibration
 
-**Status**: In progress — M1 complete, M2 complete, M3 complete; M4 next
+**Status**: In progress — M1 complete, M2 complete, M3 complete, M4 complete; M5 next
 **Priority**: High
 **GitHub Issue**: [#857](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/857)
 **Created**: 2026-05-13
@@ -229,11 +229,13 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 ### M5: Implement test calibration fixes
 
-**What to read**: `audit-findings/test-calibration.md` (M4 output). All three acceptance gate test files.
+**What to read**: `audit-findings/test-calibration.md` (M4 output). All four acceptance gate test files: `test/acceptance-gate.test.ts`, `test/fix-loop/acceptance-gate.test.ts`, `test/coordinator/acceptance-gate.test.ts`, and `test/commit-story-v2/acceptance-gate.test.ts`. M4's assertion table covers all four; changes are needed in all four.
 
 **Scope**: Fix every assertion the M4 audit marked for change. Do NOT lower quality bars — only remove assertions that test validator behavior (currently broken) rather than agent behavior. Do NOT change what the tests are trying to measure; change only how they measure it.
 
 **Constraint**: If a proposed fix requires changing what the test is verifying (not just how), stop and record it in `audit-findings/test-calibration-deferred.md` with rationale.
+
+**Note on journal-graph.js**: Changing `status === 'success'` to `['success', 'partial'].toContain(result.status)` does NOT violate the constraint above. The measurement (does the file instrument successfully?) is unchanged. Accepting `partial` acknowledges that `partial` is a valid instrumentation outcome when the NDS-003 validator has a known gap — it is not lowering the quality bar for agent behavior. This change is required by M4's verdict and must be implemented in M5.
 
 **What to produce**: edited test files + `audit-findings/test-calibration-deferred.md` (any changes requiring design decisions)
 
