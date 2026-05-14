@@ -1,6 +1,6 @@
 # PRD #857: Validation infrastructure audit — NDS-003 reconcilers, agent prompt quality, acceptance gate calibration
 
-**Status**: In progress — M1 complete, M2 complete, M3 complete, M4 complete, M5 complete, M6 complete; M7 next
+**Status**: Complete — M1 through M7 done
 **Priority**: High
 **GitHub Issue**: [#857](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/857)
 **Created**: 2026-05-13

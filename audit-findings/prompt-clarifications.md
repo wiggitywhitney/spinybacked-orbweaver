@@ -205,12 +205,16 @@ Do not expand a single-line expression into multiple lines just because indentat
 
 ## Post-fix baseline
 
-Acceptance gate run triggered after push. Results to be recorded here.
+**Note**: No acceptance gate run was triggered after the M3-complete commit (`fd03042`, 2026-05-14T13:22Z). The only run on this branch (`25833556848`) was triggered at `2026-05-14T00:03:49Z` — approximately 13 hours before the M3-complete commit, after the M3 first-batch push (5 high-severity fixes only). It therefore cannot serve as a baseline for M3-complete (which added the remaining 5 medium/low-severity fixes).
+
+Run 25833556848 results (M3 first-batch only — NOT M3-complete):
 
 | Metric | Result |
 |---|---|
-| Run ID | TBD |
-| Triggered on | feature/prd-857-validation-infrastructure-audit |
-| Pass rate | TBD |
-| Partial rate | TBD |
-| Fail rate | TBD |
+| Run ID | 25833556848 |
+| Triggered on | feature/prd-857-validation-infrastructure-audit (after M3 first-batch, before M3 complete) |
+| Core tests (P1 + fix-loop) | Passed |
+| Coordinator tests (P4/P5) | Passed |
+| commit-story-v2 tests | **Failed** — summary-graph.js produced `partial` status (NDS-003 reconciler gap); M5 had not yet been applied; the test at that point still asserted `toBe('success')` |
+
+The first post-M3-complete + post-M5 baseline will come from the PR acceptance gate run (triggered by `/prd-done` with `--label run-acceptance`).
