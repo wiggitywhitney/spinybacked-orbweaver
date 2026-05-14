@@ -180,6 +180,8 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 ### M4: Audit acceptance gate test calibration
 
+**Before starting**: Check the M3 acceptance gate results (PR #860, `gh run list --workflow=acceptance-gate.yml --limit=3 --repo wiggitywhitney/spinybacked-orbweaver`). If the run is complete, fill in the baseline table in `audit-findings/prompt-clarifications.md` before proceeding. If the run is still in progress, start reading the test files while it runs.
+
 **What to read**: `test/acceptance-gate.test.ts`, `test/fix-loop/acceptance-gate.test.ts`, `test/coordinator/acceptance-gate.test.ts` in full.
 
 **What to produce**: `audit-findings/test-calibration.md`
