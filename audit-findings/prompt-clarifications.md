@@ -34,7 +34,7 @@ If more than ~20% of functions in the file would receive manual spans, report th
 
 **After**:
 ```text
-If more than 20% of functions in the file would receive manual spans, instrument only the COV-001 entry points and COV-002 outbound calls, report the ratio in `notes`, and do not add spans to COV-004 or COV-005 candidates.
+If more than 20% of functions in the file would receive manual spans, instrument only the COV-001 entry points and COV-002 outbound calls, report the ratio in `notes`, and do not add additional manual spans beyond those targets. Continue applying COV-005 attribute requirements to any spans you do add.
 ```
 
 **Change**: Replaced `~20%` with `20%` (removes tilde ambiguity). Replaced the vague "instead of over-instrumenting" with a concrete fallback action: instrument COV-001 + COV-002 only, skip COV-004 + COV-005 candidates. Removed "Prefer instrumenting fewer functions with higher diagnostic value" which was advice without a decision rule.
