@@ -407,6 +407,30 @@ One row per open PRD, one row per open GitHub issue.
 
 ---
 
+### 2026-05-14: Research spikes must produce downstream work or a documented non-decision
+
+**Decision**: Research spike issues (#858 thinking budget, #859 self-verification tool) must result in either a new PRD or GitHub issue for the implementation work (if recommendation is go), or closure of the issue with a comment explaining the decision not to act (if recommendation is no-go). "Update PROGRESS.md with findings" is not sufficient completion — the research is not done until one of those two outcomes is recorded.
+
+**Why**: A research spike that produces a recommendation comment but no downstream artifact is invisible to future work. Whoever reads the backlog later has no way to know whether the recommendation was acted on, deferred, or rejected. Requiring an explicit go/no-go artifact makes the decision durable.
+
+**How to apply**: Both issues were updated with a new checklist item enforcing this. Any future research spike issues should include the same criterion at creation time.
+
+---
+
+### 2026-05-14: /write-prompt review of M3 prompt fixes caught two new ambiguities
+
+**Decision**: Two wording changes introduced during M3 were identified as new ambiguities by /write-prompt review post-M7 and corrected before the PR was created.
+
+1. **Return-value capture exception (Fix 4)**: A secondary clause was added — "Do NOT apply this exception to synchronous `return` expressions where extracting to a variable would change how the code reads without adding semantic value." This introduced a subjective judgment call ("would change how code reads") for synchronous function calls, contradicting the primary rule ("function call or awaited expression only"). The secondary clause was removed; the primary rule already handles all cases.
+
+2. **CDQ-006 exemption (Fix 9)**: The parenthetical added "exported service functions that are the outermost span in a call chain" — narrowing the exemption beyond COV-001's definition of entry points. This would require the LLM to evaluate "is this the outermost span?" per-call, a non-deterministic judgment. The parenthetical was simplified to "spans on COV-001 entry points" with no additional qualification.
+
+**Why**: /write-prompt was run on the full M3 diff before the PR. This is the standard process for any prompt change — targeted ambiguity fixes can introduce new ambiguities in adjacent wording, and a fresh review catches them.
+
+**How to apply**: Purely retrospective. Both fixes are committed. No downstream propagation needed — the PRD is complete.
+
+---
+
 ## Design Notes
 
 - All `audit-findings/` files are created by this PRD's milestones. The directory does not exist yet; create it when writing the first output file (M1).
