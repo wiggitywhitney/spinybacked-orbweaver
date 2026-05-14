@@ -312,6 +312,7 @@ One row per open PRD, one row per open GitHub issue.
 - No duplicate issues created for findings already handled in M6
 - Every new issue was reviewed with `/write-prompt` before creation
 - PROGRESS.md updated with a summary of what the audit found and what work was created or closed
+- Fill in the M3 post-fix baseline table in `audit-findings/prompt-clarifications.md`: run `gh run list --workflow=acceptance-gate.yml --branch feature/prd-857-validation-infrastructure-audit --limit=20 --repo wiggitywhitney/spinybacked-orbweaver`, find the earliest run triggered after the commit whose message begins "feat(prd-857): M3 complete — remaining 5 prompt ambiguity fixes", and record: the run ID, pass rate (fixtures with status=success / total), partial rate (status=partial / total), and fail rate (status=failed / total). (Acceptance gate takes ~1 hour; this is deferred from M3 to avoid blocking M4–M6.)
 
 ---
 
