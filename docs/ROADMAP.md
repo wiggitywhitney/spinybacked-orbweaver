@@ -17,8 +17,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Short-term (current focus)
 
-- **Validation infrastructure audit** — NDS-003 reconcilers, agent prompt quality, acceptance gate calibration ([PRD #857](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/857)) — three distinct structural problems found via code audit: 12 accumulated reconcilers with no principled design, prompt rules with ambiguities causing LLM non-determinism, and acceptance gate tests not calibrated for probabilistic output. Subsumes PRD #845 M0; pauses issue #841 and tentatively #855.
-- Agent misses primary exported function in git-collector (COV-001) and uses wrong attribute domain in summary-graph (SCH-002) ([issue #855](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/855)) — **tentatively paused pending PRD #857 M1**; revisit after M1 determines whether git-collector gap is targeting logic or rule interpretation.
+- Agent misses primary exported function in git-collector (COV-001, 8+ consecutive runs) ([issue #855](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/855)) — PRD #857 M1 audit verdict: targeting-logic issue in `instrument-with-retry.ts`, not a prompt interpretation problem. Issue expanded with audit findings pointers.
 
 
 ## Medium-term
