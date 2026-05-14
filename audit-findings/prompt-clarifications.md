@@ -95,6 +95,114 @@ All invented attribute keys MUST start with the namespace prefix established by 
 
 ---
 
+---
+
+## Fix 6: COV-001 vs COV-004 — "exported async service functions" undefined boundary
+
+**Resolves**: "COV-001 vs COV-004 exported async service functions" (M2 table, medium severity)
+
+**Before**:
+```text
+Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, exported async service functions) MUST have spans.
+```
+
+**After**:
+```text
+Entry points (route handlers, request handlers, CLI entry points, main functions, top-level dispatchers, and exported async service functions) MUST have spans. "Exported async service functions" means functions intended as the outer callable boundary for callers — orchestrators, route handlers, queue consumers, and exported functions called from outside the file. Exported async utilities (pure transformations, formatters, helpers called from within the file's own instrumented functions) are COV-004 candidates, not COV-001 entry points.
+```
+
+**Change**: Added a defining clause for "exported async service functions" as separate follow-on sentences (not embedded in the list parenthetical, which would create parsing ambiguity). Distinguishes orchestrator-boundary functions (COV-001) from utility functions (COV-004). Previously, "service" was undefined and any exported async function could be interpreted as a COV-001 entry point.
+
+---
+
+## Fix 7: COV-002 vs COV-006 — no decision rule for auto-instrumentation uncertainty
+
+**Resolves**: "COV-002 vs COV-006 outbound call auto-instrumentation uncertainty" (M2 table, medium severity)
+
+**Before**:
+```text
+**COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans.
+```
+
+**After**:
+```text
+**COV-002**: Outbound calls (DB queries, HTTP requests, gRPC, message queues) MUST have spans. When uncertain whether auto-instrumentation covers an outbound call, apply COV-002 and add the manual span. Report in `notes` which library would cover it if auto-instrumentation were active (COV-006).
+```
+
+**Change**: Added an explicit decision rule for the uncertain case: default to COV-002 compliance and report the uncertainty in `notes`. Previously, the agent oscillated between adding a manual span (COV-002 compliance) and skipping it (COV-006 avoidance).
+
+---
+
+## Fix 8: Notes format — "3-5" count incompatible with "empty array" permission
+
+**Resolves**: "Notes format 3-5 vs empty array" (M2 table, medium severity)
+
+**Before**:
+```text
+`notes`: Array of 3-5 judgment call explanations focusing on non-obvious decisions. Include: why functions were skipped, why specific attributes were chosen, ratio backstop warnings, variable shadowing decisions, already-instrumented detections. Standard patterns (span wrapping, error recording, import additions) do not need notes — only explain what is surprising or requires judgment. Return an empty array if there are no non-obvious decisions to document.
+```
+
+**After**:
+```text
+`notes`: Array of judgment call explanations. Include one entry for each non-obvious decision: functions skipped with a non-trivial reason (including already-instrumented detections), attributes chosen from competing candidates, ratio backstop warnings, variable shadowing decisions. Omit entries for standard patterns (span wrapping, error recording, import addition). Return an empty array if all decisions were standard.
+```
+
+**Change**: Removed the "3-5" count (logically incompatible with "return empty array"). Replaced the open-ended content list with a quality description: one entry per non-obvious decision. Re-added "already-instrumented detections" in parenthetical form (dropped in initial draft, caught by /write-prompt review). This removes the incentive to pad the array with obvious notes to reach the minimum.
+
+---
+
+## Fix 9: RST-004 vs COV-004 — exception buried after precedence claim
+
+**Resolves**: "RST-004 vs COV-004 unexported I/O conflict" (M2 table, medium severity)
+
+**Before**:
+```text
+**RST-004**: Do NOT add spans to unexported internal functions. **RST-004 takes precedence over COV-004**: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation. Only instrument an unexported I/O function when no exported orchestrator span covers that execution path.
+```
+
+**After**:
+```text
+**RST-004**: Do NOT add spans to unexported internal functions, unless no exported orchestrator span covers that function's execution path — in that case, instrument the unexported function as if it were a COV-004 target. RST-004 otherwise takes precedence over COV-004: when an exported function orchestrates unexported helpers that perform I/O, instrument the exported orchestrator, not the helpers. The helpers' I/O becomes child spans of the orchestrator's span through context propagation.
+```
+
+**Change**: Moved the exception clause ("unless no orchestrator covers it") to the front, before the precedence claim. Previously, an agent reading left-to-right hit "Do NOT add spans" → "RST-004 takes precedence" before reaching the exception at the end — causing the blanket skip to dominate.
+
+---
+
+## Fix 10: CDQ-007 — PII matching mode undefined (exact vs. substring)
+
+**Resolves**: "CDQ-007 PII attribute list overly broad" (M2 table, low severity)
+
+**Before**:
+```text
+PII attribute names to avoid: `author`, `committer`, `username`, `email`, `password`, `ssn`, `name`, `user`.
+```
+
+**After**:
+```text
+PII attribute keys to avoid (exact matches only, not substrings): `author`, `committer`, `username`, `email`, `password`, `ssn`, `name`, `user`. Do not conflate these with attribute keys that CONTAIN one of these words — `commit.file.name` is not a PII attribute.
+```
+
+**Change**: Added "(exact matches only, not substrings)" and a clarifying negative example. Previously, the bare list caused LLMs to apply substring matching and reject legitimate domain keys like `commit.file.name`.
+
+---
+
+## Duplication Table: NDS-003 line count exception clause
+
+**Before**:
+```text
+Do not expand a single-line expression into multiple lines just because indentation changed.
+```
+
+**After**:
+```text
+Do not expand a single-line expression into multiple lines just because indentation changed. The sole exception is the return-value capture pattern described below, which adds exactly one statement.
+```
+
+**Change**: Added an explicit forward reference to the return-value capture exception. Previously, "Do NOT increase the line count" immediately contradicted the return-value capture exception that follows.
+
+---
+
 ## Post-fix baseline
 
 Acceptance gate run triggered after push. Results to be recorded here.

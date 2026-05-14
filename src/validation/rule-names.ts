@@ -22,6 +22,7 @@ const RULE_NAMES: Record<string, string> = {
 
   // Tier 2 — Quality
   'CDQ-001': 'Spans Closed',
+  'CDQ-003': 'Standard Error Recording',
   'CDQ-005': 'startActiveSpan Preferred',
   'CDQ-006': 'isRecording Guard',
   'CDQ-007': 'Attribute Data Quality',

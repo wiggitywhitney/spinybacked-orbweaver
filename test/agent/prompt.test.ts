@@ -401,9 +401,9 @@ describe('buildSystemPrompt', () => {
 
   it('includes notes brevity guidance', () => {
     const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
-    expect(prompt).toContain('3-5 judgment call');
-    expect(prompt).toContain('non-obvious');
-    expect(prompt).toContain('empty array if there are no non-obvious');
+    expect(prompt).toContain('judgment call explanations');
+    expect(prompt).toContain('non-obvious decision');
+    expect(prompt).toContain('empty array if all decisions were standard');
     expect(prompt).not.toContain('Never return an empty array');
   });
 
