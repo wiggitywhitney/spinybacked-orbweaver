@@ -401,9 +401,9 @@ describe('buildSystemPrompt', () => {
 
   it('includes notes brevity guidance', () => {
     const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
-    expect(prompt).toContain('3-5 judgment call');
-    expect(prompt).toContain('non-obvious');
-    expect(prompt).toContain('empty array if there are no non-obvious');
+    expect(prompt).toContain('judgment call explanations');
+    expect(prompt).toContain('non-obvious decision');
+    expect(prompt).toContain('empty array if all decisions were standard');
     expect(prompt).not.toContain('Never return an empty array');
   });
 
@@ -445,8 +445,9 @@ describe('buildSystemPrompt', () => {
     it('NDS-003 includes return-value capture carve-out', () => {
       const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-      // Permitted: rewriting `return asyncExpr` as `const result = await asyncExpr; setAttribute; return result`
-      expect(prompt).toContain('asyncExpr');
+      // Permitted: rewriting `return expr` as `const result = expr; setAttribute; return result`
+      // (async expressions use `await expr`, sync expressions omit await)
+      expect(prompt).toContain('awaited expression');
       // Constraint: only the statement form changes — call expression must be unchanged
       expect(prompt).toContain('statement form');
     });

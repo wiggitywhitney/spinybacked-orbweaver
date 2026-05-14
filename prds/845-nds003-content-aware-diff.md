@@ -1,6 +1,6 @@
 # PRD #845: NDS-003 content-aware diff — eliminate reconciler whack-a-mole
 
-**Status**: Blocked — paused pending PRD #857 (validation infrastructure audit). M1 of PRD #857 will assess whether the content-aware classifier design in this PRD's M1 still holds. M6 of PRD #857 will assign an explicit verdict on this PRD. Do not start M1 of this PRD until both are complete.
+**Status**: Ready to start M1 — M0 is satisfied by PRD #857 M1 audit findings (see Decision Log 2026-05-14 entry). M1 scope has been revised per audit recommendation. Read `audit-findings/nds003-reconcilers.md` before starting M1.
 **Priority**: Low
 **GitHub Issue**: [#845](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/845)
 **Created**: 2026-05-11
@@ -38,36 +38,17 @@ Each reconciler was written in response to a specific pattern observed in a spec
 
 ## Proposed Solution
 
-Make NDS-003's line classifier content-aware. Instead of flagging every non-instrumentation added line, classify each added line:
+> **Note**: The original classifier approach below was superseded by the Decision Log entry on 2026-05-14. The current approach is Prettier normalization of both sides (original and instrumented) at the same indentation depth before comparison. See the Decision Log and M1 for the current design direction.
 
-- **Reorganization** (accept): The line contains only values that appeared in the original — identifiers, string literals, numbers, punctuation — and is a lexical component of an existing original line. No new symbols introduced.
-- **New code** (flag): The line contains a new function call, a new variable declaration with a non-original right-hand side, new control flow, or any symbol not present in the original.
+~~Make NDS-003's line classifier content-aware. Instead of flagging every non-instrumentation added line, classify each added line as Reorganization (accept) or New code (flag). For each non-instrumentation added line, check whether its tokens are a subset of the tokens in any single original line.~~
 
-Under this scheme, `reflections,` is a reorganization (it appears in the original as part of `formatJournalEntry(sections, commit, reflections)`). `const total = computeExpensive();` is new code. NDS-003 flags only new code.
-
-**Implementation approach**: The classifier would work on stripped token sequences rather than full lines. For each non-instrumentation added line, check whether its tokens are a subset of the tokens in any single original line. If yes, accept. If no, flag.
-
-**Risk**: The classifier must not be too loose. `const x = existingVar;` has tokens that all appear in the original, but introducing a new assignment is a real change. The classifier needs to be conservative about what counts as a "reorganization" — likely restricting to argument-context lines (lines at paren/brace depth > 0 that end with `,` or `)`) rather than all lines.
+**Current approach**: Apply Prettier to the instrumented output at the same indentation depth as the original before running the NDS-003 diff. `checkNonInstrumentationDiffNormalized` already normalizes the original — normalizing the instrumented output through the same pass at the same depth eliminates the 4 Group A (Prettier formatting artifact) reconcilers. Group B (semantic instrumentation pattern) reconcilers are unaffected and remain. See `audit-findings/nds003-reconcilers.md` for the Group A vs. Group B classification.
 
 ---
 
-## Research Spike (M0 — run before any design or implementation)
+## Research Spike (M0 — complete)
 
-The reconciler approach may be sufficient. A redesign is only warranted if new eval targets continue producing patterns that reconcilers don't handle.
-
-**Spike protocol**:
-1. Wait for PR #841's acceptance gate to complete. Note the pass/fail/partial breakdown.
-2. Run at least one new eval target from `~/Documents/Repositories/spinybacked-orbweaver-eval` using the #841 fixes.
-3. Catalog every `partial` result. For each one, identify the NDS-003 violation type:
-   - Is it a type already handled by an existing reconciler? (regression)
-   - Is it a new pattern requiring a new reconciler? (new gap)
-4. Count new gaps.
-
-**Decision criteria**:
-- **0–2 new gaps**: The current approach is sufficient. Close this issue. The reconciler maintenance cost is acceptable for this level of eval-target diversity.
-- **3+ new gaps**: The architectural redesign is justified. Proceed with M1.
-
-**What this spike is NOT**: An excuse to delay implementation. If the spike runs and finds 3+ gaps, implementation begins immediately.
+> **M0 is complete.** The 3-gap threshold was satisfied by PRD #857 M1 audit findings without running a new eval target. See the Decision Log entry on 2026-05-14 and M0 checklist below for details. The spike protocol below is preserved for historical context only — do not re-run it.
 
 ---
 
@@ -81,61 +62,85 @@ Spike protocol (self-contained): (1) confirm PR #841's acceptance gate has compl
 
 **Baseline metrics to record in Decision Log (needed by M4)**: total files instrumented, pass count, partial count, fail count, and the list of new gap patterns (if any). Record these now — M4 compares against them.
 
+**M0 is complete — satisfied by PRD #857 M1 audit findings. Read `audit-findings/nds003-reconcilers.md` for the gap analysis. M1 begins.**
+
+The PRD #857 M1 audit documented 15 reconcilers total with 3 structurally distinct gap classes that independently exceed the 3-gap threshold:
+- Gap 1: `technicalNode` LangGraph node oscillation (pre-confirmed, Run-16 Decision Log)
+- Gap 2: `startActiveSpan`-in-nested-callback re-indentation (pre-confirmed, Run-17 Decision Log)
+- Gap 3–4+: 4 Group A Prettier formatting reconcilers with order-dependent execution and a magic-number threshold — each representing a distinct formatting artifact class requiring its own reconciler
+
+A new eval target run is no longer needed to confirm the threshold. The audit's reconciler analysis provides the required gap evidence.
+
+- [x] Step 0: read `src/languages/javascript/rules/nds003.ts` in full — completed via PRD #857 M1 audit
+- [x] PR #841's acceptance gate completed; rates recorded in Decision Log (Run-17 eval finding)
+- [x] Gap count confirmed: 3+ structurally distinct gaps established via PRD #857 M1 audit
+- [x] Decision recorded in Decision Log (2026-05-14): redesign warranted; M1 begins with revised scope
+
+### M1: Design the Prettier normalization approach for Group A reconcilers
+
+**What to read**: `src/languages/javascript/rules/nds003.ts` in full. `audit-findings/nds003-reconcilers.md` (Group A vs. Group B classification, order-dependency assessment, PRD #845 M1 design assessment). The Problem section of this PRD and issues #841, #833, #837 for historical context.
+
+**Revised scope** (per Decision Log 2026-05-14): M1 targets only Group A reconcilers — the 4 Prettier formatting artifacts: `reconcileObjectLiteralExpansion`, `reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`. Group B reconcilers (semantic instrumentation patterns) are out of scope for this redesign.
+
+**Approach**: Apply Prettier to the instrumented output at the indentation depth it was formatted at, in addition to the Prettier normalization already applied to the original. `checkNonInstrumentationDiffNormalized` already normalizes the original — normalizing the instrumented output through the same pass at the same depth makes all four Group A reconcilers redundant in the normalized path.
+
+Design must answer:
+- How does `prettierNormalizeForComparison` get called on the instrumented output (it currently only normalizes the original)?
+- Does normalizing both sides through the same Prettier pass fully eliminate Group A false positives, or do edge cases remain?
+- Can reconcilePartialArgument (partial argument expansion due to `instrFreq` cancellation) be eliminated, or does the "cancelled lines" mechanism require it even after normalization?
+
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] PR #841's acceptance gate completed; pass/partial/fail rates recorded in Decision Log as the M4 baseline
-- [ ] At least one new eval target from `~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/` run with #841 fixes applied
-- [ ] Every `partial` result cataloged by NDS-003 violation type: gap (new pattern, no reconciler handles it) vs. known (existing reconciler covers it)
-- [ ] New gap count recorded: N gaps found. **Start count at 2** — two gaps are pre-confirmed before M0 runs: (1) `technicalNode` in `journal-graph.js` — 3+ consecutive eval runs of oscillation (see Decision Log "Run-16 eval finding"); (2) `startActiveSpan`-in-nested-callback re-indentation — run-17 confirms 4 files blocked by the same root cause (see Decision Log "Run-17 eval finding"). Do not re-evaluate either; add both directly to the gap tally.
-- [ ] Decision recorded in Decision Log: redesign warranted (3+ gaps) or not (< 3 gaps)
-- [ ] If < 3 gaps: issue closed with comment summarizing findings
-- [ ] If 3+ gaps: M1 begins
-
-### M1: Design the content-aware line classifier
-
-Specify the exact classification algorithm before writing any code. The algorithm must handle the known cases from M0 and the historical reorganization patterns documented in this PRD's Problem section and in issues #841, #833, #837, without false negatives on real violations.
-
-- [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Read the Problem section of this PRD and issues #841, #833, #837 to enumerate the full historical record of reorganization patterns
-- [ ] Enumerate the known reorganization patterns from M0 + historical record
-- [ ] Define the token-subset test: what tokens are compared, how depth/context determines "reorganization"
-- [ ] Enumerate at least 3 known false-negative risks (cases where new code could pass the classifier)
-- [ ] For each false-negative risk, specify a guard that prevents it
+- [ ] Read `audit-findings/nds003-reconcilers.md` — Group A classification and order-dependency assessment
+- [ ] Read issues #841, #833, #837 for historical reorganization patterns
+- [ ] Confirm which Group A reconcilers are fully eliminated by normalize-both-sides; document any that survive
+- [ ] Enumerate at least 2 false-negative risks (cases where new code could pass the normalization test)
+- [ ] For each false-negative risk, specify a guard
 - [ ] Design recorded in Decision Log with rationale
-- [ ] The existing reconcilers identified: which become redundant under the new classifier, which must survive
+- [ ] Identify which Group A reconcilers become redundant and which (if any) survive
 
-### M2: Implement the content-aware classifier
+### M2: Implement the Prettier normalize-both-sides approach
 
-Add the classifier to `nds003.ts`. Do NOT delete any reconcilers in this milestone — reconciler removal is M3's job. Do NOT modify `isInstrumentationLine` — the classifier supplements the existing instrumentation filter, it does not replace it. Use TDD.
+**What to read**: `src/languages/javascript/rules/nds003.ts` in full. `audit-findings/nds003-reconcilers.md` (Group A classification, order-dependency assessment, Design Notes section). The M1 Decision Log entry for the confirmed approach.
+
+Implement the normalize-both-sides change in `nds003.ts`: apply Prettier normalization to the instrumented output (in addition to the original, which is already normalized). Do NOT delete any Group A reconcilers in this milestone — reconciler removal is M3's job. Use TDD.
 
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Failing tests written for all known reorganization patterns (drawn from M0 and historical record)
+- [ ] Read `audit-findings/nds003-reconcilers.md` for Group A reconciler descriptions and the order-dependency assessment
+- [ ] Failing tests written for all known Group A reorganization patterns (Prettier expansion/split/reformat artifacts)
 - [ ] **Mandatory fixture**: failing test written for `technicalNode` from `journal-graph.js` (commit-story-v2) — a pre-confirmed case where attempt 3 regeneration increased NDS-003 error count from 1 to 5 (lines 29, 30, 54, 57, 31). This fixture must pass before M2 can close.
-- [ ] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), `main()` (index.js), `generateAndSaveDailySummary`, `generateAndSaveWeeklySummary`, and `generateAndSaveMonthlySummary` (all three from summary-manager.js) — all `startActiveSpan`-in-nested-callback pattern; the reconciler inflates the cumulative offset when the wrapped function body sits inside an outer callback. Each must pass before M2 can close.
+- [ ] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), `main()` (index.js), `generateAndSaveDailySummary`, `generateAndSaveWeeklySummary`, and `generateAndSaveMonthlySummary` (all three from summary-manager.js) — all `startActiveSpan`-in-nested-callback pattern. Each must pass before M2 can close.
 - [ ] Failing tests written for all known false-negative risks (from M1 design)
-- [ ] Classifier implemented in `src/languages/javascript/rules/nds003.ts`
-- [ ] All reconcilers still present and unchanged (removal deferred to M3)
+- [ ] Normalize-both-sides implementation in `src/languages/javascript/rules/nds003.ts`
+- [ ] All Group A and Group B reconcilers still present and unchanged (removal deferred to M3)
 - [ ] All tests pass
 - [ ] `npm run typecheck` passes
 
-### M3: Remove superseded reconcilers and update test suite
+### M3: Remove superseded Group A reconcilers and update test suite
 
-With the content-aware classifier in place, each reconciler that is now redundant should be removed. Tests that existed solely to cover the reconciler's cases should be replaced or absorbed.
+**What to read**: `src/languages/javascript/rules/nds003.ts` in full. `audit-findings/nds003-reconcilers.md` (Group A vs Group B classification, verdict column for each reconciler). The M2 Decision Log entry confirming which Group A reconcilers were made redundant by normalize-both-sides.
+
+With normalize-both-sides in place, Group A reconcilers that are fully redundant should be removed. Group B reconcilers must be kept — they handle semantic instrumentation patterns that Prettier normalization does not address.
 
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Each reconciler assessed: redundant (remove) or still needed (keep with comment explaining why)
-- [ ] Redundant reconcilers deleted
-- [ ] Tests updated to reflect removal; no test coverage lost for the patterns the reconcilers handled
+- [ ] Read `audit-findings/nds003-reconcilers.md` for the Group A vs. Group B split
+- [ ] Each Group A reconciler assessed against M2 test results: redundant (remove) or still needed (keep with comment)
+- [ ] All Group B reconcilers verified kept
+- [ ] Redundant Group A reconcilers deleted
+- [ ] Tests updated to reflect removal; no test coverage lost for patterns the removed reconcilers handled
 - [ ] `npm test` passes
 
 ### M4: Acceptance gate + eval target comparison
 
-Validate that the new classifier handles the patterns M0 cataloged, matches or improves on the reconciler approach for existing targets, and introduces no regressions.
+**What to read**: `src/languages/javascript/rules/nds003.ts` in full. `audit-findings/nds003-reconcilers.md` for the pre-confirmed gap patterns (technicalNode oscillation, startActiveSpan-in-nested-callback) that normalize-both-sides must resolve.
+
+Validate that normalize-both-sides handles the pre-confirmed gap patterns from `audit-findings/nds003-reconcilers.md`, matches or improves acceptance gate pass/partial/fail rates, and introduces no regressions.
 
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Acceptance gate passes (same or better pass/partial/fail rates than pre-M2 baseline)
-- [ ] The eval targets that produced the M0 gap patterns are re-run; all gaps resolved
+- [ ] Read `audit-findings/nds003-reconcilers.md` — pre-confirmed gap patterns (technicalNode, startActiveSpan nesting) must be resolved by M2's implementation
+- [ ] Acceptance gate passes (same or better pass/partial/fail rates vs. pre-M2 baseline on the feature branch)
+- [ ] commit-story-v2 fixtures (`journal-graph.js`, `summary-graph.js`) no longer require partial-acceptable test assertions (M5 of PRD #857 added those; they should revert once this PRD merges)
 - [ ] No new `partial` results introduced by the redesign
-- [ ] `docs/rules-reference.md` updated to document the new NDS-003 detection strategy
+- [ ] `docs/rules-reference.md` updated to document the normalize-both-sides NDS-003 detection strategy
 - [ ] The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 
 ---
@@ -150,7 +155,7 @@ Validate that the new classifier handles the patterns M0 cataloged, matches or i
 
 **How to apply**:
 - **M0**: Record `technicalNode` as 1 pre-confirmed gap in the spike Decision Log entry. Do not re-evaluate it as if it were unknown. If M0 finds no other new gaps (total = 1), the spike criteria still apply: 1 < 3 gaps = redesign not yet warranted. If any new target produces 2+ additional gaps, `technicalNode` pushes the total past the threshold.
-- **M2**: Add `technicalNode` from `journal-graph.js` (commit-story-v2) as a mandatory regression fixture. This is a concrete, reproducible minimal-reproduction case for NDS-003 oscillation. The content-aware classifier must handle it before M2 can close.
+- **M2**: Add `technicalNode` from `journal-graph.js` (commit-story-v2) as a mandatory regression fixture. This is a concrete, reproducible minimal-reproduction case for NDS-003 oscillation. The normalize-both-sides approach must handle it before M2 can close. (Superseded by the 2026-05-14 Decision Log entry which shifted M1 scope from content-aware classifier to normalize-both-sides.)
 
 ---
 
@@ -180,12 +185,22 @@ Blocked functions in run-17: `saveContext` (context-capture-tool.js), `saveRefle
 
 ---
 
+### 2026-05-14: M0 satisfied by PRD #857 audit; M1 scope revised to Group A + Prettier normalization
+
+**Decision**: M0's 3-gap threshold is satisfied without running a new eval target. PRD #857 M1 audit of `nds003.ts` documented 15 reconcilers with 3 structurally distinct gap classes: (1) technicalNode LangGraph oscillation, (2) startActiveSpan-in-nested-callback re-indentation, (3) 4 Group A Prettier formatting reconcilers with order-dependent execution and a magic-number threshold — each representing a distinct artifact class that requires its own reconciler. M1 scope is revised from "design a content-aware token-subset classifier" to "design normalize-both-sides through Prettier at the same indentation depth." Group B reconcilers (11 semantic instrumentation patterns) are out of scope for this redesign.
+
+**Why**: The content-aware classifier approach (token-subset test) was the original M1 design. PRD #857 M1 audit found that the 4 Group A reconcilers all share the same root cause — Prettier formats code differently when indentation depth changes — and that the right fix is to normalize both sides at the same depth before comparison, not to classify line content. The token-subset test is still technically valid, but it addresses the symptom (how to classify added lines) rather than the cause (why the lines differ). The audit's Group A/B split makes clear that Group A is an infrastructure issue solvable by normalization, while Group B requires semantic pattern recognition that any approach must handle.
+
+**How to apply**: M1 through M3 updated to use normalize-both-sides framing. All milestone "What to read" lists include `audit-findings/nds003-reconcilers.md`. M2's mandatory fixtures (technicalNode, startActiveSpan) are unchanged — they test specific gap patterns the new approach must handle. M3 removes Group A reconcilers that normalize-both-sides renders redundant; Group B reconcilers survive.
+
+---
+
 ### Acceptance gate run #25731096315: dialogueNode oscillation — confirms gap generalizes to any LangGraph node
 
 **Finding**: Acceptance gate run #25731096315 (main branch, 2026-05-12) failed `journal-graph.js` with NDS-003 oscillation on `dialogueNode`. The same code passed in run #281 (feature/848 branch), confirming LLM non-determinism rather than a code regression. The failing node varies by run — runs 14–16 saw `technicalNode`, this run saw `dialogueNode` — but the failure mechanism is identical: attempt-3 fresh regeneration increases the NDS-003 error count instead of reducing it.
 
 **How to apply**:
-- This confirms the `technicalNode` gap generalizes to any LangGraph node function body wrapped inside a callback at additional nesting depth. The content-aware classifier in M2 must handle this class of function regardless of which specific node is affected.
+- This confirms the `technicalNode` gap generalizes to any LangGraph node function body wrapped inside a callback at additional nesting depth. The normalize-both-sides approach in M2 must handle this class of function regardless of which specific node is affected. (Note: "content-aware classifier" references in earlier Decision Log entries were written before the 2026-05-14 strategy shift.)
 - The mandatory `technicalNode` fixture in M2 already covers this failure class. No additional fixture is needed for `dialogueNode` specifically — the fixture tests the pattern, not the node name.
 - No change to the M0 gap count: `dialogueNode` oscillation is the same gap as `technicalNode` oscillation, not a third independent pattern.
 
@@ -194,9 +209,9 @@ Blocked functions in run-17: `saveContext` (context-capture-tool.js), `saveRefle
 ## Design Notes
 
 - NDS-003 lives in `src/languages/javascript/rules/nds003.ts`. The reconcilers are called at the end of `checkNonInstrumentationDiff` after the initial diff is computed.
-- The Prettier normalization step (`prettierNormalizeForComparison`) is called before NDS-003 runs, so by the time the classifier sees the input, both original and instrumented have been Prettier-normalized. The classifier only needs to handle patterns that survive Prettier normalization (i.e., cases where original and instrumented Prettier-normalize to different forms because they're at different indentation depths).
+- The Prettier normalization step (`prettierNormalizeForComparison`) is called before NDS-003 runs, so by the time the normalize-both-sides comparison runs, both original and instrumented have been Prettier-normalized. The approach only needs to handle patterns that survive Prettier normalization (i.e., cases where original and instrumented Prettier-normalize to different forms because they're at different indentation depths).
 - **Concrete false-positive mechanism**: `startActiveSpan` adds 2 indentation levels to the function body. A call like `const formattedEntry = formatJournalEntry(sections, commit, reflections);` at 8-space indent is 79 chars — under Prettier's 80-char printWidth, so it stays 1 line in the original. After wrapping, the same call sits at 10-space indent (81 chars > 80), so Prettier splits it to 4 lines in the instrumented output. NDS-003's diff sees the original 1-liner as a missing line and the 4-liner as 4 added lines.
-- **Cancellation dynamic**: The diff builds `originalSet` from every line in the original function. When a function has a multi-line signature (e.g. `sections,` and `commit,` on their own lines), those standalone lines appear in `originalSet`. When the agent's expanded call produces `sections,` and `commit,` as added lines, they cancel against `originalSet` and never reach the reconcilers. Only the non-cancelled added lines (e.g. `reflections,`, which strips differently from `reflections = [],` in the signature) remain and require reconciliation. A future content-aware classifier must account for this — it sees only the *uncancelled* subset of the expansion, not the full expansion.
+- **Cancellation dynamic**: The diff builds `originalSet` from every line in the original function. When a function has a multi-line signature (e.g. `sections,` and `commit,` on their own lines), those standalone lines appear in `originalSet`. When the agent's expanded call produces `sections,` and `commit,` as added lines, they cancel against `originalSet` and never reach the reconcilers. Only the non-cancelled added lines (e.g. `reflections,`, which strips differently from `reflections = [],` in the signature) remain and require reconciliation. The normalize-both-sides approach must account for this — it sees only the *uncancelled* subset of the expansion, not the full expansion.
 - **Why `status=partial` is acceptable for reconciler misses**: Per-function validation runs the full NDS-003 suite on each function's output *before* reassembly. If a function passes per-function NDS-003, its code is semantically correct. Reassembly NDS-003 fires on format differences between the original and instrumented files as a whole — typically a false positive when split argument lines survive cancellation. The output is functionally correct; `status=partial` signals imperfection without silent corruption.
 - The `!fn.isAsync` guard in `instrument-with-retry.ts` skips sync functions in function-level fallback. This eliminates oscillation on sync functions with complex module-level constants, but does not affect NDS-003 directly.
 - **Related issues**: #841 (current reconciler fixes), #820 (Prettier normalization), #833 (method chain oscillation), #837 (parseSummarizeArgs oscillation).
