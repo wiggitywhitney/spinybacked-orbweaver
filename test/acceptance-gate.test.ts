@@ -126,7 +126,9 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 1', () => {
       // InstrumentationOutput fields should be populated (DX criterion)
       expect(output.instrumentedCode).toBeTruthy();
       expect(output.instrumentedCode.length).toBeGreaterThan(original.length);
-      expect(output.notes.length).toBeGreaterThan(0);
+      // notes may be empty if the agent determined all decisions were standard patterns
+      // (per prompt: "Return an empty array if all decisions were standard")
+      expect(Array.isArray(output.notes)).toBe(true);
       expect(output.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(output.tokenUsage.outputTokens).toBeGreaterThan(0);
       expect(output.spanCategories).not.toBeNull();

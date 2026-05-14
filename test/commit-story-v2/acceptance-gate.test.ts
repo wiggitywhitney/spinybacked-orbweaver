@@ -322,8 +322,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       dumpDiagnostics('summary-graph.js', result);
 
       // While PRD #845 (NDS-003 reconciler redesign) is open, partial is an acceptable outcome.
-      // M4 audit said "keep for now"; run 25833556848 (2026-05-14) is the first documented
-      // partial failure for this file, caused by the same NDS-003 reconciler gap as journal-graph.js.
+      // A partial outcome was documented after M5 completed, caused by the same NDS-003 reconciler
+      // gap as journal-graph.js (PRD #845's reconciler list does not handle this file's patterns).
       // Revert to toBe('success') and spansAdded >= 6 once PRD #845 is merged.
       expect(['success', 'partial']).toContain(result.status);
       expect(result.spansAdded).toBeGreaterThanOrEqual(1);
