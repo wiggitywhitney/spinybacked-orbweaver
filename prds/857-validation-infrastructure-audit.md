@@ -379,6 +379,22 @@ One row per open PRD, one row per open GitHub issue.
 
 ---
 
+### 2026-05-14: Audit document corrections after external code review
+
+**Decision**: Three corrections to completed audit documents based on findings from an external code review of M1–M3 outputs:
+
+1. **M1 count inconsistency fixed**: The PRD #845 design assessment in `audit-findings/nds003-reconcilers.md` listed 13 reconciler items across Group A (4) and Group B (9), but the reconciler table had 15 rows. The two missing sub-cases — `normalizeLine` preamble-comment-strip and arrow-paren-strip — were in the table but absent from both groups. Both are now classified in Group B. The recommendation is unchanged; correcting the count doesn't affect the "normalize both sides through Prettier" approach for Group A.
+
+2. **M2 Summary stale text fixed**: `audit-findings/prompt-rules.md` Summary section said the medium-severity ambiguities were "deferred to a future PRD per M3 scope constraints." This predated the 2026-05-14 Decision Log entry expanding M3's scope. The text now notes the expansion and points to the clarifications log.
+
+3. **Fix 4 log entry clarified**: The prompt-clarifications.md Fix 4 Before/After entry did not quote rule (4) of the return-value capture exception because rule (4) was preserved unchanged — only text before rule (1) was added. A note was added to make this explicit, since the omission was mistakenly read as a deletion.
+
+**Why**: An external review (Claude.ai) reading the audit files cold found these inconsistencies. Fixing them prevents future implementing agents from drawing incorrect conclusions — specifically, that M3 violated scope (it didn't: the Decision Log legitimately expanded it) or that rule (4) was dropped (it wasn't: the log entry was incomplete, not the implementation).
+
+**How to apply**: Audit files only — no code or PRD milestone logic changes. M1–M3 work is unaffected. No downstream milestone propagation needed.
+
+---
+
 ## Design Notes
 
 - All `audit-findings/` files are created by this PRD's milestones. The directory does not exist yet; create it when writing the first output file (M1).
