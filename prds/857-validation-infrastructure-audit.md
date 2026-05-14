@@ -1,6 +1,6 @@
 # PRD #857: Validation infrastructure audit — NDS-003 reconcilers, agent prompt quality, acceptance gate calibration
 
-**Status**: In progress — M1 complete, M2 complete, M3 complete, M4 complete; M5 next
+**Status**: In progress — M1 complete, M2 complete, M3 complete, M4 complete, M5 complete; M6 next
 **Priority**: High
 **GitHub Issue**: [#857](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/857)
 **Created**: 2026-05-13
@@ -257,7 +257,7 @@ Do NOT reorder, restructure, or remove any rule text beyond the minimum needed f
 
 ### M6: Re-evaluate open issues and PRDs
 
-**What to read**: `audit-findings/nds003-reconcilers.md`, `audit-findings/prompt-rules.md`, `audit-findings/prompt-clarifications.md`, `audit-findings/test-calibration.md`, `audit-findings/test-calibration-deferred.md` (if it exists — M5 creates it only when fixes were deferred). Then read each open item listed below.
+**What to read**: `audit-findings/nds003-reconcilers.md`, `audit-findings/prompt-rules.md`, `audit-findings/prompt-clarifications.md`, `audit-findings/test-calibration.md`, `audit-findings/test-calibration-deferred.md` (M5 created this file; it documents the summary-graph.js post-M4 extension and confirms no changes required a design decision). Then read each open item listed below.
 
 **Items in scope** (Updated per Decision 2026-05-14: all open PRDs and all open GitHub issues, not just pre-named items):
 - Every open PRD in `prds/` — run `ls prds/*.md` (exclude `prds/done/`)
@@ -298,7 +298,7 @@ One row per open PRD, one row per open GitHub issue.
 
 ### M7: Create new work for untracked findings
 
-**What to read**: All `audit-findings/` files — the five produced by M1–M5 (`nds003-reconcilers.md`, `prompt-rules.md`, `prompt-clarifications.md`, `test-calibration.md`, `test-calibration-deferred.md` if it exists) plus `audit-findings/issue-verdicts.md` produced by M6. All open issues and PRDs in `prds/`.
+**What to read**: All `audit-findings/` files — the five produced by M1–M5 (`nds003-reconcilers.md`, `prompt-rules.md`, `prompt-clarifications.md`, `test-calibration.md`, `test-calibration-deferred.md`) plus `audit-findings/issue-verdicts.md` produced by M6. All open issues and PRDs in `prds/`.
 
 **Scope**: Create issues or PRDs only for findings that have no home after M6. If a finding is already tracked (even if just updated), it is NOT new work.
 

@@ -149,9 +149,10 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       expect(result.tokenUsage.outputTokens).toBeGreaterThan(0);
 
-      // Error progression should have one entry per attempt
+      // Error progression has at least one entry per attempt. Function-level fallback
+      // appends additional entries, so length can exceed validationAttempts.
       expect(result.errorProgression).toBeDefined();
-      expect(result.errorProgression!.length).toBe(result.validationAttempts);
+      expect(result.errorProgression!.length).toBeGreaterThanOrEqual(result.validationAttempts);
 
       // The last entry should show 0 errors (since it succeeded)
       expect(result.errorProgression![result.errorProgression!.length - 1]).toBe('0 errors');
