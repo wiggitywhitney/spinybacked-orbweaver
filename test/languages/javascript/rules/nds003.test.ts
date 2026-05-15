@@ -2500,4 +2500,111 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures.length).toBeGreaterThan(0);
     });
   });
+
+  describe('normalizeLine — arrow function paren strip (#855)', () => {
+    it('passes when agent adds parens to single-parameter arrow during span reformatting', () => {
+      // normalizeLine normalizes `(x) =>` to `x =>` so the lines compare equal.
+      // Without this, every arrow callback the agent parenthesizes fires NDS-003.
+      const original = [
+        'export function formatItems(items) {',
+        '  const labels = items.map(x => x.value);',
+        '  const ids = items.map(x => x.id);',
+        '  return labels.join(", ") + ids.join(", ");',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'export function formatItems(items) {',
+        '  return tracer.startActiveSpan("formatItems", (span) => {',
+        '    try {',
+        '      const labels = items.map((x) => x.value);',
+        '      const ids = items.map((x) => x.id);',
+        '      return labels.join(", ") + ids.join(", ");',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('reconcileReturnCaptures — multi-line object literal sub-case (#855)', () => {
+    it('passes when agent extracts a multi-line object literal return to a capture variable', () => {
+      // Original has `return {` (opening line of a multi-line return object).
+      // Agent rewrites to `const result = {` + properties + `return result;`.
+      // The sub-case at lines 229-268 of reconcileReturnCaptures handles this.
+      const original = [
+        'async function buildMetadata(commitRef) {',
+        '  const hash = await getHash(commitRef);',
+        '  const author = await getAuthor(commitRef);',
+        '  return {',
+        '    hash: hash,',
+        '    author: author,',
+        '  };',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'async function buildMetadata(commitRef) {',
+        '  return tracer.startActiveSpan("buildMetadata", async (span) => {',
+        '    try {',
+        '      const hash = await getHash(commitRef);',
+        '      const author = await getAuthor(commitRef);',
+        '      const result = {',
+        '        hash: hash,',
+        '        author: author,',
+        '      };',
+        '      span.setAttribute("hash", result.hash);',
+        '      return result;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
+
+  describe('isSpanCallbackComma inline filter — isolation (#855)', () => {
+    it('passes when span callback }, is on its own line in instrumented but absent from original', () => {
+      // When Prettier splits a startActiveSpan call across lines, the span callback's
+      // closing `},` appears before `);`. isInstrumentationLine does not match `},`
+      // (it matches `}` and `})` but not `},`). isSpanCallbackComma must allow it.
+      const original = [
+        'async function sync(config) {',
+        '  const items = await loadItems(config);',
+        '  const count = await processItems(items);',
+        '  return count;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'async function sync(config) {',
+        '  return tracer.startActiveSpan("sync", async (span) => {',
+        '    try {',
+        '      const items = await loadItems(config);',
+        '      const count = await processItems(items);',
+        '      return count;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  },',    // },  — span callback closing before );
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = checkNonInstrumentationDiff(original, instrumented, filePath);
+      const failures = results.filter(r => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
 });
