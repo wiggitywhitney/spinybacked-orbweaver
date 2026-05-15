@@ -74,9 +74,10 @@ export function extractExportedFunctions(
   // Process function declarations
   for (const fn of sourceFile.getFunctions()) {
     const fnName = fn.getName();
-    if (!includeNonExported && !fn.isExported() && !(fnName && reExportedNames.has(fnName))) continue;
+    const fnIsExported = fn.isExported() || (fnName != null && reExportedNames.has(fnName));
+    if (!includeNonExported && !fnIsExported) continue;
     const bodyText = fn.getBody()?.getText() ?? '';
-    if (!isWorthInstrumenting(bodyText, effectiveStatementCount(fn.getStatements()))) continue;
+    if (!isWorthInstrumenting(bodyText, effectiveStatementCount(fn.getStatements()), fn.isAsync() && fnIsExported)) continue;
 
     const fullText = getFullFunctionText(fn);
     const jsDoc = getJsDocText(fn);
@@ -87,8 +88,6 @@ export function extractExportedFunctions(
     const fnStartLine = jsDocs.length > 0
       ? jsDocs[0].getStartLineNumber()
       : fn.getStartLineNumber();
-
-    const fnIsExported = fn.isExported() || (fnName != null && reExportedNames.has(fnName));
     results.push(buildExtractedFunction(
       fn.getName() ?? '<anonymous>',
       fn.isAsync(),
@@ -128,7 +127,10 @@ export function extractExportedFunctions(
         statementCount = 1;
       }
 
-      if (!isWorthInstrumenting(bodyText, statementCount)) continue;
+      const declIsReExported = reExportedNames.has(decl.getName());
+      const varIsExported = varStatement.isExported() || declIsReExported;
+
+      if (!isWorthInstrumenting(bodyText, statementCount, funcNode.isAsync() && varIsExported)) continue;
 
       const fullText = varStatement.getText();
       const jsDoc = getJsDocText(varStatement);
@@ -139,9 +141,6 @@ export function extractExportedFunctions(
       const varStartLine = varJsDocs.length > 0
         ? varJsDocs[0].getStartLineNumber()
         : varStatement.getStartLineNumber();
-
-      const declIsReExported = reExportedNames.has(decl.getName());
-      const varIsExported = varStatement.isExported() || declIsReExported;
       results.push(buildExtractedFunction(
         decl.getName(),
         funcNode.isAsync(),
@@ -299,9 +298,11 @@ function effectiveStatementCount(statements: { getKind(): SyntaxKind; getTryBloc
   return statements.length;
 }
 
-/** Check if a function is worth instrumenting (not trivial, not already instrumented). */
-function isWorthInstrumenting(bodyText: string, statementCount: number): boolean {
-  if (statementCount < MIN_STATEMENTS) return false;
+/** Check if a function is worth instrumenting (not trivial, not already instrumented).
+ *  Exported async functions bypass the statement-count minimum: a 2-statement
+ *  Promise.all orchestrator is a COV-001 entry point and must not be dropped. */
+function isWorthInstrumenting(bodyText: string, statementCount: number, isExportedAsync: boolean = false): boolean {
+  if (!isExportedAsync && statementCount < MIN_STATEMENTS) return false;
   if (OTEL_SPAN_PATTERNS.some(pattern => pattern.test(bodyText))) return false;
   return true;
 }
