@@ -130,6 +130,7 @@ export function extractExportedFunctions(
       const declIsReExported = reExportedNames.has(decl.getName());
       const varIsExported = varStatement.isExported() || declIsReExported;
 
+      if (!includeNonExported && !varIsExported) continue;
       if (!isWorthInstrumenting(bodyText, statementCount, funcNode.isAsync() && varIsExported)) continue;
 
       const fullText = varStatement.getText();
