@@ -489,4 +489,74 @@ export function main() {
       expect(names).not.toContain('trivialHelper');
     });
   });
+
+  describe('short exported async functions (COV-001 entry point threshold)', () => {
+    it('includes a 2-statement exported async Promise.all orchestrator', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      // Mirrors git-collector.js getCommitData: exported, async, only 2 statements.
+      // MIN_STATEMENTS=3 previously caused this class of function to be dropped from
+      // the function-level fallback, leaving COV-001 permanently unresolved.
+      const sourceFile = project.createSourceFile('git-collector.js', `
+async function getCommitMetadata(ref) {
+  const output = await runCommand(['git', 'show', ref]);
+  const lines = output.split('\\n');
+  return parseMeta(lines);
+}
+async function getCommitDiff(ref) {
+  const output = await runCommand(['git', 'diff', ref]);
+  return output.trim();
+}
+async function getMergeInfo(ref) {
+  const output = await runCommand(['git', 'log', ref]);
+  return { isMerge: output.includes('Merge') };
+}
+
+export async function getCommitData(commitRef = 'HEAD') {
+  const [metadata, diff, mergeInfo] = await Promise.all([
+    getCommitMetadata(commitRef),
+    getCommitDiff(commitRef),
+    getMergeInfo(commitRef),
+  ]);
+  return { ...metadata, diff, ...mergeInfo };
+}
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      expect(result.map(f => f.name)).toContain('getCommitData');
+    });
+
+    it('still filters non-async exported functions with fewer than 3 statements', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('helpers.js', `
+export function getVersion() {
+  return '1.0.0';
+}
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      expect(result.map(f => f.name)).not.toContain('getVersion');
+    });
+
+    it('still filters already-instrumented exported async functions', () => {
+      const project = new Project({
+        compilerOptions: { allowJs: true, noEmit: true },
+        skipAddingFilesFromTsConfig: true,
+      });
+      const sourceFile = project.createSourceFile('instrumented.js', `
+import { trace } from '@opentelemetry/api';
+const tracer = trace.getTracer('test');
+export async function getData(ref) {
+  return tracer.startActiveSpan('getData', async span => {
+    try { return await fetch(ref); } finally { span.end(); }
+  });
+}
+      `);
+      const result = extractExportedFunctions(sourceFile);
+      expect(result.map(f => f.name)).not.toContain('getData');
+    });
+  });
 });
