@@ -17,14 +17,13 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 ## Eval cadence
 
-Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 reconcilers, or acceptance gate tests — before starting the next PRD that changes agent behavior. PRD #857's prompt clarifications have not yet been validated by a full eval run; run one after the Short-term items below before opening PRD #845 M1.
+Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 reconcilers, or acceptance gate tests — before starting the next PRD that changes agent behavior.
+
+Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Short-term (current focus)
 
-Work these in order:
-
-1. Agent misses primary exported function in git-collector (COV-001, 8+ consecutive runs) ([issue #855](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/855)) — PRD #857 M1 audit verdict: targeting-logic issue in `instrument-with-retry.ts`, not a prompt interpretation problem. Issue expanded with audit findings pointers.
-2. **Run a commit-story-v2 eval** to validate PRD #857 prompt changes before opening PRD #845 M1.
+1. **Start PRD #845 M1** — run-18 confirmed 4 files still blocked by the same NDS-003 reconciler gap (context-capture-tool.js, reflection-tool.js, index.js, summary-graph.js). M0 complete. M1 design is ready: normalize-both-sides Prettier approach for Group A reconcilers. Read `prds/845-nds003-content-aware-diff.md` before starting.
 
 ## Medium-term
 
@@ -36,10 +35,12 @@ Work these in order:
 
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 produced 164 INTERNAL spans against 38 packages (structurally correct, but fails IS SPA-001 limit). Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections. One run of data; wait for 2+ CLI evals before deciding.
 - P4 coordinator: ExpressInstrumentation missing from SDK init file after successful instrumentation ([issue #846](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/846)) — `librariesNeeded` for express not reaching SDK init update; investigate `src/coordinator/aggregate.ts` → `src/coordinator/sdk-init.ts` path.
+- Advisory hook: coherence check reminder when a PR includes validation files ([issue #869](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/869)) — PreToolUse on `gh pr create`; fires when `src/validation/**` or `src/agent/prompt.ts` are in the diff.
+- Auto-push retry for progressive-commit pre-push hooks ([issue #867](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/867)) — when a target repo's pre-push hook creates a commit and exits non-zero, spiny-orb doesn't retry; fires on every commit-story-v2 run until fixed.
+- SCH-002: `quotes_count` semantic mismatch in `discoverReflections` ([issue #868](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/868)) — `commit_story.journal.quotes_count` reused for reflection file discovery counts; fix is a new schema attribute `reflections_count`.
 
 ## Long-term
 
-- NDS-003 content-aware diff — eliminate reconciler whack-a-mole ([PRD #845](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/845)) — starts with research spike; 2 gap patterns now pre-confirmed (technicalNode oscillation + startActiveSpan nesting); M0 spike count starts at 2, one more gap from a new eval target triggers M1.
 - Research spike: thinking budget allocation across retry passes ([issue #858](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/858)) — whether thinking helps, hurts, or is neutral for pass 1 (generation), pass 2 (repair), and pass 3 (diagnosis) is unknown; research before any architectural change. Start after PRD #857 M6.
 - Research spike: self-verification tool for syntax and schema validation ([issue #859](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/859)) — whether giving the agent a \`node --check\` or \`weaver registry check\` tool call mid-generation reduces errors deterministically; go/no-go recommendation needed before implementation. Start after PRD #857 M1.
 - Advisory pass rollback path untested; PR title file count is wrong ([issue #856](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/856)) — rollback to prior passing version on advisory re-run failure has no test coverage; PR title counts an unexplained number of files instead of total processed.

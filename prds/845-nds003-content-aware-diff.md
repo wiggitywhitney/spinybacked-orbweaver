@@ -109,6 +109,7 @@ Implement the normalize-both-sides change in `nds003.ts`: apply Prettier normali
 - [ ] Failing tests written for all known Group A reorganization patterns (Prettier expansion/split/reformat artifacts)
 - [ ] **Mandatory fixture**: failing test written for `technicalNode` from `journal-graph.js` (commit-story-v2) — a pre-confirmed case where attempt 3 regeneration increased NDS-003 error count from 1 to 5 (lines 29, 30, 54, 57, 31). This fixture must pass before M2 can close.
 - [ ] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), `main()` (index.js), `generateAndSaveDailySummary`, `generateAndSaveWeeklySummary`, and `generateAndSaveMonthlySummary` (all three from summary-manager.js) — all `startActiveSpan`-in-nested-callback pattern. Each must pass before M2 can close.
+- [ ] **Mandatory fixture (run-18 cumulative-offset pattern)**: failing test written for any `generate*` function in `summary-graph.js` (commit-story-v2) — 6 span wrappers accumulate line-offset increments across the file until the closing `}),` of a nested Annotation callback appears at the wrong absolute line number. This is mechanically distinct from the startActiveSpan-in-nested-callback pattern and must be covered by a separate fixture.
 - [ ] Failing tests written for all known false-negative risks (from M1 design)
 - [ ] Normalize-both-sides implementation in `src/languages/javascript/rules/nds003.ts`
 - [ ] All Group A and Group B reconcilers still present and unchanged (removal deferred to M3)
@@ -138,6 +139,7 @@ Validate that normalize-both-sides handles the pre-confirmed gap patterns from `
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
 - [ ] Read `audit-findings/nds003-reconcilers.md` — pre-confirmed gap patterns (technicalNode, startActiveSpan nesting) must be resolved by M2's implementation
 - [ ] Acceptance gate passes (same or better pass/partial/fail rates vs. pre-M2 baseline on the feature branch)
+- [ ] The 4 commit-story-v2 files blocked by NDS-003 in run-18 (context-capture-tool.js, reflection-tool.js, index.js, summary-graph.js) all commit successfully — this is the concrete eval validation for normalize-both-sides
 - [ ] commit-story-v2 fixtures (`journal-graph.js`, `summary-graph.js`) no longer require partial-acceptable test assertions (M5 of PRD #857 added those; they should revert once this PRD merges)
 - [ ] No new `partial` results introduced by the redesign
 - [ ] `docs/rules-reference.md` updated to document the normalize-both-sides NDS-003 detection strategy
@@ -192,6 +194,22 @@ Blocked functions in run-17: `saveContext` (context-capture-tool.js), `saveRefle
 **Why**: The content-aware classifier approach (token-subset test) was the original M1 design. PRD #857 M1 audit found that the 4 Group A reconcilers all share the same root cause — Prettier formats code differently when indentation depth changes — and that the right fix is to normalize both sides at the same depth before comparison, not to classify line content. The token-subset test is still technically valid, but it addresses the symptom (how to classify added lines) rather than the cause (why the lines differ). The audit's Group A/B split makes clear that Group A is an infrastructure issue solvable by normalization, while Group B requires semantic pattern recognition that any approach must handle.
 
 **How to apply**: M1 through M3 updated to use normalize-both-sides framing. All milestone "What to read" lists include `audit-findings/nds003-reconcilers.md`. M2's mandatory fixtures (technicalNode, startActiveSpan) are unchanged — they test specific gap patterns the new approach must handle. M3 removes Group A reconcilers that normalize-both-sides renders redundant; Group B reconcilers survive.
+
+---
+
+### Run-18 eval finding: 4 files confirmed still blocked; summary-graph.js adds a third gap pattern
+
+**Finding**: Run-18 (commit-story-v2) confirms 4 files still blocked by NDS-003 after all PRD #857 fixes:
+- context-capture-tool.js: lines 124–125 (`},` and `);`) — oscillation; startActiveSpan re-indentation pattern (same as run-17)
+- reflection-tool.js: lines 116–117 (`},` and `);`) — oscillation; same pattern
+- index.js: lines 217 and 375 (`);` and `},`) — multi-line `subcommandArgs.push(...)` collapsed on attempt 1, partial fix on attempt 2; related to but structurally distinct from pure startActiveSpan nesting
+- summary-graph.js: line 485 (`}),`) — 6 span wrappers inflate cumulative line offset across the whole file; the reconciler cannot locate the closing `}),` of a nested Annotation callback because every line after the first wrapper has shifted
+
+**summary-graph.js is a third gap pattern**: The two prior patterns are (1) oscillation during fresh regeneration (technicalNode) and (2) a single function body re-indented inside an outer callback (startActiveSpan-in-nested-callback). summary-graph.js is neither: it has no deep nesting and no oscillation. It fails because 6 `startActiveSpan` wrappers across the same file accumulate small line-offset increments until the closing delimiter of a later construct appears at the wrong absolute line number. A normalize-both-sides approach that handles re-indentation must also handle this cumulative drift case.
+
+**How to apply**:
+- **M2**: Add `summary-graph.js` (any of its `generate*` functions) as a mandatory fixture for the cumulative-offset inflation pattern. This tests a third mechanically distinct failure path that the technicalNode and saveContext/saveReflection fixtures do not cover.
+- **M4**: The 4 blocked files (context-capture-tool.js, reflection-tool.js, index.js, summary-graph.js) are the concrete eval validation targets. normalize-both-sides must allow all 4 to commit before M4 can close.
 
 ---
 

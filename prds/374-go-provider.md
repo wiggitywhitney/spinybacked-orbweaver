@@ -89,6 +89,8 @@ These are not suggestions — they are blockers. Go implementation must not star
 
 *Tradeoffs:* Conservative, no NDS-004 violations. Reduced instrumentation coverage. User friction for functions that need context threading.
 
+*Real-world signal — Kubernetes controllers:* In a Kubebuilder-generated controller, Option B provides reasonable coverage. The reconcile entry point (`Reconcile(ctx context.Context, req reconcile.Request)`) always carries context, as do any helpers that thread `ctx` from it — so the hot path is fully instrumented. Informer event handler callbacks (`cache.ResourceEventHandlerFuncs`) and top-level setup code do not carry context and would be skipped. For monitoring the reconcile loop (typically where most interesting work happens), Option B is sufficient. For controllers where significant work happens in informer callbacks or initialization, Option B leaves those paths dark and Option A or C is needed.
+
 **Option C — Two-pass instrumentation.** First pass: identify all functions that would benefit from instrumentation but lack `ctx context.Context`. Report them to the user with suggested signature changes. Second pass (after user makes changes): instrument with spans.
 
 *Tradeoffs:* Best user experience long-term. Complex to implement. Requires a new "suggest-only" mode in the agent.
