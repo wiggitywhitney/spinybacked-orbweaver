@@ -89,14 +89,14 @@ Design must answer:
 - Does normalizing both sides through the same Prettier pass fully eliminate Group A false positives, or do edge cases remain?
 - Can reconcilePartialArgument (partial argument expansion due to `instrFreq` cancellation) be eliminated, or does the "cancelled lines" mechanism require it even after normalization?
 
-- [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Read `audit-findings/nds003-reconcilers.md` — Group A classification and order-dependency assessment
-- [ ] Read issues #841, #833, #837 for historical reorganization patterns
-- [ ] Confirm which Group A reconcilers are fully eliminated by normalize-both-sides; document any that survive
-- [ ] Enumerate at least 2 false-negative risks (cases where new code could pass the normalization test)
-- [ ] For each false-negative risk, specify a guard
-- [ ] Design recorded in Decision Log with rationale
-- [ ] Identify which Group A reconcilers become redundant and which (if any) survive
+- [x] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
+- [x] Read `audit-findings/nds003-reconcilers.md` — Group A classification and order-dependency assessment
+- [x] Read issues #841, #833, #837 for historical reorganization patterns
+- [x] Confirm which Group A reconcilers are fully eliminated by normalize-both-sides; document any that survive
+- [x] Enumerate at least 2 false-negative risks (cases where new code could pass the normalization test)
+- [x] For each false-negative risk, specify a guard
+- [x] Design recorded in Decision Log with rationale — see 2026-05-17 Decision Log entry
+- [x] Identify which Group A reconcilers become redundant and which (if any) survive — only `reconcileObjectLiteralExpansion` is redundant; the other three survive
 
 ### M2: Implement the Prettier normalize-both-sides approach
 
@@ -118,9 +118,9 @@ Implement the normalize-both-sides change in `nds003.ts`: apply Prettier normali
 
 ### M3: Remove superseded Group A reconcilers and update test suite
 
-**What to read**: `src/languages/javascript/rules/nds003.ts` in full. `audit-findings/nds003-reconcilers.md` (Group A vs Group B classification, verdict column for each reconciler). The M2 Decision Log entry confirming which Group A reconcilers were made redundant by normalize-both-sides.
+**What to read**: `src/languages/javascript/rules/nds003.ts` in full. `audit-findings/nds003-reconcilers.md` (Group A vs Group B classification, verdict column for each reconciler). The 2026-05-17 M1 Decision Log entry confirming which Group A reconciler normalize-both-sides makes redundant.
 
-With normalize-both-sides in place, Group A reconcilers that are fully redundant should be removed. Group B reconcilers must be kept — they handle semantic instrumentation patterns that Prettier normalization does not address.
+**M1 finding**: Only `reconcileObjectLiteralExpansion` is made redundant by normalize-both-sides (the RST-001 preserved >80 char line case — both sides now expand identically). The other three Group A reconcilers (`reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`) handle patterns that survive Prettier normalization and must be kept. Group B reconcilers must also be kept — they handle semantic instrumentation patterns that Prettier normalization does not address.
 
 - [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
 - [ ] Read `audit-findings/nds003-reconcilers.md` for the Group A vs. Group B split
@@ -210,6 +210,42 @@ Blocked functions in run-17: `saveContext` (context-capture-tool.js), `saveRefle
 **How to apply**:
 - **M2**: Add `summary-graph.js` (any of its `generate*` functions) as a mandatory fixture for the cumulative-offset inflation pattern. This tests a third mechanically distinct failure path that the technicalNode and saveContext/saveReflection fixtures do not cover.
 - **M4**: The 4 blocked files (context-capture-tool.js, reflection-tool.js, index.js, summary-graph.js) are the concrete eval validation targets. normalize-both-sides must allow all 4 to commit before M4 can close.
+
+---
+
+### 2026-05-17: M1 design — normalize-both eliminates reconcileObjectLiteralExpansion only; other three Group A reconcilers survive
+
+**Finding**: The PRD's initial claim that normalize-both eliminates all 4 Group A reconcilers is incorrect. After tracing each reconciler against the normalize-both approach, only `reconcileObjectLiteralExpansion` is eliminated. The other three survive because they handle patterns that persist even when both sides are Prettier-normalized.
+
+**Reconciler-by-reconciler verdict:**
+
+- `reconcileObjectLiteralExpansion` — **ELIMINATED.** This handles the RST-001 case: the agent returns a function unchanged but the original had a >80 char single-line that Prettier expanded in `normalizedOriginal`. With normalize-both, Prettier runs on the raw agent output (which preserved the >80 char single line), expanding it to the same multi-line form as `normalizedOriginal`. Both sides match → no diff entry → reconciler no longer needed.
+
+- `reconcileAgentSplitLines` — **SURVIVES.** Handles the 79-char boundary: a line at original depth D is 79 chars (under printWidth=80, Prettier keeps as 1 line in `normalizedOriginal`). After `startActiveSpan` wraps the function body (+2 indent levels), the same line is 81 chars at depth D+2 (over printWidth → the agent's Prettier pass splits it to N lines). Running `prettierNormalize` on the instrumented output again keeps the split form. `normalizedOriginal` has 1 line; `normalizedInstrumented` has N lines. Still different. `reconcileAgentSplitLines` (including try-c whitespace comparison) correctly handles this surviving pattern.
+
+- `reconcileIndentReformat` — **SURVIVES.** Handles N-line format at original depth → M-line format at deeper depth for lines already multi-line. After normalize-both, `normalizedOriginal` has Prettier's N-line format and `normalizedInstrumented` has Prettier's M-line format at the new depth. Both are valid Prettier output of the same code — but they're different. `reconcileIndentReformat` is still needed.
+
+- `reconcilePartialArgument` — **SURVIVES.** Not about Prettier formatting differences at all. Handles the instrFreq cancellation dynamic: `func(arg)` is a missingLine but only `arg,` is in addedLines because `func(` was consumed from instrFreq by an identical call site. Normalize-both does not change the cancellation dynamic. This reconciler is fully independent of Prettier formatting depth.
+
+**How `prettierNormalizeForComparison` is called on the instrumented output:** Add one line to `checkNonInstrumentationDiffNormalized` in `nds003.ts`:
+```typescript
+const normalizedOriginal = await prettierNormalize(originalCode, filePath);
+const normalizedInstrumented = await prettierNormalize(instrumentedCode, filePath);
+return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
+```
+The `reconcileSetAttributeMultilineArgs` and `reconcileStartActiveSpanMultilineArgs` reconcilers use `rawTrimmedInstrumentedLines` derived from the `instrumentedCode` parameter (now `normalizedInstrumented`). Since both `addedLines[*].instrumentedLineNum` values and `allInstrumentedLines` are derived from the same `normalizedInstrumented` source, they remain internally consistent. The line-number-based context lookups (e.g., `allInstrumentedLines[N - 2]`) still point to the correct preceding line.
+
+**Does normalize-both fix the run-18 blocked files?** This is an open question that M2's mandatory fixtures will answer empirically. `reconcileAgentSplitLines` and `reconcileIndentReformat` survive and are the reconcilers that handle the `startActiveSpan`-in-nested-callback pattern. normalize-both may improve these reconcilers' precision (by making both sides Prettier-consistent) without eliminating them.
+
+**False-negative risks and guards:**
+
+1. *Stripped-comparison aliasing:* `reconcileAgentSplitLines` try-c uses `stripForComparison` (removes all whitespace and trailing delimiters) for matching. Two expressions with different content could theoretically strip to identical strings. In practice this requires distinct tokens (not just spacing) to collide after whitespace removal — not possible for content changes like `basePath` → `cachePath`. Risk: **very low**. Guard: the existing "still fails for real structural changes" test (nds003.test.ts:1561) explicitly covers this. No additional test needed.
+
+2. *Content change inside a Prettier-expanded >80 char line:* With normalize-both, if the agent changes a character in an originally >80 char line, both sides expand to multi-line forms. The per-line content comparison then catches the specific changed line (e.g., `force: true,` vs `force: false,`). Risk: **none** — Prettier normalization preserves per-line content differences. Guard: add a test in M2 fixtures that verifies a content change inside a >80 char expanded form is still detected after normalize-both.
+
+**Updated M3 scope:** M3 must only remove `reconcileObjectLiteralExpansion`. The other three Group A reconcilers (`reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`) handle patterns that survive normalize-both and must be kept. The PRD's M3 description of removing "redundant Group A reconcilers" remains accurate for the one reconciler that IS made redundant.
+
+**Why the prior normalize-both attempt (PR #837/#838) was reverted:** That attempt tried to fix the parseSummarizeArgs 163-violation case (>80 char lines) by normalizing both sides. It worked for parseSummarizeArgs but introduced regressions for the 79-char boundary case (pool.query calls). The fix for the 79-char boundary was to add `reconcileAgentSplitLines` (including try-c whitespace comparison). Now that `reconcileAgentSplitLines` is in place to handle the boundary case, normalize-both can proceed without triggering the prior regression. The key difference: the prior attempt reverted normalize-both entirely; the current approach implements normalize-both knowing that `reconcileAgentSplitLines` handles the one class of patterns that normalize-both cannot eliminate.
 
 ---
 
