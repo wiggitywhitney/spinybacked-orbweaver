@@ -1247,8 +1247,14 @@ function inferSingleQuote(code: string): boolean {
  * (printWidth, tabWidth, etc.) are respected. When no project config specifies
  * singleQuote, infers it from the source to avoid changing quote style —
  * quote changes produce false positives when comparing against raw instrumented code.
+ *
+ * @param singleQuoteHint - When provided and no project config specifies singleQuote,
+ *   use this value instead of inferring from the code. Used by normalize-both-sides to
+ *   ensure both the original and instrumented code are normalized with the same quote
+ *   style (the original's), since OTel import boilerplate adds double-quoted strings
+ *   that would otherwise shift inferSingleQuote(instrumented) away from the project style.
  */
-async function prettierNormalize(code: string, filePath: string): Promise<string> {
+async function prettierNormalize(code: string, filePath: string, singleQuoteHint?: boolean): Promise<string> {
   if (prettierAvailable === null) {
     try {
       await prettier.format('', { filepath: 'probe.js' });
@@ -1264,7 +1270,8 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
   }
   try {
     const config = await prettier.resolveConfig(filePath) ?? {};
-    const singleQuoteOverride = 'singleQuote' in config ? undefined : inferSingleQuote(code);
+    const singleQuoteOverride = 'singleQuote' in config ? undefined :
+      (singleQuoteHint !== undefined ? singleQuoteHint : inferSingleQuote(code));
     const options: prettier.Options = {
       ...config,
       filepath: filePath,
@@ -1281,14 +1288,18 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
 /**
  * Prettier-normalized NDS-003 check.
  *
- * Normalizes originalCode through Prettier before running the diff. The instrumented
- * code is compared raw. This allows the agent to reformat business-logic lines pushed
- * past Prettier's print width by the startActiveSpan wrapper — Prettier breaks both
- * the original and the reformatted version the same way, so the trimmed content matches.
+ * Normalizes both originalCode and instrumentedCode through Prettier before running
+ * the diff. Normalizing both sides eliminates false positives caused by Prettier
+ * reformatting code differently at different indentation depths:
  *
- * Long lines that the LLM preserves as single-line (e.g. when RST-001 skips a function)
- * are handled by reconcileObjectLiteralExpansion, which joins consecutive missingLines
- * groups and checks if the joined single-line form appears in addedLines.
+ * - RST-001 functions (agent skips, returns unchanged): Prettier(instrumented=original)
+ *   equals Prettier(original), so both normalized sides are identical and no diff fires.
+ *   This makes reconcileObjectLiteralExpansion redundant for this class of false positive.
+ *
+ * - Agent-instrumented functions: both sides are normalized to Prettier's canonical format
+ *   at their respective indentation depths. reconcileAgentSplitLines and
+ *   reconcileIndentReformat handle the residual 79-char boundary mismatches where the same
+ *   content splits differently at different depths.
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
  * Prettier availability is cached across calls within the same process.
@@ -1298,8 +1309,15 @@ export async function checkNonInstrumentationDiffNormalized(
   instrumentedCode: string,
   filePath: string,
 ): Promise<CheckResult[]> {
-  const normalizedOriginal = await prettierNormalize(originalCode, filePath);
-  return checkNonInstrumentationDiff(normalizedOriginal, instrumentedCode, filePath);
+  // Infer quote style from the original so both sides normalize consistently.
+  // OTel import boilerplate uses double-quoted strings, which shifts
+  // inferSingleQuote(instrumentedCode) away from the project's actual style when
+  // the original has mostly single quotes. Using the original's inferred style for
+  // both normalizations prevents quote-style mismatches between the two sides.
+  const singleQuote = inferSingleQuote(originalCode);
+  const normalizedOriginal = await prettierNormalize(originalCode, filePath, singleQuote);
+  const normalizedInstrumented = await prettierNormalize(instrumentedCode, filePath, singleQuote);
+  return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
 }
 
 /** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */

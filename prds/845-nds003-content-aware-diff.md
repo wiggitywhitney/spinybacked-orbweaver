@@ -104,17 +104,17 @@ Design must answer:
 
 Implement the normalize-both-sides change in `nds003.ts`: apply Prettier normalization to the instrumented output (in addition to the original, which is already normalized). Do NOT delete any Group A reconcilers in this milestone — reconciler removal is M3's job. Use TDD.
 
-- [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Read `audit-findings/nds003-reconcilers.md` for Group A reconciler descriptions and the order-dependency assessment
-- [ ] Failing tests written for all known Group A reorganization patterns (Prettier expansion/split/reformat artifacts)
-- [ ] **Mandatory fixture**: failing test written for `technicalNode` from `journal-graph.js` (commit-story-v2) — a pre-confirmed case where attempt 3 regeneration increased NDS-003 error count from 1 to 5 (lines 29, 30, 54, 57, 31). This fixture must pass before M2 can close.
-- [ ] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), `main()` (index.js), `generateAndSaveDailySummary`, `generateAndSaveWeeklySummary`, and `generateAndSaveMonthlySummary` (all three from summary-manager.js) — all `startActiveSpan`-in-nested-callback pattern. Each must pass before M2 can close.
-- [ ] **Mandatory fixture (run-18 cumulative-offset pattern)**: failing test written for any `generate*` function in `summary-graph.js` (commit-story-v2) — 6 span wrappers accumulate line-offset increments across the file until the closing `}),` of a nested Annotation callback appears at the wrong absolute line number. This is mechanically distinct from the startActiveSpan-in-nested-callback pattern and must be covered by a separate fixture.
-- [ ] Failing tests written for all known false-negative risks (from M1 design)
-- [ ] Normalize-both-sides implementation in `src/languages/javascript/rules/nds003.ts`
-- [ ] All Group A and Group B reconcilers still present and unchanged (removal deferred to M3)
-- [ ] All tests pass
-- [ ] `npm run typecheck` passes
+- [x] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
+- [x] Read `audit-findings/nds003-reconcilers.md` for Group A reconciler descriptions and the order-dependency assessment
+- [x] Failing tests written for all known Group A reorganization patterns (Prettier expansion/split/reformat artifacts)
+- [x] **Mandatory fixture**: failing test written for `technicalNode` from `journal-graph.js` (commit-story-v2) — a pre-confirmed case where attempt 3 regeneration increased NDS-003 error count from 1 to 5 (lines 29, 30, 54, 57, 31). This fixture must pass before M2 can close.
+- [x] **Mandatory fixtures (run-17 startActiveSpan pattern)**: failing tests written for `saveContext` (context-capture-tool.js), `saveReflection` (reflection-tool.js), `main()` (index.js), `generateAndSaveDailySummary`, `generateAndSaveWeeklySummary`, and `generateAndSaveMonthlySummary` (all three from summary-manager.js) — all `startActiveSpan`-in-nested-callback pattern. Each must pass before M2 can close.
+- [x] **Mandatory fixture (run-18 cumulative-offset pattern)**: failing test written for any `generate*` function in `summary-graph.js` (commit-story-v2) — 6 span wrappers accumulate line-offset increments across the file until the closing `}),` of a nested Annotation callback appears at the wrong absolute line number. This is mechanically distinct from the startActiveSpan-in-nested-callback pattern and must be covered by a separate fixture.
+- [x] Failing tests written for all known false-negative risks (from M1 design)
+- [x] Normalize-both-sides implementation in `src/languages/javascript/rules/nds003.ts`
+- [x] All Group A and Group B reconcilers still present and unchanged (removal deferred to M3)
+- [x] All tests pass
+- [x] `npm run typecheck` passes
 
 ### M3: Remove superseded Group A reconcilers and update test suite
 
