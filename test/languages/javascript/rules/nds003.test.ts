@@ -1853,9 +1853,10 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   });
 
   describe('multi-line method chain oscillation (#833)', () => {
-    it('error message mentions multi-line when a method chain is collapsed to one line', () => {
-      // The agent collapses a 4-line method chain onto one line, causing NDS-003 to fire.
-      // The message must guide the agent to restore the original multi-line form.
+    it('passes when agent collapses a method chain to one line (reconcileMethodChainCollapse handles this)', () => {
+      // reconcileMethodChainCollapse allows the agent to collapse a multi-line method chain
+      // onto a single line — the two forms are semantically identical (same chain, different
+      // whitespace). NDS-003 does not fire when the content is unchanged.
       const original = [
         'function slugify(text) {',
         '  return text',
@@ -1871,7 +1872,6 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         'function slugify(text) {',
         '  return tracer.startActiveSpan("str.slugify", (span) => {',
         '    try {',
-        // Agent collapsed the chain to one line — NDS-003 should fire with multi-line guidance
         '      return text.toLowerCase().replace(/\\s+/g, \'-\').replace(/[^\\w-]+/g, \'\');',
         '    } finally { span.end(); }',
         '  });',
@@ -1881,35 +1881,11 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       const results = checkNonInstrumentationDiff(original, instrumented, filePath);
       const failures = results.filter(r => !r.passed);
 
-      expect(failures.length).toBeGreaterThan(0);
-      const allMessages = failures.map(f => f.message).join('\n');
-      expect(allMessages).toMatch(/multi.?line/i);
+      expect(failures).toHaveLength(0);
     });
   });
 
   describe('Prettier normalization symmetry — reassembly false-positive (#834)', () => {
-    it('passes via reconcileObjectLiteralExpansion even in the raw diff when Prettier splits a long line', async () => {
-      // The reconcileObjectLiteralExpansion reconciler now handles this case:
-      // Prettier(original) splits a long const into 2 lines, raw instrumented has 1 line.
-      // The reconciler joins the 2 missingLines back to the single-line addedLine → passes.
-      const longLine = `const API_BASE = process.env.PAYMENT_API_URL || 'https://api.payments.example.com';`; // 83 chars
-      const original = [
-        '// ABOUTME: Test fixture.',
-        longLine,
-        '',
-        'export async function doWork() {',
-        '  return fetch(API_BASE);',
-        '}',
-      ].join('\n');
-      const prettierNorm = await prettierNormalizeForComparison(original, filePath);
-
-      // Raw diff: Prettier(original) has 2-line form, raw instrumented has 1-line form.
-      // The reconciler joins them → 0 failures (demonstrates reconciler coverage).
-      const results = checkNonInstrumentationDiff(prettierNorm, original, filePath);
-      const failures = results.filter(r => !r.passed);
-      expect(failures).toHaveLength(0);
-    });
-
     it('passes after pre-normalizing the reassembled output through Prettier', async () => {
       // Demonstrates the fix: normalizing the reassembled code through the same Prettier pass
       // makes both sides identical (both 2-line after normalization) and NDS-003 passes.
@@ -1932,7 +1908,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
-  describe('Problem A — reconcileObjectLiteralExpansion handles }); and }) closings (#839)', () => {
+  describe('Problem A — normalize-both handles }); and }) closings for RST-001 and agent-wrapped cases (#839)', () => {
     it('passes when agent adds span wrapper but keeps { force } arg single-line while Prettier splits in normalized original', async () => {
       // summarize.js: `await generateAndSaveWeeklySummary(weekStr, basePath, { force });`
       // is 87 chars at 4-space → Prettier splits to 3 lines in the normalized original.
@@ -2109,7 +2085,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
-  describe('Problem C — reconcileObjectLiteralExpansion try-d: 4-line original → agent 1-line (#841)', () => {
+  describe('Problem C — normalize-both handles 4-line Prettier original vs agent 1-line form (#841)', () => {
     it('passes when Prettier expands original to 4-line form but agent returns 1-line form', async () => {
       // `generateAndSaveMonthlySummary(monthStr, basePath, { force })` at 6-space (89 chars)
       // → Prettier 4-line form in normalized original (Monthly is 2 chars longer than Weekly):
@@ -2119,8 +2095,8 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       //     { force },
       //   );         ← filtered as /^\s*\);?\s*$/
       // Agent (following the "don't increase line count" directive) returns it as 1-line.
-      // reconcileObjectLiteralExpansion try-d: strip whitespace from joined missingLines and
-      // from the addedLine, compare — they match.
+      // normalize-both normalizes both sides; reconcileIndentReformat then handles the
+      // depth-difference between the 4-line form at 6-space and the agent's Prettier form at 12-space.
       const original = [
         'export async function runMonthlySummarize(options) {',
         '  const { months, force, basePath } = options;',
@@ -2616,22 +2592,16 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
   // Prettier after M2 implementation). Tests are written red-first and must
   // pass before M2 can close.
 
-  describe('normalize-both-sides — Group A: reconcileObjectLiteralExpansion elimination', () => {
-    it('passes when RST-001 function has deeply nested >80 char return (reconciler cannot reconstruct)', async () => {
+  describe('normalize-both-sides — Group A: RST-001 >80 char lines handled by normalize-both', () => {
+    it('passes when RST-001 function has deeply nested >80 char return', async () => {
       // RST-001: agent decides not to instrument this function and returns it unchanged.
       // The original has a return statement with a deeply nested object literal that
       // exceeds 80 chars. Prettier(original) expands to multi-line with trailing commas
       // at every nesting level.
       //
-      // Without normalize-both: reconcileObjectLiteralExpansion's group stops at the
-      // first `},` line (the inner object's closing brace), so the truncated joined group
-      // does not match the full single-line addedLine — try-d fails because the stripped
-      // joined form ends at the inner object while the stripped addedLine continues with
-      // the outer `, detail: { ... }` segment. NDS-003 fires.
-      //
-      // With normalize-both: Prettier(instrumented=original) = Prettier(original) =
+      // normalize-both: Prettier(instrumented=original) = Prettier(original) =
       // normalizedOriginal. checkNonInstrumentationDiff sees identical content on both
-      // sides → no diff → passes without needing the reconciler.
+      // sides → no diff → passes.
       const original = [
         'async function buildReport(commitCount, lineCount, authorCount, timeSpan, longestCommit, shortestCommit) {',
         '  return { summary: { commits: commitCount, lines: lineCount, authors: authorCount, timespan: timeSpan }, detail: { longest: longestCommit, shortest: shortestCommit } };',

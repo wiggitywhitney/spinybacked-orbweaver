@@ -122,13 +122,13 @@ Implement the normalize-both-sides change in `nds003.ts`: apply Prettier normali
 
 **M1 finding**: Only `reconcileObjectLiteralExpansion` is made redundant by normalize-both-sides (the RST-001 preserved >80 char line case — both sides now expand identically). The other three Group A reconcilers (`reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`) handle patterns that survive Prettier normalization and must be kept. Group B reconcilers must also be kept — they handle semantic instrumentation patterns that Prettier normalization does not address.
 
-- [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Read `audit-findings/nds003-reconcilers.md` for the Group A vs. Group B split
-- [ ] Each Group A reconciler assessed against M2 test results: redundant (remove) or still needed (keep with comment)
-- [ ] All Group B reconcilers verified kept
-- [ ] Redundant Group A reconcilers deleted
-- [ ] Tests updated to reflect removal; no test coverage lost for patterns the removed reconcilers handled
-- [ ] `npm test` passes
+- [x] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
+- [x] Read `audit-findings/nds003-reconcilers.md` for the Group A vs. Group B split
+- [x] Each Group A reconciler assessed against M2 test results: redundant (remove) or still needed (keep with comment)
+- [x] All Group B reconcilers verified kept
+- [x] Redundant Group A reconcilers deleted
+- [x] Tests updated to reflect removal; no test coverage lost for patterns the removed reconcilers handled
+- [x] `npm test` passes
 
 ### M4: Acceptance gate + eval target comparison
 
