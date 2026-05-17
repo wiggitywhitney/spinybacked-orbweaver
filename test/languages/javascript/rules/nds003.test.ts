@@ -2978,7 +2978,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '  return {',
         '    date: dateStr,',
         '    annotated,',
-        '  });',
+        '  };',
         '}',
       ].join('\n');
 
@@ -3017,7 +3017,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
         '      return {',
         '        date: dateStr,',
         '        annotated,',
-        '      });',
+        '      };',
         '    } finally {',
         '      span.end();',
         '    }',
