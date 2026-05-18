@@ -366,6 +366,19 @@ function reconcileAgentSplitLines(
           for (const [content, indices] of missingByContent) {
             const strippedContent = stripForComparison(content);
             if (strippedContent === strippedJoined && indices.length > 0) {
+              // stripForComparison strips }; from the missing line, which can cause
+              // a match one line short when the original ends in }; (e.g., `return
+              // { ... };`). The }; appears as a standalone next added line. Absorb
+              // it so it doesn't remain as an unreconciled NDS-003 violation.
+              const nextIdx = j + 1;
+              if (
+                nextIdx < addedLines.length &&
+                !addedToRemove.has(nextIdx) &&
+                addedLines[nextIdx].instrumentedLineNum === addedLines[j].instrumentedLineNum + 1 &&
+                /^\s*\};\s*$/.test(addedLines[nextIdx].line)
+              ) {
+                group.push(nextIdx);
+              }
               missingIndices = indices;
               break;
             }

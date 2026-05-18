@@ -3056,4 +3056,102 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
   });
+
+  describe('normalize-both-sides — closing token absorption (}; and ]); not left as unreconciled NDS-003)', () => {
+    // stripForComparison strips trailing };/); from the MISSING line. When the split
+    // ends with a standalone }; or ]); line, try-c matches one line short (group N-1)
+    // and leaves the closing token as an unreconciled NDS-003. The try-c path must
+    // absorb the immediately following consecutive closing-only line after a stripped match.
+
+    it('passes when return { ... }; at 8-indent splits and leaves }; as standalone line', async () => {
+      // processOrder pattern: `return { orderId, paymentId, status };` at 2-space
+      // is 74 chars (under 80). At 8-space inside startActiveSpan callback it is
+      // 80 chars — Prettier splits the object across lines with }; on its own line.
+      const original = [
+        'export async function processOrder(order) {',
+        '  const validated = validateOrder(order);',
+        '  const payment = await chargePayment(validated);',
+        "  return { orderId: order.id, paymentId: payment.id, status: 'completed' };",
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'export async function processOrder(order) {',
+        '  return tracer.startActiveSpan(',
+        "    'fixture_service.order.process_order',",
+        '    async (span) => {',
+        '      try {',
+        "        span.setAttribute('fixture_service.order.id', String(order.id));",
+        "        span.setAttribute('fixture_service.order.total', order.total);",
+        '        const validated = validateOrder(order);',
+        '        const payment = await chargePayment(validated);',
+        '        return {',
+        '          orderId: order.id,',
+        '          paymentId: payment.id,',
+        "          status: 'completed'",
+        '        };',
+        '      } catch (error) {',
+        '        span.recordException(error);',
+        '        span.setStatus({ code: SpanStatusCode.ERROR });',
+        '        throw error;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    },',
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('passes when pool.query(..., [id]) at 8-indent splits and leaves ]); as standalone line', async () => {
+      // getUserById pattern: pool.query at 2-space is 79 chars (under 80, stays 1 line).
+      // At 8-space inside startActiveSpan callback it is 85 chars — Prettier splits
+      // with [id] on its own line and ]); closing on the next line.
+      const original = [
+        'export async function getUserById(req, res) {',
+        '  const { id } = req.params;',
+        "  const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);",
+        '  if (result.rows.length === 0) {',
+        "    return res.status(404).json({ error: 'User not found' });",
+        '  }',
+        '  res.json(result.rows[0]);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'export async function getUserById(req, res) {',
+        '  return tracer.startActiveSpan(',
+        "    'fixture_service.user.get_user_by_id',",
+        '    async (span) => {',
+        '      try {',
+        "        span.setAttribute('http.request.method', req.method);",
+        '        const { id } = req.params;',
+        "        const result = await pool.query('SELECT * FROM users WHERE id = $1', [",
+        '          id',
+        '        ]);',
+        '        if (result.rows.length === 0) {',
+        "          return res.status(404).json({ error: 'User not found' });",
+        '        }',
+        '        res.json(result.rows[0]);',
+        '      } catch (error) {',
+        '        span.recordException(error);',
+        '        span.setStatus({ code: SpanStatusCode.ERROR });',
+        '        throw error;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    },',
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
 });
