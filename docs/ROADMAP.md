@@ -23,8 +23,6 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 ## Short-term (current focus)
 
-1. **Start PRD #845 M1** — run-18 confirmed 4 files still blocked by the same NDS-003 reconciler gap (context-capture-tool.js, reflection-tool.js, index.js, summary-graph.js). M0 complete. M1 design is ready: normalize-both-sides Prettier approach for Group A reconcilers. Read `prds/845-nds003-content-aware-diff.md` before starting.
-
 ## Medium-term
 
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
