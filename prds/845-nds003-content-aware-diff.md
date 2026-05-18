@@ -136,13 +136,13 @@ Implement the normalize-both-sides change in `nds003.ts`: apply Prettier normali
 
 Validate that normalize-both-sides handles the pre-confirmed gap patterns from `audit-findings/nds003-reconcilers.md`, matches or improves acceptance gate pass/partial/fail rates, and introduces no regressions.
 
-- [ ] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
-- [ ] Read `audit-findings/nds003-reconcilers.md` — pre-confirmed gap patterns (technicalNode, startActiveSpan nesting) must be resolved by M2's implementation
+- [x] Step 0: read `src/languages/javascript/rules/nds003.ts` in full
+- [x] Read `audit-findings/nds003-reconcilers.md` — pre-confirmed gap patterns (technicalNode, startActiveSpan nesting) must be resolved by M2's implementation
 - [ ] Acceptance gate passes (same or better pass/partial/fail rates vs. pre-M2 baseline on the feature branch)
 - [ ] The 4 commit-story-v2 files blocked by NDS-003 in run-18 (context-capture-tool.js, reflection-tool.js, index.js, summary-graph.js) all commit successfully — this is the concrete eval validation for normalize-both-sides
-- [ ] commit-story-v2 fixtures (`journal-graph.js`, `summary-graph.js`) no longer require partial-acceptable test assertions (M5 of PRD #857 added those; they should revert once this PRD merges)
+- [x] commit-story-v2 fixtures (`journal-graph.js`, `summary-graph.js`) no longer require partial-acceptable test assertions (M5 of PRD #857 added those; they should revert once this PRD merges)
 - [ ] No new `partial` results introduced by the redesign
-- [ ] `docs/rules-reference.md` updated to document the normalize-both-sides NDS-003 detection strategy
+- [x] `docs/rules-reference.md` updated to document the normalize-both-sides NDS-003 detection strategy
 - [ ] The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 
 ---
