@@ -2584,13 +2584,12 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
-  // ─── PRD #845 M2: normalize-both-sides mandatory fixtures ───────────────────
+  // ─── normalize-both-sides mandatory fixtures ────────────────────────────────
   //
   // These tests exercise patterns confirmed to fail in eval runs that the
-  // normalize-both-sides approach is expected to resolve. All use
+  // normalize-both-sides approach resolves. All use
   // checkNonInstrumentationDiffNormalized (which normalizes BOTH sides through
-  // Prettier after M2 implementation). Tests are written red-first and must
-  // pass before M2 can close.
+  // Prettier).
 
   describe('normalize-both-sides — Group A: RST-001 >80 char lines handled by normalize-both', () => {
     it('passes when RST-001 function has deeply nested >80 char return', async () => {
