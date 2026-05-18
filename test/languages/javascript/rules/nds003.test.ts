@@ -2999,4 +2999,61 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
   });
+
+  describe('normalize-both-sides — Prettier trailing comma: array arg expansion does not fire NDS-003', () => {
+    // When an array argument like [id] sits on a line that is ≤80 chars at the
+    // original 2-space indent but >80 chars after startActiveSpan adds 4 indent
+    // levels, Prettier's default trailingComma:'all' expands it to:
+    //
+    //   pool.query('SELECT * FROM users WHERE id = $1', [
+    //     id,        ← trailing comma added by Prettier
+    //   ])
+    //
+    // The original stays on one line (no trailing comma). Because [id,] ≠ [id]
+    // after token-stripping, reconcileAgentSplitLines try-c fails and `id,`
+    // fires NDS-003. normalize-both-sides must suppress this by not adding
+    // trailing commas during normalization (trailingComma:'none').
+    it('passes when Prettier splits [arg] to multi-line inside startActiveSpan without trailing comma mismatch', async () => {
+      // getUserById: pool.query at 2-space = 79 chars (stays 1 line).
+      // After startActiveSpan wrapping, same line at 6-space = 83 chars → Prettier splits.
+      const original = [
+        'export async function getUserById(req, res) {',
+        '  const { id } = req.params;',
+        "  const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);",
+        '  if (result.rows.length === 0) {',
+        "    return res.status(404).json({ error: 'User not found' });",
+        '  }',
+        '  res.json(result.rows[0]);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'export async function getUserById(req, res) {',
+        '  return tracer.startActiveSpan(',
+        "    'fixture_service.user.get_user_by_id',",
+        '    async (span) => {',
+        '      try {',
+        '        const { id } = req.params;',
+        "        const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);",
+        '        if (result.rows.length === 0) {',
+        "          return res.status(404).json({ error: 'User not found' });",
+        '        }',
+        '        res.json(result.rows[0]);',
+        '      } catch (error) {',
+        '        span.recordException(error);',
+        '        span.setStatus({ code: SpanStatusCode.ERROR });',
+        '        throw error;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    },',
+        '  );',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+  });
 });

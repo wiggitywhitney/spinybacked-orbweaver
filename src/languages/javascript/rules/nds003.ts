@@ -1130,10 +1130,17 @@ async function prettierNormalize(code: string, filePath: string, singleQuoteHint
     const config = await prettier.resolveConfig(filePath) ?? {};
     const singleQuoteOverride = 'singleQuote' in config ? undefined :
       (singleQuoteHint !== undefined ? singleQuoteHint : inferSingleQuote(code));
+    // When no project config specifies trailingComma, override to 'none'.
+    // Prettier's default ('all') adds trailing commas when splitting arrays to
+    // multi-line (e.g., [id] → [id,]), making token comparison fail in
+    // reconcileAgentSplitLines try-c even though the code is semantically
+    // identical. Both sides normalize consistently with 'none'.
+    const trailingCommaOverride = 'trailingComma' in config ? undefined : 'none' as const;
     const options: prettier.Options = {
       ...config,
       filepath: filePath,
       ...(singleQuoteOverride !== undefined ? { singleQuote: singleQuoteOverride } : {}),
+      ...(trailingCommaOverride !== undefined ? { trailingComma: trailingCommaOverride } : {}),
     };
     return await prettier.format(code, options);
   } catch {
