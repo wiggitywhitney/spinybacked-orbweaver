@@ -1053,8 +1053,8 @@ let pendingNds003Warning: string | null = null;
  * of a comparison to avoid false NDS-003 failures caused by Prettier
  * reformatting long lines (> printWidth) when only one side is normalized.
  */
-export async function prettierNormalizeForComparison(code: string, filePath: string): Promise<string> {
-  return prettierNormalize(code, filePath);
+export async function prettierNormalizeForComparison(code: string, filePath: string, singleQuoteHint?: boolean): Promise<string> {
+  return prettierNormalize(code, filePath, singleQuoteHint);
 }
 
 /**

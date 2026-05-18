@@ -1,6 +1,6 @@
 # PRD #845: NDS-003 content-aware diff — eliminate reconciler whack-a-mole
 
-**Status**: Ready to start M1 — M0 is satisfied by PRD #857 M1 audit findings (see Decision Log 2026-05-14 entry). M1 scope has been revised per audit recommendation. Read `audit-findings/nds003-reconcilers.md` before starting M1.
+**Status**: M1–M3 complete; M4 acceptance gate in progress. See Decision Log 2026-05-14 for M0 completion and M1 scope revision. Read `audit-findings/nds003-reconcilers.md` for Group A/B classification.
 **Priority**: Low
 **GitHub Issue**: [#845](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/845)
 **Created**: 2026-05-11
@@ -42,7 +42,7 @@ Each reconciler was written in response to a specific pattern observed in a spec
 
 ~~Make NDS-003's line classifier content-aware. Instead of flagging every non-instrumentation added line, classify each added line as Reorganization (accept) or New code (flag). For each non-instrumentation added line, check whether its tokens are a subset of the tokens in any single original line.~~
 
-**Current approach**: Apply Prettier to the instrumented output at the same indentation depth as the original before running the NDS-003 diff. `checkNonInstrumentationDiffNormalized` already normalizes the original — normalizing the instrumented output through the same pass at the same depth eliminates the 4 Group A (Prettier formatting artifact) reconcilers. Group B (semantic instrumentation pattern) reconcilers are unaffected and remain. See `audit-findings/nds003-reconcilers.md` for the Group A vs. Group B classification.
+**Current approach**: Apply Prettier to the instrumented output at the same indentation depth as the original before running the NDS-003 diff. `checkNonInstrumentationDiffNormalized` already normalizes the original — normalizing the instrumented output through the same pass at the same depth eliminates `reconcileObjectLiteralExpansion` (the only Group A reconciler made redundant; see Decision Log 2026-05-17). The other three Group A reconcilers (`reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`) handle patterns that survive normalization and are kept. Group B (semantic instrumentation pattern) reconcilers are unaffected and remain. See `audit-findings/nds003-reconcilers.md` for the Group A vs. Group B classification.
 
 ---
 
@@ -82,7 +82,7 @@ A new eval target run is no longer needed to confirm the threshold. The audit's 
 
 **Revised scope** (per Decision Log 2026-05-14): M1 targets only Group A reconcilers — the 4 Prettier formatting artifacts: `reconcileObjectLiteralExpansion`, `reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`. Group B reconcilers (semantic instrumentation patterns) are out of scope for this redesign.
 
-**Approach**: Apply Prettier to the instrumented output at the indentation depth it was formatted at, in addition to the Prettier normalization already applied to the original. `checkNonInstrumentationDiffNormalized` already normalizes the original — normalizing the instrumented output through the same pass at the same depth makes all four Group A reconcilers redundant in the normalized path.
+**Approach**: Apply Prettier to the instrumented output at the indentation depth it was formatted at, in addition to the Prettier normalization already applied to the original. `checkNonInstrumentationDiffNormalized` already normalizes the original — normalizing the instrumented output through the same pass at the same depth makes `reconcileObjectLiteralExpansion` redundant (see Decision Log 2026-05-17 for the reconciler-by-reconciler verdict; only this one reconciler is eliminated).
 
 Design must answer:
 - How does `prettierNormalizeForComparison` get called on the instrumented output (it currently only normalizes the original)?
