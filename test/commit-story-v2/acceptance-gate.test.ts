@@ -294,12 +294,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('journal-graph.js', result);
 
-      // While PRD #845 (NDS-003 reconciler redesign) is open, partial is an acceptable outcome.
-      // The NDS-003 reconciler gap causes valid agent output to receive partial status for patterns
-      // the reconciler list does not handle. Revert to toBe('success') and spansAdded >= 4
-      // once PRD #845 is merged.
-      expect(['success', 'partial']).toContain(result.status);
-      expect(result.spansAdded).toBeGreaterThanOrEqual(1);
+      expect(result.status).toBe('success');
+      expect(result.spansAdded).toBeGreaterThanOrEqual(4);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221)
       for (const ext of result.schemaExtensions) {
@@ -321,12 +317,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Run-5 Coverage Recovery
       const result = await instrumentWithRetry(filePath, originalCode, resolvedSchema, makeConfig(), { provider: jsProvider });
       dumpDiagnostics('summary-graph.js', result);
 
-      // While PRD #845 (NDS-003 reconciler redesign) is open, partial is an acceptable outcome.
-      // A partial outcome was documented after M5 completed, caused by the same NDS-003 reconciler
-      // gap as journal-graph.js (PRD #845's reconciler list does not handle this file's patterns).
-      // Revert to toBe('success') and spansAdded >= 6 once PRD #845 is merged.
-      expect(['success', 'partial']).toContain(result.status);
-      expect(result.spansAdded).toBeGreaterThanOrEqual(1);
+      expect(result.status).toBe('success');
+      expect(result.spansAdded).toBeGreaterThanOrEqual(6);
       expect(result.tokenUsage.inputTokens).toBeGreaterThan(0);
       // Dedup can reduce extensions below spansAdded when multiple spans share a schema name (#221).
       // Zero extensions is a valid outcome — agent may correctly use only registry attributes.

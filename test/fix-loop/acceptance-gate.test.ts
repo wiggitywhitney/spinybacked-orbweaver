@@ -154,8 +154,11 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       expect(result.errorProgression).toBeDefined();
       expect(result.errorProgression!.length).toBeGreaterThanOrEqual(result.validationAttempts);
 
-      // The last entry should show 0 errors (since it succeeded)
-      expect(result.errorProgression![result.errorProgression!.length - 1]).toBe('0 errors');
+      // The last entry shows 0 errors (full-file success) or the function-level
+      // fallback summary when the full-file path needed fallback assistance.
+      // Both are valid success paths.
+      const lastEntry = result.errorProgression![result.errorProgression!.length - 1];
+      expect(lastEntry === '0 errors' || lastEntry.startsWith('function-level:')).toBe(true);
 
       // Libraries should be detected (pg and/or express)
       expect(result.librariesNeeded.length).toBeGreaterThan(0);

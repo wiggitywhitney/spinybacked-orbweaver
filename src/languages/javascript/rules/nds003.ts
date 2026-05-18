@@ -278,142 +278,9 @@ function reconcileReturnCaptures(
 }
 
 /**
- * Reconcile Prettier-expanded lines against their single-line originals.
- *
- * When the LLM returns a function unchanged (e.g. RST-001 pure utility — no span added),
- * the original code may have long lines (>80 chars) that Prettier expands in the
- * normalizedOriginal but the LLM preserves as single-line in its output. Two patterns:
- *
- *   Object literals:            Assignment continuations:
- *     return {                    usage =
- *       dates: [],                  'Missing month argument...';
- *       ...
- *     };
- *   ↔ return { dates: [], ... };  ↔ usage = 'Missing month argument...';
- *
- * NDS-003 flags the expanded lines as "missing" and the single-line form as "added".
- * This reconciler joins consecutive missingLines groups and checks if:
- *   (a) the direct join appears in addedLines, OR
- *   (b) the join with trailing comma removed before closing `}` appears in addedLines
- *       (Prettier adds trailing commas in multi-line object/array literals)
- *
- * Safety: both sides must be present — the expanded group in missingLines AND the
- * reconstructed single-line in addedLines. Content changes produce different single-line
- * forms that won't match → NDS-003 still fires correctly.
- */
-function reconcileObjectLiteralExpansion(
-  missingLines: Array<{ line: string; originalLineNum: number }>,
-  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
-): void {
-  const addedByContent = new Map<string, number[]>();
-  // Also index by stripped form for try-d (whitespace-normalized comparison).
-  // Handles 4-line Prettier-expanded original vs agent's 1-line form where spacing
-  // prevents exact string match (e.g. joined form `func( a, b, {c,}` vs `func(a, b, { c })`).
-  const addedByStripped = new Map<string, number[]>();
-  for (let i = 0; i < addedLines.length; i++) {
-    const key = addedLines[i].line;
-    const existing = addedByContent.get(key);
-    if (existing) existing.push(i);
-    else addedByContent.set(key, [i]);
-    const stripped = stripForComparison(key);
-    if (stripped) {
-      const existingStripped = addedByStripped.get(stripped);
-      if (existingStripped) existingStripped.push(i);
-      else addedByStripped.set(stripped, [i]);
-    }
-  }
-
-  const missingToRemove = new Set<number>();
-  const addedToRemove = new Set<number>();
-
-  let i = 0;
-  while (i < missingLines.length) {
-    if (missingToRemove.has(i)) { i++; continue; }
-
-    // Build a consecutive group starting at i
-    const group: number[] = [i];
-    for (let j = i + 1; j < missingLines.length; j++) {
-      if (missingToRemove.has(j)) break;
-      const prev = missingLines[group[group.length - 1]];
-      const curr = missingLines[j];
-      if (curr.originalLineNum !== prev.originalLineNum + 1) break;
-      group.push(j);
-      // Object literals: stop at the closing brace so we don't over-consume
-      if (curr.line.startsWith('}')) break;
-    }
-
-    if (group.length >= 2) {
-      const joined = group.map(idx => missingLines[idx].line).join(' ');
-      const lastGroupLine = missingLines[group[group.length - 1]].line;
-
-      // Try (a): direct join — handles assignment continuations like `usage =\n'...'`
-      let addedIndices = addedByContent.get(joined);
-      if (!addedIndices || addedIndices.length === 0) {
-        // Try (b): remove trailing comma before closing `}`, `};`, `})`, `});`, etc.
-        // `[;)]*` handles any combination of semicolons and parens after the closing brace,
-        // so `});` (function-call argument ending) is matched in addition to `}` and `};`.
-        const withoutTrailingComma = joined.replace(/,(\s*\}[;)]*\s*)$/, '$1');
-        if (withoutTrailingComma !== joined) {
-          addedIndices = addedByContent.get(withoutTrailingComma);
-        }
-      }
-
-      // Try (c): incomplete group where the closing `});` / `})` was consumed by the
-      // instrumented code's span-callback closing brace. When the group ends with a non-`}`
-      // line (e.g., `force,`), the `});` that closed the original function call was not in
-      // missingLines because it matched the span-callback `});`. Try appending the known
-      // closing patterns and re-applying the trailing-comma removal.
-      if ((!addedIndices || addedIndices.length === 0) && !lastGroupLine.startsWith('}')) {
-        for (const closing of [' });', ' })', ' }']) {
-          const withClosing = joined + closing;
-          addedIndices = addedByContent.get(withClosing);
-          if (addedIndices && addedIndices.length > 0) break;
-          const withoutTrailingComma = withClosing.replace(/,(\s*\}[;)]*\s*)$/, '$1');
-          if (withoutTrailingComma !== withClosing) {
-            addedIndices = addedByContent.get(withoutTrailingComma);
-            if (addedIndices && addedIndices.length > 0) break;
-          }
-        }
-      }
-
-      // Try (d): whitespace-normalized comparison — handles the case where a Prettier
-      // N-line expansion of the original matches the agent's 1-line preserved form, but
-      // spacing differences (the join uses spaces between lines, the 1-line form doesn't)
-      // prevent tries (a)–(c) from matching. Strip all whitespace and trailing delimiter
-      // characters from both the joined missingLines and each addedLine, then compare.
-      // Example: 4-line Prettier form (`func(`, `a,`, `b,`, `{ c },`) vs agent's 1-line
-      // `func(a, b, { c })` — after stripping: `func(a,b,{c` vs `func(a,b,{c` → match.
-      if (!addedIndices || addedIndices.length === 0) {
-        const strippedJoined = stripForComparison(joined);
-        if (strippedJoined) {
-          addedIndices = addedByStripped.get(strippedJoined);
-        }
-      }
-
-      if (addedIndices && addedIndices.length > 0) {
-        const addedIdx = addedIndices.shift()!;
-        for (const idx of group) missingToRemove.add(idx);
-        addedToRemove.add(addedIdx);
-        i += group.length;
-        continue;
-      }
-    }
-
-    i++;
-  }
-
-  for (const idx of [...missingToRemove].sort((a, b) => b - a)) {
-    missingLines.splice(idx, 1);
-  }
-  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
-    addedLines.splice(idx, 1);
-  }
-}
-
-/**
  * Reconcile agent-split lines against their single-line originals.
  *
- * The reverse of reconcileObjectLiteralExpansion: when the agent wraps a function
+ * When the agent wraps a function
  * in a startActiveSpan callback (adding 2+ spaces of indent), lines that were
  * under Prettier's printWidth at their original indentation may now exceed it at
  * the new indentation. The agent then splits the line, producing two or more
@@ -438,8 +305,7 @@ function reconcileObjectLiteralExpansion(
  * retrying) was considered and deliberately omitted. It was too broad — it matched
  * multi-line object literals like `{ includeEmpty: false, timeout: 3000 }` and
  * caused the "without normalization: fails" regression test to silently pass.
- * The object-literal-with-consumed-closing case is already handled in
- * `reconcileObjectLiteralExpansion` (try-c). Do not re-add it here.
+ * Do not re-add it here.
  */
 function reconcileAgentSplitLines(
   missingLines: Array<{ line: string; originalLineNum: number }>,
@@ -500,6 +366,19 @@ function reconcileAgentSplitLines(
           for (const [content, indices] of missingByContent) {
             const strippedContent = stripForComparison(content);
             if (strippedContent === strippedJoined && indices.length > 0) {
+              // stripForComparison strips }; from the missing line, which can cause
+              // a match one line short when the original ends in }; (e.g., `return
+              // { ... };`). The }; appears as a standalone next added line. Absorb
+              // it so it doesn't remain as an unreconciled NDS-003 violation.
+              const nextIdx = j + 1;
+              if (
+                nextIdx < addedLines.length &&
+                !addedToRemove.has(nextIdx) &&
+                addedLines[nextIdx].instrumentedLineNum === addedLines[j].instrumentedLineNum + 1 &&
+                /^\s*\};\s*$/.test(addedLines[nextIdx].line)
+              ) {
+                group.push(nextIdx);
+              }
               missingIndices = indices;
               break;
             }
@@ -1065,18 +944,10 @@ export function checkNonInstrumentationDiff(
     }
   }
 
-  // Reconcile Prettier-expanded object literals vs their original single-line form:
-  // when the LLM returns a function unchanged (e.g. RST-001 — no span added),
-  // Prettier(original) may have expanded long single-line returns to multi-line while
-  // the LLM preserved the single-line form. The reconciler joins the expanded group
-  // back to single-line and checks if that form appears in addedLines.
-  reconcileObjectLiteralExpansion(missingLines, addedLines);
-
   // Reconcile agent-split lines vs their single-line originals: when the agent adds
   // a startActiveSpan wrapper (increasing indent by 2+ spaces), lines that fit within
   // Prettier's printWidth at their original indent may exceed it inside the span callback.
   // The agent then splits the line, producing consecutive addedLines for a single missingLine.
-  // This is the reverse of reconcileObjectLiteralExpansion (missing=single, added=multi).
   reconcileAgentSplitLines(missingLines, addedLines);
 
   // Reconcile Prettier re-splits at different indentation depths: when a span callback adds
@@ -1195,8 +1066,8 @@ let pendingNds003Warning: string | null = null;
  * of a comparison to avoid false NDS-003 failures caused by Prettier
  * reformatting long lines (> printWidth) when only one side is normalized.
  */
-export async function prettierNormalizeForComparison(code: string, filePath: string): Promise<string> {
-  return prettierNormalize(code, filePath);
+export async function prettierNormalizeForComparison(code: string, filePath: string, singleQuoteHint?: boolean): Promise<string> {
+  return prettierNormalize(code, filePath, singleQuoteHint);
 }
 
 /**
@@ -1247,8 +1118,14 @@ function inferSingleQuote(code: string): boolean {
  * (printWidth, tabWidth, etc.) are respected. When no project config specifies
  * singleQuote, infers it from the source to avoid changing quote style —
  * quote changes produce false positives when comparing against raw instrumented code.
+ *
+ * @param singleQuoteHint - When provided and no project config specifies singleQuote,
+ *   use this value instead of inferring from the code. Used by normalize-both-sides to
+ *   ensure both the original and instrumented code are normalized with the same quote
+ *   style (the original's), since OTel import boilerplate adds double-quoted strings
+ *   that would otherwise shift inferSingleQuote(instrumented) away from the project style.
  */
-async function prettierNormalize(code: string, filePath: string): Promise<string> {
+async function prettierNormalize(code: string, filePath: string, singleQuoteHint?: boolean): Promise<string> {
   if (prettierAvailable === null) {
     try {
       await prettier.format('', { filepath: 'probe.js' });
@@ -1264,11 +1141,19 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
   }
   try {
     const config = await prettier.resolveConfig(filePath) ?? {};
-    const singleQuoteOverride = 'singleQuote' in config ? undefined : inferSingleQuote(code);
+    const singleQuoteOverride = 'singleQuote' in config ? undefined :
+      (singleQuoteHint !== undefined ? singleQuoteHint : inferSingleQuote(code));
+    // When no project config specifies trailingComma, override to 'none'.
+    // Prettier's default ('all') adds trailing commas when splitting arrays to
+    // multi-line (e.g., [id] → [id,]), making token comparison fail in
+    // reconcileAgentSplitLines try-c even though the code is semantically
+    // identical. Both sides normalize consistently with 'none'.
+    const trailingCommaOverride = 'trailingComma' in config ? undefined : 'none' as const;
     const options: prettier.Options = {
       ...config,
       filepath: filePath,
       ...(singleQuoteOverride !== undefined ? { singleQuote: singleQuoteOverride } : {}),
+      ...(trailingCommaOverride !== undefined ? { trailingComma: trailingCommaOverride } : {}),
     };
     return await prettier.format(code, options);
   } catch {
@@ -1281,14 +1166,17 @@ async function prettierNormalize(code: string, filePath: string): Promise<string
 /**
  * Prettier-normalized NDS-003 check.
  *
- * Normalizes originalCode through Prettier before running the diff. The instrumented
- * code is compared raw. This allows the agent to reformat business-logic lines pushed
- * past Prettier's print width by the startActiveSpan wrapper — Prettier breaks both
- * the original and the reformatted version the same way, so the trimmed content matches.
+ * Normalizes both originalCode and instrumentedCode through Prettier before running
+ * the diff. Normalizing both sides eliminates false positives caused by Prettier
+ * reformatting code differently at different indentation depths:
  *
- * Long lines that the LLM preserves as single-line (e.g. when RST-001 skips a function)
- * are handled by reconcileObjectLiteralExpansion, which joins consecutive missingLines
- * groups and checks if the joined single-line form appears in addedLines.
+ * - RST-001 functions (agent skips, returns unchanged): Prettier(instrumented=original)
+ *   equals Prettier(original), so both normalized sides are identical and no diff fires.
+ *
+ * - Agent-instrumented functions: both sides are normalized to Prettier's canonical format
+ *   at their respective indentation depths. reconcileAgentSplitLines and
+ *   reconcileIndentReformat handle the residual 79-char boundary mismatches where the same
+ *   content splits differently at different depths.
  *
  * Falls back to the raw diff when Prettier is unavailable or formatting fails.
  * Prettier availability is cached across calls within the same process.
@@ -1298,8 +1186,15 @@ export async function checkNonInstrumentationDiffNormalized(
   instrumentedCode: string,
   filePath: string,
 ): Promise<CheckResult[]> {
-  const normalizedOriginal = await prettierNormalize(originalCode, filePath);
-  return checkNonInstrumentationDiff(normalizedOriginal, instrumentedCode, filePath);
+  // Infer quote style from the original so both sides normalize consistently.
+  // OTel import boilerplate uses double-quoted strings, which shifts
+  // inferSingleQuote(instrumentedCode) away from the project's actual style when
+  // the original has mostly single quotes. Using the original's inferred style for
+  // both normalizations prevents quote-style mismatches between the two sides.
+  const singleQuote = inferSingleQuote(originalCode);
+  const normalizedOriginal = await prettierNormalize(originalCode, filePath, singleQuote);
+  const normalizedInstrumented = await prettierNormalize(instrumentedCode, filePath, singleQuote);
+  return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
 }
 
 /** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */
