@@ -1,7 +1,7 @@
 // ABOUTME: Thin wrapper over simple-git for branch, stage, commit, and log operations.
 // ABOUTME: Used by Phase 7 deliverables to create feature branches and per-file commits.
 
-import { simpleGit } from 'simple-git';
+import { simpleGit, type SimpleGit } from 'simple-git';
 
 /** A single commit log entry. */
 export interface LogEntry {
@@ -124,6 +124,26 @@ export function resolveAuthenticatedUrl(remoteUrl: string, token: string | undef
 }
 
 /**
+ * Push with a single retry when a pre-push hook creates a commit and requests a re-push.
+ *
+ * Some repos have a pre-push hook (e.g. progress-md-pr.sh) that commits a file
+ * and exits non-zero with a "Push again" message to include the new commit. Detect
+ * this pattern and retry once so spiny-orb handles it transparently.
+ */
+async function pushWithHookRetry(git: SimpleGit, remote: string, branchName: string): Promise<void> {
+  try {
+    await git.push(remote, branchName, ['--set-upstream']);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/push again/i.test(msg)) {
+      await git.push(remote, branchName, ['--set-upstream']);
+      return;
+    }
+    throw err;
+  }
+}
+
+/**
  * Push the current branch to the remote, setting upstream tracking.
  * When GITHUB_TOKEN is set in the environment and the remote uses HTTPS,
  * the token is embedded in the push URL to avoid authentication failures
@@ -169,7 +189,7 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
         let pushError: Error | undefined;
         try {
           await git.remote(['set-url', '--push', remote, authUrl]);
-          await git.push(remote, branchName, ['--set-upstream']);
+          await pushWithHookRetry(git, remote, branchName);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           pushError = new Error(sanitizeTokenFromError(msg));
@@ -202,7 +222,7 @@ export async function pushBranch(dir: string, branchName: string, remote = 'orig
   try {
     process.stderr.write(`pushBranch: path=bare-push, reason=${token ? 'url-unchanged' : 'no-token'}\n`);
   } catch { /* diagnostic only — never block push */ }
-  await git.push(remote, branchName, ['--set-upstream']);
+  await pushWithHookRetry(git, remote, branchName);
 }
 
 /**
