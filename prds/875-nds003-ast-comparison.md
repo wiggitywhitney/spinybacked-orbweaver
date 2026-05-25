@@ -57,7 +57,7 @@ The stripper's correctness depends on knowing every instrumentation pattern the 
 **Work**:
 - Analyze debug dumps from commit-story-v2 eval runs 17–19 (located at `~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/commit-story-v2/`). For each instrumented file in the debug dumps, identify every OTel construct the agent added: `startActiveSpan` shapes, `span.*` call variants, import additions, error recording patterns, try/catch wrapping, nested spans.
 - Catalog edge cases: lines near 80-char boundary at the new indentation, early returns inside span callbacks, multiple spans in one function, async vs sync wrappers, spans inside conditionals or loops. For each edge case, record: the pattern, the specific file and eval run where it appears (e.g., `claude-collector.js`, run-19), and what the stripper must do with it.
-- Prototype the core ts-morph operation: given a `CallExpression` node matching `tracer.startActiveSpan('name', (span) => { BODY })`, write a function that extracts `BODY` and replaces the call with it. This must be a passing test, not pseudocode — the prototype validates that ts-morph supports the operation before M1 commits to the approach.
+- Prototype the core ts-morph operation: given a `CallExpression` node matching `tracer.startActiveSpan('name', (span) => { BODY })`, write a function that extracts `BODY` and replaces the call with it. This must be a passing test, not pseudocode — the prototype validates that ts-morph supports the operation before M1 commits to the approach. This test becomes the first entry in M1's fixture suite — M1 extends it, it does not start over.
 - Document all findings in `audit-findings/nds003-ast-patterns.md`.
 
 **Success criteria**:
@@ -75,8 +75,9 @@ The stripper takes an instrumented AST and returns an AST with all OTel nodes re
 
 **Patterns the stripper must handle** (exact list from M0 catalog — read it):
 - `startActiveSpan` call expressions — unwrap to callback body
+- `try { BODY } finally { span.end() }` wrappers — unwrap to `BODY` (this is how the agent handles NDS-007 Pattern A graceful-degradation catches; it does not always use a `startActiveSpan` callback)
 - `span.setAttribute(...)`, `span.setStatus(...)`, `span.recordException(...)`, `span.end()` statements — remove
-- Variables declared as the span parameter of a `startActiveSpan` callback — track and remove all usages
+- Variables declared as the span parameter of a `startActiveSpan` callback — collect all references first, remove every `span.*` usage, then remove the declaration. Removing the declaration before its references leaves dangling nodes whose behavior in ts-morph is undefined.
 - OTel import declarations (`opentelemetry`, `@opentelemetry/*`) — remove
 
 **Implementation approach**: For each function in the instrumented file, walk the AST looking for known OTel node shapes. Apply transformations in a single pass. Do not attempt to infer intent — match shapes exactly. Before using any ts-morph API method, verify it exists in `src/languages/javascript/rules/cdq007.ts` or the ts-morph type definitions. Do NOT invent method names.
