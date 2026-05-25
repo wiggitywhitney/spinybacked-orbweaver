@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-05-25) Fixed spiny-orb's push step silently giving up when a target repo's pre-push hook creates a new commit and exits non-zero asking for a re-push. Some repos (like commit-story-v2) have a `progress-md-pr.sh` hook that commits a PROGRESS.md update to the instrument branch and prints "Push again to include it." before exiting with a non-zero status. spiny-orb was treating any non-zero push exit as a permanent failure, skipping PR creation and stranding the hook's commit on the branch. The fix detects the "Push again" pattern in the hook's stderr output and retries the push once, transparently picking up the hook-created commit. This was firing on every commit-story-v2 eval run and required manual PR creation as a workaround.
+
 ### Added
 
 - (2026-05-18) Fixed NDS-003 false positive where `return { ... };` split at deeper indentation left `};` as an unreconciled added line. When `startActiveSpan` adds indent levels and a return-object statement crosses Prettier's printWidth, Prettier splits the object across lines with `};` on its own final line. `reconcileAgentSplitLines` try-c was matching one line short because `stripForComparison` strips `};` from the missing line, making the N-1 group compare equal. The fix: after a try-c match, absorb the immediately following consecutive line if it is exactly `};`. Two unit tests added for the `return { ... };` and `pool.query(..., [id]);` split patterns. Also recalibrated the Phase 3 fix-loop test assertion for `user-routes.js` to accept function-level fallback as a valid success path alongside full-file validation.

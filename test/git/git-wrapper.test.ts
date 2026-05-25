@@ -2,7 +2,7 @@
 // ABOUTME: Tests branch creation, file staging, commit, log, and current branch operations in isolated temp repos.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFile, mkdir, rm } from 'node:fs/promises';
+import { writeFile, mkdir, rm, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -318,6 +318,43 @@ describe('git-wrapper', () => {
       const bare = simpleGit(bareDir);
       const branches = await bare.branch();
       expect(branches.all).toContain('spiny-orb/test-push');
+    });
+
+    it('retries push when pre-push hook creates a commit and exits non-zero with "Push again"', { timeout: LOCAL_PUSH_TIMEOUT }, async () => {
+      // Simulate the progress-md-pr.sh pattern: on first invocation the hook creates
+      // a commit and exits 1 asking for a re-push; on second invocation it exits 0.
+      const hooksDir = join(repoDir, '.git', 'hooks');
+      await mkdir(hooksDir, { recursive: true });
+      const hookPath = join(hooksDir, 'pre-push');
+      const hookScript = [
+        '#!/bin/sh',
+        'STATE="$(git rev-parse --git-dir)/hook-fired"',
+        'if [ ! -f "$STATE" ]; then',
+        '  touch "$STATE"',
+        '  echo "hook-content" >> PROGRESS.md',
+        '  git add PROGRESS.md',
+        '  git commit -m "chore: update PROGRESS.md"',
+        '  echo "Committed PROGRESS.md update. Push again to include it." >&2',
+        '  exit 1',
+        'fi',
+        'exit 0',
+      ].join('\n');
+      await writeFile(hookPath, hookScript);
+      await chmod(hookPath, 0o755);
+
+      await createBranch(repoDir, 'spiny-orb/test-hook-retry');
+      await writeFile(join(repoDir, 'test.js'), 'const x = 1;\n');
+      await stageFiles(repoDir, ['test.js']);
+      await commit(repoDir, 'instrument test.js');
+
+      await expect(pushBranch(repoDir, 'spiny-orb/test-hook-retry')).resolves.not.toThrow();
+
+      // Both the original commit and the hook-created commit should be on the remote
+      const bare = simpleGit(bareDir);
+      const log = await bare.log(['spiny-orb/test-hook-retry']);
+      const messages = log.all.map((e) => e.message);
+      expect(messages).toContain('chore: update PROGRESS.md');
+      expect(messages).toContain('instrument test.js');
     });
 
     // This exercises the non-token path (local bare repo, no GITHUB_TOKEN).
