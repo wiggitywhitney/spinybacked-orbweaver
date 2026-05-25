@@ -25,7 +25,7 @@ Every time a new formatting pattern hits this boundary, a new reconciler is adde
 
 Replace NDS-003's Prettier-normalized text diff with AST-level comparison:
 
-1. Parse both the original and instrumented file into ASTs using ts-morph (already in the project for CDQ-007).
+1. Parse both the original and instrumented file into ASTs using ts-morph (already in the project for CDQ-007). **ts-morph is already established in this project — do not run `/research` on it.**
 2. Strip all OTel instrumentation nodes from the instrumented AST: `startActiveSpan` wrappers, `span.setAttribute`, `span.setStatus`, `span.recordException`, `span.end`, and OTel import additions.
 3. Unwrap `startActiveSpan` callbacks — replace the wrapper call with its body, restoring the original code structure.
 4. Compare the resulting AST with the original AST. Any difference is a real code change.
@@ -58,7 +58,7 @@ The stripper's correctness depends on knowing every instrumentation pattern the 
 - Analyze debug dumps from commit-story-v2 eval runs 17–19 (located at `~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/commit-story-v2/`). For each instrumented file in the debug dumps, identify every OTel construct the agent added: `startActiveSpan` shapes, `span.*` call variants, import additions, error recording patterns, try/catch wrapping, nested spans.
 - Catalog edge cases: lines near 80-char boundary at the new indentation, early returns inside span callbacks, multiple spans in one function, async vs sync wrappers, spans inside conditionals or loops. For each edge case, record: the pattern, the specific file and eval run where it appears (e.g., `claude-collector.js`, run-19), and what the stripper must do with it.
 - Prototype the core ts-morph operation: given a `CallExpression` node matching `tracer.startActiveSpan('name', (span) => { BODY })`, write a function that extracts `BODY` and replaces the call with it. This must be a passing test, not pseudocode — the prototype validates that ts-morph supports the operation before M1 commits to the approach. This test becomes the first entry in M1's fixture suite — M1 extends it, it does not start over.
-- Document all findings in `audit-findings/nds003-ast-patterns.md`.
+- Document all findings in `audit-findings/nds003-ast-patterns.md`. Structure each entry as: **(1) pattern name**, **(2) ts-morph node type** (e.g. `CallExpression`, `TryStatement`), **(3) transformation rule** (what the stripper must do with it), **(4) real example** with the source file and eval run where it appears.
 
 **Success criteria**:
 - [ ] `audit-findings/nds003-ast-patterns.md` exists and covers all patterns found in debug dumps from runs 17–19
@@ -98,6 +98,8 @@ Build fixture-driven tests first, one test per pattern in the M0 catalog, using 
 Replace the Prettier-normalized text diff in `checkNonInstrumentationDiff` (in `src/languages/javascript/rules/nds003.ts`) with the AST comparison. The new path: parse both files → strip OTel nodes from instrumented → compare ASTs → report differences. The replacement must return results in the same format as the existing function — a list of violation message strings that NDS-003 surfaces as findings. The Prettier normalization code is removed in this milestone, not kept as a fallback.
 
 **Primary regression target**: The `claude-collector.js` case from run-19. The `allMessages.sort(...)` line must no longer produce a NDS-003 finding after instrumentation.
+
+The existing tests for the Prettier normalization path in `checkNonInstrumentationDiff` must be replaced with tests for the AST comparison path — do not simply delete them. Removing them without replacement would leave the comparison logic untested.
 
 Run the full unit test suite. Then run a local commit-story-v2 eval to validate on real output. Compare the PARTIAL/SUCCESS counts before and after — any file that was PARTIAL due to NDS-003 false positives should now succeed. Any file that was SUCCESS should remain so.
 
