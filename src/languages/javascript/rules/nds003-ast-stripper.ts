@@ -94,10 +94,11 @@ function collectSpanVarNames(sourceFile: SourceFile): Set<string> {
     const callback = args[args.length - 1];
     if (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback)) return;
 
-    for (const param of callback.getParameters()) {
-      const paramName = param.getName();
-      if (paramName) names.add(paramName);
-    }
+    // startActiveSpan callbacks always have exactly one parameter: the span.
+    // Collecting only the first parameter prevents non-span params from being
+    // mistakenly treated as span variables.
+    const firstParam = callback.getParameters()[0];
+    if (firstParam) names.add(firstParam.getName());
   });
 
   return names;
