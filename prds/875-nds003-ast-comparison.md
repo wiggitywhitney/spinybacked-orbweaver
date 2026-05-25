@@ -2,7 +2,7 @@
 
 **Status**: Not started  
 **Issue**: https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/875  
-**Priority**: Medium  
+**Priority**: High  
 **Predecessor PRDs**: #820 (Prettier normalization), #845 (normalize-both-sides)
 
 ---
