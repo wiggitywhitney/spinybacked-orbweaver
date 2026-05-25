@@ -1,7 +1,7 @@
-// ABOUTME: NDS-003 AST-level OTel node stripper for PRD #875.
+// ABOUTME: NDS-003 OTel node stripper — strips all instrumentation nodes from JS/TS source.
 // ABOUTME: Removes all OTel instrumentation nodes from instrumented code for AST comparison.
 
-import { Project, Node, SyntaxKind } from 'ts-morph';
+import { Project, Node } from 'ts-morph';
 import type {
   SourceFile,
   TryStatement,
@@ -242,6 +242,27 @@ function isSpanMethodCallStatement(
  * Conservatism: if the body contains any non-OTel statement, leave intact
  * but span.* calls within it are removed in Phase 4.
  */
+// Safe condition shapes for OTel guard if-statements (P14-P17).
+// Only conditions matching these patterns are removed — conservatism policy:
+// a condition with side effects (e.g. if (sideEffect())) must never be silently dropped.
+const OTEL_GUARD_CONDITION_PATTERNS = [
+  // P14: single null/undefined check — if (x !== undefined), if (x != null), if (typeof x !== 'undefined')
+  /^(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])$/,
+  // P15: compound AND null check — two conditions joined by &&
+  /^(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*&&\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])$/,
+  // P16: truthy property-access guard — requires at least one dot dereference (no bare identifiers)
+  /^\w+(?:(?:\??\.)\w+)+$/,
+  // P17/isRecording: if (span.isRecording())
+  /^\w+\.isRecording\(\)$/,
+  // instanceof Error guard: if (err instanceof Error)
+  /^\w+\s+instanceof\s+Error$/,
+];
+
+function isKnownOtelGuardCondition(ifStmt: IfStatement): boolean {
+  const conditionText = ifStmt.getExpression().getText().trim();
+  return OTEL_GUARD_CONDITION_PATTERNS.some((p) => p.test(conditionText));
+}
+
 function removeOtelIfStatements(sourceFile: SourceFile, spanVarNames: Set<string>): void {
   const ifStatements: IfStatement[] = [];
   sourceFile.forEachDescendant((node) => {
@@ -261,11 +282,12 @@ function removeOtelIfStatements(sourceFile: SourceFile, spanVarNames: Set<string
 
     // All statements must be span.* method calls (any SPAN_METHODS method)
     const allOtel = stmts.every((stmt) => isSpanMethodCallStatement(stmt, spanVarNames));
-    if (allOtel) {
+    // Conservatism: also require the condition matches a known safe OTel guard shape.
+    // A condition with side effects (e.g. if (refreshState()) { span.* }) must not be dropped.
+    if (allOtel && isKnownOtelGuardCondition(ifStmt)) {
       ifStmt.remove();
     }
-    // Conservatism: if any non-OTel statement, leave intact
-    // Phase 4 will remove the span.* calls within the if block
+    // Otherwise leave intact — Phase 4 removes the span.* calls within the block
   }
 }
 
@@ -281,6 +303,28 @@ function removeOtelIfStatements(sourceFile: SourceFile, spanVarNames: Set<string
  *
  * Also removes span.addEvent, span.updateName, span.setAttributes.
  */
+/**
+ * Returns true if `node` is a descendant of a `startActiveSpan` callback body.
+ * Conservatism guard: span.* calls outside a startActiveSpan scope may be on
+ * unrelated objects that happen to share a variable name with the span parameter.
+ */
+function isInsideStartActiveSpanCallback(node: Node): boolean {
+  let current: Node | undefined = node.getParent();
+  while (current) {
+    if (Node.isArrowFunction(current) || Node.isFunctionExpression(current)) {
+      const parent = current.getParent();
+      if (parent && Node.isCallExpression(parent)) {
+        const calleeExpr = parent.getExpression();
+        if (Node.isPropertyAccessExpression(calleeExpr) && calleeExpr.getName() === 'startActiveSpan') {
+          return true;
+        }
+      }
+    }
+    current = current.getParent();
+  }
+  return false;
+}
+
 function removeSpanMethodCalls(sourceFile: SourceFile, spanVarNames: Set<string>): void {
   const toRemove: ExpressionStatement[] = [];
 
@@ -295,6 +339,10 @@ function removeSpanMethodCalls(sourceFile: SourceFile, spanVarNames: Set<string>
     if (!spanVarNames.has(receiver.getText())) return;
     const name = callee.getName();
     if (!SPAN_METHODS.has(name)) return;
+    // Conservatism: only remove calls inside a startActiveSpan callback.
+    // Variable names like `span` appear in unrelated code — scoping prevents
+    // incorrectly stripping calls on non-OTel objects with the same name.
+    if (!isInsideStartActiveSpanCallback(node)) return;
 
     toRemove.push(node);
   });
@@ -438,6 +486,9 @@ function removeTracerDeclarations(sourceFile: SourceFile): void {
   const toRemove: VariableStatement[] = [];
 
   for (const stmt of sourceFile.getVariableStatements()) {
+    // Conservatism: skip multi-declarator statements to avoid deleting sibling bindings.
+    // `const tracer = ..., otherThing = buildOther()` must not lose `otherThing`.
+    if (stmt.getDeclarations().length > 1) continue;
     for (const decl of stmt.getDeclarations()) {
       const declName = decl.getName();
       if (declName !== 'tracer' && declName !== 'otelTracer') continue;

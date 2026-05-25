@@ -1189,7 +1189,7 @@ export async function checkNonInstrumentationDiffNormalized(
 ): Promise<CheckResult[]> {
   // Strip all OTel instrumentation nodes first. After stripping, lines that were split
   // by Prettier at the span callback's deeper indentation are back at their original
-  // depth — so both sides normalize to the same form (EC1 fix, PRD #875).
+  // depth — so both sides normalize to the same form.
   const strippedCode = stripOtelNodes(instrumentedCode, filePath);
 
   // Infer quote style from the original so both sides normalize consistently.

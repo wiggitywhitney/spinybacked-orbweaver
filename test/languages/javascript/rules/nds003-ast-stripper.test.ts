@@ -1,14 +1,12 @@
-// ABOUTME: Tests for the NDS-003 AST-level OTel node stripper (PRD #875, M1).
+// ABOUTME: Tests for the NDS-003 AST-level OTel node stripper.
 // ABOUTME: One fixture test per catalog entry (P1-P20, EC1-EC8) plus conservatism tests.
 
 import { describe, it, expect } from 'vitest';
 import { stripOtelNodes } from '../../../../src/languages/javascript/rules/nds003-ast-stripper.ts';
 
-// ─── M0 prototype tests — now exercising the real module ─────────────────────
-// These were originally inline prototype tests in M0; they are the first entry
-// in M1's fixture suite per PRD #875.
+// ─── Core unwrap cases ────────────────────────────────────────────────────────
 
-describe('PRD #875 M1 — NDS-003 AST stripper (M0 prototype cases)', () => {
+describe('NDS-003 AST stripper — startActiveSpan unwrap (P1/P2 core cases)', () => {
   const filePath = '/tmp/test.js';
 
   it('P1/P2: replaces return tracer.startActiveSpan(...) with callback body (EC1 core case)', () => {
@@ -1004,5 +1002,78 @@ describe('P13 conservatism: removeTracerDeclarations restricted to OTel patterns
 
     expect(result).not.toContain('trace.getTracer');
     expect(result).toContain('function doWork()');
+  });
+
+  it('does NOT remove a multi-declarator const that includes the tracer (conservatism)', () => {
+    // `const tracer = trace.getTracer('svc'), otherThing = buildOther()` —
+    // removing the whole statement would delete `otherThing`. Leave it intact.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc'), otherThing = buildOther();",
+      'function doWork() { return otherThing; }',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    expect(result).toContain('otherThing = buildOther()');
+    expect(result).toContain('function doWork()');
+  });
+});
+
+describe('Phase 4 scope conservatism: span method removal is limited to startActiveSpan callbacks', () => {
+  const filePath = '/tmp/test.js';
+
+  it('does NOT remove span.setAttribute on an unrelated variable named span outside a startActiveSpan callback', () => {
+    // An HTML span element stored in `span` — its `.setAttribute` must not be stripped.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function instrument() {',
+      "  return tracer.startActiveSpan('op', (span) => {",
+      "    span.setAttribute('key', 1);",
+      '    return doWork();',
+      '  });',
+      '}',
+      'function renderHtml() {',
+      "  const span = document.createElement('span');",
+      "  span.setAttribute('class', 'highlight');",
+      '  return span;',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // The unrelated span.setAttribute inside renderHtml must be preserved
+    expect(result).toContain("span.setAttribute('class', 'highlight')");
+    // The OTel span.setAttribute inside the startActiveSpan callback is removed
+    expect(result).not.toContain("span.setAttribute('key', 1)");
+  });
+});
+
+describe('removeOtelIfStatements condition shape conservatism', () => {
+  const filePath = '/tmp/test.js';
+
+  it('does NOT remove an if block whose condition has side effects (not a known OTel guard shape)', () => {
+    // `if (sideEffect()) { span.setAttribute(...) }` — the condition is a function
+    // call with potential side effects. Conservatism: leave the if block intact.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function doWork() {',
+      "  return tracer.startActiveSpan('op', (span) => {",
+      '    if (sideEffect()) {',
+      "      span.setAttribute('key', 1);",
+      '    }',
+      '    return 42;',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // The if block is preserved because sideEffect() is not a known safe guard shape
+    expect(result).toContain('if (sideEffect())');
+    // The span.setAttribute inside is still removed by Phase 4
+    expect(result).not.toContain("span.setAttribute('key', 1)");
   });
 });
