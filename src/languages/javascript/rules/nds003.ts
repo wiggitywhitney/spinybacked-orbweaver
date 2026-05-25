@@ -4,6 +4,7 @@
 import * as prettier from 'prettier';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
+import { stripOtelNodes } from './nds003-ast-stripper.ts';
 
 /**
  * Patterns that identify OTel instrumentation lines.
@@ -1186,6 +1187,11 @@ export async function checkNonInstrumentationDiffNormalized(
   instrumentedCode: string,
   filePath: string,
 ): Promise<CheckResult[]> {
+  // Strip all OTel instrumentation nodes first. After stripping, lines that were split
+  // by Prettier at the span callback's deeper indentation are back at their original
+  // depth — so both sides normalize to the same form (EC1 fix, PRD #875).
+  const strippedCode = stripOtelNodes(instrumentedCode, filePath);
+
   // Infer quote style from the original so both sides normalize consistently.
   // OTel import boilerplate uses double-quoted strings, which shifts
   // inferSingleQuote(instrumentedCode) away from the project's actual style when
@@ -1193,8 +1199,8 @@ export async function checkNonInstrumentationDiffNormalized(
   // both normalizations prevents quote-style mismatches between the two sides.
   const singleQuote = inferSingleQuote(originalCode);
   const normalizedOriginal = await prettierNormalize(originalCode, filePath, singleQuote);
-  const normalizedInstrumented = await prettierNormalize(instrumentedCode, filePath, singleQuote);
-  return checkNonInstrumentationDiff(normalizedOriginal, normalizedInstrumented, filePath);
+  const normalizedStripped = await prettierNormalize(strippedCode, filePath, singleQuote);
+  return checkNonInstrumentationDiff(normalizedOriginal, normalizedStripped, filePath);
 }
 
 /** NDS-003 ValidationRule — non-instrumentation code must be unchanged. */

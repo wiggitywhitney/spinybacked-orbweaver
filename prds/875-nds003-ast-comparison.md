@@ -1,6 +1,6 @@
 # PRD #875: NDS-003 AST-level comparison
 
-**Status**: In progress — M1 complete  
+**Status**: In progress — M2 implementation complete (acceptance gate pending CI)  
 **Issue**: https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/875  
 **Priority**: High  
 **Predecessor PRDs**: #820 (Prettier normalization), #845 (normalize-both-sides)
@@ -44,6 +44,7 @@ This approach is immune to indentation, line breaks, trailing commas, quote styl
 | ts-morph as the AST library | Use ts-morph | Already in the project for CDQ-007. Handles both TypeScript and JavaScript. Supports the structural transformations needed (node replacement, subtree extraction). |
 | Reconciler removal timing | Remove in a dedicated milestone after AST validation | Keeping reconcilers alongside the new AST path while validating avoids silent regressions. Remove only after the AST comparison has been proven correct on real eval output. |
 | Step 0 in every downstream milestone must name the exact audit findings file | Each of M1, M2, M3 must open `audit-findings/nds003-ast-patterns.md` as their first action | A cold AI session has no memory of M0. Without an explicit named reference, the Step 0 instruction reads as optional background guidance. The catalog at `audit-findings/nds003-ast-patterns.md` defines the complete scope of patterns each milestone must implement, test, or remove — it is the spec, not background reading. Naming it explicitly and stating what it contains prevents a future AI from skipping it or substituting pattern knowledge from training data. |
+| M2 comparison approach: strip → Prettier normalize → text diff | `checkNonInstrumentationDiffNormalized` strips OTel with the AST stripper, then runs Prettier normalization on both sides, then calls the existing text diff | Pure AST structural comparison would require a tree-diff algorithm and a custom P20 equivalence handler. Strip-then-normalize reuses the existing Prettier normalization and reconcilers. The key EC1 fix: stripping restores the original indentation depth, so Prettier normalizes both sides to the same form. **Consequence for M3**: `reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument` are dead code (Prettier normalization handles all indentation-induced splits after stripping). `reconcileReturnCaptures` is STILL NEEDED (P20 structural divergence persists after stripping). `reconcileMethodChainCollapse` is STILL NEEDED (agent may collapse method chains for non-OTel reasons — this is not OTel-specific). `reconcileSetAttributeCaptures`, `reconcileSetAttributeMultilineArgs`, `reconcileStartActiveSpanMultilineArgs` are dead code (OTel patterns they handle are stripped before the diff). |
 
 ---
 
@@ -108,7 +109,7 @@ Run the full unit test suite. Then run a local commit-story-v2 eval to validate 
 - [ ] Acceptance gate passes
 - [ ] `claude-collector.js` run-19 case produces `success`, not `partial`
 - [ ] No previously-passing files regress to `partial` or `failed`
-- [ ] `npm test` passes
+- [x] `npm test` passes
 
 ---
 
@@ -116,7 +117,19 @@ Run the full unit test suite. Then run a local commit-story-v2 eval to validate 
 
 **Step 0** (mandatory first action): Open `audit-findings/nds003-ast-patterns.md` and read it in full. This file was produced by M0 and catalogs every OTel instrumentation pattern the agent generates. For M3, it identifies which existing text-based reconcilers in `nds003.ts` are made redundant by the AST comparison — any reconciler whose pattern appears in the catalog is a candidate for removal. Do not write any code before reading it.
 
-With AST comparison handling all cases, the text-based reconcilers are dead code. Remove: `reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`. Check whether any other reconcilers in `nds003.ts` are also made redundant by the AST path — if so, remove them too.
+With strip-then-normalize handling indentation-induced splits, most text-based reconcilers are dead code. See the Decision Log row "M2 comparison approach" for the full analysis. The definitive list:
+
+**Remove** (dead code after stripping — Prettier normalization handles their patterns):
+- `reconcileAgentSplitLines`
+- `reconcileIndentReformat`
+- `reconcilePartialArgument`
+- `reconcileSetAttributeCaptures`
+- `reconcileSetAttributeMultilineArgs`
+- `reconcileStartActiveSpanMultilineArgs`
+
+**Keep** (still needed — not made redundant by stripping):
+- `reconcileReturnCaptures` — P20 structural divergence (`return expr` → `const var = expr; return var;`) persists after stripping
+- `reconcileMethodChainCollapse` — agent may collapse developer-style method chains for non-OTel reasons; not OTel-specific
 
 Update `docs/rules-reference.md` to reflect NDS-003's new comparison approach. Run `/write-docs` on the update. Update `src/agent/prompt.ts` if any NDS-003 rule IDs or descriptions referenced there have changed meaning.
 

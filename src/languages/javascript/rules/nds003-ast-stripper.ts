@@ -70,7 +70,9 @@ export function stripOtelNodes(code: string, filePath: string): string {
   removeOtelImports(sourceFile);
   removeTracerDeclarations(sourceFile);
 
-  return sourceFile.getText();
+  // getFullText() includes file-level leading trivia (comments before the first statement).
+  // getText() skips leading trivia, which would drop ABOUTME headers and file-level comments.
+  return sourceFile.getFullText();
 }
 
 // ─── Phase 1: Collect span variable names ────────────────────────────────────
@@ -139,8 +141,9 @@ function removeOtelTryStatements(sourceFile: SourceFile, spanVarNames: Set<strin
 
     if (!catchClause) {
       // P5: try { BODY } finally { span.end() } — unwrap try body
-      const bodyStmts = tryStmt.getTryBlock().getStatements().map((s) => s.getText());
-      tryStmt.replaceWithText(bodyStmts.join('\n'));
+      // getFullText() preserves leading comments and whitespace on each statement
+      const bodyStmts = tryStmt.getTryBlock().getStatements().map((s) => s.getFullText());
+      tryStmt.replaceWithText(bodyStmts.join(''));
       continue;
     }
 
@@ -149,8 +152,8 @@ function removeOtelTryStatements(sourceFile: SourceFile, spanVarNames: Set<strin
     if (!catchIsOtel) continue; // Non-OTel catch (P6) — conservatism: leave intact
 
     // Both catch and finally are OTel — replace with try body
-    const bodyStmts = tryStmt.getTryBlock().getStatements().map((s) => s.getText());
-    tryStmt.replaceWithText(bodyStmts.join('\n'));
+    const bodyStmts = tryStmt.getTryBlock().getStatements().map((s) => s.getFullText());
+    tryStmt.replaceWithText(bodyStmts.join(''));
   }
 }
 
@@ -356,8 +359,10 @@ function unwrapSpanCallbacks(sourceFile: SourceFile): void {
   // Apply in reverse document order (deepest-first for nested spans, EC4)
   for (const { statement, callbackBody } of targets.reverse()) {
     if (statement.wasForgotten() || callbackBody.wasForgotten()) continue;
-    const bodyStatements = callbackBody.getStatements().map((s) => s.getText());
-    statement.replaceWithText(bodyStatements.join('\n'));
+    // getFullText() preserves leading comments and whitespace on each statement,
+    // so comments inside the callback body are not lost after unwrapping.
+    const bodyStatements = callbackBody.getStatements().map((s) => s.getFullText());
+    statement.replaceWithText(bodyStatements.join(''));
   }
 }
 

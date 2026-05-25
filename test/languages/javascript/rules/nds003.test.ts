@@ -3154,4 +3154,162 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
   });
+
+  // ─── M2: AST-level comparison — strip OTel first, then normalize both sides ──────
+
+  describe('M2 AST-level comparison: strip OTel before normalization', () => {
+    // PRD #875 M2: checkNonInstrumentationDiffNormalized now strips all OTel nodes
+    // from the instrumented code BEFORE normalizing both sides through Prettier.
+    // This ensures that lines which were split by Prettier at the span callback's deeper
+    // indentation (EC1) are back at their original depth before Prettier runs, so both
+    // sides normalize to the same form.
+
+    it('EC1: passes when a line fits at original indentation but exceeds 80 chars inside span callback (the run-19 allMessages.sort case)', async () => {
+      // The sort line is 79 chars at 2-space indent. Inside the startActiveSpan callback
+      // at 4-space the line is 81 chars, causing Prettier to split it.
+      // After M2: stripOtelNodes removes the span wrapper → sort is back at 2-space depth
+      // → Prettier normalizes both sides to the same single-line form → no NDS-003 finding.
+      const original = [
+        'async function collectChatMessages(allMessages) {',
+        '  allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));',
+        '  return allMessages;',
+        '}',
+      ].join('\n');
+
+      // The instrumented code has the sort split as Prettier would produce at span depth.
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('commit-story');",
+        'async function collectChatMessages(allMessages) {',
+        "  return tracer.startActiveSpan('collect_messages', async (span) => {",
+        '    allMessages.sort(',
+        '      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)',
+        '    );',
+        "    span.setAttribute('count', allMessages.length);",
+        '    span.end();',
+        '    return allMessages;',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/claude-collector.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('EC1: passes when a line that fits at original 4-space indent exceeds 80 chars at 6-space span callback depth', async () => {
+      // Line content is 77 chars; at 2-space indent = 79 chars (fits).
+      // Inside startActiveSpan callback at 4-space indent, same line = 81 chars (splits).
+      // After M2: stripping restores original depth → Prettier normalizes identically.
+      //
+      // Note: the `allMessages.sort(` opening line alone cannot be reconciled by
+      // reconcileAgentSplitLines (single-line group, below the 2-line minimum).
+      const sortLine = 'allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));';
+      const original = [
+        'async function processMessages(allMessages) {',
+        `  ${sortLine}`,
+        '  return allMessages;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'async function processMessages(allMessages) {',
+        "  return tracer.startActiveSpan('process', async (span) => {",
+        '    allMessages.sort(',
+        '      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)',
+        '    );',
+        '    span.end();',
+        '    return allMessages;',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('P20/EC8: passes when agent extracts return expr to const var + return var for setAttribute (reconcileReturnCaptures)', async () => {
+      // Original: `return computeResult(input);`
+      // Stripped instrumented: `const result = computeResult(input); return result;`
+      // reconcileReturnCaptures handles this structural divergence.
+      const original = [
+        'async function getResult(input) {',
+        '  const processed = preprocess(input);',
+        '  return computeResult(processed);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'async function getResult(input) {',
+        "  return tracer.startActiveSpan('getResult', async (span) => {",
+        '    const processed = preprocess(input);',
+        '    const result = computeResult(processed);',
+        "    span.setAttribute('result.value', result);",
+        '    span.end();',
+        '    return result;',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still detects real code modifications after stripping', async () => {
+      // The agent changed `options` → `{ extra: true }`. After stripping OTel, this
+      // difference is still visible in the comparison. NDS-003 must still fire.
+      const original = [
+        'async function fetchData(client, options) {',
+        '  return await client.query("data", options);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'async function fetchData(client, options) {',
+        "  return tracer.startActiveSpan('fetch', async (span) => {",
+        '    try {',
+        '      return await client.query("data", { extra: true });',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+
+    it('still detects deleted original line after stripping', async () => {
+      const original = [
+        'function doWork(data) {',
+        '  validate(data);',
+        '  return process(data);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'function doWork(data) {',
+        "  return tracer.startActiveSpan('doWork', (span) => {",
+        '    return process(data);',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
 });
