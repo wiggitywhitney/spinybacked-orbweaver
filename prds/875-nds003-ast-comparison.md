@@ -43,6 +43,7 @@ This approach is immune to indentation, line breaks, trailing commas, quote styl
 | Fixture strategy | Build from real eval output, not synthetic examples | 19 eval runs of commit-story-v2 have produced the actual instrumentation patterns the agent generates. Synthetic fixtures may miss real patterns or encode wrong assumptions. Debug dumps from runs 17–19 are the primary source. |
 | ts-morph as the AST library | Use ts-morph | Already in the project for CDQ-007. Handles both TypeScript and JavaScript. Supports the structural transformations needed (node replacement, subtree extraction). |
 | Reconciler removal timing | Remove in a dedicated milestone after AST validation | Keeping reconcilers alongside the new AST path while validating avoids silent regressions. Remove only after the AST comparison has been proven correct on real eval output. |
+| Step 0 in every downstream milestone must name the exact audit findings file | Each of M1, M2, M3 must open `audit-findings/nds003-ast-patterns.md` as their first action | A cold AI session has no memory of M0. Without an explicit named reference, the Step 0 instruction reads as optional background guidance. The catalog at `audit-findings/nds003-ast-patterns.md` defines the complete scope of patterns each milestone must implement, test, or remove — it is the spec, not background reading. Naming it explicitly and stating what it contains prevents a future AI from skipping it or substituting pattern knowledge from training data. |
 
 ---
 
@@ -69,7 +70,7 @@ The stripper's correctness depends on knowing every instrumentation pattern the 
 
 ### M1: Build the OTel node stripper
 
-**Step 0**: Read `audit-findings/nds003-ast-patterns.md` in full before writing any code.
+**Step 0** (mandatory first action): Open `audit-findings/nds003-ast-patterns.md` and read it in full. This file was produced by M0 and catalogs every OTel instrumentation pattern the agent generates — 20 patterns (P1–P20) and 8 edge cases (EC1–EC8), each with the ts-morph node type, transformation rule, and a real example from eval output. It defines the complete scope of patterns this milestone's stripper must handle. Do not write any code before reading it.
 
 The stripper takes an instrumented AST and returns an AST with all OTel nodes removed, ready for comparison with the original. It must handle every pattern in the M0 catalog. For any node that does not match a known OTel pattern, the stripper leaves it in place (conservatism policy).
 
@@ -93,7 +94,7 @@ Build fixture-driven tests first, one test per pattern in the M0 catalog, using 
 
 ### M2: Integrate into NDS-003 and validate on real eval output
 
-**Step 0**: Read `audit-findings/nds003-ast-patterns.md` in full before writing any code.
+**Step 0** (mandatory first action): Open `audit-findings/nds003-ast-patterns.md` and read it in full. This file was produced by M0 and catalogs every OTel instrumentation pattern the agent generates — the same patterns M1's stripper implements. For M2, it identifies the primary regression targets (EC1: the `allMessages.sort(...)` line-split case in `claude-collector.js`, run-19) and confirms which edge cases the integration test suite must cover. Do not write any code before reading it.
 
 Replace the Prettier-normalized text diff in `checkNonInstrumentationDiff` (in `src/languages/javascript/rules/nds003.ts`) with the AST comparison. The new path: parse both files → strip OTel nodes from instrumented → compare ASTs → report differences. The replacement must return results in the same format as the existing function — a list of violation message strings that NDS-003 surfaces as findings. The Prettier normalization code is removed in this milestone, not kept as a fallback.
 
@@ -113,7 +114,7 @@ Run the full unit test suite. Then run a local commit-story-v2 eval to validate 
 
 ### M3: Remove old reconcilers and update documentation
 
-**Step 0**: Read `audit-findings/nds003-ast-patterns.md` in full before writing any code.
+**Step 0** (mandatory first action): Open `audit-findings/nds003-ast-patterns.md` and read it in full. This file was produced by M0 and catalogs every OTel instrumentation pattern the agent generates. For M3, it identifies which existing text-based reconcilers in `nds003.ts` are made redundant by the AST comparison — any reconciler whose pattern appears in the catalog is a candidate for removal. Do not write any code before reading it.
 
 With AST comparison handling all cases, the text-based reconcilers are dead code. Remove: `reconcileAgentSplitLines`, `reconcileIndentReformat`, `reconcilePartialArgument`. Check whether any other reconcilers in `nds003.ts` are also made redundant by the AST path — if so, remove them too.
 
