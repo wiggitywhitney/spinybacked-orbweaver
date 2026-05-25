@@ -148,7 +148,9 @@ function removeOtelTryStatements(sourceFile: SourceFile, spanVarNames: Set<strin
     }
 
     // P4: has both catch and finally — check if catch is OTel-only
-    const catchIsOtel = isCatchOnlyOtelAndRethrow(catchClause.getBlock(), spanVarNames);
+    // Extract the catch variable name so `throw error` vs `throw new Error(...)` can be distinguished.
+    const catchVarName = catchClause.getVariableDeclaration()?.getName() ?? '';
+    const catchIsOtel = isCatchOnlyOtelAndRethrow(catchClause.getBlock(), spanVarNames, catchVarName);
     if (!catchIsOtel) continue; // Non-OTel catch (P6) — conservatism: leave intact
 
     // Both catch and finally are OTel — replace with try body
@@ -175,19 +177,30 @@ function isFinallyOnlySpanEnd(block: ReturnType<TryStatement['getFinallyBlock']>
  * Returns true if the catch block contains only:
  * - span.recordException(...) calls
  * - span.setStatus(...) calls
- * - throw statement(s) (OTel rethrow boilerplate)
+ * - `throw <catchVarName>` — OTel rethrow boilerplate (must rethrow the caught error)
  *
- * Any other statement → conservatism: not OTel-only.
+ * Any other statement, including `throw new Error(...)` or transformed error rethrows,
+ * → conservatism: not OTel-only.
+ *
+ * @param catchVarName - The catch clause's bound variable name (e.g. "error", "err").
+ *   Empty string if the catch has no bound variable — no rethrow can qualify.
  */
 function isCatchOnlyOtelAndRethrow(
   block: ReturnType<import('ts-morph').CatchClause['getBlock']>,
   spanVarNames: Set<string>,
+  catchVarName: string,
 ): boolean {
   const stmts = block.getStatements();
   if (stmts.length === 0) return false;
 
   for (const stmt of stmts) {
-    if (Node.isThrowStatement(stmt)) continue; // OTel rethrow boilerplate
+    if (Node.isThrowStatement(stmt)) {
+      // Only `throw <catchVarName>` is OTel boilerplate — rethrows the caught error exactly.
+      // Transformed errors (`throw new Error(...)`) are user code — conservatism.
+      const expr = stmt.getExpression();
+      if (!expr || !Node.isIdentifier(expr) || expr.getText() !== catchVarName) return false;
+      continue;
+    }
     if (isSpanMethodCallStatement(stmt, spanVarNames, 'recordException')) continue;
     if (isSpanMethodCallStatement(stmt, spanVarNames, 'setStatus')) continue;
     return false; // Non-OTel statement — conservatism
@@ -418,21 +431,33 @@ function removeOtelImports(sourceFile: SourceFile): void {
 /**
  * Remove tracer variable declarations: const tracer = trace.getTracer(...) (P13).
  * Handles both `trace.getTracer(...)` and `api.trace.getTracer(...)` forms.
+ * Restricted to OTel-named variables (tracer, otelTracer) and OTel receivers
+ * (trace or api.trace) to avoid removing non-OTel getTracer() calls.
  */
 function removeTracerDeclarations(sourceFile: SourceFile): void {
   const toRemove: VariableStatement[] = [];
 
   for (const stmt of sourceFile.getVariableStatements()) {
     for (const decl of stmt.getDeclarations()) {
+      const declName = decl.getName();
+      if (declName !== 'tracer' && declName !== 'otelTracer') continue;
+
       const init = decl.getInitializer();
       if (!init) continue;
       if (!Node.isCallExpression(init)) continue;
 
       const callee = init.getExpression();
-      if (Node.isPropertyAccessExpression(callee) && callee.getName() === 'getTracer') {
-        toRemove.push(stmt);
-        break;
-      }
+      if (!Node.isPropertyAccessExpression(callee) || callee.getName() !== 'getTracer') continue;
+
+      // Receiver must be `trace` (from `import { trace }`) or `api.trace`
+      const receiver = callee.getExpression();
+      const isOtelReceiver =
+        (Node.isIdentifier(receiver) && receiver.getText() === 'trace') ||
+        (Node.isPropertyAccessExpression(receiver) && receiver.getText() === 'api.trace');
+      if (!isOtelReceiver) continue;
+
+      toRemove.push(stmt);
+      break;
     }
   }
 

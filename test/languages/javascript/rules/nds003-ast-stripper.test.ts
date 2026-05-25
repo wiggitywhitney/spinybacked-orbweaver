@@ -902,3 +902,107 @@ describe('Span variable name conventions', () => {
     expect(result).toContain('const result = await inner()');
   });
 });
+
+// ─── CodeRabbit fix: tighten catch classification ─────────────────────────────
+
+describe('P4 catch conservatism: transformed rethrow is not OTel boilerplate', () => {
+  const filePath = '/tmp/test.js';
+
+  it('leaves try/catch intact when catch rethrows a transformed error (not plain throw <catchVar>)', () => {
+    // `throw new Error(msg)` is NOT `throw error` (the catch var) — conservatism applies.
+    const code = [
+      'async function doWork() {',
+      "  return tracer.startActiveSpan('work', async (span) => {",
+      '    try {',
+      '      return await risky();',
+      '    } catch (error) {',
+      '      span.recordException(error);',
+      "      throw new Error('wrapped: ' + error.message);",
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    expect(result).not.toContain('startActiveSpan');
+    // The catch block throws a transformed error — conservatism: catch is preserved
+    expect(result).toContain('catch');
+    expect(result).toContain("throw new Error('wrapped: ' + error.message)");
+    expect(result).not.toContain('span.recordException');
+    expect(result).not.toContain('span.end');
+  });
+
+  it('removes try/catch when catch rethrows exactly the caught variable (OTel boilerplate)', () => {
+    // `throw error` where `error` is the catch variable IS OTel boilerplate.
+    const code = [
+      'async function doWork() {',
+      "  return tracer.startActiveSpan('work', async (span) => {",
+      '    try {',
+      '      return await risky();',
+      '    } catch (error) {',
+      '      span.recordException(error);',
+      '      span.setStatus({ code: SpanStatusCode.ERROR });',
+      '      throw error;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    expect(result).not.toContain('startActiveSpan');
+    expect(result).not.toContain('span.');
+    expect(result).not.toContain('try');
+    expect(result).not.toContain('catch');
+    expect(result).toContain('return await risky()');
+  });
+});
+
+// ─── CodeRabbit fix: restrict tracer declaration removal ─────────────────────
+
+describe('P13 conservatism: removeTracerDeclarations restricted to OTel patterns', () => {
+  const filePath = '/tmp/test.js';
+
+  it('does NOT remove a non-OTel getTracer() call (e.g. logger.getTracer)', () => {
+    const code = [
+      'const tracer = logger.getTracer("my-service");',
+      'function doWork() { return tracer.log("hi"); }',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // logger.getTracer is not an OTel tracer declaration — leave it intact
+    expect(result).toContain('const tracer = logger.getTracer("my-service")');
+  });
+
+  it('removes const tracer = trace.getTracer(...) (standard OTel form)', () => {
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function doWork() { return 1; }',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    expect(result).not.toContain('trace.getTracer');
+    expect(result).toContain('function doWork()');
+  });
+
+  it('removes const otelTracer = trace.getTracer(...) (otelTracer variant)', () => {
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const otelTracer = trace.getTracer('svc');",
+      'function doWork() { return 1; }',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    expect(result).not.toContain('trace.getTracer');
+    expect(result).toContain('function doWork()');
+  });
+});
