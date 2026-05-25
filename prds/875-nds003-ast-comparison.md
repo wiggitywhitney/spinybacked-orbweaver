@@ -1,6 +1,6 @@
 # PRD #875: NDS-003 AST-level comparison
 
-**Status**: Not started  
+**Status**: In progress — M0 complete  
 **Issue**: https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/875  
 **Priority**: High  
 **Predecessor PRDs**: #820 (Prettier normalization), #845 (normalize-both-sides)
@@ -61,9 +61,9 @@ The stripper's correctness depends on knowing every instrumentation pattern the 
 - Document all findings in `audit-findings/nds003-ast-patterns.md`. Structure each entry as: **(1) pattern name**, **(2) ts-morph node type** (e.g. `CallExpression`, `TryStatement`), **(3) transformation rule** (what the stripper must do with it), **(4) real example** with the source file and eval run where it appears.
 
 **Success criteria**:
-- [ ] `audit-findings/nds003-ast-patterns.md` exists and covers all patterns found in debug dumps from runs 17–19
-- [ ] A passing test demonstrates the core `startActiveSpan` unwrap operation using ts-morph
-- [ ] Edge cases are documented with real examples from eval output
+- [x] `audit-findings/nds003-ast-patterns.md` exists and covers all patterns found in debug dumps from runs 17–19
+- [x] A passing test demonstrates the core `startActiveSpan` unwrap operation using ts-morph
+- [x] Edge cases are documented with real examples from eval output
 
 ---
 
