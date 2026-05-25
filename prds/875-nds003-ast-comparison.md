@@ -1,6 +1,6 @@
 # PRD #875: NDS-003 AST-level comparison
 
-**Status**: In progress — M2 implementation complete (acceptance gate pending CI)  
+**Status**: In progress — M2 complete, M3 next  
 **Issue**: https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/875  
 **Priority**: High  
 **Predecessor PRDs**: #820 (Prettier normalization), #845 (normalize-both-sides)
@@ -97,7 +97,7 @@ Build fixture-driven tests first, one test per pattern in the M0 catalog, using 
 
 **Step 0** (mandatory first action): Open `audit-findings/nds003-ast-patterns.md` and read it in full. This file was produced by M0 and catalogs every OTel instrumentation pattern the agent generates — the same patterns M1's stripper implements. For M2, it identifies the primary regression targets (EC1: the `allMessages.sort(...)` line-split case in `claude-collector.js`, run-19) and confirms which edge cases the integration test suite must cover. Pay particular attention to **P20/EC8 (return-value capture)**: the original has `return expr` but the stripped instrumented code has `const var = expr; return var;` — these are structurally different AST nodes. The AST comparison function must explicitly handle this equivalence. Do not write any code before reading it.
 
-Replace the Prettier-normalized text diff in `checkNonInstrumentationDiff` (in `src/languages/javascript/rules/nds003.ts`) with the AST comparison. The stripper (`stripOtelNodes`) is already implemented at `src/languages/javascript/rules/nds003-ast-stripper.ts` — read that file before designing the comparison function to understand what stripped output looks like. The new path: parse both files → strip OTel nodes from instrumented → compare ASTs → report differences. The replacement must return results in the same format as the existing function — a list of violation message strings that NDS-003 surfaces as findings. The Prettier normalization code is removed in this milestone, not kept as a fallback.
+Replace the Prettier-normalized text diff in `checkNonInstrumentationDiffNormalized` (in `src/languages/javascript/rules/nds003.ts`) with the strip-then-normalize path. The stripper (`stripOtelNodes`) is already implemented at `src/languages/javascript/rules/nds003-ast-stripper.ts` — read that file before designing the comparison function to understand what stripped output looks like. The new path: strip OTel nodes from instrumented → Prettier normalize both sides → text diff. See the Decision Log row "M2 comparison approach" for the rationale. The replacement must return results in the same format as the existing function — a list of violation message strings that NDS-003 surfaces as findings.
 
 **Primary regression target**: The `claude-collector.js` case from run-19. The `allMessages.sort(...)` line must no longer produce a NDS-003 finding after instrumentation.
 
@@ -106,9 +106,9 @@ The existing tests for the Prettier normalization path in `checkNonInstrumentati
 Run the full unit test suite. Then run a local commit-story-v2 eval to validate on real output. Compare the PARTIAL/SUCCESS counts before and after — any file that was PARTIAL due to NDS-003 false positives should now succeed. Any file that was SUCCESS should remain so.
 
 **Success criteria**:
-- [ ] Acceptance gate passes
-- [ ] `claude-collector.js` run-19 case produces `success`, not `partial`
-- [ ] No previously-passing files regress to `partial` or `failed`
+- [x] Acceptance gate passes
+- [x] `claude-collector.js` run-19 case produces `success`, not `partial`
+- [x] No previously-passing files regress to `partial` or `failed`
 - [x] `npm test` passes
 
 ---
@@ -130,6 +130,8 @@ With strip-then-normalize handling indentation-induced splits, most text-based r
 **Keep** (still needed — not made redundant by stripping):
 - `reconcileReturnCaptures` — P20 structural divergence (`return expr` → `const var = expr; return var;`) persists after stripping
 - `reconcileMethodChainCollapse` — agent may collapse developer-style method chains for non-OTel reasons; not OTel-specific
+
+After removing the dead reconcilers, search for orphaned helpers: `stripForComparison` is only called by `reconcileAgentSplitLines`, `reconcileIndentReformat`, and `reconcilePartialArgument`. Once those are gone, `stripForComparison` is dead code too — remove it. Also grep for any other private helpers called exclusively by the removed reconcilers.
 
 Update `docs/rules-reference.md` to reflect NDS-003's new comparison approach. Run `/write-docs` on the update. Update `src/agent/prompt.ts` if any NDS-003 rule IDs or descriptions referenced there have changed meaning.
 

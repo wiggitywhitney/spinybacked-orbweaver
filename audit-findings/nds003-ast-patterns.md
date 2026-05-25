@@ -213,7 +213,7 @@ span.end();
 
 ### P12: OTel import declaration
 
-**ts-morph node type**: `ImportDeclaration` where `moduleSpecifier` contains `@opentelemetry`.
+**ts-morph node type**: `ImportDeclaration` where `moduleSpecifier` contains `@opentelemetry`. Bare `opentelemetry` (without `@`) is intentionally excluded — the agent always generates scoped `@opentelemetry/*` imports, never the bare unscoped package name.
 
 **Transformation rule**: Remove the `ImportDeclaration`.
 
