@@ -1162,6 +1162,40 @@ describe('Phase 3 scope conservatism: if removal limited to startActiveSpan call
 describe('Phase 4 scope conservatism: span shadowing inside startActiveSpan callback', () => {
   const filePath = '/tmp/test.js';
 
+  it('does NOT strip span.setAttribute on a shadowed span variable inside a class method body', () => {
+    // A class method defined inside a startActiveSpan callback body redeclares
+    // `span` as a DOM element. The stripper must stop at the MethodDeclaration
+    // boundary and NOT strip the DOM span.setAttribute — same reasoning as
+    // the FunctionDeclaration stop.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function doWork() {',
+      "  return tracer.startActiveSpan('op', (span) => {",
+      "    span.setAttribute('otel.key', 1);",
+      '    class Helper {',
+      '      render() {',
+      "        const span = document.querySelector('span');",  // shadows OTel span
+      "        span.setAttribute('data-active', 'true');",  // DOM call — NOT OTel
+      '      }',
+      '    }',
+      '    try {',
+      '      return new Helper().render();',
+      '    } finally {',
+      "      span.end();",
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // The DOM span.setAttribute inside the class method must NOT be stripped
+    expect(result).toContain("span.setAttribute('data-active', 'true')");
+    // The OTel span.setAttribute at the callback body level IS stripped
+    expect(result).not.toContain("span.setAttribute('otel.key', 1)");
+  });
+
   it('does NOT strip span.setAttribute on a shadowed span variable inside a nested function', () => {
     // Inside a startActiveSpan callback, a nested function redeclares `span`
     // as a different object. The stripper must not remove the inner `span.setAttribute`

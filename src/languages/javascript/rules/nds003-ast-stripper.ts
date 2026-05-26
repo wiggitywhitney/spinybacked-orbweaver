@@ -359,9 +359,16 @@ function getEnclosingSpanVarName(node: Node): string | null {
         shadowedNames.add(param.getName());
       }
     }
-    // Named function declarations are a hard stop: we cannot cheaply inspect
-    // their body for variable declarations that might shadow the span name.
-    if (Node.isFunctionDeclaration(current)) return null;
+    // Any function-like scope boundary whose body we cannot cheaply inspect for
+    // variable-declaration shadows: named functions, class methods, constructors,
+    // getters, and setters are all hard stops.
+    if (
+      Node.isFunctionDeclaration(current) ||
+      Node.isMethodDeclaration(current) ||
+      Node.isConstructorDeclaration(current) ||
+      Node.isGetAccessorDeclaration(current) ||
+      Node.isSetAccessorDeclaration(current)
+    ) return null;
     current = current.getParent();
   }
   return null;
