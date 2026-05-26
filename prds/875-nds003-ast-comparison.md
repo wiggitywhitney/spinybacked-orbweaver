@@ -1,6 +1,6 @@
 # PRD #875: NDS-003 AST-level comparison
 
-**Status**: In progress — M2 complete, M3 next  
+**Status**: In progress — M3 in progress, acceptance gate pending  
 **Issue**: https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/875  
 **Priority**: High  
 **Predecessor PRDs**: #820 (Prettier normalization), #845 (normalize-both-sides)
@@ -136,12 +136,12 @@ After removing the dead reconcilers, search for orphaned helpers: `stripForCompa
 Update `docs/rules-reference.md` to reflect NDS-003's new comparison approach. Run `/write-docs` on the update. Update `src/agent/prompt.ts` if any NDS-003 rule IDs or descriptions referenced there have changed meaning.
 
 **Success criteria**:
-- [ ] All reconcilers made redundant by the AST comparison are removed
-- [ ] `docs/rules-reference.md` accurately describes NDS-003's current behavior
-- [ ] `src/agent/prompt.ts` contains no stale NDS-003 references
-- [ ] `npm test` passes
+- [x] All reconcilers made redundant by the AST comparison are removed
+- [x] `docs/rules-reference.md` accurately describes NDS-003's current behavior
+- [x] `src/agent/prompt.ts` contains no stale NDS-003 references
+- [x] `npm test` passes
 - [ ] Acceptance gate passes
-- [ ] Update PROGRESS.md
+- [x] Update PROGRESS.md
 
 ---
 
