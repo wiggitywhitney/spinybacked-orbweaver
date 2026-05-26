@@ -142,6 +142,6 @@ For completeness — these properties *are* normalized by ts-morph's printer:
 | Indentation style | `\t` or 2-space | 4-space | Always 4-space inside blocks |
 | Extra token whitespace | `const  x  =  1` | `const x = 1` | Spaces between keywords/identifiers |
 | Missing semicolons | `const x = 1` | `const x = 1;` | Always adds semicolons |
-| Trailing file whitespace | `const x = 1;  ` | `const x = 1;\n` | Adds trailing newline |
+| Trailing file whitespace | `const x = 1;` | `const x = 1;\n` | Adds trailing newline |
 | Multi-line call args (no obj/arr) | `f(\n  a,\n  b\n)` | `f(a, b)` | When no multiLine-flagged nodes inside |
 | Arrow callback formatting | `arr.filter(\n  x => x\n)` | `arr.filter(x => x)` | Trivia stripped by reconstruction |
