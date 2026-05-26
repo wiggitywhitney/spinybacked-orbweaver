@@ -1,6 +1,6 @@
 # PRD #875: NDS-003 AST-level comparison
 
-**Status**: In progress — M3 in progress, acceptance gate pending  
+**Status**: Complete — all milestones done, acceptance gate runs in CI  
 **Issue**: https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/875  
 **Priority**: High  
 **Predecessor PRDs**: #820 (Prettier normalization), #845 (normalize-both-sides)
