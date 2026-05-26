@@ -1050,6 +1050,122 @@ describe('Phase 4 scope conservatism: span method removal is limited to startAct
   });
 });
 
+describe('Phase 2 scope conservatism: try/finally stripping limited to startActiveSpan callbacks', () => {
+  const filePath = '/tmp/test.js';
+
+  it('does NOT strip a try/finally with span.end() that is outside a startActiveSpan callback', () => {
+    // A file has one startActiveSpan callback using `span`, and a second
+    // unrelated function that also has a `try { } finally { span.end(); }` —
+    // but its `span` is a different DOM/graphics span, not OTel. Phase 2
+    // must not strip the second try/finally just because `span` appears in
+    // the global spanVarNames set.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function instrumented() {',
+      "  return tracer.startActiveSpan('op', (span) => {",
+      '    try {',
+      '      return doWork();',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+      'function unrelated() {',
+      '  const span = getGraphicsSpan();',
+      '  try {',
+      '    return render();',
+      '  } finally {',
+      '    span.end();',  // NOT OTel — different `span`
+      '  }',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // The unrelated try/finally must survive intact
+    expect(result).toContain('const span = getGraphicsSpan()');
+    expect(result).toContain('return render()');
+    // The unrelated span.end() must NOT be stripped
+    const unrelatedSection = result.slice(result.indexOf('function unrelated'));
+    expect(unrelatedSection).toContain('span.end()');
+  });
+});
+
+describe('Phase 3 scope conservatism: if removal limited to startActiveSpan callbacks', () => {
+  const filePath = '/tmp/test.js';
+
+  it('does NOT remove an if(span.isRecording()) block outside a startActiveSpan callback', () => {
+    // A file has one startActiveSpan callback using `span`. A second
+    // unrelated function checks `if (span.isRecording())` on a non-OTel object.
+    // Phase 3 must not remove the second if-block.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function instrumented() {',
+      "  return tracer.startActiveSpan('op', (span) => {",
+      '    if (span.isRecording()) {',
+      "      span.setAttribute('key', 1);",
+      '    }',
+      '    return doWork();',
+      '  });',
+      '}',
+      'function unrelated(span) {',
+      '  if (span.isRecording()) {',  // NOT OTel — `span` is a function parameter here
+      "    span.setAttribute('some.metric', 1);",
+      '  }',
+      '  return doOtherWork();',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // The unrelated if block must survive intact
+    const unrelatedSection = result.slice(result.indexOf('function unrelated'));
+    expect(unrelatedSection).toContain('if (span.isRecording())');
+    expect(unrelatedSection).toContain("span.setAttribute('some.metric', 1)");
+  });
+});
+
+describe('Phase 4 scope conservatism: span shadowing inside startActiveSpan callback', () => {
+  const filePath = '/tmp/test.js';
+
+  it('does NOT strip span.setAttribute on a shadowed span variable inside a nested function', () => {
+    // Inside a startActiveSpan callback, a nested function redeclares `span`
+    // as a different object. The stripper must not remove the inner `span.setAttribute`
+    // call, since it belongs to the nested function's own `span`, not the OTel span.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function doWork() {',
+      "  return tracer.startActiveSpan('op', (span) => {",
+      '    span.setAttribute(\'otel.key\', 1);',
+      '    function innerRenderer() {',
+      '      const span = getCanvasContext();',  // shadows the OTel span
+      "      span.setAttribute('canvas.width', 100);",  // NOT OTel
+      '      span.end();',  // NOT OTel
+      '    }',
+      '    try {',
+      '      innerRenderer();',
+      '      return 42;',
+      '    } finally {',
+      '      span.end();',  // OTel — this should be stripped
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // The inner function's span.setAttribute must NOT be stripped
+    expect(result).toContain('const span = getCanvasContext()');
+    expect(result).toContain("span.setAttribute('canvas.width', 100)");
+    // The inner function's span.end() must NOT be stripped
+    const innerSection = result.slice(result.indexOf('function innerRenderer'));
+    expect(innerSection).toContain('span.end()');
+  });
+});
+
 describe('removeOtelIfStatements condition shape conservatism', () => {
   const filePath = '/tmp/test.js';
 

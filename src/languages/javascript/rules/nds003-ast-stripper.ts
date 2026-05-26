@@ -131,12 +131,18 @@ function removeOtelTryStatements(sourceFile: SourceFile, spanVarNames: Set<strin
   for (const tryStmt of tryStatements.reverse()) {
     if (tryStmt.wasForgotten()) continue;
 
+    // Scope the check to the enclosing startActiveSpan callback's parameter.
+    // A TryStatement outside any startActiveSpan callback is never OTel boilerplate.
+    const enclosingSpanVar = getEnclosingSpanVarName(tryStmt);
+    if (!enclosingSpanVar) continue;
+    const scopedSpanVarNames = new Set([enclosingSpanVar]);
+
     const catchClause = tryStmt.getCatchClause();
     const finallyBlock = tryStmt.getFinallyBlock();
 
     if (!finallyBlock) continue; // No finally — not an OTel lifecycle wrapper
 
-    const finallyIsOtel = isFinallyOnlySpanEnd(finallyBlock, spanVarNames);
+    const finallyIsOtel = isFinallyOnlySpanEnd(finallyBlock, scopedSpanVarNames);
     if (!finallyIsOtel) continue; // Non-OTel finally — conservatism: leave intact
 
     if (!catchClause) {
@@ -150,7 +156,7 @@ function removeOtelTryStatements(sourceFile: SourceFile, spanVarNames: Set<strin
     // P4: has both catch and finally — check if catch is OTel-only
     // Extract the catch variable name so `throw error` vs `throw new Error(...)` can be distinguished.
     const catchVarName = catchClause.getVariableDeclaration()?.getName() ?? '';
-    const catchIsOtel = isCatchOnlyOtelAndRethrow(catchClause.getBlock(), spanVarNames, catchVarName);
+    const catchIsOtel = isCatchOnlyOtelAndRethrow(catchClause.getBlock(), scopedSpanVarNames, catchVarName);
     if (!catchIsOtel) continue; // Non-OTel catch (P6) — conservatism: leave intact
 
     // Both catch and finally are OTel — replace with try body
@@ -274,6 +280,12 @@ function removeOtelIfStatements(sourceFile: SourceFile, spanVarNames: Set<string
   for (const ifStmt of ifStatements.reverse()) {
     if (ifStmt.wasForgotten()) continue;
 
+    // Scope the check to the enclosing startActiveSpan callback's parameter.
+    // An if-guard outside any startActiveSpan callback is never OTel boilerplate.
+    const enclosingSpanVar = getEnclosingSpanVarName(ifStmt);
+    if (!enclosingSpanVar) continue;
+    const scopedSpanVarNames = new Set([enclosingSpanVar]);
+
     const thenStmt = ifStmt.getThenStatement();
     if (!Node.isBlock(thenStmt)) continue;
 
@@ -281,7 +293,7 @@ function removeOtelIfStatements(sourceFile: SourceFile, spanVarNames: Set<string
     if (stmts.length === 0) continue;
 
     // All statements must be span.* method calls (any SPAN_METHODS method)
-    const allOtel = stmts.every((stmt) => isSpanMethodCallStatement(stmt, spanVarNames));
+    const allOtel = stmts.every((stmt) => isSpanMethodCallStatement(stmt, scopedSpanVarNames));
     // Conservatism: also require the condition matches a known safe OTel guard shape.
     // A condition with side effects (e.g. if (refreshState()) { span.* }) must not be dropped.
     if (allOtel && isKnownOtelGuardCondition(ifStmt)) {
@@ -304,11 +316,19 @@ function removeOtelIfStatements(sourceFile: SourceFile, spanVarNames: Set<string
  * Also removes span.addEvent, span.updateName, span.setAttributes.
  */
 /**
- * Returns true if `node` is a descendant of a `startActiveSpan` callback body.
- * Conservatism guard: span.* calls outside a startActiveSpan scope may be on
- * unrelated objects that happen to share a variable name with the span parameter.
+ * Returns the span parameter name for the innermost enclosing startActiveSpan
+ * callback, or null if the node is not directly inside one.
+ *
+ * Stronger than a boolean isInsideStartActiveSpanCallback check: it ensures the
+ * receiver identifier matches the SPECIFIC callback parameter, not just any
+ * identifier that shares a name collected from a different callback elsewhere
+ * in the file. This prevents stripping span.* calls on unrelated objects that
+ * happen to share a name with some OTel span parameter in the same file.
+ *
+ * Stops at the first function boundary — nested functions have their own scope
+ * and may shadow the outer span with a different object.
  */
-function isInsideStartActiveSpanCallback(node: Node): boolean {
+function getEnclosingSpanVarName(node: Node): string | null {
   let current: Node | undefined = node.getParent();
   while (current) {
     if (Node.isArrowFunction(current) || Node.isFunctionExpression(current)) {
@@ -316,13 +336,20 @@ function isInsideStartActiveSpanCallback(node: Node): boolean {
       if (parent && Node.isCallExpression(parent)) {
         const calleeExpr = parent.getExpression();
         if (Node.isPropertyAccessExpression(calleeExpr) && calleeExpr.getName() === 'startActiveSpan') {
-          return true;
+          const firstParam = current.getParameters()[0];
+          return firstParam ? firstParam.getName() : null;
         }
       }
+      // Stopped at a function boundary that is NOT a startActiveSpan callback.
+      // Nested functions may redeclare `span` — do not walk further up.
+      return null;
     }
+    // Named function declarations (function foo() {}) are also scope boundaries.
+    // They are never the callback argument of startActiveSpan, so always stop here.
+    if (Node.isFunctionDeclaration(current)) return null;
     current = current.getParent();
   }
-  return false;
+  return null;
 }
 
 function removeSpanMethodCalls(sourceFile: SourceFile, spanVarNames: Set<string>): void {
@@ -336,13 +363,14 @@ function removeSpanMethodCalls(sourceFile: SourceFile, spanVarNames: Set<string>
     if (!Node.isPropertyAccessExpression(callee)) return;
     const receiver = callee.getExpression();
     if (!Node.isIdentifier(receiver)) return;
-    if (!spanVarNames.has(receiver.getText())) return;
     const name = callee.getName();
     if (!SPAN_METHODS.has(name)) return;
-    // Conservatism: only remove calls inside a startActiveSpan callback.
-    // Variable names like `span` appear in unrelated code — scoping prevents
-    // incorrectly stripping calls on non-OTel objects with the same name.
-    if (!isInsideStartActiveSpanCallback(node)) return;
+    // Verify the receiver matches the specific startActiveSpan callback parameter
+    // for the innermost enclosing callback. This prevents stripping span.* calls
+    // on unrelated objects that share a name with some OTel span elsewhere in
+    // the file, or on a shadowed `span` variable inside a nested function.
+    const enclosingSpanVar = getEnclosingSpanVarName(node);
+    if (!enclosingSpanVar || receiver.getText() !== enclosingSpanVar) return;
 
     toRemove.push(node);
   });
