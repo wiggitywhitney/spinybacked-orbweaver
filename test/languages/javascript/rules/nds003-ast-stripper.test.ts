@@ -625,12 +625,12 @@ describe('P19: multiline startActiveSpan arguments (Prettier-split)', () => {
   });
 });
 
-// ─── P20: Return value capture — PRESERVE (handled by M2 comparison, not stripper) ──
+// ─── P20: Return value capture — PRESERVE (equivalence handled by checkNonInstrumentationDiff, not stripper) ──
 
-describe('P20: return value capture preserved for M2 comparison', () => {
+describe('P20: return value capture preserved for NDS-003 reconciler', () => {
   const filePath = '/tmp/test.js';
 
-  it('leaves const capture + return var intact (not stripped — M2 handles the equivalence)', () => {
+  it('leaves const capture + return var intact (not stripped — reconcileReturnCaptures handles the equivalence)', () => {
     const code = [
       'async function getResult(input) {',
       "  return tracer.startActiveSpan('get', async (span) => {",
@@ -1022,6 +1022,38 @@ describe('P13 conservatism: removeTracerDeclarations restricted to OTel patterns
 
 describe('Phase 4 scope conservatism: span method removal is limited to startActiveSpan callbacks', () => {
   const filePath = '/tmp/test.js';
+
+  it('removes span.setAttribute inside an inline arrow callback nested in a startActiveSpan callback (no shadowing)', () => {
+    // The agent may place span.setAttribute inside a .map() or .forEach() callback
+    // that is itself inside a startActiveSpan callback. The inner arrow `(item) =>`
+    // has no `span` parameter, so it does not shadow the outer span — the stripper
+    // must walk through it and still strip the span.setAttribute call.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      "const tracer = trace.getTracer('svc');",
+      'function process(items) {',
+      "  return tracer.startActiveSpan('op', (span) => {",
+      '    const results = items.map((item) => {',
+      "      span.setAttribute('item.id', item.id);",  // inside .map — should be stripped
+      '      return item.value;',
+      '    });',
+      '    try {',
+      '      return results;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    // The span.setAttribute inside .map must be stripped
+    expect(result).not.toContain("span.setAttribute('item.id', item.id)");
+    // The original code structure inside .map must be preserved
+    expect(result).toContain('items.map((item) => {');
+    expect(result).toContain('return item.value;');
+  });
 
   it('does NOT remove span.setAttribute on an unrelated variable named span outside a startActiveSpan callback', () => {
     // An HTML span element stored in `span` — its `.setAttribute` must not be stripped.

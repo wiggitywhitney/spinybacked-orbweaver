@@ -1352,7 +1352,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
-  describe('graceful degrade when Prettier is unavailable (M3)', () => {
+  describe('graceful degrade when Prettier is unavailable', () => {
     afterEach(() => {
       _testResetPrettierCache();
     });
@@ -2985,20 +2985,19 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
-  // ─── M2: AST-level comparison — strip OTel first, then normalize both sides ──────
+  // ─── AST-level comparison — strip OTel first, then normalize both sides ──────
 
-  describe('M2 AST-level comparison: strip OTel before normalization', () => {
-    // PRD #875 M2: checkNonInstrumentationDiffNormalized now strips all OTel nodes
-    // from the instrumented code BEFORE normalizing both sides through Prettier.
-    // This ensures that lines which were split by Prettier at the span callback's deeper
-    // indentation (EC1) are back at their original depth before Prettier runs, so both
-    // sides normalize to the same form.
+  describe('AST-level comparison: strip OTel before normalization', () => {
+    // checkNonInstrumentationDiffNormalized strips all OTel nodes from the instrumented
+    // code BEFORE normalizing both sides through Prettier. This ensures that lines split
+    // by Prettier at the span callback's deeper indentation (EC1) are back at their
+    // original depth before Prettier runs, so both sides normalize to the same form.
 
     it('EC1: passes when a line fits at original indentation but exceeds 80 chars inside span callback (the run-19 allMessages.sort case)', async () => {
       // The sort line is 79 chars at 2-space indent. Inside the startActiveSpan callback
       // at 4-space the line is 81 chars, causing Prettier to split it.
-      // After M2: stripOtelNodes removes the span wrapper → sort is back at 2-space depth
-      // → Prettier normalizes both sides to the same single-line form → no NDS-003 finding.
+      // After stripping, the sort is back at 2-space depth → Prettier normalizes both
+      // sides to the same single-line form → no NDS-003 finding.
       const original = [
         'async function collectChatMessages(allMessages) {',
         '  allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));',
@@ -3030,7 +3029,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     it('EC1: passes when a line that fits at original 4-space indent exceeds 80 chars at 6-space span callback depth', async () => {
       // Line content is 77 chars; at 2-space indent = 79 chars (fits).
       // Inside startActiveSpan callback at 4-space indent, same line = 81 chars (splits).
-      // After M2: stripping restores original depth → Prettier normalizes identically.
+      // After stripping, the original depth is restored → Prettier normalizes identically.
       //
       // Note: the `allMessages.sort(` opening line alone cannot be reconciled by
       // reconcileAgentSplitLines (single-line group, below the 2-line minimum).

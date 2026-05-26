@@ -316,20 +316,29 @@ function removeOtelIfStatements(sourceFile: SourceFile, spanVarNames: Set<string
  * Also removes span.addEvent, span.updateName, span.setAttributes.
  */
 /**
- * Returns the span parameter name for the innermost enclosing startActiveSpan
- * callback, or null if the node is not directly inside one.
+ * Returns the span parameter name for the nearest enclosing startActiveSpan
+ * callback, or null if the node is not inside one (or the span name is
+ * shadowed by an intermediate function boundary).
  *
- * Stronger than a boolean isInsideStartActiveSpanCallback check: it ensures the
- * receiver identifier matches the SPECIFIC callback parameter, not just any
- * identifier that shares a name collected from a different callback elsewhere
- * in the file. This prevents stripping span.* calls on unrelated objects that
- * happen to share a name with some OTel span parameter in the same file.
+ * Stronger than a boolean isInsideStartActiveSpanCallback check: it ensures
+ * the receiver identifier matches the SPECIFIC callback parameter, not just
+ * any identifier that shares a name collected from another callback in the
+ * file. Prevents stripping span.* calls on unrelated objects.
  *
- * Stops at the first function boundary — nested functions have their own scope
- * and may shadow the outer span with a different object.
+ * Walking rule:
+ * - ArrowFunction / FunctionExpression that IS a startActiveSpan callback → found; return its first param name
+ * - ArrowFunction / FunctionExpression that is NOT a startActiveSpan callback:
+ *     if any of its parameters share the span variable name → stop (shadowing)
+ *     otherwise → walk through (e.g. .map((item) => { span.setAttribute(...) }))
+ * - FunctionDeclaration → always stop (body variable declarations could shadow,
+ *     and we cannot cheaply inspect them)
  */
 function getEnclosingSpanVarName(node: Node): string | null {
   let current: Node | undefined = node.getParent();
+  // Names declared as parameters by intermediate non-startActiveSpan functions.
+  // If the outer startActiveSpan param name appears here, it is shadowed.
+  const shadowedNames = new Set<string>();
+
   while (current) {
     if (Node.isArrowFunction(current) || Node.isFunctionExpression(current)) {
       const parent = current.getParent();
@@ -337,15 +346,21 @@ function getEnclosingSpanVarName(node: Node): string | null {
         const calleeExpr = parent.getExpression();
         if (Node.isPropertyAccessExpression(calleeExpr) && calleeExpr.getName() === 'startActiveSpan') {
           const firstParam = current.getParameters()[0];
-          return firstParam ? firstParam.getName() : null;
+          const spanName = firstParam ? firstParam.getName() : null;
+          // Return the span name only if it has not been shadowed by an inner function.
+          return spanName && !shadowedNames.has(spanName) ? spanName : null;
         }
       }
-      // Stopped at a function boundary that is NOT a startActiveSpan callback.
-      // Nested functions may redeclare `span` — do not walk further up.
-      return null;
+      // Not a startActiveSpan callback. Record its parameter names as potential
+      // shadows, then continue walking up instead of stopping immediately.
+      // This allows span.* calls inside inline callbacks like .map((item) => {...})
+      // to be correctly stripped when `item` does not shadow `span`.
+      for (const param of current.getParameters()) {
+        shadowedNames.add(param.getName());
+      }
     }
-    // Named function declarations (function foo() {}) are also scope boundaries.
-    // They are never the callback argument of startActiveSpan, so always stop here.
+    // Named function declarations are a hard stop: we cannot cheaply inspect
+    // their body for variable declarations that might shadow the span name.
     if (Node.isFunctionDeclaration(current)) return null;
     current = current.getParent();
   }
