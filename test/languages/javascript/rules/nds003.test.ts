@@ -2993,7 +2993,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     // by Prettier at the span callback's deeper indentation (EC1) are back at their
     // original depth before Prettier runs, so both sides normalize to the same form.
 
-    it('EC1: passes when a line fits at original indentation but exceeds 80 chars inside span callback (the run-19 allMessages.sort case)', async () => {
+    it('EC1: passes when a line fits at original indentation but exceeds 80 chars inside span callback', async () => {
       // The sort line is 79 chars at 2-space indent. Inside the startActiveSpan callback
       // at 4-space the line is 81 chars, causing Prettier to split it.
       // After stripping, the sort is back at 2-space depth → Prettier normalizes both
@@ -3060,7 +3060,7 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
 
-    it('P20/EC8: passes when agent extracts return expr to const var + return var for setAttribute (reconcileReturnCaptures)', async () => {
+    it('passes when agent extracts return expression to capture variable for setAttribute', async () => {
       // Original: `return computeResult(input);`
       // Stripped instrumented: `const result = computeResult(input); return result;`
       // reconcileReturnCaptures handles this structural divergence.
