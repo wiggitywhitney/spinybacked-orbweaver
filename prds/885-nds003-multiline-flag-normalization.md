@@ -3,7 +3,8 @@
 **Status**: In Progress  
 **Issue**: https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/885  
 **Priority**: High  
-**Predecessor PRDs**: #875 (AST-level comparison), #820 (Prettier normalization), #845 (normalize-both-sides)
+**Predecessor PRDs**: #875 (AST-level comparison), #820 (Prettier normalization), #845 (normalize-both-sides)  
+**Blocked by**: PR #884 (research spike issue #879) must be merged before starting — every milestone's Step 0 reads `docs/architecture/nds003-ast-printing-research.md`, which only exists on main after that PR merges.
 
 ---
 
