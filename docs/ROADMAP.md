@@ -22,6 +22,7 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Short-term (current focus)
+- NDS-003 multiLine flag normalization ([PRD #885](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/885)) — fixes false positives on pure formatting changes by normalizing `multiLine` AST flags before Prettier comparison; prerequisite for fixing the acceptance gate failure on journal-graph.js.
 
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
