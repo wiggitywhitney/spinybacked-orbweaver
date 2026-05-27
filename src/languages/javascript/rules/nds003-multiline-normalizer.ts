@@ -56,6 +56,10 @@ export function normalizeMultiLineFlags(code: string): string {
   };
 
   const result = ts.transform(sourceFile, [transformer]);
-  const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
-  return printer.printFile(result.transformed[0]);
+  try {
+    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
+    return printer.printFile(result.transformed[0]);
+  } finally {
+    result.dispose();
+  }
 }
