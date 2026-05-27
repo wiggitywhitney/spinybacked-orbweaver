@@ -73,10 +73,10 @@ Write fixture-driven tests first. Required test cases:
 - Nested object literals are all normalized (the walk is recursive)
 
 **Success criteria**:
-- [ ] `normalizeMultiLineFlags` passes all fixture tests
-- [ ] Both `ObjectLiteralExpression` and `ArrayLiteralExpression` are normalized
-- [ ] Normalization is recursive — nested literals are handled
-- [ ] `npm test` passes
+- [x] `normalizeMultiLineFlags` passes all fixture tests
+- [x] Both `ObjectLiteralExpression` and `ArrayLiteralExpression` are normalized
+- [x] Normalization is recursive — nested literals are handled
+- [x] `npm test` passes
 
 ---
 
