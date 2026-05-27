@@ -60,6 +60,8 @@ export function normalizeMultiLineFlags(code: string): string {
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     return printer.printFile(result.transformed[0]);
   } finally {
+    // dispose() frees EmitNode entries attached to parse-tree nodes by the transform;
+    // without it, repeated calls accumulate memory in long-running processes.
     result.dispose();
   }
 }

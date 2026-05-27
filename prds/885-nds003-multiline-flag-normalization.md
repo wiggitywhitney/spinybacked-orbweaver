@@ -87,7 +87,7 @@ Write fixture-driven tests first. Required test cases:
 Modify `checkNonInstrumentationDiffNormalized` in `src/languages/javascript/rules/nds003.ts`. The new pipeline, in order:
 
 1. Strip OTel from instrumented code using `stripOtelNodes` (existing — do not change).
-2. Apply `normalizeMultiLineFlags` to BOTH the original code AND the stripped code (new step).
+2. Apply `normalizeMultiLineFlags` to BOTH the original code AND the stripped code (new step — import from `'./nds003-multiline-normalizer.ts'`, built in M1).
 3. Run `prettierNormalize` on both normalized sources (existing — do not change).
 4. Call `checkNonInstrumentationDiff` on both normalized texts (existing — do not change).
 
