@@ -114,11 +114,11 @@ Run the full unit test suite. Then run a local commit-story-v2 eval to validate 
 **Documentation update**: Update `docs/rules-reference.md` via `/write-docs` to describe the `normalizeMultiLineFlags` pre-processing step as part of NDS-003's comparison pipeline. The entry should describe: (1) the `multiLine` flag root cause, (2) that both sides are normalized before Prettier runs, and (3) that method chain trivia is a known out-of-scope limitation.
 
 **Success criteria**:
-- [ ] "Do not increase line count" directive removed from `src/agent/prompt.ts`
-- [ ] No orphaned NDS-003 rule ID references remain in the prompt
-- [ ] `docs/rules-reference.md` accurately describes NDS-003's comparison pipeline including the `multiLine` normalization step
-- [ ] `npm test` passes
-- [ ] Update PROGRESS.md
+- [x] "Do not increase line count" directive removed from `src/agent/prompt.ts`
+- [x] No orphaned NDS-003 rule ID references remain in the prompt
+- [x] `docs/rules-reference.md` accurately describes NDS-003's comparison pipeline including the `multiLine` normalization step
+- [x] `npm test` passes
+- [x] Update PROGRESS.md
 
 ---
 
