@@ -3141,4 +3141,78 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures.length).toBeGreaterThan(0);
     });
   });
+
+  describe('multiLine flag normalization — inline object/array literal expansion does not fire NDS-003', () => {
+    it('passes when agent expands inline object/array literals to multi-line inside a span wrapper', async () => {
+      // When the agent wraps a function in a span and expands short inline object literals
+      // to multi-line form, the stripped instrumented code has multiLine=true on those nodes
+      // while the original has multiLine=false. Without normalization, Prettier formats them
+      // differently and the diff fires. This test guards against that regression.
+      const original = [
+        'async function buildGraphNodes(config) {',
+        '  const state = { nodes: [], edges: [], metadata: config };',
+        '  return state;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function buildGraphNodes(config) {',
+        '  return tracer.startActiveSpan("graph.build_nodes", async (span) => {',
+        '    try {',
+        // Agent expanded { nodes: [], edges: [], metadata: config } to multi-line
+        '      const state = {',
+        '        nodes: [],',
+        '        edges: [],',
+        '        metadata: config,',
+        '      };',
+        '      return state;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still detects when agent changes object properties, not just expands formatting', async () => {
+      // Content change — a property was added — must still trigger NDS-003.
+      const original = [
+        'async function buildGraphNodes(config) {',
+        '  const state = { nodes: [], edges: [], metadata: config };',
+        '  return state;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function buildGraphNodes(config) {',
+        '  return tracer.startActiveSpan("graph.build_nodes", async (span) => {',
+        '    try {',
+        // Agent expanded AND added a new property — content change, not just formatting
+        '      const state = {',
+        '        nodes: [],',
+        '        edges: [],',
+        '        metadata: config,',
+        '        extra: true,',
+        '      };',
+        '      return state;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
 });

@@ -73,10 +73,10 @@ Write fixture-driven tests first. Required test cases:
 - Nested object literals are all normalized (the walk is recursive)
 
 **Success criteria**:
-- [ ] `normalizeMultiLineFlags` passes all fixture tests
-- [ ] Both `ObjectLiteralExpression` and `ArrayLiteralExpression` are normalized
-- [ ] Normalization is recursive — nested literals are handled
-- [ ] `npm test` passes
+- [x] `normalizeMultiLineFlags` passes all fixture tests
+- [x] Both `ObjectLiteralExpression` and `ArrayLiteralExpression` are normalized
+- [x] Normalization is recursive — nested literals are handled
+- [x] `npm test` passes
 
 ---
 
@@ -87,7 +87,7 @@ Write fixture-driven tests first. Required test cases:
 Modify `checkNonInstrumentationDiffNormalized` in `src/languages/javascript/rules/nds003.ts`. The new pipeline, in order:
 
 1. Strip OTel from instrumented code using `stripOtelNodes` (existing — do not change).
-2. Apply `normalizeMultiLineFlags` to BOTH the original code AND the stripped code (new step).
+2. Apply `normalizeMultiLineFlags` to BOTH the original code AND the stripped code (new step — import from `'./nds003-multiline-normalizer.ts'`, built in M1).
 3. Run `prettierNormalize` on both normalized sources (existing — do not change).
 4. Call `checkNonInstrumentationDiff` on both normalized texts (existing — do not change).
 
@@ -98,10 +98,10 @@ Replace the existing tests for `checkNonInstrumentationDiffNormalized` with test
 Run the full unit test suite. Then run a local commit-story-v2 eval to validate on real output. Compare PARTIAL/SUCCESS counts before and after — `journal-graph.js` should move from PARTIAL to SUCCESS. No previously-passing files should regress.
 
 **Success criteria**:
-- [ ] Acceptance gate passes
-- [ ] `journal-graph.js` produces `success`, not `partial`
-- [ ] No previously-passing files regress
-- [ ] `npm test` passes
+- [x] Acceptance gate passes
+- [x] `journal-graph.js` produces `success`, not `partial`
+- [x] No previously-passing files regress
+- [x] `npm test` passes
 
 ---
 
@@ -114,11 +114,11 @@ Run the full unit test suite. Then run a local commit-story-v2 eval to validate 
 **Documentation update**: Update `docs/rules-reference.md` via `/write-docs` to describe the `normalizeMultiLineFlags` pre-processing step as part of NDS-003's comparison pipeline. The entry should describe: (1) the `multiLine` flag root cause, (2) that both sides are normalized before Prettier runs, and (3) that method chain trivia is a known out-of-scope limitation.
 
 **Success criteria**:
-- [ ] "Do not increase line count" directive removed from `src/agent/prompt.ts`
-- [ ] No orphaned NDS-003 rule ID references remain in the prompt
-- [ ] `docs/rules-reference.md` accurately describes NDS-003's comparison pipeline including the `multiLine` normalization step
-- [ ] `npm test` passes
-- [ ] Update PROGRESS.md
+- [x] "Do not increase line count" directive removed from `src/agent/prompt.ts`
+- [x] No orphaned NDS-003 rule ID references remain in the prompt
+- [x] `docs/rules-reference.md` accurately describes NDS-003's comparison pipeline including the `multiLine` normalization step
+- [x] `npm test` passes
+- [x] Update PROGRESS.md
 
 ---
 

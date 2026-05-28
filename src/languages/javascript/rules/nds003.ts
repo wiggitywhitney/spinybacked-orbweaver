@@ -5,6 +5,7 @@ import * as prettier from 'prettier';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
 import { stripOtelNodes } from './nds003-ast-stripper.ts';
+import { normalizeMultiLineFlags } from './nds003-multiline-normalizer.ts';
 
 /**
  * Patterns that identify OTel instrumentation lines.
@@ -646,14 +647,24 @@ export async function checkNonInstrumentationDiffNormalized(
   // depth — so both sides normalize to the same form.
   const strippedCode = stripOtelNodes(instrumentedCode, filePath);
 
+  // Reset multiLine flags on all ObjectLiteralExpression and ArrayLiteralExpression
+  // nodes to false on BOTH sides before Prettier runs. The TypeScript parser sets
+  // multiLine=true when a literal spans multiple lines in the source; Prettier reads
+  // this flag and may produce different output for inline vs multi-line forms even
+  // when the content is identical. Normalizing both sides to multiLine=false ensures
+  // Prettier sees inline intent and produces consistent output regardless of how the
+  // agent formatted object/array literals. (See docs/architecture/nds003-ast-printing-research.md §2.)
+  const flagNormalizedOriginal = normalizeMultiLineFlags(originalCode);
+  const flagNormalizedStripped = normalizeMultiLineFlags(strippedCode);
+
   // Infer quote style from the original so both sides normalize consistently.
   // OTel import boilerplate uses double-quoted strings, which shifts
   // inferSingleQuote(instrumentedCode) away from the project's actual style when
   // the original has mostly single quotes. Using the original's inferred style for
   // both normalizations prevents quote-style mismatches between the two sides.
   const singleQuote = inferSingleQuote(originalCode);
-  const normalizedOriginal = await prettierNormalize(originalCode, filePath, singleQuote);
-  const normalizedStripped = await prettierNormalize(strippedCode, filePath, singleQuote);
+  const normalizedOriginal = await prettierNormalize(flagNormalizedOriginal, filePath, singleQuote);
+  const normalizedStripped = await prettierNormalize(flagNormalizedStripped, filePath, singleQuote);
   return checkNonInstrumentationDiff(normalizedOriginal, normalizedStripped, filePath);
 }
 
