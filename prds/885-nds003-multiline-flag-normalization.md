@@ -98,9 +98,9 @@ Replace the existing tests for `checkNonInstrumentationDiffNormalized` with test
 Run the full unit test suite. Then run a local commit-story-v2 eval to validate on real output. Compare PARTIAL/SUCCESS counts before and after — `journal-graph.js` should move from PARTIAL to SUCCESS. No previously-passing files should regress.
 
 **Success criteria**:
-- [ ] Acceptance gate passes
-- [ ] `journal-graph.js` produces `success`, not `partial`
-- [ ] No previously-passing files regress
+- [x] Acceptance gate passes
+- [x] `journal-graph.js` produces `success`, not `partial`
+- [x] No previously-passing files regress
 - [x] `npm test` passes
 
 ---
