@@ -50,7 +50,8 @@ describe('normalizeMultiLineFlags', () => {
 
   describe('journal-graph.js pattern', () => {
     it('return { key: value } expanded to multi-line normalizes to same text', async () => {
-      // Exact pattern from CI run 26425282751 that caused ~15 false NDS-003 failures
+      // Inline return object expanded to multi-line — the agent commonly produces this when
+      // adding a span wrapper increases indentation and a one-liner no longer fits.
       const inline = `function buildNode(n) { return { id: n.id, label: n.label }; }`;
       const multiline = `function buildNode(n) {\n  return {\n    id: n.id,\n    label: n.label\n  };\n}`;
 

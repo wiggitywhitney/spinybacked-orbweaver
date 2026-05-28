@@ -3142,13 +3142,12 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
     });
   });
 
-  describe('multiLine flag normalization — journal-graph.js false positive (PRD #885)', () => {
+  describe('multiLine flag normalization — inline object/array literal expansion does not fire NDS-003', () => {
     it('passes when agent expands inline object/array literals to multi-line inside a span wrapper', async () => {
-      // journal-graph.js pattern (CI run 26425282751): the agent wraps a function in a span
-      // and expands short inline object literals to multi-line form. After stripping OTel,
-      // the expanded literals have multiLine=true while the original has multiLine=false.
-      // normalizeMultiLineFlags resets both sides to multiLine=false before Prettier runs,
-      // producing identical normalized output and eliminating the false positive.
+      // When the agent wraps a function in a span and expands short inline object literals
+      // to multi-line form, the stripped instrumented code has multiLine=true on those nodes
+      // while the original has multiLine=false. Without normalization, Prettier formats them
+      // differently and the diff fires. This test guards against that regression.
       const original = [
         'async function buildGraphNodes(config) {',
         '  const state = { nodes: [], edges: [], metadata: config };',
