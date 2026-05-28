@@ -101,7 +101,7 @@ Run the full unit test suite. Then run a local commit-story-v2 eval to validate 
 - [ ] Acceptance gate passes
 - [ ] `journal-graph.js` produces `success`, not `partial`
 - [ ] No previously-passing files regress
-- [ ] `npm test` passes
+- [x] `npm test` passes
 
 ---
 

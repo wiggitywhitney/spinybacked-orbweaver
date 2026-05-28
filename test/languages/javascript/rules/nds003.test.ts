@@ -3141,4 +3141,79 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures.length).toBeGreaterThan(0);
     });
   });
+
+  describe('multiLine flag normalization — journal-graph.js false positive (PRD #885)', () => {
+    it('passes when agent expands inline object/array literals to multi-line inside a span wrapper', async () => {
+      // journal-graph.js pattern (CI run 26425282751): the agent wraps a function in a span
+      // and expands short inline object literals to multi-line form. After stripping OTel,
+      // the expanded literals have multiLine=true while the original has multiLine=false.
+      // normalizeMultiLineFlags resets both sides to multiLine=false before Prettier runs,
+      // producing identical normalized output and eliminating the false positive.
+      const original = [
+        'async function buildGraphNodes(config) {',
+        '  const state = { nodes: [], edges: [], metadata: config };',
+        '  return state;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function buildGraphNodes(config) {',
+        '  return tracer.startActiveSpan("graph.build_nodes", async (span) => {',
+        '    try {',
+        // Agent expanded { nodes: [], edges: [], metadata: config } to multi-line
+        '      const state = {',
+        '        nodes: [],',
+        '        edges: [],',
+        '        metadata: config,',
+        '      };',
+        '      return state;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toHaveLength(0);
+    });
+
+    it('still detects when agent changes object properties, not just expands formatting', async () => {
+      // Content change — a property was added — must still trigger NDS-003.
+      const original = [
+        'async function buildGraphNodes(config) {',
+        '  const state = { nodes: [], edges: [], metadata: config };',
+        '  return state;',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'async function buildGraphNodes(config) {',
+        '  return tracer.startActiveSpan("graph.build_nodes", async (span) => {',
+        '    try {',
+        // Agent expanded AND added a new property — content change, not just formatting
+        '      const state = {',
+        '        nodes: [],',
+        '        edges: [],',
+        '        metadata: config,',
+        '        extra: true,',
+        '      };',
+        '      return state;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures.length).toBeGreaterThan(0);
+    });
+  });
 });
