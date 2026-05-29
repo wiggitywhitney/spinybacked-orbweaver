@@ -1050,8 +1050,9 @@ describe('buildSystemPrompt — per-function attribute guidance', () => {
     const getCommitDataIdx = prompt.indexOf('getCommitData');
     expect(getCommitDataIdx).toBeGreaterThan(-1);
 
-    // isRecording guard must appear in the getCommitData guidance block
-    const guidance = prompt.slice(getCommitDataIdx, getCommitDataIdx + 600);
+    // isRecording guard must appear in the getCommitData guidance block (bounded by next section)
+    const nextSectionIdx = prompt.indexOf('###', getCommitDataIdx + 1);
+    const guidance = prompt.slice(getCommitDataIdx, nextSectionIdx > -1 ? nextSectionIdx : undefined);
     expect(guidance).toContain('isRecording');
   });
 });

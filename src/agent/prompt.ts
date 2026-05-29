@@ -159,8 +159,8 @@ Report ALL new schema entries in \`schemaExtensions\`. For each extension, expla
 ### Per-Function Attribute Guidance
 
 When the function being instrumented is **\`getCommitData\`** (a git commit data collector):
-- Always set \`commit_story.commit.message\` (the first line of the commit message). This value is a string fetched from git output — wrap it in a \`span.isRecording()\` guard: \`if (span.isRecording()) { span.setAttribute('commit_story.commit.message', firstLine); }\`
-- Always set \`commit_story.commit.timestamp\` (the commit timestamp, ISO 8601 string). This does not require an \`isRecording()\` guard.
+- Always set \`commit_story.commit.message\` (the first line of the commit message). Commit messages are variable-length strings, so wrap in a \`span.isRecording()\` guard to respect sampling decisions: \`if (span.isRecording()) { span.setAttribute('commit_story.commit.message', firstLine); }\`
+- Always set \`commit_story.commit.timestamp\` (the commit timestamp, ISO 8601 string). Timestamps are fixed-size metadata and do not require an \`isRecording()\` guard.
 - Do NOT set \`commit_story.commit.author\` — it is a PII attribute (CDQ-007) and must be omitted.
 
 ### Schema-Uncovered Files (COV-005)
