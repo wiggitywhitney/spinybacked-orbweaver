@@ -158,10 +158,10 @@ Report ALL new schema entries in \`schemaExtensions\`. For each extension, expla
 
 ### Per-Function Attribute Guidance
 
-When the function being instrumented is **\`getCommitData\`** (a git commit data collector):
-- Always set \`commit_story.commit.message\` (the first line of the commit message). Commit messages are variable-length strings, so wrap in a \`span.isRecording()\` guard to respect sampling decisions: \`if (span.isRecording()) { span.setAttribute('commit_story.commit.message', firstLine); }\`
-- Always set \`commit_story.commit.timestamp\` (the commit timestamp, ISO 8601 string). Timestamps are fixed-size metadata and do not require an \`isRecording()\` guard.
-- Do NOT set \`commit_story.commit.author\` — it is a PII attribute (CDQ-007) and must be omitted.
+When the function being instrumented is **\`getCommitData\`** (a function that collects git commit metadata and returns an object with message, timestamp, and related fields):
+- Set \`commit_story.commit.message\` to the **first line only** of the commit message string (use \`.split('\\n')[0]\` on whatever variable holds the raw message). Commit messages are variable-length strings, so wrap in a \`span.isRecording()\` guard: \`if (span.isRecording()) { span.setAttribute('commit_story.commit.message', rawMessage.split('\\n')[0]); }\` — replace \`rawMessage\` with the actual variable name from the function.
+- Set \`commit_story.commit.timestamp\` using the commit's ISO 8601 timestamp string. Timestamps are compact, fixed-size values and do not require an \`isRecording()\` guard.
+- Do NOT set \`commit_story.commit.author\` — it is a PII attribute (CDQ-007).
 
 ### Schema-Uncovered Files (COV-005)
 
