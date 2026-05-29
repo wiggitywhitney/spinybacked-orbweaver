@@ -895,7 +895,7 @@ describe('handleInstrument', () => {
       expect(allOutput).not.toContain('Agent thinking');
     });
 
-    it('shows full validator error messages in a dedicated section for failed files', async () => {
+    it('shows human-readable rule descriptions for validation failures, not raw error detail', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions({ verbose: true }), deps);
       const callbacks = getCallbacks(deps);
@@ -919,9 +919,13 @@ describe('handleInstrument', () => {
       // Must have a section header for validation failures
       expect(allOutput).toContain('Validation failures');
 
-      // Must show full error text from lastError (not just rule ID abbreviation)
-      expect(allOutput).toContain('NDS-001: Unexpected token at line 5');
-      expect(allOutput).toContain('NDS-003: New variable introduced at line 10');
+      // Must show formatted rule IDs with human-readable descriptions
+      expect(allOutput).toContain('NDS-001 (Syntax Valid)');
+      expect(allOutput).toContain('NDS-003 (Code Preserved)');
+
+      // Must NOT show raw error detail (line numbers, code snippets)
+      expect(allOutput).not.toContain('Unexpected token at line 5');
+      expect(allOutput).not.toContain('New variable introduced at line 10');
     });
   });
 

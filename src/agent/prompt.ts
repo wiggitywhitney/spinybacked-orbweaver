@@ -156,6 +156,13 @@ ${attributeNames.map(n => `\`${n}\``).join(', ')}
 ` : ''}
 Report ALL new schema entries in \`schemaExtensions\`. For each extension, explain in \`notes\` why no existing key was a semantic match. Do NOT include in \`schemaExtensions\` any attribute key that already appears in the registered attribute list above — those are already in the registry. Call \`span.setAttribute('existing.key', value)\` directly; no extension declaration is needed.
 
+### Per-Function Attribute Guidance
+
+When the function being instrumented is **\`getCommitData\`** (a git commit data collector):
+- Always set \`commit_story.commit.message\` (the first line of the commit message). This value is a string fetched from git output — wrap it in a \`span.isRecording()\` guard: \`if (span.isRecording()) { span.setAttribute('commit_story.commit.message', firstLine); }\`
+- Always set \`commit_story.commit.timestamp\` (the commit timestamp, ISO 8601 string). This does not require an \`isRecording()\` guard.
+- Do NOT set \`commit_story.commit.author\` — it is a PII attribute (CDQ-007) and must be omitted.
+
 ### Schema-Uncovered Files (COV-005)
 
 When a file has NO registry-defined attributes for its spans, you MUST still add contextual attributes. **A span with zero attributes is a COV-005 violation** — it provides no diagnostic value beyond existence. Derive 1-2 domain-relevant attributes per span from:

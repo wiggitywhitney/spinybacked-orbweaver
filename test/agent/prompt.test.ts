@@ -1032,3 +1032,27 @@ describe('language parameterization', () => {
   });
 });
 
+describe('buildSystemPrompt — per-function attribute guidance', () => {
+  const schema = makeSchema();
+  const jsProvider = new JavaScriptProvider();
+
+  it('includes getCommitData-specific attribute guidance requiring commit.message and commit.timestamp', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    expect(prompt).toContain('getCommitData');
+    expect(prompt).toContain('commit_story.commit.message');
+    expect(prompt).toContain('commit_story.commit.timestamp');
+  });
+
+  it('requires isRecording() guard on commit_story.commit.message in getCommitData guidance', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    const getCommitDataIdx = prompt.indexOf('getCommitData');
+    expect(getCommitDataIdx).toBeGreaterThan(-1);
+
+    // isRecording guard must appear in the getCommitData guidance block
+    const guidance = prompt.slice(getCommitDataIdx, getCommitDataIdx + 600);
+    expect(guidance).toContain('isRecording');
+  });
+});
+
