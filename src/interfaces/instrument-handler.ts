@@ -9,7 +9,7 @@ import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
 import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
-import { formatRuleId, expandRuleCodesInText } from '../validation/rule-names.ts';
+import { formatRuleId, expandRuleCodesInText, getRuleHumanDescription } from '../validation/rule-names.ts';
 import { companionPath } from '../deliverables/companion-path.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
 
@@ -259,15 +259,22 @@ export async function handleInstrument(
         deps.stderr(`  ${refactorCount} recommended ${noun}`);
       }
 
-      // Full validator error messages for failed files
+      // Full validator error messages for failed files — use human-readable descriptions
+      // so the console shows useful context instead of agent-facing raw error detail.
       if (result.status === 'failed' && result.lastError) {
         deps.stderr('');
         deps.stderr(`  ${_dim('Validation failures (last attempt)')}`);
         deps.stderr(`  ${_dim('─'.repeat(60))}`);
         for (const line of result.lastError.split('\n')) {
-          if (line.trim()) {
-            deps.stderr(`  • ${line}`);
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          const ruleMatch = trimmed.match(/^([A-Z]+-\d+[a-z]?):\s*/);
+          if (ruleMatch) {
+            const ruleId = ruleMatch[1];
+            const desc = getRuleHumanDescription(ruleId) ?? trimmed.slice(ruleMatch[0].length);
+            deps.stderr(`  • ${formatRuleId(ruleId)}: ${desc}`);
           }
+          // Skip agent-facing continuation lines that don't start with a rule ID
         }
       }
 
