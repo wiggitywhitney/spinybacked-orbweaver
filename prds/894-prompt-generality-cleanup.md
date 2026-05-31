@@ -114,7 +114,7 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
   **Success criteria**: All 7 symptom-fix sections resolved. CDQ-006 covers external source strings. `docs/rules-reference.md` reflects current CDQ-006 behavior. All tests pass.
 
-- [ ] **M3 — Implement git pre-commit hook for prompt.ts changes**
+- [x] **M3 — Implement git pre-commit hook for prompt.ts changes**
 
   **This work happens in `claude-config`** (`~/Documents/Repositories/claude-config`), not in `spinybacked-orbweaver`. The pre-commit dispatcher lives at `claude-config/hooks/git/pre-commit`; individual check scripts live at `claude-config/hooks/git/checks/`. Model after `test-tiers.sh` (`claude-config/hooks/git/checks/test-tiers.sh`) — advisory, always exits 0.
 
