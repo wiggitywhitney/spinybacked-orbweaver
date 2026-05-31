@@ -103,7 +103,7 @@ These sections have some texture of symptom-fix guidance but their underlying pr
   **CDQ-006 strengthening**: Add one sentence covering variable-length string attributes from external sources. After the existing list of expensive computations (`map`, `reduce`, `filter`, `JSON.stringify`, etc.), add: *"External source strings — values fetched from git output, API responses, file contents, or any source whose length is unbounded — should also be guarded, even when no computation is involved."* Run `/write-prompt` on the modified CDQ-006 section.
 
   **Symptom-fix sections**: Work through each of the 7 identified sections using the resolutions in the Audit Findings table above. For each:
-  1. Read the current guidance
+  1. Read the current text in `src/agent/prompt.ts` — some items (particularly the ratio backstop) may already have been partially rewritten by a prior PRD. Apply the specified resolution only where the current text still exhibits the symptom-fix pattern; do not overwrite already-correct guidance.
   2. Apply the specified resolution (rewrite, generalize, or remove)
   3. Verify the change teaches a principle that would apply to any project
   4. Run `/write-prompt` on the modified section
@@ -116,9 +116,9 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
 - [ ] **M3 — Implement git pre-commit hook for prompt.ts changes**
 
-  Add a new hook script `hooks/git/check-prompt-generality.sh` and register it in the pre-commit dispatcher (`hooks/git/pre-commit`).
+  **IMPORTANT**: This hook lives in `claude-config` (the shared hook infrastructure repo at `~/Documents/Repositories/claude-config`), NOT in `spinybacked-orbweaver`. The pre-commit dispatcher and all hook scripts are maintained there and installed into each project via `scripts/install-git-hooks.sh`. Before implementing, inspect the existing hook structure in `claude-config` to confirm the correct directory and dispatcher registration pattern. The hook script `test-tiers.sh` (warns but does not block) is the model to follow.
 
-  **Hook behavior**:
+  Add a new hook script (following the existing naming and structure convention in `claude-config`) that implements this behavior:
   - Check `git diff --cached --name-only` for `src/agent/prompt.ts`
   - If not present: exit 0 silently
   - If present: print an advisory block with the following three diagnostic questions, then exit 0:
@@ -126,16 +126,14 @@ These sections have some texture of symptom-fix guidance but their underlying pr
     2. Does every piece of guidance address a root cause rather than a symptom observed in one eval run?
     3. Are all examples using synthetic namespaces (`my_service`, `acme`) rather than real eval-target namespaces (`commit_story`, `taze`, `dd`)?
 
-  The hook must always exit 0 — it is advisory, never blocking. Model it after `test-tiers.sh` (warns but does not block).
+  The hook must always exit 0 — it is advisory, never blocking.
 
-  Add bats tests in `tests/check-prompt-generality.bats` covering:
-  - Hook is silent and exits 0 when prompt.ts is not staged
-  - Hook prints the three diagnostic questions and exits 0 when prompt.ts is staged
+  Register the script in the pre-commit dispatcher in `claude-config`. Add bats tests in the `claude-config` tests directory covering:
+  - Hook is silent and exits 0 when `src/agent/prompt.ts` is not staged
+  - Hook prints the three diagnostic questions and exits 0 when it is staged
   - Hook exits 0 (not 1) in all cases
 
-  Also register `check-prompt-generality.sh` in `scripts/install-git-hooks.sh` so it installs alongside other hooks.
-
-  **Success criteria**: Hook fires with correct advisory output when `src/agent/prompt.ts` is staged; silent otherwise; all bats tests pass; `npm test` unaffected.
+  **Success criteria**: Hook fires with correct advisory output when `src/agent/prompt.ts` is staged; silent otherwise; bats tests pass.
 
 - [ ] **M4 — Run commit-story-v2 eval (run-20)**
 
@@ -170,7 +168,7 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
 ## Design Notes
 
-- **Prerequisite**: PR #893 (`.claude/CLAUDE.md` Agent Prompt Generality Rule) must be merged to main before any milestone begins. Verify with `gh pr view 893 --repo wiggitywhitney/spinybacked-orbweaver --json state`.
+- **Prerequisite satisfied**: PR #893 (`.claude/CLAUDE.md` Agent Prompt Generality Rule) was merged to main on 2026-05-31. No action needed.
 - All prompt section edits must go through `/write-prompt` review before committing (project CLAUDE.md requirement for `src/agent/prompt.ts` changes).
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 - M1 and M2 can each be their own PR, or combined — they are independent. M3 (hook) is independent of both and can land in any order. M4 (eval) must follow M1 and M2.
