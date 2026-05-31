@@ -24,6 +24,7 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 ## Short-term (current focus)
 
 ## Medium-term
+- Prompt generality cleanup: fix target-specific namespace examples, symptom-fix guidance, add enforcement hook ([PRD #894](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/894)) — removes eval-target namespaces from prompt examples, rewrites symptom-fix guidance as general principles, strengthens CDQ-006, adds git pre-commit advisory hook for prompt.ts changes.
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
 - Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
