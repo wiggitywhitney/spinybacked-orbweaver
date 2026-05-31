@@ -108,6 +108,19 @@ These conventions apply to any PRD or GitHub issue that adds, removes, modifies,
 - **Final step: update `docs/rules-reference.md` via `/write-docs`** to reflect any rule additions, deletions, registration changes, promotion-to-blocking changes, or message changes introduced by the work. `docs/rules-reference.md` is the canonical user-facing rule reference. Closing rules-related work without this step introduces documentation drift between the codebase's rule behavior and the published reference.
 - **Final step: update `src/agent/prompt.ts`** to match any rule ID or description changes introduced by the work. The prompt instructs the LLM agent using rule IDs (e.g., `- **RST-001**: Do NOT add spans to pure synchronous data transformations...`); orphaned references — a rule ID no longer in `src/validation/rule-names.ts`, or a description that no longer matches the rule's current behavior — will confuse the agent. After making rule changes, grep the prompt for the rule-ID pattern `[A-Z]{2,4}-\d{3}[a-z]?` and verify every match still corresponds to a registered rule with accurate guidance. If a rule was deleted, remove the prompt bullet; if a rule's behavior or scope changed, update the prompt's directive phrasing to match.
 
+## Agent Prompt Generality Rule
+
+`src/agent/prompt.ts` runs against every project spiny-orb instruments. All guidance must be expressed as transferable principles — never as observations from a specific eval run.
+
+**Do not add to `src/agent/prompt.ts`:**
+- Function names from specific eval target repos (e.g. `getCommitData`, `collectChatMessages`)
+- Attribute key prefixes tied to a specific schema namespace (e.g. `commit_story.*`, `taze.*`)
+- Examples that use real eval-target namespaces in a way that anchors the agent to those names
+
+**When an eval finding reveals missing guidance:** before adding anything to the prompt, ask: "Would this guidance fire correctly for a different project with a completely different codebase, showing the same class of failure?" If yes, it is a general principle — add it in its general form. If no, it is a symptom fix — the right fix is in the schema, the registry, or a sharpening of an existing rule.
+
+**Examples and illustrations in the prompt** may use synthetic namespaces (e.g. `my_service`, `acme`) but never real eval-target namespaces.
+
 ## Code Review Triage
 
 When triaging CodeRabbit or `/code-review` findings during a PR, **never defer findings to a GitHub issue**. Fix every non-Skip finding inline in the PR, even if it requires additional files or interface changes. The Defer disposition in the global `git-workflow.md` does not apply to this project — deferred findings rarely ship; inline fixes do.
