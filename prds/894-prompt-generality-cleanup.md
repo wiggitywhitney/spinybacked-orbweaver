@@ -96,7 +96,7 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
   **Success criteria**: No real eval-target namespace strings appear anywhere in `src/agent/prompt.ts`. All existing prompt tests pass.
 
-- [ ] **M2 — Strengthen CDQ-006; evaluate and fix symptom-fix guidance**
+- [x] **M2 — Strengthen CDQ-006; evaluate and fix symptom-fix guidance**
 
   Read `docs/rules-reference.md` in full before starting.
 
@@ -116,7 +116,7 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
 - [ ] **M3 — Implement git pre-commit hook for prompt.ts changes**
 
-  **This work happens in `claude-config`** (`~/Documents/Repositories/claude-config`), not in `spinybacked-orbweaver`. The pre-commit dispatcher lives at `claude-config/hooks/git/pre-commit`; individual check scripts live at `claude-config/hooks/git/checks/`. Model after `test-tiers.sh` (advisory, always exits 0).
+  **This work happens in `claude-config`** (`~/Documents/Repositories/claude-config`), not in `spinybacked-orbweaver`. The pre-commit dispatcher lives at `claude-config/hooks/git/pre-commit`; individual check scripts live at `claude-config/hooks/git/checks/`. Model after `test-tiers.sh` (`claude-config/hooks/git/checks/test-tiers.sh`) — advisory, always exits 0.
 
   **File to create**: `claude-config/hooks/git/checks/check-prompt-generality.sh`
 
@@ -150,9 +150,9 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
   **What to verify in run-20**:
   - `getCommitData` span: sets ≥ 3 attributes (COV-005 passes); `commit_story.git.*` keys are correctly invented and reported as `schemaExtensions` (not pre-registered)
-  - CDQ-006 `isRecording()` guard applied on `commit_story.commit.message` (the variable-length external source string)
-  - No regressions on other fixtures compared to run-19
-  - No target-specific namespace strings appear in agent notes or reasoning
+  - CDQ-006 `isRecording()` guard applied on `commit_story.commit.message` (the variable-length external source string) — this is an eval-specific observation; do not add this function name or namespace to `src/agent/prompt.ts`
+  - No regressions on other fixtures compared to run-19 (results in `evaluation/commit-story-v2/run-19/`)
+  - No target-specific namespace strings appear in agent notes or reasoning. Check `debug-dumps/` thinking blocks for any occurrence of `commit_story`, `taze`, or `dd.http` — these indicate the agent is pattern-matching to familiar namespaces rather than generalizing
 
   Record results in `evaluation/commit-story-v2/run-20/`. Update PROGRESS.md.
 

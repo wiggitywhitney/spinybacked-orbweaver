@@ -463,7 +463,11 @@ describe('buildSystemPrompt', () => {
   it('includes ratio-based backstop guidance', () => {
     const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-    expect(prompt).toContain('20%');
+    // Backstop is a principle (prioritize entry points / outbound calls on dense files),
+    // not a fixed percentage threshold calibrated from a specific eval run
+    expect(prompt).toContain('excessive spans');
+    expect(prompt).toContain('Ratio-Based Backstop');
+    expect(prompt).not.toContain('20%');
   });
 
   it('includes already-instrumented detection guidance', () => {
@@ -976,6 +980,17 @@ describe('prompt rule guidance — CDQ-006 isRecording patterns', () => {
 
     expect(prompt).toContain('span.isRecording()');
     expect(prompt).toMatch(/if \(span\.isRecording\(\)\)/);
+  });
+
+  it('includes external source strings as a guarded case alongside expensive computations', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    const cdq006Match = prompt.match(/CDQ-006[^]*?(?=\n- \*\*CDQ-007)/);
+    expect(cdq006Match).not.toBeNull();
+    const cdq006Text = cdq006Match![0];
+
+    // External source strings should be covered even when no computation is involved
+    expect(cdq006Text).toContain('External source strings');
   });
 });
 
