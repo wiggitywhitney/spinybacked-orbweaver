@@ -116,9 +116,11 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
 - [ ] **M3 — Implement git pre-commit hook for prompt.ts changes**
 
-  **IMPORTANT**: This hook lives in `claude-config` (the shared hook infrastructure repo at `~/Documents/Repositories/claude-config`), NOT in `spinybacked-orbweaver`. The pre-commit dispatcher and all hook scripts are maintained there and installed into each project via `scripts/install-git-hooks.sh`. Before implementing, inspect the existing hook structure in `claude-config` to confirm the correct directory and dispatcher registration pattern. The hook script `test-tiers.sh` (warns but does not block) is the model to follow.
+  **This work happens in `claude-config`** (`~/Documents/Repositories/claude-config`), not in `spinybacked-orbweaver`. The pre-commit dispatcher lives at `claude-config/hooks/git/pre-commit`; individual check scripts live at `claude-config/hooks/git/checks/`. Model after `test-tiers.sh` (advisory, always exits 0).
 
-  Add a new hook script (following the existing naming and structure convention in `claude-config`) that implements this behavior:
+  **File to create**: `claude-config/hooks/git/checks/check-prompt-generality.sh`
+
+  Script behavior:
   - Check `git diff --cached --name-only` for `src/agent/prompt.ts`
   - If not present: exit 0 silently
   - If present: print an advisory block with the following three diagnostic questions, then exit 0:
@@ -126,12 +128,17 @@ These sections have some texture of symptom-fix guidance but their underlying pr
     2. Does every piece of guidance address a root cause rather than a symptom observed in one eval run?
     3. Are all examples using synthetic namespaces (`my_service`, `acme`) rather than real eval-target namespaces (`commit_story`, `taze`, `dd`)?
 
-  The hook must always exit 0 — it is advisory, never blocking.
+  The script must always exit 0. Any repo where `src/agent/prompt.ts` is not staged will silently pass — safe to add globally.
 
-  Register the script in the pre-commit dispatcher in `claude-config`. Add bats tests in the `claude-config` tests directory covering:
+  **Dispatcher registration**: Add this line to `claude-config/hooks/git/pre-commit` after the existing `run_check` calls:
+  ```bash
+  run_check "$CHECKS_DIR/check-prompt-generality.sh" || exit_code=$?
+  ```
+
+  **Tests**: Add bats tests in `claude-config/tests/check-prompt-generality.bats` covering:
   - Hook is silent and exits 0 when `src/agent/prompt.ts` is not staged
   - Hook prints the three diagnostic questions and exits 0 when it is staged
-  - Hook exits 0 (not 1) in all cases
+  - Hook exits 0 in all cases (never blocks)
 
   **Success criteria**: Hook fires with correct advisory output when `src/agent/prompt.ts` is staged; silent otherwise; bats tests pass.
 
