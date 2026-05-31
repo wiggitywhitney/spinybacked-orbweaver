@@ -81,7 +81,7 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
 ## Milestones
 
-- [ ] **M1 — Replace target-specific namespace examples; remove Per-Function Attribute Guidance**
+- [x] **M1 — Replace target-specific namespace examples; remove Per-Function Attribute Guidance**
 
   Read `docs/rules-reference.md` in full before starting (rules-related work convention). Then:
 

@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-05-31) Removed eval-target-specific namespace examples from the instrumentation agent's system prompt (`src/agent/prompt.ts`). Five locations had hardcoded examples drawn from real eval-target projects — `commit_story.*` span names, `dd.*` attribute keys, `taze.*` schema fidelity examples, and a function-specific guidance block for `getCommitData` — which anchored the agent toward familiar patterns and degraded results on projects with different schemas. All five were replaced with `my_service.*` synthetic namespace examples; the `getCommitData`-specific block was removed entirely. The prompt now teaches transferable principles without referencing any specific eval target's schema. Updated tests assert that none of the known real namespaces appear in the built prompt output.
+
 - (2026-05-31) Added Agent Prompt Generality Rule to `.claude/CLAUDE.md` (PR #893). This rule prohibits adding eval-target-specific content to `src/agent/prompt.ts` — function names, schema namespace prefixes, or real eval-target namespace examples — and requires all guidance to be expressed as transferable principles. Includes a diagnostic question to distinguish general principles from symptom fixes: "Would this guidance fire correctly for a different project with a completely different codebase, showing the same class of failure?" Added after discovering PR #892 accidentally introduced commit-story-v2-specific guidance into a prompt that runs against every instrumented project.
 
 ### Fixed

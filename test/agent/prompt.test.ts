@@ -716,11 +716,11 @@ describe('buildUserMessage', () => {
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
         jsProvider, undefined,
-        ['commit_story.journal.generate_summary', 'commit_story.graph.build'],
+        ['my_service.journal.generate_summary', 'my_service.graph.build'],
       );
       expect(message).toContain('Span names already in use');
-      expect(message).toContain('commit_story.journal.generate_summary');
-      expect(message).toContain('commit_story.graph.build');
+      expect(message).toContain('my_service.journal.generate_summary');
+      expect(message).toContain('my_service.graph.build');
       expect(message).toContain('Do NOT reuse');
     });
 
@@ -909,14 +909,14 @@ describe('buildUserMessage', () => {
         outboundCallsNeedingSpans: [],
         entryPointSubOperations: [],
         alreadyInstrumentedImports: [
-          { name: 'fetchPackument', sourceModule: './packument.ts', sourceFile: '/app/packument.ts', spanNames: ['taze.fetch.npm'] },
+          { name: 'fetchPackument', sourceModule: './packument.ts', sourceFile: '/app/packument.ts', spanNames: ['my_service.fetch.npm'] },
         ],
       };
       const message = buildUserMessage(
         '/app/index.js', 'const x = 1;', config,
         jsProvider, undefined, undefined, undefined, preScan,
       );
-      expect(message).toContain('taze.fetch.npm');
+      expect(message).toContain('my_service.fetch.npm');
       expect(message).toContain('spans:');
     });
 
@@ -1032,28 +1032,38 @@ describe('language parameterization', () => {
   });
 });
 
-describe('buildSystemPrompt — per-function attribute guidance', () => {
+describe('buildSystemPrompt — no real eval-target namespaces', () => {
   const schema = makeSchema();
   const jsProvider = new JavaScriptProvider();
 
-  it('includes getCommitData-specific attribute guidance requiring commit.message and commit.timestamp', () => {
+  it('does not contain real eval-target namespaces in system prompt output', () => {
     const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-    expect(prompt).toContain('getCommitData');
-    expect(prompt).toContain('commit_story.commit.message');
-    expect(prompt).toContain('commit_story.commit.timestamp');
+    expect(prompt).not.toContain('commit_story');
+    expect(prompt).not.toContain('taze');
+    expect(prompt).not.toContain('dd.http');
+    expect(prompt).not.toContain('dd.db');
   });
 
-  it('requires isRecording() guard on commit_story.commit.message in getCommitData guidance', () => {
+  it('uses synthetic my_service namespace in span naming examples', () => {
     const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-    const getCommitDataIdx = prompt.indexOf('getCommitData');
-    expect(getCommitDataIdx).toBeGreaterThan(-1);
+    expect(prompt).toContain('my_service.context.gather');
+    expect(prompt).toContain('my_service.mcp.start');
+    expect(prompt).toContain('my_service.summary.generate');
+  });
 
-    // isRecording guard must appear in the getCommitData guidance block (bounded by next section)
-    const nextSectionIdx = prompt.indexOf('###', getCommitDataIdx + 1);
-    const guidance = prompt.slice(getCommitDataIdx, nextSectionIdx > -1 ? nextSectionIdx : undefined);
-    expect(guidance).toContain('isRecording');
+  it('uses synthetic my_service namespace in attribute priority examples', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    expect(prompt).toContain('my_service.http.method');
+    expect(prompt).toContain('my_service.db.query');
+  });
+
+  it('uses synthetic my_service namespace in schemaExtensions output format example', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    expect(prompt).toContain('span.my_service.payment.process');
   });
 });
 
