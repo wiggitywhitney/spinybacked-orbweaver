@@ -112,16 +112,17 @@ const RULE_HUMAN_DESCRIPTIONS: Partial<Record<string, string>> = {
   // ── Advisory: Quality ────────────────────────────────────────────────────
 
   'CDQ-006': 'CDQ-006 (isRecording Guard) fired because span.setAttribute() is called with an ' +
-    'expensive computation (map, reduce, filter, JSON.stringify, etc.) and no span.isRecording() ' +
-    'guard. When sampling drops the span, that computation still runs on every request. Wrap the ' +
-    'call in `if (span.isRecording()) { ... }` to skip it when the span won\'t be exported. ' +
-    'Skip this finding for root spans at entry points — the guard adds clutter for negligible gain there.',
+    'expensive computation (map, reduce, filter, JSON.stringify, etc.) or an external source string ' +
+    '(value fetched from git output, an API response, file contents, or any source whose length is ' +
+    'unbounded) and no span.isRecording() guard. When sampling drops the span, that work still runs ' +
+    'on every request. Wrap the call in `if (span.isRecording()) { ... }` to skip it when the span ' +
+    'won\'t be exported. Skip this finding for root spans at entry points — the guard adds clutter ' +
+    'for negligible gain there.',
 
   'CDQ-007': 'CDQ-007 (Attribute Data Quality) fired for one or more of: a PII attribute name ' +
-    '(like author, email, or username), a raw filesystem path where a basename would be safer, ' +
-    'or a property access used as an attribute value without a null check. PII in traces can ' +
-    'violate privacy policies and is worth fixing. The path and null-guard findings are lower ' +
-    'severity — fix them if the code will run in a context where the value might be null.',
+    '(like author, email, or username) or a raw filesystem path where a basename would be safer. ' +
+    'PII in traces can violate privacy policies and is worth fixing. The path finding is lower ' +
+    'severity — fix it when the code will run in a context where the basename utility is already imported.',
 
   'CDQ-009': 'CDQ-009 (Null-Safe Guard) fired because an attribute value is guarded with ' +
     '`!== undefined` before being passed to setAttribute(). That guard doesn\'t protect against ' +

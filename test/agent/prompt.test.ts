@@ -451,6 +451,15 @@ describe('buildSystemPrompt', () => {
       // Constraint: only the statement form changes — call expression must be unchanged
       expect(prompt).toContain('statement form');
     });
+
+    it('NDS-003 teaches layout preservation as a principle, not a line-count proxy', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      // The principle is preserving multi-line code structure, not matching a line count
+      expect(prompt).toContain('multi-line');
+      // The old calibrated-from-observation proxy must not appear
+      expect(prompt).not.toContain('same number of lines');
+    });
   });
 
   it('includes variable shadowing guidance', () => {
@@ -463,7 +472,11 @@ describe('buildSystemPrompt', () => {
   it('includes ratio-based backstop guidance', () => {
     const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-    expect(prompt).toContain('20%');
+    // Backstop is a principle (prioritize entry points / outbound calls on dense files),
+    // not a fixed percentage threshold calibrated from a specific eval run
+    expect(prompt).toContain('excessive spans');
+    expect(prompt).toContain('Ratio-Based Backstop');
+    expect(prompt).not.toContain('20%');
   });
 
   it('includes already-instrumented detection guidance', () => {
@@ -716,11 +729,11 @@ describe('buildUserMessage', () => {
       const message = buildUserMessage(
         '/app/src/routes/users.js', 'const x = 1;', config,
         jsProvider, undefined,
-        ['commit_story.journal.generate_summary', 'commit_story.graph.build'],
+        ['my_service.journal.generate_summary', 'my_service.graph.build'],
       );
       expect(message).toContain('Span names already in use');
-      expect(message).toContain('commit_story.journal.generate_summary');
-      expect(message).toContain('commit_story.graph.build');
+      expect(message).toContain('my_service.journal.generate_summary');
+      expect(message).toContain('my_service.graph.build');
       expect(message).toContain('Do NOT reuse');
     });
 
@@ -909,14 +922,14 @@ describe('buildUserMessage', () => {
         outboundCallsNeedingSpans: [],
         entryPointSubOperations: [],
         alreadyInstrumentedImports: [
-          { name: 'fetchPackument', sourceModule: './packument.ts', sourceFile: '/app/packument.ts', spanNames: ['taze.fetch.npm'] },
+          { name: 'fetchPackument', sourceModule: './packument.ts', sourceFile: '/app/packument.ts', spanNames: ['my_service.fetch.npm'] },
         ],
       };
       const message = buildUserMessage(
         '/app/index.js', 'const x = 1;', config,
         jsProvider, undefined, undefined, undefined, preScan,
       );
-      expect(message).toContain('taze.fetch.npm');
+      expect(message).toContain('my_service.fetch.npm');
       expect(message).toContain('spans:');
     });
 
@@ -977,6 +990,35 @@ describe('prompt rule guidance — CDQ-006 isRecording patterns', () => {
     expect(prompt).toContain('span.isRecording()');
     expect(prompt).toMatch(/if \(span\.isRecording\(\)\)/);
   });
+
+  it('includes external source strings as a guarded case alongside expensive computations', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    const cdq006Match = prompt.match(/CDQ-006[^]*?(?=\n- \*\*CDQ-007)/);
+    expect(cdq006Match).not.toBeNull();
+    const cdq006Text = cdq006Match![0];
+
+    // External source strings should be covered even when no computation is involved
+    expect(cdq006Text).toContain('External source strings');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CDQ-009 null/undefined and optional chaining guidance
+// ---------------------------------------------------------------------------
+
+describe('prompt rule guidance — CDQ-009 null-safe guard', () => {
+  const schema = makeSchema();
+  const jsProvider = new JavaScriptProvider();
+
+  it('covers optional chaining producing undefined', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    // CDQ-009 must cover optional chaining (.?) in addition to !== undefined
+    expect(prompt).toContain('optional chaining');
+    // Must instruct agent to provide an explicit fallback for optional chaining
+    expect(prompt).toContain('?? ');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1032,28 +1074,38 @@ describe('language parameterization', () => {
   });
 });
 
-describe('buildSystemPrompt — per-function attribute guidance', () => {
+describe('buildSystemPrompt — no real eval-target namespaces', () => {
   const schema = makeSchema();
   const jsProvider = new JavaScriptProvider();
 
-  it('includes getCommitData-specific attribute guidance requiring commit.message and commit.timestamp', () => {
+  it('does not contain real eval-target namespaces in system prompt output', () => {
     const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-    expect(prompt).toContain('getCommitData');
-    expect(prompt).toContain('commit_story.commit.message');
-    expect(prompt).toContain('commit_story.commit.timestamp');
+    expect(prompt).not.toContain('commit_story');
+    expect(prompt).not.toContain('taze');
+    expect(prompt).not.toContain('dd.http');
+    expect(prompt).not.toContain('dd.db');
   });
 
-  it('requires isRecording() guard on commit_story.commit.message in getCommitData guidance', () => {
+  it('uses synthetic my_service namespace in span naming examples', () => {
     const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-    const getCommitDataIdx = prompt.indexOf('getCommitData');
-    expect(getCommitDataIdx).toBeGreaterThan(-1);
+    expect(prompt).toContain('my_service.context.gather');
+    expect(prompt).toContain('my_service.mcp.start');
+    expect(prompt).toContain('my_service.summary.generate');
+  });
 
-    // isRecording guard must appear in the getCommitData guidance block (bounded by next section)
-    const nextSectionIdx = prompt.indexOf('###', getCommitDataIdx + 1);
-    const guidance = prompt.slice(getCommitDataIdx, nextSectionIdx > -1 ? nextSectionIdx : undefined);
-    expect(guidance).toContain('isRecording');
+  it('uses synthetic my_service namespace in attribute priority examples', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    expect(prompt).toContain('my_service.http.method');
+    expect(prompt).toContain('my_service.db.query');
+  });
+
+  it('uses synthetic my_service namespace in schemaExtensions output format example', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    expect(prompt).toContain('span.my_service.payment.process');
   });
 });
 

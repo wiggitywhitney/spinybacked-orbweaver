@@ -21,8 +21,9 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
+**Pending**: commit-story-v2 run-20 — verifies PRD #894 prompt namespace cleanup and CDQ-006 external source string guidance. Run after PRD #894 merges.
+
 ## Short-term (current focus)
-- Prompt generality cleanup: fix target-specific namespace examples, symptom-fix guidance, add enforcement hook ([PRD #894](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/894)) — removes eval-target namespaces from prompt examples, rewrites symptom-fix guidance as general principles, strengthens CDQ-006, adds git pre-commit advisory hook for prompt.ts changes.
 
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.

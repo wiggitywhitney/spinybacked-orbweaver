@@ -121,6 +121,12 @@ These conventions apply to any PRD or GitHub issue that adds, removes, modifies,
 
 **Examples and illustrations in the prompt** may use synthetic namespaces (e.g. `my_service`, `acme`) but never real eval-target namespaces.
 
+## Eval Cadence
+
+**Eval runs are never PRD milestones.** Evals are executed by a separate team between PRDs. Never include an eval run as a milestone in a PRD or as a GitHub issue.
+
+To request an eval after a PRD merges, add a note to `docs/ROADMAP.md` under the `## Eval cadence` section — not in the PRD or in an issue.
+
 ## Code Review Triage
 
 When triaging CodeRabbit or `/code-review` findings during a PR, **never defer findings to a GitHub issue**. Fix every non-Skip finding inline in the PR, even if it requires additional files or interface changes. The Defer disposition in the global `git-workflow.md` does not apply to this project — deferred findings rarely ship; inline fixes do.
