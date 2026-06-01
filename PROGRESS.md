@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-05-31) Extended CDQ-006 (`isRecording` guard) to cover external source strings. Previously CDQ-006 only listed expensive computations (serialization, array operations) as cases requiring an `isRecording()` guard. External source strings — values fetched from git output, API responses, file contents, or any source whose length is unbounded — now require the same guard even when no computation is involved. This is the root cause fix behind the removal of the eval-specific `getCommitData` function guidance: rather than naming a specific function, CDQ-006 now teaches the class of values that need guarding.
 
+- (2026-05-31) Established that eval runs are never PRD milestones — they are executed by a separate team between PRDs. Added an Eval Cadence section to `.claude/CLAUDE.md` documenting this rule. Eval requests now go in `docs/ROADMAP.md` under the eval cadence section instead of in PRDs or issues. Added a pending run-20 request to ROADMAP.md for post-merge verification of PRD #894's prompt changes.
+
 - (2026-05-31) Added `check-prompt-generality.sh` pre-commit advisory check to the global git hook suite (in claude-config). When `src/agent/prompt.ts` is staged in any repo, the hook prints three diagnostic questions asking the committer to verify that all guidance is project-general (not eval-target-specific), addresses root causes (not observed symptoms), and uses synthetic namespaces such as `my_service` rather than real eval-target namespaces. Always exits 0 — advisory only, never blocks. 9 bats tests cover silent/advisory/exit-0 behavior.
 
 ### Fixed

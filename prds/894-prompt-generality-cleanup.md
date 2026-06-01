@@ -142,7 +142,7 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
   **Success criteria**: Hook fires with correct advisory output when `src/agent/prompt.ts` is staged; silent otherwise; bats tests pass.
 
-- [ ] **M4 — Update PROGRESS.md**
+- [x] **M4 — Update PROGRESS.md**
 
   Add entries for all work completed in this PRD: M1 (namespace cleanup), M2 (CDQ-006 + symptom-fix rewrites), M3 (hook).
 
