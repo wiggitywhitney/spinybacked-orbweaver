@@ -21,8 +21,6 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
-**In progress**: commit-story-v2 run-20 — verifies prompt namespace cleanup and CDQ-006 external source string guidance from the prompt generality cleanup work.
-
 ## Short-term (current focus)
 
 ## Medium-term
