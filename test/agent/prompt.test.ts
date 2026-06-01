@@ -451,6 +451,15 @@ describe('buildSystemPrompt', () => {
       // Constraint: only the statement form changes — call expression must be unchanged
       expect(prompt).toContain('statement form');
     });
+
+    it('NDS-003 teaches layout preservation as a principle, not a line-count proxy', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      // The principle is preserving multi-line code structure, not matching a line count
+      expect(prompt).toContain('multi-line');
+      // The old calibrated-from-observation proxy must not appear
+      expect(prompt).not.toContain('same number of lines');
+    });
   });
 
   it('includes variable shadowing guidance', () => {
@@ -991,6 +1000,24 @@ describe('prompt rule guidance — CDQ-006 isRecording patterns', () => {
 
     // External source strings should be covered even when no computation is involved
     expect(cdq006Text).toContain('External source strings');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CDQ-009 null/undefined and optional chaining guidance
+// ---------------------------------------------------------------------------
+
+describe('prompt rule guidance — CDQ-009 null-safe guard', () => {
+  const schema = makeSchema();
+  const jsProvider = new JavaScriptProvider();
+
+  it('covers optional chaining producing undefined', () => {
+    const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+    // CDQ-009 must cover optional chaining (.?) in addition to !== undefined
+    expect(prompt).toContain('optional chaining');
+    // Must instruct agent to provide an explicit fallback for optional chaining
+    expect(prompt).toContain('?? ');
   });
 });
 
