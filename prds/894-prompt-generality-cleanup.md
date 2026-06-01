@@ -142,25 +142,9 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 
   **Success criteria**: Hook fires with correct advisory output when `src/agent/prompt.ts` is staged; silent otherwise; bats tests pass.
 
-- [ ] **M4 — Run commit-story-v2 eval (run-20)**
+- [ ] **M4 — Update PROGRESS.md**
 
-  Per the ROADMAP eval cadence rule, a commit-story-v2 eval is required after any change to `src/agent/prompt.ts`. Run-20 is the verification eval for this PRD.
-
-  Before running: confirm the acceptance gate is green on main. Set up the eval using the command pattern in `~/.claude/rules/eval-github-pat.md` (use `--thinking` and `--debug-dump-dir`).
-
-  **What to verify in run-20**:
-  - `getCommitData` span: sets ≥ 3 attributes (COV-005 passes); `commit_story.git.*` keys are correctly invented and reported as `schemaExtensions` (not pre-registered)
-  - CDQ-006 `isRecording()` guard applied on `commit_story.commit.message` (the variable-length external source string) — this is an eval-specific observation; do not add this function name or namespace to `src/agent/prompt.ts`
-  - No regressions on other fixtures compared to run-19 (results in `evaluation/commit-story-v2/run-19/`)
-  - No target-specific namespace strings appear in agent notes or reasoning. Check `debug-dumps/` thinking blocks for any occurrence of `commit_story`, `taze`, or `dd.http` — these indicate the agent is pattern-matching to familiar namespaces rather than generalizing
-
-  Record results in `evaluation/commit-story-v2/run-20/`. Update PROGRESS.md.
-
-  **Success criteria**: Run-20 shows COV-005 improvement on `getCommitData`. No new failures vs. run-19. Schema extension mechanism exercised correctly.
-
-- [ ] **M5 — Update PROGRESS.md**
-
-  Add entries for all work completed in this PRD: M1 (namespace cleanup), M2 (CDQ-006 + symptom-fix rewrites), M3 (hook), M4 (eval results).
+  Add entries for all work completed in this PRD: M1 (namespace cleanup), M2 (CDQ-006 + symptom-fix rewrites), M3 (hook).
 
 ## Decision Log
 
@@ -169,7 +153,8 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 | Git pre-commit hook (advisory, exit 0) over Claude Code PostToolUse hook | PostToolUse only fires in Claude Code sessions; git hook fires for any commit regardless of tool. Grep-on-all-commits rejected as too noisy. Advisory (not blocking) per project convention. |
 | Strengthen CDQ-006 (Option B) over removing Per-Function Attribute Guidance without a fix (Option A) | Option A doesn't address the root cause — agent would still avoid `isRecording()` guards on external source strings in future runs. |
 | commit-story-v2 schema additions abandoned | The schema extension mechanism is the correct behavior. Pre-registering keys bypasses the test and gives artificially clean results. Run-20 should exercise the extension mechanism. |
-| Borderline items left in place | Insufficient eval evidence to determine if removal/rewrite would improve or degrade results. Revisit after run-20. |
+| Borderline items left in place | Insufficient eval evidence to determine if removal/rewrite would improve or degrade results. Revisit after the next eval run. |
+| Eval milestone removed from PRD scope | Eval runs are executed by a separate team between PRDs, not as PRD milestones. To request an eval after a PRD merges, add a note to ROADMAP.md under the eval cadence section — never in a PRD or GitHub issue. |
 | Synthetic namespace `my_service` chosen for examples | Generic, clearly fictional, not associated with any real org or project. Easy to recognize as a placeholder. |
 | CLAUDE.md generality rule implemented first (PR #893) | Prevention is cheaper than cleanup. The rule is already in place before the code fix, so future sessions have the guardrail even before M1–M3 land. |
 
@@ -178,5 +163,5 @@ These sections have some texture of symptom-fix guidance but their underlying pr
 - **Prerequisite satisfied**: PR #893 (`.claude/CLAUDE.md` Agent Prompt Generality Rule) was merged to main on 2026-05-31. No action needed.
 - All prompt section edits must go through `/write-prompt` review before committing (project CLAUDE.md requirement for `src/agent/prompt.ts` changes).
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
-- M1 and M2 can each be their own PR, or combined — they are independent. M3 (hook) is independent of both and can land in any order. M4 (eval) must follow M1 and M2.
+- M1 and M2 can each be their own PR, or combined — they are independent. M3 (hook) is independent of both and can land in any order.
 - Do not merge M1 or M2 without first running `/write-prompt` on every modified section of `src/agent/prompt.ts`.
