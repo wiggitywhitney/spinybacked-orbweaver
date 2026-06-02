@@ -3691,6 +3691,47 @@ describe('instrumentWithRetry — supplementSchemaExtensions', () => {
     expect(result.schemaExtensions).toContain('span.myapp.process_order');
     expect(result.schemaExtensions).toContain('span.myapp.process');
   });
+
+  it('adds attribute keys from setAttribute calls not declared in schemaExtensions', async () => {
+    const output = makeInstrumentationOutput({
+      instrumentedCode: [
+        `tracer.startActiveSpan('myapp.process', (span) => {`,
+        `  span.setAttribute('myapp.user.id', userId);`,
+        `  span.end();`,
+        `});`,
+      ].join('\n') + '\n',
+      schemaExtensions: [],
+    });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.schemaExtensions).toContain('myapp.user.id');
+  });
+
+  it('does not add duplicate attribute keys already declared in schemaExtensions', async () => {
+    const output = makeInstrumentationOutput({
+      instrumentedCode: `span.setAttribute('myapp.user.id', userId);\n`,
+      schemaExtensions: ['myapp.user.id'],
+    });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.schemaExtensions.filter(e => e === 'myapp.user.id')).toHaveLength(1);
+  });
 });
 
 // --- Budget escalation on truncation (#210 Milestone 8) ---

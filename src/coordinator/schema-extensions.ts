@@ -360,3 +360,25 @@ export function extractSpanNamesFromCode(code: string): string[] {
   }
   return [...names];
 }
+
+/**
+ * Extract literal attribute keys from setAttribute calls in instrumented code.
+ *
+ * Finds all `<span>.setAttribute('key', ...)` and `<span>.setAttribute("key", ...)`
+ * calls and returns the unique literal string keys. Dynamic keys (template literals,
+ * variables) are intentionally ignored.
+ *
+ * @param code - Instrumented JavaScript source code
+ * @returns Deduplicated array of attribute key strings found in the code
+ */
+export function extractAttributeKeysFromCode(code: string): string[] {
+  const keys = new Set<string>();
+  // Match <anything>.setAttribute('key', ...) — requires a leading dot so bare function
+  // calls without a receiver are excluded. Only single/double quoted literals are captured;
+  // template literals and variables do not match the quote character class.
+  const pattern = /\.setAttribute\s*\(\s*(['"])([^'"]+)\1/g;
+  for (const match of code.matchAll(pattern)) {
+    keys.add(match[2]!);
+  }
+  return [...keys];
+}

@@ -16,7 +16,7 @@ import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
-import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
+import { extractSpanNamesFromCode, extractAttributeKeysFromCode } from '../coordinator/schema-extensions.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -1500,12 +1500,18 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
  */
 function supplementSchemaExtensions(extensions: string[], code: string): string[] {
   const normalized = [...new Set(extensions.map(normalizeSchemaExtension))];
-  const spanNames = extractSpanNamesFromCode(code);
   const registered = new Set(normalized);
-  const missing = spanNames
+
+  const spanNames = extractSpanNamesFromCode(code);
+  const missingSpans = spanNames
     .filter(name => !registered.has(`span.${name}`))
     .map(name => `span.${name}`);
-  return missing.length > 0 ? [...normalized, ...missing] : normalized;
+
+  const attrKeys = extractAttributeKeysFromCode(code);
+  const missingAttrs = attrKeys.filter(key => !registered.has(key));
+
+  const additions = [...missingSpans, ...missingAttrs];
+  return additions.length > 0 ? [...normalized, ...additions] : normalized;
 }
 
 /**

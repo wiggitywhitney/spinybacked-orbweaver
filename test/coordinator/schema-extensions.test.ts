@@ -13,6 +13,7 @@ import {
   snapshotExtensionsFile,
   restoreExtensionsFile,
   extractSpanNamesFromCode,
+  extractAttributeKeysFromCode,
 } from '../../src/coordinator/schema-extensions.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 
@@ -666,5 +667,62 @@ describe('extractSpanNamesFromCode', () => {
       'tracer.startActiveSpan(spanName, (span) => {});',
     ].join('\n');
     expect(extractSpanNamesFromCode(code)).toEqual([]);
+  });
+});
+
+describe('extractAttributeKeysFromCode', () => {
+  it('extracts literal string keys from setAttribute calls with single quotes', () => {
+    const code = `span.setAttribute('commit_story.cli.subcommand', value);`;
+    expect(extractAttributeKeysFromCode(code)).toEqual(['commit_story.cli.subcommand']);
+  });
+
+  it('extracts literal string keys from setAttribute calls with double quotes', () => {
+    const code = `span.setAttribute("commit_story.cli.count", 5);`;
+    expect(extractAttributeKeysFromCode(code)).toEqual(['commit_story.cli.count']);
+  });
+
+  it('extracts multiple attribute keys from a file', () => {
+    const code = [
+      `span.setAttribute('commit_story.context.collect', true);`,
+      `span.setAttribute('commit_story.git.diff_lines', 42);`,
+    ].join('\n');
+    const keys = extractAttributeKeysFromCode(code);
+    expect(keys).toHaveLength(2);
+    expect(keys).toContain('commit_story.context.collect');
+    expect(keys).toContain('commit_story.git.diff_lines');
+  });
+
+  it('deduplicates keys that appear multiple times', () => {
+    const code = [
+      `span.setAttribute('myapp.user.id', userId);`,
+      `span.setAttribute('myapp.user.id', otherId);`,
+    ].join('\n');
+    expect(extractAttributeKeysFromCode(code)).toEqual(['myapp.user.id']);
+  });
+
+  it('returns empty array when no setAttribute calls exist', () => {
+    const code = `function doWork() { return 42; }`;
+    expect(extractAttributeKeysFromCode(code)).toEqual([]);
+  });
+
+  it('skips dynamic keys (variables)', () => {
+    const code = `span.setAttribute(keyVar, value);`;
+    expect(extractAttributeKeysFromCode(code)).toEqual([]);
+  });
+
+  it('skips template literal keys', () => {
+    const code = 'span.setAttribute(`dynamic.${name}`, value);';
+    expect(extractAttributeKeysFromCode(code)).toEqual([]);
+  });
+
+  it('does not affect span name extraction from startActiveSpan', () => {
+    const code = [
+      `tracer.startActiveSpan('myapp.process', (span) => {`,
+      `  span.setAttribute('myapp.user.id', userId);`,
+      `  span.end();`,
+      `});`,
+    ].join('\n');
+    expect(extractAttributeKeysFromCode(code)).toEqual(['myapp.user.id']);
+    expect(extractSpanNamesFromCode(code)).toEqual(['myapp.process']);
   });
 });
