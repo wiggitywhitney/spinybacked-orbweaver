@@ -1205,6 +1205,55 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     expect(result.schemaExtensions).toEqual(goodOutput.schemaExtensions);
     expect(result.notes).toEqual(goodOutput.notes);
   });
+
+  it('includes framework libraries detected from imports even when LLM returns empty librariesNeeded on attempt 2', async () => {
+    // File imports express — deterministic detection should always surface ExpressInstrumentation
+    // regardless of which attempt succeeds and regardless of what the LLM returns.
+    const expressContent = "import express from 'express';\nexport async function handleRequest(req, res) { res.json({ ok: true }); }\n";
+
+    let callCount = 0;
+    // Attempt 1: fails validation — its librariesNeeded is discarded
+    const badOutput = makeInstrumentationOutput({
+      instrumentedCode: 'const bad = syntax error;\n',
+      librariesNeeded: [],
+      tokenUsage: attempt1Tokens,
+    });
+    // Attempt 2: succeeds, but LLM omits express from librariesNeeded (the real-world failure mode)
+    const goodOutput = makeInstrumentationOutput({
+      instrumentedCode: 'const good = true;\n',
+      librariesNeeded: [],
+      tokenUsage: attempt2Tokens,
+    });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        }
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'const bad = syntax error;\n') {
+          return makeFailingValidation(testFilePath);
+        }
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, expressContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(2);
+    // ExpressInstrumentation must be in librariesNeeded because express is in the file's imports,
+    // regardless of which attempt the LLM succeeded on or what it returned for librariesNeeded.
+    expect(result.librariesNeeded).toContainEqual({
+      package: '@opentelemetry/instrumentation-express',
+      importName: 'ExpressInstrumentation',
+    });
+  });
 });
 
 describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {

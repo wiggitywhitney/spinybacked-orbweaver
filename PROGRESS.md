@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-06-02) Fixed non-deterministic SDK init library detection (issue #846): when a file's instrumentation required more than one attempt, the deterministic framework library detection (express, pg, etc.) was only applied on attempt 1's output. If attempt 1 failed validation and was discarded, subsequent successful attempts returned empty `librariesNeeded` because the pre-scan doesn't re-run on multi-turn-fix calls (which pass a `feedbackMessage`). Fix: `executeRetryLoop` now runs `preInstrumentationAnalysis` once on the original file before the retry loop starts, captures the detected libraries, and unions them into every successful attempt's `librariesNeeded`. This guarantees `ExpressInstrumentation` and other auto-instrumentation libraries detected from file imports always appear in the final `FileResult`, regardless of which attempt succeeded. The P4 coordinator acceptance gate test — `SDK init file is updated with discovered library instrumentations` — was non-deterministic because of this gap.
+
 ### Added
 
 - (2026-06-02) Added a carve-out to the retry prompt (`buildFixPrompt` in `src/fix-loop/instrument-with-retry.ts`) that explicitly forbids the agent from dropping or reducing `schemaExtension` declarations when fixing blocking errors. The previous "make minimal, targeted changes" framing was pushing agents toward the cheapest path to compliance — substituting a semantically wrong registered attribute key rather than declaring a new extension. The carve-out makes clear that declaring a new schema extension is always valid when no registered attribute precisely matches the data being captured. Includes a test asserting the carve-out language is present alongside the existing "minimal, targeted changes" instruction.
