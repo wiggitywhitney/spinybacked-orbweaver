@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-06-02) Fixed a false-positive NDS-003 validator bug introduced by PRD #885: when the agent places the OTel import as the first statement in a file, ts-morph's `ImportDeclaration.remove()` was silently stripping the file's leading trivia — shebang lines (`#!/usr/bin/env node`) and file-level JSDoc blocks — along with the import node. The fix detects when the removed import is the first statement and calls `replaceWithText(leadingTrivia)` instead, preserving the trivia while removing the import text. This unblocked `mcp/server.js` in commit-story-v2, which failed all 3 run-20 attempts on 21 identical NDS-003 violations at fixed line numbers (a validator false positive — the agent's output was correct). Two regression tests added: one using the server.js shebang + JSDoc structure as a fixture, one confirming non-first-position imports are unaffected.
+
+### Added
+
+- (2026-06-02) Research spike on OTel span granularity at caller/callee boundaries (issue #898). Recommendation: keep leaves-first file ordering. OTel community standard (official opentelemetry.io docs, Honeycomb, Jessitron) says to instrument at layer boundaries — incoming requests, network calls, async task boundaries — not at every internal coordination step. Context propagation creates parent-child span relationships automatically; callee spans attach to the nearest active span without the caller needing wrapper spans. The suppression directive in `src/agent/prompt.ts` targets callee-duplicate spans specifically (not entry-point spans), aligning with this standard. Run-20 PR evidence and IS scoring history (runs 15–19) show no failures attributable to orchestration-layer gaps. One open question for future runs: whether MCP tool handlers (`context-capture-tool.js`, `reflection-tool.js`) are correctly classified as not needing entry-point spans — a pre-scan heuristic question orthogonal to ordering. Research saved to `docs/research/otel-span-granularity.md`.
+
 ### Added
 
 - (2026-05-27) Wired `normalizeMultiLineFlags` into NDS-003's comparison pipeline. Both the original code and the OTel-stripped instrumented code are now passed through the multiLine normalizer before Prettier runs, so Prettier sees the same `multiLine=false` baseline on both sides and produces consistent output regardless of how the agent formatted object/array literals. Previously, when the agent expanded an inline object like `{ nodes: [], edges: [] }` to a multi-line block inside a span wrapper, the stripped instrumented code retained `multiLine=true` while the original had `multiLine=false`, causing Prettier to format them differently and NDS-003 to fire a false positive. Validated by acceptance gate CI run 26547319073 — `journal-graph.js` now produces `success` (was `partial`), all other fixtures unchanged.

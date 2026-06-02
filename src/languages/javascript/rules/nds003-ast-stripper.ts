@@ -511,6 +511,11 @@ function getContainingStatementForUnwrap(
 
 /**
  * Remove @opentelemetry/* import declarations (P12).
+ *
+ * When the OTel import is the first statement in the file, its leading trivia
+ * (shebang, file-level JSDoc) is attached to the import node in the AST.
+ * Calling imp.remove() would drop that trivia. Instead, replace the import
+ * with just its leading trivia so file-level headers are preserved.
  */
 function removeOtelImports(sourceFile: SourceFile): void {
   const toRemove: ImportDeclaration[] = [];
@@ -521,8 +526,24 @@ function removeOtelImports(sourceFile: SourceFile): void {
     }
   }
 
+  // Process in reverse document order to avoid position invalidation.
+  // The first-in-file import is processed last.
   for (const imp of toRemove.reverse()) {
-    if (!imp.wasForgotten()) imp.remove();
+    if (imp.wasForgotten()) continue;
+
+    const statements = sourceFile.getStatements();
+    if (statements.length > 0 && statements[0] === imp) {
+      // This import carries file-level leading trivia (shebang, JSDoc). Replace
+      // with just the trivia text so those headers survive the import removal.
+      const fileText = sourceFile.getFullText();
+      const leadingTrivia = fileText.slice(imp.getFullStart(), imp.getStart());
+      if (leadingTrivia.length > 0) {
+        imp.replaceWithText(leadingTrivia);
+        continue;
+      }
+    }
+
+    imp.remove();
   }
 }
 
