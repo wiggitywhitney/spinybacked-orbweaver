@@ -477,7 +477,17 @@ export async function instrumentWithRetry(
     wholeFileResult, validateFileFn, options,
   );
 
-  return fallbackResult ?? wholeFileResult;
+  if (!fallbackResult) return wholeFileResult;
+
+  // Apply the same file-level library union used in executeRetryLoop — per-function calls
+  // instrument isolated function snippets that lack file-level imports, so the LLM will
+  // not see framework imports and cannot include them in librariesNeeded.
+  const fallbackDetectedLibraries =
+    provider.preInstrumentationAnalysis?.(originalCode, options.processedFilesManifest, filePath)?.detectedLibraries ?? [];
+  return {
+    ...fallbackResult,
+    librariesNeeded: mergeLibraries(fallbackResult.librariesNeeded, fallbackDetectedLibraries),
+  };
 }
 
 /**

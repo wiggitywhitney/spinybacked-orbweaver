@@ -3278,6 +3278,40 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     // Reassembly-level validation must not be called — short-circuit happened before reassembly
     expect(reassemblyValidateCount).toBe(0);
   });
+
+  it('includes framework libraries detected from imports when whole-file fails and function-level fallback succeeds', async () => {
+    // File imports express — deterministic detection must surface ExpressInstrumentation
+    // even when the whole-file path fails and per-function calls return empty librariesNeeded.
+    const expressContent = "import express from 'express';\nexport async function handleRequest(req, res) { res.json({ ok: true }); }\n";
+    writeFileSync(filePath, expressContent, 'utf-8');
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: "import { trace } from '@opentelemetry/api';\nexport async function handleRequest(req, res) { trace.getTracer('svc').startActiveSpan('s', () => {}); res.json({ ok: true }); }\n",
+              librariesNeeded: [], // LLM omits express — the deterministic path must fill this in
+              attributesCreated: 0,
+              spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 1, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        // Whole-file path always fails
+        return { success: false, error: 'LLM produced null parsed_output', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, expressContent, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('success');
+    expect(result.librariesNeeded).toContainEqual({
+      package: '@opentelemetry/instrumentation-express',
+      importName: 'ExpressInstrumentation',
+    });
+  });
 });
 
 describe('instrumentWithRetry — suggestedRefactors collection', () => {
