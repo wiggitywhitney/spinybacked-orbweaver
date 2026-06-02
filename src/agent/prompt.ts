@@ -350,7 +350,7 @@ You are returning structured JSON via the output schema. Fill in each field:
 Before returning your output, answer each question. If the answer to any question is "no," fix the issue before submitting.
 
 - **SCH**: Have I declared every new attribute and span name in \`schemaExtensions\`? If I used an attribute in \`setAttribute()\`, is it either in the registered schema or in my \`schemaExtensions\`? Do NOT substitute a semantically wrong registered key to satisfy this requirement — if nothing precisely matches the data you are capturing, declare a new key in \`schemaExtensions\`.
-- **COV**: Does every function I instrumented have at least one attribute that captures output or result data — not just input parameters?
+- **COV**: Does every function I instrumented capture the operation's outcome or result in at least one span attribute — not only the inputs provided to it?
 - **NDS (placement)**: Did I place every \`startActiveSpan\` call around new logic only — not wrapping any pre-existing statements, not collapsing multi-line constructs? Did I preserve all exported function signatures unchanged? Did I leave all existing try/catch/finally blocks structurally intact?
 - **NDS (conventions)**: Did I use the same module system as the target file (ESM \`import\` or CJS \`require\`, not both)? If a catch block gracefully handles an expected condition with no rethrow, did I avoid adding \`recordException()\` or \`setStatus(ERROR)\` to it?
 - **CDQ**: Did I guard every attribute value against null and undefined before passing it to \`setAttribute()\`? Did I use an \`isRecording()\` guard when the attribute value requires expensive computation?

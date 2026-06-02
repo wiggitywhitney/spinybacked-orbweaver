@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-06-02) Fixed pre-submission verification checklist tests to scope assertions to the checklist section using a section-marker slice, so they verify content specifically in the checklist rather than matching strings that appear elsewhere in the prompt body. Rephrased the COV checklist item to lead with the general principle (capturing the operation's outcome or result) rather than the symptom observation ("not just input parameters").
+
 - (2026-06-02) Fixed a false-positive NDS-003 validator bug introduced by PRD #885: when the agent places the OTel import as the first statement in a file, ts-morph's `ImportDeclaration.remove()` was silently stripping the file's leading trivia — shebang lines (`#!/usr/bin/env node`) and file-level JSDoc blocks — along with the import node. The fix detects when the removed import is the first statement and calls `replaceWithText(leadingTrivia)` instead, preserving the trivia while removing the import text. This unblocked `mcp/server.js` in commit-story-v2, which failed all 3 run-20 attempts on 21 identical NDS-003 violations at fixed line numbers (a validator false positive — the agent's output was correct). Two regression tests added: one using the server.js shebang + JSDoc structure as a fixture, one confirming non-first-position imports are unaffected.
 
 ### Added

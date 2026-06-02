@@ -660,50 +660,57 @@ describe('buildSystemPrompt', () => {
     });
 
     it('SCH item: includes question about schemaExtensions and anti-pattern for wrong registered key', () => {
-      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
 
-      expect(prompt).toContain('schemaExtension');
-      expect(prompt).toMatch(/do not substitute|semantically wrong|nothing precisely matches/i);
+      expect(checklist).toContain('schemaExtension');
+      expect(checklist).toMatch(/do not substitute|semantically wrong|nothing precisely matches/i);
     });
 
-    it('COV item: includes question about output or result attributes, not just input parameters', () => {
-      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+    it('COV item: includes question about capturing outcome or result, not only inputs', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
 
-      expect(prompt).toMatch(/output|result.*attribute/i);
-      expect(prompt).toMatch(/input parameter/i);
+      expect(checklist).toMatch(/outcome|result/i);
+      expect(checklist).toMatch(/input/i);
     });
 
     it('NDS item 1: includes question about startActiveSpan placement and structural preservation', () => {
-      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
 
-      expect(prompt).toMatch(/startActiveSpan.*new logic|new logic.*startActiveSpan/i);
+      expect(checklist).toMatch(/startActiveSpan.*new logic|new logic.*startActiveSpan/i);
     });
 
     it('NDS item 2: includes question about module system and expected-condition catch blocks', () => {
-      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
 
-      expect(prompt).toMatch(/module system|ESM|CJS/i);
-      expect(prompt).toMatch(/expected condition|graceful|no rethrow/i);
+      expect(checklist).toMatch(/module system|ESM|CJS/i);
+      expect(checklist).toMatch(/expected condition|graceful|no rethrow/i);
     });
 
     it('CDQ item: includes question about nullable guards and isRecording', () => {
-      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
 
-      expect(prompt).toMatch(/null.*undefined|undefined.*null/i);
-      expect(prompt).toContain('isRecording');
+      expect(checklist).toMatch(/null.*undefined|undefined.*null/i);
+      expect(checklist).toContain('isRecording');
     });
 
     it('RST item: includes question about getTracer canonical call', () => {
-      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
 
-      expect(prompt).toMatch(/getTracer|canonical tracer/i);
+      expect(checklist).toMatch(/getTracer|canonical tracer/i);
     });
 
     it('API item: includes question about startActiveSpan and @opentelemetry/api import', () => {
-      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
 
-      expect(prompt).toMatch(/@opentelemetry\/api/);
-      expect(prompt).toMatch(/startActiveSpan/);
+      expect(checklist).toMatch(/@opentelemetry\/api/);
+      expect(checklist).toMatch(/startActiveSpan/);
     });
 
     it('checklist appears after all instrumentation rules (at end of prompt)', () => {
