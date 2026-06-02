@@ -15,7 +15,9 @@ PRD #901 (schema extension reliability — structural enforcement) should be imp
 
 ## Background
 
-PRD #901's behavioral fix improves schema extension reliability by making COV-005 blocking and strengthening the retry prompt. But it still depends on the agent correctly declaring new attributes in `schemaExtensions` on each attempt. Under retry pressure — or if infrastructure fails — this declaration can be lost.
+PRD #901's behavioral fix improves schema extension reliability by adding a retry prompt carve-out (preserving schemaExtension declarations under fix pressure) and a self-verification checklist in the agent prompt. But it still depends on the agent correctly declaring new attributes in `schemaExtensions` on each attempt. Under retry pressure — or if infrastructure fails — this declaration can be lost.
+
+Note: PRD #901's original Component 1 (making COV-005 blocking) was deferred after implementation-time audit found that `registryDefinitions` is never populated, making COV-005 effectively a no-op for all current eval targets. COV-005 becomes relevant once eval targets use registries with `requirement_level: required/recommended` on span-type attribute entries.
 
 The more reliable architecture: extract `setAttribute()` keys mechanically from instrumented code after generation, check them against the registry deterministically, and auto-register genuinely novel keys in `agent-extensions.yaml` before SCH-002 validation runs. The agent's `schemaExtensions` declarations remain useful as intent signals but are no longer the only path to schema registration.
 

@@ -651,6 +651,76 @@ describe('buildSystemPrompt', () => {
       expect(prompt).not.toContain('trace.getTracer("test_service")');
     });
   });
+
+  describe('pre-submission verification checklist', () => {
+    it('includes Pre-submission verification section heading', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain('## Pre-submission verification');
+    });
+
+    it('SCH item: includes question about schemaExtensions and anti-pattern for wrong registered key', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toContain('schemaExtension');
+      expect(checklist).toMatch(/do not substitute|semantically wrong|nothing precisely matches/i);
+    });
+
+    it('COV item: includes question about capturing outcome or result, not only inputs', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toMatch(/outcome|result/i);
+      expect(checklist).toMatch(/input/i);
+    });
+
+    it('NDS item 1: includes question about startActiveSpan placement and structural preservation', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toMatch(/startActiveSpan.*new logic|new logic.*startActiveSpan/i);
+    });
+
+    it('NDS item 2: includes question about module system and expected-condition catch blocks', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toMatch(/module system|ESM|CJS/i);
+      expect(checklist).toMatch(/expected condition|graceful|no rethrow/i);
+    });
+
+    it('CDQ item: includes question about nullable guards and isRecording', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toMatch(/null.*undefined|undefined.*null/i);
+      expect(checklist).toContain('isRecording');
+    });
+
+    it('RST item: includes question about getTracer canonical call', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toMatch(/getTracer|canonical tracer/i);
+    });
+
+    it('API item: includes question about startActiveSpan and @opentelemetry/api import', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toMatch(/@opentelemetry\/api/);
+      expect(checklist).toMatch(/startActiveSpan/);
+    });
+
+    it('checklist appears after all instrumentation rules (at end of prompt)', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      const checklistIndex = prompt.indexOf('## Pre-submission verification');
+      const outputFormatIndex = prompt.indexOf('## Output Format');
+      expect(checklistIndex).toBeGreaterThan(outputFormatIndex);
+    });
+  });
 });
 
 describe('buildUserMessage', () => {
