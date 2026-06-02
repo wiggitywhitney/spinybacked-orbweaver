@@ -10,3 +10,4 @@
 | weaver-registry-dependency-import-syntax.md | Weaver 0.21.2 dependency/import syntax: wildcard imports are schema-invalid, extends works for specific group IDs, --include-unreferenced produces 4.9MB payload | 2026-04-29 |
 | industry-practices-spike.md | Flaky test detection (Meta PFS, Buildkite, Datadog, Slack), codemod rollback patterns, OTel SDK injection (Vitest sdkPath vs NODE_OPTIONS), live compliance validation (Weaver is the only tool) | 2026-05-01 |
 | otel-span-granularity.md | OTel span granularity at caller/callee boundaries: community standard (instrument at layer boundaries, not every function), context propagation wiring, leaves-first ordering recommendation | 2026-06-02 |
+| llm-retry-loop-architecture.md | Multi-turn vs. fresh-regen for code repair: 39% multi-turn degradation, 2–3 rounds optimal, "minimal changes" framing causes attribute dropout, recommendation to redesign attempt 2 prompt | 2026-06-02 |
