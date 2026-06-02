@@ -405,6 +405,61 @@ describe('P12: OTel import declaration', () => {
     expect(result).toContain("import { something } from 'other-package'");
     expect(result).toContain('function doWork()');
   });
+
+  it('preserves shebang and file-level JSDoc when OTel import is the first statement (run-20 server.js regression)', () => {
+    const code = [
+      '#!/usr/bin/env node',
+      '/**',
+      ' * Commit Story MCP Server',
+      ' */',
+      '',
+      "import { trace, SpanStatusCode } from '@opentelemetry/api';",
+      "import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';",
+      '',
+      "const tracer = trace.getTracer('commit-story');",
+      '',
+      '/**',
+      ' * Create and configure the MCP server',
+      ' */',
+      'function createServer() {',
+      "  return tracer.startActiveSpan('create', (span) => {",
+      '    span.end();',
+      '    return {};',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, '/tmp/server.js');
+
+    expect(result).toContain('#!/usr/bin/env node');
+    const originalCount = (code.match(/\/\*\*/g) ?? []).length;
+    const resultCount = (result.match(/\/\*\*/g) ?? []).length;
+    expect(resultCount).toBe(originalCount);
+    expect(result).not.toContain('@opentelemetry');
+    expect(result).not.toContain('startActiveSpan');
+  });
+
+  it('does not affect files where OTel import is not the first statement', () => {
+    const code = [
+      "import { readFileSync } from 'node:fs';",
+      "import { trace } from '@opentelemetry/api';",
+      '',
+      "const tracer = trace.getTracer('svc');",
+      '',
+      'function doWork() {',
+      "  return tracer.startActiveSpan('work', (span) => {",
+      '    span.end();',
+      '    return readFileSync("/tmp/x");',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, filePath);
+
+    expect(result).toContain("import { readFileSync } from 'node:fs'");
+    expect(result).not.toContain('@opentelemetry');
+    expect(result).not.toContain('startActiveSpan');
+  });
 });
 
 // ─── P13: Tracer declaration ──────────────────────────────────────────────────
