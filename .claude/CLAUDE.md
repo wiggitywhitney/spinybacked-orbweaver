@@ -99,6 +99,11 @@ Where N is the phase number (1-7). The skill reads the spec, tech stack, recomme
 
 Do not invent tasks outside the PRD structure. When a PRD exists, follow it. Do not commit manually during PRD work — `/prd-update-progress` handles commits, PRD updates, and journaling together.
 
+### Research conventions
+
+- **All research steps use `/research`**: Any issue or PRD milestone that requires researching a technology, API, community standard, or external practice must direct the implementer to run `/research <specific question>` explicitly. Do not write "investigate", "look into", or "research" as open-ended instructions. The `/research` skill produces source links and confidence scores — include all output, do not summarize it away.
+- **Downstream milestones must read research spike output**: When a PRD milestone is a research spike that produces a Decision Log entry, document, or written finding, every downstream milestone that depends on it must begin with "Step 0: Read [description of prior milestone's output]. This entry must exist before this milestone begins — [prior milestone name] gates this milestone." Do not assume the implementer will know to check prior milestone output.
+
 ### Rules-related work conventions
 
 These conventions apply to any PRD or GitHub issue that adds, removes, modifies, rebuilds, or otherwise changes the behavior of any validation rule. When uncertain whether a change qualifies, treat it as rules-related — the cost of reading the audit and keeping documentation and the agent prompt in sync is low; the cost of missing a drift case is high.
