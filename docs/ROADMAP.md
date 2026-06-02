@@ -19,6 +19,8 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 reconcilers, or acceptance gate tests — before starting the next PRD that changes agent behavior.
 
+**Run-21 requested** (2026-06-02): PRD #901 merged — retry carve-out and pre-submission checklist are live. Watch for: improvement in schema extension registration rate for 3-attempt files.
+
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Short-term (current focus)
