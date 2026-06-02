@@ -385,6 +385,22 @@ function strategyForAttempt(attemptNumber: number, maxAttempts: number): Validat
   return 'multi-turn-fix';
 }
 
+/** Union two librariesNeeded arrays, deduplicating by package name. */
+function mergeLibraries(
+  primary: { package: string; importName: string }[],
+  additional: { package: string; importName: string }[],
+): { package: string; importName: string }[] {
+  const seen = new Set(primary.map(l => l.package));
+  const result = [...primary];
+  for (const lib of additional) {
+    if (!seen.has(lib.package)) {
+      seen.add(lib.package);
+      result.push(lib);
+    }
+  }
+  return result;
+}
+
 /**
  * Instrument a file with validation and retry loop.
  *
@@ -461,7 +477,17 @@ export async function instrumentWithRetry(
     wholeFileResult, validateFileFn, options,
   );
 
-  return fallbackResult ?? wholeFileResult;
+  if (!fallbackResult) return wholeFileResult;
+
+  // Apply the same file-level library union used in executeRetryLoop — per-function calls
+  // instrument isolated function snippets that lack file-level imports, so the LLM will
+  // not see framework imports and cannot include them in librariesNeeded.
+  const fallbackDetectedLibraries =
+    provider.preInstrumentationAnalysis?.(originalCode, options.processedFilesManifest, filePath)?.detectedLibraries ?? [];
+  return {
+    ...fallbackResult,
+    librariesNeeded: mergeLibraries(fallbackResult.librariesNeeded, fallbackDetectedLibraries),
+  };
 }
 
 /**
@@ -505,6 +531,14 @@ async function executeRetryLoop(
       `File has ${originalCode.length} characters. Increase maxTokensPerFile or reduce file size.`;
     return buildFailedResult(filePath, reason, reason, ZERO_TOKENS, 0, 'initial-generation');
   }
+
+  // Detect auto-instrumentation libraries from file imports once, before any LLM attempts.
+  // The instrumentFile call on attempt 1 also does this internally, but that result is
+  // discarded if attempt 1 fails validation. Subsequent attempts (multi-turn-fix,
+  // fresh-regen) may not rerun the detection, so we capture it here and union it into
+  // every successful attempt's librariesNeeded to guarantee coverage.
+  const fileDetectedLibraries: { package: string; importName: string }[] =
+    provider.preInstrumentationAnalysis?.(originalCode, processedFilesManifest, filePath)?.detectedLibraries ?? [];
 
   let cumulativeTokens: TokenUsage = { ...ZERO_TOKENS };
   const errorProgression: string[] = [];
@@ -784,7 +818,7 @@ async function executeRetryLoop(
         path: filePath,
         status: 'success',
         spansAdded,
-        librariesNeeded: output.librariesNeeded,
+        librariesNeeded: mergeLibraries(output.librariesNeeded, fileDetectedLibraries),
         schemaExtensions: supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode),
         attributesCreated: output.attributesCreated,
         validationAttempts: attempt,

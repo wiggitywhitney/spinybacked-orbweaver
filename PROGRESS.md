@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-06-02) Fixed non-deterministic SDK init library detection (issue #846): when a file's instrumentation required more than one attempt, the deterministic framework library detection (express, pg, etc.) was only applied on attempt 1's output. If attempt 1 failed validation and was discarded, subsequent successful attempts returned empty `librariesNeeded` because the pre-scan doesn't re-run on multi-turn-fix calls (which pass a `feedbackMessage`). Fix: `executeRetryLoop` now runs `preInstrumentationAnalysis` once on the original file before the retry loop starts, captures the detected libraries, and unions them into every successful attempt's `librariesNeeded`. This guarantees `ExpressInstrumentation` and other auto-instrumentation libraries detected from file imports always appear in the final `FileResult`, regardless of which attempt succeeded. The P4 coordinator acceptance gate test — `SDK init file is updated with discovered library instrumentations` — was non-deterministic because of this gap.
+
 ### Added
 
 - (2026-06-02) Completed research spike on retry loop architecture for modern LLMs (issue #903). Key finding: the 3-attempt hybrid structure (generate → multi-turn fix → fresh regen) is architecturally sound — research confirms 2–3 repair rounds capture 76–95% of achievable gains — but the attempt 2 prompt framing ("make minimal, targeted changes" with accumulated context) is causing attribute dropout in 3-attempt files. Eval history review (runs 13–20, commit-story-v2) shows a directional correlation: files needing 3 attempts register fewer new schema extensions and sometimes drop attributes present in 1-attempt runs of the same file (e.g., `src/index.js` run-19→20: subcommand attribute dropped when attempt count rose from 1 to 3). Recommendation: redesign attempt 2 to use fresh context with a focused failure signal rather than accumulated conversation with a conservative constraint. Research saved to `docs/research/llm-retry-loop-architecture.md`.

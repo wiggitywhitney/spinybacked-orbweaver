@@ -1205,6 +1205,55 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     expect(result.schemaExtensions).toEqual(goodOutput.schemaExtensions);
     expect(result.notes).toEqual(goodOutput.notes);
   });
+
+  it('includes framework libraries detected from imports even when LLM returns empty librariesNeeded on attempt 2', async () => {
+    // File imports express — deterministic detection should always surface ExpressInstrumentation
+    // regardless of which attempt succeeds and regardless of what the LLM returns.
+    const expressContent = "import express from 'express';\nexport async function handleRequest(req, res) { res.json({ ok: true }); }\n";
+
+    let callCount = 0;
+    // Attempt 1: fails validation — its librariesNeeded is discarded
+    const badOutput = makeInstrumentationOutput({
+      instrumentedCode: 'const bad = syntax error;\n',
+      librariesNeeded: [],
+      tokenUsage: attempt1Tokens,
+    });
+    // Attempt 2: succeeds, but LLM omits express from librariesNeeded (the real-world failure mode)
+    const goodOutput = makeInstrumentationOutput({
+      instrumentedCode: 'const good = true;\n',
+      librariesNeeded: [],
+      tokenUsage: attempt2Tokens,
+    });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return { success: true, output: badOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        }
+        return { success: true, output: goodOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'const bad = syntax error;\n') {
+          return makeFailingValidation(testFilePath);
+        }
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, expressContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(2);
+    // ExpressInstrumentation must be in librariesNeeded because express is in the file's imports,
+    // regardless of which attempt the LLM succeeded on or what it returned for librariesNeeded.
+    expect(result.librariesNeeded).toContainEqual({
+      package: '@opentelemetry/instrumentation-express',
+      importName: 'ExpressInstrumentation',
+    });
+  });
 });
 
 describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
@@ -3228,6 +3277,40 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(readFileSync(filePath, 'utf-8')).toBe(FALLBACK_FIXTURE);
     // Reassembly-level validation must not be called — short-circuit happened before reassembly
     expect(reassemblyValidateCount).toBe(0);
+  });
+
+  it('includes framework libraries detected from imports when whole-file fails and function-level fallback succeeds', async () => {
+    // File imports express — deterministic detection must surface ExpressInstrumentation
+    // even when the whole-file path fails and per-function calls return empty librariesNeeded.
+    const expressContent = "import express from 'express';\nexport async function handleRequest(req, res) { res.json({ ok: true }); }\n";
+    writeFileSync(filePath, expressContent, 'utf-8');
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: "import { trace } from '@opentelemetry/api';\nexport async function handleRequest(req, res) { trace.getTracer('svc').startActiveSpan('s', () => {}); res.json({ ok: true }); }\n",
+              librariesNeeded: [], // LLM omits express — the deterministic path must fill this in
+              attributesCreated: 0,
+              spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 1, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        // Whole-file path always fails
+        return { success: false, error: 'LLM produced null parsed_output', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, expressContent, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('success');
+    expect(result.librariesNeeded).toContainEqual({
+      package: '@opentelemetry/instrumentation-express',
+      importName: 'ExpressInstrumentation',
+    });
   });
 });
 
