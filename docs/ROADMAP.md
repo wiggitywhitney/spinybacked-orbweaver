@@ -23,6 +23,8 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 ## Short-term (current focus)
 
+Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
+
 - **[P1 — run-21 blocker]** Fix stripOtelNodes trivia-loss false positive in NDS-003 ([issue #904](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/904)) — OTel import removal strips shebang/JSDoc trivia when import is first statement; mcp/server.js failed all 3 run-20 attempts on a false positive. Fix in `nds003-ast-stripper.ts` before run-21.
 - Schema extension reliability — structural enforcement ([PRD #901](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/901)) — make COV-005 blocking, add retry prompt carve-out, add class-based self-verification checklist; behavioral fix for agents failing to register new schema attributes.
 - Deterministic schema auto-registration with LLM judge ([PRD #902](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/902)) — mechanically extract setAttribute() keys, pre-filter against registry, auto-register novel attributes before SCH-002 validation; architectural fix that removes schema extension reliance on agent behavior. Sequenced after PRD #901.
