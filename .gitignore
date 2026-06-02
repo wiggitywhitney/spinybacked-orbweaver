@@ -1,5 +1,6 @@
 node_modules/
 dist/
+!prds/
 journal/
 .env
 *.local
@@ -15,9 +16,11 @@ test/tmp-ts-golden-*/
 .claude/skills/
 
 # Talk prep (internal notes, not public-facing)
+docs/talk-story-arc.md
 talk/FACT-CHECK.md
 talk/SECTION*-FACT-CHECK.md
 talk/TELEMETRY-VALUE-RESEARCH.md
 talk/SPEAKER-NOTES.md
 talk/DEMO-WALKTHROUGH.md
+talk/research/
 .npmrc
