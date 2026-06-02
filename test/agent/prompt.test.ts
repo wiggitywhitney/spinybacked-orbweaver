@@ -651,6 +651,69 @@ describe('buildSystemPrompt', () => {
       expect(prompt).not.toContain('trace.getTracer("test_service")');
     });
   });
+
+  describe('pre-submission verification checklist', () => {
+    it('includes Pre-submission verification section heading', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain('## Pre-submission verification');
+    });
+
+    it('SCH item: includes question about schemaExtensions and anti-pattern for wrong registered key', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain('schemaExtension');
+      expect(prompt).toMatch(/do not substitute|semantically wrong|nothing precisely matches/i);
+    });
+
+    it('COV item: includes question about output or result attributes, not just input parameters', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toMatch(/output|result.*attribute/i);
+      expect(prompt).toMatch(/input parameter/i);
+    });
+
+    it('NDS item 1: includes question about startActiveSpan placement and structural preservation', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toMatch(/startActiveSpan.*new logic|new logic.*startActiveSpan/i);
+    });
+
+    it('NDS item 2: includes question about module system and expected-condition catch blocks', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toMatch(/module system|ESM|CJS/i);
+      expect(prompt).toMatch(/expected condition|graceful|no rethrow/i);
+    });
+
+    it('CDQ item: includes question about nullable guards and isRecording', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toMatch(/null.*undefined|undefined.*null/i);
+      expect(prompt).toContain('isRecording');
+    });
+
+    it('RST item: includes question about getTracer canonical call', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toMatch(/getTracer|canonical tracer/i);
+    });
+
+    it('API item: includes question about startActiveSpan and @opentelemetry/api import', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toMatch(/@opentelemetry\/api/);
+      expect(prompt).toMatch(/startActiveSpan/);
+    });
+
+    it('checklist appears after all instrumentation rules (at end of prompt)', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      const checklistIndex = prompt.indexOf('## Pre-submission verification');
+      const outputFormatIndex = prompt.indexOf('## Output Format');
+      expect(checklistIndex).toBeGreaterThan(outputFormatIndex);
+    });
+  });
 });
 
 describe('buildUserMessage', () => {

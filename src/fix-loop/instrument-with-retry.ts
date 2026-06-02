@@ -231,7 +231,7 @@ function buildFixPrompt(
   repeatLineEscalation?: string,
   canonicalTracerName?: string,
 ): string {
-  let prompt = `The instrumented file has validation errors. Fix the **blocking failures** (status: fail) — these must be resolved for the file to pass. Also address the **advisory findings** (status: advisory) — these are non-blocking quality improvements you should make but will not fail the file if unresolved. Make minimal, targeted changes. Return the complete corrected file.\n\n${validationFeedback}`;
+  let prompt = `The instrumented file has validation errors. Fix the **blocking failures** (status: fail) — these must be resolved for the file to pass. Also address the **advisory findings** (status: advisory) — these are non-blocking quality improvements you should make but will not fail the file if unresolved. Make minimal, targeted changes to fix the listed errors — but do not drop or reduce schemaExtension declarations. If you identified new attributes in a previous attempt, carry them forward. Declaring a new schema extension is always valid when no registered attribute precisely matches the data you are capturing. Return the complete corrected file.\n\n${validationFeedback}`;
   if (existingSpanNames && existingSpanNames.length > 0) {
     prompt += `\n\nReminder: these span names are already in use by other files — do not reuse them: ${existingSpanNames.join(', ')}`;
   }
