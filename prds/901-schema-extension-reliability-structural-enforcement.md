@@ -63,7 +63,7 @@ The checklist has one concrete question per rule class (six items total). "Check
 - **COV**: Does every function I instrumented have at least one attribute that captures output or result — not just the input parameters?
 - **NDS**: Did I place every `startActiveSpan` call around new logic only — not wrapping any pre-existing statements, not restructuring any existing code? Did I avoid adding spans to pure synchronous data transformations?
 - **CDQ**: Did I guard every nullable value before passing it to `setAttribute()`? Did I use `isRecording()` guard when the attribute value requires computation?
-- **RST**: Is `tracer` obtained via the canonical `getTracer()` call — not redeclared or shadowed anywhere in the file?
+- **RST** *(maps to CDQ-011 in the validator — tracer naming framed as a restraint concern)*: Is `tracer` obtained via the canonical `getTracer()` call — not redeclared or shadowed anywhere in the file?
 - **API**: Did I use only `startActiveSpan` (not `startSpan`), and only import from `@opentelemetry/api` (not the SDK)?
 
 The NDS item may need two separate questions — NDS covers multiple distinct failure modes (structural modification, data-transformation spans, etc.) and is the most common source of blocking failures.
@@ -119,9 +119,9 @@ NDS was split into two questions. `docs/rules-reference.md` NDS entries cover fi
 
 - [x] **M4 — Self-verification checklist in agent prompt**: Add a `## Pre-submission verification` section to `src/agent/prompt.ts` with six concrete questions (one per rule class: SCH, COV, NDS, CDQ, RST, API). Default placement: add this section at the end of the prompt, after all instrumentation rules. If reading the existing prompt reveals a better structural fit, use that instead and add a Decision Log entry explaining the change. The SCH item must include explicit anti-pattern language: do not substitute a semantically wrong registered key to satisfy the output attribute requirement — if nothing precisely matches the data being captured, declare a new key in schemaExtensions. Read `docs/rules-reference.md` NDS entries in full before writing the NDS item — if they cover more than two distinct failure classes, split the NDS item into two checklist questions rather than one.
 
-- [ ] **M5 — Update docs/rules-reference.md and agent prompt cross-references**: Per rules-related work conventions, verify `docs/rules-reference.md` is accurate for any rule behavior changed by this PRD. COV-005 blocking status is not changing (M1/M2 deferred), so no COV-005 update is needed there. The rules touched by M3 and M4 are: the retry prompt behavior (no rule ID — not tracked in rules-reference.md) and the six checklist rule classes (SCH, COV, NDS, CDQ, RST, API — all already in rules-reference.md). Verify that every rule ID referenced in the `## Pre-submission verification` section added in M4 still corresponds to a registered rule in `src/validation/rule-names.ts` with accurate guidance. Run `/write-docs` to validate documentation.
+- [x] **M5 — Update docs/rules-reference.md and agent prompt cross-references**: Per rules-related work conventions, verify `docs/rules-reference.md` is accurate for any rule behavior changed by this PRD. COV-005 blocking status is not changing (M1/M2 deferred), so no COV-005 update is needed there. The rules touched by M3 and M4 are: the retry prompt behavior (no rule ID — not tracked in rules-reference.md) and the six checklist rule classes (SCH, COV, NDS, CDQ, RST, API — all already in rules-reference.md). Verify that every rule ID referenced in the `## Pre-submission verification` section added in M4 still corresponds to a registered rule in `src/validation/rule-names.ts` with accurate guidance. Run `/write-docs` to validate documentation.
 
-- [ ] **M6 — Update PROGRESS.md**
+- [x] **M6 — Update PROGRESS.md**
 
 ---
 
