@@ -23,6 +23,11 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 ## Short-term (current focus)
 
+- Schema extension reliability — structural enforcement ([PRD #901](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/901)) — make COV-005 blocking, add retry prompt carve-out, add class-based self-verification checklist; behavioral fix for agents failing to register new schema attributes.
+- Research spike: OTel span granularity standards — leaves-first vs. entry-point-first file ordering ([issue #898](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/898)) — run `/research` for community standards on caller/callee span granularity, audit run-20 instrument branch and IS scoring for evidence of suppressed orchestration spans, produce a concrete recommendation.
+- Export eval run traces to Datadog APM ([issue #899](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/899)) — add Datadog exporter to OTel Collector config alongside existing file exporter; enables live trace inspection without waiting for IS scoring.
+- Set up Datadog MCP server for live APM access ([issue #900](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/900)) — configure Datadog MCP server in global Claude Code settings so Claude can query APM spans directly during verification sessions. Depends on #899.
+
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
