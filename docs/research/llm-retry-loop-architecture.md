@@ -4,6 +4,7 @@
 **Last Updated:** 2026-06-02
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-06-02 | Initial research — issue #903 spike |
