@@ -84,11 +84,11 @@ The NDS item may need two separate questions — NDS covers multiple distinct fa
 **OQ-1: COV-005 false positive profile** *(Resolved — M1/M2 deferred)*
 Answered by the M1 audit: COV-005 never fires because `registryDefinitions` is never populated. The false positive question is moot until COV-005 can actually fire. See Decision Log entry dated 2026-06-02.
 
-**OQ-2: Checklist placement and format**
-The checklist belongs in the main agent prompt. Where exactly? As a final "before you submit" section? Inline within the existing instrumentation instructions? The placement affects whether the agent treats it as an afterthought or as a required step. Recommendation: a named `## Pre-submission verification` section at the end of the prompt, after all instrumentation rules.
+**OQ-2: Checklist placement and format** *(Resolved — M4 complete)*
+Placed as `## Pre-submission verification` at the end of the system prompt, after the Output Format section. This positions it as a final verification step the agent reads after all implementation instructions, not inline within the rules where it could be skipped.
 
-**OQ-3: NDS item splitting**
-Should the NDS checklist item be split into two questions given NDS covers structural modification (NDS-003), data-transformation spans (RST-001/guidance overlap), and multiple other sub-rules? Or does a single well-phrased question cover enough? Evaluate after reading `docs/rules-reference.md` for the full NDS rule set.
+**OQ-3: NDS item splitting** *(Resolved — M4 complete)*
+NDS was split into two questions. `docs/rules-reference.md` NDS entries cover five distinct failure modes: structural placement/code preservation (NDS-003), signature preservation (NDS-004), control flow preservation (NDS-005), module system matching (NDS-006), and expected-condition catch block handling (NDS-007). Two questions: one covers placement and structural integrity (NDS-003/004/005), one covers module system and expected-condition catches (NDS-006/007).
 
 ---
 
