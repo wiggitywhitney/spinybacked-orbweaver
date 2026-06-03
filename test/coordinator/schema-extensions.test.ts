@@ -715,6 +715,30 @@ describe('extractAttributeKeysFromCode', () => {
     expect(extractAttributeKeysFromCode(code)).toEqual([]);
   });
 
+  it('extracts keys from multi-line setAttribute calls (Prettier continuation style)', () => {
+    const code = [
+      `span.setAttribute(`,
+      `  'commit_story.context.time_window_start',`,
+      `  previousCommitTime.toISOString()`,
+      `);`,
+    ].join('\n');
+    expect(extractAttributeKeysFromCode(code)).toEqual(['commit_story.context.time_window_start']);
+  });
+
+  it('extracts keys from mixed single-line and multi-line calls in the same file', () => {
+    const code = [
+      `span.setAttribute('commit_story.cli.subcommand', value);`,
+      `span.setAttribute(`,
+      `  'commit_story.context.time_window_start',`,
+      `  previousCommitTime.toISOString()`,
+      `);`,
+    ].join('\n');
+    const keys = extractAttributeKeysFromCode(code);
+    expect(keys).toHaveLength(2);
+    expect(keys).toContain('commit_story.cli.subcommand');
+    expect(keys).toContain('commit_story.context.time_window_start');
+  });
+
   it('does not affect span name extraction from startActiveSpan', () => {
     const code = [
       `tracer.startActiveSpan('myapp.process', (span) => {`,

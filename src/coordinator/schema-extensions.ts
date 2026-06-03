@@ -376,7 +376,9 @@ export function extractAttributeKeysFromCode(code: string): string[] {
   // Match <anything>.setAttribute('key', ...) — requires a leading dot so bare function
   // calls without a receiver are excluded. Only single/double quoted literals are captured;
   // template literals and variables do not match the quote character class.
-  const pattern = /\.setAttribute\s*\(\s*(['"])([^'"]+)\1/g;
+  // (?:\n\s*)? allows one optional newline+indent between ( and the key quote, which
+  // handles Prettier-reformatted multi-line calls where the key is on a continuation line.
+  const pattern = /\.setAttribute\s*\(\s*(?:\n\s*)?(['"])([^'"]+)\1/g;
   for (const match of code.matchAll(pattern)) {
     keys.add(match[2]!);
   }
