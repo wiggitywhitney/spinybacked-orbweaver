@@ -14,6 +14,7 @@ import {
   restoreExtensionsFile,
   extractSpanNamesFromCode,
   extractAttributeKeysFromCode,
+  preFilterAutoRegistrationCandidate,
 } from '../../src/coordinator/schema-extensions.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 
@@ -748,5 +749,34 @@ describe('extractAttributeKeysFromCode', () => {
     ].join('\n');
     expect(extractAttributeKeysFromCode(code)).toEqual(['myapp.user.id']);
     expect(extractSpanNamesFromCode(code)).toEqual(['myapp.process']);
+  });
+});
+
+describe('preFilterAutoRegistrationCandidate', () => {
+  it('returns true (filtered) for an exact registry match', () => {
+    const registry = new Set(['myapp.order.total', 'myapp.user.id']);
+    expect(preFilterAutoRegistrationCandidate('myapp.order.total', registry)).toBe(true);
+  });
+
+  it('returns true (filtered) for a delimiter-variant near-match', () => {
+    // http_request_method and http.request.method both normalize to httprequestmethod
+    const registry = new Set(['http.request.method']);
+    expect(preFilterAutoRegistrationCandidate('http_request_method', registry)).toBe(true);
+  });
+
+  it('returns true (filtered) for a Jaccard near-match above the threshold', () => {
+    // commit_story.git.diff_lines vs commit_story.git.diff_stats:
+    // tokens {commit,story,git,diff,lines} vs {commit,story,git,diff,stats} = 4/6 = 0.67 > 0.5
+    const registry = new Set(['commit_story.git.diff_lines']);
+    expect(preFilterAutoRegistrationCandidate('commit_story.git.diff_stats', registry)).toBe(true);
+  });
+
+  it('returns false (novel) for a key with no close registry match', () => {
+    const registry = new Set(['http.request.method', 'myapp.user.id']);
+    expect(preFilterAutoRegistrationCandidate('myapp.payment.gateway_name', registry)).toBe(false);
+  });
+
+  it('returns false (novel) for an empty registry', () => {
+    expect(preFilterAutoRegistrationCandidate('myapp.order.total', new Set())).toBe(false);
   });
 });

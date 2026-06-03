@@ -59,6 +59,17 @@ export interface SemanticDedupResult {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Jaccard token similarity threshold above which a candidate is considered a structural
+ * near-duplicate of an existing registry entry. Used in both the SCH-002 "not in registry"
+ * suggestion path and the auto-registration pre-filter (M2).
+ */
+export const JACCARD_DUPLICATE_THRESHOLD = 0.5;
+
+// ---------------------------------------------------------------------------
 // Exported helpers (unit-testable)
 // ---------------------------------------------------------------------------
 
@@ -189,7 +200,7 @@ export async function checkSemanticDuplicate(
   // "http.response.status_code" (3/5 tokens overlap at 0.6) from true duplicates.
   if (options.useJaccard) {
     for (const entry of activeEntries) {
-      if (computeJaccardSimilarity(candidate, entry.name) > 0.5) {
+      if (computeJaccardSimilarity(candidate, entry.name) > JACCARD_DUPLICATE_THRESHOLD) {
         return {
           isDuplicate: true,
           matchedEntry: entry.name,

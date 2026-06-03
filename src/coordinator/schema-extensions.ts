@@ -5,6 +5,11 @@ import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse, stringify } from 'yaml';
 import type { FileResult } from '../fix-loop/types.ts';
+import {
+  normalizeKey,
+  computeJaccardSimilarity,
+  JACCARD_DUPLICATE_THRESHOLD,
+} from '../languages/javascript/rules/semantic-dedup.ts';
 
 /** Result of writing schema extensions to disk. */
 export interface WriteSchemaExtensionsResult {
@@ -338,6 +343,33 @@ export async function restoreExtensionsFile(
   } else {
     await writeFile(filePath, snapshot, 'utf-8');
   }
+}
+
+/**
+ * Pre-filter a candidate attribute key against the registry before invoking the LLM judge.
+ * Returns true when the candidate is a near-duplicate and should NOT be auto-registered.
+ * Returns false when the candidate is genuinely novel and should proceed to the judge.
+ *
+ * Two stages:
+ * 1. Normalization: lowercase, strip delimiters (._-) — catches exact matches and
+ *    delimiter-variant duplicates (e.g., http_request_method vs http.request.method).
+ * 2. Jaccard token similarity above JACCARD_DUPLICATE_THRESHOLD — catches structural
+ *    near-duplicates (e.g., commit_story.git.diff_lines vs commit_story.git.diff_stats).
+ *
+ * @param candidate - The attribute key to evaluate
+ * @param registryNames - Set of all attribute key names currently in the resolved registry
+ * @returns true if the candidate should be filtered (near-duplicate), false if genuinely novel
+ */
+export function preFilterAutoRegistrationCandidate(
+  candidate: string,
+  registryNames: ReadonlySet<string>,
+): boolean {
+  const normalizedCandidate = normalizeKey(candidate);
+  for (const name of registryNames) {
+    if (normalizedCandidate === normalizeKey(name)) return true;
+    if (computeJaccardSimilarity(candidate, name) > JACCARD_DUPLICATE_THRESHOLD) return true;
+  }
+  return false;
 }
 
 /**
