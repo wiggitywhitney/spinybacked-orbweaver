@@ -6,9 +6,12 @@ import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, copyFileS
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { instrumentWithRetry } from '../../src/fix-loop/instrument-with-retry.ts';
+import type { InstrumentWithRetryDeps } from '../../src/fix-loop/instrument-with-retry.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
+import type { InstrumentationOutput } from '../../src/agent/schema.ts';
+import type { InstrumentFileResult } from '../../src/agent/instrument-file.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '..', 'fixtures', 'project');
 const jsProvider = new JavaScriptProvider();
@@ -317,4 +320,173 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       expect(result.tokenUsage).toBeDefined();
     });
   });
+});
+
+// ---------------------------------------------------------------------------
+// M5: Auto-registration integration tests — real LLM judge
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Auto-registration (M5)', () => {
+  let tempDir: string;
+  let registryDir: string;
+  let testFilePath: string;
+  const originalCode = 'export async function handleRequest(req) { return req; }\n';
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'spiny-orb-m5-'));
+    testFilePath = join(tempDir, 'target.js');
+    writeFileSync(testFilePath, originalCode, 'utf-8');
+    registryDir = mkdtempSync(join(tmpdir(), 'spiny-orb-m5-reg-'));
+    writeFileSync(
+      join(registryDir, 'registry_manifest.yaml'),
+      'name: m5testns\ndescription: M5 Test\n',
+    );
+  });
+
+  afterEach(() => {
+    if (tempDir && existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
+    if (registryDir && existsSync(registryDir)) rmSync(registryDir, { recursive: true, force: true });
+  });
+
+  function makeTestOutput(instrumentedCode: string, overrides?: Partial<InstrumentationOutput>): InstrumentationOutput {
+    return {
+      instrumentedCode,
+      librariesNeeded: [],
+      schemaExtensions: [],
+      attributesCreated: 1,
+      spanCategories: null,
+      suggestedRefactors: [],
+      notes: [],
+      tokenUsage: { inputTokens: 100, outputTokens: 50, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      ...overrides,
+    };
+  }
+
+  it('auto-registers novel setAttribute key via real LLM judge — OQ-4 defaults in agent-extensions.yaml',
+    { timeout: 120_000 }, async () => {
+      // Registry entries share the m5testns.autotest sub-namespace with the candidate.
+      // The judge's namespace pre-filter requires matching prefixes — entries in different
+      // sub-namespaces (e.g. m5testns.req.*) are excluded before the judge is called, which
+      // would cause a no-op return instead of a real LLM invocation.
+      const resolvedSchema = {
+        groups: [{
+          id: 'registry.m5testns.attributes',
+          type: 'attribute_group',
+          brief: 'Test attributes',
+          attributes: [
+            { name: 'm5testns.autotest.test_suite' },   // test suite name
+            { name: 'm5testns.autotest.run_id' },        // test run identifier
+          ],
+        }],
+      };
+
+      // Candidate key in the same sub-namespace — semantically distinct from the registry
+      // entries above so the judge reliably classifies it as novel.
+      const novelKey = 'm5testns.autotest.execution_context';
+      const instrumentedCode = [
+        "const { trace } = require('@opentelemetry/api');",
+        "const tracer = trace.getTracer('m5testns');",
+        "export async function handleRequest(req) {",
+        "  return tracer.startActiveSpan('m5testns.handle_request', (span) => {",
+        `    span.setAttribute('${novelKey}', req.type);`,
+        "    span.end();",
+        "    return req;",
+        "  });",
+        "}",
+      ].join('\n') + '\n';
+
+      const deps: InstrumentWithRetryDeps = {
+        instrumentFile: async () => ({
+          success: true,
+          output: makeTestOutput(instrumentedCode),
+        } as InstrumentFileResult),
+        validateFile: async () => ({
+          passed: true,
+          tier1Results: [],
+          tier2Results: [],
+          blockingFailures: [],
+          advisoryFindings: [],
+        }),
+      };
+
+      const result = await instrumentWithRetry(
+        testFilePath, originalCode, resolvedSchema, makeConfig(),
+        { deps, provider: jsProvider, registryDir },
+      );
+
+      expect(result.status).toBe('success');
+
+      // auto-registration should have written the novel key to agent-extensions.yaml
+      const extensionsPath = join(registryDir, 'agent-extensions.yaml');
+      expect(existsSync(extensionsPath)).toBe(true);
+
+      const content = readFileSync(extensionsPath, 'utf-8');
+      const { parse: parseYaml } = await import('yaml');
+      type YamlAttr = { id: string; type?: string; stability?: string; brief?: string };
+      type YamlGroup = { type?: string; attributes?: YamlAttr[] };
+      const parsed = parseYaml(content) as { groups: YamlGroup[] };
+      const attrGroup = parsed.groups.find((g) => g.type === 'attribute_group');
+      expect(attrGroup).toBeDefined();
+      const attr = attrGroup!.attributes?.find((a) => a.id === novelKey);
+      expect(attr).toBeDefined();
+
+      // OQ-4 defaults: bare string ID format written via parseExtension
+      expect(attr!.type).toBe('string');
+      expect(attr!.stability).toBe('development');
+      expect(attr!.brief).toBe(`Agent-discovered attribute: ${novelKey}`);
+    });
+
+  it('pre-filter near-match duplicate not written to agent-extensions.yaml',
+    { timeout: 30_000 }, async () => {
+      // m5testns.req.current_order_status vs m5testns.req.order_status:
+      // tokens: {m5testns, req, current, order, status} vs {m5testns, req, order, status}
+      // Jaccard intersection=4, union=5 → 0.8 > 0.5 threshold → pre-filter catches it.
+      const resolvedSchema = {
+        groups: [{
+          id: 'registry.m5testns.attributes',
+          type: 'attribute_group',
+          brief: 'Test attributes',
+          attributes: [{ name: 'm5testns.req.order_status' }],
+        }],
+      };
+
+      const instrumentedCode = [
+        "const { trace } = require('@opentelemetry/api');",
+        "export async function handleRequest(req) {",
+        "  const span = require('@opentelemetry/api').trace.getActiveSpan();",
+        "  span?.setAttribute('m5testns.req.current_order_status', req.status);",
+        "  return req;",
+        "}",
+      ].join('\n') + '\n';
+
+      const deps: InstrumentWithRetryDeps = {
+        instrumentFile: async () => ({
+          success: true,
+          output: makeTestOutput(instrumentedCode),
+        } as InstrumentFileResult),
+        validateFile: async () => ({
+          passed: true,
+          tier1Results: [],
+          tier2Results: [],
+          blockingFailures: [],
+          advisoryFindings: [],
+        }),
+      };
+
+      const result = await instrumentWithRetry(
+        testFilePath, originalCode, resolvedSchema, makeConfig(),
+        { deps, provider: jsProvider, registryDir },
+      );
+
+      expect(result.status).toBe('success');
+
+      // Pre-filter flagged m5testns.req.current_order_status as near-match of
+      // m5testns.req.order_status (Jaccard 0.8 > 0.5). Key must not be written.
+      const extensionsPath = join(registryDir, 'agent-extensions.yaml');
+      if (existsSync(extensionsPath)) {
+        const content = readFileSync(extensionsPath, 'utf-8');
+        expect(content).not.toContain('m5testns.req.current_order_status');
+      }
+      // If agent-extensions.yaml was not created at all, the key was not written — also passes.
+    });
 });
