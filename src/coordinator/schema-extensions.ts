@@ -4,12 +4,17 @@
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse, stringify } from 'yaml';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { FileResult } from '../fix-loop/types.ts';
+import type { TokenUsage } from '../agent/schema.ts';
+import type { JudgeOptions } from '../validation/judge.ts';
 import {
   normalizeKey,
   computeJaccardSimilarity,
   JACCARD_DUPLICATE_THRESHOLD,
+  checkSemanticDuplicate,
 } from '../languages/javascript/rules/semantic-dedup.ts';
+import type { RegistryEntry } from '../languages/javascript/rules/semantic-dedup.ts';
 
 /** Result of writing schema extensions to disk. */
 export interface WriteSchemaExtensionsResult {
@@ -391,6 +396,71 @@ export function extractSpanNamesFromCode(code: string): string[] {
     names.add(match[2]!);
   }
   return [...names];
+}
+
+// ---------------------------------------------------------------------------
+// Auto-registration LLM judge (M3)
+// ---------------------------------------------------------------------------
+
+/** LLM judge dependencies for auto-registration candidate evaluation. */
+export interface AutoRegistrationJudgeDeps {
+  client: Anthropic;
+  options?: JudgeOptions;
+}
+
+/** Result of running the LLM judge on auto-registration candidates. */
+export interface AutoRegistrationJudgeResult {
+  /** Candidate keys the judge confirmed as novel — safe to auto-register. */
+  novel: string[];
+  /** Candidate keys the judge flagged as semantic duplicates — do not register. */
+  duplicates: string[];
+  /** Token usage accumulated across all judge calls. */
+  judgeTokenUsage: TokenUsage[];
+}
+
+/**
+ * Run the LLM judge on candidates that survived the pre-filter (M2).
+ *
+ * Each candidate is passed to checkSemanticDuplicate with the Jaccard stage
+ * disabled — candidates have already survived both normalization and Jaccard
+ * in the M2 pre-filter, so re-running those stages would be redundant.
+ *
+ * OQ-1 note: run-20 commit-story-v2 has 18 distinct setAttribute keys across
+ * 12 files, all commit_story.* or standard OTel (vcs.*, gen_ai.*). After
+ * pre-filtering out standard OTel keys, the expected judge call count per run
+ * is ~15-18, below the 20-call threshold — no ceiling parameter is required.
+ *
+ * @param candidates - Attribute keys that survived the M2 pre-filter
+ * @param registryEntries - Current registry entries for semantic comparison
+ * @param judgeDeps - Anthropic client and optional judge configuration
+ * @returns Novel keys, duplicate keys, and accumulated token usage
+ */
+export async function runAutoRegistrationJudge(
+  candidates: string[],
+  registryEntries: RegistryEntry[],
+  judgeDeps: AutoRegistrationJudgeDeps,
+): Promise<AutoRegistrationJudgeResult> {
+  const novel: string[] = [];
+  const duplicates: string[] = [];
+  const allJudgeTokenUsage: TokenUsage[] = [];
+
+  for (const candidate of candidates) {
+    const result = await checkSemanticDuplicate(candidate, registryEntries, {
+      ruleId: 'auto-registration',
+      useJaccard: false,
+      judgeDeps: { client: judgeDeps.client, options: judgeDeps.options },
+    });
+
+    allJudgeTokenUsage.push(...result.judgeTokenUsage);
+
+    if (result.isDuplicate) {
+      duplicates.push(candidate);
+    } else {
+      novel.push(candidate);
+    }
+  }
+
+  return { novel, duplicates, judgeTokenUsage: allJudgeTokenUsage };
 }
 
 /**

@@ -1,11 +1,18 @@
 // ABOUTME: Unit tests for schema extension YAML generation.
 // ABOUTME: Covers writing agent-requested extensions to agent-extensions.yaml, namespace validation, and deduplication.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, readFile, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+
+vi.mock('../../src/validation/judge.ts', () => ({
+  callJudge: vi.fn(),
+}));
+import { callJudge } from '../../src/validation/judge.ts';
+import type { TokenUsage } from '../../src/agent/schema.ts';
+
 import {
   writeSchemaExtensions,
   collectSchemaExtensions,
@@ -15,8 +22,10 @@ import {
   extractSpanNamesFromCode,
   extractAttributeKeysFromCode,
   preFilterAutoRegistrationCandidate,
+  runAutoRegistrationJudge,
 } from '../../src/coordinator/schema-extensions.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
+import type { RegistryEntry } from '../../src/languages/javascript/rules/semantic-dedup.ts';
 
 /** Helper to create a minimal FileResult with schema extensions. */
 function makeFileResult(
@@ -778,5 +787,133 @@ describe('preFilterAutoRegistrationCandidate', () => {
 
   it('returns false (novel) for an empty registry', () => {
     expect(preFilterAutoRegistrationCandidate('myapp.order.total', new Set())).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runAutoRegistrationJudge
+// ---------------------------------------------------------------------------
+
+const MOCK_TOKEN_USAGE: TokenUsage = {
+  inputTokens: 100,
+  outputTokens: 20,
+  cacheCreationInputTokens: 0,
+  cacheReadInputTokens: 0,
+};
+
+describe('runAutoRegistrationJudge', () => {
+  beforeEach(() => {
+    vi.mocked(callJudge).mockReset();
+  });
+
+  it('classifies a novel key into result.novel when judge confirms it is distinct', async () => {
+    // Candidate "myapp.order.total" — namespace prefix "myapp.order"
+    // Registry entry "myapp.order.count" shares the same prefix, so the judge runs.
+    vi.mocked(callJudge).mockResolvedValueOnce({
+      verdict: { answer: true, suggestion: undefined, confidence: 0.95 },
+      tokenUsage: MOCK_TOKEN_USAGE,
+    });
+
+    const entries: RegistryEntry[] = [{ name: 'myapp.order.count' }];
+    const result = await runAutoRegistrationJudge(
+      ['myapp.order.total'],
+      entries,
+      { client: {} as any },
+    );
+
+    expect(result.novel).toEqual(['myapp.order.total']);
+    expect(result.duplicates).toEqual([]);
+    expect(result.judgeTokenUsage).toHaveLength(1);
+  });
+
+  it('classifies a semantic duplicate into result.duplicates when judge flags it', async () => {
+    // Candidate "myapp.user.identifier" — namespace prefix "myapp.user"
+    // Registry entry "myapp.user.id" shares the same prefix, so the judge runs.
+    vi.mocked(callJudge).mockResolvedValueOnce({
+      verdict: { answer: false, suggestion: 'Use "myapp.user.id" instead.', confidence: 0.9 },
+      tokenUsage: MOCK_TOKEN_USAGE,
+    });
+
+    const entries: RegistryEntry[] = [{ name: 'myapp.user.id' }];
+    const result = await runAutoRegistrationJudge(
+      ['myapp.user.identifier'],
+      entries,
+      { client: {} as any },
+    );
+
+    expect(result.novel).toEqual([]);
+    expect(result.duplicates).toEqual(['myapp.user.identifier']);
+    expect(result.judgeTokenUsage).toHaveLength(1);
+  });
+
+  it('handles multiple candidates — novel and duplicate mixed', async () => {
+    // "myapp.order.total" vs "myapp.order.count" — same prefix, judge runs → novel
+    // "myapp.user.identifier" vs "myapp.user.id" — same prefix, judge runs → duplicate
+    vi.mocked(callJudge)
+      .mockResolvedValueOnce({
+        verdict: { answer: true, suggestion: undefined, confidence: 0.95 },
+        tokenUsage: MOCK_TOKEN_USAGE,
+      })
+      .mockResolvedValueOnce({
+        verdict: { answer: false, suggestion: 'Use "myapp.user.id".', confidence: 0.88 },
+        tokenUsage: MOCK_TOKEN_USAGE,
+      });
+
+    const entries: RegistryEntry[] = [{ name: 'myapp.order.count' }, { name: 'myapp.user.id' }];
+    const result = await runAutoRegistrationJudge(
+      ['myapp.order.total', 'myapp.user.identifier'],
+      entries,
+      { client: {} as any },
+    );
+
+    expect(result.novel).toEqual(['myapp.order.total']);
+    expect(result.duplicates).toEqual(['myapp.user.identifier']);
+    expect(result.judgeTokenUsage).toHaveLength(2);
+  });
+
+  it('returns empty results with no judge calls when candidates array is empty', async () => {
+    const entries: RegistryEntry[] = [{ name: 'myapp.user.id' }];
+    const result = await runAutoRegistrationJudge([], entries, { client: {} as any });
+
+    expect(result.novel).toEqual([]);
+    expect(result.duplicates).toEqual([]);
+    expect(result.judgeTokenUsage).toHaveLength(0);
+    expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+  });
+
+  it('treats candidate as novel when judge call returns null (failure)', async () => {
+    // "myapp.order.total" vs "myapp.order.count" — same prefix, judge runs but returns null
+    vi.mocked(callJudge).mockResolvedValueOnce(null);
+
+    const entries: RegistryEntry[] = [{ name: 'myapp.order.count' }];
+    const result = await runAutoRegistrationJudge(
+      ['myapp.order.total'],
+      entries,
+      { client: {} as any },
+    );
+
+    expect(result.novel).toEqual(['myapp.order.total']);
+    expect(result.duplicates).toEqual([]);
+  });
+
+  it('accumulates token usage across multiple judge calls', async () => {
+    const usage1: TokenUsage = { inputTokens: 50, outputTokens: 10, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+    const usage2: TokenUsage = { inputTokens: 80, outputTokens: 15, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+
+    vi.mocked(callJudge)
+      .mockResolvedValueOnce({ verdict: { answer: true, suggestion: undefined, confidence: 0.9 }, tokenUsage: usage1 })
+      .mockResolvedValueOnce({ verdict: { answer: true, suggestion: undefined, confidence: 0.9 }, tokenUsage: usage2 });
+
+    // Same-prefix entries ensure the judge is invoked for both candidates
+    const entries: RegistryEntry[] = [{ name: 'myapp.order.count' }, { name: 'myapp.payment.status' }];
+    const result = await runAutoRegistrationJudge(
+      ['myapp.order.total', 'myapp.payment.method'],
+      entries,
+      { client: {} as any },
+    );
+
+    expect(result.judgeTokenUsage).toHaveLength(2);
+    expect(result.judgeTokenUsage[0]).toEqual(usage1);
+    expect(result.judgeTokenUsage[1]).toEqual(usage2);
   });
 });
