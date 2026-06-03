@@ -16,7 +16,18 @@ import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
-import { extractSpanNamesFromCode, extractAttributeKeysFromCode } from '../coordinator/schema-extensions.ts';
+import {
+  extractSpanNamesFromCode,
+  extractAttributeKeysFromCode,
+  preFilterAutoRegistrationCandidate,
+  runAutoRegistrationJudge,
+  snapshotExtensionsFile,
+  restoreExtensionsFile,
+  writeSchemaExtensions,
+  parseExtension,
+} from '../coordinator/schema-extensions.ts';
+import { parseResolvedRegistry, getAllAttributeNames } from '../validation/tier2/registry-types.ts';
+import type { RegistryEntry } from '../languages/javascript/rules/semantic-dedup.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -99,6 +110,13 @@ interface InstrumentWithRetryOptions {
    * Populated by the coordinator from the registry manifest's `name` field.
    */
   expectedNamespacePrefix?: string;
+  /**
+   * Absolute path to the Weaver registry directory containing agent-extensions.yaml.
+   * When provided, novel setAttribute keys found in instrumented code that are not in
+   * the resolved registry are auto-registered before SCH-002 validation runs. Requires
+   * an Anthropic client (via anthropicClient option) for LLM judge calls.
+   */
+  registryDir?: string;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -447,6 +465,7 @@ export async function instrumentWithRetry(
       options.canonicalTracerName,
       options.expectedNamespacePrefix,
       !!options._skipFunctionFallback,
+      options.registryDir,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -511,6 +530,7 @@ async function executeRetryLoop(
   canonicalTracerName?: string,
   expectedNamespacePrefix?: string,
   isPerFunctionCall?: boolean,
+  registryDir?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient, canonicalTracerName);
@@ -712,6 +732,22 @@ async function executeRetryLoop(
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
 
+    // Per-attempt auto-registration: extract novel setAttribute keys and register them in
+    // agent-extensions.yaml before SCH-002 validation runs. Snapshot before writing so
+    // the registration can be rolled back if this attempt fails validation.
+    let autoRegistrationRan = false;
+    let perAttemptExtensionsSnapshot: string | null = null;
+    if (registryDir && anthropicClient) {
+      perAttemptExtensionsSnapshot = await snapshotExtensionsFile(registryDir);
+      autoRegistrationRan = true;
+      const judgeTokenUsage = await runPerAttemptAutoRegistration(
+        output, resolvedSchema, registryDir, anthropicClient,
+      );
+      for (const t of judgeTokenUsage) {
+        cumulativeTokens = addTokenUsage(cumulativeTokens, t);
+      }
+    }
+
     // Run validation chain — pass agent-declared schema extensions so SCH-001
     // accepts span names the agent declared as new (avoids chicken-and-egg rejection)
     const validation = await validateFileFn({
@@ -786,6 +822,9 @@ async function executeRetryLoop(
           // Restore before jumping — if fresh-regen fails before writing its own output,
           // the file should not be left with the wrong-namespace code.
           try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
+          if (autoRegistrationRan && registryDir) {
+            try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+          }
           // Jump to the last attempt (fresh-regeneration) so the next loop
           // iteration runs as fresh-regen with the namespace failure hint.
           attempt = maxAttempts - 1;
@@ -793,6 +832,9 @@ async function executeRetryLoop(
         }
         // Already on last attempt — restore original file and return failure
         try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
+        if (autoRegistrationRan && registryDir) {
+          try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+        }
         return buildFailedResult(
           filePath, feedback, feedback,
           cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
@@ -929,6 +971,9 @@ async function executeRetryLoop(
 
     // Validation failed — restore original code from memory before next attempt
     await writeFile(filePath, originalCode, 'utf-8');
+    if (autoRegistrationRan && registryDir) {
+      try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+    }
 
     // Oscillation detection: compare with previous validation
     if (attempt > 1 && previousValidation) {
@@ -1512,6 +1557,68 @@ function supplementSchemaExtensions(extensions: string[], code: string): string[
 
   const additions = [...missingSpans, ...missingAttrs];
   return additions.length > 0 ? [...normalized, ...additions] : normalized;
+}
+
+/**
+ * Run the per-attempt auto-registration step for novel setAttribute keys.
+ *
+ * Extracts literal attribute keys from instrumented code, filters out keys already
+ * in the registry (exact + normalization + Jaccard), runs the LLM judge on survivors,
+ * and writes confirmed-novel keys to agent-extensions.yaml before SCH-002 validation.
+ *
+ * OQ-4 resolution: auto-registered keys use bare string ID format. parseExtension
+ * supplies defaults of type: string, stability: development, brief: "Agent-discovered
+ * attribute: {id}". This is the simplest approach and reuses existing infrastructure.
+ *
+ * @param output - Current attempt's instrumentation output
+ * @param resolvedSchema - Weaver resolved registry for pre-filter comparison
+ * @param registryDir - Absolute path to Weaver registry directory
+ * @param anthropicClient - Anthropic client for LLM judge calls
+ * @returns Token usage accumulated across judge calls
+ */
+async function runPerAttemptAutoRegistration(
+  output: import('../agent/schema.ts').InstrumentationOutput,
+  resolvedSchema: object,
+  registryDir: string,
+  anthropicClient: Anthropic,
+): Promise<import('../agent/schema.ts').TokenUsage[]> {
+  // Extract attribute keys from instrumented code
+  const extractedKeys = extractAttributeKeysFromCode(output.instrumentedCode);
+  if (extractedKeys.length === 0) return [];
+
+  // Skip keys the agent already declared in schemaExtensions — those are handled
+  // by the existing dispatch-level writeSchemaExtensions call and don't need re-processing.
+  const agentDeclaredIds = new Set<string>();
+  for (const ext of output.schemaExtensions) {
+    const parsed = parseExtension(ext);
+    if (parsed && typeof parsed.id === 'string') {
+      agentDeclaredIds.add(parsed.id);
+    }
+  }
+  const undeclaredKeys = extractedKeys.filter(key => !agentDeclaredIds.has(key));
+  if (undeclaredKeys.length === 0) return [];
+
+  // Build registry name set for pre-filter (exact + normalization + Jaccard)
+  const registryNamesSet = getAllAttributeNames(parseResolvedRegistry(resolvedSchema));
+  const novelCandidates = undeclaredKeys.filter(
+    key => !preFilterAutoRegistrationCandidate(key, registryNamesSet),
+  );
+  if (novelCandidates.length === 0) return [];
+
+  // Run LLM judge on candidates that survived the pre-filter
+  const registryEntries: RegistryEntry[] = [...registryNamesSet].map(name => ({ name }));
+  const judgeResult = await runAutoRegistrationJudge(
+    novelCandidates,
+    registryEntries,
+    { client: anthropicClient },
+  );
+
+  // Write novel keys to agent-extensions.yaml using bare string IDs (OQ-4: option a)
+  if (judgeResult.novel.length > 0) {
+    await writeSchemaExtensions(registryDir, judgeResult.novel);
+  }
+
+  return judgeResult.judgeTokenUsage;
 }
 
 /**
