@@ -445,17 +445,23 @@ export async function runAutoRegistrationJudge(
   const allJudgeTokenUsage: TokenUsage[] = [];
 
   for (const candidate of candidates) {
-    const result = await checkSemanticDuplicate(candidate, registryEntries, {
-      ruleId: 'auto-registration',
-      useJaccard: false,
-      judgeDeps: { client: judgeDeps.client, options: judgeDeps.options },
-    });
+    try {
+      const result = await checkSemanticDuplicate(candidate, registryEntries, {
+        ruleId: 'auto-registration',
+        useJaccard: false,
+        judgeDeps: { client: judgeDeps.client, options: judgeDeps.options },
+      });
 
-    allJudgeTokenUsage.push(...result.judgeTokenUsage);
+      allJudgeTokenUsage.push(...result.judgeTokenUsage);
 
-    if (result.isDuplicate) {
-      duplicates.push(candidate);
-    } else {
+      if (result.isDuplicate) {
+        duplicates.push(candidate);
+      } else {
+        novel.push(candidate);
+      }
+    } catch {
+      // Judge call failed — treat as novel so auto-registration proceeds rather than
+      // silently dropping a candidate that may be genuinely new.
       novel.push(candidate);
     }
   }

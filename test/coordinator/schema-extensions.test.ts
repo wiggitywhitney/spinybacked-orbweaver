@@ -896,6 +896,28 @@ describe('runAutoRegistrationJudge', () => {
     expect(result.duplicates).toEqual([]);
   });
 
+  it('treats candidate as novel when judge call throws (error isolation — does not abort batch)', async () => {
+    // First candidate throws, second succeeds — batch should continue and both should appear in novel
+    vi.mocked(callJudge)
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce({
+        verdict: { answer: true, suggestion: undefined, confidence: 0.9 },
+        tokenUsage: MOCK_TOKEN_USAGE,
+      });
+
+    const entries: RegistryEntry[] = [{ name: 'myapp.order.count' }, { name: 'myapp.payment.status' }];
+    const result = await runAutoRegistrationJudge(
+      ['myapp.order.total', 'myapp.payment.method'],
+      entries,
+      { client: {} as any },
+    );
+
+    expect(result.novel).toEqual(['myapp.order.total', 'myapp.payment.method']);
+    expect(result.duplicates).toEqual([]);
+    // Token usage only from the successful second call
+    expect(result.judgeTokenUsage).toHaveLength(1);
+  });
+
   it('accumulates token usage across multiple judge calls', async () => {
     const usage1: TokenUsage = { inputTokens: 50, outputTokens: 10, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
     const usage2: TokenUsage = { inputTokens: 80, outputTokens: 15, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
