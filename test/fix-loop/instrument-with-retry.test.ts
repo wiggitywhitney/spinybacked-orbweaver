@@ -4349,6 +4349,51 @@ describe('instrumentWithRetry — auto-registration (M4)', () => {
     expect(ids).not.toContain('myapp.fetch.new_key');
   });
 
+  it('threads accepted attribute keys into the schema passed to validateFile', async () => {
+    // The validator reads from config.resolvedSchema in-memory — not from disk.
+    // Auto-registration must thread accepted keys into the schema for SCH-002
+    // to see them on the same attempt.
+    const instrumentedCode = [
+      "const { trace } = require('@opentelemetry/api');",
+      "const tracer = trace.getTracer('myapp');",
+      "export async function fetchData() {",
+      "  return tracer.startActiveSpan('myapp.fetch_data', (span) => {",
+      "    span.setAttribute('myapp.fetch.source', 'db');",
+      "    span.end();",
+      "    return {};",
+      "  });",
+      "}",
+    ].join('\n') + '\n';
+
+    let capturedValidateInput: import('../../src/validation/types.ts').ValidateFileInput | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({ instrumentedCode, schemaExtensions: [] }),
+      } as InstrumentFileResult),
+      validateFile: async (input) => {
+        capturedValidateInput = input;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    // Empty resolved schema — myapp.fetch.source is not registered
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(),
+      { deps, provider: jsProvider, registryDir },
+    );
+
+    // The schema passed to validateFile should include the auto-registered key
+    const capturedSchema = capturedValidateInput?.config?.resolvedSchema as Record<string, unknown> | undefined;
+    const groups = Array.isArray(capturedSchema?.groups)
+      ? (capturedSchema.groups as Array<{ type?: string; attributes?: Array<{ name: string }> }>)
+      : [];
+    const allAttributeNames = groups
+      .flatMap(g => g.attributes ?? [])
+      .map(a => a.name);
+    expect(allAttributeNames).toContain('myapp.fetch.source');
+  });
+
   it('does not write to agent-extensions.yaml when registryDir is not provided', async () => {
     const instrumentedCode = [
       "export async function fetchData() {",

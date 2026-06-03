@@ -735,18 +735,29 @@ async function executeRetryLoop(
     // Per-attempt auto-registration: extract novel setAttribute keys and register them in
     // agent-extensions.yaml before SCH-002 validation runs. Snapshot before writing so
     // the registration can be rolled back if this attempt fails validation.
+    // Accepted keys are also threaded into the in-memory schema for this attempt so
+    // SCH-002 sees them immediately (the on-disk file alone is not read by the validator).
     let autoRegistrationRan = false;
     let perAttemptExtensionsSnapshot: string | null = null;
+    let autoRegistrationResolvedSchema: object = resolvedSchema;
     if (registryDir && anthropicClient) {
       perAttemptExtensionsSnapshot = await snapshotExtensionsFile(registryDir);
       autoRegistrationRan = true;
-      const judgeTokenUsage = await runPerAttemptAutoRegistration(
+      const autoRegResult = await runPerAttemptAutoRegistration(
         output, resolvedSchema, registryDir, anthropicClient,
       );
-      for (const t of judgeTokenUsage) {
+      for (const t of autoRegResult.judgeTokenUsage) {
         cumulativeTokens = addTokenUsage(cumulativeTokens, t);
       }
+      if (autoRegResult.acceptedAttributeKeys.length > 0) {
+        autoRegistrationResolvedSchema = appendAttributeExtensionsToSchema(
+          resolvedSchema, autoRegResult.acceptedAttributeKeys,
+        );
+      }
     }
+    const validationConfigForAttempt = autoRegistrationResolvedSchema !== resolvedSchema
+      ? { ...validationConfig, resolvedSchema: autoRegistrationResolvedSchema }
+      : validationConfig;
 
     // Run validation chain — pass agent-declared schema extensions so SCH-001
     // accepts span names the agent declared as new (avoids chicken-and-egg rejection)
@@ -755,8 +766,8 @@ async function executeRetryLoop(
       instrumentedCode: output.instrumentedCode,
       filePath,
       config: output.schemaExtensions.length > 0
-        ? { ...validationConfig, declaredSpanExtensions: output.schemaExtensions }
-        : validationConfig,
+        ? { ...validationConfigForAttempt, declaredSpanExtensions: output.schemaExtensions }
+        : validationConfigForAttempt,
       provider,
     });
 
@@ -848,8 +859,13 @@ async function executeRetryLoop(
 
       // When the agent adds 0 spans but leaves OTel imports/tracer init behind,
       // restore the original file so it's byte-identical to the input.
+      // Also restore extensions: auto-registered keys should not persist when
+      // validation passed but no spans were committed.
       if (spansAdded === 0) {
         await writeFile(filePath, originalCode, 'utf-8');
+        if (autoRegistrationRan && registryDir) {
+          try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+        }
       }
 
       const extensionWarnings = detectMalformedExtensions(output.schemaExtensions);
@@ -1559,12 +1575,26 @@ function supplementSchemaExtensions(extensions: string[], code: string): string[
   return additions.length > 0 ? [...normalized, ...additions] : normalized;
 }
 
+/** Result of the per-attempt auto-registration step. */
+interface PerAttemptAutoRegistrationResult {
+  /** Token usage accumulated across LLM judge calls. */
+  judgeTokenUsage: import('../agent/schema.ts').TokenUsage[];
+  /** Attribute key names confirmed novel and written to agent-extensions.yaml.
+   *  Must be threaded into the in-memory resolved schema for SCH-002 to see them
+   *  on the same attempt that registered them. */
+  acceptedAttributeKeys: string[];
+}
+
 /**
  * Run the per-attempt auto-registration step for novel setAttribute keys.
  *
  * Extracts literal attribute keys from instrumented code, filters out keys already
  * in the registry (exact + normalization + Jaccard), runs the LLM judge on survivors,
  * and writes confirmed-novel keys to agent-extensions.yaml before SCH-002 validation.
+ *
+ * Returns both token usage AND the accepted keys — callers must thread the accepted keys
+ * into the in-memory resolved schema (via appendAttributeExtensionsToSchema) so SCH-002
+ * sees the newly registered keys on the same attempt that accepted them.
  *
  * OQ-4 resolution: auto-registered keys use bare string ID format. parseExtension
  * supplies defaults of type: string, stability: development, brief: "Agent-discovered
@@ -1574,17 +1604,17 @@ function supplementSchemaExtensions(extensions: string[], code: string): string[
  * @param resolvedSchema - Weaver resolved registry for pre-filter comparison
  * @param registryDir - Absolute path to Weaver registry directory
  * @param anthropicClient - Anthropic client for LLM judge calls
- * @returns Token usage accumulated across judge calls
+ * @returns Token usage accumulated across judge calls and accepted attribute key names
  */
 async function runPerAttemptAutoRegistration(
   output: import('../agent/schema.ts').InstrumentationOutput,
   resolvedSchema: object,
   registryDir: string,
   anthropicClient: Anthropic,
-): Promise<import('../agent/schema.ts').TokenUsage[]> {
+): Promise<PerAttemptAutoRegistrationResult> {
   // Extract attribute keys from instrumented code
   const extractedKeys = extractAttributeKeysFromCode(output.instrumentedCode);
-  if (extractedKeys.length === 0) return [];
+  if (extractedKeys.length === 0) return { judgeTokenUsage: [], acceptedAttributeKeys: [] };
 
   // Skip keys the agent already declared in schemaExtensions — those are handled
   // by the existing dispatch-level writeSchemaExtensions call and don't need re-processing.
@@ -1596,14 +1626,14 @@ async function runPerAttemptAutoRegistration(
     }
   }
   const undeclaredKeys = extractedKeys.filter(key => !agentDeclaredIds.has(key));
-  if (undeclaredKeys.length === 0) return [];
+  if (undeclaredKeys.length === 0) return { judgeTokenUsage: [], acceptedAttributeKeys: [] };
 
   // Build registry name set for pre-filter (exact + normalization + Jaccard)
   const registryNamesSet = getAllAttributeNames(parseResolvedRegistry(resolvedSchema));
   const novelCandidates = undeclaredKeys.filter(
     key => !preFilterAutoRegistrationCandidate(key, registryNamesSet),
   );
-  if (novelCandidates.length === 0) return [];
+  if (novelCandidates.length === 0) return { judgeTokenUsage: [], acceptedAttributeKeys: [] };
 
   // Run LLM judge on candidates that survived the pre-filter
   const registryEntries: RegistryEntry[] = [...registryNamesSet].map(name => ({ name }));
@@ -1618,7 +1648,7 @@ async function runPerAttemptAutoRegistration(
     await writeSchemaExtensions(registryDir, judgeResult.novel);
   }
 
-  return judgeResult.judgeTokenUsage;
+  return { judgeTokenUsage: judgeResult.judgeTokenUsage, acceptedAttributeKeys: judgeResult.novel };
 }
 
 /**
