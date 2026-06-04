@@ -1,4 +1,4 @@
-// ABOUTME: Shared semantic duplicate detection for SCH-001 and SCH-002 extension acceptance paths.
+// ABOUTME: Shared semantic duplicate detection for SCH-001, SCH-002, and the auto-registration pre-filter (M2).
 // ABOUTME: Three-stage pipeline: normalization comparison → Jaccard pre-pass → optional LLM judge.
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -57,6 +57,17 @@ export interface SemanticDedupResult {
   /** Token usage from judge calls (empty when judge was not invoked). */
   judgeTokenUsage: TokenUsage[];
 }
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Jaccard token similarity threshold above which a candidate is considered a structural
+ * near-duplicate of an existing registry entry. Used in both the SCH-002 "not in registry"
+ * suggestion path and the auto-registration pre-filter (M2).
+ */
+export const JACCARD_DUPLICATE_THRESHOLD = 0.5;
 
 // ---------------------------------------------------------------------------
 // Exported helpers (unit-testable)
@@ -135,8 +146,8 @@ export function isTypeCompatible(novelType: InferredType, registryType?: string)
  *
  * Three-stage pipeline (all stages operate on the type-filtered entry set):
  * 1. Normalization: strip delimiters, lowercase, compare — catches delimiter-variant duplicates.
- * 2. Jaccard pre-pass (if options.useJaccard): token similarity > 0.5 — catches structural
- *    near-duplicates. Threshold of 0.5 means more than half the tokens overlap; this catches
+ * 2. Jaccard pre-pass (if options.useJaccard): token similarity > JACCARD_DUPLICATE_THRESHOLD — catches
+ *    structural near-duplicates. More than half the tokens overlap; this catches
  *    obvious delimiter-style variants before paying for a judge call while avoiding false
  *    positives on pairs that share only a single common token.
  * 3. LLM judge (if options.judgeDeps): semantic equivalence with namespace pre-filter applied
@@ -183,13 +194,13 @@ export async function checkSemanticDuplicate(
   }
 
   // Stage 2: Jaccard pre-pass (useJaccard: true) — for fast structural duplicate detection
-  // in "not in registry" suggestion paths. Threshold > 0.5: more than half the tokens must
+  // in "not in registry" suggestion paths. Threshold > JACCARD_DUPLICATE_THRESHOLD: more than half the tokens must
   // overlap. NOT used in extension acceptance paths (use useJaccard: false there) because
   // Jaccard alone cannot distinguish legitimate siblings like "http.request.status_code" vs
   // "http.response.status_code" (3/5 tokens overlap at 0.6) from true duplicates.
   if (options.useJaccard) {
     for (const entry of activeEntries) {
-      if (computeJaccardSimilarity(candidate, entry.name) > 0.5) {
+      if (computeJaccardSimilarity(candidate, entry.name) > JACCARD_DUPLICATE_THRESHOLD) {
         return {
           isDuplicate: true,
           matchedEntry: entry.name,

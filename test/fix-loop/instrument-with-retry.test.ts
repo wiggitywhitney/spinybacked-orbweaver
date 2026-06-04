@@ -1,5 +1,5 @@
 // ABOUTME: Tests for instrumentWithRetry — single-attempt, token budget, multi-turn fix, fresh regen, oscillation, function-level fallback.
-// ABOUTME: Milestones 2-6 + milestone 7 + NDS-003 repeat escalation (#495).
+// ABOUTME: Milestones 2-6, milestone 7, NDS-003 repeat escalation (#495), and M4 auto-registration wiring (PRD #902).
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSync } from 'node:fs';
@@ -3691,6 +3691,47 @@ describe('instrumentWithRetry — supplementSchemaExtensions', () => {
     expect(result.schemaExtensions).toContain('span.myapp.process_order');
     expect(result.schemaExtensions).toContain('span.myapp.process');
   });
+
+  it('adds attribute keys from setAttribute calls not declared in schemaExtensions', async () => {
+    const output = makeInstrumentationOutput({
+      instrumentedCode: [
+        `tracer.startActiveSpan('myapp.process', (span) => {`,
+        `  span.setAttribute('myapp.user.id', userId);`,
+        `  span.end();`,
+        `});`,
+      ].join('\n') + '\n',
+      schemaExtensions: [],
+    });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.schemaExtensions).toContain('myapp.user.id');
+  });
+
+  it('does not add duplicate attribute keys already declared in schemaExtensions', async () => {
+    const output = makeInstrumentationOutput({
+      instrumentedCode: `span.setAttribute('myapp.user.id', userId);\n`,
+      schemaExtensions: ['myapp.user.id'],
+    });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.schemaExtensions.filter(e => e === 'myapp.user.id')).toHaveLength(1);
+  });
 });
 
 // --- Budget escalation on truncation (#210 Milestone 8) ---
@@ -4182,5 +4223,237 @@ describe('instrumentWithRetry — namespace prefix enforcement (#722)', () => {
 
     expect(result.status).toBe('success');
     expect(result.validationAttempts).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M4: auto-registration wiring
+// ---------------------------------------------------------------------------
+
+describe('instrumentWithRetry — auto-registration (M4)', () => {
+  let testDir: string;
+  let testFilePath: string;
+  let registryDir: string;
+  const originalContent = 'export async function fetchData() { return {}; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-autoreg-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+    // Registry dir with minimal manifest
+    registryDir = mkdtempSync(join(tmpdir(), 'spiny-orb-registry-'));
+    writeFileSync(
+      join(registryDir, 'registry_manifest.yaml'),
+      'name: myapp\ndescription: Test\nsemconv_version: 0.1.0\nschema_base_url: https://example.com/\n',
+    );
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+    rmSync(registryDir, { recursive: true, force: true });
+  });
+
+  it('writes novel setAttribute keys to agent-extensions.yaml when attempt succeeds', async () => {
+    // Instrumented code has a setAttribute call with a novel key not in the empty registry
+    const instrumentedCode = [
+      "const { trace } = require('@opentelemetry/api');",
+      "const tracer = trace.getTracer('myapp');",
+      "export async function fetchData() {",
+      "  return tracer.startActiveSpan('myapp.fetch_data', (span) => {",
+      "    span.setAttribute('myapp.fetch.source', 'db');",
+      "    span.end();",
+      "    return {};",
+      "  });",
+      "}",
+    ].join('\n') + '\n';
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({
+          instrumentedCode,
+          schemaExtensions: [],  // agent did NOT declare the extension
+        }),
+      } as InstrumentFileResult),
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(),
+      { deps, provider: jsProvider, registryDir },
+    );
+
+    expect(result.status).toBe('success');
+
+    // auto-registration should have written myapp.fetch.source to agent-extensions.yaml
+    const extensionsPath = join(registryDir, 'agent-extensions.yaml');
+    expect(existsSync(extensionsPath)).toBe(true);
+    const content = readFileSync(extensionsPath, 'utf-8');
+    expect(content).toContain('myapp.fetch.source');
+  });
+
+  it('rolls back agent-extensions.yaml when attempt fails validation', async () => {
+    const { parse: parseYaml } = await import('yaml');
+    const { stringify: stringifyYaml } = await import('yaml');
+
+    // Pre-existing agent-extensions.yaml content
+    const existingContent = stringifyYaml({
+      groups: [{
+        id: 'registry.myapp.agent_extensions',
+        type: 'attribute_group',
+        display_name: 'Agent-Created Attributes',
+        brief: 'Attributes created by the instrumentation agent',
+        attributes: [{ id: 'myapp.existing.key', type: 'string', stability: 'development', brief: 'Pre-existing key' }],
+      }],
+    });
+    writeFileSync(join(registryDir, 'agent-extensions.yaml'), existingContent);
+
+    // Instrumented code with a novel setAttribute key
+    const instrumentedCode = [
+      "const { trace } = require('@opentelemetry/api');",
+      "export async function fetchData() {",
+      "  const span = trace.getActiveSpan();",
+      "  span?.setAttribute('myapp.fetch.new_key', 'value');",
+      "  return {};",
+      "}",
+    ].join('\n') + '\n';
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({
+          instrumentedCode,
+          schemaExtensions: [],
+        }),
+      } as InstrumentFileResult),
+      // Validation always fails — the auto-registered key should be rolled back
+      validateFile: async () => makeFailingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 0 }),
+      { deps, provider: jsProvider, registryDir },
+    );
+
+    expect(result.status).toBe('failed');
+
+    // agent-extensions.yaml should be restored to its pre-attempt state (only pre-existing key)
+    const extensionsPath = join(registryDir, 'agent-extensions.yaml');
+    expect(existsSync(extensionsPath)).toBe(true);
+    const restoredContent = readFileSync(extensionsPath, 'utf-8');
+    type YamlGroup = { type?: string; attributes?: Array<{ id: string }> };
+    const parsed = parseYaml(restoredContent) as { groups: Array<YamlGroup> };
+    const attrGroup = parsed.groups.find((g) => g.type === 'attribute_group');
+    const ids = attrGroup?.attributes?.map((a) => a.id) ?? [];
+    expect(ids).toContain('myapp.existing.key');
+    expect(ids).not.toContain('myapp.fetch.new_key');
+  });
+
+  it('threads accepted attribute keys into the schema passed to validateFile', async () => {
+    // The validator reads from config.resolvedSchema in-memory — not from disk.
+    // Auto-registration must thread accepted keys into the schema for SCH-002
+    // to see them on the same attempt.
+    const instrumentedCode = [
+      "const { trace } = require('@opentelemetry/api');",
+      "const tracer = trace.getTracer('myapp');",
+      "export async function fetchData() {",
+      "  return tracer.startActiveSpan('myapp.fetch_data', (span) => {",
+      "    span.setAttribute('myapp.fetch.source', 'db');",
+      "    span.end();",
+      "    return {};",
+      "  });",
+      "}",
+    ].join('\n') + '\n';
+
+    let capturedValidateInput: import('../../src/validation/types.ts').ValidateFileInput | undefined;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({ instrumentedCode, schemaExtensions: [] }),
+      } as InstrumentFileResult),
+      validateFile: async (input) => {
+        capturedValidateInput = input;
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    // Empty resolved schema — myapp.fetch.source is not registered
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(),
+      { deps, provider: jsProvider, registryDir },
+    );
+
+    // The schema passed to validateFile should include the auto-registered key
+    const capturedSchema = capturedValidateInput?.config?.resolvedSchema as Record<string, unknown> | undefined;
+    const groups = Array.isArray(capturedSchema?.groups)
+      ? (capturedSchema.groups as Array<{ type?: string; attributes?: Array<{ name: string }> }>)
+      : [];
+    const allAttributeNames = groups
+      .flatMap(g => g.attributes ?? [])
+      .map(a => a.name);
+    expect(allAttributeNames).toContain('myapp.fetch.source');
+  });
+
+  it('does not write to agent-extensions.yaml when registryDir is not provided', async () => {
+    const instrumentedCode = [
+      "export async function fetchData() {",
+      "  const span = require('@opentelemetry/api').trace.getActiveSpan();",
+      "  span?.setAttribute('myapp.fetch.source', 'db');",
+      "  return {};",
+      "}",
+    ].join('\n') + '\n';
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({ instrumentedCode, schemaExtensions: [] }),
+      } as InstrumentFileResult),
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(),
+      // No registryDir — auto-registration should not run
+      { deps, provider: jsProvider },
+    );
+
+    // agent-extensions.yaml should NOT be created in the temp test directory
+    expect(existsSync(join(registryDir, 'agent-extensions.yaml'))).toBe(false);
+  });
+
+  it('skips auto-registration for setAttribute keys already in the resolved registry', async () => {
+    // resolved schema has myapp.fetch.source already registered
+    const resolvedSchema = {
+      groups: [{
+        id: 'registry.myapp.attributes',
+        type: 'attribute_group',
+        brief: 'Existing attributes',
+        attributes: [{ name: 'myapp.fetch.source' }],
+      }],
+    };
+
+    const instrumentedCode = [
+      "export async function fetchData() {",
+      "  const span = require('@opentelemetry/api').trace.getActiveSpan();",
+      "  span?.setAttribute('myapp.fetch.source', 'db');",
+      "  return {};",
+      "}",
+    ].join('\n') + '\n';
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({
+        success: true,
+        output: makeInstrumentationOutput({ instrumentedCode, schemaExtensions: [] }),
+      } as InstrumentFileResult),
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    await instrumentWithRetry(
+      testFilePath, originalContent, resolvedSchema, makeConfig(),
+      { deps, provider: jsProvider, registryDir },
+    );
+
+    // Key is already in registry — no agent-extensions.yaml should be written
+    expect(existsSync(join(registryDir, 'agent-extensions.yaml'))).toBe(false);
   });
 });

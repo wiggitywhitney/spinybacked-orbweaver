@@ -16,7 +16,18 @@ import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
 import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
-import { extractSpanNamesFromCode } from '../coordinator/schema-extensions.ts';
+import {
+  extractSpanNamesFromCode,
+  extractAttributeKeysFromCode,
+  preFilterAutoRegistrationCandidate,
+  runAutoRegistrationJudge,
+  snapshotExtensionsFile,
+  restoreExtensionsFile,
+  writeSchemaExtensions,
+  parseExtension,
+} from '../coordinator/schema-extensions.ts';
+import { parseResolvedRegistry, getAllAttributeNames } from '../validation/tier2/registry-types.ts';
+import type { RegistryEntry } from '../languages/javascript/rules/semantic-dedup.ts';
 
 const require = createRequire(import.meta.url);
 const { version: AGENT_VERSION } = require('../../package.json') as { version: string };
@@ -99,6 +110,13 @@ interface InstrumentWithRetryOptions {
    * Populated by the coordinator from the registry manifest's `name` field.
    */
   expectedNamespacePrefix?: string;
+  /**
+   * Absolute path to the Weaver registry directory containing agent-extensions.yaml.
+   * When provided, novel setAttribute keys found in instrumented code that are not in
+   * the resolved registry are auto-registered before SCH-002 validation runs. Requires
+   * an Anthropic client (via anthropicClient option) for LLM judge calls.
+   */
+  registryDir?: string;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -447,6 +465,7 @@ export async function instrumentWithRetry(
       options.canonicalTracerName,
       options.expectedNamespacePrefix,
       !!options._skipFunctionFallback,
+      options.registryDir,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -511,6 +530,7 @@ async function executeRetryLoop(
   canonicalTracerName?: string,
   expectedNamespacePrefix?: string,
   isPerFunctionCall?: boolean,
+  registryDir?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient, canonicalTracerName);
@@ -712,6 +732,48 @@ async function executeRetryLoop(
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
 
+    // Per-attempt auto-registration: extract novel setAttribute keys and register them in
+    // agent-extensions.yaml before SCH-002 validation runs. Snapshot before writing so
+    // the registration can be rolled back if this attempt fails validation.
+    // Accepted keys are also threaded into the in-memory schema for this attempt so
+    // SCH-002 sees them immediately (the on-disk file alone is not read by the validator).
+    let autoRegistrationRan = false;
+    let perAttemptExtensionsSnapshot: string | null = null;
+    let autoRegistrationResolvedSchema: object = resolvedSchema;
+    if (registryDir && anthropicClient) {
+      perAttemptExtensionsSnapshot = await snapshotExtensionsFile(registryDir);
+      let autoRegResult;
+      try {
+        autoRegResult = await runPerAttemptAutoRegistration(
+          output, resolvedSchema, registryDir, anthropicClient,
+        );
+        autoRegistrationRan = true;
+      } catch (err) {
+        try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot!); } catch { /* best-effort */ }
+        throw err;
+      }
+      for (const t of autoRegResult.judgeTokenUsage) {
+        cumulativeTokens = addTokenUsage(cumulativeTokens, t);
+      }
+      if (autoRegResult.acceptedAttributeKeys.length > 0) {
+        autoRegistrationResolvedSchema = appendAttributeExtensionsToSchema(
+          resolvedSchema,
+          autoRegResult.acceptedAttributeKeys,
+          'spiny_orb_auto_registration_extensions',
+          'Attribute keys auto-registered from instrumented code before SCH-002 validation',
+        );
+      }
+    }
+    const validationConfigForAttempt = autoRegistrationResolvedSchema !== resolvedSchema
+      ? { ...validationConfig, resolvedSchema: autoRegistrationResolvedSchema }
+      : validationConfig;
+    // Pre-compute registry names so supplementSchemaExtensions can filter out keys that
+    // are already registered (e.g., standard OTel attributes used without declaration).
+    // Computed once per attempt to avoid repeated schema parsing at each call site.
+    const registryNamesForAttempt = getAllAttributeNames(
+      parseResolvedRegistry(autoRegistrationResolvedSchema),
+    );
+
     // Run validation chain — pass agent-declared schema extensions so SCH-001
     // accepts span names the agent declared as new (avoids chicken-and-egg rejection)
     const validation = await validateFileFn({
@@ -719,8 +781,8 @@ async function executeRetryLoop(
       instrumentedCode: output.instrumentedCode,
       filePath,
       config: output.schemaExtensions.length > 0
-        ? { ...validationConfig, declaredSpanExtensions: output.schemaExtensions }
-        : validationConfig,
+        ? { ...validationConfigForAttempt, declaredSpanExtensions: output.schemaExtensions }
+        : validationConfigForAttempt,
       provider,
     });
 
@@ -745,7 +807,7 @@ async function executeRetryLoop(
       // and span names auto-extracted from the instrumented code by supplementSchemaExtensions.
       // Checking only output.schemaExtensions would miss span names the agent embedded in
       // startActiveSpan() calls without explicitly declaring them.
-      const allExtensions = supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode);
+      const allExtensions = supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode, registryNamesForAttempt);
       const wrongNamespace = allExtensions.filter((ext) => {
         // Strip "span." or "span:" prefix before namespace check.
         // normalizeSchemaExtension() converts span: → span. but runs after this check,
@@ -786,6 +848,9 @@ async function executeRetryLoop(
           // Restore before jumping — if fresh-regen fails before writing its own output,
           // the file should not be left with the wrong-namespace code.
           try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
+          if (autoRegistrationRan && registryDir) {
+            try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+          }
           // Jump to the last attempt (fresh-regeneration) so the next loop
           // iteration runs as fresh-regen with the namespace failure hint.
           attempt = maxAttempts - 1;
@@ -793,6 +858,9 @@ async function executeRetryLoop(
         }
         // Already on last attempt — restore original file and return failure
         try { await writeFile(filePath, originalCode, 'utf-8'); } catch { /* best-effort */ }
+        if (autoRegistrationRan && registryDir) {
+          try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+        }
         return buildFailedResult(
           filePath, feedback, feedback,
           cumulativeTokens, attempt, actualStrategy, errorProgression, lastOutput,
@@ -806,8 +874,13 @@ async function executeRetryLoop(
 
       // When the agent adds 0 spans but leaves OTel imports/tracer init behind,
       // restore the original file so it's byte-identical to the input.
+      // Also restore extensions: auto-registered keys should not persist when
+      // validation passed but no spans were committed.
       if (spansAdded === 0) {
         await writeFile(filePath, originalCode, 'utf-8');
+        if (autoRegistrationRan && registryDir) {
+          try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+        }
       }
 
       const extensionWarnings = detectMalformedExtensions(output.schemaExtensions);
@@ -819,7 +892,7 @@ async function executeRetryLoop(
         status: 'success',
         spansAdded,
         librariesNeeded: mergeLibraries(output.librariesNeeded, fileDetectedLibraries),
-        schemaExtensions: supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode),
+        schemaExtensions: supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode, registryNamesForAttempt),
         attributesCreated: output.attributesCreated,
         validationAttempts: attempt,
         validationStrategyUsed: actualStrategy,
@@ -878,8 +951,8 @@ async function executeRetryLoop(
             instrumentedCode: advisoryCode,
             filePath,
             config: advisoryOutput.schemaExtensions.length > 0
-              ? { ...validationConfig, declaredSpanExtensions: advisoryOutput.schemaExtensions }
-              : validationConfig,
+              ? { ...validationConfigForAttempt, declaredSpanExtensions: advisoryOutput.schemaExtensions }
+              : validationConfigForAttempt,
             provider,
           });
 
@@ -888,7 +961,7 @@ async function executeRetryLoop(
             // The advisory pass may add new startActiveSpan() calls with wrong-namespace
             // span names that weren't present in the pre-advisory output.
             if (expectedNamespacePrefix) {
-              const advisoryAll = supplementSchemaExtensions(advisoryOutput.schemaExtensions, advisoryCode);
+              const advisoryAll = supplementSchemaExtensions(advisoryOutput.schemaExtensions, advisoryCode, registryNamesForAttempt);
               const advisoryWrong = advisoryAll.filter((ext) => {
                 const pre = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
                 const checkPart = pre.startsWith('span.') ? pre.slice('span.'.length) : pre;
@@ -929,6 +1002,9 @@ async function executeRetryLoop(
 
     // Validation failed — restore original code from memory before next attempt
     await writeFile(filePath, originalCode, 'utf-8');
+    if (autoRegistrationRan && registryDir) {
+      try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot); } catch { /* best-effort */ }
+    }
 
     // Oscillation detection: compare with previous validation
     if (attempt > 1 && previousValidation) {
@@ -1013,7 +1089,12 @@ async function executeRetryLoop(
  * include these entries. Span extensions (span.*) are threaded via existingSpanNames
  * on retryOptions instead, since they affect SCH-001 not SCH-002.
  */
-function appendAttributeExtensionsToSchema(schema: object, attributeExtensions: string[]): object {
+function appendAttributeExtensionsToSchema(
+  schema: object,
+  attributeExtensions: string[],
+  groupId: string,
+  brief: string,
+): object {
   if (attributeExtensions.length === 0) return schema;
   const existing = (schema as Record<string, unknown>).groups;
   const existingGroups = Array.isArray(existing) ? existing : [];
@@ -1022,9 +1103,9 @@ function appendAttributeExtensionsToSchema(schema: object, attributeExtensions: 
     groups: [
       ...existingGroups,
       {
-        id: 'spiny_orb_function_fallback_extensions',
+        id: groupId,
         type: 'attribute_group',
-        brief: 'Attribute extensions accepted by earlier functions in this fallback run',
+        brief,
         attributes: attributeExtensions.map(name => ({ name })),
       },
     ],
@@ -1138,7 +1219,12 @@ async function functionLevelFallback(
             e => e.startsWith('span.') || e.startsWith('span:'),
           );
           if (attrExts.length > 0) {
-            cumulativeSchema = appendAttributeExtensionsToSchema(cumulativeSchema, attrExts);
+            cumulativeSchema = appendAttributeExtensionsToSchema(
+              cumulativeSchema,
+              attrExts,
+              'spiny_orb_function_fallback_extensions',
+              'Attribute extensions accepted by earlier functions in this fallback run',
+            );
           }
           if (spanExts.length > 0) {
             // Strip schema ID prefix (span. / span:) — cumulativeSpanExtensions holds
@@ -1315,6 +1401,10 @@ async function functionLevelFallback(
   // Reuse fnExtensions (computed above for validation) for malformed extension detection
   const extensionWarnings = detectMalformedExtensions(fnExtensions);
   const schemaExtensions = aggregateSchemaExtensions(fnResults);
+  // Filter supplemented keys against the registry so already-registered attributes
+  // (e.g., commit_story.*) are not added to FileResult.schemaExtensions and then
+  // rejected by SCH-002 in downstream reassembly or coordinator validation.
+  const registryNamesForFallback = getAllAttributeNames(parseResolvedRegistry(resolvedSchema));
   const totalSpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
   const totalAttributes = successful.reduce((sum, r) => sum + r.attributesCreated, 0);
 
@@ -1346,7 +1436,7 @@ async function functionLevelFallback(
       status: (totalSpans === 0 || successful.length === extractedFunctions.length) ? 'success' : 'partial',
       spansAdded: totalSpans,
       librariesNeeded: totalSpans === 0 ? [] : librariesNeeded,
-      schemaExtensions: totalSpans === 0 ? [] : supplementSchemaExtensions(schemaExtensions, reassembledCode),
+      schemaExtensions: totalSpans === 0 ? [] : supplementSchemaExtensions(schemaExtensions, reassembledCode, registryNamesForFallback),
       attributesCreated: totalSpans === 0 ? 0 : totalAttributes,
       validationAttempts: wholeFileResult.validationAttempts,
       validationStrategyUsed: wholeFileResult.validationStrategyUsed,
@@ -1407,7 +1497,7 @@ async function functionLevelFallback(
     status: 'partial',
     spansAdded: totalSpans,
     librariesNeeded,
-    schemaExtensions: supplementSchemaExtensions(schemaExtensions, partialCode),
+    schemaExtensions: supplementSchemaExtensions(schemaExtensions, partialCode, registryNamesForFallback),
     attributesCreated: totalAttributes,
     validationAttempts: wholeFileResult.validationAttempts,
     validationStrategyUsed: wholeFileResult.validationStrategyUsed,
@@ -1498,14 +1588,104 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
  * @param code - Instrumented code to scan for span names
  * @returns Deduplicated, normalized extensions including auto-detected span names
  */
-function supplementSchemaExtensions(extensions: string[], code: string): string[] {
+function supplementSchemaExtensions(
+  extensions: string[],
+  code: string,
+  registryNames?: ReadonlySet<string>,
+): string[] {
   const normalized = [...new Set(extensions.map(normalizeSchemaExtension))];
-  const spanNames = extractSpanNamesFromCode(code);
   const registered = new Set(normalized);
-  const missing = spanNames
+
+  const spanNames = extractSpanNamesFromCode(code);
+  const missingSpans = spanNames
     .filter(name => !registered.has(`span.${name}`))
     .map(name => `span.${name}`);
-  return missing.length > 0 ? [...normalized, ...missing] : normalized;
+
+  const attrKeys = extractAttributeKeysFromCode(code);
+  const missingAttrs = attrKeys.filter(key => {
+    if (registered.has(normalizeSchemaExtension(key))) return false;
+    if (registryNames?.has(key)) return false;
+    return true;
+  });
+
+  const additions = [...missingSpans, ...missingAttrs];
+  return additions.length > 0 ? [...normalized, ...additions] : normalized;
+}
+
+/** Result of the per-attempt auto-registration step. */
+interface PerAttemptAutoRegistrationResult {
+  /** Token usage accumulated across LLM judge calls. */
+  judgeTokenUsage: import('../agent/schema.ts').TokenUsage[];
+  /** Attribute key names confirmed novel and written to agent-extensions.yaml.
+   *  Must be threaded into the in-memory resolved schema for SCH-002 to see them
+   *  on the same attempt that registered them. */
+  acceptedAttributeKeys: string[];
+}
+
+/**
+ * Run the per-attempt auto-registration step for novel setAttribute keys.
+ *
+ * Extracts literal attribute keys from instrumented code, filters out keys already
+ * in the registry (exact + normalization + Jaccard), runs the LLM judge on survivors,
+ * and writes confirmed-novel keys to agent-extensions.yaml before SCH-002 validation.
+ *
+ * Returns both token usage AND the accepted keys — callers must thread the accepted keys
+ * into the in-memory resolved schema (via appendAttributeExtensionsToSchema) so SCH-002
+ * sees the newly registered keys on the same attempt that accepted them.
+ *
+ * OQ-4 resolution: auto-registered keys use bare string ID format. parseExtension
+ * supplies defaults of type: string, stability: development, brief: "Agent-discovered
+ * attribute: {id}". This is the simplest approach and reuses existing infrastructure.
+ *
+ * @param output - Current attempt's instrumentation output
+ * @param resolvedSchema - Weaver resolved registry for pre-filter comparison
+ * @param registryDir - Absolute path to Weaver registry directory
+ * @param anthropicClient - Anthropic client for LLM judge calls
+ * @returns Token usage accumulated across judge calls and accepted attribute key names
+ */
+async function runPerAttemptAutoRegistration(
+  output: import('../agent/schema.ts').InstrumentationOutput,
+  resolvedSchema: object,
+  registryDir: string,
+  anthropicClient: Anthropic,
+): Promise<PerAttemptAutoRegistrationResult> {
+  // Extract attribute keys from instrumented code
+  const extractedKeys = extractAttributeKeysFromCode(output.instrumentedCode);
+  if (extractedKeys.length === 0) return { judgeTokenUsage: [], acceptedAttributeKeys: [] };
+
+  // Skip keys the agent already declared in schemaExtensions — those are handled
+  // by the existing dispatch-level writeSchemaExtensions call and don't need re-processing.
+  const agentDeclaredIds = new Set<string>();
+  for (const ext of output.schemaExtensions) {
+    const parsed = parseExtension(ext);
+    if (parsed && typeof parsed.id === 'string') {
+      agentDeclaredIds.add(parsed.id);
+    }
+  }
+  const undeclaredKeys = extractedKeys.filter(key => !agentDeclaredIds.has(key));
+  if (undeclaredKeys.length === 0) return { judgeTokenUsage: [], acceptedAttributeKeys: [] };
+
+  // Build registry name set for pre-filter (exact + normalization + Jaccard)
+  const registryNamesSet = getAllAttributeNames(parseResolvedRegistry(resolvedSchema));
+  const novelCandidates = undeclaredKeys.filter(
+    key => !preFilterAutoRegistrationCandidate(key, registryNamesSet),
+  );
+  if (novelCandidates.length === 0) return { judgeTokenUsage: [], acceptedAttributeKeys: [] };
+
+  // Run LLM judge on candidates that survived the pre-filter
+  const registryEntries: RegistryEntry[] = [...registryNamesSet].map(name => ({ name }));
+  const judgeResult = await runAutoRegistrationJudge(
+    novelCandidates,
+    registryEntries,
+    { client: anthropicClient },
+  );
+
+  // Write novel keys to agent-extensions.yaml using bare string IDs (OQ-4: option a)
+  if (judgeResult.novel.length > 0) {
+    await writeSchemaExtensions(registryDir, judgeResult.novel);
+  }
+
+  return { judgeTokenUsage: judgeResult.judgeTokenUsage, acceptedAttributeKeys: judgeResult.novel };
 }
 
 /**

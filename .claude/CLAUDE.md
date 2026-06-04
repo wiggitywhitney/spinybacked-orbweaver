@@ -126,6 +126,8 @@ These conventions apply to any PRD or GitHub issue that adds, removes, modifies,
 
 **Examples and illustrations in the prompt** may use synthetic namespaces (e.g. `my_service`, `acme`) but never real eval-target namespaces.
 
+**When editing `src/agent/prompt.ts`**: do NOT commit changes that add, modify, or remove guidance for any rule class (SCH, COV, NDS, CDQ, RST, API) without also updating the `## Pre-submission verification` section at the end of the prompt. If a rule's behavior changed, update that rule's checklist item. If a new rule class was added, add a corresponding checklist item. The checklist is the last thing the agent reads before submitting — it must give a consistent picture of every rule class covered in the body. Run `/write-prompt` on the full diff when done.
+
 ## Eval Cadence
 
 **Eval runs are never PRD milestones.** Evals are executed by a separate team between PRDs. Never include an eval run as a milestone in a PRD or as a GitHub issue.

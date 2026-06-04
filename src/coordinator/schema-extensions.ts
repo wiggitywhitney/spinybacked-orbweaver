@@ -1,10 +1,20 @@
-// ABOUTME: Schema extension YAML generation for the coordinator module.
-// ABOUTME: Writes agent-requested schema extensions to agent-extensions.yaml in the registry directory.
+// ABOUTME: Schema extension YAML generation and auto-registration orchestration for the coordinator.
+// ABOUTME: Writes agent-requested and auto-extracted setAttribute() keys to agent-extensions.yaml.
 
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse, stringify } from 'yaml';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { FileResult } from '../fix-loop/types.ts';
+import type { TokenUsage } from '../agent/schema.ts';
+import type { JudgeOptions } from '../validation/judge.ts';
+import {
+  normalizeKey,
+  computeJaccardSimilarity,
+  JACCARD_DUPLICATE_THRESHOLD,
+  checkSemanticDuplicate,
+} from '../languages/javascript/rules/semantic-dedup.ts';
+import type { RegistryEntry } from '../languages/javascript/rules/semantic-dedup.ts';
 
 /** Result of writing schema extensions to disk. */
 export interface WriteSchemaExtensionsResult {
@@ -341,6 +351,47 @@ export async function restoreExtensionsFile(
 }
 
 /**
+ * Pre-filter a candidate attribute key against the registry before invoking the LLM judge.
+ * Returns true when the candidate is a near-duplicate and should NOT be auto-registered.
+ * Returns false when the candidate is genuinely novel and should proceed to the judge.
+ *
+ * Two stages:
+ * 1. Normalization: lowercase, strip delimiters (._-) — catches exact matches and
+ *    delimiter-variant duplicates (e.g., http_request_method vs http.request.method).
+ * 2. Jaccard token similarity above JACCARD_DUPLICATE_THRESHOLD — catches structural
+ *    near-duplicates (e.g., commit_story.git.diff_lines vs commit_story.git.diff_stats).
+ *
+ * @param candidate - The attribute key to evaluate
+ * @param registryNames - Set of all attribute key names currently in the resolved registry
+ * @returns true if the candidate should be filtered (near-duplicate), false if genuinely novel
+ */
+export function preFilterAutoRegistrationCandidate(
+  candidate: string,
+  registryNames: ReadonlySet<string>,
+): boolean {
+  const normalizedCandidate = normalizeKey(candidate);
+  // Namespace prefix for Jaccard filtering: all-but-last dot-separated segments.
+  // Mirrors checkSemanticDuplicate's namespace guard — prevents cross-namespace token
+  // collisions (e.g., taze.check.result vs taze.io.result) from incorrectly dropping
+  // novel candidates. Normalization check is unrestricted (exact matches are always
+  // near-duplicates regardless of namespace).
+  const parts = candidate.split('.');
+  const namespacePrefix = parts.length > 1 ? parts.slice(0, -1).join('.') : null;
+
+  for (const name of registryNames) {
+    if (normalizedCandidate === normalizeKey(name)) return true;
+    // Jaccard: only compare within the same namespace prefix
+    if (namespacePrefix !== null) {
+      const nameParts = name.split('.');
+      const namePrefix = nameParts.length > 1 ? nameParts.slice(0, -1).join('.') : null;
+      if (namePrefix !== namespacePrefix) continue;
+    }
+    if (computeJaccardSimilarity(candidate, name) > JACCARD_DUPLICATE_THRESHOLD) return true;
+  }
+  return false;
+}
+
+/**
  * Extract span names used in startActiveSpan calls from instrumented code.
  *
  * Finds all `startActiveSpan('name', ...)` and `startActiveSpan("name", ...)`
@@ -359,4 +410,102 @@ export function extractSpanNamesFromCode(code: string): string[] {
     names.add(match[2]!);
   }
   return [...names];
+}
+
+// ---------------------------------------------------------------------------
+// Auto-registration LLM judge (M3)
+// ---------------------------------------------------------------------------
+
+/** LLM judge dependencies for auto-registration candidate evaluation. */
+export interface AutoRegistrationJudgeDeps {
+  client: Anthropic;
+  options?: JudgeOptions;
+}
+
+/** Result of running the LLM judge on auto-registration candidates. */
+export interface AutoRegistrationJudgeResult {
+  /** Candidate keys the judge confirmed as novel — safe to auto-register. */
+  novel: string[];
+  /** Candidate keys the judge flagged as semantic duplicates — do not register. */
+  duplicates: string[];
+  /** Token usage accumulated across all judge calls. */
+  judgeTokenUsage: TokenUsage[];
+}
+
+/**
+ * Run the LLM judge on candidates that survived the pre-filter (M2).
+ *
+ * Each candidate is passed to checkSemanticDuplicate with the Jaccard stage
+ * disabled — candidates have already survived both normalization and Jaccard
+ * in the M2 pre-filter, so re-running those stages would be redundant.
+ *
+ * OQ-1 note: run-20 commit-story-v2 has 18 distinct setAttribute keys across
+ * 12 files, all commit_story.* or standard OTel (vcs.*, gen_ai.*). After
+ * pre-filtering out standard OTel keys, the expected judge call count per run
+ * is ~15-18, below the 20-call threshold — no ceiling parameter is required.
+ *
+ * @param candidates - Attribute keys that survived the M2 pre-filter
+ * @param registryEntries - Current registry entries for semantic comparison
+ * @param judgeDeps - Anthropic client and optional judge configuration
+ * @returns Novel keys, duplicate keys, and accumulated token usage
+ */
+export async function runAutoRegistrationJudge(
+  candidates: string[],
+  registryEntries: RegistryEntry[],
+  judgeDeps: AutoRegistrationJudgeDeps,
+): Promise<AutoRegistrationJudgeResult> {
+  const novel: string[] = [];
+  const duplicates: string[] = [];
+  const allJudgeTokenUsage: TokenUsage[] = [];
+
+  for (const candidate of candidates) {
+    try {
+      const result = await checkSemanticDuplicate(candidate, registryEntries, {
+        ruleId: 'auto-registration',
+        useJaccard: false,
+        judgeDeps: { client: judgeDeps.client, options: judgeDeps.options },
+      });
+
+      allJudgeTokenUsage.push(...result.judgeTokenUsage);
+
+      if (result.isDuplicate) {
+        duplicates.push(candidate);
+      } else {
+        novel.push(candidate);
+      }
+    } catch {
+      // Judge call failed — treat as novel so auto-registration proceeds rather than
+      // silently dropping a candidate that may be genuinely new.
+      novel.push(candidate);
+    }
+  }
+
+  return { novel, duplicates, judgeTokenUsage: allJudgeTokenUsage };
+}
+
+/**
+ * Extract literal attribute keys from setAttribute calls in instrumented code.
+ *
+ * Finds all `<span>.setAttribute('key', ...)` and `<span>.setAttribute("key", ...)`
+ * calls and returns the unique literal string keys. Dynamic keys (template literals,
+ * variables) are intentionally ignored.
+ *
+ * @param code - Instrumented JavaScript source code
+ * @returns Deduplicated array of attribute key strings found in the code
+ */
+export function extractAttributeKeysFromCode(code: string): string[] {
+  const keys = new Set<string>();
+  // Match <anything>.setAttribute('key', ...) — requires a leading dot so bare function
+  // calls without a receiver are excluded. Only single/double quoted literals are captured;
+  // template literals and variables do not match the quote character class.
+  // (?:\n\s*)? allows one optional newline+indent between ( and the key quote, which
+  // handles Prettier-reformatted multi-line calls where the key is on a continuation line.
+  // Require the closing quote to be followed by optional whitespace and a comma — this
+  // ensures only literal first-argument keys are captured and prevents matching a quoted
+  // prefix in a concatenation like setAttribute('prefix' + suffix, value).
+  const pattern = /\.setAttribute\s*\(\s*(?:\n\s*)?(['"])([^'"\\]*(?:\\.[^'"\\]*)*)\1\s*,/g;
+  for (const match of code.matchAll(pattern)) {
+    keys.add(match[2]!);
+  }
+  return [...keys];
 }
