@@ -380,9 +380,10 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Auto-registration (M5)'
         }],
       };
 
-      // Candidate key in the same sub-namespace — semantically distinct from the registry
-      // entries above so the judge reliably classifies it as novel.
-      const novelKey = 'm5testns.autotest.execution_context';
+      // Candidate key in the same sub-namespace. Uses a measurement concept (byte size)
+      // that is semantically unambiguous from identifier/name concepts (test_suite, run_id),
+      // ensuring reliable novel classification across LLM invocations.
+      const novelKey = 'm5testns.autotest.request_size_bytes';
       const instrumentedCode = [
         "const { trace } = require('@opentelemetry/api');",
         "const tracer = trace.getTracer('m5testns');",

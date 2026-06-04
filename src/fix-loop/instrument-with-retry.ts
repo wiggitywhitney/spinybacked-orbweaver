@@ -742,22 +742,37 @@ async function executeRetryLoop(
     let autoRegistrationResolvedSchema: object = resolvedSchema;
     if (registryDir && anthropicClient) {
       perAttemptExtensionsSnapshot = await snapshotExtensionsFile(registryDir);
-      autoRegistrationRan = true;
-      const autoRegResult = await runPerAttemptAutoRegistration(
-        output, resolvedSchema, registryDir, anthropicClient,
-      );
+      let autoRegResult;
+      try {
+        autoRegResult = await runPerAttemptAutoRegistration(
+          output, resolvedSchema, registryDir, anthropicClient,
+        );
+        autoRegistrationRan = true;
+      } catch (err) {
+        try { await restoreExtensionsFile(registryDir, perAttemptExtensionsSnapshot!); } catch { /* best-effort */ }
+        throw err;
+      }
       for (const t of autoRegResult.judgeTokenUsage) {
         cumulativeTokens = addTokenUsage(cumulativeTokens, t);
       }
       if (autoRegResult.acceptedAttributeKeys.length > 0) {
         autoRegistrationResolvedSchema = appendAttributeExtensionsToSchema(
-          resolvedSchema, autoRegResult.acceptedAttributeKeys,
+          resolvedSchema,
+          autoRegResult.acceptedAttributeKeys,
+          'spiny_orb_auto_registration_extensions',
+          'Attribute keys auto-registered from instrumented code before SCH-002 validation',
         );
       }
     }
     const validationConfigForAttempt = autoRegistrationResolvedSchema !== resolvedSchema
       ? { ...validationConfig, resolvedSchema: autoRegistrationResolvedSchema }
       : validationConfig;
+    // Pre-compute registry names so supplementSchemaExtensions can filter out keys that
+    // are already registered (e.g., standard OTel attributes used without declaration).
+    // Computed once per attempt to avoid repeated schema parsing at each call site.
+    const registryNamesForAttempt = getAllAttributeNames(
+      parseResolvedRegistry(autoRegistrationResolvedSchema),
+    );
 
     // Run validation chain — pass agent-declared schema extensions so SCH-001
     // accepts span names the agent declared as new (avoids chicken-and-egg rejection)
@@ -792,7 +807,7 @@ async function executeRetryLoop(
       // and span names auto-extracted from the instrumented code by supplementSchemaExtensions.
       // Checking only output.schemaExtensions would miss span names the agent embedded in
       // startActiveSpan() calls without explicitly declaring them.
-      const allExtensions = supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode);
+      const allExtensions = supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode, registryNamesForAttempt);
       const wrongNamespace = allExtensions.filter((ext) => {
         // Strip "span." or "span:" prefix before namespace check.
         // normalizeSchemaExtension() converts span: → span. but runs after this check,
@@ -877,7 +892,7 @@ async function executeRetryLoop(
         status: 'success',
         spansAdded,
         librariesNeeded: mergeLibraries(output.librariesNeeded, fileDetectedLibraries),
-        schemaExtensions: supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode),
+        schemaExtensions: supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode, registryNamesForAttempt),
         attributesCreated: output.attributesCreated,
         validationAttempts: attempt,
         validationStrategyUsed: actualStrategy,
@@ -936,8 +951,8 @@ async function executeRetryLoop(
             instrumentedCode: advisoryCode,
             filePath,
             config: advisoryOutput.schemaExtensions.length > 0
-              ? { ...validationConfig, declaredSpanExtensions: advisoryOutput.schemaExtensions }
-              : validationConfig,
+              ? { ...validationConfigForAttempt, declaredSpanExtensions: advisoryOutput.schemaExtensions }
+              : validationConfigForAttempt,
             provider,
           });
 
@@ -946,7 +961,7 @@ async function executeRetryLoop(
             // The advisory pass may add new startActiveSpan() calls with wrong-namespace
             // span names that weren't present in the pre-advisory output.
             if (expectedNamespacePrefix) {
-              const advisoryAll = supplementSchemaExtensions(advisoryOutput.schemaExtensions, advisoryCode);
+              const advisoryAll = supplementSchemaExtensions(advisoryOutput.schemaExtensions, advisoryCode, registryNamesForAttempt);
               const advisoryWrong = advisoryAll.filter((ext) => {
                 const pre = ext.startsWith('span:') ? ext.slice('span:'.length) : ext;
                 const checkPart = pre.startsWith('span.') ? pre.slice('span.'.length) : pre;
@@ -1074,7 +1089,12 @@ async function executeRetryLoop(
  * include these entries. Span extensions (span.*) are threaded via existingSpanNames
  * on retryOptions instead, since they affect SCH-001 not SCH-002.
  */
-function appendAttributeExtensionsToSchema(schema: object, attributeExtensions: string[]): object {
+function appendAttributeExtensionsToSchema(
+  schema: object,
+  attributeExtensions: string[],
+  groupId: string,
+  brief: string,
+): object {
   if (attributeExtensions.length === 0) return schema;
   const existing = (schema as Record<string, unknown>).groups;
   const existingGroups = Array.isArray(existing) ? existing : [];
@@ -1083,9 +1103,9 @@ function appendAttributeExtensionsToSchema(schema: object, attributeExtensions: 
     groups: [
       ...existingGroups,
       {
-        id: 'spiny_orb_function_fallback_extensions',
+        id: groupId,
         type: 'attribute_group',
-        brief: 'Attribute extensions accepted by earlier functions in this fallback run',
+        brief,
         attributes: attributeExtensions.map(name => ({ name })),
       },
     ],
@@ -1199,7 +1219,12 @@ async function functionLevelFallback(
             e => e.startsWith('span.') || e.startsWith('span:'),
           );
           if (attrExts.length > 0) {
-            cumulativeSchema = appendAttributeExtensionsToSchema(cumulativeSchema, attrExts);
+            cumulativeSchema = appendAttributeExtensionsToSchema(
+              cumulativeSchema,
+              attrExts,
+              'spiny_orb_function_fallback_extensions',
+              'Attribute extensions accepted by earlier functions in this fallback run',
+            );
           }
           if (spanExts.length > 0) {
             // Strip schema ID prefix (span. / span:) — cumulativeSpanExtensions holds
@@ -1376,6 +1401,10 @@ async function functionLevelFallback(
   // Reuse fnExtensions (computed above for validation) for malformed extension detection
   const extensionWarnings = detectMalformedExtensions(fnExtensions);
   const schemaExtensions = aggregateSchemaExtensions(fnResults);
+  // Filter supplemented keys against the registry so already-registered attributes
+  // (e.g., commit_story.*) are not added to FileResult.schemaExtensions and then
+  // rejected by SCH-002 in downstream reassembly or coordinator validation.
+  const registryNamesForFallback = getAllAttributeNames(parseResolvedRegistry(resolvedSchema));
   const totalSpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
   const totalAttributes = successful.reduce((sum, r) => sum + r.attributesCreated, 0);
 
@@ -1407,7 +1436,7 @@ async function functionLevelFallback(
       status: (totalSpans === 0 || successful.length === extractedFunctions.length) ? 'success' : 'partial',
       spansAdded: totalSpans,
       librariesNeeded: totalSpans === 0 ? [] : librariesNeeded,
-      schemaExtensions: totalSpans === 0 ? [] : supplementSchemaExtensions(schemaExtensions, reassembledCode),
+      schemaExtensions: totalSpans === 0 ? [] : supplementSchemaExtensions(schemaExtensions, reassembledCode, registryNamesForFallback),
       attributesCreated: totalSpans === 0 ? 0 : totalAttributes,
       validationAttempts: wholeFileResult.validationAttempts,
       validationStrategyUsed: wholeFileResult.validationStrategyUsed,
@@ -1468,7 +1497,7 @@ async function functionLevelFallback(
     status: 'partial',
     spansAdded: totalSpans,
     librariesNeeded,
-    schemaExtensions: supplementSchemaExtensions(schemaExtensions, partialCode),
+    schemaExtensions: supplementSchemaExtensions(schemaExtensions, partialCode, registryNamesForFallback),
     attributesCreated: totalAttributes,
     validationAttempts: wholeFileResult.validationAttempts,
     validationStrategyUsed: wholeFileResult.validationStrategyUsed,
@@ -1559,7 +1588,11 @@ function aggregateSchemaExtensions(results: FunctionResult[]): string[] {
  * @param code - Instrumented code to scan for span names
  * @returns Deduplicated, normalized extensions including auto-detected span names
  */
-function supplementSchemaExtensions(extensions: string[], code: string): string[] {
+function supplementSchemaExtensions(
+  extensions: string[],
+  code: string,
+  registryNames?: ReadonlySet<string>,
+): string[] {
   const normalized = [...new Set(extensions.map(normalizeSchemaExtension))];
   const registered = new Set(normalized);
 
@@ -1569,7 +1602,11 @@ function supplementSchemaExtensions(extensions: string[], code: string): string[
     .map(name => `span.${name}`);
 
   const attrKeys = extractAttributeKeysFromCode(code);
-  const missingAttrs = attrKeys.filter(key => !registered.has(key));
+  const missingAttrs = attrKeys.filter(key => {
+    if (registered.has(normalizeSchemaExtension(key))) return false;
+    if (registryNames?.has(key)) return false;
+    return true;
+  });
 
   const additions = [...missingSpans, ...missingAttrs];
   return additions.length > 0 ? [...normalized, ...additions] : normalized;

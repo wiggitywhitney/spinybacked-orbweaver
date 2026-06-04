@@ -1,5 +1,5 @@
-// ABOUTME: Schema extension YAML generation for the coordinator module.
-// ABOUTME: Writes agent-requested schema extensions to agent-extensions.yaml in the registry directory.
+// ABOUTME: Schema extension YAML generation and auto-registration orchestration for the coordinator.
+// ABOUTME: Writes agent-requested and auto-extracted setAttribute() keys to agent-extensions.yaml.
 
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -370,8 +370,22 @@ export function preFilterAutoRegistrationCandidate(
   registryNames: ReadonlySet<string>,
 ): boolean {
   const normalizedCandidate = normalizeKey(candidate);
+  // Namespace prefix for Jaccard filtering: all-but-last dot-separated segments.
+  // Mirrors checkSemanticDuplicate's namespace guard — prevents cross-namespace token
+  // collisions (e.g., taze.check.result vs taze.io.result) from incorrectly dropping
+  // novel candidates. Normalization check is unrestricted (exact matches are always
+  // near-duplicates regardless of namespace).
+  const parts = candidate.split('.');
+  const namespacePrefix = parts.length > 1 ? parts.slice(0, -1).join('.') : null;
+
   for (const name of registryNames) {
     if (normalizedCandidate === normalizeKey(name)) return true;
+    // Jaccard: only compare within the same namespace prefix
+    if (namespacePrefix !== null) {
+      const nameParts = name.split('.');
+      const namePrefix = nameParts.length > 1 ? nameParts.slice(0, -1).join('.') : null;
+      if (namePrefix !== namespacePrefix) continue;
+    }
     if (computeJaccardSimilarity(candidate, name) > JACCARD_DUPLICATE_THRESHOLD) return true;
   }
   return false;
@@ -486,7 +500,10 @@ export function extractAttributeKeysFromCode(code: string): string[] {
   // template literals and variables do not match the quote character class.
   // (?:\n\s*)? allows one optional newline+indent between ( and the key quote, which
   // handles Prettier-reformatted multi-line calls where the key is on a continuation line.
-  const pattern = /\.setAttribute\s*\(\s*(?:\n\s*)?(['"])([^'"]+)\1/g;
+  // Require the closing quote to be followed by optional whitespace and a comma — this
+  // ensures only literal first-argument keys are captured and prevents matching a quoted
+  // prefix in a concatenation like setAttribute('prefix' + suffix, value).
+  const pattern = /\.setAttribute\s*\(\s*(?:\n\s*)?(['"])([^'"\\]*(?:\\.[^'"\\]*)*)\1\s*,/g;
   for (const match of code.matchAll(pattern)) {
     keys.add(match[2]!);
   }
