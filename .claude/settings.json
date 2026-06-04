@@ -1,9 +1,23 @@
 {
   "permissions": {
     "allow": [
+      "Bash(bats tests/*)",
       "Bash(coderabbit review *)",
       "Bash(npm run typecheck)",
       "Bash(npx tsc --noEmit *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver/.claude/scripts/check-rules-coherence.sh"
+          }
+        ]
+      }
     ]
   }
 }
