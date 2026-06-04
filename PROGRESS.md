@@ -36,6 +36,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-06-02) Verified `docs/rules-reference.md` is current after PRD #901 M3 and M4 changes. No rules were added, deleted, or changed in blocking status — the retry prompt carve-out (M3) is not tracked in rules-reference.md, and the self-verification checklist (M4) lives in the agent prompt, not in rules-reference.md. COV-005 remains advisory and documented correctly. All six rule classes referenced in the checklist (SCH, COV, NDS, CDQ, RST, API) are present and accurate in the reference document. All internal file references resolve.
 
+### Changed
+
+- (2026-06-04) Updated the validation rules reference and instrumentation agent prompt to document the auto-registration behavior shipped in previous sessions. `docs/rules-reference.md` now describes how novel `setAttribute()` keys not declared in `schemaExtensions` are auto-registered before SCH-002 validation fires — covering the full pipeline (literal key extraction, normalization pre-filter, Jaccard check, LLM judge, write to `agent-extensions.yaml`), the bare-string-ID defaults used for auto-registered keys, and the remaining gap for dynamic keys. The agent prompt now frames `schemaExtensions` declarations as the preferred path (carrying explicit type, brief, and stability metadata) with auto-registration as a reliability backstop, and makes clear that dynamic attribute keys (template literals, variable references) cannot be auto-registered and require explicit declaration.
+
 ### Fixed
 
 - (2026-06-02) Fixed pre-submission verification checklist tests to scope assertions to the checklist section using a section-marker slice, so they verify content specifically in the checklist rather than matching strings that appear elsewhere in the prompt body. Rephrased the COV checklist item to lead with the general principle (capturing the operation's outcome or result) rather than the symptom observation ("not just input parameters").
