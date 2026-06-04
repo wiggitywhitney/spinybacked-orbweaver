@@ -121,3 +121,20 @@ add_diff_file() {
   [ "$status" -eq 0 ]
   echo "$output" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['hookSpecificOutput']['permissionDecision']=='allow'"
 }
+
+@test "gh pr create with no origin/main exits 0 silently" {
+  # Repo without a remote — hook cannot resolve diff base and must exit 0 silently
+  NO_REMOTE=$(mktemp -d)
+  git -C "$NO_REMOTE" init -b main
+  git -C "$NO_REMOTE" config user.email "test@test.com"
+  git -C "$NO_REMOTE" config user.name "Test"
+  echo "content" > "$NO_REMOTE/README.md"
+  git -C "$NO_REMOTE" add README.md
+  git -C "$NO_REMOTE" commit -m "initial"
+  export HOOK_INPUT
+  HOOK_INPUT=$(make_input "gh pr create --title test" "$NO_REMOTE")
+  run bash -c 'printf "%s" "$HOOK_INPUT" | "$SCRIPT"'
+  rm -rf "$NO_REMOTE"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
