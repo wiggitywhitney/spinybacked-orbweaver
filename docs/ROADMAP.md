@@ -21,6 +21,8 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 
 **Run-21 requested** (2026-06-02): PRD #901 merged — retry carve-out and pre-submission checklist are live. Watch for: improvement in schema extension registration rate for 3-attempt files.
 
+**Run-22 requested** (2026-06-04): PRD #902 merged — deterministic auto-registration pipeline live (attribute key extraction, normalization pre-filter, LLM judge, per-attempt write with rollback). Watch for: elimination of the `getCommitData` schema gap, reduction in files committed with zero new attributes despite agent notes identifying gaps, and any increase in judge call latency on a per-file basis.
+
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Short-term (current focus)
