@@ -40,7 +40,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 produced 164 INTERNAL spans against 38 packages (structurally correct, but fails IS SPA-001 limit). Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections. One run of data; wait for 2+ CLI evals before deciding.
 - SCH-002: `quotes_count` semantic mismatch in `discoverReflections` ([issue #868](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/868)) — `commit_story.journal.quotes_count` reused for reflection file discovery counts; fix is a new schema attribute `reflections_count`.
-- NDS-003 method chain trivia — PRD scope confirmed, awaiting run-20 data ([issue #886](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/886)) — leading dot token trivia causes false positives on method chains near the 80-char boundary after `startActiveSpan` indentation shift; mechanism is distinct from #885's multiLine fix (PRD #885 ✓ merged); run-19 confirms it is a practical problem (claude-collector.js partial); run-20 will show whether the issue persists before creating the PRD.
+- NDS-003 method chain trivia — watching for recurrence ([issue #886](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/886)) — run-19 partial commit (claude-collector.js); runs 20 and 21 both clean with no recurrence; no specific upstream fix identified (PRD #885's multiLine change is a different mechanism); watch run-22 before deciding to PRD or close as resolved-by-side-effect.
 
 ## Long-term
 
