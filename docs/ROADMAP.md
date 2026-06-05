@@ -19,9 +19,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 reconcilers, or acceptance gate tests — before starting the next PRD that changes agent behavior.
 
-**Run-21 requested** (2026-06-02): PRD #901 merged — retry carve-out and pre-submission checklist are live. Watch for: improvement in schema extension registration rate for 3-attempt files.
-
-**Run-22 requested** (2026-06-04): PRD #902 merged — deterministic auto-registration pipeline live (attribute key extraction, normalization pre-filter, LLM judge, per-attempt write with rollback). Watch for: elimination of the `getCommitData` schema gap, reduction in files committed with zero new attributes despite agent notes identifying gaps, and any increase in judge call latency on a per-file basis.
+**Run-21 requested** (2026-06-04): PRDs #901 and #902 merged — retry carve-out, pre-submission checklist, and deterministic auto-registration pipeline (attribute key extraction, normalization pre-filter, LLM judge, per-attempt write with rollback) are all live. Watch for: improvement in schema extension registration rate for 3-attempt files, elimination of the `getCommitData` schema gap, reduction in files committed with zero new attributes despite agent notes identifying gaps, and any increase in judge call latency on a per-file basis.
 
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
@@ -31,6 +29,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 
 - Export eval run traces to Datadog APM ([issue #899](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/899)) — add Datadog exporter to OTel Collector config alongside existing file exporter; enables live trace inspection without waiting for IS scoring.
 - Set up Datadog MCP server for live APM access ([issue #900](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/900)) — configure Datadog MCP server in global Claude Code settings so Claude can query APM spans directly during verification sessions. Depends on #899.
+- Instrumentation notes diverge from committed code ([issue #918](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/918)) — notes generated pre-commit reflect superseded attempts rather than the committed version; makes PR review unreliable.
 
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
@@ -41,7 +40,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 produced 164 INTERNAL spans against 38 packages (structurally correct, but fails IS SPA-001 limit). Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections. One run of data; wait for 2+ CLI evals before deciding.
 - SCH-002: `quotes_count` semantic mismatch in `discoverReflections` ([issue #868](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/868)) — `commit_story.journal.quotes_count` reused for reflection file discovery counts; fix is a new schema attribute `reflections_count`.
-- NDS-003 method chain trivia — PRD scope confirmed, awaiting run-20 data ([issue #886](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/886)) — leading dot token trivia causes false positives on method chains near the 80-char boundary after `startActiveSpan` indentation shift; mechanism is distinct from #885's multiLine fix (PRD #885 ✓ merged); run-19 confirms it is a practical problem (claude-collector.js partial); run-20 will show whether the issue persists before creating the PRD.
+- NDS-003 method chain trivia — watching for recurrence ([issue #886](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/886)) — run-19 partial commit (claude-collector.js); runs 20 and 21 both clean with no recurrence; no specific upstream fix identified (PRD #885's multiLine change is a different mechanism); watch run-22 before deciding to PRD or close as resolved-by-side-effect.
 
 ## Long-term
 

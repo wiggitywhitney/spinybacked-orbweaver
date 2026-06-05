@@ -887,6 +887,9 @@ async function executeRetryLoop(
       const buildSuccessResult = (
         advisoryAnnotations: FileResult['advisoryAnnotations'],
         tokens: TokenUsage,
+        // When the advisory pass commits its code, pass its notes here so the
+        // FileResult reflects the committed version rather than the earlier pass.
+        committedNotes?: string[],
       ): FileResult => ({
         path: filePath,
         status: 'success',
@@ -898,7 +901,7 @@ async function executeRetryLoop(
         validationStrategyUsed: actualStrategy,
         errorProgression,
         spanCategories: output.spanCategories,
-        notes: [...output.notes, ...extensionWarnings],
+        notes: [...(committedNotes ?? output.notes), ...extensionWarnings],
         advisoryAnnotations,
         agentVersion: AGENT_VERSION,
         tokenUsage: tokens,
@@ -979,6 +982,7 @@ async function executeRetryLoop(
             return buildSuccessResult(
               advisoryValidation.advisoryFindings.length > 0 ? advisoryValidation.advisoryFindings : undefined,
               cumulativeTokens,
+              advisoryOutput.notes,
             );
           }
 
@@ -1287,7 +1291,6 @@ async function functionLevelFallback(
         `function-level: 0/${extractedFunctions.length} functions instrumented (no spans needed)`,
       ],
       notes: [
-        ...(wholeFileResult.notes ?? []),
         `Function-level fallback: 0/${extractedFunctions.length} functions instrumented`,
         ...fnResults.filter(r => !r.success).map(r => `  skipped: ${r.name} — ${r.error}`),
       ],
@@ -1410,7 +1413,6 @@ async function functionLevelFallback(
 
   // Build notes listing which functions were instrumented vs skipped
   const notes = [
-    ...(wholeFileResult.notes ?? []),
     `Function-level fallback: ${successful.length}/${extractedFunctions.length} functions instrumented`,
     ...successful.map(r => `  instrumented: ${r.name} (${r.spansAdded} spans)`),
     ...fnResults.filter(r => !r.success).map(r => `  skipped: ${r.name} — ${r.error}`),
