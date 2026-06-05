@@ -439,6 +439,34 @@ describe('P12: OTel import declaration', () => {
     expect(result).not.toContain('startActiveSpan');
   });
 
+  it('does not duplicate shebang when OTel import is the first statement (run-21 regression)', () => {
+    const code = [
+      '#!/usr/bin/env node',
+      '/**',
+      ' * File-level JSDoc',
+      ' */',
+      '',
+      "import { trace } from '@opentelemetry/api';",
+      "import { other } from 'other';",
+      '',
+      "const tracer = trace.getTracer('svc');",
+      '',
+      'function work() {',
+      "  return tracer.startActiveSpan('w', (span) => {",
+      '    span.end();',
+      '    return 1;',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = stripOtelNodes(code, '/tmp/test.js');
+
+    const shebangCount = (result.match(/^#!.*$/gm) ?? []).length;
+    expect(shebangCount).toBe(1);
+    expect(result).toContain('#!/usr/bin/env node');
+    expect(result).not.toContain('@opentelemetry');
+  });
+
   it('does not affect files where OTel import is not the first statement', () => {
     const code = [
       "import { readFileSync } from 'node:fs';",
