@@ -19,9 +19,7 @@ Pass rate = files committed / files discovered. Syntax errors = files where `tsc
 
 Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 reconcilers, or acceptance gate tests — before starting the next PRD that changes agent behavior.
 
-**Run-21 requested** (2026-06-02): PRD #901 merged — retry carve-out and pre-submission checklist are live. Watch for: improvement in schema extension registration rate for 3-attempt files.
-
-**Run-22 requested** (2026-06-04): PRD #902 merged — deterministic auto-registration pipeline live (attribute key extraction, normalization pre-filter, LLM judge, per-attempt write with rollback). Watch for: elimination of the `getCommitData` schema gap, reduction in files committed with zero new attributes despite agent notes identifying gaps, and any increase in judge call latency on a per-file basis.
+**Run-21 requested** (2026-06-04): PRDs #901 and #902 merged — retry carve-out, pre-submission checklist, and deterministic auto-registration pipeline (attribute key extraction, normalization pre-filter, LLM judge, per-attempt write with rollback) are all live. Watch for: improvement in schema extension registration rate for 3-attempt files, elimination of the `getCommitData` schema gap, reduction in files committed with zero new attributes despite agent notes identifying gaps, and any increase in judge call latency on a per-file basis.
 
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
@@ -29,6 +27,7 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
+- Instrumentation notes diverge from committed code ([issue #918](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/918)) — notes generated pre-commit reflect superseded attempts rather than the committed version; makes PR review unreliable.
 - Export eval run traces to Datadog APM ([issue #899](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/899)) — add Datadog exporter to OTel Collector config alongside existing file exporter; enables live trace inspection without waiting for IS scoring.
 - Set up Datadog MCP server for live APM access ([issue #900](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/900)) — configure Datadog MCP server in global Claude Code settings so Claude can query APM spans directly during verification sessions. Depends on #899.
 
