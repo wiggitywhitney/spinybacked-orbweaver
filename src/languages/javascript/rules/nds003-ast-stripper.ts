@@ -533,12 +533,16 @@ function removeOtelImports(sourceFile: SourceFile): void {
 
     const statements = sourceFile.getStatements();
     if (statements.length > 0 && statements[0] === imp) {
-      // This import carries file-level leading trivia (shebang, JSDoc). Replace
-      // with just the trivia text so those headers survive the import removal.
+      // This import carries file-level leading trivia (shebang, JSDoc).
+      // imp.remove() drops the full range including trivia; re-insert it at
+      // position 0 so those headers survive. replaceWithText(trivia) is wrong
+      // here — it replaces only getStart..getEnd, leaving the original trivia
+      // intact AND inserting a second copy, doubling the shebang/JSDoc.
       const fileText = sourceFile.getFullText();
       const leadingTrivia = fileText.slice(imp.getFullStart(), imp.getStart());
       if (leadingTrivia.length > 0) {
-        imp.replaceWithText(leadingTrivia);
+        imp.remove();
+        sourceFile.insertText(0, leadingTrivia);
         continue;
       }
     }
