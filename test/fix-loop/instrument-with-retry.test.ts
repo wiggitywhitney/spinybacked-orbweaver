@@ -2336,6 +2336,44 @@ describe('instrumentWithRetry — advisory-only pass (M3)', () => {
     // File on disk must be the pre-advisory passing code, not the failed advisory output
     expect(readFileSync(testFilePath, 'utf-8')).toBe(passingInstrumentedContent);
   });
+
+  it('notes in FileResult reflect the advisory pass output when advisory pass commits its code (issue #918)', async () => {
+    // Initial pass notes say "initial-pass note" but advisory pass notes say "advisory-pass note".
+    // The advisory pass's code is what gets committed, so notes must match advisory pass.
+    let instrumentCallCount = 0;
+    const initialPassOutput = makeInstrumentationOutput({
+      instrumentedCode: passingInstrumentedContent,
+      tokenUsage: baseTokens,
+      notes: ['initial-pass note'],
+    });
+    const advisoryPassOutput = makeInstrumentationOutput({
+      instrumentedCode: advisoryImprovedContent,
+      tokenUsage: baseTokens,
+      notes: ['advisory-pass note'],
+    });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        instrumentCallCount++;
+        return {
+          success: true,
+          output: instrumentCallCount === 1 ? initialPassOutput : advisoryPassOutput,
+        } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        // Initial pass triggers advisory pass; advisory code passes cleanly
+        if (input.originalCode === originalContent) return makeValidationWithAdvisory(testFilePath);
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('success');
+    // Notes must come from the advisory pass (the committed code), not the initial pass
+    expect(result.notes).toContain('advisory-pass note');
+    expect(result.notes).not.toContain('initial-pass note');
+  });
 });
 
 describe('instrumentWithRetry — agentVersion population', () => {
@@ -3311,6 +3349,46 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
       package: '@opentelemetry/instrumentation-express',
       importName: 'ExpressInstrumentation',
     });
+  });
+
+  it('does not include stale whole-file attempt notes when function-level fallback commits its code (issue #918)', async () => {
+    // Whole-file attempt fails with stale notes ("dropped attribute X").
+    // Function-level fallback succeeds with different notes ("instrumented fn").
+    // The final FileResult must NOT include the stale whole-file notes.
+    const wholeFileStaleNote = 'whole-file: dropped attribute X';
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path, _code, _schema, _config) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function instrumented() { trace.getTracer('svc').startActiveSpan('fn', (span) => { try { return 1; } finally { span.end(); } }); }`,
+              notes: ['per-function note'],
+            }),
+          };
+        }
+        // Whole-file call fails with stale notes
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            instrumentedCode: 'bad;\n',
+            notes: [wholeFileStaleNote],
+          }),
+        };
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'bad;\n') return makeFailingValidation(input.filePath);
+        return makePassingValidation(input.filePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('success');
+    // Must have function-level fallback notes
+    expect(result.notes?.some(n => n.includes('Function-level fallback'))).toBe(true);
+    // Must NOT include stale notes from the failed whole-file attempt
+    expect(result.notes?.some(n => n.includes(wholeFileStaleNote))).toBe(false);
   });
 });
 
