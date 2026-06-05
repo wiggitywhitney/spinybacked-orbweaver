@@ -27,9 +27,9 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
-- Instrumentation notes diverge from committed code ([issue #918](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/918)) — notes generated pre-commit reflect superseded attempts rather than the committed version; makes PR review unreliable.
 - Export eval run traces to Datadog APM ([issue #899](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/899)) — add Datadog exporter to OTel Collector config alongside existing file exporter; enables live trace inspection without waiting for IS scoring.
 - Set up Datadog MCP server for live APM access ([issue #900](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/900)) — configure Datadog MCP server in global Claude Code settings so Claude can query APM spans directly during verification sessions. Depends on #899.
+- Instrumentation notes diverge from committed code ([issue #918](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/918)) — notes generated pre-commit reflect superseded attempts rather than the committed version; makes PR review unreliable.
 
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
