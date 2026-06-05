@@ -167,6 +167,23 @@ When a file has NO registry-defined attributes for its spans, you MUST still add
 
 Every span MUST have at least one \`setAttribute\` call. Even without registry guidance, function signatures reveal what data matters.
 
+**Input attributes before early-return guards**: Set input parameter attributes unconditionally at span open, before any conditional branching or early-return checks. A span on an early-exit path must still carry the input context — an attribute set after the guard is absent from every span produced by that path:
+\`\`\`javascript
+// Wrong — input attribute missing on the skip path
+return tracer.startActiveSpan('svc.op', (span) => {
+  if (!input) return null;                            // skip-path span missing input context
+  span.setAttribute('svc.input.id', input.id);       // only set on the happy path
+  ...
+});
+
+// Correct — input attribute captured before the guard
+return tracer.startActiveSpan('svc.op', (span) => {
+  span.setAttribute('svc.input.id', input?.id ?? ''); // present on all paths
+  if (!input) return null;
+  ...
+});
+\`\`\`
+
 ### Attribute Type Safety
 
 OpenTelemetry attributes must be primitive types: string, number, boolean, or arrays of these. Do NOT pass objects directly to \`span.setAttribute()\`. Common violations:
@@ -184,6 +201,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **NDS-002**: Pre-existing tests must still pass after your changes
 - **NDS-003**: Do NOT modify, remove, or reorder any non-instrumentation code. Only add instrumentation. Removing original code — including try/catch blocks, conditionals, or any other lines you did not write — causes immediate rejection, even if the removed code appears "redundant" or conflicts with your instrumentation approach. Valid instrumentation never requires removing original code. If your approach requires removing something, the approach is wrong — ADD instrumentation that works within the existing structure instead. **Do not restructure multi-line code layout**: if original code spans multiple lines (variable declarations, method chains, function call arguments, or any other multi-line construct), preserve that layout. Do not join or collapse multi-line constructs onto fewer lines. Collapsing a multi-line construct onto fewer lines triggers NDS-003 even when the resulting code is semantically equivalent.
   **Return-value capture exception**: When you need \`span.setAttribute()\` to receive a return value, you may rewrite \`return expr\` as \`const result = expr; span.setAttribute('attr.name', result.field); return result;\`. This exception applies only to expressions that are a function call or awaited expression — not to synchronous literals, identifiers, or ternary expressions. Rules: (1) the original call expression must be preserved exactly — only the statement form changes from \`return expr\` to \`const result = await expr\` when \`expr\` is already async, or \`const result = expr\` when it is not; (2) the captured variable must be immediately used in a \`span.setAttribute()\` call before the \`return\`; (3) do NOT use this for synchronous literals, identifiers, or ternary expressions — those are not call expressions and cannot benefit from capture; do NOT use this to restructure multi-statement returns or chains. **(4) return-value capture applies only to call expressions and awaited expressions** — not to constructors, object literals, array literals, or ternary expressions. If you need to set attributes after a function that returns an object or other non-call expression, redesign the span boundary rather than capturing the value.
+  **Import statement formatting**: Do NOT reformat existing import declarations. Leave every import statement exactly as written — do not expand a single-line \`import { a, b, c }\` into a multi-line block, and do not collapse a multi-line import block onto one line. Import reformatting is an NDS-003 violation regardless of context volume or code style preference.
 - **API-001**: Import only from \`@opentelemetry/api\`. No SDK, exporter, or instrumentation-* imports.
 - **NDS-006**: Match the target project's module system. ESM project → ESM imports. CJS project → require().
 
@@ -268,7 +286,10 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 ### Code Quality
 
-- **CDQ-001**: Every span MUST be closed — \`span.end()\` in a \`finally\` block or use the \`startActiveSpan\` callback pattern. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT add \`span.end()\` immediately before \`process.exit()\` calls — the \`finally\` block handles normal exit paths; \`process.exit()\` paths leak the span at runtime (known limitation). Report leaked span paths in \`notes\` as a known limitation.
+- **CDQ-001**: Every span MUST be closed. Two patterns — choose the right one:
+  - **\`startActiveSpan\` (callback lifecycle)**: The span is automatically closed when the callback resolves or throws. Do NOT add \`span.end()\` anywhere inside a \`startActiveSpan\` callback — not in \`finally\`, not inline, not anywhere. Adding an explicit \`span.end()\` inside the callback double-ends the span.
+  - **\`startSpan\` (manual lifecycle)**: The span is not auto-closed. You MUST add \`span.end()\` in a \`finally\` block.
+  In both cases: do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT add \`span.end()\` immediately before \`process.exit()\` calls — the \`finally\` block handles normal exit paths; \`process.exit()\` paths leak the span at runtime (known limitation). Report leaked span paths in \`notes\` as a known limitation.
 - **CDQ-005**: Prefer \`tracer.startActiveSpan()\` over \`tracer.startSpan()\`. \`startActiveSpan()\` automatically sets the span as active in context so child operations are correctly parented. Use \`startSpan()\` only when: (1) the span is a sibling and should not parent subsequent operations; (2) the span is fire-and-forget background work that must not affect the calling trace hierarchy; (3) you need explicit, independent lifecycle control over parallel spans; (4) the span's lifetime must extend beyond a single function scope and be passed to another function to close. If you use \`startSpan()\`, confirm in your reasoning which of these four scenarios applies.
 - **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.filter\`, \`.reduce\`, \`.join\`, \`.flatMap\`, \`Object.keys()\`) with \`span.isRecording()\`. External source strings — values fetched from git output, API responses, file contents, or any source whose length is unbounded — should also be guarded, even when no computation is involved. When a tracer uses head-based sampling, non-recording spans are no-ops — computations inside \`setAttribute\` still run even when the span will be dropped. Pattern:
   \`\`\`javascript
@@ -352,10 +373,10 @@ You are returning structured JSON via the output schema. Fill in each field:
 Before returning your output, answer each question. If the answer to any question is "no," fix the issue before submitting.
 
 - **SCH**: Have I declared every new span name in \`schemaExtensions\`? Have I declared every new attribute key — including the type, brief, and stability I know from context? Do NOT substitute a semantically wrong registered key to satisfy this requirement — if nothing precisely matches the data I am capturing, declare a new extension key. If I used dynamic attribute keys (variables or template literals as the key argument to \`setAttribute()\`), have I declared those explicitly? Dynamic keys cannot be auto-registered.
-- **COV**: Does every function I instrumented capture the operation's outcome or result in at least one span attribute — not only the inputs provided to it?
-- **NDS (placement)**: Did I place every \`startActiveSpan\` call around new logic only — not wrapping any pre-existing statements, not collapsing multi-line constructs? Did I preserve all exported function signatures unchanged? Did I leave all existing try/catch/finally blocks structurally intact?
+- **COV**: Does every function I instrumented capture the operation's outcome or result in at least one span attribute — not only the inputs provided to it? Did I set input parameter attributes before any early-return guards, so the span carries context on all execution paths?
+- **NDS (placement)**: Did I place every \`startActiveSpan\` call around new logic only — not wrapping any pre-existing statements, not collapsing multi-line constructs? Did I preserve all exported function signatures unchanged? Did I leave all existing try/catch/finally blocks structurally intact? Did I leave every import statement formatted exactly as originally written (no expansion, no collapsing)?
 - **NDS (conventions)**: Did I use the same module system as the target file (ESM \`import\` or CJS \`require\`, not both)? If a catch block gracefully handles an expected condition with no rethrow, did I avoid adding \`recordException()\` or \`setStatus(ERROR)\` to it?
-- **CDQ**: Did I guard every attribute value against null and undefined before passing it to \`setAttribute()\`? Did I use an \`isRecording()\` guard when the attribute value requires expensive computation?
+- **CDQ**: Did I guard every attribute value against null and undefined before passing it to \`setAttribute()\`? Did I use an \`isRecording()\` guard when the attribute value requires expensive computation? If I used \`startActiveSpan\`, did I avoid adding \`span.end()\` inside the callback?
 - **RST**: Is \`tracer\` obtained via the canonical \`getTracer()\` call — not redeclared or shadowed anywhere in the file?
 - **API**: Did I use only \`startActiveSpan\` (not \`startSpan\` unless one of the four documented scenarios applies), and import only from \`@opentelemetry/api\` (not SDK packages)?`;
 }
