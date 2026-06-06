@@ -4,6 +4,7 @@
 **Last Updated:** 2026-06-06
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-06-05 | Initial research — installation, auth, APM tools, secrets injection |
