@@ -1,12 +1,13 @@
 # Research: Datadog MCP Server for Claude Code
 
 **Project:** spinybacked-orbweaver
-**Last Updated:** 2026-06-05
+**Last Updated:** 2026-06-06
 
 ## Update Log
 | Date | Summary |
 |------|---------|
 | 2026-06-05 | Initial research — installation, auth, APM tools, secrets injection |
+| 2026-06-06 | Added live verification section (commit-story spans in APM); fixed "two APM tools" to three; clarified env block bug status |
 
 ## Findings
 
@@ -20,13 +21,13 @@ The Datadog MCP server provides Claude Code with tools to query APM traces, logs
 
 🟡 **`vals exec` cannot wrap MCP server subprocesses.** MCP servers are long-running processes spawned by Claude Code itself at session start — not launched by a user command. `vals exec` wraps a command and exits, so it has no way to inject env vars into a process Claude Code will later spawn. There is no `vals exec`-native solution here.
 
-🟡 **The `env` block in `settings.json` has a known bug (open as of June 2026) where it is silently ignored** and env vars are not passed to spawned MCP server subprocesses. The workaround is to set the vars in `~/.zshrc` so they're inherited from the parent shell.
+🟡 **The `env` block in `settings.json` has a known bug where it is silently ignored** and env vars are not passed to spawned MCP server subprocesses. The Claude Code issue was closed as a duplicate of another open issue; fix status unknown as of June 2026. The workaround is to set the vars in `~/.zshrc` so they're inherited from the parent shell.
 
 🟢 **OAuth (the default) sidesteps the API key problem entirely.** The OAuth flow is browser-based; no credentials touch the AI provider. For a user already authenticated with Datadog in their browser, this is zero-config.
 
 🟡 **Multiple `/reload-plugins` calls required** — reload after installation _and_ again after `/ddsetup` completes.
 
-🟡 **The dedicated `apm` toolset is in Preview** and requires sign-up to access. The `core` toolset already includes two APM tools (`get_datadog_trace`, `search_datadog_spans`) that don't require Preview access.
+🟡 **The dedicated `apm` toolset is in Preview** and requires sign-up to access. The `core` toolset already includes three APM tools (`get_datadog_trace`, `search_datadog_spans`, `search_datadog_service_dependencies`) that don't require Preview access.
 
 🔴 **Multi-org warning.** If you use multiple Datadog organizations under one account, you must be careful during OAuth not to select the wrong organization. There is no post-auth org-switch without re-running `/ddsetup`.
 
@@ -82,7 +83,7 @@ For multi-org accounts: be careful to select the correct organization during OAu
 
 1. **OAuth (best)** — no secrets injection needed at all
 2. **`~/.zshrc` env var export** — `export DD_API_KEY=...` makes the value available to all child processes including Claude Code's MCP spawns. Avoids the `env` block bug.
-3. **`settings.json` `env` block** — documented as the intended approach but has a known open bug where it is silently ignored in some configurations. The bug was "closed as duplicate" with unknown fix status.
+3. **`settings.json` `env` block** — documented as the intended approach but silently ignored in practice. The Claude Code bug was closed as a duplicate of another open issue; fix status unknown as of June 2026.
 
 🟡 medium confidence — env block bug status unknown; OAuth path confirmed working
 
@@ -140,6 +141,26 @@ If headless/automated key-based auth is needed, export `DD_API_KEY`, `DD_APPLICA
 - Large traces with thousands of spans may be truncated by `get_datadog_trace`
 - OAuth requires browser access — not suitable for headless sessions
 - Must be on Claude Code v2.1.30+
+
+---
+
+### Live Verification — commit-story Traces in APM
+
+Verified via `search_datadog_spans` query (`service:commit-story*`, last 30 days) after MCP server was authenticated.
+
+**Result:** 1,196 spans found, all from June 4, 2026.
+
+**Key findings:**
+- Service name is `commit-story` (not `commit-story-v2` — the OTel resource attribute `service.name` is set in the SDK bootstrap, not derived from the repo name)
+- Custom attributes in `commit_story.*` namespace: `commit_story.journal.*`, `commit_story.summary.*`, `commit_story.context.*`
+- LLM call spans carry `gen_ai.*` attributes: `gen_ai.request.model` (claude-haiku-4-5-20251001), `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.response.id`
+- Ingested via local Datadog Agent, `ingestion_reason: probabilistic`, `env: development`
+
+**The eval run gap:** commit-story traces reach APM via the local Datadog Agent on port 4318. During IS scoring runs, the Agent is stopped to free port 4318 for the OTel Collector — so eval traces go to the file exporter only and never appear in APM. Issue #899 addresses this by adding a Datadog exporter to the OTel Collector config so eval traces bypass the port conflict.
+
+[APM Trace Explorer — commit-story spans](https://app.datadoghq.com/apm/traces?end=1780779974567&historicalData=true&paused=true&query=service%3Acommit-story%2A&start=1778187974567)
+
+---
 
 ## Sources
 - [Datadog MCP Server Tools](https://docs.datadoghq.com/mcp_server/tools/) — official tools reference; fetched directly
