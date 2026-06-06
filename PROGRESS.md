@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 
+- (2026-06-06) Added research file `docs/research/otel-to-datadog-forwarding.md` surveying all options for forwarding OTel traces from a local development machine to Datadog APM: dual exporters in otelcol-contrib (recommended), permanent daemon pattern, Agent port change, and direct OTLP ingestion (Preview-gated). Recommendation: add the Datadog exporter to `evaluation/is/otelcol-config.yaml` alongside the existing file exporter so IS scoring runs automatically forward traces to Datadog APM in parallel — no change to the Weaver live-check workflow. This closes the eval run gap described in issue #899.
+
 - (2026-06-06) Added a research file (`docs/research/datadog-mcp-server.md`) and global gotchas rule documenting the Datadog MCP server for Claude Code — covering installation via the official plugin, OAuth vs key-based auth, available APM tools (`get_datadog_trace`, `search_datadog_spans`, `search_datadog_service_dependencies`), `vals exec` incompatibility with MCP subprocess injection, the `env` block bug in settings, and `DD_MCP_DOMAIN` format requirements (domain-only, no `https://`). Confirmed via live APM query that commit-story traces reach Datadog with rich `commit_story.*` and `gen_ai.*` attributes; the service name is `commit-story`. Establishes the MCP server as the verification mechanism for the upcoming OTel Collector → Datadog APM export work.
 
 

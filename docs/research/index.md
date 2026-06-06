@@ -12,3 +12,4 @@
 | otel-span-granularity.md | OTel span granularity at caller/callee boundaries: community standard (instrument at layer boundaries, not every function), context propagation wiring, leaves-first ordering recommendation | 2026-06-02 |
 | llm-retry-loop-architecture.md | Multi-turn vs. fresh-regen for code repair: 39% multi-turn degradation, 2–3 rounds optimal, "minimal changes" framing causes attribute dropout, recommendation to redesign attempt 2 prompt | 2026-06-02 |
 | datadog-mcp-server.md | Datadog MCP server for Claude Code: official plugin install, OAuth vs key-based auth, APM trace tools, vals exec incompatibility with MCP subprocesses, env block bug workaround | 2026-06-06 |
+| otel-to-datadog-forwarding.md | All options for local OTel→Datadog APM forwarding: dual exporters (recommended), permanent daemon, Agent port change, direct OTLP ingestion (Preview-blocked); recommendation for eval run gap fix | 2026-06-06 |
