@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-06-06) Added a research file (`docs/research/datadog-mcp-server.md`) and global gotchas rule documenting the Datadog MCP server for Claude Code — covering installation via the official plugin, OAuth vs key-based auth, available APM tools (`get_datadog_trace`, `search_datadog_spans`), `vals exec` incompatibility with MCP subprocess injection, the `env` block bug in settings, and `DD_MCP_DOMAIN` format requirements (domain-only, no `https://`). Confirmed via live APM query that commit-story traces reach Datadog with rich `commit_story.*` and `gen_ai.*` attributes; the service name is `commit-story`. Establishes the MCP server as the verification mechanism for the upcoming OTel Collector → Datadog APM export work.
+
 ### Fixed
 
 - (2026-06-05) Fixed two note-staleness bugs in `instrumentWithRetry` where `FileResult.notes` reflected discarded attempt output rather than the code actually committed to disk. Bug 1 (advisory pass): when the advisory follow-up pass validated successfully and committed its code, `buildSuccessResult` was still capturing `notes` from the initial pass. Fixed by adding an optional `committedNotes` parameter to `buildSuccessResult` and passing `advisoryOutput.notes` at the advisory success call site. Bug 2 (function-level fallback): when whole-file attempts all failed and the function-level fallback succeeded, the final `notes` array included `wholeFileResult.notes` from the failed whole-file attempts — code that was never committed. Fixed by removing `wholeFileResult.notes` from the fallback notes array in both the success path and the 0-spans short-circuit path.
