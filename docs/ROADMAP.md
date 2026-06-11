@@ -27,6 +27,10 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
+- SCH-003: integer-as-string type mismatch on count/size attributes ([issue #928](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/928)) — run-23 findings; fix is `agent-extensions.yaml` type corrections plus prompt guidance. Small.
+- SCH-002: improve output-count preference and near-synonym recovery ([issue #925](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/925)) — run-23 findings; fix is prompt guidance in `src/agent/prompt.ts`. Small.
+- SPA-002: process.exit() drops outermost span in eval target bootstrap ([issue #926](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/926)) — run-23 findings; fix is `forceFlush` in `examples/instrumentation.js` (eval target). Small.
+
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
@@ -37,6 +41,9 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 produced 164 INTERNAL spans against 38 packages (structurally correct, but fails IS SPA-001 limit). Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections. One run of data; wait for 2+ CLI evals before deciding.
 - SCH-002: `quotes_count` semantic mismatch in `discoverReflections` ([issue #868](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/868)) — `commit_story.journal.quotes_count` reused for reflection file discovery counts; fix is a new schema attribute `reflections_count`.
 - NDS-003 method chain trivia — watching for recurrence ([issue #886](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/886)) — run-19 partial commit (claude-collector.js); runs 20 and 21 both clean with no recurrence; no specific upstream fix identified (PRD #885's multiLine change is a different mechanism); watch run-22 before deciding to PRD or close as resolved-by-side-effect.
+- Engineering talk story asset: SCH-002 near-synonym catch from run 22 ([issue #924](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/924)) — agent invented `commit_story.journal.base_path` instead of reusing registered `commit_story.journal.file_path`; validator caught it; capture for engineering team talk.
+- Watch: agent notes diverging from committed code ([issue #927](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/927)) — run-21: two confirmed instances where notes described a prior attempt rather than committed code; both code-correct but trust/auditability concern; open a fix issue on second occurrence.
+- Research spike: SPA-001 calibration — understand OllyGarden spec's 10-span rationale ([issue #929](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/929)) — commit-story-v2 has exceeded the 10-span IS limit for 9 consecutive runs (~25 spans); existing research restates the limit without rationale; read the OllyGarden spec and assess whether 10 applies to CLI pipeline workloads.
 
 ## Long-term
 

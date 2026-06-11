@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-06-11) Processed commit-story-v2 eval run-23 findings into five GitHub issues and updated the roadmap. Three actionable fixes in Short-term: SCH-003 integer-as-string type mismatch in `agent-extensions.yaml` and prompt (issue #928); SCH-002 near-synonym self-correction and output-count attribute preference in `src/agent/prompt.ts` (issue #925); SPA-002 orphan span caused by `process.exit()` before OTel batch flush, fix in eval target bootstrap (issue #926). Two non-immediate items in Medium-term: research spike to read the OllyGarden IS spec and assess whether the 10-span SPA-001 limit applies to CLI pipeline workloads (issue #929); watch issue for agent notes diverging from committed code framed as a trust/auditability problem that breaks the human review loop (issue #927).
 
 - (2026-06-06) Added research file `docs/research/otel-to-datadog-forwarding.md` surveying all options for forwarding OTel traces from a local development machine to Datadog APM: dual exporters in otelcol-contrib (recommended), permanent daemon pattern, Agent port change, and direct OTLP ingestion (Preview-gated). Recommendation: add the Datadog exporter to `evaluation/is/otelcol-config.yaml` alongside the existing file exporter so IS scoring runs automatically forward traces to Datadog APM in parallel — no change to the Weaver live-check workflow. This closes the eval run gap described in issue #899.
 
