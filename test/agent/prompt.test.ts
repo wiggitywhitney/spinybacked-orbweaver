@@ -403,7 +403,9 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
     const sch003Start = prompt.indexOf('**SCH-003**');
     expect(sch003Start).toBeGreaterThan(-1);
-    const sch003 = prompt.slice(sch003Start, sch003Start + 600);
+    const nextRuleOffset = prompt.slice(sch003Start + 1).search(/\n- \*\*[A-Z]{3}-\d{3}/);
+    const sch003End = nextRuleOffset >= 0 ? sch003Start + 1 + nextRuleOffset : prompt.length;
+    const sch003 = prompt.slice(sch003Start, sch003End);
     // Must cover size attributes (not just *_count)
     expect(sch003).toMatch(/size/i);
     // Must direct agent to determine type from semantic meaning, not JS return type
@@ -414,7 +416,7 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
     const sch002Start = prompt.indexOf('**SCH-002**');
     const sch002End = prompt.indexOf('\n- **SCH-003**', sch002Start);
-    const sch002 = prompt.slice(sch002Start, sch002End > -1 ? sch002End : sch002Start + 1400);
+    const sch002 = prompt.slice(sch002Start, sch002End > -1 ? sch002End : prompt.length);
     // Must address what to do when near-synonym rejection fires on a retry attempt
     expect(sch002).toMatch(/previous attempt|prior attempt/i);
     // Must direct reuse of existing registered key, not a new variant
@@ -426,7 +428,7 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
     const sch002Start = prompt.indexOf('**SCH-002**');
     const sch002End = prompt.indexOf('\n- **SCH-003**', sch002Start);
-    const sch002 = prompt.slice(sch002Start, sch002End > -1 ? sch002End : sch002Start + 1400);
+    const sch002 = prompt.slice(sch002Start, sch002End > -1 ? sch002End : prompt.length);
     // Must address aggregation/transformation spans preferring output counts
     expect(sch002).toMatch(/aggregat|transform/i);
     expect(sch002).toMatch(/output.*count|count.*output|items.*produced|produced.*items|items.*processed/i);
