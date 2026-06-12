@@ -399,6 +399,41 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('String()');
   });
 
+  it('SCH-003 covers size attributes as int and directs type based on semantic meaning, not JS expression type', () => {
+    const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
+    const sch003Start = prompt.indexOf('**SCH-003**');
+    expect(sch003Start).toBeGreaterThan(-1);
+    const sch003 = prompt.slice(sch003Start, sch003Start + 600);
+    // Must cover size attributes (not just *_count)
+    expect(sch003).toMatch(/size/i);
+    // Must direct agent to determine type from semantic meaning, not JS return type
+    expect(sch003).toMatch(/semantic|represents/i);
+  });
+
+  it('SCH-002 includes near-synonym recovery path: reuse registered key on retry, not a new variant', () => {
+    const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
+    const sch002Start = prompt.indexOf('**SCH-002**');
+    const sch002End = prompt.indexOf('\n- **SCH-003**', sch002Start);
+    const sch002 = prompt.slice(sch002Start, sch002End > -1 ? sch002End : sch002Start + 1400);
+    // Must address what to do when near-synonym rejection fires on a retry attempt
+    expect(sch002).toMatch(/previous attempt|prior attempt/i);
+    // Must direct reuse of existing registered key, not a new variant
+    expect(sch002).toMatch(/reuse|use.*exact|use the.*registered/i);
+    expect(sch002).toMatch(/variant|different.*key|new.*key/i);
+  });
+
+  it('SCH-002 prefers output-count attributes over input-parameter attributes for aggregation spans', () => {
+    const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
+    const sch002Start = prompt.indexOf('**SCH-002**');
+    const sch002End = prompt.indexOf('\n- **SCH-003**', sch002Start);
+    const sch002 = prompt.slice(sch002Start, sch002End > -1 ? sch002End : sch002Start + 1400);
+    // Must address aggregation/transformation spans preferring output counts
+    expect(sch002).toMatch(/aggregat|transform/i);
+    expect(sch002).toMatch(/output.*count|count.*output|items.*produced|produced.*items|items.*processed/i);
+    // Must contrast with input-parameter attributes
+    expect(sch002).toMatch(/input.*param|config.*path|filesystem.*path|path.*input/i);
+  });
+
   it('includes notes brevity guidance', () => {
     const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
     expect(prompt).toContain('judgment call explanations');
