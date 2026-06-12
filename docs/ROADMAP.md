@@ -29,9 +29,9 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 
 - SCH-003: integer-as-string type mismatch on count/size attributes ([issue #928](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/928)) — run-23 findings; fix is `agent-extensions.yaml` type corrections plus prompt guidance. Small.
 - SCH-002: improve output-count preference and near-synonym recovery ([issue #925](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/925)) — run-23 findings; fix is prompt guidance in `src/agent/prompt.ts`. Small.
+- Auto-detect CLI apps and default `targetType` to `short-lived` ([PRD #930](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/930)) — `init-handler.ts` hardcodes `long-lived` in `--yes` mode even for CLI apps; fix is detecting `package.json` `bin` field and defaulting to `short-lived`. Closes #926.
 
 ## Medium-term
-- Auto-detect CLI apps and default `targetType` to `short-lived` ([PRD #930](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/930)) — `init-handler.ts` hardcodes `long-lived` in `--yes` mode even for CLI apps; fix is detecting `package.json` `bin` field and defaulting to `short-lived`. Closes #926.
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
 - Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
