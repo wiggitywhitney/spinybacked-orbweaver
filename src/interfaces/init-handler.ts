@@ -293,6 +293,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   // Auto-detect CLI apps: non-empty bin field → default targetType to short-lived
   const binField = packageJson['bin'];
   const hasBin =
+    (typeof binField === 'string' && binField.trim().length > 0) ||
     (typeof binField === 'object' && binField !== null && !Array.isArray(binField) &&
       Object.keys(binField as Record<string, unknown>).length > 0) ||
     (Array.isArray(binField) && (binField as unknown[]).length > 0);
