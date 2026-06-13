@@ -49,8 +49,24 @@ const SDK_INIT_PATTERNS = [
 ];
 
 /**
+ * Returns true when package.json contains a non-empty bin field, meaning the
+ * package exposes at least one CLI entry point.
+ */
+function hasNonEmptyBinField(packageJson: Record<string, unknown>): boolean {
+  const binField = packageJson['bin'];
+  return (
+    (typeof binField === 'string' && binField.trim().length > 0) ||
+    (typeof binField === 'object' &&
+      binField !== null &&
+      !Array.isArray(binField) &&
+      Object.keys(binField as Record<string, unknown>).length > 0) ||
+    (Array.isArray(binField) && (binField as unknown[]).length > 0)
+  );
+}
+
+/**
  * Detect project type from package.json contents.
- * Precedence: private: true → service; bin → distributable; main/exports → distributable.
+ * Precedence: private: true → service; non-empty bin → distributable; main/exports → distributable.
  * Default: service.
  *
  * @param packageJson - Parsed package.json object
@@ -60,7 +76,7 @@ function detectProjectType(packageJson: Record<string, unknown>): 'service' | 'd
   if (packageJson.private === true) {
     return 'service';
   }
-  if (packageJson.bin !== undefined) {
+  if (hasNonEmptyBinField(packageJson)) {
     return 'distributable';
   }
   if (packageJson.main !== undefined || packageJson.exports !== undefined) {
@@ -291,14 +307,7 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
   deps.stderr(`Detected project type: ${projectType} (dependencyStrategy: ${dependencyStrategy})`);
 
   // Auto-detect CLI apps: non-empty bin field → default targetType to short-lived
-  const binField = packageJson['bin'];
-  const hasBin =
-    (typeof binField === 'string' && binField.trim().length > 0) ||
-    (typeof binField === 'object' && binField !== null && !Array.isArray(binField) &&
-      Object.keys(binField as Record<string, unknown>).length > 0) ||
-    (Array.isArray(binField) && (binField as unknown[]).length > 0);
-
-  let targetType: 'short-lived' | 'long-lived' = hasBin ? 'short-lived' : 'long-lived';
+  let targetType: 'short-lived' | 'long-lived' = hasNonEmptyBinField(packageJson) ? 'short-lived' : 'long-lived';
   if (!yes) {
     const hint = targetType === 'short-lived' ? '[short-lived]' : '[long-lived]';
     const answer = await deps.prompt(

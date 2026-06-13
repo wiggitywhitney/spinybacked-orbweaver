@@ -564,6 +564,7 @@ describe('handleInit', () => {
       expect(result.success).toBe(true);
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
       expect(writtenContent).toContain('targetType: long-lived');
+      expect(writtenContent).toContain('dependencyStrategy: dependencies');
     });
 
     it('TC4b: bin:null falls through to long-lived', async () => {
@@ -585,6 +586,7 @@ describe('handleInit', () => {
       expect(result.success).toBe(true);
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
       expect(writtenContent).toContain('targetType: long-lived');
+      expect(writtenContent).toContain('dependencyStrategy: dependencies');
     });
 
     it('TC5: private:true + bin field yields dependencyStrategy:dependencies and targetType:short-lived', async () => {
