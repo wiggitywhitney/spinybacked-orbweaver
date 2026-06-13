@@ -454,6 +454,163 @@ describe('handleInit', () => {
       const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
       expect(writtenContent).toContain('targetType: long-lived');
     });
+
+    it('TC1: --yes mode auto-detects short-lived when bin field is an object', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn(async (path: string) => {
+          if (path.endsWith('package.json')) {
+            return JSON.stringify({
+              name: 'mycli',
+              bin: { mycli: './bin/cli.js' },
+              peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+            });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: short-lived');
+    });
+
+    it('TC1b: --yes mode auto-detects short-lived when bin field is a string', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn(async (path: string) => {
+          if (path.endsWith('package.json')) {
+            return JSON.stringify({
+              name: 'mycli',
+              bin: './bin/cli.js',
+              peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+            });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: short-lived');
+    });
+
+    it('TC2: --yes mode defaults to long-lived when no bin field present', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn(async (path: string) => {
+          if (path.endsWith('package.json')) {
+            return JSON.stringify({
+              name: 'myserver',
+              private: true,
+              peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+            });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: long-lived');
+    });
+
+    it('TC3: interactive mode shows [short-lived] hint and accepts empty input as short-lived when bin detected', async () => {
+      const promptCalls: string[] = [];
+      const deps = makeDeps({
+        readFile: vi.fn(async (path: string) => {
+          if (path.endsWith('package.json')) {
+            return JSON.stringify({
+              name: 'mycli',
+              bin: { mycli: './bin/cli.js' },
+              peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+            });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }),
+        prompt: vi.fn(async (question: string) => {
+          promptCalls.push(question);
+          return promptCalls.length === 1 ? '' : 'y';
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: false }, deps);
+
+      expect(result.success).toBe(true);
+      expect(promptCalls[0]).toContain('[short-lived]');
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: short-lived');
+    });
+
+    it('TC4a: empty bin:{} falls through to long-lived', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn(async (path: string) => {
+          if (path.endsWith('package.json')) {
+            return JSON.stringify({
+              name: 'myproject',
+              bin: {},
+              peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+            });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: long-lived');
+      expect(writtenContent).toContain('dependencyStrategy: dependencies');
+    });
+
+    it('TC4b: bin:null falls through to long-lived', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn(async (path: string) => {
+          if (path.endsWith('package.json')) {
+            return JSON.stringify({
+              name: 'myproject',
+              bin: null,
+              peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+            });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: long-lived');
+      expect(writtenContent).toContain('dependencyStrategy: dependencies');
+    });
+
+    it('TC5: private:true + bin field yields dependencyStrategy:dependencies and targetType:short-lived', async () => {
+      const deps = makeDeps({
+        readFile: vi.fn(async (path: string) => {
+          if (path.endsWith('package.json')) {
+            return JSON.stringify({
+              name: 'private-cli',
+              private: true,
+              bin: { 'private-cli': './bin/cli.js' },
+              peerDependencies: { '@opentelemetry/api': '^1.9.0' },
+            });
+          }
+          throw new Error(`ENOENT: ${path}`);
+        }),
+      });
+
+      const result = await handleInit({ projectDir: FIXTURES_DIR, yes: true }, deps);
+
+      expect(result.success).toBe(true);
+      const writtenContent = (deps.writeFile as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      expect(writtenContent).toContain('targetType: short-lived');
+      expect(writtenContent).toContain('dependencyStrategy: dependencies');
+    });
   });
 
   describe('globSync scoping', () => {
