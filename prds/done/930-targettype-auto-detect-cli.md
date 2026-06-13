@@ -2,7 +2,7 @@
 
 **GitHub Issue**: [#930](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/930)
 **Priority**: Medium
-**Status**: Open
+**Status**: Complete (2026-06-13)
 
 ---
 
