@@ -163,7 +163,9 @@ If you have the [CLI installed](#installation), run from your project directory:
 spiny-orb init
 ```
 
-This scans your project, auto-detects the schema directory and SDK init file, validates prerequisites, detects project type (service vs. distributable package), asks about your process lifecycle, and writes `spiny-orb.yaml`. Use `--yes` to skip prompts and accept all defaults.
+This scans your project, auto-detects the schema directory and SDK init file, validates prerequisites, detects project type (service vs. distributable package), and writes `spiny-orb.yaml`. It also checks `package.json`'s `bin` field: CLI apps (those with a `bin` entry) default `targetType` to `short-lived`; all others default to `long-lived`. The prompt shows the detected default and lets you override it. Use `--yes` to skip prompts and accept all detected defaults.
+
+Non-CLI project (no `bin` field detected):
 
 ```text
 $ spiny-orb init
@@ -174,14 +176,37 @@ Detecting SDK init file...
 Detecting Weaver schema...
 Validating Weaver schema...
 Detected project type: service (dependencyStrategy: dependencies)
-Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)?
-BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [long-lived]
+Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)? BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [long-lived]
 
 Configuration summary:
   schemaPath: semconv/
   sdkInitFile: src/instrumentation.js
   dependencyStrategy: dependencies
   targetType: long-lived
+
+Create spiny-orb.yaml with these settings? [y/N] y
+Writing spiny-orb.yaml...
+Created /path/to/your-project/spiny-orb.yaml
+```
+
+CLI project (`bin` field detected):
+
+```text
+$ spiny-orb init
+Checking prerequisites...
+Checking Weaver CLI...
+Checking port availability...
+Detecting SDK init file...
+Detecting Weaver schema...
+Validating Weaver schema...
+Detected project type: service (dependencyStrategy: dependencies)
+Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)? BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [short-lived]
+
+Configuration summary:
+  schemaPath: semconv/
+  sdkInitFile: src/instrumentation.js
+  dependencyStrategy: dependencies
+  targetType: short-lived
 
 Create spiny-orb.yaml with these settings? [y/N] y
 Writing spiny-orb.yaml...

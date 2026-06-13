@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- (2026-06-13) `spiny-orb init` now auto-detects CLI apps by checking `package.json`'s `bin` field and defaults `targetType` to `short-lived` when bin entries are present. Previously, `--yes` mode always hardcoded `long-lived`, causing `BatchSpanProcessor` to drop all spans on `process.exit()` for CLI targets. Interactive mode also benefits — the prompt now shows `[short-lived]` as the pre-filled hint when bin is detected, so users see the right default rather than always seeing `[long-lived]`.
+- (2026-06-13) `spiny-orb init` now auto-detects CLI apps by checking `package.json`'s `bin` field and defaults `targetType` to `short-lived` when bin entries are present. Previously, `--yes` mode always hardcoded `long-lived`, causing `BatchSpanProcessor` to drop all spans on `process.exit()` for CLI targets. Interactive mode also benefits — the prompt now shows `[short-lived]` as the pre-filled hint when bin is detected, so users see the right default rather than always seeing `[long-lived]`. The README init section was updated to explain the detection behavior and includes labeled examples showing what `spiny-orb init` looks like for both CLI and non-CLI projects.
 
 - (2026-06-12) Fixed SCH-003 type mismatch for `commit_story.git.diff_size` and `commit_story.summarize.monthly_summaries_generated` in commit-story-v2's `agent-extensions.yaml` — both were declared as `type: string` but hold integer counts/sizes. Fixed both to `type: int` (issue #928).
 

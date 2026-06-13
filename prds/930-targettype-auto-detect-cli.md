@@ -65,7 +65,7 @@ Both modes benefit: `--yes` mode auto-detects correctly; interactive mode shows 
 
   Acceptance: TC1–TC4 all pass. `npm test` passes.
 
-- [ ] **M2 — Update README to document auto-detection behavior**
+- [x] **M2 — Update README to document auto-detection behavior**
 
   **Step 0**: Read README lines 154–230 in full before writing anything. The README already documents `targetType` at line 210–212 and the `spiny-orb init` interactive flow at lines 158–189. Do not add a new section — update what exists.
 
