@@ -43,7 +43,7 @@ Both modes benefit: `--yes` mode auto-detects correctly; interactive mode shows 
 
 ## Milestones
 
-- [ ] **M1 — Auto-detect CLI target type in `init-handler.ts`**
+- [x] **M1 — Auto-detect CLI target type in `init-handler.ts`**
 
   One file requires changes: `src/interfaces/init-handler.ts`.
 

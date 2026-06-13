@@ -290,19 +290,29 @@ async function handleInit(options: InitOptions, deps: InitDeps): Promise<InitRes
 
   deps.stderr(`Detected project type: ${projectType} (dependencyStrategy: ${dependencyStrategy})`);
 
-  // Ask for targetType in interactive mode; default to long-lived in --yes mode
-  let targetType: 'short-lived' | 'long-lived' = 'long-lived';
+  // Auto-detect CLI apps: non-empty bin field → default targetType to short-lived
+  const binField = packageJson['bin'];
+  const hasBin =
+    (typeof binField === 'object' && binField !== null && !Array.isArray(binField) &&
+      Object.keys(binField as Record<string, unknown>).length > 0) ||
+    (Array.isArray(binField) && (binField as unknown[]).length > 0);
+
+  let targetType: 'short-lived' | 'long-lived' = hasBin ? 'short-lived' : 'long-lived';
   if (!yes) {
+    const hint = targetType === 'short-lived' ? '[short-lived]' : '[long-lived]';
     const answer = await deps.prompt(
       'Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)? ' +
-      'BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [long-lived] ',
+      `BatchSpanProcessor drops all spans if the process exits before the 5-second flush. ${hint} `,
     );
     const normalized = answer.trim().toLowerCase();
     if (normalized === 'short-lived') {
       targetType = 'short-lived';
-    } else if (normalized !== '' && normalized !== 'long-lived') {
-      warnings.push(`Unrecognized targetType "${answer.trim()}"; defaulting to long-lived.`);
+    } else if (normalized === 'long-lived') {
+      targetType = 'long-lived';
+    } else if (normalized !== '') {
+      warnings.push(`Unrecognized targetType "${answer.trim()}"; defaulting to ${targetType}.`);
     }
+    // Empty input → keep detected default (already set above)
   }
 
   // Interactive confirmation
