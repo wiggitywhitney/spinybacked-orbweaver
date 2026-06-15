@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-06-15) Closed issue #886 (NDS-003 method chain trivia — leading dot token false positive) as resolved-by-side-effect. Runs 20, 21, and 23 showed no recurrence; removed from ROADMAP.
+
 - (2026-06-15) Processed taze run-14 eval findings into four GitHub issues and updated the roadmap. Three blockers in short-term: checkpoint logic sets `stoppedByCheckpoint = true` even when baseline tests were already failing before instrumentation, which halted taze at file 5 of 33 (issue #934, fix in `dispatch.ts`); CDQ-006 isRecording guard generated without block body crashes ts-morph on the instrumented output (issue #933, prompt + syntax validation); spiny-orb should abort before the cost ceiling prompt when baseline tests fail rather than proceeding with rollback disabled (issue #935, depends on #934). One cosmetic: ~60 `[dep-graph] cycle detected` stderr lines should be gated behind `--verbose` (issue #936).
 
 - (2026-06-13) `spiny-orb init` now auto-detects CLI apps by checking `package.json`'s `bin` field and defaults `targetType` to `short-lived` when bin entries are present. Previously, `--yes` mode always hardcoded `long-lived`, causing `BatchSpanProcessor` to drop all spans on `process.exit()` for CLI targets. Interactive mode also benefits — the prompt now shows `[short-lived]` as the pre-filled hint when bin is detected, so users see the right default rather than always seeing `[long-lived]`. The README init section was updated to explain the detection behavior and includes labeled examples showing what `spiny-orb init` looks like for both CLI and non-CLI projects.
