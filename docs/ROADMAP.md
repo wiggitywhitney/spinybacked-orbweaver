@@ -27,9 +27,6 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
-- CDQ-006 isRecording guard generated without block body, crashing ts-morph ([issue #933](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/933)) — prompt tightening + syntax validation before ts-morph parse.
-- Gate `[dep-graph] cycle detected` messages behind `--verbose` ([issue #936](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/936)) — cosmetic; ~60 stderr lines on taze; thread verbose flag to `topoSort`.
-
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).

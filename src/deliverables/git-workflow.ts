@@ -22,6 +22,7 @@ export interface GitWorkflowOptions {
   dryRun: boolean;
   registryDir?: string;
   targetPath?: string;
+  verbose?: boolean;
 }
 
 /** Result of the git workflow. */
@@ -38,7 +39,7 @@ export interface GitWorkflowDeps {
     projectDir: string,
     config: AgentConfig,
     callbacks?: CoordinatorCallbacks,
-    deps?: CoordinateDeps,
+    deps?: Partial<CoordinateDeps>,
     targetPath?: string,
   ) => Promise<RunResult>;
   createBranch: (dir: string, branchName: string) => Promise<void>;
@@ -90,7 +91,7 @@ export async function runGitWorkflow(
   deps: GitWorkflowDeps,
   callerCallbacks?: Partial<CoordinatorCallbacks>,
 ): Promise<GitWorkflowResult> {
-  const { projectDir, config, noPr, dryRun, registryDir, targetPath } = options;
+  const { projectDir, config, noPr, dryRun, registryDir, targetPath, verbose } = options;
   const absoluteRegistryDir = registryDir ? resolve(projectDir, registryDir) : undefined;
   const branchName = generateBranchName();
 
@@ -145,7 +146,7 @@ export async function runGitWorkflow(
     },
   };
 
-  const runResult = await deps.coordinate(projectDir, config, callbacks, undefined, targetPath);
+  const runResult = await deps.coordinate(projectDir, config, callbacks, { verbose }, targetPath);
 
   // Wait for all per-file commits to complete before aggregate commit
   await commitChain;

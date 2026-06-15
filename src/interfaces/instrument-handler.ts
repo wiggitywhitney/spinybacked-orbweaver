@@ -70,7 +70,7 @@ export interface InstrumentDeps {
     projectDir: string,
     config: AgentConfig,
     callbacks?: CoordinatorCallbacks,
-    deps?: CoordinateDeps,
+    deps?: Partial<CoordinateDeps>,
     targetPath?: string,
   ) => Promise<RunResult>;
   gitWorkflow?: Partial<Omit<GitWorkflowDeps, 'coordinate'>>;
@@ -409,6 +409,7 @@ export async function handleInstrument(
         dryRun: options.dryRun,
         registryDir,
         targetPath: options.path,
+        verbose: options.verbose,
       },
       gitDeps,
       callbacks,

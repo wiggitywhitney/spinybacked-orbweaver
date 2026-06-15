@@ -288,12 +288,15 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **CDQ-001**: Every span MUST be closed — always call \`span.end()\` in a \`finally\` block, regardless of whether you used \`startActiveSpan\` or \`startSpan\`. \`@opentelemetry/api\` does not auto-close spans in either case. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. Do NOT add \`span.end()\` immediately before \`process.exit()\` calls — the \`finally\` block handles normal exit paths; \`process.exit()\` paths leak the span at runtime (known limitation). Report leaked span paths in \`notes\` as a known limitation.
 - **CDQ-005**: Prefer \`tracer.startActiveSpan()\` over \`tracer.startSpan()\`. \`startActiveSpan()\` automatically sets the span as active in context so child operations are correctly parented. Use \`startSpan()\` only when: (1) the span is a sibling and should not parent subsequent operations; (2) the span is fire-and-forget background work that must not affect the calling trace hierarchy; (3) you need explicit, independent lifecycle control over parallel spans; (4) the span's lifetime must extend beyond a single function scope and be passed to another function to close. If you use \`startSpan()\`, confirm in your reasoning which of these four scenarios applies.
-- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.filter\`, \`.reduce\`, \`.join\`, \`.flatMap\`, \`Object.keys()\`) with \`span.isRecording()\`. External source strings — values fetched from git output, API responses, file contents, or any source whose length is unbounded — should also be guarded, even when no computation is involved. When a tracer uses head-based sampling, non-recording spans are no-ops — computations inside \`setAttribute\` still run even when the span will be dropped. Pattern:
+- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.filter\`, \`.reduce\`, \`.join\`, \`.flatMap\`, \`Object.keys()\`) with \`span.isRecording()\`. External source strings — values fetched from git output, API responses, file contents, or any source whose length is unbounded — should also be guarded, even when no computation is involved. When a tracer uses head-based sampling, non-recording spans are no-ops — computations inside \`setAttribute\` still run even when the span will be dropped. The \`isRecording()\` guard MUST use a block body with curly braces — bare statement form is forbidden. Pattern:
   \`\`\`javascript
   // Wrong — computation runs even when span is not recording
   span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
 
-  // Correct
+  // Wrong — bare statement form (Do NOT write this — causes downstream parse errors)
+  if (span.isRecording()) span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
+
+  // Correct — block body with curly braces is required
   if (span.isRecording()) {
     span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
   }

@@ -67,7 +67,7 @@ export function buildDepGraph(filePaths: string[]): DepGraph {
  * the BFS, a cycle exists. One edge is removed (logged to stderr) and Kahn's
  * restarts. Throws if restarts exceed the original edge count.
  */
-export function topoSort(graph: DepGraph): string[] {
+export function topoSort(graph: DepGraph, verbose?: boolean): string[] {
   // Deep-copy edges so cycle-breaking mutations don't affect the original graph
   let workingEdges = new Map<string, string[]>(
     [...graph.edges].map(([k, v]) => [k, [...v]]),
@@ -96,7 +96,9 @@ export function topoSort(graph: DepGraph): string[] {
 
     const target = cycleEdges[0]!;
     workingEdges.set(cycleNode, cycleEdges.slice(1));
-    process.stderr.write(`[dep-graph] cycle detected: removed edge ${cycleNode} → ${target}\n`);
+    if (verbose) {
+      process.stderr.write(`[dep-graph] cycle detected: removed edge ${cycleNode} → ${target}\n`);
+    }
     restartCount++;
   }
 
