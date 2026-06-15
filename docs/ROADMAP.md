@@ -27,9 +27,6 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
-- Fix checkpoint stop on pre-existing test failure ([issue #934](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/934)) — `stoppedByCheckpoint` fires incorrectly when `baselineTestPassed === false`; single-file fix in `dispatch.ts`.
-- Abort before instrumentation when baseline tests already fail ([issue #935](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/935)) — currently warns and continues; should halt before cost ceiling with actionable message. Sequenced after #934.
-
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
