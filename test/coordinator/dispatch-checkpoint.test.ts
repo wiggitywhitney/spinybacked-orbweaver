@@ -743,7 +743,7 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
       expect(results.every(r => r.status === 'failed')).toBe(true);
     });
 
-    it('stops processing when checkpoint test fails with baseline already failing', async () => {
+    it('continues processing when checkpoint test fails with baseline already failing', async () => {
       const testRunCount = { value: 0 };
       const config = makeConfig({ schemaCheckpointInterval: 2, testCommand: 'vitest run' });
       const files = await Promise.all([
@@ -762,12 +762,11 @@ describe('dispatchFiles with schema checkpoints — real Weaver integration', ()
         baselineTestPassed: false,
       });
 
-      // With baseline already failing, no rollback — falls through to stop behavior
-      expect(testRunCount.value).toBe(1);
-      expect(results).toHaveLength(2);
-      // Files not rolled back — they remain successful
-      expect(results[0].status).toBe('success');
-      expect(results[1].status).toBe('success');
+      // Baseline already failing — test failure is pre-existing, not a regression.
+      // All files processed; no rollback; both checkpoints fire.
+      expect(results).toHaveLength(4);
+      expect(testRunCount.value).toBe(2);
+      expect(results.every(r => r.status === 'success')).toBe(true);
     });
 
     it('skips test run when testCommand is a placeholder', async () => {

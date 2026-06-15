@@ -358,6 +358,40 @@ export async function coordinate(
     depGraphWarnings.push(`Dependency graph ordering failed (degraded to alphabetical): ${message}`);
   }
 
+  // Step 2c: Baseline test check — abort before the cost ceiling if tests are already failing.
+  // Running instrumentation against a broken test suite wastes tokens on work that checkpoint
+  // rollback would undo, and produces misleading checkpoint failures that look like regressions.
+  // Dry-run skips this — files are reverted, test results would be meaningless.
+  let baselineTestPassed: boolean | undefined;
+  let checkpointTestRunner: ((pd: string, tc: string) => Promise<{ passed: boolean; error?: string }>) | undefined;
+  if (!config.dryRun) {
+    let projectHasTests = false;
+    try {
+      projectHasTests = await detectTestSuite(config.testCommand, projectDir);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      checkpointTestWarnings.push(`Checkpoint test suite detection failed (degraded): ${message}`);
+    }
+    if (projectHasTests) {
+      checkpointTestRunner = runTests;
+      try {
+        const baselineResult = await runTests(projectDir, config.testCommand);
+        if (!baselineResult.passed) {
+          const detail = baselineResult.error ? `\n\n${baselineResult.error}` : '';
+          throw new CoordinatorAbortError(
+            `Target project's tests are already failing before instrumentation begins. ` +
+            `Fix the failing tests and retry.${detail}`,
+          );
+        }
+        baselineTestPassed = true;
+      } catch (err) {
+        if (err instanceof CoordinatorAbortError) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        checkpointTestWarnings.push(`Baseline test recording failed (degraded): ${message}`);
+      }
+    }
+  }
+
   // Step 3: Compute cost ceiling
   const costCeiling = await computeCostCeiling(filePaths, config.maxTokensPerFile, statFn);
 
@@ -397,40 +431,6 @@ export async function coordinate(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     schemaDiffWarnings.push(`Baseline snapshot failed (degraded): ${message}`);
-  }
-
-  // Step 4d: Detect test suite for checkpoint test execution (degrade and warn on failure)
-  // Dry-run skips checkpoint tests — files are reverted, test results would be meaningless
-  let checkpointTestRunner: ((pd: string, tc: string) => Promise<{ passed: boolean; error?: string }>) | undefined;
-  if (!config.dryRun) {
-    try {
-      const projectHasTests = await detectTestSuite(config.testCommand, projectDir);
-      if (projectHasTests) {
-        checkpointTestRunner = runTests;
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      checkpointTestWarnings.push(`Checkpoint test suite detection failed (degraded): ${message}`);
-    }
-  }
-
-  // Step 4e: Record baseline test results for checkpoint rollback (degrade and warn on failure)
-  // If the project's tests already fail before instrumentation, checkpoint test failures
-  // should not trigger rollback (can't distinguish instrumentation breakage from pre-existing)
-  let baselineTestPassed: boolean | undefined;
-  if (checkpointTestRunner) {
-    try {
-      const baselineResult = await runTests(projectDir, config.testCommand);
-      baselineTestPassed = baselineResult.passed;
-      if (!baselineResult.passed) {
-        checkpointTestWarnings.push(
-          'Baseline test suite has pre-existing failures — checkpoint test rollback disabled',
-        );
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      checkpointTestWarnings.push(`Baseline test recording failed (degraded): ${message}`);
-    }
   }
 
   // Step 4f: Resolve canonical tracer name (degrade and warn on failure)

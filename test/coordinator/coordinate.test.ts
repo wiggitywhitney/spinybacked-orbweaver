@@ -211,6 +211,51 @@ describe('coordinate', () => {
 
       expect(dispatchFiles).not.toHaveBeenCalled();
     });
+
+    it('aborts with CoordinatorAbortError when baseline tests fail before instrumentation', async () => {
+      const deps = makeDeps({
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({
+          passed: false,
+          error: 'FAIL test/resolves.test.ts > provenanceDowngraded\n  AssertionError: expected ...',
+        }),
+      });
+
+      await expect(coordinate('/project', makeConfig({ confirmEstimate: false }), undefined, deps))
+        .rejects.toThrow(CoordinatorAbortError);
+    });
+
+    it('abort message when baseline fails names the failing tests and instructs user to fix', async () => {
+      const deps = makeDeps({
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({
+          passed: false,
+          error: 'FAIL test/resolves.test.ts > provenanceDowngraded',
+        }),
+      });
+
+      try {
+        await coordinate('/project', makeConfig({ confirmEstimate: false }), undefined, deps);
+        expect.unreachable('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CoordinatorAbortError);
+        const abortErr = err as CoordinatorAbortError;
+        expect(abortErr.message).toContain('already failing');
+        expect(abortErr.message).toContain('provenanceDowngraded');
+      }
+    });
+
+    it('does not abort and does not call dispatchFiles when no test suite is present', async () => {
+      const dispatchFiles = vi.fn().mockResolvedValue([]);
+      const deps = makeDeps({
+        hasTestSuite: vi.fn().mockResolvedValue(false),
+        dispatchFiles,
+      });
+
+      await coordinate('/project', makeConfig({ confirmEstimate: false }), undefined, deps);
+
+      expect(dispatchFiles).toHaveBeenCalled();
+    });
   });
 
   describe('degrade and continue — isolated failures do not stop the run', () => {
@@ -878,22 +923,18 @@ describe('coordinate', () => {
       expect(options.baselineTestPassed).toBe(true);
     });
 
-    it('passes baselineTestPassed=false when baseline tests fail', async () => {
-      const dispatchFiles = vi.fn().mockResolvedValue([
-        makeSuccessResult('/project/a.js'),
-      ]);
+    it('aborts before dispatch when baseline tests fail', async () => {
+      const dispatchFiles = vi.fn();
       const deps = makeDeps({
         dispatchFiles,
         hasTestSuite: vi.fn().mockResolvedValue(true),
         executeProjectTests: vi.fn().mockResolvedValue({ passed: false, error: 'pre-existing failures' }),
       });
-      const config = makeConfig({ testCommand: 'vitest run' });
+      const config = makeConfig({ testCommand: 'vitest run', confirmEstimate: false });
 
-      const result = await coordinate('/project', config, undefined, deps);
-
-      const options = dispatchFiles.mock.calls[0][4];
-      expect(options.baselineTestPassed).toBe(false);
-      expect(result.warnings.some((w: string) => w.includes('pre-existing failures'))).toBe(true);
+      await expect(coordinate('/project', config, undefined, deps))
+        .rejects.toThrow(CoordinatorAbortError);
+      expect(dispatchFiles).not.toHaveBeenCalled();
     });
 
     it('does not record baseline when no test suite detected', async () => {
@@ -1096,19 +1137,6 @@ describe('coordinate', () => {
       expect(result.warnings.some((w: string) => w.includes('End-of-run test suite failed'))).toBe(true);
     });
 
-    it('does not roll back when baseline tests failed', async () => {
-      const deps = makeRollbackDeps({
-        executeProjectTests: vi.fn().mockResolvedValue({ passed: false, error: 'pre-existing' }),
-      });
-      const config = makeConfig({ testCommand: 'vitest run' });
-
-      const result = await coordinate('/project', config, undefined, deps);
-
-      // No rollback — can't distinguish instrumentation breakage from pre-existing failures
-      expect(result.filesSucceeded).toBe(2);
-      expect(deps.writeFileForRollback).not.toHaveBeenCalled();
-    });
-
     it('skips end-of-run rollback in dry-run mode', async () => {
       const writeFileForRollback = vi.fn();
       const deps = makeRollbackDeps({ writeFileForRollback });
@@ -1153,6 +1181,7 @@ describe('coordinate', () => {
     it('warns when live-check runs against all-failed files (degraded)', async () => {
       const deps = makeDeps({
         hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
         dispatchFiles: vi.fn().mockImplementation(async (filePaths: string[]) => {
           return filePaths.map(fp => makeFailedResult(fp));
         }),
@@ -1174,6 +1203,7 @@ describe('coordinate', () => {
     it('warns when live-check has partial file failures', async () => {
       const deps = makeDeps({
         hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: true }),
         dispatchFiles: vi.fn().mockImplementation(async (filePaths: string[]) => {
           return [
             makeSuccessResult(filePaths[0]),
