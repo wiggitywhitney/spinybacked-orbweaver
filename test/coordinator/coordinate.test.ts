@@ -213,6 +213,7 @@ describe('coordinate', () => {
     });
 
     it('aborts with CoordinatorAbortError when baseline tests fail before instrumentation', async () => {
+      const onCostCeilingReady = vi.fn().mockResolvedValue(true);
       const deps = makeDeps({
         hasTestSuite: vi.fn().mockResolvedValue(true),
         executeProjectTests: vi.fn().mockResolvedValue({
@@ -221,8 +222,11 @@ describe('coordinate', () => {
         }),
       });
 
-      await expect(coordinate('/project', makeConfig({ confirmEstimate: false }), undefined, deps))
-        .rejects.toThrow(CoordinatorAbortError);
+      await expect(
+        coordinate('/project', makeConfig({ confirmEstimate: true }), { onCostCeilingReady }, deps),
+      ).rejects.toThrow(CoordinatorAbortError);
+
+      expect(onCostCeilingReady).not.toHaveBeenCalled();
     });
 
     it('abort message when baseline fails names the failing tests and instructs user to fix', async () => {
@@ -245,7 +249,7 @@ describe('coordinate', () => {
       }
     });
 
-    it('does not abort and does not call dispatchFiles when no test suite is present', async () => {
+    it('does not abort and calls dispatchFiles when no test suite is present', async () => {
       const dispatchFiles = vi.fn().mockResolvedValue([]);
       const deps = makeDeps({
         hasTestSuite: vi.fn().mockResolvedValue(false),

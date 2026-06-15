@@ -377,7 +377,8 @@ export async function coordinate(
       try {
         const baselineResult = await runTests(projectDir, config.testCommand);
         if (!baselineResult.passed) {
-          const detail = baselineResult.error ? `\n\n${baselineResult.error}` : '';
+          const failureDetail = (baselineResult.output ?? baselineResult.error)?.trim();
+          const detail = failureDetail ? `\n\n${failureDetail}` : '';
           throw new CoordinatorAbortError(
             `Target project's tests are already failing before instrumentation begins. ` +
             `Fix the failing tests and retry.${detail}`,
