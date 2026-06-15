@@ -1316,6 +1316,34 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     expect(result.validationAttempts).toBe(1);
     expect(validateFile).toHaveBeenCalledTimes(1);
   });
+
+  it('block-form isRecording guard with line comment before brace is not treated as bare', async () => {
+    // `if (span.isRecording()) // note\n{ ... }` is block-form — must not trigger the bare guard retry.
+    const blockWithLineComment = makeInstrumentationOutput({
+      instrumentedCode: 'if (span.isRecording()) // note\n{\n  span.setAttribute("key", "val");\n}\n',
+      tokenUsage: attempt1Tokens,
+    });
+
+    const validateFile = vi.fn().mockResolvedValue(makePassingValidation(testFilePath));
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: vi.fn().mockResolvedValue({
+        success: true,
+        output: blockWithLineComment,
+        conversationContext: mockConversationContext,
+      } as InstrumentFileResult),
+      validateFile,
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
+    );
+
+    // Block-form with line comment: no bare-guard retry, validateFile called once on first attempt
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(1);
+    expect(validateFile).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {
