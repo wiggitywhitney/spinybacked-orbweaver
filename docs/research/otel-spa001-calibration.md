@@ -15,7 +15,7 @@
 
 ### Core question
 
-SPA-001 defines a SHOULD threshold of ≤10 INTERNAL spans per trace. commit-story-v2 has exceeded this in every eval run (runs 15–23). Is the threshold correct for a CLI pipeline workload? Where does the fix belong — eval repo or spiny-orb?
+SPA-001 defines a SHOULD threshold of ≤10 INTERNAL spans per trace. commit-story-v2 has exceeded this in every completed eval run from run-15 onward (runs 15–21 and run 23; run 22 was skipped). Is the threshold correct for a CLI pipeline workload? Where does the fix belong — eval repo or spiny-orb?
 
 ### The spec rationale and its scope
 
@@ -133,7 +133,7 @@ Proposed change to `score-is.js` (search for `'SPA-001'` to locate the block):
 // with sequential stages (git collection, AI analysis, journal generation, etc.) naturally
 // produce 15-30 INTERNAL spans per invocation — each representing a distinct, observable
 // operation, not redundant sub-spans. Threshold calibrated against commit-story-v2 runs
-// 15-23 (range: 11-37, median ~20). Spec commit: 52c14ba.
+// 15-21 and 23 (range: 11-37, median 21). Spec commit: 52c14ba.
 const SPA001_INTERNAL_SPAN_LIMIT = 30;
 ```
 
