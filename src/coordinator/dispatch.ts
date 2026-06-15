@@ -829,8 +829,15 @@ export async function dispatchFiles(
             filesSinceLastCheckpoint = 0;
             locSinceLastCheckpoint = 0;
             lastCheckpointResultIndex = results.length;
+          } else if (testFailedAtCheckpoint && options.baselineTestPassed === false) {
+            // Test failed but baseline was already failing before instrumentation — not a
+            // regression introduced by the agent. Continue without rollback.
+            checkpointWindowFiles.length = 0;
+            filesSinceLastCheckpoint = 0;
+            locSinceLastCheckpoint = 0;
+            lastCheckpointResultIndex = results.length;
           } else {
-            // Schema failure or baseline-already-failing — original stop/continue behavior
+            // Schema failure or unknown baseline state — apply stop/continue logic
             if (shouldContinue !== true) {
               stoppedByCheckpoint = true;
             } else {

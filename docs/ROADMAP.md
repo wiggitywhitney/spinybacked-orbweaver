@@ -27,8 +27,8 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
-- SCH-003: integer-as-string type mismatch on count/size attributes ([issue #928](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/928)) — run-23 findings; fix is `agent-extensions.yaml` type corrections plus prompt guidance. Small.
-- SCH-002: improve output-count preference and near-synonym recovery ([issue #925](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/925)) — run-23 findings; fix is prompt guidance in `src/agent/prompt.ts`. Small.
+- CDQ-006 isRecording guard generated without block body, crashing ts-morph ([issue #933](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/933)) — prompt tightening + syntax validation before ts-morph parse.
+- Gate `[dep-graph] cycle detected` messages behind `--verbose` ([issue #936](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/936)) — cosmetic; ~60 stderr lines on taze; thread verbose flag to `topoSort`.
 
 ## Medium-term
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files.
