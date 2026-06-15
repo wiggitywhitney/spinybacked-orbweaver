@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-06-15) Fixed checkpoint dispatch incorrectly halting the run when a baseline-already-failing test suite fails again at a checkpoint. The `else` branch in `dispatch.ts` conflated schema failures with test failures on a pre-broken baseline; the new `else if (testFailedAtCheckpoint && baselineTestPassed === false)` case now continues processing and resets the checkpoint window without setting `stoppedByCheckpoint`. This was the root cause of taze run-14 stopping at file 5 of 33 (issue #934).
+
+- (2026-06-15) `coordinate()` now aborts with `CoordinatorAbortError` before the cost ceiling prompt when the target project's tests are already failing at the start of a run. Previously it degraded-and-continued with rollback disabled, wasting tokens on instrumentation the checkpoints would undo and producing misleading failures. The early check runs in a new Step 2c, before cost ceiling computation, so users see a clear message naming the failing tests and are told to fix them before retrying (issue #935).
+
 ### Added
 
 - (2026-06-15) Processed taze run-14 eval findings into four GitHub issues and updated the roadmap. Three blockers in short-term: checkpoint logic sets `stoppedByCheckpoint = true` even when baseline tests were already failing before instrumentation, which halted taze at file 5 of 33 (issue #934, fix in `dispatch.ts`); CDQ-006 isRecording guard generated without block body crashes ts-morph on the instrumented output (issue #933, prompt + syntax validation); spiny-orb should abort before the cost ceiling prompt when baseline tests fail rather than proceeding with rollback disabled (issue #935, depends on #934). One cosmetic: ~60 `[dep-graph] cycle detected` stderr lines should be gated behind `--verbose` (issue #936).
