@@ -1288,6 +1288,34 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
     // validateFile is not called on the bad attempt — the pre-check short-circuits before it
     expect(validateFile).toHaveBeenCalledTimes(1);
   });
+
+  it('block-form isRecording guard with inline comment before brace is not treated as bare', async () => {
+    // `if (span.isRecording()) /* comment */ { ... }` is block-form — must not trigger the bare guard retry.
+    const blockWithComment = makeInstrumentationOutput({
+      instrumentedCode: 'if (span.isRecording()) /* note */ {\n  span.setAttribute("key", "val");\n}\n',
+      tokenUsage: attempt1Tokens,
+    });
+
+    const validateFile = vi.fn().mockResolvedValue(makePassingValidation(testFilePath));
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: vi.fn().mockResolvedValue({
+        success: true,
+        output: blockWithComment,
+        conversationContext: mockConversationContext,
+      } as InstrumentFileResult),
+      validateFile,
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
+    );
+
+    // Block-form with comment: no bare-guard retry, validateFile called once on first attempt
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(1);
+    expect(validateFile).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('instrumentWithRetry — fresh regeneration (Milestone 5)', () => {

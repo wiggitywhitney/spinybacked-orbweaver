@@ -776,7 +776,9 @@ async function executeRetryLoop(
 
     // Pre-check: bare isRecording guard `if (span.isRecording()) stmt;` without a block body
     // causes downstream ts-morph parse failures. Catch it before the full validation chain.
-    const BARE_IS_RECORDING = /if\s*\(\s*\w+\.isRecording\(\)\s*\)\s*(?!\s*\{)/;
+    // Allow optional whitespace, block comments (/* */), and line comments (//)
+    // before the opening brace so block-form guards with inline comments are not false-positives.
+    const BARE_IS_RECORDING = /if\s*\(\s*\w+\.isRecording\(\)\s*\)\s*(?!(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*)*\{)/;
     const validation = BARE_IS_RECORDING.test(output.instrumentedCode)
       ? {
           passed: false,
