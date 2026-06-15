@@ -1,7 +1,7 @@
 // ABOUTME: Tests for instrumentWithRetry — single-attempt, token budget, multi-turn fix, fresh regen, oscillation, function-level fallback.
 // ABOUTME: Milestones 2-6, milestone 7, NDS-003 repeat escalation (#495), and M4 auto-registration wiring (PRD #902).
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, existsSync, unlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -1253,6 +1253,40 @@ describe('instrumentWithRetry — multi-turn fix (Milestone 4)', () => {
       package: '@opentelemetry/instrumentation-express',
       importName: 'ExpressInstrumentation',
     });
+  });
+
+  it('bare isRecording guard triggers retry without calling validateFile on the bad attempt', async () => {
+    // Bare form `if (span.isRecording()) stmt;` must be caught before validateFile
+    // to avoid ts-morph parse failures downstream.
+    let callCount = 0;
+    const bareOutput = makeInstrumentationOutput({
+      instrumentedCode: 'if (span.isRecording()) span.setAttribute("key", "val");\n',
+      tokenUsage: attempt1Tokens,
+    });
+    const cleanOutput = makeInstrumentationOutput({
+      instrumentedCode: 'if (span.isRecording()) {\n  span.setAttribute("key", "val");\n}\n',
+      tokenUsage: attempt2Tokens,
+    });
+
+    const validateFile = vi.fn().mockResolvedValue(makePassingValidation(testFilePath));
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) return { success: true, output: bareOutput, conversationContext: mockConversationContext } as InstrumentFileResult;
+        return { success: true, output: cleanOutput } as InstrumentFileResult;
+      },
+      validateFile,
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.validationAttempts).toBe(2);
+    // validateFile is not called on the bad attempt — the pre-check short-circuits before it
+    expect(validateFile).toHaveBeenCalledTimes(1);
   });
 });
 

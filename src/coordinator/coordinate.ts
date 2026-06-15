@@ -140,6 +140,8 @@ export interface CoordinateDeps {
    * Runs in parallel with checkRegistryHealth via Promise.all.
    */
   retryTestSuite?: (projectDir: string, testCommand: string) => Promise<{ passed: boolean }>;
+  /** When true, log dep-graph cycle messages to stderr. */
+  verbose?: boolean;
 }
 
 /**
@@ -262,7 +264,7 @@ export async function coordinate(
   projectDir: string,
   config: AgentConfig,
   callbacks?: CoordinatorCallbacks,
-  deps?: CoordinateDeps,
+  deps?: Partial<CoordinateDeps>,
   targetPath?: string,
 ): Promise<RunResult> {
   const checkPrereqs = deps?.checkPrerequisites ?? defaultCheckPrerequisites;
@@ -352,7 +354,7 @@ export async function coordinate(
   // instrumentation picture of its dependencies before it runs.
   // Falls back to alphabetical order from discovery if graph construction fails.
   try {
-    filePaths = topoSort(buildDepGraph(filePaths));
+    filePaths = topoSort(buildDepGraph(filePaths), deps?.verbose);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     depGraphWarnings.push(`Dependency graph ordering failed (degraded to alphabetical): ${message}`);

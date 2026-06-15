@@ -1,7 +1,7 @@
 // ABOUTME: Unit tests for buildDepGraph and topoSort — dep graph construction and topological ordering.
 // ABOUTME: Covers happy-path chain, external import exclusion, leaf nodes, cycle breaking, and alphabetical tiebreaker.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
 import { buildDepGraph, topoSort } from '../../src/coordinator/dep-graph.ts';
 import type { DepGraph } from '../../src/coordinator/dep-graph.ts';
@@ -73,6 +73,38 @@ describe('topoSort', () => {
     expect(order).toHaveLength(2);
     expect(order).toContain(cycleA);
     expect(order).toContain(cycleB);
+  });
+
+  it('cycle: does not write to stderr when verbose is absent', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const cycleA = '/virtual/a.ts';
+    const cycleB = '/virtual/b.ts';
+    const graph: DepGraph = {
+      nodes: [cycleA, cycleB],
+      edges: new Map([
+        [cycleA, [cycleB]],
+        [cycleB, [cycleA]],
+      ]),
+    };
+    topoSort(graph);
+    expect(stderrSpy).not.toHaveBeenCalledWith(expect.stringContaining('[dep-graph]'));
+    stderrSpy.mockRestore();
+  });
+
+  it('cycle: writes cycle message to stderr when verbose is true', () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const cycleA = '/virtual/a.ts';
+    const cycleB = '/virtual/b.ts';
+    const graph: DepGraph = {
+      nodes: [cycleA, cycleB],
+      edges: new Map([
+        [cycleA, [cycleB]],
+        [cycleB, [cycleA]],
+      ]),
+    };
+    topoSort(graph, true);
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('[dep-graph] cycle detected'));
+    stderrSpy.mockRestore();
   });
 
   it('alphabetical tiebreaker: two unrelated files are sorted alphabetically', () => {

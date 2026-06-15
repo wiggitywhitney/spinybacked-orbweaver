@@ -162,7 +162,7 @@ describe('handleInstrument', () => {
         '/test/project',
         expect.objectContaining({ confirmEstimate: true }),
         expect.any(Object),
-        undefined,
+        expect.objectContaining({ verbose: false }),
         './src',
       );
     });
@@ -174,7 +174,7 @@ describe('handleInstrument', () => {
         expect.any(String),
         expect.objectContaining({ confirmEstimate: false }),
         expect.any(Object),
-        undefined,
+        expect.objectContaining({ verbose: false }),
         './src',
       );
     });
@@ -186,7 +186,7 @@ describe('handleInstrument', () => {
         expect.any(String),
         expect.objectContaining({ dryRun: true }),
         expect.any(Object),
-        undefined,
+        expect.objectContaining({ verbose: false }),
         './src',
       );
     });
@@ -198,7 +198,7 @@ describe('handleInstrument', () => {
         expect.any(String),
         expect.any(Object),
         expect.any(Object),
-        undefined,
+        expect.objectContaining({ verbose: false }),
         'src/routes',
       );
     });

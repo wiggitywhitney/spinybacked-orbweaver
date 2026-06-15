@@ -774,17 +774,36 @@ async function executeRetryLoop(
       parseResolvedRegistry(autoRegistrationResolvedSchema),
     );
 
-    // Run validation chain — pass agent-declared schema extensions so SCH-001
-    // accepts span names the agent declared as new (avoids chicken-and-egg rejection)
-    const validation = await validateFileFn({
-      originalCode,
-      instrumentedCode: output.instrumentedCode,
-      filePath,
-      config: output.schemaExtensions.length > 0
-        ? { ...validationConfigForAttempt, declaredSpanExtensions: output.schemaExtensions }
-        : validationConfigForAttempt,
-      provider,
-    });
+    // Pre-check: bare isRecording guard `if (span.isRecording()) stmt;` without a block body
+    // causes downstream ts-morph parse failures. Catch it before the full validation chain.
+    const BARE_IS_RECORDING = /if\s*\(\s*\w+\.isRecording\(\)\s*\)\s*(?!\s*\{)/;
+    const validation = BARE_IS_RECORDING.test(output.instrumentedCode)
+      ? {
+          passed: false,
+          tier1Results: [],
+          tier2Results: [],
+          blockingFailures: [{
+            ruleId: 'CDQ-006',
+            passed: false,
+            filePath,
+            lineNumber: null,
+            message: 'isRecording() guard must use a block body — `if (span.isRecording()) { ... }`. The bare statement form `if (span.isRecording()) stmt;` causes downstream parse errors.',
+            tier: 2 as const,
+            blocking: true,
+          }],
+          advisoryFindings: [],
+        }
+      // Run validation chain — pass agent-declared schema extensions so SCH-001
+      // accepts span names the agent declared as new (avoids chicken-and-egg rejection)
+      : await validateFileFn({
+          originalCode,
+          instrumentedCode: output.instrumentedCode,
+          filePath,
+          config: output.schemaExtensions.length > 0
+            ? { ...validationConfigForAttempt, declaredSpanExtensions: output.schemaExtensions }
+            : validationConfigForAttempt,
+          provider,
+        });
 
     lastValidation = validation;
     errorProgression.push(summarizeErrors(validation));
