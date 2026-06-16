@@ -165,7 +165,9 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 ### M4: Discuss traces↔logs findings with Whitney and file any resulting issues/PRDs
 
-**Step 0: Read `docs/research/traces-logs-correlation.md` in full before beginning. This file was produced by M3 and gates this milestone. Do not proceed without reading it.**
+**Step 0: Read the following before beginning:**
+- `docs/research/traces-logs-correlation.md` — produced by M3; gates this milestone. Do not proceed without reading it.
+- `docs/demo/datadog-setup-baseline.md` — current OTel→Datadog infrastructure state. The chosen path is **pure OTel via Datadog Exporter** (decided in M4 conversation 2026-06-16). The existing `otelcol-contrib` setup already handles traces; the demo implementation adds logs and metrics pipelines to the same config.
 
 **Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
 
@@ -193,7 +195,10 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 ### M5: Research — metrics ↔ logs correlation
 
-**Step 0:** Read related research before starting: [Research: OTel Semantic Conventions for Log Record Attributes](../docs/research/otel-semconv-log-attributes.md) — covers deployment.environment deprecation, service.name/service.version stable constants, and resource attribute-to-Datadog-tag mappings. Step 3 below substantially overlaps with this file; build on it rather than re-researching from scratch. Also read: [Research: Pure OTel vs Datadog-Native Traces-to-Logs Correlation](../docs/research/otel-vs-native-logs-correlation.md) — covers the pure OTel vs Datadog-native UI parity question for logs (step 4 below asks the same question for metrics; use the logs findings as a baseline).
+**Step 0:** Read related research before starting:
+- [Research: OTel Semantic Conventions for Log Record Attributes](../docs/research/otel-semconv-log-attributes.md) — covers deployment.environment deprecation, service.name/service.version stable constants, and resource attribute-to-Datadog-tag mappings. Step 3 below substantially overlaps with this file; build on it rather than re-researching from scratch.
+- [Research: Pure OTel vs Datadog-Native Traces-to-Logs Correlation](../docs/research/otel-vs-native-logs-correlation.md) — covers the pure OTel vs Datadog-native UI parity question for logs (step 4 below asks the same question for metrics; use the logs findings as a baseline).
+- `docs/demo/datadog-setup-baseline.md` — current OTel→Datadog infrastructure state, including what is already configured and what is not yet set up. Read this to understand the existing baseline before assessing what metrics-to-logs correlation would require. The path decision for metrics-to-logs has not been made — that is M6's job. The traces-to-logs path (pure OTel via Datadog Exporter, decided in M4) is noted for context only.
 
 This milestone produces `docs/research/metrics-logs-correlation.md`. Do not create any GitHub issues in this milestone; that is M6's job.
 
@@ -227,7 +232,9 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 ### M6: Discuss metrics↔logs findings with Whitney and file any resulting issues/PRDs
 
-**Step 0: Read `docs/research/metrics-logs-correlation.md` in full before beginning. This file was produced by M5 and gates this milestone. Do not proceed without reading it.**
+**Step 0: Read the following before beginning:**
+- `docs/research/metrics-logs-correlation.md` — produced by M5; gates this milestone. Do not proceed without reading it.
+- `docs/demo/datadog-setup-baseline.md` — current OTel→Datadog infrastructure state. The chosen path is pure OTel via Datadog Exporter. The implementation issue filed from this milestone should reference this baseline so the implementer knows what already exists.
 
 **Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
 
@@ -255,10 +262,11 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 ### M7: Demo target evaluation
 
-**Step 0: Read all three research documents before beginning:**
+**Step 0: Read all of the following before beginning:**
 - `docs/research/traces-metrics-correlation.md` (produced by M1)
 - `docs/research/traces-logs-correlation.md` (produced by M3)
 - `docs/research/metrics-logs-correlation.md` (produced by M5)
+- `docs/demo/datadog-setup-baseline.md` — current OTel→Datadog infrastructure state and chosen demo path (pure OTel via Datadog Exporter). The "setup work remains" section in step 7 should be framed as additions to the existing `otelcol-contrib` config, not from scratch.
 
 All three files must exist before beginning this milestone. If any are missing, stop and complete the corresponding research milestone (M1, M3, or M5) before proceeding.
 
@@ -284,16 +292,16 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
    - Primary demo target with reasoning
    - Whether a second target adds value, and if so which one and why
    - What the Datadog UI would show for each signal (traces, metrics, logs) for the chosen target(s)
-   - What setup work remains — structured logging changes, schema additions, Datadog configuration — described for BOTH correlation paths (pure OTel and Datadog-proprietary) since the path has not yet been chosen
-   - A "Next step" section explicitly stating: "A demo setup issue or PRD should be filed by a human after reviewing this evaluation and the three research documents, then choosing a correlation path (pure OTel vs Datadog-proprietary)."
+   - What setup work remains — structured logging changes, schema additions, Datadog configuration — described for the **pure OTel via Datadog Exporter** path (chosen in M4). See `docs/demo/datadog-setup-baseline.md` for what already exists; frame setup work as additions to that baseline.
+   - A "Next step" section explicitly stating: "A demo setup issue or PRD should be filed by a human after reviewing this evaluation and the three research documents."
 
 8. Update `talk/observability-triangle-story-points.md` with the full triangle demo arc from this evaluation: fill in the "The Full Triangle Demo" section with the confirmed demo target(s), the narrative sequence, and what each pillar shows in the Datadog UI. Update sections 13 and 14 of `talk/demo-flow-observability-triangle.md` with the full triangle flow and closing. (Updated per Decision 2026-06-16: story documents updated in same commit as progress update.)
 
 9. Update `PROGRESS.md` with a summary of findings.
 
 **Constraints:**
-- Do NOT file a demo setup issue or PRD. That is for Whitney to do after choosing a path.
-- Do NOT recommend a correlation path. Describe setup work for both paths.
+- Do NOT file a demo setup issue or PRD. That is for Whitney to do after reviewing these findings.
+- The correlation path is **pure OTel via Datadog Exporter** (decided in M4). Do NOT describe setup work for dd-trace or Datadog-proprietary paths.
 - **DDOT note** (Decision Log): When describing OTel Collector setup work for the OTel path, note that DDOT (Datadog Distribution of the OTel Collector, embedded in Datadog Agent v7.65+) is the preferred Collector distribution for environments where the Datadog Agent is already deployed. Both `datadogconnector` and `spanmetricsconnector` are in DDOT's curated component list — the coexistence pattern from the OTel Demo works without custom components. Also flag the open YAML key verification step: the `spanmetricsconnector` type key may differ from otelcol-contrib's `span_metrics` rename and must be verified against the running Agent version before implementation begins.
 
 ---
@@ -314,3 +322,4 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
 | 2026-06-16 | Conversation milestones must enforce "one question, then stop and wait" — not just "one at a time" | The first restructuring of M2/M4/M6 added "one dimension at a time" language but buried it in step prose and allowed a step to say "ask any follow-up questions needed" without the constraint. Whitney clarified: each question must be asked, then the assistant must stop and wait for a response before asking the next. Whitney's answer may change what the next question should be, so pre-sequencing questions is explicitly forbidden. Each of M2, M4, M6 now contains a "Conversation protocol — strictly enforced" block at the top of its instructions, with four rules: one question then stop, no front-loading, applies to all question types, do not pre-sequence. |
 | 2026-06-16 | `talk/observability-triangle-story-points.md` and `talk/demo-flow-observability-triangle.md` are living documents — updated in the same commit as each assessment milestone | Created in M2 to capture the traces↔metrics story beats (Story A: OTel semconv via Weaver `ref:` gives automatic metric dimensions; Story B: custom Weaver attribute becomes a metric dimension by name agreement). Each subsequent assessment milestone (M4, M6, M7) must update both files with confirmed story beats in the same commit as the progress update. Research milestones (M3, M5) update the open-questions sections of the story doc when findings clarify what the demo can or cannot show. Keeps the conference demo narrative current without reconstruction from raw research docs at demo time. |
 | 2026-06-16 | Each `/research` step in research milestones (M1, M3, M5) must be invoked as a separate `/research` skill call | Batching multiple research questions into one `/research` skill invocation skips Phase 5 (file persistence) and Phase 6 (gotcha documentation) for all but the last question, leaving findings unsaved and rule files unupdated. Each call must complete all 6 phases independently: scope, search, synthesize, present, persist (save file + update index + cross-reference PRDs), and document gotchas to global rule files. M1 retroactive note: rule files (`otel-span-metrics-connector-gotchas.md`, `datadog-span-based-metrics-gotchas.md`, `ddot-gotchas.md`) and research index were updated as part of M1. |
+| 2026-06-16 | Demo correlation path chosen: pure OTel via Datadog Exporter (no dd-trace) | Both paths produce equivalent Datadog UI experiences for traces-to-logs correlation. For commit-story-v2's `console.log` setup, both require identical manual `span.spanContext()` extraction — dd-trace provides no setup advantage. Pure OTel extends the existing `otelcol-contrib` infrastructure naturally, keeps the open source/CNCF-aligned narrative intact, and lets the Datadog Exporter handle `service.name` → `service` tag remapping automatically. Decision made during M4 conversation. Documented in `docs/demo/datadog-setup-baseline.md`. Affects M5 Step 0 (context only — metrics-to-logs path not yet decided), M6 implementation issue framing, M7 setup work description. |

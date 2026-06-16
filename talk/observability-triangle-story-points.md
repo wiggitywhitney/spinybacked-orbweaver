@@ -80,7 +80,9 @@ The story this demo tells: **Weaver schema compliance is what makes the triangle
 
 ## Traces to Logs Correlation
 
-**Status**: Research complete (M3). Assessment conversation with Whitney pending (M4).
+**Status**: Path decided (M4 in progress). Implementation issue pending.
+
+**Chosen path**: Pure OTel via Datadog Exporter. No dd-trace. Existing `otelcol-contrib` setup extended with a logs pipeline. See `docs/demo/datadog-setup-baseline.md`.
 
 **Source**: `docs/research/traces-logs-correlation.md`
 
@@ -118,10 +120,10 @@ commit-story-v2 emits all logs via `console.log`/`console.error` — no structur
 **The demo beat** (draft):
 > "When we emit this log line, we include `commit_story.ai.section_type` — the same attribute name the schema defined for spans. Now in Datadog Logs Explorer, I can filter by section type. The same dimension that appears in the metrics breakdown, appears in the trace attributes, now also appears in the logs. The schema is the contract that makes these strings agree across all three signals."
 
-**Open questions for M4 conversation**:
+**Remaining open questions for M4 conversation**:
 - Does Whitney prefer Option A (minimal JSON wrapper at span sites) or Option B (pino + OTel bridge for fuller auto-injection)?
 - Should the demo show the "navigate from slow span to logs" flow, or focus on the schema attribute appearing in all three pillars?
-- Is `commit_story.ai.section_type` in log bodies enough for the M4 story, or should additional context fields be included?
+- Is `commit_story.ai.section_type` in log bodies enough for the demo, or should additional context fields be included?
 
 ---
 
@@ -161,6 +163,6 @@ Open questions going into M5:
 |---|---|---|
 | `spanmetrics` + `datadog/connector` in OTel Collector | Filed | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
 | `gen_ai.usage.output_tokens` Distribution metric in Datadog | Filed | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
-| Traces to logs correlation | Pending M3/M4 | — |
+| Traces to logs correlation | M4 in progress — path decided (pure OTel) | — |
 | Metrics to logs correlation | Pending M5/M6 | — |
 | Full demo setup | Pending M7 | — |
