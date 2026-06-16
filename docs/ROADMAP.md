@@ -29,10 +29,7 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
-- Research spike: traces ↔ metrics correlation ([issue #943](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/943)) — OTel + Datadog + Weaver schema; output is a follow-up implementation issue or PRD. Pure OTel vs Datadog-proprietary path comparison required.
-- Research spike: traces ↔ logs correlation ([issue #944](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/944)) — OTel + Datadog + Weaver schema; includes dd.trace_id format uncertainty and commit-story logging assessment. Pure OTel vs Datadog-proprietary path comparison required.
-- Research spike: metrics ↔ logs correlation ([issue #945](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/945)) — OTel + Datadog + Weaver schema; third leg of the observability triangle. Pure OTel vs Datadog-proprietary path comparison required.
-- Demo target evaluation: Datadog correlation demo ([issue #946](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/946)) — evaluate commit-story, taze, release-it for conference demo; follow-up setup issue blocked until #943–#945 complete and path decided.
+- Observability triangle research: traces↔metrics, traces↔logs, metrics↔logs correlation + demo target evaluation ([PRD #963](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/963)) — three sequential research spikes (OTel + Datadog + Weaver schema, pure OTel vs Datadog-proprietary path comparison), each followed by a follow-up implementation issue; closes with demo target evaluation for the conference demo.
 
 Taze run-15 eval findings (juggling order 1–14; items 7, 8, and 14 are blocked):
 
