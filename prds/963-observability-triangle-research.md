@@ -56,7 +56,7 @@ Run three sequential research spikes, each writing findings to a `docs/research/
 ## Milestones
 
 - [x] M1: Research — traces ↔ metrics correlation
-- [ ] M2: Discuss traces↔metrics findings with Whitney and file any resulting issues/PRDs
+- [x] M2: Discuss traces↔metrics findings with Whitney and file any resulting issues/PRDs
 - [ ] M3: Research — traces ↔ logs correlation
 - [ ] M4: Discuss traces↔logs findings with Whitney and file any resulting issues/PRDs
 - [ ] M5: Research — metrics ↔ logs correlation
@@ -148,7 +148,9 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 8. Write all findings to `docs/research/traces-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
 
-9. Update `PROGRESS.md` with a summary of findings and a note that M4 will discuss findings with Whitney and file any resulting issues or PRDs.
+9. Update `talk/observability-triangle-story-points.md` with findings from this research: populate the "Traces to Logs Correlation" section — answer the open questions that research resolved, add any confirmed story beats, and revise the remaining open questions for the M4 conversation. Update section 12 of `talk/demo-flow-observability-triangle.md` if the research clarifies what the demo can show. (Updated per Decision 2026-06-16: story documents updated in same commit as progress update.)
+
+10. Update `PROGRESS.md` with a summary of findings and a note that M4 will discuss findings with Whitney and file any resulting issues or PRDs.
 
 **Constraints:**
 - Do NOT assume the `dd.trace_id` 64-bit decimal conversion requirement is still current — confirm it via research.
@@ -171,7 +173,7 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 **How to run this milestone:**
 
-1. Ask the top-level question: pure OTel Logs Bridge API vs dd-trace/Datadog Agent log pipeline. Present only the single most important tradeoff from `docs/research/traces-logs-correlation.md` as context — including the `dd.trace_id` format finding (128-bit hex vs 64-bit decimal) since it is a gotcha regardless of which path is chosen. Wait for Whitney's response.
+1. Ask the top-level question: pure OTel Logs Bridge API vs dd-trace/Datadog Agent log pipeline. Present only the single most important tradeoff from `docs/research/traces-logs-correlation.md` as context. If M3's research found the `dd.trace_id` format (128-bit hex vs 64-bit decimal conversion) to be unresolved or still required, include that finding — it is a gotcha regardless of which path is chosen. Wait for Whitney's response.
 
 2. Based on Whitney's answer, ask the single most useful follow-up question — e.g., which log emission points in commit-story need trace context injected, or what the minimal change looks like. One question. Wait for response. Repeat until path and scope are concrete.
 
@@ -179,7 +181,9 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 4. Run `/write-prompt` on any issue or PRD body before creating it. Apply all suggested revisions, then run `gh issue create` or the appropriate PRD creation command.
 
-5. Update `PROGRESS.md` with a link to whatever was created.
+5. Update `talk/observability-triangle-story-points.md` with confirmed story beats from the conversation: fill in the "Traces to Logs Correlation" section with the agreed implementation path and the demo beat narrative. Update section 12 of `talk/demo-flow-observability-triangle.md` with the confirmed demo content. (Updated per Decision 2026-06-16: story documents updated in same commit as progress update.)
+
+6. Update `PROGRESS.md` with a link to whatever was created.
 
 ---
 
@@ -203,7 +207,9 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 7. Write all findings to `docs/research/metrics-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
 
-8. Update `PROGRESS.md` with a summary of findings and a note that M6 will discuss findings with Whitney and file any resulting issues or PRDs.
+8. Update `talk/observability-triangle-story-points.md` with findings from this research: populate the "Metrics to Logs Correlation" section — answer the open questions that research resolved, add any confirmed story beats, and revise the remaining open questions for the M6 conversation. Update section 13 of `talk/demo-flow-observability-triangle.md` if the research clarifies what the demo can show. (Updated per Decision 2026-06-16: story documents updated in same commit as progress update.)
+
+9. Update `PROGRESS.md` with a summary of findings and a note that M6 will discuss findings with Whitney and file any resulting issues or PRDs.
 
 **Constraints:**
 - Do NOT create any GitHub issues or PRDs here. That is M6's job.
@@ -233,7 +239,9 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 4. Run `/write-prompt` on any issue or PRD body before creating it. Apply all suggested revisions, then run `gh issue create` or the appropriate PRD creation command.
 
-5. Update `PROGRESS.md` with a link to whatever was created.
+5. Update `talk/observability-triangle-story-points.md` with confirmed story beats from the conversation: fill in the "Metrics to Logs Correlation" section with the agreed implementation path and the demo beat narrative. Update section 13 of `talk/demo-flow-observability-triangle.md` with the confirmed demo content. (Updated per Decision 2026-06-16: story documents updated in same commit as progress update.)
+
+6. Update `PROGRESS.md` with a link to whatever was created.
 
 ---
 
@@ -271,7 +279,9 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
    - What setup work remains — structured logging changes, schema additions, Datadog configuration — described for BOTH correlation paths (pure OTel and Datadog-proprietary) since the path has not yet been chosen
    - A "Next step" section explicitly stating: "A demo setup issue or PRD should be filed by a human after reviewing this evaluation and the three research documents, then choosing a correlation path (pure OTel vs Datadog-proprietary)."
 
-8. Update `PROGRESS.md` with a summary of findings.
+8. Update `talk/observability-triangle-story-points.md` with the full triangle demo arc from this evaluation: fill in the "The Full Triangle Demo" section with the confirmed demo target(s), the narrative sequence, and what each pillar shows in the Datadog UI. Update sections 13 and 14 of `talk/demo-flow-observability-triangle.md` with the full triangle flow and closing. (Updated per Decision 2026-06-16: story documents updated in same commit as progress update.)
+
+9. Update `PROGRESS.md` with a summary of findings.
 
 **Constraints:**
 - Do NOT file a demo setup issue or PRD. That is for Whitney to do after choosing a path.
@@ -294,3 +304,4 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
 | 2026-06-16 | Research milestones must explicitly instruct implementers to save gotchas to global rule files | Phase 6 of the `/research` skill handles gotcha documentation automatically, but relying on Phase 6 firing without explicit direction is insufficient — a cold AI instance reading only the milestone may skip it. Each research spike milestone (M1, M3, M5) must include an explicit step after all `/research` calls directing the implementer to save surprises for newly-introduced technologies to `~/.claude/rules/<technology>-gotchas.md` and reference each file from `~/.claude/CLAUDE.md` under 'Adopting New Technologies.' M1 completed this retroactively: `otel-span-metrics-connector-gotchas.md`, `datadog-span-based-metrics-gotchas.md`, and `ddot-gotchas.md` were created 2026-06-16. |
 | 2026-06-16 | M2, M4, M6 are conversations with Whitney, not autonomous filing tasks | Issue #964 was filed autonomously with abstract milestones and no concrete work — it was immediately closed as the wrong shape. These milestones must be run as a dialogue: present research findings and tradeoff questions one at a time, wait for Whitney's input, and only create issues or PRDs that emerge from that conversation with concrete agreed-upon scope. No pre-drafting of implementation issues before the conversation. |
 | 2026-06-16 | Conversation milestones must enforce "one question, then stop and wait" — not just "one at a time" | The first restructuring of M2/M4/M6 added "one dimension at a time" language but buried it in step prose and allowed a step to say "ask any follow-up questions needed" without the constraint. Whitney clarified: each question must be asked, then the assistant must stop and wait for a response before asking the next. Whitney's answer may change what the next question should be, so pre-sequencing questions is explicitly forbidden. Each of M2, M4, M6 now contains a "Conversation protocol — strictly enforced" block at the top of its instructions, with four rules: one question then stop, no front-loading, applies to all question types, do not pre-sequence. |
+| 2026-06-16 | `talk/observability-triangle-story-points.md` and `talk/demo-flow-observability-triangle.md` are living documents — updated in the same commit as each assessment milestone | Created in M2 to capture the traces↔metrics story beats (Story A: OTel semconv via Weaver `ref:` gives automatic metric dimensions; Story B: custom Weaver attribute becomes a metric dimension by name agreement). Each subsequent assessment milestone (M4, M6, M7) must update both files with confirmed story beats in the same commit as the progress update. Research milestones (M3, M5) update the open-questions sections of the story doc when findings clarify what the demo can or cannot show. Keeps the conference demo narrative current without reconstruction from raw research docs at demo time. |
