@@ -55,7 +55,7 @@ Run three sequential research spikes, each writing findings to a `docs/research/
 
 ## Milestones
 
-- [ ] M1: Research — traces ↔ metrics correlation
+- [x] M1: Research — traces ↔ metrics correlation
 - [ ] M2: File traces↔metrics implementation issue
 - [ ] M3: Research — traces ↔ logs correlation
 - [ ] M4: File traces↔logs implementation issue
@@ -83,7 +83,7 @@ This milestone produces `docs/research/traces-metrics-correlation.md`. Do not cr
 
 5. Assess the Weaver schema angle: how does having a formal Weaver schema for span attributes strengthen traces-to-metrics correlation? Consider: consistent attribute naming across instrumented codebases, known attribute types that map cleanly to metric dimensions, schema-enforced cardinality control.
 
-6. Write all findings to `docs/research/traces-metrics-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim from every `/research` call. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
+6. Write all findings to `docs/research/traces-metrics-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim from every `/research` call. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs Summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
 
 7. Update `PROGRESS.md` with a summary of findings and a note that M2 will file the follow-up issue.
 
@@ -206,7 +206,7 @@ Update `PROGRESS.md` with a link to the created issue.
 - `docs/research/traces-logs-correlation.md` (produced by M3)
 - `docs/research/metrics-logs-correlation.md` (produced by M5)
 
-All three files must exist before beginning this milestone.
+All three files must exist before beginning this milestone. If any are missing, stop and complete the corresponding research milestone (M1, M3, or M5) before proceeding.
 
 This milestone evaluates commit-story, taze, and release-it as conference demo targets for showing correlated traces, metrics, and logs in the Datadog UI to a Datadog engineer audience. It does NOT file a demo setup issue or PRD — that requires Whitney to review these findings and the three research documents, then choose a correlation path. Filing the setup issue is outside this PRD's scope.
 
