@@ -192,13 +192,6 @@ Bring it back to the problem. "Organizations need business logic visibility. Dev
 | Audience asks about failure rate | Have concrete numbers from the pre-talk run. "X of Y files instrumented successfully, Z failed with these reasons." |
 | Audience asks "why not just use auto-instrumentation for everything?" | "Auto covers framework calls. It can't see your business logic — what operation you're performing, for which customer, with what parameters. That's the gap." |
 
-### Resolved risks (from audit review 2026-03-14)
-
-- Schema evolution across files — working correctly since Phase 5 (PRD #31, `dispatch.ts:248-250`)
-- NDS-003 inline finally false positive — fixed (PR #90, `nds003.ts` INSTRUMENTATION_PATTERNS)
-- NDS-003 cascading false positives — fixed via frequency map approach (PR #90)
-- COV-004/RST-004 validation contradiction — fixed via async function exemption (PR #91)
-
 ---
 
 ## Open Items
