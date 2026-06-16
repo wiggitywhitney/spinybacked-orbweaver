@@ -90,6 +90,7 @@ This milestone produces `docs/research/traces-metrics-correlation.md`. Do not cr
 **Constraints:**
 - Do NOT create a follow-up GitHub issue here. That is M2.
 - Do NOT recommend a path (pure OTel vs Datadog-proprietary). Record findings and tradeoffs; leave the decision to the human.
+- **Retroactive note (completed 2026-06-16):** Three global rule files were created when running this milestone: `~/.claude/rules/otel-span-metrics-connector-gotchas.md`, `~/.claude/rules/datadog-span-based-metrics-gotchas.md`, and `~/.claude/rules/ddot-gotchas.md`. All three are referenced in `~/.claude/CLAUDE.md` under 'Adopting New Technologies.'
 
 ---
 
@@ -130,13 +131,15 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 4. Run `/research "Pure OTel OTLP ingest path vs Datadog-native mechanisms for traces-to-logs correlation — does the Datadog UI show an equivalent log-trace linking experience either way? Does adherence to OTel semantic conventions close the gap between the pure OTel path and the Datadog-native path? Are there log correlation features that require dd-trace or the Datadog Agent log pipeline regardless of semantic convention compliance?"` Preserve all source links and confidence scores.
 
-5. Assess the Weaver schema angle: the schema ensures span attributes are consistently named. How does this help on the log side? Can Weaver-schema-defined attributes appear in structured log record bodies to make correlation richer and more discoverable?
+5. For any technology researched in steps 1–4 that is new to this project, save surprises and gotchas to a global rule file at `~/.claude/rules/<technology>-gotchas.md` per Phase 6 of the `/research` skill, and add a reference to `~/.claude/CLAUDE.md` under 'Adopting New Technologies.' Check `~/.claude/rules/` before creating — technologies from M1 (OTel Span Metrics Connector, DDOT, Datadog span-based metrics) already have rule files. Do not create duplicate files; update existing ones with new findings instead.
 
-6. Assess what changes commit-story's logging code needs: which log emission points need trace context injected, and what is the minimal change required to enable Datadog log-trace correlation.
+6. Assess the Weaver schema angle: the schema ensures span attributes are consistently named. How does this help on the log side? Can Weaver-schema-defined attributes appear in structured log record bodies to make correlation richer and more discoverable?
 
-7. Write all findings to `docs/research/traces-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
+7. Assess what changes commit-story's logging code needs: which log emission points need trace context injected, and what is the minimal change required to enable Datadog log-trace correlation.
 
-8. Update `PROGRESS.md` with a summary of findings and a note that M4 will file the follow-up issue.
+8. Write all findings to `docs/research/traces-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
+
+9. Update `PROGRESS.md` with a summary of findings and a note that M4 will file the follow-up issue.
 
 **Constraints:**
 - Do NOT assume the `dd.trace_id` 64-bit decimal conversion requirement is still current — confirm it via research.
@@ -175,11 +178,13 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 4. Run `/research "Pure OTel OTLP ingest path vs Datadog-native mechanisms for metrics-to-logs correlation — does the Datadog UI show an equivalent metrics-logs linking experience either way? Does adherence to OTel semantic conventions close the gap between the pure OTel path and the Datadog-native path? Are there metrics-logs correlation features that require Datadog-proprietary tooling regardless of semantic convention compliance?"` Preserve all source links and confidence scores.
 
-5. Assess the Weaver schema angle: the Weaver schema defines a shared vocabulary of attribute names across spans, metrics, and logs. How does declaring resource-level attributes in the schema ensure they appear consistently across all three signals — making the metrics-logs leg of the triangle correlate automatically without additional plumbing?
+5. For any technology researched in steps 1–4 that is new to this project, save surprises and gotchas to a global rule file at `~/.claude/rules/<technology>-gotchas.md` per Phase 6 of the `/research` skill, and add a reference to `~/.claude/CLAUDE.md` under 'Adopting New Technologies.' Check `~/.claude/rules/` before creating — technologies from M1 (OTel Span Metrics Connector, DDOT, Datadog span-based metrics) already have rule files. Do not create duplicate files; update existing ones with new findings instead.
 
-6. Write all findings to `docs/research/metrics-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
+6. Assess the Weaver schema angle: the Weaver schema defines a shared vocabulary of attribute names across spans, metrics, and logs. How does declaring resource-level attributes in the schema ensure they appear consistently across all three signals — making the metrics-logs leg of the triangle correlate automatically without additional plumbing?
 
-7. Update `PROGRESS.md` with a summary of findings and a note that M6 will file the follow-up issue.
+7. Write all findings to `docs/research/metrics-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
+
+8. Update `PROGRESS.md` with a summary of findings and a note that M6 will file the follow-up issue.
 
 **Constraints:**
 - Do NOT create a follow-up GitHub issue here. That is M6.
@@ -228,14 +233,16 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
 
 5. For taze and release-it: briefly assess each for demo suitability — structured logging presence, interesting span attributes, narrative value for a Datadog engineer audience. Answer: does showing a second project alongside commit-story strengthen the demo, or does it dilute the story?
 
-6. Write all findings to `docs/research/demo-target-evaluation.md`, covering:
+6. For any technology or Datadog capability encountered during assessment in steps 1–5 that is new to this project and reveals non-obvious behavior, save surprises and gotchas to a global rule file at `~/.claude/rules/<technology>-gotchas.md` per Phase 6 of the `/research` skill, and add a reference to `~/.claude/CLAUDE.md` under 'Adopting New Technologies.' Check `~/.claude/rules/` first — existing rule files from M1 include OTel Span Metrics Connector, DDOT, and Datadog span-based metrics. Do not create duplicate files; update existing ones with new findings instead.
+
+7. Write all findings to `docs/research/demo-target-evaluation.md`, covering:
    - Primary demo target with reasoning
    - Whether a second target adds value, and if so which one and why
    - What the Datadog UI would show for each signal (traces, metrics, logs) for the chosen target(s)
    - What setup work remains — structured logging changes, schema additions, Datadog configuration — described for BOTH correlation paths (pure OTel and Datadog-proprietary) since the path has not yet been chosen
    - A "Next step" section explicitly stating: "A demo setup issue or PRD should be filed by a human after reviewing this evaluation and the three research documents, then choosing a correlation path (pure OTel vs Datadog-proprietary)."
 
-7. Update `PROGRESS.md` with a summary of findings.
+8. Update `PROGRESS.md` with a summary of findings.
 
 **Constraints:**
 - Do NOT file a demo setup issue or PRD. That is for Whitney to do after choosing a path.
@@ -255,3 +262,4 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
 | 2026-06-16 | `spanmetricsconnector` YAML type key in DDOT is unconfirmed — verify before implementing | DDOT docs call the component `spanmetricsconnector`. The upstream otelcol-contrib type was renamed from `spanmetrics` → `span_metrics` in recent releases. Whether that rename applies to DDOT is unverified. Any implementation milestone that builds OTel Collector config using this connector must check the actual YAML key against the running DDOT Agent version before deploying. |
 | 2026-06-16 | Infinite Cardinality Metrics coverage of span-based custom metrics is unconfirmed | Datadog's Infinite Cardinality Metrics (GA June 9, 2026) prices metrics per name instead of per time series. Whether "Generate Metrics from Spans" custom metrics fall under this model is not stated in the current docs. Do not design implementation work or issue content assuming high-cardinality group-by dimensions are cost-free under this model until Datadog confirms it. Source: [Infinite Cardinality Metrics blog](https://www.datadoghq.com/blog/infinite-cardinality-metrics/) |
 | 2026-06-16 | Filter field is safe for high-cardinality; group-by drives cardinality in "Generate Metrics from Spans" | In Datadog's span-based custom metrics, cardinality risk lives exclusively in the group-by (dimensions) field. The filter field narrows which spans are counted — it does not multiply series and is safe for any attribute including user IDs. This distinction must be explicit in implementation issues to prevent implementers from misidentifying the cardinality risk. Source: [Datadog Generate Metrics from Spans docs](https://docs.datadoghq.com/tracing/trace_pipeline/generate_metrics/) |
+| 2026-06-16 | Research milestones must explicitly instruct implementers to save gotchas to global rule files | Phase 6 of the `/research` skill handles gotcha documentation automatically, but relying on Phase 6 firing without explicit direction is insufficient — a cold AI instance reading only the milestone may skip it. Each research spike milestone (M1, M3, M5) must include an explicit step after all `/research` calls directing the implementer to save surprises for newly-introduced technologies to `~/.claude/rules/<technology>-gotchas.md` and reference each file from `~/.claude/CLAUDE.md` under 'Adopting New Technologies.' M1 completed this retroactively: `otel-span-metrics-connector-gotchas.md`, `datadog-span-based-metrics-gotchas.md`, and `ddot-gotchas.md` were created 2026-06-16. |
