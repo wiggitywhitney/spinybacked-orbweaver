@@ -159,32 +159,42 @@ Show the `gen_ai.usage.output_tokens` distribution metric — p50/p95/max — gr
 
 ## 12. Live Telemetry — Logs Correlation
 
-*[Research complete. Demo flow draft — confirmed beats after M4 conversation with Whitney.]*
-
-Navigate to the Logs Explorer. Filter by `trace_id` from the slow span you just showed.
-
-"These log lines were emitted during that span. They carry `trace_id` and `span_id` — in the 128-bit hex format OTel uses natively. Datadog recognizes that directly. No conversion. No special adapter."
-
-**The demo beat**:
-
-Click the log line. Show the Trace tab. The flame graph appears — the same trace you were just looking at, now correlated from the log side.
-
-"Click 'View Trace in APM' and you're back at the trace. Navigate from trace to logs, logs back to trace. This is the Logs tab in APM — it shows all log lines emitted within any span in the trace."
-
-### Story C: The Schema Attribute in the Log Body
+### Story C: The Schema Attribute Appears in All Three Pillars
 
 Navigate to the Logs Explorer and filter by `commit_story.ai.section_type:dialogue`.
 
-"This attribute is in the log body. Not injected by a framework — included by the code that emits the log. The same string the Weaver schema defined for the span attribute. The same string that appears as a metric dimension. The schema is the single source of truth for this name — the instrumenter used it, the log emitter used it, the metric dimension config used it."
+"This attribute is in the log body. Not injected by a framework — included by the code that emits the log. The same string the Weaver schema defined for the span attribute. The same string that appears as a metric dimension. The schema is the single source of truth for this name across all three signals."
 
-"When you filter logs by `commit_story.ai.section_type`, you're using the Weaver schema's vocabulary directly in the Datadog Logs Explorer."
+Show a log line. The body includes:
 
-*[Final demo beat detail — exact flow for "navigate from slow span to logs" — to be confirmed in M4 conversation.]*
+```json
+{
+  "trace_id": "a3f2...",
+  "span_id": "b81c...",
+  "commit_story.ai.section_type": "dialogue",
+  "commit_story.context.messages_count": 47,
+  "commit_story.context.messages_filtered": 12,
+  "commit_story.context.substantial_messages": 31,
+  "gen_ai.usage.output_tokens": 892,
+  "msg": "generating section",
+  "level": "info"
+}
+```
+
+"The message counts give you color — 47 messages were captured from my Claude Code sessions, 12 were filtered out as noise, 31 were substantive enough to gate whether this section even ran. The output tokens tell you what it cost. All of these attribute names came from the Weaver schema."
+
+**The navigation beat**:
+
+Click the log line. Show the Trace tab. The flame graph appears — the same trace, now correlated from the log side.
+
+"These log lines carry `trace_id` and `span_id` in the 128-bit hex format OTel uses natively. Datadog recognizes that directly. No conversion, no special adapter. Click 'View Trace in APM' and you're back at the trace."
+
+Navigate from trace to logs, logs back to trace — the correlation works in both directions.
 
 **Setup required (before this section can run live)**:
-- commit-story-v2 instrumented branch emits JSON logs to stdout with `trace_id`, `span_id`, and `commit_story.ai.section_type`
+- commit-story-v2 instrumented branch emits JSON logs to stdout with `trace_id`, `span_id`, `commit_story.ai.section_type`, `commit_story.context.messages_count`, `commit_story.context.messages_filtered`, `commit_story.context.substantial_messages`, and `gen_ai.usage.output_tokens`
 - Datadog Exporter in the OTel Collector handles `service.name` → `service` tag remapping (OTLP path, not file scraping)
-- Logs indexed in Datadog Logs Explorer with the `trace_id` field recognized for correlation
+- Logs indexed in Datadog Logs Explorer with `trace_id` recognized for correlation
 
 ## 13. The Full Triangle
 

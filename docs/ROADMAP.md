@@ -31,6 +31,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 
 - Observability triangle research: traces↔metrics, traces↔logs, metrics↔logs correlation + demo target evaluation ([PRD #963](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/963)) — three sequential research spikes (OTel + Datadog + Weaver schema, pure OTel vs Datadog-proprietary path comparison), each followed by a follow-up implementation issue; closes with demo target evaluation for the conference demo.
 - OTel Collector connector config + Datadog "Generate Metrics from Spans" distribution metric for commit-story-v2 ([issue #965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965)) — add `spanmetrics` and `datadog/connector` to `evaluation/is/otelcol-config.yaml`, and create a Distribution metric for `gen_ai.usage.output_tokens` grouped by `commit_story.ai.section_type`; implementation issue from PRD #963 M2.
+- Traces-to-logs correlation for commit-story-v2 ([issue #966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966)) — add structured JSON log emission at AI section generation span sites (pure OTel, manual `span.spanContext()` extraction), add `filelog` receiver pipeline to OTel Collector config; implementation issue from PRD #963 M4.
 
 Taze run-15 eval findings (juggling order 1–14; items 7, 8, and 14 are blocked):
 

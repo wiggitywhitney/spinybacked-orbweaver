@@ -110,20 +110,39 @@ commit-story-v2 emits all logs via `console.log`/`console.error` — no structur
 
 ### Story C: The Weaver Schema as the Log Attribute Vocabulary
 
-**Status**: Research confirmed. Story beat identified for M4 conversation.
+**Status**: Confirmed. M4 complete. Implementation issue filed: [#966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966).
 
 **The facts**:
 - `commit_story.ai.section_type` appears in spans as a schema-defined attribute — spiny-orb writes it because the schema says to
-- Including the same attribute name in structured log JSON bodies creates log-level filterability by the same dimension used in metrics and traces
-- No additional plumbing required — just using the same string the schema defined
+- The same attribute name appears in structured log JSON bodies, creating log-level filterability by the same dimension used in metrics and traces
+- Log bodies also include context color: message counts (`messages_count`, `messages_filtered`, `substantial_messages`) and `gen_ai.usage.output_tokens` for cost — all schema-defined attributes
+- No auto-injection framework required — manual `span.spanContext()` extraction at instrumented span sites (Option A)
+- Navigation works in both directions: trace → logs, logs → trace
 
-**The demo beat** (draft):
-> "When we emit this log line, we include `commit_story.ai.section_type` — the same attribute name the schema defined for spans. Now in Datadog Logs Explorer, I can filter by section type. The same dimension that appears in the metrics breakdown, appears in the trace attributes, now also appears in the logs. The schema is the contract that makes these strings agree across all three signals."
+**The log body (confirmed)**:
+```json
+{
+  "trace_id": "a3f2...",
+  "span_id": "b81c...",
+  "commit_story.ai.section_type": "dialogue",
+  "commit_story.context.messages_count": 47,
+  "commit_story.context.messages_filtered": 12,
+  "commit_story.context.substantial_messages": 31,
+  "gen_ai.usage.output_tokens": 892,
+  "msg": "generating section",
+  "level": "info"
+}
+```
 
-**Remaining open questions for M4 conversation**:
-- Does Whitney prefer Option A (minimal JSON wrapper at span sites) or Option B (pino + OTel bridge for fuller auto-injection)?
-- Should the demo show the "navigate from slow span to logs" flow, or focus on the schema attribute appearing in all three pillars?
-- Is `commit_story.ai.section_type` in log bodies enough for the demo, or should additional context fields be included?
+**The demo beat**:
+> "This attribute is in the log body. Not injected by a framework — included by the code that emits the log. The same string the Weaver schema defined for the span attribute. The same string that appears as a metric dimension. The schema is the single source of truth for this name across all three signals."
+
+**Implementation path**:
+- Pure OTel via Datadog Exporter (no dd-trace)
+- Option A: manual JSON at span sites — `process.stdout.write(JSON.stringify({trace_id, span_id, ...attributes, msg, level}))`
+- `trace_id` as 32-char hex — Datadog recognizes natively, no conversion
+- `service.name` → `service` tag remapping handled by Datadog Exporter automatically
+- New attributes added to registry: `commit_story.context.messages_filtered`, `commit_story.context.substantial_messages` (2026-06-16)
 
 ---
 
@@ -163,6 +182,6 @@ Open questions going into M5:
 |---|---|---|
 | `spanmetrics` + `datadog/connector` in OTel Collector | Filed | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
 | `gen_ai.usage.output_tokens` Distribution metric in Datadog | Filed | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
-| Traces to logs correlation | M4 in progress — path decided (pure OTel) | — |
+| Traces to logs correlation | Filed | [#966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966) |
 | Metrics to logs correlation | Pending M5/M6 | — |
 | Full demo setup | Pending M7 | — |
