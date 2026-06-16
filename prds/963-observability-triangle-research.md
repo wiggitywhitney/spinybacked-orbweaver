@@ -57,7 +57,7 @@ Run three sequential research spikes, each writing findings to a `docs/research/
 
 - [x] M1: Research — traces ↔ metrics correlation
 - [x] M2: Discuss traces↔metrics findings with Whitney and file any resulting issues/PRDs
-- [ ] M3: Research — traces ↔ logs correlation
+- [x] M3: Research — traces ↔ logs correlation
 - [ ] M4: Discuss traces↔logs findings with Whitney and file any resulting issues/PRDs
 - [ ] M5: Research — metrics ↔ logs correlation
 - [ ] M6: Discuss metrics↔logs findings with Whitney and file any resulting issues/PRDs
@@ -123,6 +123,8 @@ This milestone produces `docs/research/traces-metrics-correlation.md`. Do not cr
 ---
 
 ### M3: Research — traces ↔ logs correlation
+
+**Step 0:** Read related research before starting: [Research: OTel Logs Bridge API in Node.js](../docs/research/otel-logs-bridge-api.md) | [Research: Datadog Log-Trace Correlation with OTel SDK](../docs/research/datadog-log-trace-correlation.md) | [Research: OTel Semantic Conventions for Log Record Attributes](../docs/research/otel-semconv-log-attributes.md)
 
 This milestone produces `docs/research/traces-logs-correlation.md`. Do not create any GitHub issues in this milestone; that is M4's job.
 
@@ -190,6 +192,8 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 ---
 
 ### M5: Research — metrics ↔ logs correlation
+
+**Step 0:** Read related research before starting: [Research: OTel Semantic Conventions for Log Record Attributes](../docs/research/otel-semconv-log-attributes.md) — covers deployment.environment deprecation, service.name/service.version stable constants, and resource attribute-to-Datadog-tag mappings. Step 3 below substantially overlaps with this file; build on it rather than re-researching from scratch. Also read: [Research: Pure OTel vs Datadog-Native Traces-to-Logs Correlation](../docs/research/otel-vs-native-logs-correlation.md) — covers the pure OTel vs Datadog-native UI parity question for logs (step 4 below asks the same question for metrics; use the logs findings as a baseline).
 
 This milestone produces `docs/research/metrics-logs-correlation.md`. Do not create any GitHub issues in this milestone; that is M6's job.
 

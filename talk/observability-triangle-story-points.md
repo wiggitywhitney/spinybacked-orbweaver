@@ -80,16 +80,48 @@ The story this demo tells: **Weaver schema compliance is what makes the triangle
 
 ## Traces to Logs Correlation
 
-**Status**: Pending. PRD #963 M3 (research) and M4 (assessment with Whitney).
+**Status**: Research complete (M3). Assessment conversation with Whitney pending (M4).
 
-*To be filled in after M3 and M4 complete.*
+**Source**: `docs/research/traces-logs-correlation.md`
 
-Open questions going into M3:
-- Does the Datadog Agent automatically inject trace ID / span ID into log records when OTel traces are in play?
-- Does commit-story-v2 currently emit structured logs with trace context?
-- What does "navigate from a trace to its logs" look like in the Datadog UI?
-- Is there a Weaver schema angle here — log attribute names that match trace attribute names?
-- Does the `commit_story.ai.section_type` attribute appear in both traces and logs, enabling cross-correlation?
+### The Setup Constraint: commit-story-v2 Uses console.log
+
+commit-story-v2 emits all logs via `console.log`/`console.error` — no structured logging library. This means:
+- The OTel Logs Bridge API auto-injection does NOT apply (it requires winston/pino/bunyan)
+- The dd-trace `DD_LOGS_INJECTION=true` auto-injection also does NOT apply (same requirement)
+- Both paths require the same manual trace context injection: `span.spanContext()` → embed in JSON body
+- There is no setup convenience difference between pure OTel and dd-trace for commit-story-v2
+
+**The minimum change**: emit JSON to stdout at instrumented span sites, including `trace_id`, `span_id`, and `commit_story.ai.section_type` in the body.
+
+### What the Research Resolved
+
+✅ **`dd.trace_id` 64-bit decimal format is NOT required.** Datadog recognizes 32-char lowercase hex trace IDs (OTel native format) directly. No conversion needed.
+
+✅ **The "View Trace in APM" button works for OTLP-ingested logs.** The pure OTel UI experience is equivalent to dd-trace — bidirectional navigation, Logs tab in APM, Trace tab in Logs Explorer, flame graph all work.
+
+✅ **`service.name` remapping gap closes cleanly via Datadog Exporter.** Route OTLP through the Datadog Exporter and `service.name` → `service` tag mapping happens automatically. No Log Profile configuration needed.
+
+✅ **`TraceId`/`SpanId` are OTel Log Data Model top-level fields — NOT semantic convention attributes.** There are no `ATTR_LOG_TRACE_ID` constants. Extract via `span.spanContext()`.
+
+✅ **`deployment.environment` is deprecated** — use `deployment.environment.name` (stable in OTel semconv v1.27.0+, requires Agent >= 7.58.0).
+
+### Story C: The Weaver Schema as the Log Attribute Vocabulary
+
+**Status**: Research confirmed. Story beat identified for M4 conversation.
+
+**The facts**:
+- `commit_story.ai.section_type` appears in spans as a schema-defined attribute — spiny-orb writes it because the schema says to
+- Including the same attribute name in structured log JSON bodies creates log-level filterability by the same dimension used in metrics and traces
+- No additional plumbing required — just using the same string the schema defined
+
+**The demo beat** (draft):
+> "When we emit this log line, we include `commit_story.ai.section_type` — the same attribute name the schema defined for spans. Now in Datadog Logs Explorer, I can filter by section type. The same dimension that appears in the metrics breakdown, appears in the trace attributes, now also appears in the logs. The schema is the contract that makes these strings agree across all three signals."
+
+**Open questions for M4 conversation**:
+- Does Whitney prefer Option A (minimal JSON wrapper at span sites) or Option B (pino + OTel bridge for fuller auto-injection)?
+- Should the demo show the "navigate from slow span to logs" flow, or focus on the schema attribute appearing in all three pillars?
+- Is `commit_story.ai.section_type` in log bodies enough for the M4 story, or should additional context fields be included?
 
 ---
 
