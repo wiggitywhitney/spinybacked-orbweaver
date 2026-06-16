@@ -31,7 +31,7 @@ The traces-to-metrics, traces-to-logs, and metrics-to-logs implementation work c
 
 ## Solution
 
-Run three sequential research spikes, each writing findings to a `docs/research/` document on this PRD branch. After each research doc is written, a follow-up milestone files a GitHub implementation issue for that correlation type — presenting tradeoffs for both paths without recommending one. The PRD closes with a demo target evaluation document that informs the conference demo setup (demo setup is out of scope; it requires a separate PRD filed after the path is chosen).
+Run three sequential research spikes, each writing findings to a `docs/research/` document on this PRD branch. After each research doc is written, a follow-up milestone discusses findings with Whitney and files any concrete implementation issues or PRDs that emerge from that conversation. The PRD closes with a demo target evaluation document that informs the conference demo setup (demo setup is out of scope; it requires a separate PRD filed after the path is chosen).
 
 ---
 
@@ -56,11 +56,11 @@ Run three sequential research spikes, each writing findings to a `docs/research/
 ## Milestones
 
 - [x] M1: Research — traces ↔ metrics correlation
-- [ ] M2: File traces↔metrics implementation issue
+- [ ] M2: Discuss traces↔metrics findings with Whitney and file any resulting issues/PRDs
 - [ ] M3: Research — traces ↔ logs correlation
-- [ ] M4: File traces↔logs implementation issue
+- [ ] M4: Discuss traces↔logs findings with Whitney and file any resulting issues/PRDs
 - [ ] M5: Research — metrics ↔ logs correlation
-- [ ] M6: File metrics↔logs implementation issue
+- [ ] M6: Discuss metrics↔logs findings with Whitney and file any resulting issues/PRDs
 - [ ] M7: Demo target evaluation
 
 ---
@@ -85,7 +85,7 @@ This milestone produces `docs/research/traces-metrics-correlation.md`. Do not cr
 
 6. Write all findings to `docs/research/traces-metrics-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim from every `/research` call. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs Summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
 
-7. Update `PROGRESS.md` with a summary of findings and a note that M2 will file the follow-up issue.
+7. Update `PROGRESS.md` with a summary of findings and a note that M2 will discuss findings with Whitney and file any resulting issues or PRDs.
 
 **Constraints:**
 - Do NOT create a follow-up GitHub issue here. That is M2.
@@ -94,22 +94,25 @@ This milestone produces `docs/research/traces-metrics-correlation.md`. Do not cr
 
 ---
 
-### M2: File traces↔metrics implementation issue
+### M2: Discuss traces↔metrics findings with Whitney and file any resulting issues/PRDs
 
 **Step 0: Read `docs/research/traces-metrics-correlation.md` in full before beginning. This file was produced by M1 and gates this milestone. Do not proceed without reading it.**
 
-Using the research from M1, create a GitHub implementation issue for the traces↔metrics work. The issue body must:
-- Summarize the two architecture paths (pure OTel Span Metrics Connector vs Datadog Generate Metrics from Spans) and their tradeoffs as established by the research
-- **Include a note about DDOT** (Decision Log): when Datadog Agent is already deployed in the environment, DDOT is the preferred Collector distribution — both `datadogconnector` and `spanmetricsconnector` are included in DDOT's curated list; the coexistence pipeline works without custom components. Standalone otelcol-contrib remains appropriate for non-Agent environments.
-- **Include the `spanmetricsconnector` YAML key gotcha** (Decision Log): the otelcol-contrib type rename (`spanmetrics` → `span_metrics`) may not apply to DDOT; implementation work must verify the actual YAML key against the running Agent version before building configs.
-- **Include the Infinite Cardinality Metrics uncertainty** (Decision Log): as of 2026-06-16, it is unconfirmed whether Datadog's per-name pricing model covers span-based custom metrics from "Generate Metrics from Spans." Implementation work must not assume high-cardinality group-by dimensions are cost-free until Datadog confirms coverage.
-- **Explain the filter vs group-by cardinality distinction** (Decision Log): in "Generate Metrics from Spans," only the group-by (dimensions) field creates cardinality risk; the filter field is safe for any attribute including user IDs.
-- Include every implementation milestone beginning with: "Step 0: Re-read the findings from `docs/research/traces-metrics-correlation.md` before beginning. This research gates every implementation milestone."
-- NOT recommend a path. Present tradeoffs and leave the architecture decision to the human.
+**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Present findings and paths one question at a time, discuss tradeoffs, and only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
 
-Run `/write-prompt` on the issue body before creating it. Apply all suggested revisions, then run `gh issue create`.
+**How to run this milestone:**
 
-Update `PROGRESS.md` with a link to the created issue.
+1. Present the top-level question from the research: pure OTel (Span Metrics Connector) vs Datadog-proprietary (Generate Metrics from Spans) vs both coexisting. Share the key tradeoffs from `docs/research/traces-metrics-correlation.md` — one dimension at a time, waiting for Whitney's input before moving to the next.
+
+2. Based on Whitney's direction, ask any follow-up questions needed to scope the implementation concretely — e.g., which Weaver schema attributes should become metric dimensions, whether DDOT or standalone otelcol-contrib is the right Collector distribution for her demo environment.
+
+3. Once the path and scope are agreed upon, create a concrete GitHub issue or PRD. Every implementation milestone in that issue must begin with: "Step 0: Re-read the findings from `docs/research/traces-metrics-correlation.md` before beginning. This research gates every implementation milestone."
+
+4. Run `/write-prompt` on any issue or PRD body before creating it. Apply all suggested revisions, then run `gh issue create` or the appropriate PRD creation command.
+
+5. Update `PROGRESS.md` with a link to whatever was created.
+
+**Note**: Issue #964 was filed autonomously before this decision was captured and was closed as the wrong shape. Any replacement issues come from the conversation in step 1–2 above.
 
 ---
 
@@ -139,28 +142,32 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 8. Write all findings to `docs/research/traces-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
 
-9. Update `PROGRESS.md` with a summary of findings and a note that M4 will file the follow-up issue.
+9. Update `PROGRESS.md` with a summary of findings and a note that M4 will discuss findings with Whitney and file any resulting issues or PRDs.
 
 **Constraints:**
 - Do NOT assume the `dd.trace_id` 64-bit decimal conversion requirement is still current — confirm it via research.
-- Do NOT create a follow-up GitHub issue here. That is M4.
+- Do NOT create any GitHub issues or PRDs here. That is M4's job.
 - Do NOT recommend a path. Record findings and tradeoffs; leave the decision to the human.
 
 ---
 
-### M4: File traces↔logs implementation issue
+### M4: Discuss traces↔logs findings with Whitney and file any resulting issues/PRDs
 
 **Step 0: Read `docs/research/traces-logs-correlation.md` in full before beginning. This file was produced by M3 and gates this milestone. Do not proceed without reading it.**
 
-Using the research from M3, create a GitHub implementation issue for the traces↔logs work. The issue body must:
-- Summarize the two architecture paths (pure OTel Logs Bridge API vs dd-trace/Datadog Agent log pipeline) and their tradeoffs as established by the research
-- Include a section documenting the `dd.trace_id` format finding (128-bit hex vs 64-bit decimal) — this is a likely implementation gotcha
-- Include every implementation milestone beginning with: "Step 0: Re-read the findings from `docs/research/traces-logs-correlation.md` before beginning. This research gates every implementation milestone."
-- NOT recommend a path. Present tradeoffs and leave the architecture decision to the human.
+**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Present findings and paths one question at a time, discuss tradeoffs, and only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
 
-Run `/write-prompt` on the issue body before creating it. Apply all suggested revisions, then run `gh issue create`.
+**How to run this milestone:**
 
-Update `PROGRESS.md` with a link to the created issue.
+1. Present the top-level question from the research: pure OTel Logs Bridge API vs dd-trace/Datadog Agent log pipeline. Share the key tradeoffs from `docs/research/traces-logs-correlation.md` — including the `dd.trace_id` format finding (128-bit hex vs 64-bit decimal), which is a likely implementation gotcha regardless of path — one dimension at a time, waiting for Whitney's input before moving to the next.
+
+2. Based on Whitney's direction, ask any follow-up questions needed to scope the implementation concretely — e.g., which log emission points in commit-story need trace context injected, what the minimal change looks like.
+
+3. Once the path and scope are agreed upon, create a concrete GitHub issue or PRD. Every implementation milestone in that issue must begin with: "Step 0: Re-read the findings from `docs/research/traces-logs-correlation.md` before beginning. This research gates every implementation milestone."
+
+4. Run `/write-prompt` on any issue or PRD body before creating it. Apply all suggested revisions, then run `gh issue create` or the appropriate PRD creation command.
+
+5. Update `PROGRESS.md` with a link to whatever was created.
 
 ---
 
@@ -184,27 +191,31 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 7. Write all findings to `docs/research/metrics-logs-correlation.md`. Do NOT summarize findings away — preserve source links and confidence scores verbatim. Structure the document with these top-level sections: `## Overview`, `## Pure OTel path`, `## Datadog-proprietary path`, `## Weaver schema angle`, `## Tradeoffs summary`, `## Sources`. This consistent structure enables M7 to compare findings across all three spikes.
 
-8. Update `PROGRESS.md` with a summary of findings and a note that M6 will file the follow-up issue.
+8. Update `PROGRESS.md` with a summary of findings and a note that M6 will discuss findings with Whitney and file any resulting issues or PRDs.
 
 **Constraints:**
-- Do NOT create a follow-up GitHub issue here. That is M6.
+- Do NOT create any GitHub issues or PRDs here. That is M6's job.
 - Do NOT recommend a path. Record findings and tradeoffs; leave the decision to the human.
 
 ---
 
-### M6: File metrics↔logs implementation issue
+### M6: Discuss metrics↔logs findings with Whitney and file any resulting issues/PRDs
 
 **Step 0: Read `docs/research/metrics-logs-correlation.md` in full before beginning. This file was produced by M5 and gates this milestone. Do not proceed without reading it.**
 
-Using the research from M5, create a GitHub implementation issue for the metrics↔logs work. The issue body must:
-- Summarize the two architecture paths (pure OTel resource attribute alignment vs Datadog-native tag pipeline) and their tradeoffs as established by the research
-- Highlight which resource attributes must be shared across all three signal types for automatic correlation — this is the key implementation constraint
-- Include every implementation milestone beginning with: "Step 0: Re-read the findings from `docs/research/metrics-logs-correlation.md` before beginning. This research gates every implementation milestone."
-- NOT recommend a path. Present tradeoffs and leave the architecture decision to the human.
+**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Present findings and paths one question at a time, discuss tradeoffs, and only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
 
-Run `/write-prompt` on the issue body before creating it. Apply all suggested revisions, then run `gh issue create`.
+**How to run this milestone:**
 
-Update `PROGRESS.md` with a link to the created issue.
+1. Present the top-level question from the research: pure OTel resource attribute alignment vs Datadog-native tag pipeline. Share the key tradeoffs from `docs/research/metrics-logs-correlation.md` — including which resource attributes must be shared across all three signal types — one dimension at a time, waiting for Whitney's input before moving to the next.
+
+2. Based on Whitney's direction, ask any follow-up questions needed to scope the implementation concretely — e.g., which resource attributes need to be added or standardized, what the minimal plumbing change looks like.
+
+3. Once the path and scope are agreed upon, create a concrete GitHub issue or PRD. Every implementation milestone in that issue must begin with: "Step 0: Re-read the findings from `docs/research/metrics-logs-correlation.md` before beginning. This research gates every implementation milestone."
+
+4. Run `/write-prompt` on any issue or PRD body before creating it. Apply all suggested revisions, then run `gh issue create` or the appropriate PRD creation command.
+
+5. Update `PROGRESS.md` with a link to whatever was created.
 
 ---
 
@@ -263,3 +274,4 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
 | 2026-06-16 | Infinite Cardinality Metrics coverage of span-based custom metrics is unconfirmed | Datadog's Infinite Cardinality Metrics (GA June 9, 2026) prices metrics per name instead of per time series. Whether "Generate Metrics from Spans" custom metrics fall under this model is not stated in the current docs. Do not design implementation work or issue content assuming high-cardinality group-by dimensions are cost-free under this model until Datadog confirms it. Source: [Infinite Cardinality Metrics blog](https://www.datadoghq.com/blog/infinite-cardinality-metrics/) |
 | 2026-06-16 | Filter field is safe for high-cardinality; group-by drives cardinality in "Generate Metrics from Spans" | In Datadog's span-based custom metrics, cardinality risk lives exclusively in the group-by (dimensions) field. The filter field narrows which spans are counted — it does not multiply series and is safe for any attribute including user IDs. This distinction must be explicit in implementation issues to prevent implementers from misidentifying the cardinality risk. Source: [Datadog Generate Metrics from Spans docs](https://docs.datadoghq.com/tracing/trace_pipeline/generate_metrics/) |
 | 2026-06-16 | Research milestones must explicitly instruct implementers to save gotchas to global rule files | Phase 6 of the `/research` skill handles gotcha documentation automatically, but relying on Phase 6 firing without explicit direction is insufficient — a cold AI instance reading only the milestone may skip it. Each research spike milestone (M1, M3, M5) must include an explicit step after all `/research` calls directing the implementer to save surprises for newly-introduced technologies to `~/.claude/rules/<technology>-gotchas.md` and reference each file from `~/.claude/CLAUDE.md` under 'Adopting New Technologies.' M1 completed this retroactively: `otel-span-metrics-connector-gotchas.md`, `datadog-span-based-metrics-gotchas.md`, and `ddot-gotchas.md` were created 2026-06-16. |
+| 2026-06-16 | M2, M4, M6 are conversations with Whitney, not autonomous filing tasks | Issue #964 was filed autonomously with abstract milestones and no concrete work — it was immediately closed as the wrong shape. These milestones must be run as a dialogue: present research findings and tradeoff questions one at a time, wait for Whitney's input, and only create issues or PRDs that emerge from that conversation with concrete agreed-upon scope. No pre-drafting of implementation issues before the conversation. |
