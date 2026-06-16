@@ -98,13 +98,19 @@ This milestone produces `docs/research/traces-metrics-correlation.md`. Do not cr
 
 **Step 0: Read `docs/research/traces-metrics-correlation.md` in full before beginning. This file was produced by M1 and gates this milestone. Do not proceed without reading it.**
 
-**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Present findings and paths one question at a time, discuss tradeoffs, and only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
+**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
+
+**Conversation protocol — strictly enforced:**
+- Ask **one question**, then **stop and wait** for Whitney's response before asking the next.
+- Do NOT front-load all tradeoffs, options, or follow-up questions in a single message.
+- This applies to every question throughout the conversation — the opening question, follow-up questions, scoping questions, and clarifying questions.
+- Each answer Whitney gives may change what the next question should be. Do not pre-sequence the questions.
 
 **How to run this milestone:**
 
-1. Present the top-level question from the research: pure OTel (Span Metrics Connector) vs Datadog-proprietary (Generate Metrics from Spans) vs both coexisting. Share the key tradeoffs from `docs/research/traces-metrics-correlation.md` — one dimension at a time, waiting for Whitney's input before moving to the next.
+1. Ask the top-level question: pure OTel (Span Metrics Connector) vs Datadog-proprietary (Generate Metrics from Spans) vs both coexisting. Present only the single most important tradeoff from `docs/research/traces-metrics-correlation.md` as context. Wait for Whitney's response.
 
-2. Based on Whitney's direction, ask any follow-up questions needed to scope the implementation concretely — e.g., which Weaver schema attributes should become metric dimensions, whether DDOT or standalone otelcol-contrib is the right Collector distribution for her demo environment.
+2. Based on Whitney's answer, ask the single most useful follow-up question — e.g., which Weaver schema attributes should become metric dimensions, or whether DDOT or standalone otelcol-contrib fits her demo environment. One question. Wait for response. Repeat until path and scope are concrete.
 
 3. Once the path and scope are agreed upon, create a concrete GitHub issue or PRD. Every implementation milestone in that issue must begin with: "Step 0: Re-read the findings from `docs/research/traces-metrics-correlation.md` before beginning. This research gates every implementation milestone."
 
@@ -155,13 +161,19 @@ The primary demo target is commit-story (`~/Documents/Repositories/commit-story-
 
 **Step 0: Read `docs/research/traces-logs-correlation.md` in full before beginning. This file was produced by M3 and gates this milestone. Do not proceed without reading it.**
 
-**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Present findings and paths one question at a time, discuss tradeoffs, and only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
+**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
+
+**Conversation protocol — strictly enforced:**
+- Ask **one question**, then **stop and wait** for Whitney's response before asking the next.
+- Do NOT front-load all tradeoffs, options, or follow-up questions in a single message.
+- This applies to every question throughout the conversation — the opening question, follow-up questions, scoping questions, and clarifying questions.
+- Each answer Whitney gives may change what the next question should be. Do not pre-sequence the questions.
 
 **How to run this milestone:**
 
-1. Present the top-level question from the research: pure OTel Logs Bridge API vs dd-trace/Datadog Agent log pipeline. Share the key tradeoffs from `docs/research/traces-logs-correlation.md` — including the `dd.trace_id` format finding (128-bit hex vs 64-bit decimal), which is a likely implementation gotcha regardless of path — one dimension at a time, waiting for Whitney's input before moving to the next.
+1. Ask the top-level question: pure OTel Logs Bridge API vs dd-trace/Datadog Agent log pipeline. Present only the single most important tradeoff from `docs/research/traces-logs-correlation.md` as context — including the `dd.trace_id` format finding (128-bit hex vs 64-bit decimal) since it is a gotcha regardless of which path is chosen. Wait for Whitney's response.
 
-2. Based on Whitney's direction, ask any follow-up questions needed to scope the implementation concretely — e.g., which log emission points in commit-story need trace context injected, what the minimal change looks like.
+2. Based on Whitney's answer, ask the single most useful follow-up question — e.g., which log emission points in commit-story need trace context injected, or what the minimal change looks like. One question. Wait for response. Repeat until path and scope are concrete.
 
 3. Once the path and scope are agreed upon, create a concrete GitHub issue or PRD. Every implementation milestone in that issue must begin with: "Step 0: Re-read the findings from `docs/research/traces-logs-correlation.md` before beginning. This research gates every implementation milestone."
 
@@ -203,13 +215,19 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 **Step 0: Read `docs/research/metrics-logs-correlation.md` in full before beginning. This file was produced by M5 and gates this milestone. Do not proceed without reading it.**
 
-**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Present findings and paths one question at a time, discuss tradeoffs, and only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
+**Updated per Decision 2026-06-16b**: This milestone is a conversation with Whitney, not an autonomous filing task. Do not pre-draft implementation issues or PRDs before the conversation. Only create issues or PRDs that come out of that conversation with concrete, agreed-upon work.
+
+**Conversation protocol — strictly enforced:**
+- Ask **one question**, then **stop and wait** for Whitney's response before asking the next.
+- Do NOT front-load all tradeoffs, options, or follow-up questions in a single message.
+- This applies to every question throughout the conversation — the opening question, follow-up questions, scoping questions, and clarifying questions.
+- Each answer Whitney gives may change what the next question should be. Do not pre-sequence the questions.
 
 **How to run this milestone:**
 
-1. Present the top-level question from the research: pure OTel resource attribute alignment vs Datadog-native tag pipeline. Share the key tradeoffs from `docs/research/metrics-logs-correlation.md` — including which resource attributes must be shared across all three signal types — one dimension at a time, waiting for Whitney's input before moving to the next.
+1. Ask the top-level question: pure OTel resource attribute alignment vs Datadog-native tag pipeline. Present only the single most important tradeoff from `docs/research/metrics-logs-correlation.md` as context — including which resource attributes must be shared across all three signal types, since that is the key implementation constraint regardless of path. Wait for Whitney's response.
 
-2. Based on Whitney's direction, ask any follow-up questions needed to scope the implementation concretely — e.g., which resource attributes need to be added or standardized, what the minimal plumbing change looks like.
+2. Based on Whitney's answer, ask the single most useful follow-up question — e.g., which resource attributes need to be added or standardized, or what the minimal plumbing change looks like. One question. Wait for response. Repeat until path and scope are concrete.
 
 3. Once the path and scope are agreed upon, create a concrete GitHub issue or PRD. Every implementation milestone in that issue must begin with: "Step 0: Re-read the findings from `docs/research/metrics-logs-correlation.md` before beginning. This research gates every implementation milestone."
 
@@ -275,3 +293,4 @@ This milestone evaluates commit-story, taze, and release-it as conference demo t
 | 2026-06-16 | Filter field is safe for high-cardinality; group-by drives cardinality in "Generate Metrics from Spans" | In Datadog's span-based custom metrics, cardinality risk lives exclusively in the group-by (dimensions) field. The filter field narrows which spans are counted — it does not multiply series and is safe for any attribute including user IDs. This distinction must be explicit in implementation issues to prevent implementers from misidentifying the cardinality risk. Source: [Datadog Generate Metrics from Spans docs](https://docs.datadoghq.com/tracing/trace_pipeline/generate_metrics/) |
 | 2026-06-16 | Research milestones must explicitly instruct implementers to save gotchas to global rule files | Phase 6 of the `/research` skill handles gotcha documentation automatically, but relying on Phase 6 firing without explicit direction is insufficient — a cold AI instance reading only the milestone may skip it. Each research spike milestone (M1, M3, M5) must include an explicit step after all `/research` calls directing the implementer to save surprises for newly-introduced technologies to `~/.claude/rules/<technology>-gotchas.md` and reference each file from `~/.claude/CLAUDE.md` under 'Adopting New Technologies.' M1 completed this retroactively: `otel-span-metrics-connector-gotchas.md`, `datadog-span-based-metrics-gotchas.md`, and `ddot-gotchas.md` were created 2026-06-16. |
 | 2026-06-16 | M2, M4, M6 are conversations with Whitney, not autonomous filing tasks | Issue #964 was filed autonomously with abstract milestones and no concrete work — it was immediately closed as the wrong shape. These milestones must be run as a dialogue: present research findings and tradeoff questions one at a time, wait for Whitney's input, and only create issues or PRDs that emerge from that conversation with concrete agreed-upon scope. No pre-drafting of implementation issues before the conversation. |
+| 2026-06-16 | Conversation milestones must enforce "one question, then stop and wait" — not just "one at a time" | The first restructuring of M2/M4/M6 added "one dimension at a time" language but buried it in step prose and allowed a step to say "ask any follow-up questions needed" without the constraint. Whitney clarified: each question must be asked, then the assistant must stop and wait for a response before asking the next. Whitney's answer may change what the next question should be, so pre-sequencing questions is explicitly forbidden. Each of M2, M4, M6 now contains a "Conversation protocol — strictly enforced" block at the top of its instructions, with four rules: one question then stop, no front-loading, applies to all question types, do not pre-sequence. |
