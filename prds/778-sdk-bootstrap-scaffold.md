@@ -50,14 +50,16 @@ The architecture defines a language-provider interface for bootstrap generation.
   ```
   Verify this shape fits naturally alongside existing types before finalizing — do NOT add it if the existing type structure calls for a different pattern.
 
-- [ ] **M2 — JavaScript bootstrap generator**: Implement `JsBootstrapGenerator` in `src/languages/javascript/bootstrap.ts` (a new peer file alongside `ast.ts`, `validation.ts`, etc.) following the `BootstrapGenerator` interface from M1. Generated files must use ESM (`import`/`export`). Use only these exact package names — do NOT invent alternatives:
+- [ ] **M2 — JavaScript bootstrap generator**:
+  **Step 0:** Read related research before starting: [Research: OTel Semantic Conventions for Resource Attributes](../docs/research/otel-semconv-resource-attributes.md)
+  Implement `JsBootstrapGenerator` in `src/languages/javascript/bootstrap.ts` (a new peer file alongside `ast.ts`, `validation.ts`, etc.) following the `BootstrapGenerator` interface from M1. Generated files must use ESM (`import`/`export`). Use only these exact package names — do NOT invent alternatives:
   - `@opentelemetry/sdk-node` → `NodeSDK`
   - `@opentelemetry/resources` → `resourceFromAttributes`
   - `@opentelemetry/exporter-trace-otlp-http` → `OTLPTraceExporter`
   - `@opentelemetry/sdk-trace-node` → `BatchSpanProcessor`, `SimpleSpanProcessor`
   - `node:crypto` → `randomUUID`
 
-  Long-lived output: `BatchSpanProcessor` + `OTLPTraceExporter`. Short-lived output: `SimpleSpanProcessor` + `OTLPTraceExporter` + `process.exit()` interception with `sdk.shutdown()`. Both: `resourceFromAttributes` with `service.name`, `service.version`, and `'service.instance.id': randomUUID()`. Do NOT import from `@opentelemetry/sdk-node` internals beyond `NodeSDK`.
+  Long-lived output: `BatchSpanProcessor` + `OTLPTraceExporter`. Short-lived output: `SimpleSpanProcessor` + `OTLPTraceExporter` + `process.exit()` interception with `sdk.shutdown()`. Both: `resourceFromAttributes` with `service.name`, `service.version`, and `'service.instance.id': randomUUID()`. Do NOT import from `@opentelemetry/sdk-node` internals beyond `NodeSDK`. Generated file content must be complete and runnable — do NOT produce placeholder comments or elided sections.
 
 - [ ] **M3 — Init integration**: In `src/interfaces/init-handler.ts`, find where the `SDK_INIT_FILE` prerequisite failure is handled (currently exits with an error) and branch instead: prompt the user interactively for `service.name` (required, no default) and exporter endpoint (default: `http://localhost:4318/v1/traces`). Derive `isTypeScript` from whether the project's source files are `.ts`; use `serviceVersion: '0.0.0'` as default. Call the language provider's `BootstrapGenerator.generate()`, write the output file to the suggested filename, run `npm install` for `packagesToInstall`, and set `sdkInitFile` in `spiny-orb.yaml` to the generated filename. If the user declines or input is non-interactive, exit with a message pointing to `docs/short-lived-setup.md`.
 
