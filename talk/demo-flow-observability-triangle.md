@@ -27,7 +27,7 @@ The observability triangle extension: "And because the agent uses the right attr
 - Start the OTel Collector with both connectors running (`evaluation/is/otelcol-config.yaml` — requires issue #965 complete)
 - Verify traces flow: make a test commit, confirm spans appear in Datadog APM
 - Verify metrics flow: confirm `calls.total` metric appears with `gen_ai.request.model` and `commit_story.ai.section_type` dimensions
-- Verify logs correlation: *[to be filled in after M3/M4]* confirm log entries correlate with traces
+- Verify logs correlation: run `commit-story`, confirm structured JSON logs appear in `/tmp/commit-story.log` with `trace_id` and `span_id` fields, confirm Datadog Logs shows entries linked to APM trace (requires issue #966 complete)
 - Be ready to show: terminal logs, GitHub PR, Datadog APM, Datadog metrics, Datadog logs
 
 ---
