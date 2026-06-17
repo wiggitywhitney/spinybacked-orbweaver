@@ -198,11 +198,24 @@ Navigate from trace to logs, logs back to trace — the correlation works in bot
 
 ## 13. The Full Triangle
 
-*[Placeholder — to be filled in after PRD #963 M5/M6/M7 complete.]*
+*[Section 13 demo content confirmed pending M6 conversation with Whitney and M7 demo target evaluation.]*
 
-Intended beat: navigate from an anomalous metric spike → to the traces that were slow → to the log entries that explain why.
+**M5 research findings relevant to this section:**
 
-Close: "Every step of that navigation worked because the attribute names are consistent. The schema is why."
+Metrics-to-logs navigation works via Datadog's "View related logs" button in Metrics Explorer or Dashboard widgets. The mechanism is purely tag-based (`service`, `env`, `version`). For the pure OTel path, `add_resource_attributes: true` must be set on the `spanmetricsconnector` for `env` and `version` tags to appear on span-derived metrics. With this config in place, the navigation is equivalent to the Datadog-native experience.
+
+**Intended beat (draft — pending M6/M7):**
+1. In Metrics Explorer, select the `spans.duration` (or `calls.total`) metric — filter by `commit_story.ai.section_type:dialogue`
+2. Click a spike point → "View related logs" → Log Explorer opens filtered to `service:commit-story, env:production`
+3. Optionally: further refine by `commit_story.ai.section_type:dialogue` in the log search to narrow to the same section type
+4. "Every step of that navigation worked because the attribute names are consistent. The schema is why."
+
+**Config requirement (to be included in issue #965 scope — confirm in M6):**
+```yaml
+connectors:
+  span_metrics:
+    add_resource_attributes: true
+```
 
 ## 14. Closing
 

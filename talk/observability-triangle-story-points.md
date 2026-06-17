@@ -148,14 +148,28 @@ commit-story-v2 emits all logs via `console.log`/`console.error` — no structur
 
 ## Metrics to Logs Correlation
 
-**Status**: Pending. PRD #963 M5 (research) and M6 (assessment with Whitney).
+**Status**: Research complete (M5). Path decision and demo beat pending M6 (conversation with Whitney).
 
-*To be filled in after M5 and M6 complete.*
+### Research findings (M5)
 
-Open questions going into M5:
-- How does Datadog connect a metric spike to the logs that explain it?
-- Does the `commit_story.ai.section_type` dimension on metrics link back to log entries with the same attribute?
-- What attributes need to appear in both metrics and logs for the correlation to work?
+Datadog metrics-to-logs correlation is **purely tag-based**. The shared reserved tags `service`, `env`, `version` must be present on both the metric time series and log entries. "View related logs" in Metrics Explorer and Dashboards is the UI entry point — it filters Log Explorer by those tags automatically.
+
+For the pure OTel path, the critical non-obvious config is `add_resource_attributes: true` on the `spanmetricsconnector` — without it, metrics are missing `env` and `version` tags even when the OTel SDK sets them on spans. With this flag set, the Datadog Exporter maps `service.name`, `service.version`, and `deployment.environment.name` to the `service`, `version`, and `env` tags on generated metrics.
+
+The pure OTel path produces an **equivalent** "View related logs" experience to Datadog-native APM Trace Metrics — confirmed via Datadog's compatibility matrix.
+
+### Answers to M5 open questions
+
+- **How does Datadog connect a metric spike to logs?** — Purely via matching `service`/`env`/`version` tags. "View related logs" applies those tags as a filter to Log Explorer. No explicit linking IDs.
+- **Does `commit_story.ai.section_type` on metrics link back to log entries?** — Not via the "View related logs" UI button (which only uses UST tags). But if `commit_story.ai.section_type` appears in log bodies (by developer convention, matching the schema-defined attribute name), users can *manually* refine the Log Explorer query to add that dimension. The schema's value here is ensuring the same string appears in both metric dimensions and log fields.
+- **What attributes need to appear in both signals?** — `service.name`, `service.version`, `deployment.environment.name` (as OTel resource attributes) → maps to `service`, `version`, `env` Datadog tags. Both must be present on metric and log for correlation to work.
+
+### Open questions for M6
+
+- Should `add_resource_attributes: true` be added to issue #965 scope, or filed as a separate issue?
+- Which `dimensions:` entries to include on the spanmetricsconnector for demo?
+- Does the demo show metrics-to-logs as a live click-through, or via screenshot backup?
+- Path confirmed as pure OTel (M4 decision carries forward) — M6 to confirm scope of remaining config work.
 
 ---
 
