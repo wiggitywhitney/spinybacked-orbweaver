@@ -148,28 +148,39 @@ commit-story-v2 emits all logs via `console.log`/`console.error` — no structur
 
 ## Metrics to Logs Correlation
 
-**Status**: Research complete (M5). Path decision and demo beat pending M6 (conversation with Whitney).
+**Status**: Confirmed — M6 complete. No new issue filed; `add_resource_attributes: true` added to [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) M1 scope.
 
-### Research findings (M5)
+**Chosen path**: Pure OTel (M4 decision carries forward). `add_resource_attributes: true` on the `spanmetricsconnector` is the only additional config required. See [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) M1.
+
+**Source**: `docs/research/metrics-logs-correlation.md`
+
+### The Mechanism
 
 Datadog metrics-to-logs correlation is **purely tag-based**. The shared reserved tags `service`, `env`, `version` must be present on both the metric time series and log entries. "View related logs" in Metrics Explorer and Dashboards is the UI entry point — it filters Log Explorer by those tags automatically.
 
-For the pure OTel path, the critical non-obvious config is `add_resource_attributes: true` on the `spanmetricsconnector` — without it, metrics are missing `env` and `version` tags even when the OTel SDK sets them on spans. With this flag set, the Datadog Exporter maps `service.name`, `service.version`, and `deployment.environment.name` to the `service`, `version`, and `env` tags on generated metrics.
+For the pure OTel path, the critical non-obvious config is `add_resource_attributes: true` on the `spanmetricsconnector` — without it, metrics are missing `env` and `version` tags even when the OTel SDK sets them on spans. The pure OTel path produces an equivalent "View related logs" experience to Datadog-native APM Trace Metrics — confirmed via Datadog's compatibility matrix.
 
-The pure OTel path produces an **equivalent** "View related logs" experience to Datadog-native APM Trace Metrics — confirmed via Datadog's compatibility matrix.
+### What the Research Resolved
 
-### Answers to M5 open questions
+✅ **"View related logs" works equivalently on the pure OTel path.** Confirmed in Datadog's compatibility matrix — "Correlated Traces, Metrics, Logs" fully supported for all OTel ingest configurations.
 
-- **How does Datadog connect a metric spike to logs?** — Purely via matching `service`/`env`/`version` tags. "View related logs" applies those tags as a filter to Log Explorer. No explicit linking IDs.
-- **Does `commit_story.ai.section_type` on metrics link back to log entries?** — Not via the "View related logs" UI button (which only uses UST tags). But if `commit_story.ai.section_type` appears in log bodies (by developer convention, matching the schema-defined attribute name), users can *manually* refine the Log Explorer query to add that dimension. The schema's value here is ensuring the same string appears in both metric dimensions and log fields.
-- **What attributes need to appear in both signals?** — `service.name`, `service.version`, `deployment.environment.name` (as OTel resource attributes) → maps to `service`, `version`, `env` Datadog tags. Both must be present on metric and log for correlation to work.
+✅ **`add_resource_attributes: true` is the only missing config.** Without it, span-derived metrics silently lose `env` and `version` tags and "View related logs" returns no results. With it, the Datadog Exporter maps `service.name`, `service.version`, and `deployment.environment.name` to the correct reserved tags.
 
-### Open questions for M6
+✅ **`commit_story.ai.section_type` in log bodies enables manual refinement.** The "View related logs" button filters only by UST tags — but once in Log Explorer, the user can further filter by `commit_story.ai.section_type` because the same schema-defined attribute name appears in log bodies. The schema's value: the same string at every layer.
 
-- Should `add_resource_attributes: true` be added to issue #965 scope, or filed as a separate issue?
-- Which `dimensions:` entries to include on the spanmetricsconnector for demo?
-- Does the demo show metrics-to-logs as a live click-through, or via screenshot backup?
-- Path confirmed as pure OTel (M4 decision carries forward) — M6 to confirm scope of remaining config work.
+### Story D: The Full Triangle — Click Through
+
+**Status**: Confirmed. M6 complete. Demo format: **live click-through**.
+
+**The demo beat**:
+
+In Metrics Explorer, select the `spans.duration` (or `calls.total`) metric filtered to `commit_story.ai.section_type:dialogue`. Click a spike point. Datadog opens Log Explorer filtered to `service:commit-story, env:production`. The logs that were running when that metric spike happened are right there.
+
+> "I filtered the metric to one section type. I clicked a spike. Datadog jumped to the logs from that moment — filtered to the same service and environment. It knows to link them because the tags match. The tags match because the OTel resource attributes were set correctly in the Collector config. `add_resource_attributes: true`. One line."
+
+> "And if I want to narrow further — I can filter in Log Explorer by `commit_story.ai.section_type:dialogue`. Same string. The metric dimension, the span attribute, the log field. All one name. The Weaver schema is why."
+
+**Implementation**: `add_resource_attributes: true` on the `spanmetrics` connector in issue #965 M1 (added to scope during M6, 2026-06-17).
 
 ---
 
@@ -197,5 +208,5 @@ The pure OTel path produces an **equivalent** "View related logs" experience to 
 | `spanmetrics` + `datadog/connector` in OTel Collector | Filed | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
 | `gen_ai.usage.output_tokens` Distribution metric in Datadog | Filed | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
 | Traces to logs correlation | Filed | [#966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966) |
-| Metrics to logs correlation | Pending M5/M6 | — |
+| Metrics to logs correlation (`add_resource_attributes: true` → #965 M1) | Confirmed M6 | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
 | Full demo setup | Pending M7 | — |

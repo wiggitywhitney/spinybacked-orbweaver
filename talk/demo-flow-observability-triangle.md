@@ -198,24 +198,24 @@ Navigate from trace to logs, logs back to trace — the correlation works in bot
 
 ## 13. The Full Triangle
 
-*[Section 13 demo content confirmed pending M6 conversation with Whitney and M7 demo target evaluation.]*
+**M6 confirmed — live click-through.** `add_resource_attributes: true` added to issue #965 M1 scope (2026-06-17).
 
-**M5 research findings relevant to this section:**
+Back in Metrics Explorer. The traces gave us business context — section type, LLM call details. The metrics showed us patterns over time — which section type is slowest, which model is doing the work. Now connect metrics to logs.
 
-Metrics-to-logs navigation works via Datadog's "View related logs" button in Metrics Explorer or Dashboard widgets. The mechanism is purely tag-based (`service`, `env`, `version`). For the pure OTel path, `add_resource_attributes: true` must be set on the `spanmetricsconnector` for `env` and `version` tags to appear on span-derived metrics. With this config in place, the navigation is equivalent to the Datadog-native experience.
-
-**Intended beat (draft — pending M6/M7):**
-1. In Metrics Explorer, select the `spans.duration` (or `calls.total`) metric — filter by `commit_story.ai.section_type:dialogue`
+1. In Metrics Explorer, select the `calls.total` metric — filter by `commit_story.ai.section_type:dialogue`
 2. Click a spike point → "View related logs" → Log Explorer opens filtered to `service:commit-story, env:production`
-3. Optionally: further refine by `commit_story.ai.section_type:dialogue` in the log search to narrow to the same section type
-4. "Every step of that navigation worked because the attribute names are consistent. The schema is why."
+3. Further refine by `commit_story.ai.section_type:dialogue` in Log Explorer to narrow to the same section type
 
-**Config requirement (to be included in issue #965 scope — confirm in M6):**
-```yaml
-connectors:
-  span_metrics:
-    add_resource_attributes: true
-```
+"I filtered the metric to one section type. I clicked a spike. Datadog jumped to the logs from that moment — filtered to the same service and environment. It knows to link them because the tags match. The tags match because `add_resource_attributes: true` was set in the Collector config. One line of YAML."
+
+"And if I want to narrow further — I can filter in Log Explorer by `commit_story.ai.section_type:dialogue`. Same string. The metric dimension, the span attribute, the log field. All one name. The Weaver schema is why."
+
+Close the loop: "Every step of that navigation worked because the attribute names are consistent. Traces to metrics. Metrics to logs. Logs back to traces. The schema is what makes the triangle work."
+
+**Setup required (before this section can run live)**:
+- Issue #965 M1 complete — `spanmetricsconnector` with `add_resource_attributes: true` and `dimensions:` list in `otelcol-config.yaml`
+- Metrics flowing to Datadog — `calls.total` visible in Metrics Explorer with both `gen_ai.request.model` and `commit_story.ai.section_type` dimensions
+- Logs pipeline active — issue #966 complete, log entries appearing in Datadog Logs Explorer
 
 ## 14. Closing
 
