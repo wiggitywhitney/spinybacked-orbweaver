@@ -225,4 +225,4 @@ In Metrics Explorer, select the `spans.duration` (or `calls.total`) metric filte
 | `gen_ai.usage.output_tokens` Distribution metric in Datadog | Filed | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
 | Traces to logs correlation | Filed | [#966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966) |
 | Metrics to logs correlation (`add_resource_attributes: true` → #965 M1) | Confirmed M6 | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) |
-| Full demo setup | Pending M7 | — |
+| Full demo setup (demo target confirmed, setup work in #965 + #966) | Confirmed M7 | [#965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965), [#966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966) |
