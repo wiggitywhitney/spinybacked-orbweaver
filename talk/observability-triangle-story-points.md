@@ -186,18 +186,34 @@ In Metrics Explorer, select the `spans.duration` (or `calls.total`) metric filte
 
 ## The Full Triangle Demo
 
-**Status**: Pending. PRD #963 M7 (Demo Target Evaluation).
+**Status**: Confirmed — PRD #963 M7 complete.
 
-*To be filled in after M6 and M7 complete.*
+**Primary demo target**: commit-story-v2 (alone — no second target).
 
-**Intended demo arc** (draft — will be revised with M4/M6/M7 findings):
-1. Make a commit — instrumented commit-story-v2 runs live
-2. Show the trace in Datadog APM (traces pillar)
-3. Navigate to the metrics — LLM calls broken down by model (Story A) and by section type (Story B)
-4. Show the token distribution — p95 output tokens grouped by section type
-5. Navigate from a slow span to the logs that explain it (traces to logs)
-6. Navigate from an anomalous metric spike to the relevant log entries (metrics to logs)
-7. Close: "Every step of that navigation worked because the attribute names are consistent. The schema is why."
+**Why commit-story-v2 alone**: Whitney wrote it (can answer any Q&A); LLM calls are the compelling story for a Datadog engineer audience in 2026; rich schema (22 unique span names, `gen_ai.*` + `commit_story.ai.section_type`); organic runs accumulate during normal development. Taze and release-it have no LLM calls and add demo complexity with no narrative upside.
+
+**Full narrative arc**:
+1. Make a real git commit — commit-story-v2 runs live on the instrumented branch
+2. Show the trace in Datadog APM — root `commit_story.index.main` → orchestration → per-section AI generation spans with `gen_ai.*` attributes
+3. Navigate to Metrics Explorer — `calls.total` broken down by `gen_ai.request.model` (Story A: OTel semconv via `ref:`) and `commit_story.ai.section_type` (Story B: custom Weaver attribute)
+4. Show `gen_ai.usage.output_tokens` distribution — p95 token usage by section type
+5. From an APM span, navigate to the correlated log entry — `trace_id`/`span_id` in 32-char hex, no conversion needed
+6. From Metrics Explorer, click a spike → "View related logs" → Log Explorer filtered by `service`/`env`/`version` tags
+7. Narrow in Log Explorer by `commit_story.ai.section_type:dialogue` — same string used in the metric dimension and span attribute
+8. Close: "Every step of that navigation worked because the attribute names are consistent. The schema is why."
+
+**What each pillar shows in the Datadog UI**:
+
+*Traces*: Three-level hierarchy — entry point → orchestration → auto-instrumented LLM calls. Attributes: `gen_ai.request.model`, `gen_ai.usage.output_tokens`, `commit_story.ai.section_type`, `commit_story.context.messages_count/sessions_count`, `vcs.ref.head.revision`.
+
+*Metrics*: `calls.total` and `spans.duration` broken down by `gen_ai.request.model` and `commit_story.ai.section_type`. Distribution of `gen_ai.usage.output_tokens` by section type. Tag-based correlation uses `service:commit-story`, `env:production`, `version:<semver>` — populated via `add_resource_attributes: true` on the `spanmetricsconnector`.
+
+*Logs*: JSON log bodies with `trace_id`, `span_id`, `commit_story.ai.section_type`, context message counts, `gen_ai.usage.output_tokens`. Bidirectional navigation with APM. "View related logs" entry point from Metrics Explorer.
+
+**Setup required before this section runs live** (summary — full detail in `docs/research/demo-target-evaluation.md`):
+- Issue #965 M1: `spanmetricsconnector` with `add_resource_attributes: true` and `dimensions:` list
+- Issue #965 M2: `gen_ai.usage.output_tokens` Distribution metric in Datadog APM UI
+- Issue #966: commit-story-v2 JSON logging at span sites + `filelog` receiver in OTel Collector
 
 ---
 

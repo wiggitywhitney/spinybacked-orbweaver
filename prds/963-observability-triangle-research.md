@@ -61,7 +61,7 @@ Run three sequential research spikes, each writing findings to a `docs/research/
 - [x] M4: Discuss traces↔logs findings with Whitney and file any resulting issues/PRDs
 - [x] M5: Research — metrics ↔ logs correlation
 - [x] M6: Discuss metrics↔logs findings with Whitney and file any resulting issues/PRDs
-- [ ] M7: Demo target evaluation
+- [x] M7: Demo target evaluation
 
 ---
 
