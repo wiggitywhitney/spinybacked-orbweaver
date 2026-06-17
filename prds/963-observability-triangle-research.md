@@ -270,6 +270,8 @@ This milestone produces `docs/research/metrics-logs-correlation.md`. Do not crea
 
 All three files must exist before beginning this milestone. If any are missing, stop and complete the corresponding research milestone (M1, M3, or M5) before proceeding.
 
+**Before writing any Collector YAML in this milestone or in any follow-up implementation issue:** verify the exact type key for the span metrics connector in the Collector version in use. The upstream component was renamed from `spanmetrics` to `span_metrics`; DDOT may use a different key. To check: run `grep -rE "(spanmetricsconnector|span_metrics|spanmetrics)" <your-collector-config-file>` to see which name is already in use in this environment's config, or consult the Collector version's component list documentation. A wrong key is silently ignored at startup — no error, no metrics generated.
+
 This milestone evaluates commit-story, taze, and release-it as conference demo targets for showing correlated traces, metrics, and logs in the Datadog UI to a Datadog engineer audience. It does NOT file a demo setup issue or PRD — that requires Whitney to review these findings and the three research documents, then choose a correlation path. Filing the setup issue is outside this PRD's scope.
 
 **Background**: commit-story is the strongly preferred primary target: Whitney wrote it, understands its architecture, and it makes LLM calls that are especially compelling for a Datadog engineer audience. This evaluation should confirm that preference and assess whether showing a second project alongside commit-story adds value within a conference talk slot.

@@ -241,8 +241,8 @@ Bring it back to the problem. "Organizations need business logic visibility. Dev
 ## Open Items
 
 - [ ] Complete issue #965 (OTel Collector connector config + Datadog metric setup) — required before sections 11-13 can be demoed live
-- [ ] Research traces to logs correlation (PRD #963 M3) — required before section 12
-- [ ] Research metrics to logs correlation (PRD #963 M5) — required before section 13
+- [x] Research traces to logs correlation (PRD #963 M3) — required before section 12
+- [x] Research metrics to logs correlation (PRD #963 M5) — required before section 13
 - [ ] PRD #963 M7 demo target evaluation — locks in the full triangle demo flow
 - [ ] Run spiny-orb against commit-story-v2 proper (first real run, not eval)
 - [ ] Verify live telemetry end-to-end: traces in APM, metrics with both dimensions, logs correlation

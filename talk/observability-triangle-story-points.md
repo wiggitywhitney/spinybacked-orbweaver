@@ -80,7 +80,7 @@ The story this demo tells: **Weaver schema compliance is what makes the triangle
 
 ## Traces to Logs Correlation
 
-**Status**: Path decided (M4 in progress). Implementation issue pending.
+**Status**: M4 complete. Implementation issue filed: [#966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966).
 
 **Chosen path**: Pure OTel via Datadog Exporter. No dd-trace. Existing `otelcol-contrib` setup extended with a logs pipeline. See `docs/demo/datadog-setup-baseline.md`.
 
