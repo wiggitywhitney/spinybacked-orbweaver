@@ -81,7 +81,7 @@ To complete the observability triangle, three additions are needed to `otelcol-c
 
 1. **Logs pipeline** — add a `filelog` receiver (reading commit-story stdout) or OTLP logs receiver, routed to the `datadog` exporter. commit-story-v2 must be updated to emit JSON logs with `trace_id`/`span_id` fields at instrumented sites (manual `span.spanContext()` extraction — no structured logging library is currently in use).
 
-2. **Metrics pipeline** — add `spanmetricsconnector` (generates RED metrics from spans) + `datadogconnector` (computes APM stats), routed to the `datadog` exporter.
+2. **Metrics pipeline** — add `spanmetricsconnector` (generates RED metrics from spans) + `datadogconnector` (computes APM stats), routed to the `datadog` exporter. **CRITICAL**: set `add_resource_attributes: true` on the `spanmetricsconnector`; without it, `env` and `version` tags are silently missing from span-derived metrics, breaking metrics-to-logs "View related logs" navigation even when the OTel SDK sets these attributes correctly on spans (default is `false`).
 
 3. **Schema attribute dimensions** — configure `spanmetricsconnector` dimensions to include Weaver-schema attributes (e.g., `commit_story.ai.section_type`) so those attributes appear as metric dimensions in Datadog.
 
