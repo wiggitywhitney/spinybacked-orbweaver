@@ -29,6 +29,7 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
+- README validate and update before public sharing ([PRD #970](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/970)) — audit and fix all README commands, add illustration, clean up root-level files; needed before sharing the repo publicly next week.
 - Demo setup docs: observability triangle traces-metrics-logs story ([issue #965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) M3) — write `docs/demo/traces-metrics-setup.md` covering the two-story demo narrative (Story A: `gen_ai.request.model` via OTel semconv; Story B: `commit_story.ai.section_type` via custom Weaver schema). M1 (spanmetrics + datadog/connector in otelcol-config.yaml) and M2 (`commit_story.llm.output_tokens` Distribution metric in Datadog) are complete. M3 blocked on commit-story-v2 PRD #77 shipping the OTLP logs pipeline.
 
 Taze run-15 eval findings (juggling order 1–14; items 7, 8, and 14 are blocked):
