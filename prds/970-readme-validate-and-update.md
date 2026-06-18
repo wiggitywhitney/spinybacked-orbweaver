@@ -14,24 +14,26 @@ Run the `/write-docs` validation workflow against the README — executing every
 
 ## Context for the Implementing AI
 
-The README is 635 lines with these main sections (line numbers approximate):
-- **What is this?** (L7) — conceptual overview; low drift risk
-- **Example: before/after** (L27) — illustrative code; low drift risk
-- **Choose your interface** (L119) — brief navigation; low drift risk
-- **Prerequisites** (L129) — version numbers, env var behaviors, `@opentelemetry/api` peerDep requirement; **high drift risk**
-- **Project Setup** (L154) — `spiny-orb init`, `spiny-orb.yaml`, Weaver registry setup; **high drift risk**
-- **CLI** (L280) — command examples and output, flags, dry-run; **high drift risk**
-- **MCP Integration** (L462) — install steps, tool descriptions; **moderate drift risk**
-- **GitHub Action** (L545) — workflow YAML, permissions, inputs; **moderate drift risk**
-- **Configuration Reference** (L579) — config schema; **moderate drift risk**
-- **Dry-Run Mode** (L608) — behavior description; low drift risk
-- **Language Provider API** (L629) — interface spec; low drift risk
+The README is 635 lines with these main sections (section headings are the stable reference — use them to locate content, not approximate line numbers):
+- **What is this?** — conceptual overview; low drift risk
+- **Example: before/after** — illustrative code; low drift risk
+- **Choose your interface** — brief navigation; low drift risk
+- **Prerequisites** — version numbers, env var behaviors, `@opentelemetry/api` peerDep requirement; **high drift risk**
+- **Project Setup** — `spiny-orb init`, `spiny-orb.yaml`, Weaver registry setup; **high drift risk**
+- **CLI** — command examples and output, flags, dry-run; **high drift risk**
+- **MCP Integration** — install steps, tool descriptions; **moderate drift risk**
+- **GitHub Action** — workflow YAML, permissions, inputs; **moderate drift risk**
+- **Configuration Reference** — config schema; **moderate drift risk**
+- **Dry-Run Mode** — behavior description; low drift risk
+- **Language Provider API** — interface spec; low drift risk
 
 The `/write-docs` skill (at `~/.claude/skills/write-docs`) has a 7-phase workflow: broken docs scan → environment setup → outline → chunk-by-chunk writing (execute commands, capture real output) → cross-reference check → final review. Follow it, do not short-circuit it.
 
 Issue #953 ("README CLI getting-started guidance: forceFlush and parent span") is an open tracked issue for an onboarding gap. The fix belongs in the CLI or Project Setup section — `docs/short-lived-setup.md` already has the full technical content; the README needs a pointer and a summary of why it matters.
 
 ## Implementation Milestones
+
+**Before beginning M1:** Complete M5 Step 0 — search the repository for `spiny-orb-illustration-bank.png` (or any `.png`/`.jpg`/`.svg` in `docs/`, `talk/`, or the repo root). If no image file is found, surface this as a blocker to Whitney before starting any other milestone work.
 
 ### M1: Broken docs scan — identify stale and broken content
 
@@ -93,18 +95,18 @@ Add a short section to the CLI or Project Setup part of the README that surfaces
 
 The full technical content and code examples already exist in `docs/short-lived-setup.md`. Do NOT duplicate them — link to that doc and add a 2–3 sentence summary explaining why these matter. The goal is that someone skimming the README prerequisites or CLI section sees the warning and knows where to look.
 
-Place the guidance where it is most likely to be seen before someone runs `spiny-orb instrument` for the first time — probably a callout in Prerequisites or a "Before you run" note at the top of the CLI section.
+Place the guidance as a callout at the top of the CLI section, immediately before the first command example — this is where someone running `spiny-orb instrument` for the first time will encounter it.
 
 **Acceptance criteria:**
 - [ ] forceFlush and parent span failure modes are mentioned in the README with a link to `docs/short-lived-setup.md`
-- [ ] The guidance is 2–3 sentences max in the README body — technical depth lives in `docs/short-lived-setup.md`
+- [ ] The guidance is 60 words max in the README body (roughly 2–3 sentences) — technical depth lives in `docs/short-lived-setup.md`
 - [ ] Issue #953 is referenced in the PR so GitHub auto-closes it on merge
 
 ### M5: Add spiny-orb illustration to top of README
 
 Add the spiny-orb illustration image to the very top of the README so it appears prominently on the GitHub repository home page.
 
-**Step 0: Locate the illustration file.** Search the repository for image files (`.png`, `.jpg`, `.svg`) in `docs/`, `talk/`, the repo root, and any subdirectory. The file referenced in project memory is `spiny-orb-illustration-bank.png`. If no image file is found anywhere in the repo, surface this to Whitney as a blocker — do not add a broken image tag or placeholder.
+**Step 0 (do this before starting any other milestone): Locate the illustration file.** Search the repository for image files (`.png`, `.jpg`, `.svg`) in `docs/`, `talk/`, the repo root, and any subdirectory. The file referenced in project memory is `spiny-orb-illustration-bank.png`. If no image file is found anywhere in the repo, surface this to Whitney as a blocker before proceeding with M1–M4 — do not add a broken image tag or placeholder, and do not spend time on other milestones only to discover a hard blocker at M5.
 
 Once the file is found:
 - If the file is not already in a location that serves well as a README asset (e.g., it lives under `talk/` or a temp directory), copy it to `docs/images/` or a similarly permanent location. Do not move original files from `talk/` without Whitney's approval.

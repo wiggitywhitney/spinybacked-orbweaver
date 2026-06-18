@@ -12,7 +12,7 @@ Two demo stories are enabled:
 ## Prerequisites
 
 - `otelcol-contrib` v0.154.0 installed at `~/.local/bin/otelcol-contrib`
-- `spinybacked-orbweaver-eval` repo cloned locally with `.vals.yaml` containing `DD_API_KEY`
+- `spinybacked-orbweaver-eval` repo cloned locally with `.vals.yaml` containing `DD_API_KEY` and `DD_APP_KEY`
 - Datadog Agent stopped (port 4318 conflict — see note below)
 - commit-story-v2 running from a spiny-orb instrument branch
 
@@ -51,7 +51,7 @@ Two harmless warnings appear on every start:
 To stop the Collector when done:
 
 ```bash
-kill $(lsof -ti:4318) && datadog-agent start
+kill $(lsof -ti:4318) 2>/dev/null; datadog-agent start
 ```
 
 ---
