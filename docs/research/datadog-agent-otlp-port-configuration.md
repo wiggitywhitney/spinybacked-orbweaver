@@ -86,7 +86,7 @@ After restarting the Agent:
 
 ```bash
 lsof -i :4318   # should return empty — no process on this port
-datadog-agent status | grep -i otlp   # should show no HTTP receiver
+datadog-agent status | grep -i 4318   # should return empty — HTTP receiver no longer bound
 ```
 
 ### Caveats
