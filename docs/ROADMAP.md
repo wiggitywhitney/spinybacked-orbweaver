@@ -29,8 +29,7 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
-- OTel Collector connector config + Datadog "Generate Metrics from Spans" distribution metric for commit-story-v2 ([issue #965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965)) — add `spanmetrics` and `datadog/connector` to `evaluation/is/otelcol-config.yaml`, and create a Distribution metric for `gen_ai.usage.output_tokens` grouped by `commit_story.ai.section_type`; implementation issue from PRD #963 M2.
-- Traces-to-logs correlation for commit-story-v2 ([issue #966](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/966)) — add structured JSON log emission at AI section generation span sites (pure OTel, manual `span.spanContext()` extraction), add `filelog` receiver pipeline to OTel Collector config; implementation issue from PRD #963 M4.
+- Demo setup docs: observability triangle traces-metrics-logs story ([issue #965](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/965) M3) — write `docs/demo/traces-metrics-setup.md` covering the two-story demo narrative (Story A: `gen_ai.request.model` via OTel semconv; Story B: `commit_story.ai.section_type` via custom Weaver schema). M1 (spanmetrics + datadog/connector in otelcol-config.yaml) and M2 (`commit_story.llm.output_tokens` Distribution metric in Datadog) are complete. M3 blocked on commit-story-v2 PRD #77 shipping the OTLP logs pipeline.
 
 Taze run-15 eval findings (juggling order 1–14; items 7, 8, and 14 are blocked):
 
