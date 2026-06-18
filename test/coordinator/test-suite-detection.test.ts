@@ -53,9 +53,9 @@ describe('hasTestSuite', () => {
       expect(await hasTestSuite('npm test', '/project', failReader)).toBe(true);
     });
 
-    it('returns true when package.json has no scripts.test', async () => {
+    it('returns false when package.json has no scripts.test', async () => {
       const pkgJson = JSON.stringify({ name: 'test-project' });
-      expect(await hasTestSuite('npm test', '/project', mockReadFile(pkgJson))).toBe(true);
+      expect(await hasTestSuite('npm test', '/project', mockReadFile(pkgJson))).toBe(false);
     });
 
     it('resolves yarn test the same way', async () => {
