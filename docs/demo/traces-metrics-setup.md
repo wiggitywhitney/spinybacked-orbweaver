@@ -13,20 +13,11 @@ Two demo stories are enabled:
 
 - `otelcol-contrib` v0.154.0 installed at `~/.local/bin/otelcol-contrib`
 - `spinybacked-orbweaver-eval` repo cloned locally with `.vals.yaml` containing `DD_API_KEY` and `DD_APP_KEY`
-- Datadog Agent stopped (port 4318 conflict — see note below)
 - commit-story-v2 running from a spiny-orb instrument branch
-
-> **Port conflict note**: The Datadog Agent and `otelcol-contrib` both use port 4318 for OTLP. They cannot run simultaneously. Stop the Agent before starting the Collector; restart it after. Issue [#972](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/972) tracks eliminating this constraint by disabling the Agent's OTLP receiver permanently.
 
 ---
 
 ## Starting the Collector
-
-Stop the Datadog Agent to free port 4318:
-
-```bash
-datadog-agent stop
-```
 
 Start `otelcol-contrib` with the demo config. Run from the eval repo root:
 
@@ -51,7 +42,7 @@ Two harmless warnings appear on every start:
 To stop the Collector when done:
 
 ```bash
-kill $(lsof -ti:4318) 2>/dev/null; datadog-agent start
+kill $(lsof -ti:4318) 2>/dev/null
 ```
 
 ---
