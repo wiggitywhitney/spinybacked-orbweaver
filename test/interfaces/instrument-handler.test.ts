@@ -574,6 +574,40 @@ describe('handleInstrument', () => {
       expect(costLine).toContain('claude-sonnet-4-6');
     });
 
+    it('onRunComplete includes cache-write tokens in total cost calculation', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions(), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      // Two results — one with cache-write tokens, one without
+      const results = [
+        makeFileResult({ status: 'success', tokenUsage: { inputTokens: 10000, outputTokens: 5000, cacheReadInputTokens: 0, cacheCreationInputTokens: 5000 } }),
+        makeFileResult({ status: 'success', tokenUsage: { inputTokens: 10000, outputTokens: 5000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } }),
+      ];
+      callbacks.onRunComplete!(results);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const costLine = stderrCalls.find((s: string) => s.includes('Total cost'));
+      expect(costLine).toBeDefined();
+
+      // Cost with 5000 cache-write tokens must exceed cost without them
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+      const resultsNoCacheWrite = [
+        makeFileResult({ status: 'success', tokenUsage: { inputTokens: 10000, outputTokens: 5000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } }),
+        makeFileResult({ status: 'success', tokenUsage: { inputTokens: 10000, outputTokens: 5000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } }),
+      ];
+      callbacks.onRunComplete!(resultsNoCacheWrite);
+      const stderrCalls2 = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const costLineNoCacheWrite = stderrCalls2.find((s: string) => s.includes('Total cost'));
+      expect(costLineNoCacheWrite).toBeDefined();
+
+      // Extract dollar amounts and compare
+      const extractCost = (line: string) => parseFloat(line.match(/\$([\d.]+)/)?.[1] ?? '0');
+      expect(extractCost(costLine!)).toBeGreaterThan(extractCost(costLineNoCacheWrite!));
+    });
+
     it('onRunComplete includes partial count in summary (#188)', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions(), deps);

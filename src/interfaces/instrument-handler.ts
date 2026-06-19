@@ -341,6 +341,7 @@ export async function handleInstrument(
       const totalInput = results.reduce((sum, r) => sum + r.tokenUsage.inputTokens, 0);
       const totalOutput = results.reduce((sum, r) => sum + r.tokenUsage.outputTokens, 0);
       const totalCached = results.reduce((sum, r) => sum + r.tokenUsage.cacheReadInputTokens, 0);
+      const totalCacheWrite = results.reduce((sum, r) => sum + r.tokenUsage.cacheCreationInputTokens, 0);
       deps.stderr(
         `\nRun complete: ${committed} committed, ${failed} failed, ${partial} partial, ${correctSkips} correct skips, ${skipped} skipped`,
       );
@@ -350,7 +351,7 @@ export async function handleInstrument(
           tokenLine += ` (${(totalCached / 1000).toFixed(1)}K cached)`;
         }
         deps.stderr(tokenLine);
-        const totalUsage = { inputTokens: totalInput, outputTokens: totalOutput, cacheReadInputTokens: totalCached, cacheCreationInputTokens: 0 };
+        const totalUsage = { inputTokens: totalInput, outputTokens: totalOutput, cacheReadInputTokens: totalCached, cacheCreationInputTokens: totalCacheWrite };
         const totalCostStr = formatDollars(tokensToDollars(totalUsage, config.agentModel));
         deps.stderr(`  Total cost: ${totalCostStr} (${config.agentModel})`);
       }
