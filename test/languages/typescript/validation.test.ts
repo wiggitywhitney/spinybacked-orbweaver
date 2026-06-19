@@ -556,6 +556,16 @@ describe('detectInvalidRegexFlag', () => {
     expect(result).not.toBeNull();
     expect(result!.match).toContain('/ v');
   });
+
+  it('returns null for valid regex with ES2022 d flag: /pattern/d', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/d;');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for valid regex with ES2024 v flag: /pattern/v', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/v;');
+    expect(result).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
