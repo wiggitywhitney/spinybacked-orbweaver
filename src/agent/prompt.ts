@@ -308,7 +308,7 @@ Your output is scored against these rules. Violating gate rules causes immediate
 - **CDQ-006**: Wrap \`setAttribute\` calls with \`if (span.isRecording()) { ... }\` when the value expression involves any computation — a function call, method call, array transformation, or string joining operation. Non-recording spans are no-ops under head-based sampling, but the value expression still executes; the guard prevents that wasted work.
 
   **Requires a guard** — any of these value expression types:
-  - Function calls: \`getData()\`, \`computeStats()\`, \`JSON.stringify(...)\`
+  - Function calls: \`getData()\`, \`computeStats()\`, \`JSON.stringify(...)\`, \`Object.keys(...)\`
   - Method calls that transform data: \`.map()\`, \`.filter()\`, \`.reduce()\`, \`.join()\`, \`.flatMap()\`
   - Chains that call methods: \`items.filter(x => x.active).map(x => x.name).join(',')\`
   - External source strings: values from API responses, file contents, or any source of unbounded length — even when no transformation is involved
