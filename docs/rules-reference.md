@@ -2,7 +2,7 @@
 
 Spinybacked Orbweaver validates every instrumented file against a two-tier rubric. This document lists every rule: what it checks, whether it blocks file success or is advisory, and how it relates to the OpenTelemetry specification.
 
-The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/` — one file per rule ID (e.g., `nds003.ts`, `cov001.ts`), with the exception that `api004Rule` is exported from `api001.ts`. Shared registry parsing infrastructure lives in `src/validation/tier2/registry-types.ts` — no per-file rule implementations live in `tier2/`. When rule details and this document disagree, the source of truth is the code — please open an issue.
+The authoritative rule catalog lives in `src/validation/rule-names.ts`. Rule implementations for the JavaScript provider live in `src/languages/javascript/rules/` — one file per rule ID (e.g., `nds003.ts`, `cov001.ts`), with the exception that `api004Rule` is exported from `api001.ts`. Shared registry parsing infrastructure lives in `src/validation/tier2/registry-types.ts` — no per-file rule implementations live in `tier2/`.
 
 ## How rules work
 

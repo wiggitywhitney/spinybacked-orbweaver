@@ -72,6 +72,21 @@ export type ValidationStrategy =
   | 'retry-initial';
 
 /**
+ * A single tsc (or node --check) invocation captured from a per-function instrumentation attempt.
+ * Used in oscillation diagnostics when function-level fallback produces NDS-001 failures.
+ */
+export interface TscAttemptRecord {
+  /** 1-indexed attempt number within the per-function retry loop. */
+  attempt: number;
+  /** Name of the function being instrumented when this tsc invocation ran. */
+  functionName: string;
+  /** Combined stdout from the tsc invocation (errors go to stdout by design). */
+  stdout: string;
+  /** Stderr from the tsc invocation (typically empty; included for completeness). */
+  stderr: string;
+}
+
+/**
  * Complete outcome of instrumenting a single file, including all retry metadata.
  *
  * Every exit path from the fix loop — success, exhaustion, budget exceeded —
@@ -131,4 +146,6 @@ export interface FileResult {
   functionResults?: FunctionResult[];
   /** Recommended refactors the user should apply before re-running the agent on this file. */
   suggestedRefactors?: SuggestedRefactor[];
+  /** tsc invocations from per-function instrumentation attempts, for oscillation debugging. */
+  tscAttempts?: TscAttemptRecord[];
 }
