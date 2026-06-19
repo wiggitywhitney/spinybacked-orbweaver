@@ -39,8 +39,9 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 
 Taze run-15 eval findings (juggling order 1–10; #958 and eval #133 are blocked):
 
-- CDQ-006 auto-fix: deterministic isRecording guard insertion ([issue #984](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/984)) — CDQ-006 validator already identifies exact unguarded call sites; auto-fix wraps them using ts-morph without an LLM retry. Highest-frequency retry driver in taze evals (4 files/run). Follow-on from #956.
+- CDQ-006 AST validator completeness + auto-fix ([issue #984](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/984)) — AST validator completeness (deferred from #956) plus deterministic auto-fix that wraps unguarded calls via ts-morph without an LLM retry. Highest-frequency retry driver in taze evals (4 files/run).
 - SCH-003 gap investigation: fixAttributeTypeCoercions() missing auto-registered numeric attributes ([issue #985](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/985)) — write a reproducing test to confirm whether the sequencing gap hypothesis is correct; fix if confirmed. Follow-on from #908.
+- Create individual issues for deterministic auto-fix candidates from #908 spike ([issue #987](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/987)) — meta-issue; each of the 10+ candidates gets its own issue with /write-prompt review before creation.
 - resolves.ts oscillation root cause investigation ([issue #954](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/954)) — highest-impact taze finding; recovering 6 functions raises Q×F from 10.2 to ~15.8. Prerequisite #949 ✓ closed. Juggling order: 3.
 - resolves.ts oscillation fix ([issue #958](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/958)) — implement the fix identified in #954. Depends on #954. Juggling order: 4.
 - SCH-001 false positive: namespace prefix substring matching ([issue #959](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/959)) — advisor fires when one span name is a prefix substring of another valid span name; fix the matching logic in the SCH-001 judge. Juggling order: 5.
