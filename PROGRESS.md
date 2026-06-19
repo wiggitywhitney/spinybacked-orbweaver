@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-06-15) `coordinate()` now aborts with `CoordinatorAbortError` before the cost ceiling prompt when the target project's tests are already failing at the start of a run. Previously it degraded-and-continued with rollback disabled, wasting tokens on instrumentation the checkpoints would undo and producing misleading failures. The early check runs in a new Step 2c, before cost ceiling computation, so users see a clear message naming the failing tests and are told to fix them before retrying (issue #935).
 
+### Changed
+
+- (2026-06-19) Closed issue #952 (proactive forceFlush for eval forks) as wrong-level fix. The correct solution is `targetType: short-lived` in each fork's `spiny-orb.yaml`, which causes spiny-orb to generate a `SimpleSpanProcessor`-based bootstrap that exports synchronously and is immune to `process.exit()` truncation. taze already had this config; added `targetType: short-lived` to `wiggitywhitney/release-it`'s `spiny-orb.yaml` (commit `36c7606`). Manually patching forceFlush into eval bootstraps was superseded by PRD #930.
+
 ### Added
 
 - (2026-06-19) Added CDQ-001 auto-fix (`fixProcessExitSpanEnd`) that inserts `span.end()` before `process.exit()` inside `startActiveSpan` callbacks using ts-morph AST analysis. Without this, the bootstrap monkey-patch intercepts `process.exit()` to run an async shutdown chain, creating a race between the shutdown and the finally block that loses spans. The auto-fix inserts in reverse-position order to preserve string offsets. Wired into both the primary fix loop and the advisory pass in `instrument-with-retry.ts`. Added prompt instruction directing the agent to use this pattern. Fixes issue #976 (CDQ-001 and SPA-002 share the same root cause — span end before process.exit).
