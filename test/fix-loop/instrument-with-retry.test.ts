@@ -3480,6 +3480,96 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     // Must NOT include stale notes from the failed whole-file attempt
     expect(result.notes?.some(n => n.includes(wholeFileStaleNote))).toBe(false);
   });
+
+  it('returns status failed when some per-function calls fail and no spans were added (#950)', async () => {
+    // Whole-file fails → function-level fallback.
+    // First per-function call: LLM succeeds but validation fails → success: false.
+    // Second per-function call: LLM succeeds, validation passes, but 0 spans → success: true, spansAdded: 0.
+    // Because some functions failed, the result must be 'failed', not 'success'.
+    let perFunctionCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          perFunctionCallCount++;
+          if (perFunctionCallCount === 1) {
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: 'invalid syntax;\n',
+                spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: FALLBACK_FIXTURE,
+              spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        return { success: false, error: 'whole-file LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => {
+        if (isPerFunctionCall(input.filePath) && perFunctionCallCount === 1) {
+          return makeFailingValidation(input.filePath);
+        }
+        return makePassingValidation(input.filePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('failed');
+    expect(result.spansAdded).toBe(0);
+  });
+
+  it('populates tscAttempts from per-function validation failures for oscillation debugging (#949)', async () => {
+    // Same scenario as #950 test — first function fails validation, second succeeds with 0 spans.
+    // After the fix, result.tscAttempts must contain the NDS-001 diagnostic from the failed function.
+    let perFunctionCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          perFunctionCallCount++;
+          if (perFunctionCallCount === 1) {
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: 'invalid syntax;\n',
+                spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: FALLBACK_FIXTURE,
+              spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        return { success: false, error: 'whole-file LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => {
+        if (isPerFunctionCall(input.filePath) && perFunctionCallCount === 1) {
+          return makeFailingValidation(input.filePath);
+        }
+        return makePassingValidation(input.filePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.tscAttempts).toBeDefined();
+    expect(result.tscAttempts!.length).toBeGreaterThan(0);
+    const entry = result.tscAttempts![0];
+    expect(entry.attempt).toBe(1);
+    expect(typeof entry.functionName).toBe('string');
+    expect(entry.functionName.length).toBeGreaterThan(0);
+    expect(typeof entry.stdout).toBe('string');
+    expect(entry.stdout.length).toBeGreaterThan(0);
+  });
 });
 
 describe('instrumentWithRetry — suggestedRefactors collection', () => {

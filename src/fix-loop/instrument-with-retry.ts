@@ -1165,6 +1165,8 @@ async function functionLevelFallback(
 
   // Instrument each function through the full retry loop
   const fnResults: FunctionResult[] = [];
+  // Collect tsc diagnostics from per-function validation failures for oscillation debugging.
+  const tscAttempts: Array<{ attempt: number; functionName: string; stdout: string; stderr: string }> = [];
   const tmpBase = tmpdir();
 
   // Progressive schema threading: mirrors how the coordinator updates the working registry
@@ -1267,6 +1269,15 @@ async function functionLevelFallback(
           }
         }
       } else {
+        // Collect per-attempt tsc diagnostic output for oscillation debugging (#949).
+        if (fileResult.lastErrorByAttempt) {
+          for (let i = 0; i < fileResult.lastErrorByAttempt.length; i++) {
+            const stdout = fileResult.lastErrorByAttempt[i];
+            if (stdout.trim()) {
+              tscAttempts.push({ attempt: i + 1, functionName: fn.name, stdout, stderr: '' });
+            }
+          }
+        }
         fnResults.push({
           name: fn.name,
           success: false,
@@ -1306,6 +1317,30 @@ async function functionLevelFallback(
     for (const r of fnResults) {
       shortCircuitTokens = addTokenUsage(shortCircuitTokens, r.tokenUsage);
     }
+    const failedFns = fnResults.filter(r => !r.success);
+    const tscAttemptsResult = tscAttempts.length > 0 ? tscAttempts : undefined;
+    if (failedFns.length > 0) {
+      // Some functions failed validation — not a correct skip. Return 'failed' so the run
+      // summary counts it correctly and the debug dump fires via lastInstrumentedCode.
+      return {
+        ...wholeFileResult,
+        spansAdded: 0,
+        tokenUsage: shortCircuitTokens,
+        lastInstrumentedCode: wholeFileResult.lastInstrumentedCode ?? originalCode,
+        errorProgression: [
+          ...(wholeFileResult.errorProgression ?? []),
+          `function-level: ${successful.length}/${extractedFunctions.length} with no spans, ${failedFns.length} failed`,
+        ],
+        notes: [
+          `Function-level fallback: ${successful.length}/${extractedFunctions.length} functions instrumented (0 spans)`,
+          ...failedFns.map(r => `  failed: ${r.name} — ${r.error}`),
+        ],
+        functionsInstrumented: 0,
+        functionsSkipped: extractedFunctions.length,
+        functionResults: fnResults,
+        tscAttempts: tscAttemptsResult,
+      };
+    }
     return {
       path: filePath,
       status: 'success',
@@ -1321,13 +1356,13 @@ async function functionLevelFallback(
       ],
       notes: [
         `Function-level fallback: 0/${extractedFunctions.length} functions instrumented`,
-        ...fnResults.filter(r => !r.success).map(r => `  skipped: ${r.name} — ${r.error}`),
       ],
       agentVersion: AGENT_VERSION,
       tokenUsage: shortCircuitTokens,
       functionsInstrumented: 0,
       functionsSkipped: extractedFunctions.length,
       functionResults: fnResults,
+      tscAttempts: tscAttemptsResult,
     };
   }
 

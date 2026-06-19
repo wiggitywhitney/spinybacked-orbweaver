@@ -122,6 +122,7 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 3 Fix Loop', () =
       lastError: result.lastError,
       lastErrorByAttempt: result.lastErrorByAttempt,
       notes: result.notes,
+      tscAttempts: result.tscAttempts,
       tokenUsage: result.tokenUsage,
     }, null, 2));
   }
