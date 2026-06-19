@@ -57,24 +57,31 @@ export async function hasTestSuite(
   // Avoid startsWith to prevent matching `npm test:unit` → scripts.test.
   if (projectDir && NPM_TEST_COMMANDS.some(cmd => trimmed === cmd || trimmed.startsWith(cmd + ' '))) {
     const resolvedScript = await resolveNpmTestScript(projectDir, readFileFn);
-    if (resolvedScript !== null) {
+    if (resolvedScript === null) {
+      // scripts.test is not defined — npm test will fail with "Missing script: test"
+      return false;
+    }
+    if (resolvedScript !== undefined) {
       // Check the resolved script against placeholder patterns
       for (const pattern of NO_TEST_PATTERNS) {
         if (pattern.test(resolvedScript)) return false;
       }
     }
+    // resolvedScript === undefined: package.json unreadable — fall through to return true
   }
 
   return true;
 }
 
 /**
- * Read package.json and return the scripts.test value, or null if unavailable.
+ * Read package.json and return the scripts.test value.
+ * Returns null when the file is readable but scripts.test is not defined.
+ * Returns undefined when the file cannot be read or parsed.
  */
 async function resolveNpmTestScript(
   projectDir: string,
   readFileFn?: ReadFileFn,
-): Promise<string | null> {
+): Promise<string | null | undefined> {
   const reader = readFileFn ?? ((p: string) => readFile(p, 'utf-8'));
   try {
     const content = await reader(join(projectDir, 'package.json'));
@@ -82,6 +89,6 @@ async function resolveNpmTestScript(
     const testScript = pkg?.scripts?.test;
     return typeof testScript === 'string' ? testScript : null;
   } catch {
-    return null;
+    return undefined;
   }
 }
