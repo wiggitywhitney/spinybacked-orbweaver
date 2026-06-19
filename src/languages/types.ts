@@ -662,6 +662,37 @@ export interface LanguageProvider {
   ensureTracerAfterImports(code: string): string;
 
   /**
+   * Auto-fix: insert span.end() before process.exit() inside startActiveSpan callbacks.
+   *
+   * When process.exit() is called inside a startActiveSpan callback, instrumented
+   * environments often intercept the call to run an async shutdown chain, causing
+   * execution to continue past process.exit(). The finally block may race with
+   * shutdown and lose the span. Inserting span.end() immediately before each bare
+   * process.exit() guarantees the span is exported before the race occurs.
+   *
+   * Providers that do not support this pattern should return the code unchanged.
+   *
+   * @param code - Instrumented code that may have unguarded process.exit() calls
+   * @returns Code with span.end() inserted before bare process.exit() calls inside spans
+   */
+  fixProcessExitSpanEnd(code: string): string;
+
+  /**
+   * Auto-fix: wrap numeric or boolean expressions in String() for string-typed attributes.
+   *
+   * Deterministic backstop for SCH-003 type mismatches: when an attribute is declared
+   * as 'string' in the registry but the agent passed a numeric or boolean expression,
+   * this wraps the value in String() to satisfy the declared type.
+   *
+   * Providers that do not support this pattern should return the code unchanged.
+   *
+   * @param code - Instrumented code that may have type-mismatched setAttribute values
+   * @param resolvedSchema - Resolved Weaver registry for declared type lookups
+   * @returns Code with String() coercions applied where safe, or unchanged code
+   */
+  fixAttributeTypeCoercions(code: string, resolvedSchema: object): string;
+
+  /**
    * Return a language-specific formatter constraint string for the LLM prompt.
    *
    * For JavaScript and TypeScript, reads the project's Prettier config from

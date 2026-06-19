@@ -28,6 +28,8 @@ import {
 } from './ast.ts';
 import { checkSyntax, checkLint, formatCode } from './validation.ts';
 import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImports as ensureTracerAfterImportsImpl } from '../shared/reassembly.ts';
+import { fixProcessExitSpanEnd as fixProcessExitSpanEndImpl } from '../javascript/rules/cdq001.ts';
+import { fixAttributeTypeCoercions as fixAttributeTypeCoercionsImpl } from '../javascript/rules/sch003.ts';
 import { buildPrettierConstraint } from '../javascript/validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
@@ -191,6 +193,14 @@ export class TypeScriptProvider implements LanguageProvider {
 
   ensureTracerAfterImports(code: string): string {
     return ensureTracerAfterImportsImpl(code);
+  }
+
+  fixProcessExitSpanEnd(code: string): string {
+    return fixProcessExitSpanEndImpl(code);
+  }
+
+  fixAttributeTypeCoercions(code: string, resolvedSchema: object): string {
+    return fixAttributeTypeCoercionsImpl(code, resolvedSchema);
   }
 
   getFormatterConstraint(filePath: string): Promise<string> {

@@ -824,6 +824,21 @@ describe('renderPrSummary', () => {
       expect(md).toContain('40,000');
       expect(md).toContain('8,000');
     });
+
+    it('includes model ID on the cost row', () => {
+      const result = _makeRunResult({
+        actualTokenUsage: _makeTokenUsage({
+          inputTokens: 40_000,
+          outputTokens: 8_000,
+        }),
+      });
+      const md = renderPrSummary(result, _makeConfig({ agentModel: 'claude-sonnet-4-6' }));
+
+      // Model ID must appear on the same table row as the cost figure
+      const costLine = md.split('\n').find(l => l.includes('**Cost**'));
+      expect(costLine).toBeDefined();
+      expect(costLine).toContain('claude-sonnet-4-6');
+    });
   });
 
   describe('agent version section', () => {

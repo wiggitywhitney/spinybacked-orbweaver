@@ -206,6 +206,93 @@ function getStartSpanVariable(
   return null;
 }
 
+/**
+ * Auto-fix: insert span.end() before process.exit() inside startActiveSpan callbacks.
+ *
+ * When process.exit() is called inside a startActiveSpan callback, execution may
+ * continue past the call if the instrumented environment intercepts process.exit()
+ * to run an async shutdown chain. The finally block may race with shutdown and
+ * lose the span. Calling span.end() immediately before process.exit() guarantees
+ * the span is exported before the race occurs.
+ *
+ * This fix detects process.exit() calls inside startActiveSpan callbacks that do
+ * not already have a preceding span.end(), and inserts one.
+ *
+ * @param code - Instrumented JavaScript or TypeScript code
+ * @returns Code with span.end() inserted before any bare process.exit() calls
+ */
+export function fixProcessExitSpanEnd(code: string): string {
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile('fix.js', code);
+
+  const insertions: Array<{ pos: number; spanName: string; indent: string }> = [];
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+
+    if (!node.getExpression().getText().endsWith('.startActiveSpan')) return;
+
+    const args = node.getArguments();
+    for (const arg of args) {
+      if (!Node.isArrowFunction(arg) && !Node.isFunctionExpression(arg)) continue;
+
+      const spanParam = arg.getParameters()[0]?.getName();
+      if (!spanParam) continue;
+
+      const escSpan = spanParam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const spanEndRe = new RegExp(`\\b${escSpan}\\.end\\(\\)`);
+
+      arg.forEachDescendant((desc) => {
+        if (!Node.isCallExpression(desc)) return;
+        if (desc.getExpression().getText() !== 'process.exit') return;
+
+        // Skip process.exit() calls inside a nested function scope — those will be
+        // handled when forEachDescendant processes their own startActiveSpan call.
+        const enclosingFn = desc.getAncestors().find(
+          (a) => Node.isArrowFunction(a) || Node.isFunctionExpression(a),
+        );
+        if (enclosingFn !== arg) return;
+
+        const exprStmt = desc.getParent();
+        if (!exprStmt || !Node.isExpressionStatement(exprStmt)) return;
+
+        const block = exprStmt.getParent();
+        if (!block || (!Node.isBlock(block) && !Node.isSourceFile(block))) return;
+
+        const statements = block.getStatements();
+        const idx = statements.findIndex((s) => s === exprStmt);
+        if (idx < 0) return;
+
+        const prevStmt = idx > 0 ? statements[idx - 1] : undefined;
+        if (prevStmt && spanEndRe.test(prevStmt.getText())) return;
+
+        const startPos = exprStmt.getStart();
+        let lineStart = startPos;
+        while (lineStart > 0 && code[lineStart - 1] !== '\n') lineStart--;
+        const indent = code.slice(lineStart, startPos).match(/^(\s*)/)?.[1] ?? '';
+
+        insertions.push({ pos: startPos, spanName: spanParam, indent });
+      });
+
+      break;
+    }
+  });
+
+  if (insertions.length === 0) return code;
+
+  insertions.sort((a, b) => b.pos - a.pos);
+
+  let result = code;
+  for (const { pos, spanName, indent } of insertions) {
+    const insertText = `${spanName}.end();\n${indent}`;
+    result = result.slice(0, pos) + insertText + result.slice(pos);
+  }
+  return result;
+}
+
 /** CDQ-001 ValidationRule — every span must be closed in all code paths. */
 export const cdq001Rule: ValidationRule = {
   ruleId: 'CDQ-001',
