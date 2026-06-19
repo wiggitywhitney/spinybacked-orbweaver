@@ -26,8 +26,11 @@ interface TypeViolation {
  * checks that literal values match the expected type (string, int, double,
  * boolean, or enum members).
  *
- * Variable values (non-literals) are skipped — static analysis cannot determine
- * their type without full type resolution.
+ * Non-literal values (variables, function calls, property access) are classified by
+ * classifyExpression(). Unfixable mismatches (string expression for an int-typed
+ * attribute; string or numeric expression for a boolean-typed attribute) are flagged
+ * as blocking failures. Safe coercions (numeric or boolean expression for a string-typed
+ * attribute) are handled by fixAttributeTypeCoercions and not re-flagged here.
  *
  * @param code - The instrumented JavaScript code to check
  * @param filePath - Path to the file being validated (for CheckResult)

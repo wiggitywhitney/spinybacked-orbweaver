@@ -249,6 +249,13 @@ export function fixProcessExitSpanEnd(code: string): string {
         if (!Node.isCallExpression(desc)) return;
         if (desc.getExpression().getText() !== 'process.exit') return;
 
+        // Skip process.exit() calls inside a nested function scope — those will be
+        // handled when forEachDescendant processes their own startActiveSpan call.
+        const enclosingFn = desc.getAncestors().find(
+          (a) => Node.isArrowFunction(a) || Node.isFunctionExpression(a),
+        );
+        if (enclosingFn !== arg) return;
+
         const exprStmt = desc.getParent();
         if (!exprStmt || !Node.isExpressionStatement(exprStmt)) return;
 

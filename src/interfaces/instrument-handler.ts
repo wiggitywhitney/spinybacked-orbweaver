@@ -351,12 +351,8 @@ export async function handleInstrument(
         }
         deps.stderr(tokenLine);
         const totalUsage = { inputTokens: totalInput, outputTokens: totalOutput, cacheReadInputTokens: totalCached, cacheCreationInputTokens: 0 };
-        try {
-          const totalCostStr = formatDollars(tokensToDollars(totalUsage, config.agentModel));
-          deps.stderr(`  Total cost: ${totalCostStr} (${config.agentModel})`);
-        } catch {
-          // unsupported model — skip cost line
-        }
+        const totalCostStr = formatDollars(tokensToDollars(totalUsage, config.agentModel));
+        deps.stderr(`  Total cost: ${totalCostStr} (${config.agentModel})`);
       }
     },
   };

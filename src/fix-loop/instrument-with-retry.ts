@@ -730,11 +730,6 @@ async function executeRetryLoop(
     output.instrumentedCode = provider.ensureTracerAfterImports(output.instrumentedCode);
     // Fix span lifecycle: insert span.end() before process.exit() inside startActiveSpan callbacks.
     output.instrumentedCode = provider.fixProcessExitSpanEnd(output.instrumentedCode);
-    // Fix SCH-003 type coercions: wrap numeric/boolean expressions in String() for string-typed attributes.
-    output.instrumentedCode = provider.fixAttributeTypeCoercions(output.instrumentedCode, resolvedSchema);
-
-    // Write instrumented code to disk (validation chain needs the file on disk)
-    await writeFile(filePath, output.instrumentedCode, 'utf-8');
 
     // Per-attempt auto-registration: extract novel setAttribute keys and register them in
     // agent-extensions.yaml before SCH-002 validation runs. Snapshot before writing so
@@ -768,6 +763,13 @@ async function executeRetryLoop(
         );
       }
     }
+    // Fix SCH-003 type coercions after auto-registration so agent-declared string-typed
+    // attributes are visible via autoRegistrationResolvedSchema, not just the base schema.
+    output.instrumentedCode = provider.fixAttributeTypeCoercions(output.instrumentedCode, autoRegistrationResolvedSchema);
+
+    // Write instrumented code to disk (validation chain needs the file on disk)
+    await writeFile(filePath, output.instrumentedCode, 'utf-8');
+
     const validationConfigForAttempt = autoRegistrationResolvedSchema !== resolvedSchema
       ? { ...validationConfig, resolvedSchema: autoRegistrationResolvedSchema }
       : validationConfig;
@@ -973,7 +975,7 @@ async function executeRetryLoop(
 
           let advisoryCode = provider.ensureTracerAfterImports(advisoryOutput.instrumentedCode);
           advisoryCode = provider.fixProcessExitSpanEnd(advisoryCode);
-          advisoryCode = provider.fixAttributeTypeCoercions(advisoryCode, resolvedSchema);
+          advisoryCode = provider.fixAttributeTypeCoercions(advisoryCode, autoRegistrationResolvedSchema);
           await writeFile(filePath, advisoryCode, 'utf-8');
 
           const advisoryValidation = await validateFileFn({

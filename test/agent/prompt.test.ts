@@ -412,6 +412,24 @@ describe('buildSystemPrompt', () => {
     expect(sch003).toMatch(/semantic|represents/i);
   });
 
+  it('SCH-003 type inference table maps .length / integer arithmetic to int and comparison / boolean methods to boolean', () => {
+    const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
+    const sch003Start = prompt.indexOf('**SCH-003**');
+    expect(sch003Start).toBeGreaterThan(-1);
+    const nextRuleOffset = prompt.slice(sch003Start + 1).search(/\n- \*\*[A-Z]{3}-\d{3}/);
+    const sch003End = nextRuleOffset >= 0 ? sch003Start + 1 + nextRuleOffset : prompt.length;
+    const sch003 = prompt.slice(sch003Start, sch003End);
+    // Must include type inference table with .length → int
+    expect(sch003).toMatch(/\.length/);
+    expect(sch003).toMatch(/integer arithmetic/i);
+    // Must map comparison / includes() to boolean
+    expect(sch003).toMatch(/Comparison|===|!==|includes/);
+    expect(sch003).toMatch(/boolean/);
+    // Must map .toFixed() / division to double
+    expect(sch003).toMatch(/toFixed/);
+    expect(sch003).toMatch(/double/);
+  });
+
   it('SCH-002 includes near-synonym recovery path: reuse registered key on retry, not a new variant', () => {
     const prompt = buildSystemPrompt(makeSchema(), undefined, jsProvider);
     const sch002Start = prompt.indexOf('**SCH-002**');
@@ -733,6 +751,14 @@ describe('buildSystemPrompt', () => {
 
       expect(checklist).toMatch(/null.*undefined|undefined.*null/i);
       expect(checklist).toContain('isRecording');
+    });
+
+    it('CDQ item: includes question about span.end() before process.exit() inside startActiveSpan', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(checklist).toMatch(/process\.exit/);
+      expect(checklist).toMatch(/startActiveSpan/);
     });
 
     it('RST item: includes question about getTracer canonical call', () => {

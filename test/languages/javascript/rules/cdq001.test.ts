@@ -336,6 +336,42 @@ describe('checkSpansClosed (CDQ-001)', () => {
 
       expect(fixed).toBe(code);
     });
+
+    it('uses inner span variable for process.exit() inside a nested startActiveSpan callback', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function run() {',
+        '  return tracer.startActiveSpan("outer", async (outerSpan) => {',
+        '    try {',
+        '      return tracer.startActiveSpan("inner", async (innerSpan) => {',
+        '        try {',
+        '          const result = await doWork();',
+        '          return result;',
+        '        } catch (err) {',
+        '          process.exit(1);',
+        '        } finally {',
+        '          innerSpan.end();',
+        '        }',
+        '      });',
+        '    } finally {',
+        '      outerSpan.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const fixed = fixProcessExitSpanEnd(code);
+
+      // Should insert innerSpan.end() (not outerSpan.end()) before process.exit()
+      expect(fixed).toContain('innerSpan.end();\n');
+      expect(fixed).not.toMatch(/outerSpan\.end\(\);\s*\n\s*process\.exit/);
+      // process.exit must be preceded by innerSpan.end() — use indexOf to find the
+      // inserted occurrence (catch block), not the original finally-block occurrence.
+      const innerEndIdx = fixed.indexOf('innerSpan.end();');
+      const processExitIdx = fixed.indexOf('process.exit(1);');
+      expect(innerEndIdx).toBeLessThan(processExitIdx);
+    });
   });
 
   describe('ancestor walk does not cross function boundaries', () => {
