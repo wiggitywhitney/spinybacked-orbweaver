@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-06-19) Removed closed issue #929 (SPA-001 calibration research spike) from ROADMAP short-term after eval team flagged it as closed. Spike concluded: 10-span limit is calibrated for microservices, not CLI pipelines; recommendation to raise to 30 in eval repo's score-is.js. Fix tracked in eval repo issue #940, PR #941 — not in spiny-orb. Updated #976 body to replace "do not auto-fix" with the approved auto-fix acceptance criteria (span variable recoverable from AST; auto-insert span.end() before process.exit() without agent round-trip).
+
 - (2026-06-19) Processed commit-story-v2 run-24 eval findings: created issues #976 (CDQ-001 span.end() before process.exit() — prompt fix + AST auto-fix backstop; also resolves SPA-002, gating IS recovery from 80→90), #977 (include model ID alongside cost in PR body and log output), and #978 (prompt hygiene — two hardcoded commit-story-v2 attribute names in SCH-003 and SCH-002 rule text contaminate eval signal). Extended #948 (SCH-003 type inference and enforcement) with run-24 evidence and all-type enforcement scope. Updated #976 to allow auto-fix when the span variable is unambiguously recoverable from the AST — rejected "flag-only" approach after discovering the bootstrap's process.exit interception creates an async race that makes CDQ-001 and SPA-002 the same root cause. Updated ROADMAP.md: run-23 #926 state corrected to closed, #976 entry updated with SPA-002 recovery note, #978 added as juggling order 4 of 4.
 
 
