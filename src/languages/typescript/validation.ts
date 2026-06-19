@@ -159,6 +159,28 @@ export function getTscMajorVersion(tsc: string): number {
   }
 }
 
+// ─── pre-tsc: regex flag whitespace (NDS-008) ────────────────────────────────
+
+/**
+ * Detect invalid regex flag syntax: whitespace between closing `/` delimiter and flag.
+ * Example: `/pattern/ g` is invalid — must be `/pattern/g`.
+ *
+ * This is a heuristic string-level scan sufficient for agent-generated TypeScript code.
+ * It may produce false positives in the rare case of a single-letter variable (`g`, `i`,
+ * etc.) immediately after a division operator with surrounding spaces, but that pattern
+ * is not realistic in instrumentation output.
+ *
+ * @param source - TypeScript source code to scan
+ * @returns Object with match text and source index, or null if none found
+ */
+export function detectInvalidRegexFlag(source: string): { match: string; index: number } | null {
+  // Match: / followed by spaces/tabs, then one or more flag chars, not followed by a word char.
+  // Negative lookbehind (?<!\/) prevents matching the closing / in // line comments.
+  const re = /(?<!\/)\/([ \t]+)([gimsuy]+)(?![a-zA-Z_$0-9])/g;
+  const m = re.exec(source);
+  return m ? { match: m[0], index: m.index } : null;
+}
+
 // ─── syntax (checkSyntax) ─────────────────────────────────────────────────────
 
 /**
@@ -209,6 +231,27 @@ function parseTscLineNumber(output: string): number | null {
  * @returns CheckResult with ruleId 'NDS-001', tier 1, blocking true
  */
 export function checkSyntax(filePath: string): CheckResult {
+  // Pre-tsc: catch invalid regex flag syntax before running tsc.
+  // tsc reports this as TS1005 ("',' expected") with no reference to the regex,
+  // making it hard to diagnose. Detect and report it with a clear message first.
+  const source = readFileSync(filePath, 'utf-8');
+  const flagIssue = detectInvalidRegexFlag(source);
+  if (flagIssue) {
+    const lineNumber = source.slice(0, flagIssue.index).split('\n').length;
+    return {
+      ruleId: 'NDS-008',
+      passed: false,
+      filePath,
+      lineNumber,
+      message:
+        `NDS-008 check failed: invalid regex literal — whitespace between closing \`/\` delimiter ` +
+        `and flag. Found \`${flagIssue.match.trimEnd()}\`. ` +
+        `Fix: remove the whitespace (e.g., \`/pattern/ g\` → \`/pattern/g\`).`,
+      tier: 1,
+      blocking: true,
+    };
+  }
+
   const tsc = findTsc(dirname(filePath));
   const tsconfig = findTsconfig(dirname(filePath));
   const moduleOpts = tsconfig ? readTsConfigModuleOptions(tsconfig) : {};

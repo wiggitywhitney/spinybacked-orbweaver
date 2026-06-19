@@ -1,5 +1,5 @@
-// ABOUTME: CDQ-006 Tier 2 check — expensive attribute computation guarded.
-// ABOUTME: Flags setAttribute calls with expensive values lacking span.isRecording() guard.
+// ABOUTME: CDQ-006 Tier 2 check — setAttribute calls with computed values must be guarded.
+// ABOUTME: Flags setAttribute calls whose value involves a function call, method call, or transformation without span.isRecording().
 
 import { basename } from 'node:path';
 
@@ -9,9 +9,9 @@ import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
 
 /**
- * Patterns that indicate an expensive computation in a setAttribute value.
- * These should be guarded by span.isRecording() to avoid unnecessary work
- * when the span is not being sampled.
+ * Fast text-level patterns for common computed value forms.
+ * The AST pass in isExpensiveValue() catches all CallExpressions including
+ * unlisted function calls — these patterns are a performance shortcut only.
  */
 const EXPENSIVE_PATTERNS = [
   /JSON\.stringify/,
@@ -23,11 +23,11 @@ const EXPENSIVE_PATTERNS = [
 ];
 
 /**
- * CDQ-006: Flag expensive attribute computations without isRecording() guard.
+ * CDQ-006: Flag setAttribute calls whose value involves computation without an isRecording() guard.
  *
- * Detects setAttribute calls whose value argument contains function calls,
- * method chains (.map, .reduce, .join), or JSON.stringify without a preceding
- * span.isRecording() check in the enclosing scope.
+ * "Computation" means any function call, method call, array transformation,
+ * or string joining operation. Simple variable reads, literals, and direct
+ * property accesses do not require a guard.
  *
  * This is an advisory check — it does not block instrumentation.
  *
@@ -163,10 +163,10 @@ function isTrivialCall(callNode: import('ts-morph').CallExpression): boolean {
 }
 
 /**
- * Check if a value expression is "expensive" — contains function calls,
- * method chains, or JSON.stringify.
- * Trivial conversions (.toISOString(), String(), Number(), Boolean(), .toString())
- * are exempt unless they wrap expensive inner expressions.
+ * Check if a value expression requires an isRecording() guard — contains any
+ * function call, method call, or nested computation.
+ * Trivial type coercions (.toISOString(), String(), Number(), Boolean(), .toString())
+ * are exempt unless they wrap a computed inner expression.
  */
 function isExpensiveValue(valueNode: import('ts-morph').Node, valueText: string): boolean {
   // Check for known expensive patterns
@@ -291,7 +291,7 @@ function isDescendantOf(node: import('ts-morph').Node, potentialParent: import('
   return false;
 }
 
-/** CDQ-006 ValidationRule — expensive attribute computation must be guarded by isRecording(). */
+/** CDQ-006 ValidationRule — setAttribute calls with computed values must be guarded by isRecording(). */
 export const cdq006Rule: ValidationRule = {
   ruleId: 'CDQ-006',
   dimension: 'Code Quality',

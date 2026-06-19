@@ -9,6 +9,7 @@ const RULE_NAMES: Record<string, string> = {
   // Tier 1 — Structural
   'ELISION': 'Elision Detected',
   'NDS-001': 'Syntax Valid',
+  'NDS-008': 'Invalid Regex Flag Syntax',
   'LINT': 'Lint Clean',
   'WEAVER': 'Schema Valid',
 
@@ -205,6 +206,11 @@ const RULE_HUMAN_DESCRIPTIONS: Partial<Record<string, string>> = {
     'to a catch block that handles an expected condition — one that doesn\'t rethrow. These catches ' +
     'represent graceful degradation, not failures; recording them as errors creates false alerts. ' +
     'Remove the error recording from that catch block.',
+
+  'NDS-008': 'NDS-008 (Invalid Regex Flag Syntax) fired because the generated code contains a ' +
+    'regex literal with whitespace between the closing delimiter and the flag character ' +
+    '(e.g. `/pattern/ g` instead of `/pattern/g`). Remove the whitespace so the flag ' +
+    'immediately follows the closing `/`.',
 
   // ── Blocking: Coverage ───────────────────────────────────────────────────
 
