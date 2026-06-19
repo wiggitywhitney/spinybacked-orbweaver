@@ -176,7 +176,7 @@ export function getTscMajorVersion(tsc: string): number {
 export function detectInvalidRegexFlag(source: string): { match: string; index: number } | null {
   // Match: / followed by spaces/tabs, then one or more flag chars, not followed by a word char.
   // Negative lookbehind (?<!\/) prevents matching the closing / in // line comments.
-  const re = /(?<!\/)\/([ \t]+)([gimsuy]+)(?![a-zA-Z_$0-9])/g;
+  const re = /(?<!\/)\/([ \t]+)([dgimsuvy]+)(?![a-zA-Z_$0-9])/g;
   const m = re.exec(source);
   return m ? { match: m[0], index: m.index } : null;
 }

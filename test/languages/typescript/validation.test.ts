@@ -544,6 +544,18 @@ describe('detectInvalidRegexFlag', () => {
     expect(result!.index).toBeGreaterThanOrEqual(0);
     expect(source.slice(result!.index)).toMatch(/^\/ g/);
   });
+
+  it('detects whitespace before ES2022 d (hasIndices) flag: /pattern/ d', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/ d;');
+    expect(result).not.toBeNull();
+    expect(result!.match).toContain('/ d');
+  });
+
+  it('detects whitespace before ES2024 v (unicodeSets) flag: /pattern/ v', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/ v;');
+    expect(result).not.toBeNull();
+    expect(result!.match).toContain('/ v');
+  });
 });
 
 // ---------------------------------------------------------------------------
