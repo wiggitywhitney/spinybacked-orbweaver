@@ -43,7 +43,7 @@ Commit-story-v2 run-24 eval findings (juggling order 1–4; all unblocked):
 - Auto-instrumentation: generated gated code includes no user guidance on how to activate it ([issue #979](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/979)) — users receiving an instrument branch have no way to know they need to set env vars to activate generated auto-instrumentation; fix is generated-file comments, instrument report callout, and README section.
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 (164 spans/38 packages) and run-15 provide 2+ CLI evals; data condition met. Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections.
 
-Taze run-15 eval findings (juggling order 1–12; items 6 and 12 are blocked):
+Taze run-15 eval findings (juggling order 1–12; #958 and eval #133 are blocked):
 
 - Proactive forceFlush for taze and release-it eval forks ([issue #952](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/952)) — SPA-002 root cause fix applied proactively before first scored run; also updates eval repo onboarding instructions. Juggling order: 1.
 - SCH-003: attribute type inference and schema type enforcement ([issue #948](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/948)) — wrong type inferred when creating new attributes; declared schema type also ignored in setAttribute calls; prompt guidance for all types + deterministic enforcement backstop. Expanded from taze run-15 to include commit-story-v2 run-24 evidence. Juggling order: 2.
