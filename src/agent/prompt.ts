@@ -305,17 +305,30 @@ Your output is scored against these rules. Violating gate rules causes immediate
 
 - **CDQ-001**: Every span MUST be closed — always call \`span.end()\` in a \`finally\` block, regardless of whether you used \`startActiveSpan\` or \`startSpan\`. \`@opentelemetry/api\` does not auto-close spans in either case. Do NOT place \`span.end()\` inside a \`try\` block — if an exception is thrown before it runs, the span leaks. **When \`process.exit()\` is called inside a \`startActiveSpan\` callback**: call \`span.end()\` immediately before each \`process.exit()\` call, in addition to the \`finally\` block. Instrumented environments often intercept \`process.exit()\` to run an async shutdown chain before actually exiting — execution continues past the call, and the \`finally\` block may race with the shutdown and lose the span. Calling \`span.end()\` before \`process.exit()\` guarantees export before the race occurs.
 - **CDQ-005**: Prefer \`tracer.startActiveSpan()\` over \`tracer.startSpan()\`. \`startActiveSpan()\` automatically sets the span as active in context so child operations are correctly parented. Use \`startSpan()\` only when: (1) the span is a sibling and should not parent subsequent operations; (2) the span is fire-and-forget background work that must not affect the calling trace hierarchy; (3) you need explicit, independent lifecycle control over parallel spans; (4) the span's lifetime must extend beyond a single function scope and be passed to another function to close. If you use \`startSpan()\`, confirm in your reasoning which of these four scenarios applies.
-- **CDQ-006**: Guard expensive attribute computation (\`JSON.stringify\`, \`.map\`, \`.filter\`, \`.reduce\`, \`.join\`, \`.flatMap\`, \`Object.keys()\`) with \`span.isRecording()\`. External source strings — values fetched from git output, API responses, file contents, or any source whose length is unbounded — should also be guarded, even when no computation is involved. When a tracer uses head-based sampling, non-recording spans are no-ops — computations inside \`setAttribute\` still run even when the span will be dropped. The \`isRecording()\` guard MUST use a block body with curly braces — bare statement form is forbidden. Pattern:
+- **CDQ-006**: Wrap \`setAttribute\` calls with \`if (span.isRecording()) { ... }\` when the value expression involves any computation — a function call, method call, array transformation, or string joining operation. Non-recording spans are no-ops under head-based sampling, but the value expression still executes; the guard prevents that wasted work.
+
+  **Requires a guard** — any of these value expression types:
+  - Function calls: \`getData()\`, \`computeStats()\`, \`JSON.stringify(...)\`, \`Object.keys(...)\`
+  - Method calls that transform data: \`.map()\`, \`.filter()\`, \`.reduce()\`, \`.join()\`, \`.flatMap()\`
+  - Chains that call methods: \`items.filter(x => x.active).map(x => x.name).join(',')\`
+  - External source strings: values from API responses, file contents, or any source of unbounded length — even when no transformation is involved
+
+  **Does NOT require a guard** — these are cheap reads:
+  - Simple variable reads: \`span.setAttribute('key', name)\`
+  - Literal values: \`span.setAttribute('key', 'static-string')\`
+  - Direct property accesses with no method calls: \`span.setAttribute('key', obj.id)\` or \`span.setAttribute('key', request.method)\`
+
+  The guard MUST use a block body with curly braces — bare single-statement form is forbidden:
   \`\`\`javascript
   // Wrong — computation runs even when span is not recording
-  span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
+  span.setAttribute('my_service.items', items.map(i => i.name).join(','));
 
   // Wrong — bare statement form (Do NOT write this — causes downstream parse errors)
-  if (span.isRecording()) span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
+  if (span.isRecording()) span.setAttribute('my_service.items', items.map(i => i.name).join(','));
 
   // Correct — block body with curly braces is required
   if (span.isRecording()) {
-    span.setAttribute('pkg.deps', packages.reduce((sum, p) => sum + p.deps.length, 0));
+    span.setAttribute('my_service.items', items.map(i => i.name).join(','));
   }
   \`\`\`
   **Exemption: CDQ-006 does not apply to spans on COV-001 entry points.** COV-001 entry point spans can technically be non-recording when a sampler drops the trace, but adding \`isRecording()\` guards at entry points creates clutter for negligible gain — when an entry point span is dropped, all child work is dropped too, making the guard moot. Do not add \`isRecording()\` guards to COV-001 entry point spans. Do not cite CDQ-006 violations for COV-001 entry point spans in advisory notes or instrumentation reasoning.
@@ -393,7 +406,7 @@ Before returning your output, answer each question. If the answer to any questio
 - **COV**: Does every function I instrumented capture the operation's outcome or result in at least one span attribute — not only the inputs provided to it? Did I set input parameter attributes before any early-return guards, so the span carries context on all execution paths?
 - **NDS (placement)**: Did I place every \`startActiveSpan\` call around new logic only — not wrapping any pre-existing statements, not collapsing multi-line constructs? Did I preserve all exported function signatures unchanged? Did I leave all existing try/catch/finally blocks structurally intact? Did I leave every import statement formatted exactly as originally written (no expansion, no collapsing)?
 - **NDS (conventions)**: Did I use the same module system as the target file (ESM \`import\` or CJS \`require\`, not both)? If a catch block gracefully handles an expected condition with no rethrow, did I avoid adding \`recordException()\` or \`setStatus(ERROR)\` to it?
-- **CDQ**: Did I guard every attribute value against null and undefined before passing it to \`setAttribute()\`? Did I use an \`isRecording()\` guard when the attribute value requires expensive computation? Did I call \`span.end()\` in a \`finally\` block — not inside a \`try\` block? If any \`process.exit()\` call appears inside a \`startActiveSpan\` callback, did I also call \`span.end()\` immediately before each \`process.exit()\`?
+- **CDQ**: Did I guard every attribute value against null and undefined before passing it to \`setAttribute()\`? Did I wrap \`setAttribute\` in an \`isRecording()\` guard (block body, curly braces required) whenever the value involves a function call, method call, array transformation, or string joining operation — or is an external source string of unbounded length? Did I leave simple variable reads, literals, and direct property accesses unguarded (they don't need it)? Did I call \`span.end()\` in a \`finally\` block — not inside a \`try\` block? If any \`process.exit()\` call appears inside a \`startActiveSpan\` callback, did I also call \`span.end()\` immediately before each \`process.exit()\`?
 - **RST**: Is \`tracer\` obtained via the canonical \`getTracer()\` call — not redeclared or shadowed anywhere in the file?
 - **API**: Did I use only \`startActiveSpan\` (not \`startSpan\` unless one of the four documented scenarios applies), and import only from \`@opentelemetry/api\` (not SDK packages)?`;
 }

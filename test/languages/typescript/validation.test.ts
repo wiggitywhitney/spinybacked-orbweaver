@@ -6,7 +6,7 @@ import { mkdtemp, writeFile, rm, mkdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
-import { checkSyntax, findTsconfig, getTscMajorVersion } from '../../../src/languages/typescript/validation.ts';
+import { checkSyntax, findTsconfig, getTscMajorVersion, detectInvalidRegexFlag } from '../../../src/languages/typescript/validation.ts';
 
 // ---------------------------------------------------------------------------
 // getTscMajorVersion
@@ -496,5 +496,134 @@ describe('checkSyntax — --ignoreConfig and stdout capture', () => {
     // Error detail must appear — not an empty double-space gap
     expect(result.message).not.toMatch(/exit code\.\s{2,}Fix/);
     expect(result.message).toContain('TS');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectInvalidRegexFlag — unit tests for pre-tsc regex flag whitespace scan
+// ---------------------------------------------------------------------------
+
+describe('detectInvalidRegexFlag', () => {
+  it('detects whitespace before a single flag: /\\.\\ g', () => {
+    const result = detectInvalidRegexFlag('const re = /\\./ g;');
+    expect(result).not.toBeNull();
+    expect(result!.match).toContain('/ g');
+  });
+
+  it('detects whitespace before multiple flags: /pattern/ gi', () => {
+    const result = detectInvalidRegexFlag('str.replace(/pattern/ gi, "");');
+    expect(result).not.toBeNull();
+    expect(result!.match).toContain('/ gi');
+  });
+
+  it('detects whitespace before flag with tab: /pattern/\\tg', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/\tg;');
+    expect(result).not.toBeNull();
+  });
+
+  it('returns null for valid regex with no space: /\\./g', () => {
+    const result = detectInvalidRegexFlag('const re = /\\./g;');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for valid regex with multiple flags: /pattern/gi', () => {
+    const result = detectInvalidRegexFlag('str.replace(/pattern/gi, "");');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for string containing a regex-like literal with no flags', () => {
+    const result = detectInvalidRegexFlag('const x = /no-flags/;');
+    expect(result).toBeNull();
+  });
+
+  it('returns index pointing to the invalid match position', () => {
+    const source = 'const re = /\\./ g;';
+    const result = detectInvalidRegexFlag(source);
+    expect(result).not.toBeNull();
+    expect(typeof result!.index).toBe('number');
+    expect(result!.index).toBeGreaterThanOrEqual(0);
+    expect(source.slice(result!.index)).toMatch(/^\/ g/);
+  });
+
+  it('detects whitespace before ES2022 d (hasIndices) flag: /pattern/ d', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/ d;');
+    expect(result).not.toBeNull();
+    expect(result!.match).toContain('/ d');
+  });
+
+  it('detects whitespace before ES2024 v (unicodeSets) flag: /pattern/ v', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/ v;');
+    expect(result).not.toBeNull();
+    expect(result!.match).toContain('/ v');
+  });
+
+  it('returns null for valid regex with ES2022 d flag: /pattern/d', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/d;');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for valid regex with ES2024 v flag: /pattern/v', () => {
+    const result = detectInvalidRegexFlag('const re = /pattern/v;');
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkSyntax — pre-tsc regex flag whitespace check (NDS-008)
+// ---------------------------------------------------------------------------
+
+describe('checkSyntax — NDS-008 pre-tsc regex flag whitespace', () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns NDS-008 failure before running tsc when source has /pattern/ g', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-nds008-'));
+    await writeFile(join(tempDir, 'bad-regex.ts'), [
+      'export function clean(str: string): string {',
+      '  return str.replace(/\\./ g, "");',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'bad-regex.ts'));
+
+    expect(result.passed).toBe(false);
+    expect(result.ruleId).toBe('NDS-008');
+    expect(result.blocking).toBe(true);
+    expect(result.tier).toBe(1);
+    expect(result.message).toContain('whitespace');
+    expect(result.message).toContain('/pattern/g');
+  });
+
+  it('passes through to tsc when no whitespace-before-flag is present', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-nds008-ok-'));
+    await writeFile(join(tempDir, 'ok-regex.ts'), [
+      'export function clean(str: string): string {',
+      '  return str.replace(/\\./g, "");',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'ok-regex.ts'));
+
+    expect(result.ruleId).toBe('NDS-001');
+    expect(result.passed).toBe(true);
+  });
+
+  it('includes line number in NDS-008 result', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-nds008-line-'));
+    await writeFile(join(tempDir, 'bad-line.ts'), [
+      'export function clean(str: string): string {',
+      '  const re = /\\W/ i;',
+      '  return str.replace(re, "");',
+      '}',
+    ].join('\n'));
+
+    const result = checkSyntax(join(tempDir, 'bad-line.ts'));
+
+    expect(result.passed).toBe(false);
+    expect(result.ruleId).toBe('NDS-008');
+    expect(result.lineNumber).toBe(2);
   });
 });
