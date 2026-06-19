@@ -556,6 +556,24 @@ describe('handleInstrument', () => {
       expect(summaryLine).toContain('2 correct skips');
     });
 
+    it('onRunComplete includes model ID alongside total cost when tokens are non-zero', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions(), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const results = [
+        makeFileResult({ status: 'success', tokenUsage: { inputTokens: 50000, outputTokens: 10000, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } }),
+      ];
+      callbacks.onRunComplete!(results);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const costLine = stderrCalls.find((s: string) => s.includes('Total cost'));
+      expect(costLine).toBeDefined();
+      expect(costLine).toContain('claude-sonnet-4-6');
+    });
+
     it('onRunComplete includes partial count in summary (#188)', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions(), deps);

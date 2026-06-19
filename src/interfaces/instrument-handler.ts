@@ -8,7 +8,7 @@ import type { AgentConfig } from '../config/schema.ts';
 import type { CoordinatorCallbacks, RunResult } from '../coordinator/types.ts';
 import { CoordinatorAbortError } from '../coordinator/coordinate.ts';
 import type { GitWorkflowDeps, GitWorkflowResult } from '../deliverables/git-workflow.ts';
-import { ceilingToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
+import { ceilingToDollars, tokensToDollars, formatDollars } from '../deliverables/cost-formatting.ts';
 import { formatRuleId, expandRuleCodesInText, getRuleHumanDescription } from '../validation/rule-names.ts';
 import { companionPath } from '../deliverables/companion-path.ts';
 import type { CoordinateDeps } from '../coordinator/coordinate.ts';
@@ -350,6 +350,13 @@ export async function handleInstrument(
           tokenLine += ` (${(totalCached / 1000).toFixed(1)}K cached)`;
         }
         deps.stderr(tokenLine);
+        const totalUsage = { inputTokens: totalInput, outputTokens: totalOutput, cacheReadInputTokens: totalCached, cacheCreationInputTokens: 0 };
+        try {
+          const totalCostStr = formatDollars(tokensToDollars(totalUsage, config.agentModel));
+          deps.stderr(`  Total cost: ${totalCostStr} (${config.agentModel})`);
+        } catch {
+          // unsupported model — skip cost line
+        }
       }
     },
   };

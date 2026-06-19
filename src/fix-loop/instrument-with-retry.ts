@@ -728,6 +728,10 @@ async function executeRetryLoop(
 
     // Fix tracer init placement: ensure it's after all imports, not between them.
     output.instrumentedCode = provider.ensureTracerAfterImports(output.instrumentedCode);
+    // Fix span lifecycle: insert span.end() before process.exit() inside startActiveSpan callbacks.
+    output.instrumentedCode = provider.fixProcessExitSpanEnd(output.instrumentedCode);
+    // Fix SCH-003 type coercions: wrap numeric/boolean expressions in String() for string-typed attributes.
+    output.instrumentedCode = provider.fixAttributeTypeCoercions(output.instrumentedCode, resolvedSchema);
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -968,6 +972,8 @@ async function executeRetryLoop(
           cumulativeTokens = addTokenUsage(cumulativeTokens, advisoryOutput.tokenUsage);
 
           let advisoryCode = provider.ensureTracerAfterImports(advisoryOutput.instrumentedCode);
+          advisoryCode = provider.fixProcessExitSpanEnd(advisoryCode);
+          advisoryCode = provider.fixAttributeTypeCoercions(advisoryCode, resolvedSchema);
           await writeFile(filePath, advisoryCode, 'utf-8');
 
           const advisoryValidation = await validateFileFn({

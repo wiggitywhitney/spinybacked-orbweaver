@@ -2,7 +2,7 @@
 // ABOUTME: Verifies AST-based span.end() detection in finally blocks and callbacks.
 
 import { describe, it, expect } from 'vitest';
-import { checkSpansClosed } from '../../../../src/languages/javascript/rules/cdq001.ts';
+import { checkSpansClosed, fixProcessExitSpanEnd } from '../../../../src/languages/javascript/rules/cdq001.ts';
 
 describe('checkSpansClosed (CDQ-001)', () => {
   const filePath = '/tmp/test-file.js';
@@ -263,6 +263,78 @@ describe('checkSpansClosed (CDQ-001)', () => {
         tier: 2,
         blocking: true,
       });
+    });
+  });
+
+  describe('fixProcessExitSpanEnd', () => {
+    it('inserts span.end() before process.exit() inside startActiveSpan callback', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function run() {',
+        '  return tracer.startActiveSpan("run", async (span) => {',
+        '    try {',
+        '      const result = await doWork();',
+        '      return result;',
+        '    } catch (err) {',
+        '      process.exit(1);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const fixed = fixProcessExitSpanEnd(code);
+
+      expect(fixed).toContain('span.end();\n');
+      // span.end() must appear before process.exit()
+      const spanEndIdx = fixed.indexOf('span.end();');
+      const processExitIdx = fixed.indexOf('process.exit(1);');
+      expect(spanEndIdx).toBeLessThan(processExitIdx);
+      // The finally-block span.end() must still be present (not deduplicated away)
+      const allSpanEnds = [...fixed.matchAll(/span\.end\(\)/g)];
+      expect(allSpanEnds.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('does not modify code when span.end() already precedes process.exit()', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function run() {',
+        '  return tracer.startActiveSpan("run", async (span) => {',
+        '    try {',
+        '      const result = await doWork();',
+        '      return result;',
+        '    } catch (err) {',
+        '      span.end();',
+        '      process.exit(1);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const fixed = fixProcessExitSpanEnd(code);
+
+      expect(fixed).toBe(code);
+    });
+
+    it('does not modify process.exit() calls outside startActiveSpan callbacks', () => {
+      const code = [
+        'async function run() {',
+        '  const result = await doWork();',
+        '  if (!result) {',
+        '    process.exit(1);',
+        '  }',
+        '  return result;',
+        '}',
+      ].join('\n');
+
+      const fixed = fixProcessExitSpanEnd(code);
+
+      expect(fixed).toBe(code);
     });
   });
 

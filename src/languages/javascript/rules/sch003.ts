@@ -125,6 +125,61 @@ function checkSetAttributeValue(
 }
 
 /**
+ * Classify the runtime kind of a non-literal expression for type mismatch detection.
+ *
+ * Returns a best-effort category based on structural shape. Returns 'unknown'
+ * when the expression is too ambiguous to classify safely (avoids false positives).
+ */
+function classifyExpression(expr: Expression): 'numeric' | 'string' | 'boolean' | 'unknown' {
+  // Template literals → string
+  if (Node.isTemplateExpression(expr) || Node.isNoSubstitutionTemplateLiteral(expr)) {
+    return 'string';
+  }
+
+  // Prefix unary: !x → boolean
+  if (Node.isPrefixUnaryExpression(expr)) {
+    if (expr.getText().startsWith('!')) return 'boolean';
+  }
+
+  // Binary expressions — check operator
+  if (Node.isBinaryExpression(expr)) {
+    const opText = expr.getOperatorToken().getText().trim();
+    const boolOps = ['===', '!==', '==', '!=', '>', '<', '>=', '<=', '&&', '||'];
+    const numOps = ['-', '*', '/', '%'];
+    if (boolOps.includes(opText)) return 'boolean';
+    if (numOps.includes(opText)) return 'numeric';
+    // '+' is ambiguous (addition or string concat) — unknown
+    return 'unknown';
+  }
+
+  // Call expressions — identify by callee text
+  if (Node.isCallExpression(expr)) {
+    const calleeText = expr.getExpression().getText();
+    if (calleeText === 'String') return 'string';
+    if (calleeText === 'Boolean') return 'boolean';
+    if (['parseInt', 'parseFloat', 'Number'].includes(calleeText)) return 'numeric';
+    if (calleeText.startsWith('Math.')) return 'numeric';
+    const stringMethods = [
+      '.toString', '.join', '.toFixed', '.padStart', '.padEnd',
+      '.trim', '.toLowerCase', '.toUpperCase', '.slice', '.substring', '.replace',
+    ];
+    if (stringMethods.some((m) => calleeText.endsWith(m))) return 'string';
+    const boolMethods = ['.includes', '.some', '.every', '.has', '.startsWith', '.endsWith'];
+    if (boolMethods.some((m) => calleeText.endsWith(m))) return 'boolean';
+    return 'unknown';
+  }
+
+  // Property access: .length, .size → numeric
+  if (Node.isPropertyAccessExpression(expr)) {
+    const propName = expr.getName();
+    if (propName === 'length' || propName === 'size') return 'numeric';
+    return 'unknown';
+  }
+
+  return 'unknown';
+}
+
+/**
  * Check a value expression against an expected registry type.
  * Returns a violation if the types don't match, or null if they do (or can't be checked).
  */
@@ -134,9 +189,35 @@ function checkValueAgainstType(
   def: ResolvedRegistryAttribute,
   line: number,
 ): TypeViolation | null {
-  // Skip non-literal values — can't type-check variables statically
   const literalType = getLiteralType(valueExpr);
-  if (!literalType) return null;
+
+  if (!literalType) {
+    // Non-literal: classify to detect unfixable type mismatches.
+    // Safe coercions (string-type + numeric/boolean expr) are handled by fixAttributeTypeCoercions
+    // and not flagged here to avoid double-reporting.
+    const exprKind = classifyExpression(valueExpr);
+    if (exprKind === 'unknown') return null;
+
+    const registryType = def.type!;
+    if (isEnumType(registryType)) return null;
+
+    const typeStr = registryType as string;
+    if (typeStr === 'int' && exprKind === 'string') {
+      return {
+        key, line, expectedType: 'int',
+        actualValue: valueExpr.getText(),
+        detail: `expected int but value expression appears to be a string`,
+      };
+    }
+    if (typeStr === 'boolean' && (exprKind === 'string' || exprKind === 'numeric')) {
+      return {
+        key, line, expectedType: 'boolean',
+        actualValue: valueExpr.getText(),
+        detail: `expected boolean but value expression appears to be a ${exprKind}`,
+      };
+    }
+    return null;
+  }
 
   const registryType = def.type!;
 
@@ -256,6 +337,77 @@ function getLiteralType(expr: Expression): LiteralInfo | null {
     }
   }
   return null;
+}
+
+/**
+ * Auto-fix: wrap numeric or boolean expressions in String() when the declared
+ * attribute type is 'string'.
+ *
+ * Only handles the safe coercion case. Type mismatches that cannot be safely
+ * auto-fixed (e.g., string expression for an int-typed attribute) are left for
+ * the enhanced validator in checkValueAgainstType to report as blocking failures.
+ *
+ * @param code - Instrumented code that may have type-mismatched setAttribute calls
+ * @param resolvedSchema - Resolved Weaver registry object for type lookups
+ * @returns Code with String() coercions inserted where needed, or original code unchanged
+ */
+export function fixAttributeTypeCoercions(code: string, resolvedSchema: object): string {
+  const registry = parseResolvedRegistry(resolvedSchema);
+  const attrDefs = getAttributeDefinitions(registry);
+  if (attrDefs.size === 0) return code;
+
+  const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+  const sourceFile = project.createSourceFile('fix.js', code);
+
+  const replacements: Array<{ start: number; end: number; replacement: string }> = [];
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+
+    const expr = node.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return;
+
+    const methodName = expr.getName();
+    const receiverText = expr.getExpression().getText();
+    if (!/\b(?:span|activeSpan|parentSpan|rootSpan|childSpan)\b/i.test(receiverText)) return;
+    if (methodName !== 'setAttribute') return;
+
+    const args = node.getArguments();
+    if (args.length < 2) return;
+
+    const keyArg = args[0];
+    if (!Node.isStringLiteral(keyArg)) return;
+
+    const key = keyArg.getLiteralValue();
+    const def = attrDefs.get(key);
+    if (!def || !def.type) return;
+
+    // Only fix string-typed attributes — other coercions require semantic judgment
+    const typeStr = def.type;
+    if (typeof typeStr !== 'string' || typeStr !== 'string') return;
+
+    const valueArg = args[1] as Expression;
+
+    // Skip literal values — getLiteralType / existing validator handles those
+    if (getLiteralType(valueArg) !== null) return;
+
+    const exprKind = classifyExpression(valueArg);
+    if (exprKind !== 'numeric' && exprKind !== 'boolean') return;
+
+    const start = valueArg.getStart();
+    const end = valueArg.getEnd();
+    replacements.push({ start, end, replacement: `String(${valueArg.getText()})` });
+  });
+
+  if (replacements.length === 0) return code;
+
+  // Apply in reverse order so earlier positions remain valid
+  replacements.sort((a, b) => b.start - a.start);
+  let result = code;
+  for (const { start, end, replacement } of replacements) {
+    result = result.slice(0, start) + replacement + result.slice(end);
+  }
+  return result;
 }
 
 function pass(filePath: string, message: string): CheckResult {

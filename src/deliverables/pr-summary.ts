@@ -658,7 +658,7 @@ function renderTokenUsage(runResult: RunResult, config: AgentConfig): string {
   try {
     const ceilingDollars = ceilingToDollars(runResult.costCeiling, config.agentModel);
     const actualDollars = tokensToDollars(runResult.actualTokenUsage, config.agentModel);
-    costRow = `| **Cost** | ${formatDollars(ceilingDollars)} | ${formatDollars(actualDollars)} |`;
+    costRow = `| **Cost** | ${formatDollars(ceilingDollars)} | ${formatDollars(actualDollars)} (${config.agentModel}) |`;
   } catch {
     costRow = `| **Cost** | unknown | unknown |`;
   }
