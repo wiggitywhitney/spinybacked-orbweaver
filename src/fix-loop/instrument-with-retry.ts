@@ -14,7 +14,7 @@ import type { LanguageProvider, ManifestEntry } from '../languages/types.ts';
 import { addTokenUsage, totalTokens, estimateMinTokens, estimateOutputBudget, MAX_OUTPUT_BUDGET } from './token-budget.ts';
 import { formatRuleId } from '../validation/rule-names.ts';
 import { detectOscillation } from './oscillation.ts';
-import type { FileResult, FunctionResult, SuggestedRefactor, ValidationStrategy } from './types.ts';
+import type { FileResult, FunctionResult, SuggestedRefactor, TscAttemptRecord, ValidationStrategy } from './types.ts';
 import { detectPersistentViolations, collectSuggestedRefactors } from './refactor-detection.ts';
 import {
   extractSpanNamesFromCode,
@@ -1166,7 +1166,7 @@ async function functionLevelFallback(
   // Instrument each function through the full retry loop
   const fnResults: FunctionResult[] = [];
   // Collect tsc diagnostics from per-function validation failures for oscillation debugging.
-  const tscAttempts: Array<{ attempt: number; functionName: string; stdout: string; stderr: string }> = [];
+  const tscAttempts: TscAttemptRecord[] = [];
   const tmpBase = tmpdir();
 
   // Progressive schema threading: mirrors how the coordinator updates the working registry
