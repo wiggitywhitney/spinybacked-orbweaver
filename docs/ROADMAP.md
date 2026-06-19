@@ -41,7 +41,6 @@ Commit-story-v2 run-24 eval findings (juggling order 1–4; all unblocked):
 - SCH-003: attribute type inference and schema type enforcement ([issue #948](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/948)) — see taze run-15 entry below; run-24 evidence added, scope expanded to all types. Juggling order: 3.
 - Prompt hygiene: remove hardcoded commit-story-v2 values from SCH-003 and SCH-002 rule text ([issue #978](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/978)) — two target-specific attribute names embedded in rule text contaminate eval signal; replace with neutral domain examples. Juggling order: 4.
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 (164 spans/38 packages) and run-15 provide 2+ CLI evals; data condition met. Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections.
-- Research spike: SPA-001 calibration — understand OllyGarden spec's 10-span rationale ([issue #929](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/929)) — commit-story-v2 has exceeded the 10-span IS limit for 10+ consecutive runs (48 spans in run-24); gates IS recovery path alongside #976.
 
 Taze run-15 eval findings (juggling order 1–14; items 7, 8, and 14 are blocked):
 
