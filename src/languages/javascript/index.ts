@@ -47,7 +47,7 @@ import { nds007Rule } from './rules/nds007.ts';
 import { cdq001Rule, fixProcessExitSpanEnd as fixProcessExitSpanEndImpl } from './rules/cdq001.ts';
 import { fixAttributeTypeCoercions as fixAttributeTypeCoercionsImpl } from './rules/sch003.ts';
 import { cdq005Rule } from './rules/cdq005.ts';
-import { cdq006Rule } from './rules/cdq006.ts';
+import { cdq006Rule, fixIsRecordingGuards as fixIsRecordingGuardsImpl } from './rules/cdq006.ts';
 import { cdq007Rule } from './rules/cdq007.ts';
 import { cdq009Rule } from './rules/cdq009.ts';
 import { cdq010Rule } from './rules/cdq010.ts';
@@ -348,6 +348,10 @@ export class JavaScriptProvider implements LanguageProvider {
 
   fixAttributeTypeCoercions(code: string, resolvedSchema: object): string {
     return fixAttributeTypeCoercionsImpl(code, resolvedSchema);
+  }
+
+  fixIsRecordingGuards(code: string): string {
+    return fixIsRecordingGuardsImpl(code);
   }
 
   getFormatterConstraint(filePath: string): Promise<string> {

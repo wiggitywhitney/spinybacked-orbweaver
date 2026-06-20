@@ -291,6 +291,147 @@ function isDescendantOf(node: import('ts-morph').Node, potentialParent: import('
   return false;
 }
 
+/**
+ * Entry-point parameter names that indicate a service-level function.
+ * These functions are invoked by frameworks; adding isRecording() guards
+ * there would be incorrect since they may not always run inside an active span.
+ */
+const ENTRY_POINT_PARAM_NAMES = new Set([
+  'req', 'res', 'ctx', 'event', 'context', 'request', 'response',
+  'next', 'msg', 'message', 'conn', 'socket', 'client',
+]);
+
+/**
+ * Check if a node is directly inside a service entry-point function.
+ * Only the immediately enclosing function is checked — nested span callbacks
+ * inside entry-point functions are not themselves entry points.
+ */
+function isInsideEntryPoint(node: import('ts-morph').Node): boolean {
+  let current = node.getParent();
+  while (current) {
+    if (
+      Node.isFunctionDeclaration(current) ||
+      Node.isFunctionExpression(current) ||
+      Node.isArrowFunction(current)
+    ) {
+      const params = current.getParameters();
+      for (const param of params) {
+        if (ENTRY_POINT_PARAM_NAMES.has(param.getName().toLowerCase())) return true;
+      }
+      // Stop at the first enclosing function — inner span callbacks inside entry-point
+      // functions are not themselves entry points.
+      return false;
+    }
+    current = current.getParent();
+  }
+  return false;
+}
+
+/**
+ * Walk up the AST to find the ExpressionStatement that directly contains a node.
+ * Returns undefined if no ExpressionStatement is found before a block boundary.
+ */
+function findExpressionStatement(
+  node: import('ts-morph').Node,
+): import('ts-morph').Node | undefined {
+  let current = node.getParent();
+  while (current) {
+    if (Node.isExpressionStatement(current)) return current;
+    if (Node.isBlock(current) || Node.isSourceFile(current)) return undefined;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+/**
+ * Auto-fix: wrap unguarded expensive setAttribute calls in if (span.isRecording()) guards.
+ *
+ * Detects the same violations as checkIsRecordingGuard() and wraps each unguarded
+ * expression statement in an if (receiver.isRecording()) block. Processes violations
+ * in reverse document order to preserve character offsets during multi-site edits.
+ *
+ * Skips service entry-point functions (detected by parameter names: req, res, ctx, etc.)
+ * since those are invoked by frameworks and the calling context controls sampling.
+ *
+ * @param code - JavaScript source code to fix
+ * @returns Fixed code with isRecording() guards added, or original code if no changes needed
+ */
+export function fixIsRecordingGuards(code: string): string {
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile('fix-target.js', code);
+
+  const violations: Array<{
+    start: number;
+    end: number;
+    statementText: string;
+    indent: string;
+    receiver: string;
+  }> = [];
+  // Deduplicate by statement range: one ExpressionStatement may contain multiple
+  // expensive setAttribute calls, but the statement can only be wrapped once.
+  const seenStatements = new Set<string>();
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+
+    const expr = node.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return;
+    if (expr.getName() !== 'setAttribute') return;
+
+    const receiverExpr = expr.getExpression();
+    // Skip when the receiver itself contains calls or element access — emitting
+    // if (getSpan().isRecording()) would evaluate getSpan() twice, changing behavior.
+    if (receiverExpr.getDescendants().some(
+      (n) => Node.isCallExpression(n) || Node.isElementAccessExpression(n),
+    )) return;
+    const receiverText = receiverExpr.getText();
+    if (!isSpanReceiver(receiverText)) return;
+
+    const args = node.getArguments();
+    if (args.length < 2) return;
+
+    const valueArg = args[1];
+    const valueText = valueArg.getText();
+    if (!isExpensiveValue(valueArg, valueText)) return;
+
+    if (hasIsRecordingGuard(node)) return;
+    if (isInsideEntryPoint(node)) return;
+
+    const stmt = findExpressionStatement(node);
+    if (!stmt) return;
+
+    const start = stmt.getStart();
+    const end = stmt.getEnd();
+    const statementKey = `${start}:${end}`;
+    if (seenStatements.has(statementKey)) return;
+    seenStatements.add(statementKey);
+
+    // Extract the indentation of this statement from the source line
+    const lineStart = code.lastIndexOf('\n', start - 1) + 1;
+    const indent = code.substring(lineStart, start);
+
+    violations.push({ start, end, statementText: stmt.getText(), indent, receiver: receiverText });
+  });
+
+  if (violations.length === 0) return code;
+
+  // Apply fixes in reverse order to preserve character offsets
+  let result = code;
+  for (let i = violations.length - 1; i >= 0; i--) {
+    const v = violations[i];
+    const wrapped =
+      `if (${v.receiver}.isRecording()) {\n` +
+      `${v.indent}  ${v.statementText}\n` +
+      `${v.indent}}`;
+    result = result.substring(0, v.start) + wrapped + result.substring(v.end);
+  }
+
+  return result;
+}
+
 /** CDQ-006 ValidationRule — setAttribute calls with computed values must be guarded by isRecording(). */
 export const cdq006Rule: ValidationRule = {
   ruleId: 'CDQ-006',
