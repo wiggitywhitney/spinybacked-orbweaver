@@ -51,6 +51,11 @@ Taze run-15 eval findings (juggling order 1–10; #958 and eval #133 are blocked
 - Per-target SPA-001 threshold in IS scoring ([eval issue #134](https://github.com/wiggitywhitney/spinybacked-orbweaver-eval/issues/134)) — taze's per-package HTTP spans legitimately exceed the current fixed threshold; fix lives in eval repo's `score-is.js`. Juggling order: 9.
 - Eval repo onboarding checklist ([eval issue #133](https://github.com/wiggitywhitney/spinybacked-orbweaver-eval/issues/133)) — add forceFlush setup and per-target SPA-001 threshold as required steps for new eval targets. Depends on eval #134. Juggling order: 10.
 
+Commit-story-v2 run-25 eval findings (juggling order 1–2):
+
+- COV-004 (error recording coverage): `isExpectedConditionCatch` false positive on negated ENOENT conditional-rethrow pattern ([issue #992](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/992)) — `isExpectedConditionCatch` in `cov003.ts` rejects the idiomatic `!== 'ENOENT'` graceful-degradation form; surgical regex addition to both JS and TS rule files; blocks run-26 from reaching 25/25. Juggling order: 1.
+- Agent prompt: minimum-attribute threshold and registered-vs-extension decision framework ([issue #993](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/993)) — root cause of run-to-run attribute variance across all eval targets; research spike required before implementation. Juggling order: 2.
+
 ## Medium-term
 - Fix loop: auto-correct agent changes to function signatures, try/catch blocks, import style, and error recording ([issue #990](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/990)) — deterministic auto-fix for NDS-004/005/006/007 using original source as ground truth; low eval frequency reflects limited eval coverage, not low risk of regression.
 - Fix loop: auto-correct agent-added forbidden OTel imports ([issue #991](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/991)) — API-001 (OTel API Only) replaces SDK imports with `@opentelemetry/api` equivalents; API-004 (SDK Package Placement) removes `@opentelemetry/core` imports; both blocking rules, one shared fix function.
