@@ -39,7 +39,6 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 
 Taze run-15 eval findings (juggling order 1–10; #958 and eval #133 are blocked):
 
-- Create individual issues for deterministic auto-fix candidates from #908 spike ([issue #987](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/987)) — meta-issue; each of the 10+ candidates gets its own issue with /write-prompt review before creation.
 - CLI flag redesign: --verbose-fail, --thinking redesign, companion file thinking blocks ([PRD #752](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/752)) — adds `--verbose-fail` and `--thinking-fail`; changes `--thinking` to show for all files; always writes thinking blocks to companion files. Sequenced before #954: companion file persistence gives eval visibility into attribute decisions on committed files.
 - Extend debug dump coverage to partial and success-with-0-spans files ([issue #989](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/989)) — dumps currently only written for `status: failed`; extend to `partial` and `success` where `spansAdded === 0`; populate `lastInstrumentedCode` for skipped functions. Unblocks #954 if resolves.ts comes back SUCCESS-with-0-spans in run-16.
 - resolves.ts oscillation root cause investigation ([issue #954](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/954)) — highest-impact taze finding; recovering 6 functions raises Q×F from 10.2 to ~15.8. Prerequisite #949 ✓ closed. Depends on #752 and #989. Juggling order: 3.
