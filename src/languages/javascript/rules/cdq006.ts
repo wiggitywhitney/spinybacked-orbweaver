@@ -370,6 +370,9 @@ export function fixIsRecordingGuards(code: string): string {
     indent: string;
     receiver: string;
   }> = [];
+  // Deduplicate by statement range: one ExpressionStatement may contain multiple
+  // expensive setAttribute calls, but the statement can only be wrapped once.
+  const seenStatements = new Set<string>();
 
   sourceFile.forEachDescendant((node) => {
     if (!Node.isCallExpression(node)) return;
@@ -378,7 +381,13 @@ export function fixIsRecordingGuards(code: string): string {
     if (!Node.isPropertyAccessExpression(expr)) return;
     if (expr.getName() !== 'setAttribute') return;
 
-    const receiverText = expr.getExpression().getText();
+    const receiverExpr = expr.getExpression();
+    // Skip when the receiver itself contains calls or element access — emitting
+    // if (getSpan().isRecording()) would evaluate getSpan() twice, changing behavior.
+    if (receiverExpr.getDescendants().some(
+      (n) => Node.isCallExpression(n) || Node.isElementAccessExpression(n),
+    )) return;
+    const receiverText = receiverExpr.getText();
     if (!isSpanReceiver(receiverText)) return;
 
     const args = node.getArguments();
@@ -396,6 +405,9 @@ export function fixIsRecordingGuards(code: string): string {
 
     const start = stmt.getStart();
     const end = stmt.getEnd();
+    const statementKey = `${start}:${end}`;
+    if (seenStatements.has(statementKey)) return;
+    seenStatements.add(statementKey);
 
     // Extract the indentation of this statement from the source line
     const lineStart = code.lastIndexOf('\n', start - 1) + 1;
