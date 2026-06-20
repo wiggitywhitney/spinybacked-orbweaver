@@ -57,6 +57,7 @@ Commit-story-v2 run-25 eval findings (juggling order 1–2):
 - Agent prompt: minimum-attribute threshold and registered-vs-extension decision framework ([issue #993](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/993)) — root cause of run-to-run attribute variance across all eval targets; research spike required before implementation. Juggling order: 2.
 
 - Fix loop: auto-correct untyped string method calls on property access — CDQ-010 ([issue #998](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/998)) — deterministic `String(obj.field)` coercion reconciler; the detection already identifies the exact receiver expression; no LLM judgment required.
+- Fix loop: auto-correct delimiter-variant span names and attribute keys ([issue #999](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/999)) — SCH-001 and SCH-002 delimiter variants are fully deterministic; normalization pre-filter already finds the exact registry match; `fixDelimiterVariants()` reconciler uses ts-morph AST and `lastValidation?.blockingFailures` to apply corrections in the pre-validation fix chain before each retry.
 
 ## Medium-term
 - Fix loop: auto-correct agent changes to function signatures, try/catch blocks, and import style ([issue #996](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/996)) — deterministic source-restoration auto-fix for NDS-004/005/006; low eval frequency reflects limited eval coverage, not low risk of regression.
