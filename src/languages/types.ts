@@ -693,6 +693,18 @@ export interface LanguageProvider {
   fixAttributeTypeCoercions(code: string, resolvedSchema: object): string;
 
   /**
+   * Wrap unguarded expensive setAttribute calls in if (span.isRecording()) guards.
+   *
+   * Detects setAttribute calls whose value involves a function call, method chain,
+   * or other non-trivial expression, and wraps them in an isRecording() guard block.
+   * Skips entry-point functions (req, res, ctx, event, etc.) and already-guarded calls.
+   *
+   * @param code - Instrumented code that may have unguarded expensive setAttribute calls
+   * @returns Code with isRecording() guards added where needed, or unchanged code
+   */
+  fixIsRecordingGuards(code: string): string;
+
+  /**
    * Return a language-specific formatter constraint string for the LLM prompt.
    *
    * For JavaScript and TypeScript, reads the project's Prettier config from

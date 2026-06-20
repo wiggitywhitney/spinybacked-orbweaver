@@ -135,6 +135,64 @@ describe('checkIsRecordingGuard (CDQ-006)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('flags Object.keys() in setAttribute value', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("keys", Object.keys(payload).join(","));',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags template literal containing a function call', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("info", `count=${items.filter(i => i.active).length}`);',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags arr.filter(...).length in setAttribute value', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("active_count", items.filter(i => i.active).length);',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
+  describe('simple value pass cases', () => {
+    it('passes for direct property access without any calls', () => {
+      const code = [
+        'tracer.startActiveSpan("work", (span) => {',
+        '  try {',
+        '    span.setAttribute("name", obj.name);',
+        '  } finally { span.end(); }',
+        '});',
+      ].join('\n');
+
+      const results = checkIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('trivial conversion exemptions', () => {

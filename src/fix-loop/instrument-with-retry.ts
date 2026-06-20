@@ -763,9 +763,17 @@ async function executeRetryLoop(
         );
       }
     }
-    // Fix SCH-003 type coercions after auto-registration so agent-declared string-typed
-    // attributes are visible via autoRegistrationResolvedSchema, not just the base schema.
-    output.instrumentedCode = provider.fixAttributeTypeCoercions(output.instrumentedCode, autoRegistrationResolvedSchema);
+    // Fix SCH-003 type coercions after auto-registration. Merge type info from
+    // agent-declared schemaExtensions into the schema so fixAttributeTypeCoercions
+    // can coerce values for keys that runPerAttemptAutoRegistration skips (it
+    // excludes keys already in schemaExtensions, so their types never reach
+    // autoRegistrationResolvedSchema without this step).
+    const schemaForTypeCoercions = appendDeclaredExtensionTypes(
+      autoRegistrationResolvedSchema,
+      output.schemaExtensions,
+    );
+    output.instrumentedCode = provider.fixAttributeTypeCoercions(output.instrumentedCode, schemaForTypeCoercions);
+    output.instrumentedCode = provider.fixIsRecordingGuards(output.instrumentedCode);
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -975,7 +983,11 @@ async function executeRetryLoop(
 
           let advisoryCode = provider.ensureTracerAfterImports(advisoryOutput.instrumentedCode);
           advisoryCode = provider.fixProcessExitSpanEnd(advisoryCode);
-          advisoryCode = provider.fixAttributeTypeCoercions(advisoryCode, autoRegistrationResolvedSchema);
+          advisoryCode = provider.fixAttributeTypeCoercions(
+            advisoryCode,
+            appendDeclaredExtensionTypes(autoRegistrationResolvedSchema, advisoryOutput.schemaExtensions),
+          );
+          advisoryCode = provider.fixIsRecordingGuards(advisoryCode);
           await writeFile(filePath, advisoryCode, 'utf-8');
 
           const advisoryValidation = await validateFileFn({
@@ -1140,6 +1152,50 @@ function appendAttributeExtensionsToSchema(
         type: 'attribute_group',
         brief,
         attributes: attributeExtensions.map(name => ({ name })),
+      },
+    ],
+  };
+}
+
+/**
+ * Append type information from agent-declared schemaExtensions to the resolved schema
+ * so fixAttributeTypeCoercions() can coerce values for string-typed attributes that
+ * the agent declared but runPerAttemptAutoRegistration intentionally skipped.
+ *
+ * Each schemaExtension is a YAML string with fields like id, type, brief. Only
+ * attribute extensions (type !== 'span') with a string primitive type are included.
+ * The id field maps to the attribute name used in setAttribute() calls.
+ */
+export function appendDeclaredExtensionTypes(
+  schema: object,
+  schemaExtensions: string[],
+): object {
+  if (schemaExtensions.length === 0) return schema;
+
+  const typedAttrs: Array<{ name: string; type: string }> = [];
+  for (const ext of schemaExtensions) {
+    const parsed = parseExtension(ext);
+    if (!parsed) continue;
+    const id = parsed['id'];
+    const type = parsed['type'];
+    if (typeof id !== 'string' || typeof type !== 'string') continue;
+    if (type === 'span') continue;
+    typedAttrs.push({ name: id, type });
+  }
+
+  if (typedAttrs.length === 0) return schema;
+
+  const existing = (schema as Record<string, unknown>).groups;
+  const existingGroups = Array.isArray(existing) ? existing : [];
+  return {
+    ...schema,
+    groups: [
+      ...existingGroups,
+      {
+        id: 'spiny_orb_declared_extension_types',
+        type: 'attribute_group',
+        brief: 'Type info from agent-declared schema extensions for SCH-003 auto-fix',
+        attributes: typedAttrs,
       },
     ],
   };
