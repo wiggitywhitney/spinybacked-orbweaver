@@ -19,7 +19,7 @@ describe('SCH-003 sequencing gap: agent-declared string-typed key + numeric expr
   it('wraps numeric expression in String() when agent-declared extension type is string', () => {
     // Reproduces the sequencing gap from issue #985.
     // runPerAttemptAutoRegistration skips keys in schemaExtensions, so they reach
-    // appendAttributeExtensionsToSchema as { name } only (no type field).
+    // appendAttributeExtensionsToSchema as { name } without a type field.
     // appendDeclaredExtensionTypes parses schemaExtensions YAML and injects { name, type }
     // entries so fixAttributeTypeCoercions can coerce the numeric value to String().
     const schemaWithoutType = {
