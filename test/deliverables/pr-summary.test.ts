@@ -1659,6 +1659,84 @@ describe('renderPrSummary — SDK bootstrap checklist', () => {
   });
 });
 
+describe('renderPrSummary — auto-instrumentation activation section', () => {
+  it('renders activation section when librariesInstalled is non-empty', () => {
+    const result = _makeRunResult({ librariesInstalled: ['@opentelemetry/instrumentation-pg'] });
+    const md = renderPrSummary(result, _makeConfig());
+
+    expect(md).toContain('## Auto-Instrumentation Activation');
+    expect(md).toContain('npm install');
+  });
+
+  it('omits activation section when librariesInstalled is empty', () => {
+    const result = _makeRunResult({ librariesInstalled: [] });
+    const md = renderPrSummary(result, _makeConfig());
+
+    expect(md).not.toContain('## Auto-Instrumentation Activation');
+  });
+
+  it('notes SDK init file was updated when sdkInitUpdated is true', () => {
+    const result = _makeRunResult({
+      librariesInstalled: ['@opentelemetry/instrumentation-http'],
+      sdkInitUpdated: true,
+    });
+    const md = renderPrSummary(result, _makeConfig());
+    const section = md.split('## Auto-Instrumentation Activation')[1]?.split('##')[0] ?? '';
+
+    expect(section).toContain('SDK init file');
+  });
+
+  it('mentions fallback file when sdkInitUpdated is false', () => {
+    const result = _makeRunResult({
+      librariesInstalled: ['@opentelemetry/instrumentation-http'],
+      sdkInitUpdated: false,
+    });
+    const md = renderPrSummary(result, _makeConfig());
+    const section = md.split('## Auto-Instrumentation Activation')[1]?.split('##')[0] ?? '';
+
+    expect(section).toContain('spiny-orb-instrumentations.js');
+  });
+
+  it('includes env-var guidance for @traceloop packages', () => {
+    const result = _makeRunResult({
+      librariesInstalled: ['@traceloop/instrumentation-langchain'],
+      sdkInitUpdated: true,
+    });
+    const md = renderPrSummary(result, _makeConfig());
+    const section = md.split('## Auto-Instrumentation Activation')[1]?.split('##')[0] ?? '';
+
+    expect(section).toContain('@traceloop/instrumentation-langchain');
+    expect(section).toContain('process.env');
+  });
+
+  it('omits env-var guidance when no @traceloop packages installed', () => {
+    const result = _makeRunResult({
+      librariesInstalled: ['@opentelemetry/instrumentation-pg'],
+      sdkInitUpdated: true,
+    });
+    const md = renderPrSummary(result, _makeConfig());
+    const section = md.split('## Auto-Instrumentation Activation')[1]?.split('##')[0] ?? '';
+
+    expect(section).not.toContain('@traceloop');
+    expect(section).not.toContain('process.env');
+  });
+
+  it('lists multiple installed packages in the section', () => {
+    const result = _makeRunResult({
+      librariesInstalled: [
+        '@traceloop/instrumentation-langchain',
+        '@traceloop/instrumentation-mcp',
+      ],
+      sdkInitUpdated: true,
+    });
+    const md = renderPrSummary(result, _makeConfig());
+    const section = md.split('## Auto-Instrumentation Activation')[1]?.split('##')[0] ?? '';
+
+    expect(section).toContain('@traceloop/instrumentation-langchain');
+    expect(section).toContain('@traceloop/instrumentation-mcp');
+  });
+});
+
 describe('writeLiveCheckArtifact', () => {
   it('writes report to spiny-orb-live-check-report.json in projectDir', async () => {
     const { writeLiveCheckArtifact, LIVE_CHECK_ARTIFACT_FILENAME } = await import('../../src/deliverables/pr-summary.ts');

@@ -274,8 +274,36 @@ Follow this order:
 3. **Set up your Weaver schema directory** with your semantic convention definitions.
 4. **Run `spiny-orb init`** (or create `spiny-orb.yaml` manually) — this detects your schema dir, SDK init file, and project type.
 5. **Run `spiny-orb instrument`** — the agent adds spans and updates your SDK init file with discovered libraries.
+6. **Activate auto-instrumentation packages** — if the agent installed any auto-instrumentation packages, see the [After the instrument branch](#after-the-instrument-branch) section below.
 
 Once `spiny-orb.yaml` exists, follow the setup for your interface: [CLI](#cli), [MCP](#mcp-integration), or [GitHub Action](#github-action).
+
+### After the instrument branch
+
+After the instrument branch is ready, check the PR summary for an **Auto-Instrumentation Activation** section. This section appears when spiny-orb installed auto-instrumentation packages and tells you exactly what to activate and how.
+
+**If spiny-orb updated your SDK init file:** Import it via `--import` or `--require` before your application code. No additional wiring is needed — the packages are already registered in the `NodeSDK` `instrumentations` array.
+
+**If the PR summary mentions `spiny-orb-instrumentations.js`:** Your SDK init file didn't match the recognized `NodeSDK` pattern. Open `spiny-orb-instrumentations.js` and integrate the `instrumentations` export into your OTel setup manually:
+
+```javascript
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { instrumentations } from './spiny-orb-instrumentations.js';
+
+const sdk = new NodeSDK({ instrumentations });
+sdk.start();
+```
+
+**For `@traceloop/*` packages:** These libraries activate via `manuallyInstrument()` and should be gated behind an environment variable so they only run where you want AI/LLM traces:
+
+```javascript
+if (process.env.YOUR_TRACELOOP_FLAG === 'true') {
+  const { LangChainInstrumentation } = await import('@traceloop/instrumentation-langchain');
+  new LangChainInstrumentation().manuallyInstrument();
+}
+```
+
+Set `YOUR_TRACELOOP_FLAG=true` in your local `.env`, in CI, or in any environment where you want the additional traces. Leaving the flag unset disables the instrumentation with no performance impact.
 
 ## CLI
 

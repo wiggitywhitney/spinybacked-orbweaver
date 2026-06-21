@@ -33,6 +33,7 @@ import { fixAttributeTypeCoercions as fixAttributeTypeCoercionsImpl } from '../j
 import { fixIsRecordingGuards as fixIsRecordingGuardsImpl } from '../javascript/rules/cdq006.ts';
 import { fixUntypedStringMethods as fixUntypedStringMethodsImpl } from '../javascript/rules/cdq010.ts';
 import { fixDelimiterVariants as fixDelimiterVariantsImpl } from '../javascript/rules/sch001.ts';
+import { fixCanonicalTracerName as fixCanonicalTracerNameImpl } from '../javascript/rules/cdq011.ts';
 import { buildPrettierConstraint } from '../javascript/validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
@@ -216,6 +217,10 @@ export class TypeScriptProvider implements LanguageProvider {
 
   fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: import('../../validation/types.ts').CheckResult[]): string {
     return fixDelimiterVariantsImpl(code, schemaExtensions, previousBlockingFailures);
+  }
+
+  fixCanonicalTracerName(code: string, canonicalTracerName: string | undefined): string {
+    return fixCanonicalTracerNameImpl(code, canonicalTracerName);
   }
 
   getFormatterConstraint(filePath: string): Promise<string> {

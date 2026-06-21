@@ -52,7 +52,7 @@ import { cdq007Rule } from './rules/cdq007.ts';
 import { cdq009Rule } from './rules/cdq009.ts';
 import { cdq010Rule, fixUntypedStringMethods as fixUntypedStringMethodsImpl } from './rules/cdq010.ts';
 import { fixDelimiterVariants as fixDelimiterVariantsImpl } from './rules/sch001.ts';
-import { cdq011Rule } from './rules/cdq011.ts';
+import { cdq011Rule, fixCanonicalTracerName as fixCanonicalTracerNameImpl } from './rules/cdq011.ts';
 import { api001Rule, api004Rule } from './rules/api001.ts';
 import { api002Rule } from './rules/api002.ts';
 import { sch001Rule } from './rules/sch001.ts';
@@ -361,6 +361,10 @@ export class JavaScriptProvider implements LanguageProvider {
 
   fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: import('../../validation/types.ts').CheckResult[]): string {
     return fixDelimiterVariantsImpl(code, schemaExtensions, previousBlockingFailures);
+  }
+
+  fixCanonicalTracerName(code: string, canonicalTracerName: string | undefined): string {
+    return fixCanonicalTracerNameImpl(code, canonicalTracerName);
   }
 
   getFormatterConstraint(filePath: string): Promise<string> {

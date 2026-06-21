@@ -37,6 +37,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderEndOfRunFlag(runResult, display));
   sections.push(renderRolledBackFiles(runResult, display));
   sections.push(renderCompanionPackages(runResult, config));
+  sections.push(renderAutoInstrumentationActivation(runResult));
   sections.push(renderShortLivedSetupGuidance(config));
   sections.push(renderSdkBootstrapChecklist());
   sections.push(renderTokenUsage(runResult, config));
@@ -567,6 +568,57 @@ function renderCompanionPackages(runResult: RunResult, config: AgentConfig): str
     lines.push(
       '> See the Short-Lived Process Setup Guidance section below for additional setup details.',
     );
+  }
+
+  return lines.join('\n');
+}
+
+function renderAutoInstrumentationActivation(runResult: RunResult): string {
+  if (runResult.librariesInstalled.length === 0) return '';
+
+  const lines: string[] = ['## Auto-Instrumentation Activation'];
+  lines.push('');
+  lines.push(
+    'spiny-orb installed the following auto-instrumentation packages. ' +
+    'They must be activated in your application startup to take effect:',
+  );
+  lines.push('');
+  lines.push('```bash');
+  lines.push(`npm install ${runResult.librariesInstalled.join(' ')}`);
+  lines.push('```');
+  lines.push('');
+
+  if (runResult.sdkInitUpdated) {
+    lines.push(
+      'The instrumentations were registered in your **SDK init file**. ' +
+      'Import that file via `--import` before your application code runs.',
+    );
+  } else {
+    lines.push(
+      'The instrumentations were written to **`spiny-orb-instrumentations.js`** ' +
+      'because your SDK init file did not match the recognized NodeSDK pattern. ' +
+      'Add the contents of that file to your OpenTelemetry SDK setup manually.',
+    );
+  }
+
+  const traceloopPkgs = runResult.librariesInstalled.filter(p => p.startsWith('@traceloop/'));
+  if (traceloopPkgs.length > 0) {
+    lines.push('');
+    lines.push(
+      '**@traceloop packages — conditional activation:** ' +
+      'These packages were installed: ' +
+      traceloopPkgs.map(p => `\`${p}\``).join(', ') + '. ' +
+      'Traceloop instrumentations use `manuallyInstrument()` and should be activated behind ' +
+      'a `process.env` check so they only run in environments where you want AI/LLM traces:',
+    );
+    lines.push('');
+    lines.push('```javascript');
+    lines.push('if (process.env.YOUR_TRACELOOP_FLAG === \'true\') {');
+    for (const pkg of traceloopPkgs) {
+      lines.push(`  // activate ${pkg}`);
+    }
+    lines.push('}');
+    lines.push('```');
   }
 
   return lines.join('\n');
