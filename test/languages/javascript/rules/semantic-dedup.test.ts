@@ -300,11 +300,13 @@ describe('checkSemanticDuplicate — judge stage', () => {
       tokenUsage: MOCK_TOKEN_USAGE,
     });
 
+    // 3-component names: same sub-namespace prefix ('user.checkout') passes the namespace filter
+    // unconditionally — the judge is invoked and confirms the extension is distinct.
     const entries: RegistryEntry[] = [
-      { name: 'user.register' },
-      { name: 'user.login' },
+      { name: 'user.checkout.status' },
+      { name: 'user.payment.finalize' }, // different sub-namespace — filtered out before judge
     ];
-    const result = await checkSemanticDuplicate('user.purchase', entries, {
+    const result = await checkSemanticDuplicate('user.checkout.process', entries, {
       ruleId: 'SCH-001',
       useJaccard: false,
       judgeDeps: { client: {} as any },
@@ -312,6 +314,9 @@ describe('checkSemanticDuplicate — judge stage', () => {
 
     expect(result.isDuplicate).toBe(false);
     expect(result.judgeTokenUsage).toHaveLength(1);
+    const [question] = vi.mocked(callJudge).mock.calls[0]!;
+    expect(question.candidates).toContain('user.checkout.status');
+    expect(question.candidates).not.toContain('user.payment.finalize');
   });
 
   it('ignores judge verdict below confidence threshold (< 0.7)', async () => {
@@ -476,6 +481,50 @@ describe('checkSemanticDuplicate — judge stage', () => {
     expect(question.candidates).toContain('taze.check.status');
     expect(question.candidates).not.toContain('taze.io.run');
     expect(question.candidates).not.toContain('taze.cli.run');
+  });
+
+  it('does not call judge for 2-component span names sharing only the top-level namespace token (#959)', async () => {
+    // taze run-15: 27 false positive SCH-001 advisories. 2-component span names like
+    // taze.workspace vs taze.io share only the top-level namespace token. The current
+    // allButLast filter passes them because allButLast('taze.workspace') = 'taze' =
+    // allButLast('taze.io'). The fix must compare remainder tokens when LCP depth is 1.
+    const entries: RegistryEntry[] = [
+      { name: 'taze.io' },     // shares only top-level 'taze' — unrelated, should be filtered
+      { name: 'taze.check' },  // shares only top-level 'taze' — unrelated, should be filtered
+    ];
+
+    const result = await checkSemanticDuplicate('taze.workspace', entries, {
+      ruleId: 'SCH-001',
+      useJaccard: false,
+      judgeDeps: { client: {} as any },
+    });
+
+    expect(vi.mocked(callJudge)).not.toHaveBeenCalled();
+    expect(result.isDuplicate).toBe(false);
+  });
+
+  it('still calls judge for 2-component span names whose remainders are substring-similar (#959 regression guard)', async () => {
+    // When the top-level namespace is shared AND one last-token normalizes as a substring
+    // of the other (e.g. taze.load vs taze.load_all), the judge should still run —
+    // the names may be semantically related.
+    vi.mocked(callJudge).mockResolvedValueOnce({
+      verdict: { answer: true, suggestion: undefined, confidence: 0.95 },
+      tokenUsage: MOCK_TOKEN_USAGE,
+    });
+
+    const entries: RegistryEntry[] = [
+      { name: 'taze.load_all' },  // 'load' is substring of normalized 'loadall' — pass through
+    ];
+
+    await checkSemanticDuplicate('taze.load', entries, {
+      ruleId: 'SCH-001',
+      useJaccard: false,
+      judgeDeps: { client: {} as any },
+    });
+
+    expect(vi.mocked(callJudge)).toHaveBeenCalledOnce();
+    const [question] = vi.mocked(callJudge).mock.calls[0]!;
+    expect(question.candidates).toContain('taze.load_all');
   });
 });
 

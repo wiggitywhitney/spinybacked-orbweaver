@@ -151,10 +151,13 @@ export function isTypeCompatible(novelType: InferredType, registryType?: string)
  *    obvious delimiter-style variants before paying for a judge call while avoiding false
  *    positives on pairs that share only a single common token.
  * 3. LLM judge (if options.judgeDeps): semantic equivalence with namespace pre-filter applied
- *    when candidate has dots (restricts to same namespace prefix, all-but-last segments —
- *    sub-namespace siblings like "release_it.gitlab.*" vs "release_it.github.*" are never
- *    compared, and cross-domain pairs like "commit_story.*" vs "gen_ai.*" are excluded too).
- *    SCH-001 passes all entries without namespace pre-filtering (span names are short).
+ *    when candidate has dots. The filter uses the longest common dot-delimited prefix (LCP)
+ *    of the pair. If LCP depth ≥ 2 (shared sub-namespace, e.g. "taze.check.*"), the entry
+ *    passes through. If LCP depth = 1 (only top-level token shared, e.g. both under "taze.*"),
+ *    the entry only passes if the normalized remainders have substring overlap — preventing
+ *    false positives for pairs like "taze.workspace" vs "taze.io". LCP depth = 0 (no shared
+ *    prefix, cross-domain like "commit_story.*" vs "gen_ai.*") is always filtered out.
+ *    Applies to both SCH-001 span names and SCH-002 attribute keys.
  *
  * @param candidate - The extension name being declared (e.g., "user_registration" or "http_request_duration").
  * @param registryEntries - Existing registry entries to compare against.
@@ -224,12 +227,36 @@ export async function checkSemanticDuplicate(
   let candidates = activeEntries;
 
   if (candidate.includes('.')) {
-    const parts = candidate.split('.');
-    const candidatePrefix = parts.slice(0, -1).join('.');
+    const candParts = candidate.split('.');
+    const candidatePrefix = candParts.slice(0, -1).join('.');
     candidates = candidates.filter((e) => {
       if (!e.name.includes('.')) return false;
       const entryPrefix = e.name.split('.').slice(0, -1).join('.');
-      return entryPrefix === candidatePrefix;
+
+      // Primary filter: both must share the same all-but-last prefix (same sub-namespace).
+      // Handles 3-component names: 'taze.check.run' vs 'taze.io.run' → different prefix, excluded.
+      if (entryPrefix !== candidatePrefix) return false;
+
+      // Secondary filter for SCH-001 span names only: when the shared prefix is a single token
+      // (2-component name like 'taze.workspace'), require the normalized last tokens to share a
+      // common prefix before passing to the judge. Prevents false positive advisories for unrelated
+      // siblings like 'taze.workspace' vs 'taze.io' that share only the top-level token.
+      // Attribute keys (SCH-002) skip this check — same-namespace attributes are always compared.
+      // Common-prefix threshold: max(2, floor(shorter.length / 2)) chars — permissive enough to
+      // pass morphological variants ('register'/'registration' share 'regi') while filtering out
+      // clearly unrelated tokens ('workspace'/'io', 'cli'/'check').
+      if (options.ruleId === 'SCH-001' && !candidatePrefix.includes('.')) {
+        const normCand = normalizeKey(candParts[candParts.length - 1]!);
+        const normEnt = normalizeKey(e.name.split('.').pop()!);
+        const [shorter, longer] = normCand.length <= normEnt.length
+          ? [normCand, normEnt]
+          : [normEnt, normCand];
+        if (shorter.length === 0) return false;
+        const prefixLen = Math.max(2, Math.floor(shorter.length / 2));
+        return longer.startsWith(shorter.slice(0, prefixLen));
+      }
+
+      return true;
     });
   }
 

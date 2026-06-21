@@ -13,7 +13,7 @@ import { discoverFiles as defaultDiscoverFiles } from './discovery.ts';
 import { dispatchFiles as defaultDispatchFiles, parseFailingSourceFiles } from './dispatch.ts';
 import { aggregateResults, finalizeResults as defaultFinalizeResults } from './aggregate.ts';
 import { checkPrerequisites as defaultCheckPrerequisites } from '../config/prerequisites.ts';
-import { collectSchemaExtensions } from './schema-extensions.ts';
+import { collectSchemaExtensions, parseExtension } from './schema-extensions.ts';
 import type { FinalizeDeps } from './aggregate.ts';
 import { computeSchemaHash } from './schema-hash.ts';
 import { resolveSchema as defaultResolveSchema } from './dispatch.ts';
@@ -480,6 +480,35 @@ export async function coordinate(
   // Step 5b: Schema extensions are written per-file inside dispatchFiles.
   // Warnings from per-file writes are pushed into schemaExtensionWarnings.
   const extensions = collectSchemaExtensions(fileResults);
+
+  // Step 5b2: Remove cross-file SCH-001 advisory contamination.
+  // dispatch.ts calls resolveSchema fresh per file, so file N's schema includes extensions
+  // written by files 0..N-1 as "pre-existing" entries. SCH-001 may then flag file N's spans
+  // as potential duplicates of those earlier extensions, producing false positive advisories.
+  // Strip any SCH-001 non-blocking advisory whose matched span name came from this same run.
+  const runSpanOpNames = new Set<string>();
+  for (const ext of extensions) {
+    const parsed = parseExtension(ext);
+    const id = typeof parsed?.id === 'string' ? parsed.id : '';
+    if (id.startsWith('span.')) {
+      runSpanOpNames.add(id.slice('span.'.length));
+    }
+  }
+  if (runSpanOpNames.size > 0) {
+    for (const result of fileResults) {
+      if (!result.advisoryAnnotations) continue;
+      result.advisoryAnnotations = result.advisoryAnnotations.filter((annotation) => {
+        if (annotation.ruleId !== 'SCH-001' || annotation.blocking) return true;
+        // Extract the matched registry entry name from the advisory message.
+        // Advisory format: '...of existing registry operation "NAME"...'
+        // When the matched entry was introduced by an earlier file in this same run,
+        // the advisory is a cross-file contamination false positive — remove it.
+        const match = annotation.message.match(/of existing registry operation "([^"]+)"/);
+        if (!match) return true; // no matched entry name → keep advisory
+        return !runSpanOpNames.has(match[1]!);
+      });
+    }
+  }
 
   // Step 5c: Compute schema diff against baseline BEFORE cleanup (needs baseline snapshot on disk)
   let schemaDiffMarkdown: string | undefined;
