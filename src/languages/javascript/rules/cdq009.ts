@@ -204,7 +204,9 @@ export function fixNotNullSafeGuards(code: string): string {
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('fix-target.js', code);
+  // Use .tsx so the parser handles JS, JSX, TS, and TSX inputs — this fixer
+  // is called by both JavaScript and TypeScript providers.
+  const sourceFile = project.createSourceFile('fix-target.tsx', code);
 
   const fixSites: Array<{ start: number; end: number; replacement: string }> = [];
   const seenConditions = new Set<string>();
