@@ -91,7 +91,7 @@ The current `--verbose` and `--thinking` flags have two usability gaps:
 
   Acceptance: docs accurately describe all four flags and the companion file behavior.
 
-- [ ] **M5 — Communicate changes to eval team**
+- [x] **M5 — Communicate changes to eval team**
 
   After M1–M4 merge, send the eval team a message covering:
   - The new flag set and what changed (`--verbose-fail`, `--thinking-fail` added; `--thinking` now shows thinking for all files)

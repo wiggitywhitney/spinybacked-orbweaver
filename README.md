@@ -395,6 +395,9 @@ Configuration not found — run 'spiny-orb init' to create spiny-orb.yaml
 --thinking-fail  Show agent thinking blocks for failed files only. Use this when a file fails
                  and you need to understand the agent's reasoning without thinking output for
                  successful files.
+--debug-dump-dir Write each file's last instrumented code to this directory. Fires for failed,
+                 partial, and zero-span results — not for clean successes. Use this to inspect
+                 the raw LLM-produced code without checking out the instrument branch.
 --debug          Show debug-level diagnostic output
 --no-pr          Skip PR creation (create branch and commits only)
 ```
@@ -410,6 +413,8 @@ Configuration not found — run 'spiny-orb init' to create spiny-orb.yaml
 | `--thinking-fail` | Compact one-liner | Yes, failed files only |
 | `--verbose --thinking` | Structured multi-line | Yes, all files |
 | `--verbose-fail --thinking-fail` | Structured for failed/partial | Yes, failed files only |
+
+`--debug-dump-dir` operates independently of all display flags — it writes the LLM-produced code to the filesystem and can be combined with any of the above.
 
 The `--verbose` flag expands each file's output into a structured block:
 

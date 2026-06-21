@@ -151,6 +151,8 @@ Use `--thinking-fail` when you want to diagnose a failing file without thinking 
 | `--verbose --thinking` | Structured multi-line | Yes, all files |
 | `--verbose-fail --thinking-fail` | Structured for failed/partial | Yes, failed files only |
 
+`--debug-dump-dir <path>` operates independently of all display flags — it writes the LLM-produced code to the filesystem and can be combined with any of the above. It fires for failed, partial, and zero-span results; clean successes do not produce a dump.
+
 ### Recommended refactors
 
 When files fail because of code patterns that block safe instrumentation, the agent suggests specific refactors:
