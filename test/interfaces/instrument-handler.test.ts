@@ -783,6 +783,87 @@ describe('handleInstrument', () => {
     });
   });
 
+  describe('--verbose-fail output', () => {
+    it('shows structured block for failed files when --verbose-fail is set', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verboseFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const failedResult = makeFileResult({ status: 'failed', spansAdded: 0 });
+      callbacks.onFileComplete!(failedResult, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // Structured block shows FAILED in caps
+      expect(stderrCalls.some((s: string) => s.includes('FAILED'))).toBe(true);
+    });
+
+    it('shows structured block for partial files when --verbose-fail is set', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verboseFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const partialResult = makeFileResult({ status: 'partial', spansAdded: 1 });
+      callbacks.onFileComplete!(partialResult, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // Structured block shows PARTIAL in caps
+      expect(stderrCalls.some((s: string) => s.includes('PARTIAL'))).toBe(true);
+    });
+
+    it('shows compact one-liner for success files when --verbose-fail is set (not --verbose)', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verboseFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const successResult = makeFileResult({ status: 'success', spansAdded: 2 });
+      callbacks.onFileComplete!(successResult, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // Compact one-liner — no standalone FAILED/PARTIAL/SUCCESS caps label
+      expect(stderrCalls.some((s: string) => s.includes('SUCCESS'))).toBe(false);
+      // But success text appears inline
+      expect(stderrCalls.some((s: string) => s.includes('success'))).toBe(true);
+    });
+
+    it('shows compact one-liner for skipped files when --verbose-fail is set', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verboseFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const skippedResult = makeFileResult({ status: 'skipped', spansAdded: 0 });
+      callbacks.onFileComplete!(skippedResult, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // No structured block
+      expect(stderrCalls.some((s: string) => s.includes('SUCCESS') || s.includes('FAILED') || s.includes('PARTIAL'))).toBe(false);
+      // Compact one-liner present
+      expect(stderrCalls.some((s: string) => s.includes('skipped'))).toBe(true);
+    });
+
+    it('--verbose takes precedence over --verbose-fail: shows structured block for all files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true, verboseFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const successResult = makeFileResult({ status: 'success', spansAdded: 3 });
+      callbacks.onFileComplete!(successResult, 0, 1);
+
+      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      // Full verbose mode shows SUCCESS in caps
+      expect(stderrCalls.some((s: string) => s.includes('SUCCESS'))).toBe(true);
+    });
+  });
+
   describe('companion file paths in output', () => {
     it('shows companion path in non-verbose mode for successful files', async () => {
       const deps = makeDeps();
@@ -947,6 +1028,98 @@ describe('handleInstrument', () => {
       expect(allOutput).not.toContain('Agent thinking');
     });
 
+    it('shows agent thinking blocks with --thinking for success files (all-files behavior)', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: false, thinking: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      // Success file — --thinking must show thinking blocks for ALL statuses
+      const result = makeFileResult({
+        status: 'success',
+        spansAdded: 2,
+        thinkingBlocksByAttempt: [
+          ['This function makes an external HTTP call — added a span for it.'],
+        ],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      expect(allOutput).toContain('Agent thinking');
+      expect(allOutput).toContain('HTTP call');
+    });
+
+    it('--thinking-fail shows thinking blocks only for failed files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ thinkingFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        reason: 'Validation failed',
+        thinkingBlocksByAttempt: [
+          ['Retrying with a different span approach.'],
+        ],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      expect(allOutput).toContain('Agent thinking');
+    });
+
+    it('--thinking-fail does NOT show thinking blocks for success files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ thinkingFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'success',
+        spansAdded: 2,
+        thinkingBlocksByAttempt: [
+          ['Excellent — span was added cleanly.'],
+        ],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      expect(allOutput).not.toContain('Agent thinking');
+    });
+
+    it('--thinking takes precedence over --thinking-fail: shows thinking for success files', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ thinking: true, thinkingFail: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'success',
+        spansAdded: 2,
+        thinkingBlocksByAttempt: [
+          ['Added span for the external call.'],
+        ],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      // --thinking all-files shows thinking even for success
+      expect(allOutput).toContain('Agent thinking');
+    });
+
     it('shows human-readable rule descriptions for validation failures, not raw error detail', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions({ verbose: true }), deps);
@@ -1107,6 +1280,102 @@ describe('handleInstrument', () => {
         const dumpedPath = join(dumpDir, 'src', 'app.js');
         expect(existsSync(dumpedPath)).toBe(true);
         expect(fsRead(dumpedPath, 'utf-8')).toBe('const x = 1; // agent output');
+      } finally {
+        rmSync(dumpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('--debug-dump-dir writes lastInstrumentedCode for partial FileResult', async () => {
+      const { mkdtempSync, readFileSync: fsRead, existsSync, rmSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+
+      const dumpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-dump-partial-'));
+
+      try {
+        const partialResult = makeFileResult({
+          path: '/test/project/src/api.js',
+          status: 'partial',
+          spansAdded: 1,
+          lastInstrumentedCode: 'const partial = 1; // partial agent output',
+        });
+        const coordinateMock = vi.fn().mockImplementation(
+          async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
+            callbacks?.onFileComplete?.(partialResult, 0, 1);
+            return makeRunResult({ filesProcessed: 1, fileResults: [partialResult] });
+          },
+        );
+
+        const deps = makeDeps({ coordinate: coordinateMock });
+        await handleInstrument(makeOptions({ debugDumpDir: dumpDir }), deps);
+
+        const dumpedPath = join(dumpDir, 'src', 'api.js');
+        expect(existsSync(dumpedPath)).toBe(true);
+        expect(fsRead(dumpedPath, 'utf-8')).toBe('const partial = 1; // partial agent output');
+      } finally {
+        rmSync(dumpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('--debug-dump-dir writes lastInstrumentedCode for success-with-0-spans FileResult', async () => {
+      const { mkdtempSync, readFileSync: fsRead, existsSync, rmSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+
+      const dumpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-dump-zero-'));
+
+      try {
+        const zeroSpansResult = makeFileResult({
+          path: '/test/project/src/sync.js',
+          status: 'success',
+          spansAdded: 0,
+          lastInstrumentedCode: 'const zero = 1; // 0-spans agent output',
+        });
+        const coordinateMock = vi.fn().mockImplementation(
+          async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
+            callbacks?.onFileComplete?.(zeroSpansResult, 0, 1);
+            return makeRunResult({ filesProcessed: 1, fileResults: [zeroSpansResult] });
+          },
+        );
+
+        const deps = makeDeps({ coordinate: coordinateMock });
+        await handleInstrument(makeOptions({ debugDumpDir: dumpDir }), deps);
+
+        const dumpedPath = join(dumpDir, 'src', 'sync.js');
+        expect(existsSync(dumpedPath)).toBe(true);
+        expect(fsRead(dumpedPath, 'utf-8')).toBe('const zero = 1; // 0-spans agent output');
+      } finally {
+        rmSync(dumpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('--debug-dump-dir does not write dump when partial FileResult has no lastInstrumentedCode', async () => {
+      const { mkdtempSync, existsSync, rmSync, readdirSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+
+      const dumpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-dump-noop-'));
+
+      try {
+        const partialNoCode = makeFileResult({
+          path: '/test/project/src/noop.js',
+          status: 'partial',
+          spansAdded: 0,
+          // intentionally no lastInstrumentedCode
+        });
+        const coordinateMock = vi.fn().mockImplementation(
+          async (_dir: string, _config: unknown, callbacks?: CoordinatorCallbacks) => {
+            callbacks?.onFileComplete?.(partialNoCode, 0, 1);
+            return makeRunResult({ filesProcessed: 1, fileResults: [partialNoCode] });
+          },
+        );
+
+        const deps = makeDeps({ coordinate: coordinateMock });
+        await handleInstrument(makeOptions({ debugDumpDir: dumpDir }), deps);
+
+        // No file should be written when lastInstrumentedCode is absent
+        expect(existsSync(join(dumpDir, 'src', 'noop.js'))).toBe(false);
+        expect(readdirSync(dumpDir)).toHaveLength(0);
       } finally {
         rmSync(dumpDir, { recursive: true, force: true });
       }

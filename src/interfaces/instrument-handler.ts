@@ -53,8 +53,12 @@ export interface InstrumentOptions {
   output: 'text' | 'json';
   yes: boolean;
   verbose: boolean;
-  /** When true, include agent thinking blocks in the output for failed files. */
+  /** When true, show structured per-file block for failed/partial files only; compact one-liner for success/skipped. Overridden by --verbose. */
+  verboseFail?: boolean;
+  /** When true, include agent thinking blocks in the output for all files. */
   thinking?: boolean;
+  /** When true, include agent thinking blocks in the output for failed files only. Overridden by --thinking. */
+  thinkingFail?: boolean;
   debug: boolean;
   /** When set, write each file's lastInstrumentedCode to this directory during the run. */
   debugDumpDir?: string;
@@ -194,7 +198,8 @@ export async function handleInstrument(
       const hasCompanion = result.status === 'success' || result.status === 'partial';
       const refactorCount = result.suggestedRefactors?.length ?? 0;
 
-      if (!options.verbose || result.status === 'skipped') {
+      const useVerboseBlock = options.verbose || (options.verboseFail && (result.status === 'failed' || result.status === 'partial'));
+      if (!useVerboseBlock || result.status === 'skipped') {
         // Compact single-line format for non-verbose mode
         const attrsCount = result.attributesCreated ?? 0;
         const attrsStr = attrsCount === 1 ? '1 attribute' : `${attrsCount} attributes`;
@@ -218,12 +223,13 @@ export async function handleInstrument(
         } else {
           deps.stderr(`  ${displayPath}: ${statusLabel}`);
         }
-        // Agent thinking blocks — shown when --thinking is passed, regardless of --verbose
-        if (options.thinking && result.status === 'failed' && result.thinkingBlocksByAttempt && result.thinkingBlocksByAttempt.some(b => b.length > 0)) {
+        // Agent thinking blocks — --thinking shows all files; --thinking-fail shows failed only
+        const thinkingBlocksCompact = result.thinkingBlocksByAttempt;
+        if (thinkingBlocksCompact && thinkingBlocksCompact.some(b => b.length > 0) && (options.thinking || (options.thinkingFail && result.status === 'failed'))) {
           deps.stderr('');
           deps.stderr(`  ${_dim('Agent thinking')}`);
           deps.stderr(`  ${_dim('─'.repeat(60))}`);
-          result.thinkingBlocksByAttempt.forEach((blocks, attemptIdx) => {
+          thinkingBlocksCompact.forEach((blocks, attemptIdx) => {
             if (blocks.length === 0) return;
             deps.stderr(`  ${_dim(`Attempt ${attemptIdx + 1}`)}`);
             for (const block of blocks) {
@@ -278,12 +284,13 @@ export async function handleInstrument(
         }
       }
 
-      // Agent thinking blocks for failed files — shown when --thinking is passed
-      if (options.thinking && result.status === 'failed' && result.thinkingBlocksByAttempt && result.thinkingBlocksByAttempt.some(b => b.length > 0)) {
+      // Agent thinking blocks — --thinking shows all files; --thinking-fail shows failed only
+      const thinkingBlocksVerbose = result.thinkingBlocksByAttempt;
+      if (thinkingBlocksVerbose && thinkingBlocksVerbose.some(b => b.length > 0) && (options.thinking || (options.thinkingFail && result.status === 'failed'))) {
         deps.stderr('');
         deps.stderr(`  ${_dim('Agent thinking')}`);
         deps.stderr(`  ${_dim('─'.repeat(60))}`);
-        result.thinkingBlocksByAttempt.forEach((blocks, attemptIdx) => {
+        thinkingBlocksVerbose.forEach((blocks, attemptIdx) => {
           if (blocks.length === 0) return;
           deps.stderr(`  ${_dim(`Attempt ${attemptIdx + 1}`)}`);
           for (const block of blocks) {

@@ -99,5 +99,22 @@ export function renderReasoningReport(result: FileResult, projectDir?: string): 
     sections.push('');
   }
 
+  // Agent thinking — always written when present, regardless of display flags
+  if (result.thinkingBlocksByAttempt && result.thinkingBlocksByAttempt.some(b => b.length > 0)) {
+    sections.push('## Agent Thinking');
+    sections.push('');
+    result.thinkingBlocksByAttempt.forEach((blocks, attemptIdx) => {
+      if (blocks.length === 0) return;
+      sections.push(`### Attempt ${attemptIdx + 1}`);
+      sections.push('');
+      for (const block of blocks) {
+        sections.push('```');
+        sections.push(block);
+        sections.push('```');
+        sections.push('');
+      }
+    });
+  }
+
   return sections.join('\n');
 }

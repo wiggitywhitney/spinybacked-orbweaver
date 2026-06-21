@@ -93,11 +93,33 @@ Processing file 3 of 4: src/payment.js
       }
 ```
 
-### Thinking blocks (`--thinking`)
+### Verbose for failures only (`--verbose-fail`)
 
-`--thinking` shows the agent's step-by-step reasoning for every attempt on **failed files**. Use it when a file fails repeatedly and you need to understand whether the agent is misreading the code, misapplying a rule, or oscillating between contradictory fixes.
+`--verbose-fail` shows the full structured block for failed and partial files while keeping the compact one-liner for everything else. Use it when you want to understand why specific files failed without verbose output for every file in the run.
 
-Thinking blocks are shown for failed files only — successful files produce no thinking output regardless of this flag.
+```text
+Processing file 1 of 4: src/api-client.js
+  src/api-client.js: success (3 spans, 5.2K output tokens)
+Processing file 2 of 4: src/format-helpers.js
+  src/format-helpers.js: success (0 spans, 1.1K output tokens)
+Processing file 3 of 4: src/payment.js
+  ❌ FAILED — NDS-005 (Code Pattern Preserved) after 3 attempts
+  Tokens: 12.3K output
+
+  Validation failures (last attempt)
+  ────────────────────────────────────────────────────────────
+  • NDS-005b: Block at lines 47-52 was modified...
+
+  Report: src/payment.instrumentation.md
+Processing file 4 of 4: src/order-service.js
+  src/order-service.js: success (2 spans, 4.1K output tokens)
+```
+
+When both `--verbose` and `--verbose-fail` are set, `--verbose` takes precedence and shows the structured block for all files.
+
+### Thinking blocks (`--thinking` and `--thinking-fail`)
+
+`--thinking` shows the agent's step-by-step reasoning for every attempt on **all files**. `--thinking-fail` shows thinking blocks for **failed files only**. Use these flags when a file fails repeatedly and you need to understand whether the agent is misreading the code, misapplying a rule, or oscillating between contradictory fixes.
 
 ```text
 Processing file 3 of 4: src/payment.js
@@ -116,16 +138,19 @@ Processing file 3 of 4: src/payment.js
     requires an error-recording catch...
 ```
 
+Use `--thinking-fail` when you want to diagnose a failing file without thinking output for successful files. Use `--thinking` when you want thinking for every file — useful when diagnosing unexpected results on files that succeeded but produced surprising instrumentation.
+
 **Flag combinations and what they produce:**
 
 | Flags | Per-file output | Thinking blocks |
 |-------|----------------|-----------------|
 | _(none)_ | Compact one-liner | No |
-| `--verbose` | Structured multi-line | No |
-| `--thinking` | Compact one-liner | Yes, for failed files |
-| `--verbose --thinking` | Structured multi-line | Yes, for failed files |
-
-Use `--thinking` alone when you want to diagnose a failing file without the full verbose block for every other file. Use `--verbose --thinking` when you want the complete picture for every file alongside reasoning for failures.
+| `--verbose` | Structured multi-line, all files | No |
+| `--verbose-fail` | Structured for failed/partial; compact for success/skipped | No |
+| `--thinking` | Compact one-liner | Yes, all files |
+| `--thinking-fail` | Compact one-liner | Yes, failed files only |
+| `--verbose --thinking` | Structured multi-line | Yes, all files |
+| `--verbose-fail --thinking-fail` | Structured for failed/partial | Yes, failed files only |
 
 ### Recommended refactors
 
@@ -205,6 +230,7 @@ Each instrumented file gets a companion markdown file (written alongside the PR 
 - **Notes**: Full agent reasoning (same as CLI verbose output, but never truncated)
 - **Advisory Findings**: All non-blocking rule results with codes, labels, and line numbers
 - **Failure Details**: For failed files, the specific reason the file couldn't be committed
+- **Agent Thinking**: Per-attempt thinking blocks when thinking was enabled during the run. Each attempt is a separate subsection (`### Attempt 1`, `### Attempt 2`, etc.) with thinking blocks as fenced code blocks. Attempts with no thinking content are omitted.
 
 ## Schema extensions
 

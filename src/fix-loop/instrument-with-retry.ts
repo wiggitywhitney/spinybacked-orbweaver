@@ -1427,6 +1427,7 @@ async function functionLevelFallback(
       functionsSkipped: extractedFunctions.length,
       functionResults: fnResults,
       tscAttempts: tscAttemptsResult,
+      lastInstrumentedCode: wholeFileResult.lastInstrumentedCode ?? originalCode,
     };
   }
 
@@ -1558,6 +1559,7 @@ async function functionLevelFallback(
     if (totalSpans === 0) {
       await writeFile(filePath, originalCode, 'utf-8');
     }
+    const isPartialResult = totalSpans > 0 && successful.length < extractedFunctions.length;
     return {
       path: filePath,
       // Validation passed on the reassembled code.
@@ -1580,6 +1582,9 @@ async function functionLevelFallback(
       functionsInstrumented: successful.length,
       functionsSkipped: extractedFunctions.length - successful.length,
       functionResults: fnResults,
+      tscAttempts: tscAttempts.length > 0 ? tscAttempts : undefined,
+      // Populate for partial results so the debug dump fires for non-clean-success files.
+      lastInstrumentedCode: isPartialResult ? reassembledCode : undefined,
     };
   }
 
@@ -1645,6 +1650,8 @@ async function functionLevelFallback(
     functionsInstrumented: successful.length,
     functionsSkipped: extractedFunctions.length - successful.length,
     functionResults: fnResults,
+    tscAttempts: tscAttempts.length > 0 ? tscAttempts : undefined,
+    lastInstrumentedCode: partialCode,
   };
 }
 

@@ -3570,6 +3570,152 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(typeof entry.stdout).toBe('string');
     expect(entry.stdout.length).toBeGreaterThan(0);
   });
+
+  // Debug dump coverage (#989): partial and success-with-0-spans paths must populate
+  // lastInstrumentedCode so the instrument-handler debug dump fires for those files.
+
+  it('partial result from function-level fallback has lastInstrumentedCode populated', async () => {
+    // Two-function fixture so first-succeeds / second-fails reliably produces partial.
+    const twoFnFixture = `import { trace } from '@opentelemetry/api';
+
+export async function alpha(x) {
+  return x + 1;
+}
+
+export async function beta(y) {
+  return y * 2;
+}
+`;
+    const twoFnPath = join(tmpDir, 'two-fn.js');
+    writeFileSync(twoFnPath, twoFnFixture, 'utf-8');
+
+    let perFnCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          perFnCount++;
+          if (perFnCount === 1) {
+            // First function succeeds with a span
+            return {
+              success: true,
+              output: makeInstrumentationOutput({
+                instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function alpha(x) { return trace.getTracer('svc').startActiveSpan('alpha', async (span) => { try { return x + 1; } finally { span.end(); } }); }\n`,
+                schemaExtensions: [],
+                spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+              }),
+            };
+          }
+          // Second function: instrumentFile fails
+          return { success: false, error: 'LLM timeout', tokenUsage: sampleTokens };
+        }
+        // Whole-file call fails
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(twoFnPath, twoFnFixture, {}, makeConfig(), { deps, provider: jsProvider });
+
+    // With one function succeeding and one failing, expect partial (or success if only one function extracted)
+    expect(['partial', 'success']).toContain(result.status);
+
+    // When a file went through function-level fallback and some functions were skipped,
+    // lastInstrumentedCode must be set so the debug dump fires (issue #989).
+    if (result.functionsSkipped && result.functionsSkipped > 0) {
+      expect(result.lastInstrumentedCode, 'partial result must have lastInstrumentedCode for debug dump').toBeDefined();
+    }
+  });
+
+  it('success-with-0-spans from function-level fallback has lastInstrumentedCode populated', async () => {
+    // All functions succeed via function-level fallback but produce 0 spans.
+    // The 0-spans short-circuit at lines 1408-1430 must set lastInstrumentedCode.
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          // Succeeds but returns code with no spans
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `export async function fetchWithRetry(url) { return fetch(url); }\n`,
+              schemaExtensions: [],
+              spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        // Whole-file call fails to trigger function-level fallback
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('success');
+    expect(result.spansAdded).toBe(0);
+    // success-with-0-spans must have lastInstrumentedCode set so the debug dump fires (issue #989)
+    expect(result.lastInstrumentedCode, 'success-with-0-spans must have lastInstrumentedCode for debug dump').toBeDefined();
+  });
+
+  it('success-with-spans from function-level fallback does not set lastInstrumentedCode', async () => {
+    // When all functions succeed with spans, no debug dump should fire (normal success path).
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function fetchWithRetry(url) { return trace.getTracer('svc').startActiveSpan('fetch', async (span) => { try { return fetch(url); } finally { span.end(); } }); }\n`,
+              schemaExtensions: [],
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('success');
+    expect(result.spansAdded).toBeGreaterThan(0);
+    // Normal success-with-spans must NOT have lastInstrumentedCode (no dump needed)
+    expect(result.lastInstrumentedCode).toBeUndefined();
+  });
+
+  it('partial from reassembly-validation-failure path has lastInstrumentedCode populated', async () => {
+    // Reassembly validation fails → uses partial-results fallback path (lines 1625-1648).
+    // lastInstrumentedCode must be set so the debug dump fires (issue #989).
+    let validateCallCount = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionCall(path)) {
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              instrumentedCode: `import { trace } from '@opentelemetry/api';\nexport async function fn() { return trace.getTracer('svc').startActiveSpan('op', async (span) => { try { return null; } finally { span.end(); } }); }\n`,
+              schemaExtensions: [],
+              spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+            }),
+          };
+        }
+        return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+      },
+      validateFile: async (input) => {
+        validateCallCount++;
+        if (isPerFunctionCall(input.filePath)) return makePassingValidation(input.filePath);
+        // Whole-file and full reassembly validation fail; partial reassembly passes
+        if (validateCallCount <= 4) return makeFailingValidation(input.filePath);
+        return makePassingValidation(input.filePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(filePath, FALLBACK_FIXTURE, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(result.status).toBe('partial');
+    // The partial-fallback path must set lastInstrumentedCode for debug dump (issue #989)
+    expect(result.lastInstrumentedCode, 'partial-fallback result must have lastInstrumentedCode for debug dump').toBeDefined();
+  });
 });
 
 describe('instrumentWithRetry — suggestedRefactors collection', () => {
