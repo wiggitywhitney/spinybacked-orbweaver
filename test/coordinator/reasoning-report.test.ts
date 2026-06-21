@@ -166,4 +166,52 @@ describe('renderReasoningReport', () => {
     expect(report).toContain('## Notes');
     expect(report).toContain('All exported functions are synchronous');
   });
+
+  it('includes Agent Thinking section when thinkingBlocksByAttempt is present', () => {
+    const report = renderReasoningReport(makeResult({
+      thinkingBlocksByAttempt: [
+        ['The function makes an HTTP call — adding an external span.'],
+        ['Retrying with a cleaner startActiveSpan wrapper.'],
+      ],
+    }));
+    expect(report).toContain('## Agent Thinking');
+    expect(report).toContain('### Attempt 1');
+    expect(report).toContain('The function makes an HTTP call');
+    expect(report).toContain('### Attempt 2');
+    expect(report).toContain('Retrying with a cleaner');
+  });
+
+  it('includes multiple thinking blocks per attempt as separate fenced code blocks', () => {
+    const report = renderReasoningReport(makeResult({
+      thinkingBlocksByAttempt: [
+        ['First thinking block.', 'Second thinking block.'],
+      ],
+    }));
+    expect(report).toContain('First thinking block.');
+    expect(report).toContain('Second thinking block.');
+  });
+
+  it('skips attempts with empty thinking blocks', () => {
+    const report = renderReasoningReport(makeResult({
+      thinkingBlocksByAttempt: [
+        [],
+        ['Attempt 2 had thinking content.'],
+      ],
+    }));
+    expect(report).toContain('## Agent Thinking');
+    expect(report).not.toContain('### Attempt 1');
+    expect(report).toContain('### Attempt 2');
+  });
+
+  it('omits Agent Thinking section when thinkingBlocksByAttempt is absent', () => {
+    const report = renderReasoningReport(makeResult());
+    expect(report).not.toContain('## Agent Thinking');
+  });
+
+  it('omits Agent Thinking section when all attempts have empty thinking blocks', () => {
+    const report = renderReasoningReport(makeResult({
+      thinkingBlocksByAttempt: [[], []],
+    }));
+    expect(report).not.toContain('## Agent Thinking');
+  });
 });

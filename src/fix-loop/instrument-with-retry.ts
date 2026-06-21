@@ -1427,6 +1427,7 @@ async function functionLevelFallback(
       functionsSkipped: extractedFunctions.length,
       functionResults: fnResults,
       tscAttempts: tscAttemptsResult,
+      lastInstrumentedCode: wholeFileResult.lastInstrumentedCode ?? originalCode,
     };
   }
 
@@ -1580,6 +1581,11 @@ async function functionLevelFallback(
       functionsInstrumented: successful.length,
       functionsSkipped: extractedFunctions.length - successful.length,
       functionResults: fnResults,
+      tscAttempts: tscAttempts.length > 0 ? tscAttempts : undefined,
+      // Populate lastInstrumentedCode when the outcome is partial (some functions failed)
+      // so the debug dump fires. When all functions succeeded (status 'success'), leave
+      // undefined to skip the dump.
+      lastInstrumentedCode: successful.length < extractedFunctions.length ? reassembledCode : undefined,
     };
   }
 
@@ -1645,6 +1651,8 @@ async function functionLevelFallback(
     functionsInstrumented: successful.length,
     functionsSkipped: extractedFunctions.length - successful.length,
     functionResults: fnResults,
+    tscAttempts: tscAttempts.length > 0 ? tscAttempts : undefined,
+    lastInstrumentedCode: partialCode,
   };
 }
 

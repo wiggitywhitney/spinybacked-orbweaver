@@ -381,27 +381,40 @@ Configuration not found — run 'spiny-orb init' to create spiny-orb.yaml
 #### Flags
 
 ```text
---dry-run   Preview changes without writing
---output    Output format: text (default) or json
---yes       Skip cost ceiling confirmation
---verbose   Show structured per-file output: status, token count, validation failures,
-            schema extensions, and agent notes. Use this when a file fails and you want
-            to understand why.
---thinking  Show agent thinking blocks for failed files. Thinking blocks contain the
-            agent's step-by-step reasoning per attempt. Combine with --verbose to see
-            structured output alongside thinking blocks.
---debug     Show debug-level diagnostic output
---no-pr     Skip PR creation (create branch and commits only)
+--dry-run        Preview changes without writing
+--output         Output format: text (default) or json
+--yes            Skip cost ceiling confirmation
+--verbose        Show structured per-file output: status, token count, validation failures,
+                 schema extensions, and agent notes. Use this when a file fails and you want
+                 to understand why.
+--verbose-fail   Show structured diagnostic output for failed and partial files only.
+                 Success and skipped files use the compact one-liner. Use this when you want
+                 full detail on failures without verbose output for every file.
+--thinking       Show agent thinking blocks for all files. Thinking blocks contain the
+                 agent's step-by-step reasoning per attempt.
+--thinking-fail  Show agent thinking blocks for failed files only. Use this when a file fails
+                 and you need to understand the agent's reasoning without thinking output for
+                 successful files.
+--debug-dump-dir Write each file's last instrumented code to this directory. Fires for failed,
+                 partial, and zero-span results — not for clean successes. Use this to inspect
+                 the raw LLM-produced code without checking out the instrument branch.
+--debug          Show debug-level diagnostic output
+--no-pr          Skip PR creation (create branch and commits only)
 ```
 
 **Flag combinations:**
 
-| Flags | Per-file output | Thinking blocks (failed files only) |
-|-------|----------------|--------------------------------------|
+| Flags | Per-file output | Thinking blocks |
+|-------|----------------|-----------------|
 | _(none)_ | Compact one-liner | No |
-| `--verbose` | Structured multi-line | No |
-| `--thinking` | Compact one-liner | Yes |
-| `--verbose --thinking` | Structured multi-line | Yes |
+| `--verbose` | Structured multi-line, all files | No |
+| `--verbose-fail` | Structured for failed/partial; compact for success/skipped | No |
+| `--thinking` | Compact one-liner | Yes, all files |
+| `--thinking-fail` | Compact one-liner | Yes, failed files only |
+| `--verbose --thinking` | Structured multi-line | Yes, all files |
+| `--verbose-fail --thinking-fail` | Structured for failed/partial | Yes, failed files only |
+
+`--debug-dump-dir` operates independently of all display flags — it writes the LLM-produced code to the filesystem and can be combined with any of the above.
 
 The `--verbose` flag expands each file's output into a structured block:
 

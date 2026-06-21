@@ -52,7 +52,7 @@ The current `--verbose` and `--thinking` flags have two usability gaps:
 
 ## Milestones
 
-- [ ] **M1 — Add `--verbose-fail` flag**
+- [x] **M1 — Add `--verbose-fail` flag**
 
   Two files require changes:
 
@@ -61,7 +61,7 @@ The current `--verbose` and `--thinking` flags have two usability gaps:
 
   Acceptance: `spiny-orb instrument src --verbose-fail --yes` shows structured blocks for failed/partial files and compact one-liners for success/skipped. `npm test` passes.
 
-- [ ] **M2 — Change `--thinking` to all-files; add `--thinking-fail`**
+- [x] **M2 — Change `--thinking` to all-files; add `--thinking-fail`**
 
   Two files require changes:
 
@@ -70,7 +70,7 @@ The current `--verbose` and `--thinking` flags have two usability gaps:
 
   Acceptance: `--thinking` shows thinking for every file including successful ones. `--thinking-fail` shows thinking only for failed files. `npm test` passes.
 
-- [ ] **M3 — Thread `thinkingBlocksByAttempt` through coordinator to companion file writer**
+- [x] **M3 — Thread `thinkingBlocksByAttempt` through coordinator to companion file writer**
 
   Two changes required:
 
@@ -79,7 +79,7 @@ The current `--verbose` and `--thinking` flags have two usability gaps:
 
   Acceptance: after a run, `.instrumentation.md` companion files contain an `## Agent Thinking` section when the agent generated thinking blocks. Verified with and without `--thinking`/`--thinking-fail` flags. `npm test` passes.
 
-- [ ] **M4 — Update documentation**
+- [x] **M4 — Update documentation**
 
   Use `/write-docs` to update:
   - `README.md` flags table: add `--verbose-fail` and `--thinking-fail` rows; update `--thinking` description to reflect all-files behavior.
@@ -91,7 +91,7 @@ The current `--verbose` and `--thinking` flags have two usability gaps:
 
   Acceptance: docs accurately describe all four flags and the companion file behavior.
 
-- [ ] **M5 — Communicate changes to eval team**
+- [x] **M5 — Communicate changes to eval team**
 
   After M1–M4 merge, send the eval team a message covering:
   - The new flag set and what changed (`--verbose-fail`, `--thinking-fail` added; `--thinking` now shows thinking for all files)
@@ -101,7 +101,7 @@ The current `--verbose` and `--thinking` flags have two usability gaps:
 
   Acceptance: message sent with the above content.
 
-- [ ] **M6 — Update `PROGRESS.md`**
+- [x] **M6 — Update `PROGRESS.md`**
 
 ---
 
