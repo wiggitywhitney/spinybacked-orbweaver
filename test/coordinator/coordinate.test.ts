@@ -1632,4 +1632,108 @@ describe('coordinate', () => {
 
   });
 
+  describe('cross-file SCH-001 advisory contamination (#960)', () => {
+    it('removes SCH-001 advisory when matched registry entry was introduced by an earlier file in this run', async () => {
+      // #960: dispatch.ts calls resolveSchema fresh per file. After writing file N-1's span
+      // extensions to agent-extensions.yaml, file N's fresh resolveSchema picks them up as
+      // "pre-existing" registry entries. SCH-001 for file N may then flag file N's own spans
+      // as potential duplicates of file N-1's spans — e.g., "taze.io" flagged against
+      // "taze.workspace" from file N-1. The fix strips these self-referential advisories by
+      // checking whether the matched registry entry came from this run's extensions.
+      const runExtensionOpName = 'taze.workspace'; // File 1 introduces this
+      const file2Advisory = {
+        ruleId: 'SCH-001',
+        passed: false,
+        filePath: '/project/file2.js',
+        lineNumber: null as null,
+        message:
+          // File 2 declares taze.io; SCH-001 compares against taze.workspace (from File 1, now in registry)
+          `SCH-001: declared span extension "taze.io" may be a semantic duplicate` +
+          ` of existing registry operation "${runExtensionOpName}". If these operations are equivalent,` +
+          ` reuse "${runExtensionOpName}" instead of declaring a new extension.` +
+          ` If they are a different operation class, this advisory can be ignored.`,
+        tier: 2 as const,
+        blocking: false,
+        matchedEntry: runExtensionOpName,
+      };
+
+      const fileResults = [
+        makeSuccessResult('/project/file1.js', {
+          // file1 introduces span.taze.workspace into the registry
+          schemaExtensions: ['span.taze.workspace'],
+        }),
+        makeSuccessResult('/project/file2.js', {
+          // file2 gets an advisory where the matched entry is taze.workspace (from this run)
+          advisoryAnnotations: [file2Advisory],
+        }),
+      ];
+
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/file1.js', '/project/file2.js']),
+        dispatchFiles: vi.fn().mockResolvedValue(fileResults),
+      });
+
+      let capturedFileResults: FileResult[] | undefined;
+      await coordinate('/project', makeConfig(), {
+        onRunComplete: (results) => { capturedFileResults = results; },
+      }, deps);
+
+      const file2Result = capturedFileResults?.find(r => r.path === '/project/file2.js');
+      expect(file2Result).toBeDefined();
+      // After the fix: advisory whose matched entry (taze.workspace) came from this run is removed
+      const remainingAdvisory = file2Result?.advisoryAnnotations?.find(
+        a => a.ruleId === 'SCH-001' && a.message.includes(runExtensionOpName),
+      );
+      expect(remainingAdvisory).toBeUndefined();
+    });
+
+    it('keeps SCH-001 advisories where the matched registry entry pre-existed before this run', async () => {
+      // SCH-001 advisories flagging similarity against a span that was in the registry BEFORE
+      // this run started are genuine warnings — they should not be filtered.
+      const preExistingOpName = 'taze.preexisting_op'; // was in registry before this run
+      const genuineAdvisory = {
+        ruleId: 'SCH-001',
+        passed: false,
+        filePath: '/project/file1.js',
+        lineNumber: null as null,
+        message:
+          // taze.new_op is being declared; matched against taze.preexisting_op (pre-run registry)
+          `SCH-001: declared span extension "taze.new_op" may be a semantic duplicate` +
+          ` of existing registry operation "${preExistingOpName}". If these operations are equivalent,` +
+          ` reuse "${preExistingOpName}" instead of declaring a new extension.` +
+          ` If they are a different operation class, this advisory can be ignored.`,
+        tier: 2 as const,
+        blocking: false,
+        matchedEntry: preExistingOpName,
+      };
+
+      const fileResults = [
+        makeSuccessResult('/project/file1.js', {
+          // This run introduced taze.new_op — but taze.preexisting_op was already in the registry
+          schemaExtensions: ['span.taze.new_op'],
+          advisoryAnnotations: [genuineAdvisory],
+        }),
+      ];
+
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockResolvedValue(['/project/file1.js']),
+        dispatchFiles: vi.fn().mockResolvedValue(fileResults),
+      });
+
+      let capturedFileResults: FileResult[] | undefined;
+      await coordinate('/project', makeConfig(), {
+        onRunComplete: (results) => { capturedFileResults = results; },
+      }, deps);
+
+      const file1Result = capturedFileResults?.find(r => r.path === '/project/file1.js');
+      expect(file1Result).toBeDefined();
+      // The advisory's matched entry (taze.preexisting_op) is NOT in this run's extensions
+      // — it should be kept as a genuine duplicate warning
+      const keptAdvisory = file1Result?.advisoryAnnotations?.find(
+        a => a.ruleId === 'SCH-001' && a.message.includes(preExistingOpName),
+      );
+      expect(keptAdvisory).toBeDefined();
+    });
+  });
+
 });
