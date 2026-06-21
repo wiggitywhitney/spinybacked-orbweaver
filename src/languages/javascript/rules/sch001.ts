@@ -259,7 +259,7 @@ async function checkRegistryConformance(
             `. If these operations are equivalent, reuse "${matchedEntry || 'the existing name'}" instead of declaring a new extension. If they are a different operation class, this advisory can be ignored.`,
           tier: 2,
           blocking: false,
-          matchedEntry,
+          matchedEntry: matchedEntry || undefined,
         });
         // Fall through to add the extension to validOperations.
       }
