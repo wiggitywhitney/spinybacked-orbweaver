@@ -239,6 +239,7 @@ async function checkRegistryConformance(
               `. Use the existing registry operation instead of declaring a new extension.`,
             tier: 2,
             blocking: true,
+            matchedEntry: matchedEntry || undefined,
           });
           continue; // Don't add delimiter variants to validOperations
         }
@@ -521,3 +522,55 @@ export const sch001Rule: ValidationRule = {
     );
   },
 };
+
+/**
+ * Fix delimiter-variant violations from SCH-001 and SCH-002 by replacing the
+ * violating string literals with the canonical registry entry.
+ *
+ * Only acts on failures that have `matchedEntry` set (i.e., normalization-detected
+ * delimiter variants). Semantic duplicates (detected by the LLM judge) are skipped
+ * because they require agent judgment to resolve.
+ *
+ * For each qualifying failure, extracts the violating name from the message and
+ * replaces all occurrences of that quoted string in the code with the matchedEntry.
+ *
+ * @param code - Instrumented code containing delimiter-variant span names or attribute keys
+ * @param _schemaExtensions - Declared schema extensions (unused; violations come from failures)
+ * @param previousBlockingFailures - CheckResult[] from the last validation run
+ * @returns Fixed code string, or unchanged code if no delimiter failures exist
+ */
+export function fixDelimiterVariants(
+  code: string,
+  _schemaExtensions: string[],
+  previousBlockingFailures: CheckResult[],
+): string {
+  const repairs: Array<{ violating: string; canonical: string }> = [];
+
+  for (const failure of previousBlockingFailures) {
+    if (failure.ruleId !== 'SCH-001' && failure.ruleId !== 'SCH-002') continue;
+    if (!failure.matchedEntry) continue;
+
+    // Extract violating name from message.
+    // SCH-001 format: declared span extension "VIOLATING" is a delimiter-variant...
+    // SCH-002 format: declared attribute extension "VIOLATING" is a delimiter-variant...
+    const match = failure.message.match(/declared (?:span|attribute) extension "([^"]+)"/);
+    if (!match) continue;
+
+    const violating = match[1];
+    const canonical = failure.matchedEntry;
+    if (violating !== canonical) {
+      repairs.push({ violating, canonical });
+    }
+  }
+
+  if (repairs.length === 0) return code;
+
+  let result = code;
+  for (const { violating, canonical } of repairs) {
+    // Replace all quoted occurrences of the violating string with the canonical form.
+    // Use a global replace on the exact quoted string to avoid partial matches.
+    result = result.replaceAll(`"${violating}"`, `"${canonical}"`);
+    result = result.replaceAll(`'${violating}'`, `'${canonical}'`);
+  }
+  return result;
+}

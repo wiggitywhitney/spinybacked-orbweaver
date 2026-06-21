@@ -705,6 +705,32 @@ export interface LanguageProvider {
   fixIsRecordingGuards(code: string): string;
 
   /**
+   * Wrap untyped property-access string method calls in String() coercion.
+   *
+   * Detects setAttribute calls where a string method (split, slice, etc.) is
+   * called directly on a property-access expression (obj.field.method()) without
+   * a String() coercion, and wraps the receiver: String(obj.field).method().
+   *
+   * @param code - Instrumented code that may have untyped string method calls
+   * @returns Code with String() coercions applied, or unchanged code
+   */
+  fixUntypedStringMethods(code: string): string;
+
+  /**
+   * Replace delimiter-variant span names and attribute keys with canonical registry forms.
+   *
+   * Reads SCH-001 and SCH-002 blocking failures that have `matchedEntry` set
+   * (normalization-detected delimiter variants only) and replaces the violating
+   * quoted string literals with the canonical registry entry.
+   *
+   * @param code - Instrumented code with delimiter-variant names or keys
+   * @param schemaExtensions - Declared schema extensions (for context)
+   * @param previousBlockingFailures - CheckResult[] from the last validation run
+   * @returns Fixed code string, or unchanged code if no delimiter failures apply
+   */
+  fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: CheckResult[]): string;
+
+  /**
    * Return a language-specific formatter constraint string for the LLM prompt.
    *
    * For JavaScript and TypeScript, reads the project's Prettier config from

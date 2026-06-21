@@ -1,8 +1,8 @@
 // ABOUTME: Tests for CDQ-010 advisory check — untyped string method on property access.
-// ABOUTME: Verifies string methods called on obj.field without type coercion are flagged.
+// ABOUTME: Verifies string methods called on obj.field without type coercion are flagged and auto-fixed.
 
 import { describe, it, expect } from 'vitest';
-import { checkUntypedStringMethod } from '../../../../src/languages/javascript/rules/cdq010.ts';
+import { checkUntypedStringMethod, fixUntypedStringMethods } from '../../../../src/languages/javascript/rules/cdq010.ts';
 
 describe('checkUntypedStringMethod (CDQ-010)', () => {
   const filePath = '/tmp/test-file.js';
@@ -384,6 +384,81 @@ describe('checkUntypedStringMethod (CDQ-010)', () => {
       expect(results[0].tier).toBe(2);
       expect(results[0].blocking).toBe(false);
     });
+  });
+});
+
+describe('fixUntypedStringMethods', () => {
+  it('wraps obj.field with String() before the string method call', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function saveEntry(commit) {',
+      '  return tracer.startActiveSpan("save", (span) => {',
+      '    span.setAttribute("date", commit.timestamp.split("T")[0]);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = fixUntypedStringMethods(code);
+
+    expect(result).toContain('String(commit.timestamp).split("T")[0]');
+    expect(result).not.toContain('commit.timestamp.split(');
+  });
+
+  it('leaves already-correct String(obj.field).method() unchanged', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function saveEntry(commit) {',
+      '  return tracer.startActiveSpan("save", (span) => {',
+      '    span.setAttribute("date", String(commit.timestamp).split("T")[0]);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = fixUntypedStringMethods(code);
+
+    expect(result).toBe(code);
+  });
+
+  it('returns code unchanged when no CDQ-010 findings exist', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function greet(name) {',
+      '  return tracer.startActiveSpan("greet", (span) => {',
+      '    span.setAttribute("name", name);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = fixUntypedStringMethods(code);
+
+    expect(result).toBe(code);
+  });
+
+  it('wraps obj.field with String() in TypeScript code with type annotations', () => {
+    // Verifies fix.ts parsing mode handles TypeScript-specific syntax (interface, type unions).
+    // With fix.js mode, the interface declaration causes a silent parse error and no fix is applied.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      'const tracer = trace.getTracer("svc");',
+      'interface Commit { timestamp: Date | string; sha: string; }',
+      'function saveEntry(commit: Commit): void {',
+      '  tracer.startActiveSpan("save", (span) => {',
+      '    span.setAttribute("date", commit.timestamp.split("T")[0]);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = fixUntypedStringMethods(code);
+
+    expect(result).toContain('String(commit.timestamp).split("T")[0]');
+    expect(result).not.toContain('commit.timestamp.split(');
   });
 });
 

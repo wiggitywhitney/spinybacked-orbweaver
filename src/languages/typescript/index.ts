@@ -31,6 +31,8 @@ import { reassembleFunctions as reassembleFunctionsImpl, ensureTracerAfterImport
 import { fixProcessExitSpanEnd as fixProcessExitSpanEndImpl } from '../javascript/rules/cdq001.ts';
 import { fixAttributeTypeCoercions as fixAttributeTypeCoercionsImpl } from '../javascript/rules/sch003.ts';
 import { fixIsRecordingGuards as fixIsRecordingGuardsImpl } from '../javascript/rules/cdq006.ts';
+import { fixUntypedStringMethods as fixUntypedStringMethodsImpl } from '../javascript/rules/cdq010.ts';
+import { fixDelimiterVariants as fixDelimiterVariantsImpl } from '../javascript/rules/sch001.ts';
 import { buildPrettierConstraint } from '../javascript/validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
@@ -206,6 +208,14 @@ export class TypeScriptProvider implements LanguageProvider {
 
   fixIsRecordingGuards(code: string): string {
     return fixIsRecordingGuardsImpl(code);
+  }
+
+  fixUntypedStringMethods(code: string): string {
+    return fixUntypedStringMethodsImpl(code);
+  }
+
+  fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: import('../../validation/types.ts').CheckResult[]): string {
+    return fixDelimiterVariantsImpl(code, schemaExtensions, previousBlockingFailures);
   }
 
   getFormatterConstraint(filePath: string): Promise<string> {

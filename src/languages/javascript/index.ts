@@ -50,7 +50,8 @@ import { cdq005Rule } from './rules/cdq005.ts';
 import { cdq006Rule, fixIsRecordingGuards as fixIsRecordingGuardsImpl } from './rules/cdq006.ts';
 import { cdq007Rule } from './rules/cdq007.ts';
 import { cdq009Rule } from './rules/cdq009.ts';
-import { cdq010Rule } from './rules/cdq010.ts';
+import { cdq010Rule, fixUntypedStringMethods as fixUntypedStringMethodsImpl } from './rules/cdq010.ts';
+import { fixDelimiterVariants as fixDelimiterVariantsImpl } from './rules/sch001.ts';
 import { cdq011Rule } from './rules/cdq011.ts';
 import { api001Rule, api004Rule } from './rules/api001.ts';
 import { api002Rule } from './rules/api002.ts';
@@ -352,6 +353,14 @@ export class JavaScriptProvider implements LanguageProvider {
 
   fixIsRecordingGuards(code: string): string {
     return fixIsRecordingGuardsImpl(code);
+  }
+
+  fixUntypedStringMethods(code: string): string {
+    return fixUntypedStringMethodsImpl(code);
+  }
+
+  fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: import('../../validation/types.ts').CheckResult[]): string {
+    return fixDelimiterVariantsImpl(code, schemaExtensions, previousBlockingFailures);
   }
 
   getFormatterConstraint(filePath: string): Promise<string> {

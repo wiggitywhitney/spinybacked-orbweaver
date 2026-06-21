@@ -774,6 +774,12 @@ async function executeRetryLoop(
     );
     output.instrumentedCode = provider.fixAttributeTypeCoercions(output.instrumentedCode, schemaForTypeCoercions);
     output.instrumentedCode = provider.fixIsRecordingGuards(output.instrumentedCode);
+    output.instrumentedCode = provider.fixUntypedStringMethods(output.instrumentedCode);
+    output.instrumentedCode = provider.fixDelimiterVariants(
+      output.instrumentedCode,
+      output.schemaExtensions,
+      lastValidation?.blockingFailures ?? [],
+    );
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');
@@ -988,6 +994,8 @@ async function executeRetryLoop(
             appendDeclaredExtensionTypes(autoRegistrationResolvedSchema, advisoryOutput.schemaExtensions),
           );
           advisoryCode = provider.fixIsRecordingGuards(advisoryCode);
+          advisoryCode = provider.fixUntypedStringMethods(advisoryCode);
+          advisoryCode = provider.fixDelimiterVariants(advisoryCode, advisoryOutput.schemaExtensions, []);
           await writeFile(filePath, advisoryCode, 'utf-8');
 
           const advisoryValidation = await validateFileFn({

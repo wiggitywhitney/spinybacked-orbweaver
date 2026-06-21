@@ -163,6 +163,83 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
     });
   });
 
+  describe('negated ENOENT graceful-degradation pattern', () => {
+    it('passes when catch uses negated ENOENT rethrow — ENOENT is graceful, non-ENOENT propagates to outer span', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export async function readWeekDailySummaries(path: string): Promise<string[]> {',
+        '  return tracer.startActiveSpan("readWeekDailySummaries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;',
+        '      return [];',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Negated ENOENT: ENOENT is the handled (graceful) case; non-ENOENT errors
+      // rethrow to an outer span that already records them. Not a genuine error path.
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it("passes when catch uses negated ENOENT rethrow with single quotes", () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        "export async function readConfig(path: string): Promise<string | null> {",
+        '  return tracer.startActiveSpan("readConfig", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err: unknown) {',
+        "      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;",
+        '      return null;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags catch where .code !== ENOENT appears in if-body that does not throw (over-match regression)', () => {
+      // `.code !== 'ENOENT'` is present but in an if-body that logs, not a rethrow guard.
+      // The unconditional throw after means error recording is required — exemption must NOT fire.
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export function readData(path: string): Buffer {',
+        '  return tracer.startActiveSpan("readData", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {',
+        '        console.error("unexpected error");',  // if-body has no throw
+        '      }',
+        '      throw err;',  // unconditional throw — not guarded by the ENOENT check
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('no spans', () => {
     it('passes when no spans exist in file', () => {
       const code = [

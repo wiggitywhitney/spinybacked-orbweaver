@@ -258,6 +258,54 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when catch uses negated ENOENT rethrow — ENOENT is graceful, non-ENOENT propagates to outer span', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function readWeekDailySummaries(path) {',
+        '  return tracer.startActiveSpan("readWeekDailySummaries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err) {',
+        '      if (err.code !== "ENOENT") throw err;',
+        '      return [];',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Negated ENOENT: ENOENT is the handled (graceful) case; non-ENOENT errors
+      // rethrow to an outer span that already records them. Not a genuine error path.
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it("passes when catch uses negated ENOENT rethrow with single quotes", () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function readConfig(path) {',
+        '  return tracer.startActiveSpan("readConfig", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        "    } catch (err) {",
+        "      if (err.code !== 'ENOENT') throw err;",
+        '      return null;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('flags ENOENT catch that rethrows non-expected errors (mixed path)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
@@ -302,6 +350,33 @@ describe('checkErrorVisibility (COV-003)', () => {
       const results = checkErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags catch where .code !== ENOENT appears in if-body that does not throw (over-match regression)', () => {
+      // `.code !== 'ENOENT'` is present but in an if-body that logs, not a rethrow guard.
+      // The unconditional throw after means error recording is required — exemption must NOT fire.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function readData(path) {',
+        '  return tracer.startActiveSpan("readData", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      if (err.code !== "ENOENT") {',
+        '        console.error("unexpected error");',  // if-body has no throw
+        '      }',
+        '      throw err;',  // unconditional throw — not guarded by the ENOENT check
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
 
     it('passes when catch uses continue (loop control flow)', () => {
