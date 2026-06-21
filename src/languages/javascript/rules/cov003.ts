@@ -251,6 +251,16 @@ export function isExpectedConditionCatch(catchClause: import('ts-morph').CatchCl
     return true;
   }
 
+  // Negated ENOENT rethrow: `if (err.code !== 'ENOENT') throw err` — ENOENT is the
+  // graceful path (file simply doesn't exist); non-ENOENT errors rethrow to an outer
+  // span that already calls recordException/setStatus. This is idiomatic Node.js
+  // graceful degradation for file-reading operations and is not a genuine error path.
+  // Matches both JS (`err.code`) and TS cast forms (`(err as ErrnoException).code`).
+  const NEGATED_ENOENT_RETHROW = /\.code\s*!==\s*['"]ENOENT['"]/;
+  if (NEGATED_ENOENT_RETHROW.test(bodyText)) {
+    return true;
+  }
+
   // Has throw — check if it's a mixed path with expected-condition code patterns.
   // E.g., `if (err.code === 'ENOENT') return null; throw err;` — the ENOENT path
   // is expected-condition, but the rethrow path is a genuine error needing recording.

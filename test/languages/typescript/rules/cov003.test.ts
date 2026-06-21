@@ -163,6 +163,56 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
     });
   });
 
+  describe('negated ENOENT graceful-degradation pattern', () => {
+    it('passes when catch uses negated ENOENT rethrow — ENOENT is graceful, non-ENOENT propagates to outer span', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export async function readWeekDailySummaries(path: string): Promise<string[]> {',
+        '  return tracer.startActiveSpan("readWeekDailySummaries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;',
+        '      return [];',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Negated ENOENT: ENOENT is the handled (graceful) case; non-ENOENT errors
+      // rethrow to an outer span that already records them. Not a genuine error path.
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it("passes when catch uses negated ENOENT rethrow with single quotes", () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        "export async function readConfig(path: string): Promise<string | null> {",
+        '  return tracer.startActiveSpan("readConfig", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err: unknown) {',
+        "      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;",
+        '      return null;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('no spans', () => {
     it('passes when no spans exist in file', () => {
       const code = [

@@ -38,6 +38,13 @@ export interface CheckResult {
   tier: 1 | 2;
   /** Whether failure reverts the file (true) or is advisory (false). */
   blocking: boolean;
+  /**
+   * The schema entry that was matched during detection, if applicable.
+   * SCH-001/SCH-002 populate this when detectionMethod is 'normalization'
+   * so that fixDelimiterVariants can identify and replace the violating span
+   * name or attribute key without re-running schema lookup.
+   */
+  matchedEntry?: string;
 }
 
 /**

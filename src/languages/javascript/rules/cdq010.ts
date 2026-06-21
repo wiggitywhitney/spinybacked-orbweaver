@@ -164,6 +164,83 @@ function isSpanReceiver(receiverText: string): boolean {
   return /span/i.test(name);
 }
 
+/**
+ * Fix CDQ-010 violations by wrapping untyped property-access receivers with String().
+ *
+ * Walks setAttribute call sites with span receivers, finds value arguments where
+ * a string method (split, slice, etc.) is called directly on a property-access
+ * expression (obj.field.method()), and replaces the receiver with String(obj.field).
+ *
+ * Uses collect-sort-descending-apply to preserve character offsets during replacement.
+ *
+ * @param code - The instrumented JavaScript code to fix
+ * @returns Fixed code string
+ */
+export function fixUntypedStringMethods(code: string): string {
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  const sourceFile = project.createSourceFile('fix.js', code);
+
+  // Collect (start, end) positions of each receiver that needs wrapping.
+  const replacements: Array<{ start: number; end: number; text: string }> = [];
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+
+    const expr = node.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return;
+    if (expr.getName() !== 'setAttribute') return;
+
+    const receiverText = expr.getExpression().getText();
+    if (!isSpanReceiver(receiverText)) return;
+
+    const args = node.getArguments();
+    if (args.length < 2) return;
+
+    const valueArg = args[1];
+
+    const checkForReplacement = (candidate: import('ts-morph').Node): void => {
+      if (!Node.isCallExpression(candidate)) return;
+
+      const callExpr = candidate.getExpression();
+      if (!Node.isPropertyAccessExpression(callExpr)) return;
+
+      const methodName = callExpr.getName();
+      if (!STRING_ONLY_METHODS.has(methodName)) return;
+
+      const receiver = callExpr.getExpression();
+      if (!Node.isPropertyAccessExpression(receiver)) return;
+
+      // Already wrapped in String() — skip.
+      if (Node.isCallExpression(receiver.getExpression())) return;
+
+      const start = receiver.getStart();
+      const end = receiver.getEnd();
+      const text = receiver.getText();
+
+      // Guard against duplicate positions (nested descendants may overlap).
+      if (!replacements.some((r) => r.start === start && r.end === end)) {
+        replacements.push({ start, end, text: `String(${text})` });
+      }
+    };
+
+    checkForReplacement(valueArg);
+    valueArg.forEachDescendant(checkForReplacement);
+  });
+
+  if (replacements.length === 0) return code;
+
+  // Apply replacements in reverse order (descending start position) to preserve offsets.
+  replacements.sort((a, b) => b.start - a.start);
+  let result = code;
+  for (const { start, end, text } of replacements) {
+    result = result.slice(0, start) + text + result.slice(end);
+  }
+  return result;
+}
+
 /** CDQ-010 ValidationRule — untyped string method on property access advisory check. */
 export const cdq010Rule: ValidationRule = {
   ruleId: 'CDQ-010',

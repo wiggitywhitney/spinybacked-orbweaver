@@ -2,7 +2,7 @@
 // ABOUTME: Verifies span name literals conform to span definitions in resolved registry.
 
 import { describe, it, expect } from 'vitest';
-import { checkSpanNamesMatchRegistry } from '../../../../src/languages/javascript/rules/sch001.ts';
+import { checkSpanNamesMatchRegistry, fixDelimiterVariants } from '../../../../src/languages/javascript/rules/sch001.ts';
 
 describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
   const filePath = '/tmp/test-file.js';
@@ -605,5 +605,141 @@ describe('checkSpanNamesMatchRegistry (SCH-001)', () => {
         blocking: true,
       });
     });
+  });
+});
+
+describe('fixDelimiterVariants', () => {
+  it('replaces underscore-delimited span name with dot-delimited registry match (SCH-001)', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function registerUser(user) {',
+      '  return tracer.startActiveSpan("user_register", (span) => {',
+      '    span.setAttribute("user.id", user.id);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const failures = [{
+      ruleId: 'SCH-001',
+      passed: false,
+      filePath: '/tmp/test.js',
+      lineNumber: null,
+      message: 'SCH-001 check failed: declared span extension "user_register" is a delimiter-variant duplicate of existing registry operation "user.register". Use the existing registry operation instead.',
+      tier: 2 as const,
+      blocking: true,
+      matchedEntry: 'user.register',
+    }];
+
+    const result = fixDelimiterVariants(code, [], failures);
+
+    expect(result).toContain('"user.register"');
+    expect(result).not.toContain('"user_register"');
+  });
+
+  it('replaces underscore-delimited attribute key with dot-delimited registry match (SCH-002)', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function trackCommit(commit) {',
+      '  return tracer.startActiveSpan("commit.process", (span) => {',
+      '    span.setAttribute("commit_sha", commit.sha);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const failures = [{
+      ruleId: 'SCH-002',
+      passed: false,
+      filePath: '/tmp/test.js',
+      lineNumber: null,
+      message: 'SCH-002 check failed: declared attribute extension "commit_sha" is a delimiter-variant duplicate of existing registry attribute "commit.sha". Use the existing registry attribute instead.',
+      tier: 2 as const,
+      blocking: true,
+      matchedEntry: 'commit.sha',
+    }];
+
+    const result = fixDelimiterVariants(code, [], failures);
+
+    expect(result).toContain('"commit.sha"');
+    expect(result).not.toContain('"commit_sha"');
+  });
+
+  it('handles multiple delimiter violations in one pass', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork(commit) {',
+      '  return tracer.startActiveSpan("commit_process", (span) => {',
+      '    span.setAttribute("commit_sha", commit.sha);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const failures = [
+      {
+        ruleId: 'SCH-001',
+        passed: false,
+        filePath: '/tmp/test.js',
+        lineNumber: null,
+        message: 'SCH-001 check failed: declared span extension "commit_process" is a delimiter-variant duplicate of existing registry operation "commit.process".',
+        tier: 2 as const,
+        blocking: true,
+        matchedEntry: 'commit.process',
+      },
+      {
+        ruleId: 'SCH-002',
+        passed: false,
+        filePath: '/tmp/test.js',
+        lineNumber: null,
+        message: 'SCH-002 check failed: declared attribute extension "commit_sha" is a delimiter-variant duplicate of existing registry attribute "commit.sha".',
+        tier: 2 as const,
+        blocking: true,
+        matchedEntry: 'commit.sha',
+      },
+    ];
+
+    const result = fixDelimiterVariants(code, [], failures);
+
+    expect(result).toContain('"commit.process"');
+    expect(result).not.toContain('"commit_process"');
+    expect(result).toContain('"commit.sha"');
+    expect(result).not.toContain('"commit_sha"');
+  });
+
+  it('returns code unchanged when no delimiter failures exist', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'span.setAttribute("user.id", id);',
+    ].join('\n');
+
+    const result = fixDelimiterVariants(code, [], []);
+
+    expect(result).toBe(code);
+  });
+
+  it('ignores failures without matchedEntry (semantic duplicates, not delimiter variants)', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'tracer.startActiveSpan("commit_process", (span) => { span.end(); });',
+    ].join('\n');
+
+    const failures = [{
+      ruleId: 'SCH-001',
+      passed: false,
+      filePath: '/tmp/test.js',
+      lineNumber: null,
+      message: 'SCH-001: declared span extension "commit_process" may be a semantic duplicate.',
+      tier: 2 as const,
+      blocking: false,
+      // no matchedEntry — semantic duplicate detected by judge, not normalization
+    }];
+
+    const result = fixDelimiterVariants(code, [], failures);
+
+    expect(result).toBe(code);
   });
 });

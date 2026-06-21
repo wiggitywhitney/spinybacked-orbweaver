@@ -235,6 +235,9 @@ export async function checkAttributeKeysMatchRegistry(
             `Use the existing registry attribute instead of declaring a new extension.`,
           tier: 2,
           blocking: true,
+          ...(dedupResult.detectionMethod === 'normalization' && dedupResult.matchedEntry
+            ? { matchedEntry: dedupResult.matchedEntry }
+            : {}),
         });
       } else {
         // Accept the extension: add to both registryNames and registryEntries so subsequent

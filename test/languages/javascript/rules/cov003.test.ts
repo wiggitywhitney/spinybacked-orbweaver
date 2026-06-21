@@ -258,6 +258,54 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when catch uses negated ENOENT rethrow — ENOENT is graceful, non-ENOENT propagates to outer span', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function readWeekDailySummaries(path) {',
+        '  return tracer.startActiveSpan("readWeekDailySummaries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err) {',
+        '      if (err.code !== "ENOENT") throw err;',
+        '      return [];',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      // Negated ENOENT: ENOENT is the handled (graceful) case; non-ENOENT errors
+      // rethrow to an outer span that already records them. Not a genuine error path.
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it("passes when catch uses negated ENOENT rethrow with single quotes", () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function readConfig(path) {',
+        '  return tracer.startActiveSpan("readConfig", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        "    } catch (err) {",
+        "      if (err.code !== 'ENOENT') throw err;",
+        '      return null;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('flags ENOENT catch that rethrows non-expected errors (mixed path)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
