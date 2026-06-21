@@ -499,13 +499,10 @@ export async function coordinate(
       if (!result.advisoryAnnotations) continue;
       result.advisoryAnnotations = result.advisoryAnnotations.filter((annotation) => {
         if (annotation.ruleId !== 'SCH-001' || annotation.blocking) return true;
-        // Extract the matched registry entry name from the advisory message.
-        // Advisory format: '...of existing registry operation "NAME"...'
         // When the matched entry was introduced by an earlier file in this same run,
         // the advisory is a cross-file contamination false positive — remove it.
-        const match = annotation.message.match(/of existing registry operation "([^"]+)"/);
-        if (!match) return true; // no matched entry name → keep advisory
-        return !runSpanOpNames.has(match[1]!);
+        if (!annotation.matchedEntry) return true; // no matched entry → keep advisory
+        return !runSpanOpNames.has(annotation.matchedEntry);
       });
     }
   }

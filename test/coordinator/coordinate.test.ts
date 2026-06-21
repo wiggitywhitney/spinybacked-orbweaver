@@ -1654,6 +1654,7 @@ describe('coordinate', () => {
           ` If they are a different operation class, this advisory can be ignored.`,
         tier: 2 as const,
         blocking: false,
+        matchedEntry: runExtensionOpName,
       };
 
       const fileResults = [
@@ -1703,6 +1704,7 @@ describe('coordinate', () => {
           ` If they are a different operation class, this advisory can be ignored.`,
         tier: 2 as const,
         blocking: false,
+        matchedEntry: preExistingOpName,
       };
 
       const fileResults = [
