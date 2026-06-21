@@ -44,6 +44,22 @@ function formatDuration(ms: number): string {
   return `${secs}s`;
 }
 
+/** Render agent thinking blocks to stderr, grouped by attempt. */
+function renderThinkingBlocks(thinkingBlocksByAttempt: string[][], stderr: (line: string) => void): void {
+  stderr('');
+  stderr(`  ${_dim('Agent thinking')}`);
+  stderr(`  ${_dim('─'.repeat(60))}`);
+  thinkingBlocksByAttempt.forEach((blocks, attemptIdx) => {
+    if (blocks.length === 0) return;
+    stderr(`  ${_dim(`Attempt ${attemptIdx + 1}`)}`);
+    for (const block of blocks) {
+      for (const line of block.split('\n')) {
+        stderr(`    ${line}`);
+      }
+    }
+  });
+}
+
 /** Options parsed from CLI arguments for the instrument command. */
 export interface InstrumentOptions {
   path: string;
@@ -224,20 +240,9 @@ export async function handleInstrument(
           deps.stderr(`  ${displayPath}: ${statusLabel}`);
         }
         // Agent thinking blocks — --thinking shows all files; --thinking-fail shows failed only
-        const thinkingBlocksCompact = result.thinkingBlocksByAttempt;
-        if (thinkingBlocksCompact && thinkingBlocksCompact.some(b => b.length > 0) && (options.thinking || (options.thinkingFail && result.status === 'failed'))) {
-          deps.stderr('');
-          deps.stderr(`  ${_dim('Agent thinking')}`);
-          deps.stderr(`  ${_dim('─'.repeat(60))}`);
-          thinkingBlocksCompact.forEach((blocks, attemptIdx) => {
-            if (blocks.length === 0) return;
-            deps.stderr(`  ${_dim(`Attempt ${attemptIdx + 1}`)}`);
-            for (const block of blocks) {
-              for (const line of block.split('\n')) {
-                deps.stderr(`    ${line}`);
-              }
-            }
-          });
+        const thinkingBlocks = result.thinkingBlocksByAttempt;
+        if (thinkingBlocks && thinkingBlocks.some(b => b.length > 0) && (options.thinking || (options.thinkingFail && result.status === 'failed'))) {
+          renderThinkingBlocks(thinkingBlocks, deps.stderr);
         }
         return;
       }
@@ -287,18 +292,7 @@ export async function handleInstrument(
       // Agent thinking blocks — --thinking shows all files; --thinking-fail shows failed only
       const thinkingBlocksVerbose = result.thinkingBlocksByAttempt;
       if (thinkingBlocksVerbose && thinkingBlocksVerbose.some(b => b.length > 0) && (options.thinking || (options.thinkingFail && result.status === 'failed'))) {
-        deps.stderr('');
-        deps.stderr(`  ${_dim('Agent thinking')}`);
-        deps.stderr(`  ${_dim('─'.repeat(60))}`);
-        thinkingBlocksVerbose.forEach((blocks, attemptIdx) => {
-          if (blocks.length === 0) return;
-          deps.stderr(`  ${_dim(`Attempt ${attemptIdx + 1}`)}`);
-          for (const block of blocks) {
-            for (const line of block.split('\n')) {
-              deps.stderr(`    ${line}`);
-            }
-          }
-        });
+        renderThinkingBlocks(thinkingBlocksVerbose, deps.stderr);
       }
 
       // Function-level details when available

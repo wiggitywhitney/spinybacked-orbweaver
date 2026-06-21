@@ -1559,7 +1559,6 @@ async function functionLevelFallback(
     if (totalSpans === 0) {
       await writeFile(filePath, originalCode, 'utf-8');
     }
-    const isPartialResult = totalSpans > 0 && successful.length < extractedFunctions.length;
     return {
       path: filePath,
       // Validation passed on the reassembled code.
@@ -1583,8 +1582,10 @@ async function functionLevelFallback(
       functionsSkipped: extractedFunctions.length - successful.length,
       functionResults: fnResults,
       tscAttempts: tscAttempts.length > 0 ? tscAttempts : undefined,
-      // Populate for partial results so the debug dump fires for non-clean-success files.
-      lastInstrumentedCode: isPartialResult ? reassembledCode : undefined,
+      // Populate whenever functions failed (partial) or all produced 0 spans despite
+      // failures so debug dump fires for both cases. successful.length < extractedFunctions.length
+      // is always true here since failedFns.length > 0 at this point in the code.
+      lastInstrumentedCode: successful.length < extractedFunctions.length ? reassembledCode : undefined,
     };
   }
 

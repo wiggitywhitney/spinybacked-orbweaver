@@ -99,9 +99,9 @@ Processing file 3 of 4: src/payment.js
 
 ```text
 Processing file 1 of 4: src/api-client.js
-  src/api-client.js: success (3 spans, 5.2K output tokens)
+  src/api-client.js: success (3 spans, 5.2K output tokens) → src/api-client.instrumentation.md
 Processing file 2 of 4: src/format-helpers.js
-  src/format-helpers.js: success (0 spans, 1.1K output tokens)
+  src/format-helpers.js: success (0 spans, 1.1K output tokens) → src/format-helpers.instrumentation.md
 Processing file 3 of 4: src/payment.js
   ❌ FAILED — NDS-005 (Code Pattern Preserved) after 3 attempts
   Tokens: 12.3K output
@@ -110,9 +110,8 @@ Processing file 3 of 4: src/payment.js
   ────────────────────────────────────────────────────────────
   • NDS-005b: Block at lines 47-52 was modified...
 
-  Report: src/payment.instrumentation.md
 Processing file 4 of 4: src/order-service.js
-  src/order-service.js: success (2 spans, 4.1K output tokens)
+  src/order-service.js: success (2 spans, 4.1K output tokens) → src/order-service.instrumentation.md
 ```
 
 When both `--verbose` and `--verbose-fail` are set, `--verbose` takes precedence and shows the structured block for all files.

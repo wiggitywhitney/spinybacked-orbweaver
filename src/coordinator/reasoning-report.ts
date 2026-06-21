@@ -108,9 +108,12 @@ export function renderReasoningReport(result: FileResult, projectDir?: string): 
       sections.push(`### Attempt ${attemptIdx + 1}`);
       sections.push('');
       for (const block of blocks) {
-        sections.push('```');
+        const runs = block.match(/`+/g) ?? [];
+        const maxRun = runs.reduce((m, s) => Math.max(m, s.length), 0);
+        const fence = '`'.repeat(Math.max(3, maxRun + 1));
+        sections.push(fence);
         sections.push(block);
-        sections.push('```');
+        sections.push(fence);
         sections.push('');
       }
     });
