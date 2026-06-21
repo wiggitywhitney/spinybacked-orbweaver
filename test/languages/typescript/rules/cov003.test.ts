@@ -211,6 +211,33 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('still flags catch where .code !== ENOENT appears in if-body that does not throw (over-match regression)', () => {
+      // `.code !== 'ENOENT'` is present but in an if-body that logs, not a rethrow guard.
+      // The unconditional throw after means error recording is required — exemption must NOT fire.
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export function readData(path: string): Buffer {',
+        '  return tracer.startActiveSpan("readData", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {',
+        '        console.error("unexpected error");',  // if-body has no throw
+        '      }',
+        '      throw err;',  // unconditional throw — not guarded by the ENOENT check
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('no spans', () => {

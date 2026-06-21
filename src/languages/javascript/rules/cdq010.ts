@@ -181,7 +181,7 @@ export function fixUntypedStringMethods(code: string): string {
     compilerOptions: { allowJs: true },
     useInMemoryFileSystem: true,
   });
-  const sourceFile = project.createSourceFile('fix.js', code);
+  const sourceFile = project.createSourceFile('fix.ts', code);
 
   // Collect (start, end) positions of each receiver that needs wrapping.
   const replacements: Array<{ start: number; end: number; text: string }> = [];

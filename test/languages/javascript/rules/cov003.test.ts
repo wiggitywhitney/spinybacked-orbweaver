@@ -352,6 +352,33 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('still flags catch where .code !== ENOENT appears in if-body that does not throw (over-match regression)', () => {
+      // `.code !== 'ENOENT'` is present but in an if-body that logs, not a rethrow guard.
+      // The unconditional throw after means error recording is required — exemption must NOT fire.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function readData(path) {',
+        '  return tracer.startActiveSpan("readData", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      if (err.code !== "ENOENT") {',
+        '        console.error("unexpected error");',  // if-body has no throw
+        '      }',
+        '      throw err;',  // unconditional throw — not guarded by the ENOENT check
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('passes when catch uses continue (loop control flow)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',

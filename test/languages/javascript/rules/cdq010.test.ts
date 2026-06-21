@@ -439,6 +439,27 @@ describe('fixUntypedStringMethods', () => {
 
     expect(result).toBe(code);
   });
+
+  it('wraps obj.field with String() in TypeScript code with type annotations', () => {
+    // Verifies fix.ts parsing mode handles TypeScript-specific syntax (interface, type unions).
+    // With fix.js mode, the interface declaration causes a silent parse error and no fix is applied.
+    const code = [
+      "import { trace } from '@opentelemetry/api';",
+      'const tracer = trace.getTracer("svc");',
+      'interface Commit { timestamp: Date | string; sha: string; }',
+      'function saveEntry(commit: Commit): void {',
+      '  tracer.startActiveSpan("save", (span) => {',
+      '    span.setAttribute("date", commit.timestamp.split("T")[0]);',
+      '    span.end();',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const result = fixUntypedStringMethods(code);
+
+    expect(result).toContain('String(commit.timestamp).split("T")[0]');
+    expect(result).not.toContain('commit.timestamp.split(');
+  });
 });
 
 describe('CDQ-010 prompt guidance', () => {
