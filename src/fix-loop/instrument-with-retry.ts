@@ -1582,9 +1582,9 @@ async function functionLevelFallback(
       functionsSkipped: extractedFunctions.length - successful.length,
       functionResults: fnResults,
       tscAttempts: tscAttempts.length > 0 ? tscAttempts : undefined,
-      // Populate whenever functions failed (partial) or all produced 0 spans despite
-      // failures so debug dump fires for both cases. successful.length < extractedFunctions.length
-      // is always true here since failedFns.length > 0 at this point in the code.
+      // Populate lastInstrumentedCode when the outcome is partial (some functions failed)
+      // so the debug dump fires. When all functions succeeded (status 'success'), leave
+      // undefined to skip the dump.
       lastInstrumentedCode: successful.length < extractedFunctions.length ? reassembledCode : undefined,
     };
   }
