@@ -730,6 +730,8 @@ async function executeRetryLoop(
     output.instrumentedCode = provider.ensureTracerAfterImports(output.instrumentedCode);
     // Fix span lifecycle: insert span.end() before process.exit() inside startActiveSpan callbacks.
     output.instrumentedCode = provider.fixProcessExitSpanEnd(output.instrumentedCode);
+    // Fix CDQ-011: replace wrong trace.getTracer() string literals with the canonical tracer name.
+    output.instrumentedCode = provider.fixCanonicalTracerName(output.instrumentedCode, canonicalTracerName);
 
     // Per-attempt auto-registration: extract novel setAttribute keys and register them in
     // agent-extensions.yaml before SCH-002 validation runs. Snapshot before writing so
@@ -989,6 +991,7 @@ async function executeRetryLoop(
 
           let advisoryCode = provider.ensureTracerAfterImports(advisoryOutput.instrumentedCode);
           advisoryCode = provider.fixProcessExitSpanEnd(advisoryCode);
+          advisoryCode = provider.fixCanonicalTracerName(advisoryCode, canonicalTracerName);
           advisoryCode = provider.fixAttributeTypeCoercions(
             advisoryCode,
             appendDeclaredExtensionTypes(autoRegistrationResolvedSchema, advisoryOutput.schemaExtensions),

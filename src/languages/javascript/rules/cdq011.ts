@@ -64,6 +64,39 @@ export function checkCanonicalTracerName(
   }));
 }
 
+/**
+ * CDQ-011 auto-fix: replace wrong trace.getTracer() string literals with the canonical name.
+ *
+ * Reuses the same regex pattern as checkCanonicalTracerName. For each call whose literal
+ * doesn't match canonicalTracerName, replaces the literal while preserving the original
+ * quote style (single, double, or backtick). Interpolated template literals (containing `$`)
+ * are excluded — they match no literal pattern and are left unchanged.
+ *
+ * Returns code unchanged when canonicalTracerName is undefined (graceful no-op).
+ *
+ * @param code - The instrumented code to fix
+ * @param canonicalTracerName - The expected tracer name; undefined means no-op
+ * @returns Code with all wrong getTracer() literals replaced, or unchanged code
+ */
+export function fixCanonicalTracerName(code: string, canonicalTracerName: string | undefined): string {
+  if (canonicalTracerName === undefined) return code;
+
+  // Same pattern as checkCanonicalTracerName — matches trace.getTracer('...'), "...", or `...`
+  // (non-interpolated only; `$` excluded from backtick group)
+  const pattern = /\btrace\s*\.\s*getTracer\s*\(\s*(?:(["'])([^"'\n]*)\1|`([^`\n$]*)`)/g;
+
+  return code.replace(pattern, (match, quote, singleDoubleContent, backtickContent) => {
+    const found: string = singleDoubleContent ?? backtickContent;
+    if (found === canonicalTracerName) return match;
+
+    // Reconstruct: keep the `trace.getTracer(` prefix, replace just the string literal.
+    // prefix length = total match length minus the two quote chars minus the content length.
+    const quoteChar: string = quote ?? '`';
+    const prefix = match.slice(0, match.length - found.length - 2);
+    return prefix + quoteChar + canonicalTracerName + quoteChar;
+  });
+}
+
 /** CDQ-011 ValidationRule — canonical tracer name enforcement blocking check. */
 export const cdq011Rule: ValidationRule = {
   ruleId: 'CDQ-011',

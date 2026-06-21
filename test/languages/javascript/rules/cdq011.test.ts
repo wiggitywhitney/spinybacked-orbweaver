@@ -2,7 +2,7 @@
 // ABOUTME: Verifies trace.getTracer() string literals match the project's canonical tracer name.
 
 import { describe, it, expect } from 'vitest';
-import { checkCanonicalTracerName } from '../../../../src/languages/javascript/rules/cdq011.ts';
+import { checkCanonicalTracerName, fixCanonicalTracerName } from '../../../../src/languages/javascript/rules/cdq011.ts';
 
 describe('checkCanonicalTracerName (CDQ-011)', () => {
   const filePath = '/tmp/test-file.js';
@@ -146,6 +146,102 @@ describe('checkCanonicalTracerName (CDQ-011)', () => {
       const results = checkCanonicalTracerName(code, filePath, canonical);
       const failure = results.find(r => !r.passed);
       expect(failure?.lineNumber).toBe(3);
+    });
+  });
+});
+
+describe('fixCanonicalTracerName (CDQ-011 auto-fix)', () => {
+  const canonical = 'commit-story';
+
+  describe('no-op cases', () => {
+    it('returns code unchanged when canonicalTracerName is undefined', () => {
+      const code = "const tracer = trace.getTracer('wrong-name');";
+      expect(fixCanonicalTracerName(code, undefined)).toBe(code);
+    });
+
+    it('returns code unchanged when all getTracer calls already use the canonical name', () => {
+      const code = "const tracer = trace.getTracer('commit-story');";
+      expect(fixCanonicalTracerName(code, canonical)).toBe(code);
+    });
+
+    it('returns code unchanged when there are no getTracer calls', () => {
+      const code = "async function doWork() { return fetch('https://example.com'); }";
+      expect(fixCanonicalTracerName(code, canonical)).toBe(code);
+    });
+  });
+
+  describe('single-quote literal replaced', () => {
+    it('replaces wrong single-quoted tracer name with canonical', () => {
+      const code = "const tracer = trace.getTracer('wrong-name');";
+      const fixed = fixCanonicalTracerName(code, canonical);
+      expect(fixed).toBe("const tracer = trace.getTracer('commit-story');");
+    });
+
+    it('preserves surrounding code when replacing single-quoted name', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('wrong-name');",
+        'async function fetchData() { return 42; }',
+      ].join('\n');
+      const fixed = fixCanonicalTracerName(code, canonical);
+      expect(fixed).toContain("trace.getTracer('commit-story')");
+      expect(fixed).toContain("import { trace } from '@opentelemetry/api';");
+      expect(fixed).toContain('async function fetchData()');
+    });
+  });
+
+  describe('double-quote literal replaced', () => {
+    it('replaces wrong double-quoted tracer name with canonical', () => {
+      const code = 'const tracer = trace.getTracer("wrong-name");';
+      const fixed = fixCanonicalTracerName(code, canonical);
+      expect(fixed).toBe('const tracer = trace.getTracer("commit-story");');
+    });
+
+    it('preserves the double-quote style when replacing', () => {
+      const code = 'const tracer = trace.getTracer("commit_story");';
+      const fixed = fixCanonicalTracerName(code, canonical);
+      expect(fixed).toContain('"commit-story"');
+      expect(fixed).not.toContain("'commit-story'");
+    });
+  });
+
+  describe('template-literal replaced', () => {
+    it('replaces wrong backtick tracer name with canonical', () => {
+      const code = 'const tracer = trace.getTracer(`wrong-name`);';
+      const fixed = fixCanonicalTracerName(code, canonical);
+      expect(fixed).toBe('const tracer = trace.getTracer(`commit-story`);');
+    });
+
+    it('does not modify interpolated template literals', () => {
+      // Interpolated template literals contain `$` and are excluded from the check
+      const code = 'const tracer = trace.getTracer(`svc-${env}`);';
+      expect(fixCanonicalTracerName(code, canonical)).toBe(code);
+    });
+  });
+
+  describe('multiple getTracer calls', () => {
+    it('replaces all wrong getTracer calls in one pass', () => {
+      const code = [
+        "const t1 = trace.getTracer('wrong-one');",
+        "const t2 = trace.getTracer('wrong-two');",
+      ].join('\n');
+      const fixed = fixCanonicalTracerName(code, canonical);
+      expect(fixed).toBe([
+        "const t1 = trace.getTracer('commit-story');",
+        "const t2 = trace.getTracer('commit-story');",
+      ].join('\n'));
+    });
+
+    it('replaces only wrong calls when some already use the canonical name', () => {
+      const code = [
+        "const t1 = trace.getTracer('commit-story');",
+        "const t2 = trace.getTracer('wrong-name');",
+      ].join('\n');
+      const fixed = fixCanonicalTracerName(code, canonical);
+      expect(fixed).toBe([
+        "const t1 = trace.getTracer('commit-story');",
+        "const t2 = trace.getTracer('commit-story');",
+      ].join('\n'));
     });
   });
 });

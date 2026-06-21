@@ -731,6 +731,19 @@ export interface LanguageProvider {
   fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: CheckResult[]): string;
 
   /**
+   * Auto-fix: replace wrong trace.getTracer() string literals with the canonical tracer name.
+   *
+   * When canonicalTracerName is undefined, returns code unchanged. Preserves the original
+   * quote style (single, double, or backtick) of each replaced literal. Interpolated
+   * template literals (containing `$`) are left unchanged.
+   *
+   * @param code - Instrumented code that may have mismatched getTracer() calls
+   * @param canonicalTracerName - The expected tracer name; undefined means no-op
+   * @returns Code with all wrong getTracer() literals replaced, or unchanged code
+   */
+  fixCanonicalTracerName(code: string, canonicalTracerName: string | undefined): string;
+
+  /**
    * Return a language-specific formatter constraint string for the LLM prompt.
    *
    * For JavaScript and TypeScript, reads the project's Prettier config from
