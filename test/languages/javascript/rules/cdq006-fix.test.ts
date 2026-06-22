@@ -1,5 +1,5 @@
 // ABOUTME: Tests for fixIsRecordingGuards() auto-fix — wraps unguarded expensive setAttribute
-// ABOUTME: calls in if (span.isRecording()) blocks, skipping entry-point functions.
+// ABOUTME: calls in if (span.isRecording()) blocks unconditionally.
 
 import { describe, it, expect } from 'vitest';
 import { fixIsRecordingGuards } from '../../../../src/languages/javascript/rules/cdq006.ts';
