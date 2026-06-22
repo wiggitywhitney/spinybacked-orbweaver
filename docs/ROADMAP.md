@@ -45,9 +45,11 @@ Commit-story-v2 run-25 eval findings:
 
 - Agent prompt: minimum-attribute threshold and registered-vs-extension decision framework ([issue #993](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/993)) — root cause of run-to-run attribute variance across all eval targets; research spike required before implementation.
 
-## Medium-term
+Taze run-16 eval findings:
 - CDQ-006: align fixIsRecordingGuards() and checkIsRecordingGuard() around entry-point detection ([issue #1011](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1011)) — validator/auto-fix asymmetry caused unguarded setAttribute calls to commit in taze run-16; fix is either removing isInsideEntryPoint from auto-fix or adding it to validator, plus documenting the parameter-name heuristic.
 - SCH-003: add reverse coercion fix (strip String() wrapper from int-typed attributes) ([issue #1010](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1010)) — fixAttributeTypeCoercions() handles string-typed attributes only; int-typed attributes wrapped in String() still commit as blocking violations; deterministic reverse case needed.
+
+## Medium-term
 - Watch: IS SPA-002 (orphan span) recurrence in taze ([issue #1008](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1008)) — first appeared in taze run-16; possibly stochastic (async span parent race); monitor across future runs before investing in a fix.
 - Fix loop: auto-correct agent changes to function signatures, try/catch blocks, and import style ([issue #996](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/996)) — deterministic source-restoration auto-fix for NDS-004/005/006; low eval frequency reflects limited eval coverage, not low risk of regression.
 - Fix loop: auto-correct agent-added exception recording in graceful handlers ([issue #997](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/997)) — deterministic targeted-removal auto-fix for NDS-007 using validator-provided line coordinates; structurally separate from the NDS-004/005/006 source-restoration work.
