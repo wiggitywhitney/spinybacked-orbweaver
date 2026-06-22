@@ -23,5 +23,9 @@ export async function makeTestRepo(dir: string): Promise<SimpleGit> {
   await git.addConfig('user.email', 'test@example.com');
   await git.addConfig('user.name', 'E2E Test');
   await git.addConfig('commit.gpgsign', 'false');
+  // Disable auto-GC and background maintenance so git never spawns pack-objects
+  // processes that can hold open handles on .git/objects/pack during afterEach cleanup.
+  await git.addConfig('gc.auto', '0');
+  await git.addConfig('maintenance.auto', 'false');
   return git;
 }

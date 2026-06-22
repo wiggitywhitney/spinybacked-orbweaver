@@ -205,9 +205,16 @@ function createTestSubscriber(): { callbacks: CoordinatorCallbacks; events: Even
   return { callbacks, events };
 }
 
+/** Write per-test diagnostic data to /tmp for CI artifact collection.
+ * Written unconditionally so passing and failing runs both produce artifacts. */
+function writeDiagnosticFile(label: string, result: RunResult): void {
+  const filePath = `/tmp/spiny-orb-debug-coordinator-${label}.js`;
+  writeFileSync(filePath, JSON.stringify({ test: label, fileResults: result.fileResults }, null, 2), 'utf-8');
+}
+
 /** Log full RunResult diagnostics only when the run has unexpected results.
  * Silent on clean runs so CI output stays quiet on pass. */
-function logRunResult(label: string, result: import('../../src/coordinator/types.ts').RunResult): void {
+function logRunResult(label: string, result: RunResult): void {
   const hasProblems =
     result.filesFailed > 0 ||
     result.filesPartial > 0 ||
@@ -230,6 +237,7 @@ function logRunResult(label: string, result: import('../../src/coordinator/types
   console.error(`[coordinator diagnostics] totals: succeeded=${result.filesSucceeded} failed=${result.filesFailed} skipped=${result.filesSkipped} partial=${result.filesPartial}`);
 }
 
+
 describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', () => {
   const resolvedSchema = API_KEY_AVAILABLE ? loadResolvedSchema() : {};
   let tempDir: string;
@@ -251,6 +259,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
 
     const result: RunResult = await coordinate(tempDir, config, callbacks, deps);
     logRunResult('P4-1 full end-to-end', result);
+    writeDiagnosticFile('p4-1', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p4-1.js')).toBe(true);
 
     // (a) All discoverable files processed — at least 5 JS files in src/ (minus SDK init)
     expect(result.filesProcessed).toBeGreaterThanOrEqual(5);
@@ -345,6 +355,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
 
     const result = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P4-2 spansAdded diagnostics', result);
+    writeDiagnosticFile('p4-2', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p4-2.js')).toBe(true);
 
     const succeeded = result.fileResults.filter(r => r.status === 'success');
     expect(succeeded.length).toBeGreaterThanOrEqual(1);
@@ -373,6 +385,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
 
     const result = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P4-3 SDK init libraries', result);
+    writeDiagnosticFile('p4-3', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p4-3.js')).toBe(true);
 
     // If any files succeeded with library needs, SDK init should be updated
     const succeeded = result.fileResults.filter(r => r.status === 'success');
@@ -401,6 +415,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
 
     const result = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P4-4 advisory annotations', result);
+    writeDiagnosticFile('p4-4', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p4-4.js')).toBe(true);
 
     // Collect all advisory annotations from all file results
     const allAdvisory = result.fileResults
@@ -423,6 +439,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 4 Coordinator', (
 
     const result = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P4-5 error progression', result);
+    writeDiagnosticFile('p4-5', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p4-5.js')).toBe(true);
 
     // Files that went through the fix loop should have error progression
     const nonSkipped = result.fileResults.filter(r => r.status !== 'skipped');
@@ -565,6 +583,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
 
     const result: RunResult = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P5-a schema fields', result);
+    writeDiagnosticFile('p5-a', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p5-a.js')).toBe(true);
 
     // Schema hash fields are valid SHA-256 hashes
     expect(result.schemaHashStart).toMatch(/^[0-9a-f]{64}$/);
@@ -604,6 +624,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
 
     const result = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P5-b schema lifecycle', result);
+    writeDiagnosticFile('p5-b', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p5-b.js')).toBe(true);
 
     // createBaselineSnapshot was called at run start
     expect(deps.createBaselineSnapshot).toHaveBeenCalled();
@@ -632,6 +654,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
 
     const result = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P5-d live-check hashes', result);
+    writeDiagnosticFile('p5-d', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p5-d.js')).toBe(true);
 
     // Live-check was invoked
     expect(deps.runLiveCheck).toHaveBeenCalled();
@@ -658,7 +682,9 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
     const deps = makePhase5Deps(resolvedSchema, tempDir);
     const config = makeConfig({ schemaCheckpointInterval: 2 });
 
-    await coordinate(tempDir, config, callbacks, deps);
+    const result = await coordinate(tempDir, config, callbacks, deps);
+    writeDiagnosticFile('p5-c', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p5-c.js')).toBe(true);
 
     // Verify dispatchFiles received the callbacks with onSchemaCheckpoint
     expect(deps.dispatchFiles).toHaveBeenCalledWith(
@@ -677,6 +703,8 @@ describe.skipIf(!API_KEY_AVAILABLE)('Acceptance Gate — Phase 5 Schema Integrat
 
     const result = await coordinate(tempDir, config, undefined, deps);
     logRunResult('P5-f no warnings', result);
+    writeDiagnosticFile('p5-f', result);
+    expect(existsSync('/tmp/spiny-orb-debug-coordinator-p5-f.js')).toBe(true);
 
     // Schema-related warnings should be absent when everything succeeds
     const schemaWarnings = result.warnings.filter(
