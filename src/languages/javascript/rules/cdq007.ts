@@ -136,6 +136,8 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
 
     // Check 3: Nullable member access — value is expr.property without optional chaining,
     // and the object has no preceding null check in the enclosing scope.
+    // For TypeScript files: suppress if the variable is a non-optional, non-nullable
+    // parameter of any enclosing function — the type system already guarantees safety.
     if (
       Node.isPropertyAccessExpression(valueArg) &&
       valueArg.getQuestionDotTokenNode() === undefined
@@ -143,6 +145,9 @@ export function checkAttributeDataQuality(code: string, filePath: string): Check
       const objectNode = valueArg.getExpression();
       if (Node.isIdentifier(objectNode)) {
         const objectName = objectNode.getText();
+        if ((ext === 'ts' || ext === 'tsx') && isNonNullableTypescriptParameter(node, objectName)) {
+          return;
+        }
         if (!hasNullGuard(node, objectName)) {
           findings.push({
             line,
@@ -313,6 +318,56 @@ function isFunctionBoundary(node: import('ts-morph').Node): boolean {
     Node.isMethodDeclaration(node) ||
     Node.isConstructorDeclaration(node)
   );
+}
+
+/**
+ * Returns true if `varName` is a non-optional, non-nullable parameter of any
+ * enclosing function of `node`. Walks through function boundaries so closures
+ * that capture outer function parameters are handled correctly (the agent
+ * commonly places setAttribute inside startActiveSpan callbacks).
+ *
+ * Inspects only explicit type annotations — type inference is not available in
+ * the isolated in-memory Project. When no type annotation is present, returns
+ * false (unknown nullability → advisory fires conservatively).
+ */
+function isNonNullableTypescriptParameter(
+  node: import('ts-morph').Node,
+  varName: string,
+): boolean {
+  let current: import('ts-morph').Node | undefined = node.getParent();
+  while (current) {
+    if (isFunctionBoundary(current)) {
+      for (const param of getNodeParameters(current)) {
+        if (param.getName() !== varName) continue;
+        if (param.hasQuestionToken()) return false;
+        const typeNode = param.getTypeNode();
+        if (!typeNode) return false;
+        const typeText = typeNode.getText();
+        return !typeText.includes('null') && !typeText.includes('undefined');
+      }
+      // varName not a param of this function — continue outward (closure capture)
+    }
+    current = current.getParent();
+  }
+  return false;
+}
+
+/**
+ * Extract the parameter list from any function-like node.
+ */
+function getNodeParameters(
+  node: import('ts-morph').Node,
+): import('ts-morph').ParameterDeclaration[] {
+  if (
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isArrowFunction(node) ||
+    Node.isMethodDeclaration(node) ||
+    Node.isConstructorDeclaration(node)
+  ) {
+    return (node as import('ts-morph').FunctionDeclaration).getParameters();
+  }
+  return [];
 }
 
 /**

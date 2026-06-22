@@ -34,6 +34,7 @@ import { fixIsRecordingGuards as fixIsRecordingGuardsImpl } from '../javascript/
 import { fixUntypedStringMethods as fixUntypedStringMethodsImpl } from '../javascript/rules/cdq010.ts';
 import { fixDelimiterVariants as fixDelimiterVariantsImpl } from '../javascript/rules/sch001.ts';
 import { fixCanonicalTracerName as fixCanonicalTracerNameImpl } from '../javascript/rules/cdq011.ts';
+import { fixNotNullSafeGuards as fixNotNullSafeGuardsImpl } from '../javascript/rules/cdq009.ts';
 import { buildPrettierConstraint } from '../javascript/validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { registerRule } from '../../validation/rule-registry.ts';
@@ -213,6 +214,10 @@ export class TypeScriptProvider implements LanguageProvider {
 
   fixUntypedStringMethods(code: string): string {
     return fixUntypedStringMethodsImpl(code);
+  }
+
+  fixNotNullSafeGuards(code: string): string {
+    return fixNotNullSafeGuardsImpl(code);
   }
 
   fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: import('../../validation/types.ts').CheckResult[]): string {

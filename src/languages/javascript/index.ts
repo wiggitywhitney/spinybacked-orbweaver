@@ -49,7 +49,7 @@ import { fixAttributeTypeCoercions as fixAttributeTypeCoercionsImpl } from './ru
 import { cdq005Rule } from './rules/cdq005.ts';
 import { cdq006Rule, fixIsRecordingGuards as fixIsRecordingGuardsImpl } from './rules/cdq006.ts';
 import { cdq007Rule } from './rules/cdq007.ts';
-import { cdq009Rule } from './rules/cdq009.ts';
+import { cdq009Rule, fixNotNullSafeGuards as fixNotNullSafeGuardsImpl } from './rules/cdq009.ts';
 import { cdq010Rule, fixUntypedStringMethods as fixUntypedStringMethodsImpl } from './rules/cdq010.ts';
 import { fixDelimiterVariants as fixDelimiterVariantsImpl } from './rules/sch001.ts';
 import { cdq011Rule, fixCanonicalTracerName as fixCanonicalTracerNameImpl } from './rules/cdq011.ts';
@@ -357,6 +357,10 @@ export class JavaScriptProvider implements LanguageProvider {
 
   fixUntypedStringMethods(code: string): string {
     return fixUntypedStringMethodsImpl(code);
+  }
+
+  fixNotNullSafeGuards(code: string): string {
+    return fixNotNullSafeGuardsImpl(code);
   }
 
   fixDelimiterVariants(code: string, schemaExtensions: string[], previousBlockingFailures: import('../../validation/types.ts').CheckResult[]): string {

@@ -777,6 +777,7 @@ async function executeRetryLoop(
     output.instrumentedCode = provider.fixAttributeTypeCoercions(output.instrumentedCode, schemaForTypeCoercions);
     output.instrumentedCode = provider.fixIsRecordingGuards(output.instrumentedCode);
     output.instrumentedCode = provider.fixUntypedStringMethods(output.instrumentedCode);
+    output.instrumentedCode = provider.fixNotNullSafeGuards(output.instrumentedCode);
     output.instrumentedCode = provider.fixDelimiterVariants(
       output.instrumentedCode,
       output.schemaExtensions,
@@ -998,6 +999,7 @@ async function executeRetryLoop(
           );
           advisoryCode = provider.fixIsRecordingGuards(advisoryCode);
           advisoryCode = provider.fixUntypedStringMethods(advisoryCode);
+          advisoryCode = provider.fixNotNullSafeGuards(advisoryCode);
           advisoryCode = provider.fixDelimiterVariants(advisoryCode, advisoryOutput.schemaExtensions, []);
           await writeFile(filePath, advisoryCode, 'utf-8');
 

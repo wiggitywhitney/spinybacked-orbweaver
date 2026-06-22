@@ -187,6 +187,148 @@ function isInsideNode(node: import('ts-morph').Node, ancestor: import('ts-morph'
   return false;
 }
 
+/**
+ * Auto-fix: replace `!== undefined` guards with `!= null` before property-access setAttribute values.
+ *
+ * Detects the same violations as checkNotNullSafeGuard() and replaces each
+ * strict `!== undefined` binary expression in the IfStatement condition with
+ * `!= null`. For compound `&&` conditions, only the specific sub-expression is
+ * replaced. Processes violations in reverse document order to preserve
+ * character offsets during multi-site edits.
+ *
+ * @param code - JavaScript source code to fix
+ * @returns Fixed code with !== undefined guards replaced by != null, or original code if no changes
+ */
+export function fixNotNullSafeGuards(code: string): string {
+  const project = new Project({
+    compilerOptions: { allowJs: true },
+    useInMemoryFileSystem: true,
+  });
+  // Use .tsx so the parser handles JS, JSX, TS, and TSX inputs — this fixer
+  // is called by both JavaScript and TypeScript providers.
+  const sourceFile = project.createSourceFile('fix-target.tsx', code);
+
+  const fixSites: Array<{ start: number; end: number; replacement: string }> = [];
+  const seenConditions = new Set<string>();
+
+  sourceFile.forEachDescendant((node) => {
+    if (!Node.isCallExpression(node)) return;
+
+    const expr = node.getExpression();
+    if (!Node.isPropertyAccessExpression(expr)) return;
+    if (expr.getName() !== 'setAttribute') return;
+
+    const receiverText = expr.getExpression().getText();
+    if (!isSpanReceiver(receiverText)) return;
+
+    const args = node.getArguments();
+    if (args.length < 2) return;
+    const valueArg = args[1];
+
+    if (!Node.isPropertyAccessExpression(valueArg)) return;
+    if (valueArg.getQuestionDotTokenNode() !== undefined) return;
+
+    const objectNode = valueArg.getExpression();
+    if (!Node.isIdentifier(objectNode)) return;
+    const varName = objectNode.getText();
+
+    const ifStmt = findEnclosingStrictUndefinedIfStatement(node, varName);
+    if (!ifStmt) return;
+
+    const strictBinary = findStrictUndefinedBinaryInCondition(ifStmt.getExpression(), varName);
+    if (!strictBinary) return;
+
+    const condKey = `${strictBinary.getStart()}:${strictBinary.getEnd()}`;
+    if (seenConditions.has(condKey)) return;
+    seenConditions.add(condKey);
+
+    const replacement = buildNullGuardReplacement(strictBinary);
+    if (!replacement) return;
+
+    fixSites.push({ start: strictBinary.getStart(), end: strictBinary.getEnd(), replacement });
+  });
+
+  if (fixSites.length === 0) return code;
+
+  fixSites.sort((a, b) => b.start - a.start);
+  let result = code;
+  for (const site of fixSites) {
+    result = result.substring(0, site.start) + site.replacement + result.substring(site.end);
+  }
+  return result;
+}
+
+/**
+ * Walk up from a setAttribute call to find the IfStatement whose then-branch contains
+ * the call and whose condition guards `varName` with `!== undefined`.
+ */
+function findEnclosingStrictUndefinedIfStatement(
+  node: import('ts-morph').Node,
+  varName: string,
+): import('ts-morph').IfStatement | undefined {
+  let current: import('ts-morph').Node | undefined = node.getParent();
+  while (current && !isFunctionBoundary(current)) {
+    if (Node.isIfStatement(current)) {
+      const thenStmt = current.getThenStatement();
+      if (isInsideNode(node, thenStmt) && isStrictUndefinedGuard(current.getExpression(), varName)) {
+        return current;
+      }
+    }
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+/**
+ * Recursively locate the BinaryExpression with `ExclamationEqualsEqualsToken` and
+ * `undefined` operand for `varName` within a condition. Handles `&&` compounds by
+ * checking both sides so only the specific `!== undefined` sub-expression is found.
+ */
+function findStrictUndefinedBinaryInCondition(
+  condition: import('ts-morph').Expression,
+  varName: string,
+): import('ts-morph').BinaryExpression | undefined {
+  if (!Node.isBinaryExpression(condition)) return undefined;
+
+  const operator = condition.getOperatorToken().getKind();
+
+  if (operator === SyntaxKind.AmpersandAmpersandToken) {
+    return (
+      findStrictUndefinedBinaryInCondition(condition.getLeft(), varName) ??
+      findStrictUndefinedBinaryInCondition(condition.getRight(), varName)
+    );
+  }
+
+  if (operator === SyntaxKind.ExclamationEqualsEqualsToken) {
+    const left = condition.getLeft();
+    const right = condition.getRight();
+    const leftIsVar = Node.isIdentifier(left) && left.getText() === varName;
+    const rightIsVar = Node.isIdentifier(right) && right.getText() === varName;
+    const leftIsUndefined = left.getText() === 'undefined';
+    const rightIsUndefined = right.getText() === 'undefined';
+    if ((leftIsVar && rightIsUndefined) || (rightIsVar && leftIsUndefined)) {
+      return condition;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Build the replacement text for a BinaryExpression `x !== undefined` or `undefined !== x`.
+ * - `x !== undefined` → `x != null`
+ * - `undefined !== x` → `null != x`
+ */
+function buildNullGuardReplacement(
+  binaryExpr: import('ts-morph').BinaryExpression,
+): string | undefined {
+  const left = binaryExpr.getLeft();
+  const right = binaryExpr.getRight();
+  if (right.getText() === 'undefined') return `${left.getText()} != null`;
+  if (left.getText() === 'undefined') return `null != ${right.getText()}`;
+  return undefined;
+}
+
 /** CDQ-009 ValidationRule — not-null-safe undefined guard advisory check. */
 export const cdq009Rule: ValidationRule = {
   ruleId: 'CDQ-009',

@@ -305,6 +305,132 @@ describe('checkAttributeDataQuality (CDQ-007)', () => {
     });
   });
 
+  describe('TypeScript parameter suppression (CDQ-007 Check 3)', () => {
+    const tsFilePath = '/tmp/test-file.ts';
+
+    it('does not flag non-optional explicitly-typed TS parameter (direct call)', () => {
+      const code = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items: string[]): void {',
+        '  tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("items.count", items.length);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, tsFilePath);
+      const check3Findings = results.filter((r) => !r.passed && r.message.includes('null'));
+      expect(check3Findings).toHaveLength(0);
+    });
+
+    it('does not flag non-optional TS parameter accessed inside an inner arrow function callback', () => {
+      // The most common agent-generated pattern: outer function param used in startActiveSpan callback
+      const code = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items: string[]): void {',
+        '  tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("items.count", items.length);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, tsFilePath);
+      const nullFindings = results.filter((r) => !r.passed && r.message.includes('null'));
+      expect(nullFindings).toHaveLength(0);
+    });
+
+    it('flags optional TS parameter (?) even with a typed annotation', () => {
+      const code = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items?: string[]): void {',
+        '  tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("items.count", items.length);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, tsFilePath);
+      const nullFindings = results.filter((r) => !r.passed && r.message.includes('null'));
+      expect(nullFindings.length).toBeGreaterThan(0);
+    });
+
+    it('flags TS parameter with null in type union (T | null)', () => {
+      const code = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items: string[] | null): void {',
+        '  tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("items.count", items.length);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, tsFilePath);
+      const nullFindings = results.filter((r) => !r.passed && r.message.includes('null'));
+      expect(nullFindings.length).toBeGreaterThan(0);
+    });
+
+    it('flags TS parameter with undefined in type union (T | undefined)', () => {
+      const code = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items: string[] | undefined): void {',
+        '  tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("items.count", items.length);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, tsFilePath);
+      const nullFindings = results.filter((r) => !r.passed && r.message.includes('null'));
+      expect(nullFindings.length).toBeGreaterThan(0);
+    });
+
+    it('flags TS parameter with no type annotation (unknown nullability)', () => {
+      const code = [
+        'import { trace } from "@opentelemetry/api";',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items) {',
+        '  tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("items.count", items.length);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, tsFilePath);
+      const nullFindings = results.filter((r) => !r.passed && r.message.includes('null'));
+      expect(nullFindings.length).toBeGreaterThan(0);
+    });
+
+    it('still fires on JS files even if the parameter name is non-nullable', () => {
+      // The suppression only applies to TS files — JS behavior is unchanged
+      const jsFilePath = '/tmp/test-file.js';
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function process(items) {',
+        '  return tracer.startActiveSpan("process", (span) => {',
+        '    span.setAttribute("items.count", items.length);',
+        '    span.end();',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkAttributeDataQuality(code, jsFilePath);
+      const nullFindings = results.filter((r) => !r.passed && r.message.includes('null'));
+      expect(nullFindings.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure for passing result', () => {
       const code = 'const x = 1;\n';

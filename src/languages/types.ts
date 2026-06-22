@@ -717,6 +717,22 @@ export interface LanguageProvider {
   fixUntypedStringMethods(code: string): string;
 
   /**
+   * Auto-fix: replace `!== undefined` guards with `!= null` before property-access setAttribute values.
+   *
+   * When the agent guards a variable with `if (x !== undefined)` and then accesses
+   * a property of `x` as a span attribute value, the guard is not null-safe: it passes
+   * when `x` is `null`, risking a TypeError. This fix replaces `!== undefined` with
+   * `!= null` in the IfStatement condition, covering both null and undefined.
+   * For compound `&&` conditions, only the specific `!== undefined` sub-expression is replaced.
+   *
+   * Providers that do not support this pattern should return the code unchanged.
+   *
+   * @param code - Instrumented code that may have strict-undefined guards before property access
+   * @returns Code with !==undefined guards upgraded to !=null, or unchanged code
+   */
+  fixNotNullSafeGuards(code: string): string;
+
+  /**
    * Replace delimiter-variant span names and attribute keys with canonical registry forms.
    *
    * Reads SCH-001 and SCH-002 blocking failures that have `matchedEntry` set
