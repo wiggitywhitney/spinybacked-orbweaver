@@ -447,4 +447,31 @@ describe('fixAttributeTypeCoercions', () => {
     const fixed = fixAttributeTypeCoercions(code, emptySchema);
     expect(fixed).toBe(code);
   });
+
+  describe('int-typed attributes — strip String() wrapper from numeric expressions', () => {
+    it('strips String() from a .length expression for an int-typed attribute', () => {
+      const code = 'span.setAttribute("myapp.count", String(deps.length));';
+      const fixed = fixAttributeTypeCoercions(code, resolvedSchema);
+      expect(fixed).toBe('span.setAttribute("myapp.count", deps.length);');
+    });
+
+    it('strips String() from a numeric literal for an int-typed attribute', () => {
+      const code = 'span.setAttribute("myapp.count", String(42));';
+      const fixed = fixAttributeTypeCoercions(code, resolvedSchema);
+      expect(fixed).toBe('span.setAttribute("myapp.count", 42);');
+    });
+
+    it('strips String() from an arithmetic expression for an int-typed attribute', () => {
+      const code = 'span.setAttribute("myapp.count", String(a - b));';
+      const fixed = fixAttributeTypeCoercions(code, resolvedSchema);
+      expect(fixed).toBe('span.setAttribute("myapp.count", a - b);');
+    });
+
+    it('does not strip String() wrapping a string expression for an int-typed attribute', () => {
+      // String(someStr.toString()) — inner expression is classified as string, not numeric
+      const code = 'span.setAttribute("myapp.count", String(someStr.toString()));';
+      const fixed = fixAttributeTypeCoercions(code, resolvedSchema);
+      expect(fixed).toBe(code);
+    });
+  });
 });
