@@ -1,5 +1,5 @@
 // ABOUTME: Tests for fixIsRecordingGuards() auto-fix — wraps unguarded expensive setAttribute
-// ABOUTME: calls in if (span.isRecording()) blocks, skipping entry-point functions.
+// ABOUTME: calls in if (span.isRecording()) blocks unconditionally.
 
 import { describe, it, expect } from 'vitest';
 import { fixIsRecordingGuards } from '../../../../src/languages/javascript/rules/cdq006.ts';
@@ -101,8 +101,8 @@ describe('fixIsRecordingGuards (CDQ-006 auto-fix)', () => {
     });
   });
 
-  describe('entry-point skip', () => {
-    it('does not wrap setAttribute in functions with req/res parameters', () => {
+  describe('entry-point functions — now wrapped (Option A: isInsideEntryPoint removed from auto-fix)', () => {
+    it('wraps setAttribute in functions with req/res parameters', () => {
       const code = [
         'app.get("/users", (req, res) => {',
         '  const span = tracer.startSpan("get-users");',
@@ -114,10 +114,10 @@ describe('fixIsRecordingGuards (CDQ-006 auto-fix)', () => {
 
       const result = fixIsRecordingGuards(code);
 
-      expect(result).toBe(code);
+      expect(result).toContain('if (span.isRecording())');
     });
 
-    it('does not wrap setAttribute in functions with ctx parameter', () => {
+    it('wraps setAttribute in functions with ctx parameter', () => {
       const code = [
         'async function handler(ctx) {',
         '  span.setAttribute("path", ctx.request.path.split("/").join("-"));',
@@ -126,7 +126,23 @@ describe('fixIsRecordingGuards (CDQ-006 auto-fix)', () => {
 
       const result = fixIsRecordingGuards(code);
 
-      expect(result).toBe(code);
+      expect(result).toContain('if (span.isRecording())');
+    });
+
+    it('wraps setAttribute in non-framework function misidentified as entry point (loadBunWorkspace pattern)', () => {
+      // loadBunWorkspace has a `context` parameter that matches ENTRY_POINT_PARAM_NAMES,
+      // but is not a real framework handler — the old auto-fix incorrectly skipped it.
+      const code = [
+        'async function loadBunWorkspace(context) {',
+        '  const data = await fetchData(context);',
+        '  span.setAttribute("taze.write.file_path", data.filePaths.join(","));',
+        '  span.setAttribute("taze.write.package_type", data.packageTypes.map(t => t.name).join(","));',
+        '}',
+      ].join('\n');
+
+      const result = fixIsRecordingGuards(code);
+
+      expect(result).toContain('if (span.isRecording())');
     });
 
     it('wraps setAttribute in non-entry-point functions regardless of outer entry-point', () => {
@@ -142,8 +158,6 @@ describe('fixIsRecordingGuards (CDQ-006 auto-fix)', () => {
 
       const result = fixIsRecordingGuards(code);
 
-      // The span.setAttribute inside the inner startActiveSpan callback is NOT an entry point
-      // (the inner callback only has `span` as a param, not req/res/etc.)
       expect(result).toContain('if (span.isRecording())');
     });
   });

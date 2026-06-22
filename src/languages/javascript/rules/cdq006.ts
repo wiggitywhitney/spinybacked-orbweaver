@@ -292,9 +292,18 @@ function isDescendantOf(node: import('ts-morph').Node, potentialParent: import('
 }
 
 /**
- * Entry-point parameter names that indicate a service-level function.
- * These functions are invoked by frameworks; adding isRecording() guards
- * there would be incorrect since they may not always run inside an active span.
+ * Entry-point parameter names used by the original isInsideEntryPoint heuristic.
+ * Retained for documentation — this set is no longer load-bearing in fixIsRecordingGuards()
+ * after Option A was chosen: the auto-fix now guards all expensive setAttribute calls
+ * regardless of the enclosing function's parameter names.
+ *
+ * The heuristic catches real framework handlers (Express req/res, Koa ctx, Lambda event/context)
+ * but misfires on any non-framework function that happens to use the same parameter names
+ * (e.g., a `loadBunWorkspace(context)` helper that is not a framework entry point). Because
+ * CDQ-006 is advisory (non-blocking), the cost of a false skip (unguarded expensive setAttribute
+ * in a non-entry-point function) outweighs the cost of a false guard (cheap isRecording() check
+ * added to a real framework handler). isInsideEntryPoint is kept as documentation of the former
+ * design — do not re-add it to fixIsRecordingGuards() without addressing the mismatch problem.
  */
 const ENTRY_POINT_PARAM_NAMES = new Set([
   'req', 'res', 'ctx', 'event', 'context', 'request', 'response',
@@ -305,6 +314,9 @@ const ENTRY_POINT_PARAM_NAMES = new Set([
  * Check if a node is directly inside a service entry-point function.
  * Only the immediately enclosing function is checked — nested span callbacks
  * inside entry-point functions are not themselves entry points.
+ *
+ * NOTE: This function is intentionally not called by fixIsRecordingGuards() — see the
+ * ENTRY_POINT_PARAM_NAMES comment above for rationale. Retained for documentation only.
  */
 function isInsideEntryPoint(node: import('ts-morph').Node): boolean {
   let current = node.getParent();
@@ -349,9 +361,6 @@ function findExpressionStatement(
  * Detects the same violations as checkIsRecordingGuard() and wraps each unguarded
  * expression statement in an if (receiver.isRecording()) block. Processes violations
  * in reverse document order to preserve character offsets during multi-site edits.
- *
- * Skips service entry-point functions (detected by parameter names: req, res, ctx, etc.)
- * since those are invoked by frameworks and the calling context controls sampling.
  *
  * @param code - JavaScript source code to fix
  * @returns Fixed code with isRecording() guards added, or original code if no changes needed
@@ -398,7 +407,6 @@ export function fixIsRecordingGuards(code: string): string {
     if (!isExpensiveValue(valueArg, valueText)) return;
 
     if (hasIsRecordingGuard(node)) return;
-    if (isInsideEntryPoint(node)) return;
 
     const stmt = findExpressionStatement(node);
     if (!stmt) return;

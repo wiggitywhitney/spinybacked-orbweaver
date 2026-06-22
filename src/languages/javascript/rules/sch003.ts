@@ -343,16 +343,21 @@ function getLiteralType(expr: Expression): LiteralInfo | null {
 }
 
 /**
- * Auto-fix: wrap numeric or boolean expressions in String() when the declared
- * attribute type is 'string'.
+ * Auto-fix: correct attribute type coercions for 'string' and 'int' registry types.
  *
- * Only handles the safe coercion case. Type mismatches that cannot be safely
- * auto-fixed (e.g., string expression for an int-typed attribute) are left for
- * the enhanced validator in checkValueAgainstType to report as blocking failures.
+ * - string-typed attributes: wraps numeric or boolean expressions in String().
+ * - int-typed attributes: strips String() wrapper when the inner expression is
+ *   classifiably numeric (e.g. String(deps.length) → deps.length).
+ *
+ * Type mismatches that cannot be safely auto-fixed (e.g., a bare string expression
+ * for an int-typed attribute) are left for checkValueAgainstType to report as
+ * blocking failures. When that happens, the fix-loop in instrument-with-retry.ts
+ * triggers an LLM retry with the blocking failure as feedback; if all retries fail,
+ * buildFailedResult is returned (status='failed') and the file is never committed.
  *
  * @param code - Instrumented code that may have type-mismatched setAttribute calls
  * @param resolvedSchema - Resolved Weaver registry object for type lookups
- * @returns Code with String() coercions inserted where needed, or original code unchanged
+ * @returns Code with type coercions corrected, or original code unchanged
  */
 export function fixAttributeTypeCoercions(code: string, resolvedSchema: object): string {
   const registry = parseResolvedRegistry(resolvedSchema);
@@ -385,21 +390,42 @@ export function fixAttributeTypeCoercions(code: string, resolvedSchema: object):
     const def = attrDefs.get(key);
     if (!def || !def.type) return;
 
-    // Only fix string-typed attributes — other coercions require semantic judgment
     const typeStr = def.type;
-    if (typeof typeStr !== 'string' || typeStr !== 'string') return;
+    if (typeof typeStr !== 'string') return;
 
     const valueArg = args[1] as Expression;
 
-    // Skip literal values — getLiteralType / existing validator handles those
-    if (getLiteralType(valueArg) !== null) return;
+    if (typeStr === 'string') {
+      // String-typed attribute: wrap numeric or boolean expressions in String()
+      if (getLiteralType(valueArg) !== null) return;
+      const exprKind = classifyExpression(valueArg);
+      if (exprKind !== 'numeric' && exprKind !== 'boolean') return;
+      const start = valueArg.getStart();
+      const end = valueArg.getEnd();
+      replacements.push({ start, end, replacement: `String(${valueArg.getText()})` });
+      return;
+    }
 
-    const exprKind = classifyExpression(valueArg);
-    if (exprKind !== 'numeric' && exprKind !== 'boolean') return;
-
-    const start = valueArg.getStart();
-    const end = valueArg.getEnd();
-    replacements.push({ start, end, replacement: `String(${valueArg.getText()})` });
+    if (typeStr === 'int') {
+      // Int-typed attribute: strip String() wrapper when the inner expression is numeric.
+      // The agent sometimes wraps numeric expressions in String() — e.g. String(deps.length) —
+      // which is a type error when the schema declares int. Strip the wrapper to restore the
+      // correct numeric type. Only safe when the inner expression is classifiable as numeric;
+      // ambiguous or string expressions are left for the validator to report as blocking.
+      if (!Node.isCallExpression(valueArg)) return;
+      if (valueArg.getExpression().getText() !== 'String') return;
+      const innerArgs = valueArg.getArguments();
+      if (innerArgs.length !== 1) return;
+      const innerArg = innerArgs[0] as Expression;
+      const innerLiteral = getLiteralType(innerArg);
+      const isNumericLiteral = innerLiteral !== null && innerLiteral.kind === 'number';
+      const isNumericExpr = innerLiteral === null && classifyExpression(innerArg) === 'numeric';
+      if (!isNumericLiteral && !isNumericExpr) return;
+      const start = valueArg.getStart();
+      const end = valueArg.getEnd();
+      replacements.push({ start, end, replacement: innerArg.getText() });
+      return;
+    }
   });
 
   if (replacements.length === 0) return code;
