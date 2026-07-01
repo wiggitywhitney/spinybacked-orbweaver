@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- (2026-07-01) Reorganized `docs/ROADMAP.md` around a new "Path to Python" section — a strict numbered sequence from talk-prep through the small-issue batch, a commit-story-v2 eval run, and the Python and Go language providers. Consolidated the recurring "Watch" items (#1008, #1014, #927, #954, #958) into a dedicated "Watch issues" section, deferred until future eval runs. The existing Short-term/Medium-term/Long-term buckets are retained but rescoped to work that comes after the Python/Go path. Fixes issue #1019.
+
 ### Fixed
 
 - (2026-06-22) Fixed git auto-GC race condition in `test/helpers/git.ts`. Added `gc.auto = 0` and `maintenance.auto = false` to `makeTestRepo` so git never spawns background `pack-objects` processes during test cleanup. Without this, a second commit in a test could trigger auto-GC, which spawned a background process writing to `.git/objects/pack` while `afterEach` ran `rm({ recursive: true })` — causing an `ENOTEMPTY` failure when `rmdir` ran after Node.js had already emptied the pack directory but before the background process finished writing. The fix propagates to all test suites that call `makeTestRepo`. Fixes the `ENOTEMPTY: directory not empty, rmdir .git/objects/pack` failure in `test/git/per-file-commit.test.ts`.
