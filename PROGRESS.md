@@ -38,6 +38,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-06-15) `coordinate()` now aborts with `CoordinatorAbortError` before the cost ceiling prompt when the target project's tests are already failing at the start of a run. Previously it degraded-and-continued with rollback disabled, wasting tokens on instrumentation the checkpoints would undo and producing misleading failures. The early check runs in a new Step 2c, before cost ceiling computation, so users see a clear message naming the failing tests and are told to fix them before retrying (issue #935).
 
+### Removed
+
+- (2026-06-30) Removed the "Taze run-16 eval findings" (#1011, #1010) and "Coordinator acceptance gate findings" (#1013) sections from `docs/ROADMAP.md`. All three issues were already closed and merged, but the entries were never removed on closure, contradicting the documented convention that ROADMAP.md is forward-looking and completed work should only live in this file.
+
 ### Changed
 
 - (2026-06-19) Revised CDQ-006 (isRecording guard) prompt instruction in `src/agent/prompt.ts` to lead with the general principle rather than an exhaustive method list. The previous instruction listed named methods (`JSON.stringify`, `.map`, etc.) which caused agents to miss unlisted function calls. The revised instruction states upfront that any function call or method call requires a guard, adds an explicit positive list of value expression forms that do require a guard, and an explicit negative list of cheap reads that do not (simple variable reads, literals, direct property accesses). Updated the CDQ checklist item in the pre-submission verification section to match. Updated `docs/rules-reference.md` CDQ-006 row to reflect the new principle-based description. Updated comments in `src/languages/javascript/rules/cdq006.ts` to align with the principle-based framing (no logic changes — the validator already catches all CallExpressions via `forEachDescendant`). Fixes issue #956.
