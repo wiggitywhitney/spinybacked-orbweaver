@@ -7,6 +7,7 @@
 **Design sync**: Several OD decisions in this PRD (OD-9b library/app classification, OD-9c rule ID choice) explicitly match whatever Python decided in PRD #373. Before finalizing Go's pre-implementation gate, read PRD #373's completed Decision Log and mirror the relevant decisions here. Do not resolve OD-9c independently — cross-reference PRD #373 OD-9c explicitly.
 **Created**: 2026-04-06
 **Updated**: 2026-04-20 — added PRD #507 blocker and Milestone E4 for Go API-002-equivalent package-hygiene rule, per PRD #483 audit's Downstream PRD candidates. See `docs/reviews/advisory-rules-audit-2026-04-15.md` Action Items → "Package-hygiene rules for Python and Go providers."
+**Updated**: 2026-07-01 — added OD-10 (does API-002's OTel API/SDK packaging split apply to Go at all?), a placeholder gate mirroring [issue #1017](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1017)'s Python spike. OD-10 must resolve before Milestone E4's OD-9a/b/c work begins; added a Step -1 gate check to E4.
 
 ---
 
@@ -203,6 +204,18 @@ Three sub-decisions:
 
 **Interaction with OD-7 (go.work):** when a Go workspace is detected, the package-hygiene check runs independently against each member module's `go.mod`. A workspace member that is a library must still pass the rule regardless of the workspace root's configuration. Document this behavior in the rule's implementation.
 
+### OD-10: Does API-002's packaging risk apply to Go at all? (Milestone 0 — run before OD-9)
+
+OD-9 above assumes Go needs an API-002 equivalent, mirroring JavaScript's rule that libraries depend on `go.opentelemetry.io/otel` (the API) only, not the SDK/exporters/contrib packages. That assumption has not been tested against Go's actual risk profile.
+
+API-002 in JavaScript exists because npm's `node_modules` resolution can install multiple SDK instances in one dependency tree, silently breaking trace context propagation — a multi-instance risk specific to npm's package resolution model. Go compiles to a single static binary with a single package instance per build; it is not yet confirmed whether Go shares this multi-instance risk, or whether Go's packaging concern (if any) is something else entirely (binary size, build-time dependency bloat, etc.).
+
+[Issue #1017](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1017) runs the equivalent spike for Python against PRD #373. Do not resolve OD-10 independently — once issue #1017 lands a Decision Log entry in PRD #373, read it first and mirror the applicable reasoning here (per this PRD's existing "Design sync" convention, above).
+
+**This is a placeholder gate, not a resolved question.** Do not attempt to answer OD-10 now. Run a Go-specific research spike (new issue, filed when Go implementation is about to begin) before OD-9's rule work starts, informed by whatever PRD #373 concluded for Python.
+
+**This decision must be resolved before Milestone E4 (Go API-002-equivalent package-hygiene rule) begins — not before M1.** Unlike OD-1 and OD-2, OD-10 does not block the rest of Go implementation; it only gates E4.
+
 ---
 
 ## Decision Log
@@ -220,6 +233,7 @@ Three sub-decisions:
 | OD-7 | (pending) | | |
 | OD-8 | (pending) | | |
 | OD-9 | (pending) | | |
+| OD-10 | (pending) | | |
 
 ---
 
@@ -316,6 +330,7 @@ Required by PRD #483 audit Action Items → "Package-hygiene rules for Python an
 This check is **advisory**, not blocking — matching JavaScript API-002's disposition per PRD #483's audit. Reason: the agent cannot modify `go.mod`. A pre-existing misconfiguration would make the check permanently fail for that codebase if blocking, regardless of instrumentation quality.
 
 **Before writing code:**
+- [ ] Step -1 (OD-10 gate): before touching OD-9a/b/c, check PRD #373's Decision Log for issue #1017's finding. If it has not landed yet, file the Go-specific research spike now (mirroring issue #1017's scope and questions, applied to Go's packaging model) rather than waiting — do not block this milestone indefinitely on Python's timeline. Once you have a finding (either from PRD #373 or your own Go spike), resolve OD-10 and record it in the Decision Log before proceeding. If OD-10 concludes Go does not need an API-002 equivalent at all, stop here and update this milestone's scope instead of implementing OD-9a/b/c.
 - [ ] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the API section and the Action Items entry on Python/Go package-hygiene
 - [ ] Resolve OD-9a (manifest scope — `go.mod` only; `go.work` member modules scoped per OD-7) and record the decision in the Decision Log
 - [ ] Resolve OD-9b (library vs. app classification via `package main` detection) and record the decision in the Decision Log
