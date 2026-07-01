@@ -212,7 +212,7 @@ API-002 in JavaScript exists because npm's `node_modules` resolution can install
 
 [Issue #1017](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1017) runs the equivalent spike for Python against PRD #373. Do not resolve OD-10 independently — once issue #1017 lands a Decision Log entry in PRD #373, read it first and mirror the applicable reasoning here (per this PRD's existing "Design sync" convention, above).
 
-**This is a placeholder gate, not a resolved question.** Do not attempt to answer OD-10 now. Run a Go-specific research spike (new issue, filed when Go implementation is about to begin) before OD-9's rule work starts, informed by whatever PRD #373 concluded for Python.
+**This is a placeholder gate, not a resolved question.** Do not attempt to answer OD-10 now. If PRD #373's Decision Log entry for issue #1017 does not already settle the Go case, file a Go-specific research spike before OD-9's rule work starts, informed by whatever PRD #373 concluded for Python.
 
 **This decision must be resolved before Milestone E4 (Go API-002-equivalent package-hygiene rule) begins — not before M1.** Unlike OD-1 and OD-2, OD-10 does not block the rest of Go implementation; it only gates E4.
 
