@@ -278,6 +278,57 @@ Follow this order:
 
 Once `spiny-orb.yaml` exists, follow the setup for your interface: [CLI](#cli), [MCP](#mcp-integration), or [GitHub Action](#github-action).
 
+### CLI app considerations
+
+`process.exit()` interception in the SDK init file (step 2 above) is a safety net — it flushes spans before the process actually exits. But it doesn't fix the root cause: calling `process.exit()` from inside your `main()` function skips that function's `finally` block, so a root span wrapping `main()` never calls `span.end()`. The fix requires three changes, applied together — they solve the same problem from three angles and none of them alone is sufficient.
+
+**1. Move `process.exit()` out of the main function body.** Refactor every `process.exit()` call inside `main()` to `return` an exit code instead. Call `process.exit()` exactly once, at the top level, after `main()` resolves:
+
+```javascript
+// Before — root span's finally block never runs
+async function main() {
+  if (error) {
+    process.exit(1); // terminates before finally
+  }
+  // ...
+}
+main();
+
+// After — control returns to the caller, finally always runs
+async function main() {
+  if (error) {
+    return 1;
+  }
+  // ...
+  return 0;
+}
+const exitCode = await main();
+await sdk.shutdown();
+process.exit(exitCode);
+```
+
+**2. Call `sdk.shutdown()` before the final `process.exit()`.** This flushes any buffered spans and log records. Without it, `SimpleSpanProcessor` still exports each span as it ends, but pending exporter network requests can be cut off mid-flight when the process exits — this shows up as SPA-002 (orphan spans with no parent) in eval scoring. The call sequence is shown in the example above: `await main()` → `await sdk.shutdown()` → `process.exit(exitCode)`.
+
+**3. Wrap the CLI's entry point in a root span.** This gives every span the agent adds a common ancestor instead of a flat list of unrelated traces. Confirm the exact imports against your installed `@opentelemetry/api` version before using this pattern:
+
+```javascript
+import { trace, context } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('my-cli');
+const rootSpan = tracer.startSpan('my-cli');
+const exitCode = await context.with(trace.setSpan(context.active(), rootSpan), async () => {
+  try {
+    return await main();
+  } finally {
+    rootSpan.end();
+  }
+});
+await sdk.shutdown();
+process.exit(exitCode);
+```
+
+Do all three together. Skipping the refactor in step 1 means step 3's `finally` block can still be bypassed by a stray `process.exit()` deeper in the call stack; skipping step 2 means spans can still be lost on exit even with a correctly-ended root span.
+
 ### After the instrument branch
 
 After the instrument branch is ready, check the PR summary for an **Auto-Instrumentation Activation** section. This section appears when spiny-orb installed auto-instrumentation packages and tells you exactly what to activate and how.
