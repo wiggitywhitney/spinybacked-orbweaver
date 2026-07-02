@@ -318,15 +318,19 @@ import { trace, context } from '@opentelemetry/api';
 
 const tracer = trace.getTracer('my-cli');
 const rootSpan = tracer.startSpan('my-cli');
-const exitCode = await context.with(trace.setSpan(context.active(), rootSpan), async () => {
-  try {
-    return await main();
-  } finally {
-    rootSpan.end();
-  }
-});
-await sdk.shutdown();
-process.exit(exitCode);
+let exitCode = 1;
+try {
+  exitCode = await context.with(trace.setSpan(context.active(), rootSpan), async () => {
+    try {
+      return await main();
+    } finally {
+      rootSpan.end();
+    }
+  });
+} finally {
+  await sdk.shutdown();
+  process.exit(exitCode);
+}
 ```
 
 Do all three together. Skipping the refactor in step 1 means step 3's `finally` block can still be bypassed by a stray `process.exit()` deeper in the call stack; skipping step 2 means spans can still be lost on exit even with a correctly-ended root span.

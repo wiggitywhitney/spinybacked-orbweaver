@@ -10,7 +10,7 @@ The README (635 lines covering CLI, MCP, GitHub Action, config, and setup) has n
 
 ## Solution
 
-Run the `/write-docs` validation workflow against the README — executing every command, comparing actual vs. claimed output, fixing stale content section by section — and add the missing forceFlush/parent span onboarding guidance. Closes issue #953.
+Run the `/write-docs` validation workflow against the README — executing every command, comparing actual vs. claimed output, fixing stale content section by section — and add the missing forceFlush/parent span onboarding guidance. (Issue #953, the forceFlush/parent span onboarding gap, was already closed independently by PR #1021 — see Context section below and M4.)
 
 ## Context for the Implementing AI
 
