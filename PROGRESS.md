@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-07-02) Added a "CLI app considerations" section to README.md documenting the root-span-loss failure mode in CLI apps: `process.exit()` calls inside `main()` skip the `finally` block that would end a root span, and missing `sdk.shutdown()` causes buffered spans to be lost (surfacing as SPA-002, orphan spans with no parent). Documents three required-together fixes in dependency order: refactor `process.exit()` calls to return codes, call `sdk.shutdown()` before the final `process.exit()`, and wrap the CLI entry point in a root span. Fixes issue #953.
+
 ### Changed
+
+- (2026-07-02) Updated `prds/970-readme-validate-and-update.md` to mark milestone M4 superseded — issue #953 was resolved independently via PR #1021 with a fuller in-README fix than M4 originally specified, so M4 now only verifies that work during M1's scan instead of duplicating it. Also flagged README-wide JavaScript/TypeScript example parity as a scan category for M1, per a decision recorded on issue #953.
 
 - (2026-07-01) Reorganized `docs/ROADMAP.md` around a new "Path to Python" section — a strict numbered sequence from talk-prep through the small-issue batch, a commit-story-v2 eval run, and the Python and Go language providers. Consolidated the recurring "Watch" items (#1008, #1014, #927, #954, #958) into a dedicated "Watch issues" section, deferred until future eval runs. The existing Short-term/Medium-term/Long-term buckets are retained but rescoped to work that comes after the Python/Go path. Fixes issue #1019.
 
