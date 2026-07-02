@@ -29,7 +29,7 @@ The README is 635 lines with these main sections (section headings are the stabl
 
 The `/write-docs` skill (at `~/.claude/skills/write-docs`) has a 7-phase workflow: broken docs scan → environment setup → outline → chunk-by-chunk writing (execute commands, capture real output) → cross-reference check → final review. Follow it, do not short-circuit it.
 
-Issue #953 ("README CLI getting-started guidance: forceFlush and parent span") is an open tracked issue for an onboarding gap. The fix belongs in the CLI or Project Setup section — `docs/short-lived-setup.md` already has the full technical content; the README needs a pointer and a summary of why it matters.
+Issue #953 ("README CLI getting-started guidance: forceFlush and parent span") is resolved as of PR #1021 — see Decision Log and M4 for details. M4 as originally scoped (a 60-word callout linking to `docs/short-lived-setup.md`) is superseded; skip it during implementation.
 
 ## Implementation Milestones
 
@@ -86,21 +86,16 @@ Same constraint as M2: execute corrected commands and capture real output before
 - [ ] GitHub Action inputs and workflow YAML match the current `action.yml`
 - [ ] Configuration Reference field names and defaults match `src/config/schema.ts`
 
-### M4: Add forceFlush and parent span onboarding guidance (closes #953)
+### M4: Superseded — forceFlush and parent span onboarding guidance (closes #953)
 
-Add a short section to the CLI or Project Setup part of the README that surfaces the two most common silent failure modes for short-lived processes:
+**This milestone is already satisfied. Do not implement it as originally scoped.** Issue #953 was resolved independently via PR #1021, which added a full "CLI app considerations" section directly to the README covering `process.exit()` → return-code refactor, `sdk.shutdown()` sequencing, and root span wrapping — with complete before/after code examples in-line, not a link-out summary. See the Decision Log entry below for why the original 60-word link-to-`docs/short-lived-setup.md` approach was superseded.
 
-1. **`BatchSpanProcessor` span loss** — the default SDK processor buffers spans on a timer; a process that exits in under 5 seconds loses all spans silently. Fix: use `SimpleSpanProcessor` or call `sdk.shutdown()` before `process.exit()`.
-2. **Missing parent span** — the agent instruments individual functions, but if there is no root span wrapping the process entry point, spans appear as disconnected orphans in the trace UI.
-
-The full technical content and code examples already exist in `docs/short-lived-setup.md`. Do NOT duplicate them — link to that doc and add a 2–3 sentence summary explaining why these matter. The goal is that someone skimming the README prerequisites or CLI section sees the warning and knows where to look.
-
-Place the guidance as a callout at the top of the CLI section, immediately before the first command example — this is where someone running `spiny-orb instrument` for the first time will encounter it.
+During M1's scan, verify the "CLI app considerations" section added by PR #1021 still passes (commands/examples still accurate) and is not duplicated or contradicted by anything else added in M2/M3. No new content should be added for this milestone.
 
 **Acceptance criteria:**
-- [ ] forceFlush and parent span failure modes are mentioned in the README with a link to `docs/short-lived-setup.md`
-- [ ] The guidance is 60 words max in the README body (roughly 2–3 sentences) — technical depth lives in `docs/short-lived-setup.md`
-- [ ] Issue #953 is referenced in the PR so GitHub auto-closes it on merge
+- [x] forceFlush and parent span failure modes are covered in the README (delivered via PR #1021's "CLI app considerations" section, not a link to `docs/short-lived-setup.md`)
+- [x] Issue #953 is closed (closed by PR #1021, not this PRD)
+- [ ] M1's scan confirms the "CLI app considerations" section content is still accurate and not duplicated elsewhere in the README
 
 ### M5: Add spiny-orb illustration to top of README
 
@@ -153,20 +148,22 @@ Run the `/write-docs` cross-reference check (Phase 6):
 
 Update `PROGRESS.md` under `## [Unreleased] > ### Changed`:
 - Entry for the README validation and update, noting what was found stale and what was fixed
-- Entry for closing issue #953 (forceFlush/parent span gap filled)
+- Do NOT add an entry for closing issue #953 — it was already closed and logged in PROGRESS.md by PR #1021
 
 **Acceptance criteria:**
 - [ ] All internal README links resolve correctly
 - [ ] `docs/readme-scan-findings.md` deleted
-- [ ] `PROGRESS.md` updated with entries for README validation and #953 closure
+- [ ] `PROGRESS.md` updated with an entry for README validation (no duplicate #953 entry — already logged by PR #1021)
 
 ## Design Notes
 
 - **Use `/write-docs` — do not short-circuit it.** The skill exists specifically to prevent invented command output. Every example in the README must come from actual execution in the session.
 - **Do NOT rewrite sections that pass.** Sections that pass the M1 scan should be left alone unless a specific content gap (like M4's forceFlush guidance) applies to them. Scope is fix-and-fill, not rewrite.
-- **The `docs/short-lived-setup.md` doc is the technical source for M4.** Read it before writing the README guidance — the README summary should be accurate to that doc.
+- **M4 is superseded — do not read `docs/short-lived-setup.md` as a source for new README content.** The gap it covered is already filled by PR #1021's "CLI app considerations" section. See the Decision Log.
 - The feature PR created by `/prd-done` needs the `run-acceptance` label to trigger acceptance gate CI. This is handled automatically by `/prd-done` when acceptance gate tests are detected.
 
 ## Decision Log
 
-_No decisions recorded yet._
+**[2026-07-02] M4 superseded by issue #953's own PR**: Issue #953 was resolved independently on its own branch (PR #1021) before M4 was implemented, with a full "CLI app considerations" README section (complete before/after code examples for the `process.exit()` refactor, `sdk.shutdown()` sequencing, and root span wrapping) rather than the 60-word callout linking to `docs/short-lived-setup.md` that M4 originally specified. M4 is marked superseded; its remaining acceptance criterion is limited to verifying the delivered section during M1's scan. **Why**: #953 was worked as a standalone issue in parallel with this PRD's planning; by the time this PRD reached implementation, the gap it was meant to fill was already closed with a more thorough approach (full examples in-README rather than a link-out summary), so redoing the work per M4's original spec would create duplicate or contradictory content. **Alternatives**: (a) implement M4 as originally scoped anyway and reconcile the resulting duplication (rejected — wasted effort, and risks two out-of-sync explanations of the same failure mode); (b) revert PR #1021's section and replace it with M4's lighter version (rejected — no indication the fuller in-README approach is undesirable, and reverting already-merged, already-reviewed work is unnecessary churn).
+
+Also noted (from issue #953's own Decision Log): the README's CLI examples are JavaScript-only despite the tagline claiming JS + TypeScript support, and no example anywhere in the README currently has a TypeScript variant. This is in scope for M1's broken-docs scan — when auditing code blocks, flag TS-parity as a gap category alongside stale-command and wrong-output findings, so the M1 findings table surfaces it even if fixing it is deferred to a future PRD.
