@@ -307,7 +307,7 @@ await sdk.shutdown();
 process.exit(exitCode);
 ```
 
-**2. Call `sdk.shutdown()` before the final `process.exit()`.** This flushes any buffered spans and log records. Without it, `SimpleSpanProcessor` still exports each span as it ends, but pending exporter network requests can be cut off mid-flight when the process exits — this shows up as SPA-002 (orphan spans with no parent) in eval scoring. The call sequence is shown in the example above: `await main()` → `await sdk.shutdown()` → `process.exit(exitCode)`.
+**2. Call `sdk.shutdown()` before the final `process.exit()`.** This flushes any buffered spans and log records. Without it, `SimpleSpanProcessor` still exports each span as it ends, but pending exporter network requests can be cut off mid-flight when the process exits, dropping spans. The call sequence is shown in the example above: `await main()` → `await sdk.shutdown()` → `process.exit(exitCode)`.
 
 **3. Wrap the CLI's entry point in a root span.** This gives every span the agent adds a common ancestor instead of a flat list of unrelated traces. Confirm the exact imports against your installed `@opentelemetry/api` version before using this pattern:
 
