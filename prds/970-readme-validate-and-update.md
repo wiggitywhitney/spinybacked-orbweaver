@@ -86,7 +86,7 @@ Same constraint as M2: execute corrected commands and capture real output before
 - [ ] GitHub Action inputs and workflow YAML match the current `action.yml`
 - [ ] Configuration Reference field names and defaults match `src/config/schema.ts`
 
-### M4: Superseded — forceFlush and parent span onboarding guidance (closes #953)
+### M4: Superseded — forceFlush and parent span onboarding guidance (already closed by PR #1021)
 
 **This milestone is already satisfied. Do not implement it as originally scoped.** Issue #953 was resolved independently via PR #1021, which added a full "CLI app considerations" section directly to the README covering `process.exit()` → return-code refactor, `sdk.shutdown()` sequencing, and root span wrapping — with complete before/after code examples in-line, not a link-out summary. See the Decision Log entry below for why the original 60-word link-to-`docs/short-lived-setup.md` approach was superseded.
 
