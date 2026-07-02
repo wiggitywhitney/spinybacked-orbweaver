@@ -282,6 +282,8 @@ Once `spiny-orb.yaml` exists, follow the setup for your interface: [CLI](#cli), 
 
 `process.exit()` interception in the SDK init file (step 2 above) is a safety net — it flushes spans before the process actually exits. But it doesn't fix the root cause: calling `process.exit()` from inside your `main()` function skips that function's `finally` block, so a root span wrapping `main()` never calls `span.end()`. The fix requires three changes, applied together — they solve the same problem from three angles and none of them alone is sufficient.
 
+The examples below are shown in JavaScript; the same three-step fix applies unchanged in TypeScript.
+
 **1. Move `process.exit()` out of the main function body.** Refactor every `process.exit()` call inside `main()` to `return` an exit code instead. Call `process.exit()` exactly once, at the top level, after `main()` resolves:
 
 ```javascript
