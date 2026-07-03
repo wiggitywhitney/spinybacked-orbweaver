@@ -1,6 +1,6 @@
 # README Broken Docs Scan — Findings (PRD #970, Milestone M1)
 
-Scope: every fenced code block in `README.md`, scanned per the `/write-docs` Phase 2 process. Commands were executed against the real CLI (`bin/spiny-orb.js`) in a scratch directory (`/tmp/spiny-orb-doctest`); claimed outputs were compared against actual output, ignoring non-deterministic fields (timestamps, dollar amounts, PR URLs, branch suffixes, absolute paths). No fixes were made in this milestone — scan only.
+Scope: every fenced code block in `README.md`, scanned per the `/write-docs` Phase 2 process. Commands were executed against the real CLI (`bin/spiny-orb.js`) in a scratch directory (`/tmp/spiny-orb-doctest`) where safe; skipped destructive/global-install/live-API cases are listed below. Claimed outputs were compared against actual output, ignoring non-deterministic fields (timestamps, dollar amounts, PR URLs, branch suffixes, absolute paths). No fixes were made in this milestone — scan only.
 
 ## Findings
 
