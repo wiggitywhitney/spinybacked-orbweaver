@@ -34,7 +34,7 @@ Scope: every fenced code block in `README.md`, scanned per the `/write-docs` Pha
 
 ## Summary
 
-24 sections/blocks checked · 15 passed · 3 failed · 5 skipped (destructive/global-install/live-API) · 1 flagged as a TS-parity gap.
+25 sections/blocks checked · 16 passed · 3 failed · 5 skipped (destructive/global-install/live-API) · 1 flagged as a TS-parity gap.
 
 ### Failures requiring a fix (for M2–M4)
 
