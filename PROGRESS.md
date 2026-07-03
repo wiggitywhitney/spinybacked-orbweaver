@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-07-03) Ran a full accuracy scan of README.md — every setup command, code example, and configuration table was tested against the real CLI and codebase rather than just read. Found three stale spots (an outdated example transcript missing a helpful tip, a formatting mismatch in one config value, and a GitHub Action example showing an old default version) and flagged one gap where a JavaScript-only example is presented as covering both JavaScript and TypeScript. Findings are recorded for the next round of README fixes.
+
 - (2026-07-02) Added a "CLI app considerations" section to README.md documenting the root-span-loss failure mode in CLI apps: `process.exit()` calls inside `main()` skip the `finally` block that would end a root span, and missing `sdk.shutdown()` causes buffered spans to be lost (surfacing as SPA-002, orphan spans with no parent). Documents three required-together fixes in dependency order: refactor `process.exit()` calls to return codes, call `sdk.shutdown()` before the final `process.exit()`, and wrap the CLI entry point in a root span. Fixes issue #953.
 
 ### Changed

@@ -53,14 +53,17 @@ Pay special attention to:
 Produce a findings table before touching any content. Do not fix anything during this milestone — only scan and record.
 
 **Acceptance criteria:**
-- [ ] Every command block in the README has been executed and marked Pass/Fail/Skipped with reason
-- [ ] Findings table committed to a scratch file (e.g., `docs/readme-scan-findings.md`) for reference during M2–M4
+- [x] Every command block in the README has been executed and marked Pass/Fail/Skipped with reason
+- [x] Findings table committed to a scratch file (e.g., `docs/readme-scan-findings.md`) for reference during M2–M4
 
 ### M2: Fix Prerequisites, Project Setup, and CLI sections
 
 Using the findings from M1, fix stale or broken content in the three highest-drift-risk sections:
 - **Prerequisites** (L129): verify version requirements, env var behavior, peerDep requirement
-- **Project Setup** (L154): verify `spiny-orb init` output, `spiny-orb.yaml` schema, Weaver registry setup steps
+- **Project Setup** (L154): verify `spiny-orb init` output, `spiny-orb.yaml` schema, Weaver registry setup steps.
+  Confirmed fixes needed (per Decision Log 2026-07-03):
+  - Both `spiny-orb init` transcripts show `schemaPath: semconv/` with a trailing slash — actual output has no trailing slash.
+  - Both transcripts omit the actual CLI's `Tip: consider importing OTel semantic conventions as a registry dependency: https://opentelemetry.io/docs/specs/semconv/` line.
 - **CLI** (L280): verify all flag names, example commands, and output snippets
 
 For each fix, execute the corrected command and capture the real output before writing it to the README. Do NOT invent or approximate output — if a command cannot be run, mark the block with a note explaining why.
@@ -76,7 +79,8 @@ Do NOT modify MCP Integration, GitHub Action, or Configuration Reference during 
 
 Using the findings from M1, fix stale or broken content in:
 - **MCP Integration** (L462): verify install command, tool list, usage examples
-- **GitHub Action** (L545): verify input names against `action.yml`, workflow YAML shape, permissions
+- **GitHub Action** (L545): verify input names against `action.yml`, workflow YAML shape, permissions.
+  Confirmed fix needed (per Decision Log 2026-07-03): the Usage example YAML and the Inputs table both list `weaver-version` default as `0.21.2`; `action.yml`'s actual default is `0.22.1` — update both places.
 - **Configuration Reference** (L579): verify config field names and defaults against `src/config/schema.ts`
 
 Same constraint as M2: execute corrected commands and capture real output before writing.
@@ -95,7 +99,7 @@ During M1's scan, verify the "CLI app considerations" section added by PR #1021 
 **Acceptance criteria:**
 - [x] forceFlush and parent span failure modes are covered in the README (delivered via PR #1021's "CLI app considerations" section, not a link to `docs/short-lived-setup.md`)
 - [x] Issue #953 is closed (closed by PR #1021, not this PRD)
-- [ ] M1's scan confirms the "CLI app considerations" section content is still accurate and not duplicated elsewhere in the README
+- [x] M1's scan confirms the "CLI app considerations" section content is still accurate and not duplicated elsewhere in the README
 
 ### M5: Add spiny-orb illustration to top of README
 
@@ -167,3 +171,5 @@ Update `PROGRESS.md` under `## [Unreleased] > ### Changed`:
 **[2026-07-02] M4 superseded by issue #953's own PR**: Issue #953 was resolved independently on its own branch (PR #1021) before M4 was implemented, with a full "CLI app considerations" README section (complete before/after code examples for the `process.exit()` refactor, `sdk.shutdown()` sequencing, and root span wrapping) rather than the 60-word callout linking to `docs/short-lived-setup.md` that M4 originally specified. M4 is marked superseded; its remaining acceptance criterion is limited to verifying the delivered section during M1's scan. **Why**: #953 was worked as a standalone issue in parallel with this PRD's planning; by the time this PRD reached implementation, the gap it was meant to fill was already closed with a more thorough approach (full examples in-README rather than a link-out summary), so redoing the work per M4's original spec would create duplicate or contradictory content. **Alternatives**: (a) implement M4 as originally scoped anyway and reconcile the resulting duplication (rejected — wasted effort, and risks two out-of-sync explanations of the same failure mode); (b) revert PR #1021's section and replace it with M4's lighter version (rejected — no indication the fuller in-README approach is undesirable, and reverting already-merged, already-reviewed work is unnecessary churn).
 
 Also noted (from issue #953's own Decision Log): the README's CLI examples are JavaScript-only despite the tagline claiming JS + TypeScript support, and no example anywhere in the README currently has a TypeScript variant. This is in scope for M1's broken-docs scan — when auditing code blocks, flag TS-parity as a gap category alongside stale-command and wrong-output findings, so the M1 findings table surfaces it even if fixing it is deferred to a future PRD.
+
+**[2026-07-03] M1 scan complete — 3 concrete failures identified, TS-parity gap confirmed**: The M1 broken docs scan executed every command block in README.md and produced findings at `docs/readme-scan-findings.md` (24 sections checked: 15 passed, 3 failed, 5 skipped as destructive/global-install/live-API, 1 flagged as the anticipated TS-parity gap). The three concrete failures are: (1) the `spiny-orb init` transcripts (both non-CLI and CLI) show `schemaPath: semconv/` with a trailing slash, but actual output is `schemaPath: semconv` with no trailing slash; (2) both `spiny-orb init` transcripts omit a line the real CLI actually prints — `Tip: consider importing OTel semantic conventions as a registry dependency: https://opentelemetry.io/docs/specs/semconv/`; (3) the GitHub Action's Usage example and Inputs table both claim `weaver-version` defaults to `0.21.2`, but `action.yml`'s actual default is `0.22.1` (this is independent of `weaverMinVersion` in `src/config/schema.ts`, which correctly remains `0.21.2` — the Action installs a newer-than-minimum Weaver version by design, so only the README's stale example values need correcting, not the schema). The TS-parity gap already anticipated in the prior Decision Log entry is confirmed present in the "Example: before and after" section specifically — the tagline claims JS+TypeScript support but the flagship example has no TypeScript variant or caveat (contrast with the CLI app considerations section, which does add such a caveat). **Why**: recording the exact failures here gives M2 and M3 implementers precise, evidence-based fix targets instead of requiring them to re-read the full scan file to extract scope. **Impact**: M2 gains two explicit fix items (schemaPath trailing slash, missing Tip line) under Project Setup; M3 gains one explicit fix item (weaver-version stale default) under GitHub Action. The TS-parity gap remains deferred — no milestone in this PRD is scoped to add a TypeScript example, consistent with the original decision to surface but not fix it here. **Code Impact**: `README.md` only (both `spiny-orb init` transcript blocks; both the GitHub Action Usage YAML and Inputs table). **Owner**: Whitney (scan executed and reviewed in this session).
