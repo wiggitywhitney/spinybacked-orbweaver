@@ -157,7 +157,7 @@ Update `PROGRESS.md` under `## [Unreleased] > ### Changed`:
 **Acceptance criteria:**
 - [ ] All internal README links resolve correctly
 - [ ] `docs/readme-scan-findings.md` deleted
-- [ ] `PROGRESS.md` updated with an entry for README validation (no duplicate #953 entry — already logged by PR #1021. M8's TypeScript inline-notes fixes already have their own entry, added during M8 — do not duplicate it here; add only an entry for M6/M7's own changes)
+- [ ] `PROGRESS.md` updated with an entry for README validation changes from M6/M7 (no duplicate #953 entry — already logged by PR #1021)
 
 ### M8: Audit README for TypeScript accuracy and add inline notes
 
