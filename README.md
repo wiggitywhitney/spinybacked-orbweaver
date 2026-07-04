@@ -2,13 +2,13 @@
 
 # Spinybacked Orbweaver
 
-AI-powered OpenTelemetry instrumentation for JavaScript and Typescript applications. Analyzes your source code, adds spans, attributes, and context propagation using LLM-guided code generation — validated against your [Weaver](https://github.com/open-telemetry/weaver) schema and the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. When your schema [declares OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the agent uses them for attribute naming and validates against them.
+AI-powered OpenTelemetry instrumentation for JavaScript and TypeScript applications. Analyzes your source code, adds spans, attributes, and context propagation using LLM-guided code generation — validated against your [Weaver](https://github.com/open-telemetry/weaver) schema and the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. When your schema [declares OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the agent uses them for attribute naming and validates against them.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## What is this?
 
-Spinybacked Orbweaver is an AI agent that adds OpenTelemetry instrumentation to your JavaScript codebase. Point it at your source files, and it:
+Spinybacked Orbweaver is an AI agent that adds OpenTelemetry instrumentation to your JavaScript or TypeScript codebase. Point it at your source files, and it:
 
 1. **Analyzes** each file to identify what should be instrumented — external calls (HTTP, DB, message queues), schema-defined spans, and service entry points. Before calling the LLM, a deterministic pre-scan computes entry points, skip candidates, and outbound calls from the AST, injecting explicit function-level directives that reduce ambiguous inference.
 2. **Generates** complete instrumented files using an LLM, preferring auto-instrumentation libraries over manual spans
@@ -27,6 +27,8 @@ Three interfaces: [**CLI**](#cli) for interactive use, [**MCP server**](#mcp-int
 - **[Interpreting Output](docs/interpreting-output.md)** — How to read CLI output, PR summaries, and companion files
 
 ## Example: before and after
+
+The example below is shown in JavaScript; the same instrumentation applies unchanged in TypeScript.
 
 Given an order processing module (`src/orders.js`):
 
@@ -139,7 +141,7 @@ All three interfaces share the same `spiny-orb.yaml` configuration and produce t
   ```
   Or set in your shell environment: `export ANTHROPIC_API_KEY=your-key`. See [`.env.example`](.env.example) for a template.
 - **A [Weaver registry](https://github.com/open-telemetry/weaver/blob/main/docs/define-your-own-telemetry-schema.md)** — your project needs a telemetry schema directory that defines your spans and attributes ([setup guide](https://github.com/open-telemetry/weaver/blob/main/docs/define-your-own-telemetry-schema.md), [examples](https://github.com/open-telemetry/opentelemetry-weaver-examples))
-- **An [OTel SDK init file](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** — a file that initializes the OpenTelemetry SDK and registers instrumentations (e.g., `src/instrumentation.js`). `spiny-orb init` auto-detects common file names like `src/instrumentation.js`, `src/telemetry.js`, or `src/tracing.js`.
+- **An [OTel SDK init file](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** — a file that initializes the OpenTelemetry SDK and registers instrumentations (e.g., `src/instrumentation.js` or `src/instrumentation.ts`). `spiny-orb init` auto-detects common file names in both JavaScript and TypeScript, such as `src/instrumentation.js`/`.ts`, `src/telemetry.js`/`.ts`, or `src/tracing.js`/`.ts`.
 - **`@opentelemetry/api` as a peerDependency** — must be in your `package.json` peerDependencies (not dependencies) to avoid silent trace loss from duplicate instances
 
 ### Optional
@@ -345,7 +347,7 @@ After the instrument branch is ready, check the PR summary for an **Auto-Instrum
 
 **If spiny-orb updated your SDK init file:** Import it via `--import` or `--require` before your application code. No additional wiring is needed — the packages are already registered in the `NodeSDK` `instrumentations` array.
 
-**If the PR summary mentions `spiny-orb-instrumentations.js`:** Your SDK init file didn't match the recognized `NodeSDK` pattern. Open `spiny-orb-instrumentations.js` and integrate the `instrumentations` export into your OTel setup manually:
+**If the PR summary mentions `spiny-orb-instrumentations.js`:** Your SDK init file didn't match the recognized `NodeSDK` pattern. Open `spiny-orb-instrumentations.js` and integrate the `instrumentations` export into your OTel setup manually. This fallback file is always plain JavaScript, regardless of your project's `language` setting — import it from a TypeScript SDK init file the same way you'd import any `.js` module:
 
 ```javascript
 import { NodeSDK } from '@opentelemetry/sdk-node';
@@ -408,7 +410,7 @@ After installing, the `spiny-orb` command is available globally.
 spiny-orb instrument src/
 ```
 
-Pass a directory to instrument all `.js` files in it, or a single file path to instrument one file. The agent discovers files, calculates a cost ceiling (displayed in dollars), asks for confirmation, then instruments each file sequentially. Each successful file gets its own commit on a feature branch. After all files are processed, the agent installs dependencies, updates the SDK init file, and opens a PR.
+Pass a directory to instrument all matching source files in it, or a single file path to instrument one file. Which extensions match depends on the `language` config field: `.js`/`.jsx` for `javascript` (the default), `.ts`/`.tsx` for `typescript`. The agent discovers files, calculates a cost ceiling (displayed in dollars), asks for confirmation, then instruments each file sequentially. Each successful file gets its own commit on a feature branch. After all files are processed, the agent installs dependencies, updates the SDK init file, and opens a PR.
 
 The cost ceiling is a conservative worst case (assumes output tokens equal input tokens, plus 30% thinking headroom). Actual costs are typically much lower — a 630-line LangGraph state machine that needed all 3 retry attempts used ~78k tokens, well under the 100k ceiling.
 
@@ -692,7 +694,7 @@ Only `schemaPath` and `sdkInitFile` are required — everything else has default
 | `agentEffort` | `low` \| `medium` \| `high` | `medium` | Thinking depth — higher means more thorough but slower |
 | `testCommand` | string | `npm test` | Command to run checkpoint and end-of-run test validation. Supports any test runner and inline env vars — e.g., `GIT_CONFIG_GLOBAL=/tmp/test.gitconfig npm test` for repos where global git config conflicts with the test suite |
 | `targetType` | `long-lived` \| `short-lived` | `long-lived` | Process lifecycle. `long-lived` (web servers, workers, daemons) uses `BatchSpanProcessor` — no extra setup. `short-lived` (CLIs, scripts, Lambda, batch jobs) needs `SimpleSpanProcessor` and `process.exit()` interception, otherwise `BatchSpanProcessor` drops all spans before the 5-second flush timer fires. Set during `spiny-orb init` or add manually. |
-| `language` | `javascript` \| `typescript` | `javascript` | Language provider to use for parsing and code generation. TypeScript language provider support is planned for a future release — see [Language Provider API](#language-provider-api). |
+| `language` | `javascript` \| `typescript` | `javascript` | Language provider to use for parsing and code generation — see [Language Provider API](#language-provider-api). |
 | `dependencyStrategy` | `dependencies` \| `peerDependencies` | `dependencies` | Multiple copies of `@opentelemetry/api` in `node_modules` cause silent trace loss via no-op fallbacks. Use `dependencies` for services (backend APIs, workers, apps) — they own their dependency tree. Use `peerDependencies` for distributable packages (libraries, anything published to npm) — consumers control which version is installed. These two fields are independent: a CLI tool is both `short-lived` and `dependencies`. |
 | `maxFilesPerRun` | number | `50` | Maximum files to process in one run |
 | `maxFixAttempts` | number | `2` | Retry attempts per file after initial generation (total attempts = 1 + this value) |
@@ -735,7 +737,7 @@ Dry-run still costs tokens — the agent analyzes every file with real LLM calls
 
 ## Language Provider API
 
-Support for languages beyond JavaScript will be added via language provider packages that implement the `LanguageProvider` interface. Providers declare `spiny-orb` as a peer dependency and import their interface types from `"spiny-orb/plugin"`. This architecture is planned for a future release.
+Each supported language is implemented as a language provider that satisfies the `LanguageProvider` interface — JavaScript and TypeScript both ship as providers today. Additional language providers can be built as packages that declare `spiny-orb` as a peer dependency and import their interface types from `"spiny-orb/plugin"`.
 
 ## License
 

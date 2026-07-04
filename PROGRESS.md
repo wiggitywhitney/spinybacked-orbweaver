@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-07-04) Corrected two spots in README.md that described TypeScript support as a future feature — the Language Provider API section and the Configuration Reference `language` row — when TypeScript is already a fully implemented, registered language provider. Also reviewed every JavaScript-specific section of the README and added short inline notes wherever TypeScript needs a callout (SDK init file detection, source file discovery, the before/after example, and the auto-instrumentation fallback file), so the README's "JavaScript and TypeScript" claim holds up section by section without a full restructuring into separate per-language pages.
+
 - (2026-07-04) Corrected the README's GitHub Action documentation and Configuration Reference table to match the codebase. The `weaver-version` default shown in the workflow example and inputs table was stale (`0.21.2` instead of the actual `0.22.1` default in `action.yml`). Separately, a direct comparison against the config schema found five configuration fields — `language`, `maxTimePerFile`, `checkpointLocThreshold`, `attributesPerFileThreshold`, and `spansPerFileThreshold` — that were entirely missing from the Configuration Reference table; added rows for all five.
 
 - (2026-07-04) Corrected the `spiny-orb init` example transcripts in the README so the shown configuration summary and tip message match what the command actually prints — removed a stray trailing slash from the schema path and added the missing tip about importing OTel semantic conventions as a registry dependency.

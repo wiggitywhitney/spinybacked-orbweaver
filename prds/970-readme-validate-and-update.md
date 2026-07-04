@@ -157,7 +157,7 @@ Update `PROGRESS.md` under `## [Unreleased] > ### Changed`:
 **Acceptance criteria:**
 - [ ] All internal README links resolve correctly
 - [ ] `docs/readme-scan-findings.md` deleted
-- [ ] `PROGRESS.md` updated with an entry for README validation (no duplicate #953 entry — already logged by PR #1021, and covering M8's TypeScript inline-notes fixes alongside the rest of this PRD's work)
+- [ ] `PROGRESS.md` updated with an entry for README validation (no duplicate #953 entry — already logged by PR #1021. M8's TypeScript inline-notes fixes already have their own entry, added during M8 — do not duplicate it here; add only an entry for M6/M7's own changes)
 
 ### M8: Audit README for TypeScript accuracy and add inline notes
 
@@ -175,10 +175,10 @@ The README's tagline claims support for "JavaScript and TypeScript applications,
 **Step 3: Verify the tagline claim.** Confirm the tagline's "JavaScript and TypeScript" claim is accurate everywhere it implies parity, given the inline notes added in Step 2.
 
 **Acceptance criteria:**
-- [ ] `## Language Provider API` section no longer describes TypeScript support as planned/future
-- [ ] Configuration Reference `language` row no longer describes TypeScript support as planned/future
-- [ ] Every JavaScript-specific README section has been reviewed for TypeScript accuracy, with inline notes added where needed
-- [ ] No per-language pages or README restructuring introduced in this milestone (deferred to PRD #373)
+- [x] `## Language Provider API` section no longer describes TypeScript support as planned/future
+- [x] Configuration Reference `language` row no longer describes TypeScript support as planned/future
+- [x] Every JavaScript-specific README section has been reviewed for TypeScript accuracy, with inline notes added where needed
+- [x] No per-language pages or README restructuring introduced in this milestone (deferred to PRD #373)
 
 ## Design Notes
 
