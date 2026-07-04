@@ -179,10 +179,11 @@ Detected project type: service (dependencyStrategy: dependencies)
 Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)? BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [long-lived]
 
 Configuration summary:
-  schemaPath: semconv/
+  schemaPath: semconv
   sdkInitFile: src/instrumentation.js
   dependencyStrategy: dependencies
   targetType: long-lived
+  Tip: consider importing OTel semantic conventions as a registry dependency: https://opentelemetry.io/docs/specs/semconv/
 
 Create spiny-orb.yaml with these settings? [y/N] y
 Writing spiny-orb.yaml...
@@ -203,10 +204,11 @@ Detected project type: service (dependencyStrategy: dependencies)
 Target type — short-lived (CLI, Lambda, script) or long-lived (server, worker)? BatchSpanProcessor drops all spans if the process exits before the 5-second flush. [short-lived]
 
 Configuration summary:
-  schemaPath: semconv/
+  schemaPath: semconv
   sdkInitFile: src/instrumentation.js
   dependencyStrategy: dependencies
   targetType: short-lived
+  Tip: consider importing OTel semantic conventions as a registry dependency: https://opentelemetry.io/docs/specs/semconv/
 
 Create spiny-orb.yaml with these settings? [y/N] y
 Writing spiny-orb.yaml...

@@ -71,9 +71,9 @@ For each fix, execute the corrected command and capture the real output before w
 Do NOT modify MCP Integration, GitHub Action, or Configuration Reference during this milestone.
 
 **Acceptance criteria:**
-- [ ] All ❌ Fail findings from M1 in the three target sections are resolved
-- [ ] Every command block in the three sections produces output matching what the README claims
-- [ ] No content in MCP Integration, GitHub Action, or Configuration Reference was modified
+- [x] All ❌ Fail findings from M1 in the three target sections are resolved
+- [x] Every command block in the three sections produces output matching what the README claims
+- [x] No content in MCP Integration, GitHub Action, or Configuration Reference was modified
 
 ### M3: Fix MCP Integration, GitHub Action, and Configuration Reference sections
 
