@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-07-04) Corrected the README's GitHub Action documentation and Configuration Reference table to match the codebase. The `weaver-version` default shown in the workflow example and inputs table was stale (`0.21.2` instead of the actual `0.22.1` default in `action.yml`). Separately, a direct comparison against the config schema found five configuration fields — `language`, `maxTimePerFile`, `checkpointLocThreshold`, `attributesPerFileThreshold`, and `spansPerFileThreshold` — that were entirely missing from the Configuration Reference table; added rows for all five.
+
 - (2026-07-04) Corrected the `spiny-orb init` example transcripts in the README so the shown configuration summary and tip message match what the command actually prints — removed a stray trailing slash from the schema path and added the missing tip about importing OTel semantic conventions as a registry dependency.
 
 - (2026-06-22) Fixed git auto-GC race condition in `test/helpers/git.ts`. Added `gc.auto = 0` and `maintenance.auto = false` to `makeTestRepo` so git never spawns background `pack-objects` processes during test cleanup. Without this, a second commit in a test could trigger auto-GC, which spawned a background process writing to `.git/objects/pack` while `afterEach` ran `rm({ recursive: true })` — causing an `ENOTEMPTY` failure when `rmdir` ran after Node.js had already emptied the pack directory but before the background process finished writing. The fix propagates to all test suites that call `makeTestRepo`. Fixes the `ENOTEMPTY: directory not empty, rmdir .git/objects/pack` failure in `test/git/per-file-commit.test.ts`.

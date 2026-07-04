@@ -656,7 +656,7 @@ Add OpenTelemetry instrumentation as a step in your CI/CD pipeline.
   with:
     path: src
     node-version: '24'
-    weaver-version: '0.21.2'
+    weaver-version: '0.22.1'
 ```
 
 ### Inputs
@@ -665,7 +665,7 @@ Add OpenTelemetry instrumentation as a step in your CI/CD pipeline.
 |-------|---------|-------------|
 | `path` | `src` | Path to instrument (relative to repository root) |
 | `node-version` | `24` | Node.js version to use |
-| `weaver-version` | `0.21.2` | Weaver CLI version to install |
+| `weaver-version` | `0.22.1` | Weaver CLI version to install |
 
 ### Outputs
 
@@ -690,12 +690,17 @@ Only `schemaPath` and `sdkInitFile` are required — everything else has default
 | `agentEffort` | `low` \| `medium` \| `high` | `medium` | Thinking depth — higher means more thorough but slower |
 | `testCommand` | string | `npm test` | Command to run checkpoint and end-of-run test validation. Supports any test runner and inline env vars — e.g., `GIT_CONFIG_GLOBAL=/tmp/test.gitconfig npm test` for repos where global git config conflicts with the test suite |
 | `targetType` | `long-lived` \| `short-lived` | `long-lived` | Process lifecycle. `long-lived` (web servers, workers, daemons) uses `BatchSpanProcessor` — no extra setup. `short-lived` (CLIs, scripts, Lambda, batch jobs) needs `SimpleSpanProcessor` and `process.exit()` interception, otherwise `BatchSpanProcessor` drops all spans before the 5-second flush timer fires. Set during `spiny-orb init` or add manually. |
+| `language` | `javascript` \| `typescript` | `javascript` | Language provider to use for parsing and code generation. TypeScript language provider support is planned for a future release — see [Language Provider API](#language-provider-api). |
 | `dependencyStrategy` | `dependencies` \| `peerDependencies` | `dependencies` | Multiple copies of `@opentelemetry/api` in `node_modules` cause silent trace loss via no-op fallbacks. Use `dependencies` for services (backend APIs, workers, apps) — they own their dependency tree. Use `peerDependencies` for distributable packages (libraries, anything published to npm) — consumers control which version is installed. These two fields are independent: a CLI tool is both `short-lived` and `dependencies`. |
 | `maxFilesPerRun` | number | `50` | Maximum files to process in one run |
 | `maxFixAttempts` | number | `2` | Retry attempts per file after initial generation (total attempts = 1 + this value) |
 | `maxTokensPerFile` | number | `100000` | Soft token budget per file — pre-flight estimate is a hard gate; post-hoc check stops further retries but never discards a passing result |
+| `maxTimePerFile` | number (seconds) | *(none)* | Optional per-file wall-clock budget. When set, retry attempts after the first are skipped once elapsed time exceeds this value. |
 | `largeFileThresholdLines` | number | `500` | Files above this threshold get special handling in the prompt |
 | `schemaCheckpointInterval` | number | `5` | Run `weaver registry check` every N files during processing |
+| `checkpointLocThreshold` | number | *(none)* | Optional additive checkpoint trigger — runs a checkpoint early when cumulative lines-of-code changed since the last checkpoint exceeds this value, independent of `schemaCheckpointInterval`'s file-count trigger. |
+| `attributesPerFileThreshold` | number | `30` | Per-file attribute count that triggers a schema drift warning |
+| `spansPerFileThreshold` | number | `20` | Per-file span count that triggers a schema drift warning |
 | `weaverMinVersion` | string | `0.21.2` | Minimum Weaver CLI version required |
 | `reviewSensitivity` | `strict` \| `moderate` \| `off` | `moderate` | PR annotation strictness — `strict` flags tier 3+ spans, `moderate` flags outliers only, `off` suppresses warnings |
 | `tracerName` | string | *(from registry)* | Canonical tracer name used in all `trace.getTracer()` calls. When absent, derived from the Weaver registry manifest `name` field with underscores replaced by hyphens (e.g., `my_app` → `my-app`). Set this if your project uses an established naming convention that differs from the registry name. Variable-based `getTracer()` calls are not checked by the validator — only string literals. |
