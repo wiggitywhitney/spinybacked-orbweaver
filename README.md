@@ -1,3 +1,5 @@
+<img src="docs/images/spinybacked-orbweaver-spider.png" alt="Spinybacked Orbweaver illustration" width="200">
+
 # Spinybacked Orbweaver
 
 AI-powered OpenTelemetry instrumentation for JavaScript and Typescript applications. Analyzes your source code, adds spans, attributes, and context propagation using LLM-guided code generation — validated against your [Weaver](https://github.com/open-telemetry/weaver) schema and the [Instrumentation Score](https://github.com/instrumentation-score/spec) quality standard. When your schema [declares OTel semantic conventions as a dependency](https://github.com/open-telemetry/weaver/blob/main/crates/weaver_forge/README.md#registry-manifest), the agent uses them for attribute naming and validates against them.
