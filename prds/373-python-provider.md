@@ -188,7 +188,7 @@ _Populate as decisions are made during implementation._
 
 | ID | Decision | Rationale | Date |
 |----|----------|-----------|------|
-| (none yet) | | | |
+| D-README-1 | README documentation structure for multi-language support deferred to Milestone D7, to be designed at implementation time rather than now | PRD #970 found the README's TypeScript coverage stale and fixed it with an inline-notes approach (brief TypeScript caveats within JavaScript-focused sections) rather than separate per-language pages, since two languages don't yet justify the overhead of a restructured doc set. A third language (Python) may tip that balance, but designing the restructuring now would be speculative before Python's actual documentation needs are known. | 2026-07-04 |
 
 ---
 
@@ -322,6 +322,15 @@ Following Part 8 checklist, Steps 5 and 6:
 - [ ] Write language-specific setup guide for Python users (how to install formatter, how to configure `spiny-orb.yaml` for Python)
 - [ ] Document known limitations (e.g., dynamic decorator patterns, metaclass-based frameworks)
 - [ ] Update feature parity matrix
+
+### Milestone D7: Decide README documentation structure for multi-language support
+
+PRD #970 found the README's TypeScript coverage stale and fixed it with an inline-notes approach — brief TypeScript caveats added within JavaScript-focused sections, rather than separate per-language pages (see PRD #970's Decision Log, 2026-07-04, and Decision D-README-1 above). That approach was judged adequate for two languages. Once Python is a third supported language, re-evaluate whether inline notes still scale or whether the README needs a different structure (e.g., a shared quickstart with per-language setup pages, tabbed code examples, or another approach not yet identified).
+
+**Do not design the restructuring now.** This milestone exists to make sure the question gets asked once Python's actual documentation needs are visible, not to pre-specify the answer. Whitney explicitly deferred the design: "full plan for exactly how to do so can be decided at implementation time."
+
+- [ ] Once Python provider work has produced real code examples and setup steps (after D6), assess whether the README's inline-notes pattern still reads clearly with three languages present
+- [ ] Decide whether inline notes still scale; either extend the existing pattern with Python notes, or propose a restructuring approach to Whitney and get approval before implementing — record whichever decision is made in this PRD's Decision Log
 
 ---
 
