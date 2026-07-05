@@ -99,7 +99,7 @@ Read `references/tech-stack-by-phase.md` (bundled with this skill) to find which
 
 #### 3c. Rubric Rules
 
-The phase definition lists rubric rule IDs (e.g., NDS-001, CDQ-003). Look up each rule's full definition in `research/evaluation-rubric.md`. The code-level rules are in **Part 2: Code-Level Evaluation** (line 136), organized as:
+The phase definition lists rubric rule IDs (e.g., NDS-001, CDQ-003). Look up each rule's full definition in `docs/research/evaluation-rubric.md`. The code-level rules are in **Part 2: Code-Level Evaluation** (line 136), organized as:
 
 | Dimension | Location | Rules |
 |-----------|----------|-------|
@@ -239,7 +239,7 @@ Before presenting the PRD to the user, verify:
 | Implementation Phasing | `docs/specs/research/implementation-phasing.md` | Phase definitions, spec section maps, cross-cutting architecture |
 | Telemetry Agent Spec | `docs/specs/telemetry-agent-spec-v3.9.md` | Source of truth for what to build |
 | Tech Stack Evaluation | `docs/architecture/tech-stack-evaluation.md` | Version numbers, API patterns, library choices |
-| Evaluation Rubric | `research/evaluation-rubric.md` | Full rule definitions for acceptance criteria |
+| Evaluation Rubric | `docs/research/evaluation-rubric.md` | Full rule definitions for acceptance criteria |
 | Architectural Recommendations | `docs/architecture/recommendations.md` | Preserve/change verdicts, evidence base |
 | Design Document | `docs/architecture/design-document.md` | Interface contracts, module organization, decision register |
 | Tech Stack by Phase | `references/tech-stack-by-phase.md` (skill-bundled) | Routing table: which tech stack sections per phase |

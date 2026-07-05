@@ -1,6 +1,6 @@
 # Prompt Clarifications Log
 
-Source: `audit-findings/prompt-rules.md` (M2 output). Each entry resolves one ambiguity identified in that audit; severities vary — later entries include medium and low severity fixes, not only high.
+Source: `docs/audit-findings/prompt-rules.md` (M2 output). Each entry resolves one ambiguity identified in that audit; severities vary — later entries include medium and low severity fixes, not only high.
 Most fixes are wording-only rewrites; a few add explicit fallback or eligibility rules rather than only rephrasing. No entry redesigns a rule or changes what any rule requires.
 
 ---

@@ -7,7 +7,7 @@
 
 ## What Gets Built
 
-Shared infrastructure for calling an LLM to make semantic judgments on validation candidates flagged by scripts, plus judge implementations for three rules that the [evaluation rubric](../research/evaluation-rubric.md) classifies as semi-automatable.
+Shared infrastructure for calling an LLM to make semantic judgments on validation candidates flagged by scripts, plus judge implementations for three rules that the [evaluation rubric](../../docs/research/evaluation-rubric.md) classifies as semi-automatable.
 
 ## Why This Exists
 
@@ -15,7 +15,7 @@ Shared infrastructure for calling an LLM to make semantic judgments on validatio
 
 The [telemetry agent spec](../docs/specs/telemetry-agent-spec-v3.9.md) (Two-Tier Validation Architecture section) defines Tier 2 checks as "concrete, AST-based, deterministic checks — not vague quality judgments." The spec intentionally scoped Tier 2 to automatable checks.
 
-The [evaluation rubric](../research/evaluation-rubric.md) (Automation Classification section) goes further: "All [three non-fully-automatable rules] are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 32/32, fully automatable with no specialized human knowledge required."
+The [evaluation rubric](../../docs/research/evaluation-rubric.md) (Automation Classification section) goes further: "All [three non-fully-automatable rules] are strong candidates for LLM-as-judge evaluation — a script + LLM judge pipeline could bring the effective automation rate to 32/32, fully automatable with no specialized human knowledge required."
 
 The implementation brought the script-only portions of these rules into the Tier 2 fix loop but left the semantic judgment gaps unaddressed:
 

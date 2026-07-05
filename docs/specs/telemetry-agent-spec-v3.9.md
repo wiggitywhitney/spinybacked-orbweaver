@@ -1701,7 +1701,7 @@ An implementation that passes all unit tests but fails any of these is incomplet
 
 ### Rubric Dimensions
 
-The [Instrumentation Quality Evaluation Rubric](../../research/evaluation-rubric.md) defines 6 code-level dimensions for evaluating AI-generated instrumentation quality:
+The [Instrumentation Quality Evaluation Rubric](../research/evaluation-rubric.md) defines 6 code-level dimensions for evaluating AI-generated instrumentation quality:
 
 | Dimension | Abbreviation | What It Measures |
 |-----------|-------------|-----------------|
