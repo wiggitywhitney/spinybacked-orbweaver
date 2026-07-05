@@ -6,8 +6,7 @@
 | Test file | Test name | Assertion | Why deferred | Design decision needed |
 |---|---|---|---|---|
 
-No deferred changes. All assertions from M4's "tests that should be changed" list were implemented
-without requiring a change to what the test verifies — only how it verifies.
+No deferred changes from M4. Later follow-up calibrations are recorded below in "Post-M4 Extension."
 
 ## Post-M4 Extension
 
