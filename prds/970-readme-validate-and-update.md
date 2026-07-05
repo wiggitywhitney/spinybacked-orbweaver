@@ -155,9 +155,9 @@ Update `PROGRESS.md` under `## [Unreleased] > ### Changed`:
 - Do NOT add an entry for closing issue #953 — it was already closed and logged in PROGRESS.md by PR #1021
 
 **Acceptance criteria:**
-- [ ] All internal README links resolve correctly
-- [ ] `docs/readme-scan-findings.md` deleted
-- [ ] `PROGRESS.md` updated with an entry for README validation changes from M6/M7/M8 (no duplicate #953 entry — already logged by PR #1021)
+- [x] All internal README links resolve correctly
+- [x] `docs/readme-scan-findings.md` deleted
+- [x] `PROGRESS.md` updated with an entry for README validation changes from M6/M7/M8 (no duplicate #953 entry — already logged by PR #1021)
 
 ### M8: Audit README for TypeScript accuracy and add inline notes
 

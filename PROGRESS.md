@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-07-05) Finished the README validation pass: fixed a relative link left broken by the root-directory cleanup below (it pointed to the old `research/` path instead of the new `docs/research/` location), confirmed every other internal link and anchor in README.md resolves, and removed the scratch scan-findings file used to track the validation work.
+
 - (2026-07-05) Cleaned up the repository's root directory listing on GitHub: removed a stray `FETCH_HEAD` file left over from a git fetch, stopped tracking `.DS_Store`, and moved two directories of internal reference material (past validation-rule audit notes and research artifacts) into `docs/` so the project's home page shows fewer unrelated files to a first-time visitor.
 
 - (2026-07-02) Updated `prds/970-readme-validate-and-update.md` to mark milestone M4 superseded — issue #953 was resolved independently via PR #1021 with a fuller in-README fix than M4 originally specified, so M4 now only verifies that work during M1's scan instead of duplicating it. Also flagged README-wide JavaScript/TypeScript example parity as a scan category for M1, per a decision recorded on issue #953.
