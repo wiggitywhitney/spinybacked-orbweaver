@@ -127,7 +127,7 @@ The rubric connection is indirect: COV and RST quality becomes iterative through
 
 **Rubric rules consumed by the fix loop (from Phase 2):**
 
-These rules have full definitions in `research/evaluation-rubric.md` (impact levels, automation classification, failure examples).
+These rules have full definitions in `docs/research/evaluation-rubric.md` (impact levels, automation classification, failure examples).
 
 | Rule | Name | Tier | Blocking? | Fix Loop Role |
 |------|------|------|-----------|---------------|

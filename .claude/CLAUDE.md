@@ -66,7 +66,7 @@ The project's design is captured across research documents. Each layer builds on
 2. **Tech Stack Evaluation** (`docs/architecture/tech-stack-evaluation.md`) — Library choices and version decisions for each build phase.
 3. **Recommendations** (`docs/architecture/recommendations.md`) — What to preserve from the first-draft implementation and what to change.
 4. **Design Document** (`docs/architecture/design-document.md`) — Cross-phase interfaces, module organization, TypeScript type definitions, and the decision register.
-5. **Evaluation Rubric** (`research/evaluation-rubric.md`) — Quality criteria for assessing agent output. Used to validate implementation correctness.
+5. **Evaluation Rubric** (`docs/research/evaluation-rubric.md`) — Quality criteria for assessing agent output. Used to validate implementation correctness.
 6. **Implementation Phasing** (`docs/specs/research/implementation-phasing.md`) — What to build in what order (7 phases with acceptance gates).
 
 When the spec and design document disagree, the spec wins. The design document interprets the spec into concrete types and module boundaries, but the spec is the source of truth.

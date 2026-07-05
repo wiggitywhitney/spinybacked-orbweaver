@@ -115,7 +115,7 @@
 | commit-story-v2/acceptance-gate.test.ts | journal-graph.js | `expect(result.schemaExtensions.length).toBeGreaterThan(0)` | **conditional** — non-deterministic | Same as summarize.js: remove the length guard, keep the format loop. |
 | commit-story-v2/acceptance-gate.test.ts | journal-graph.js | `for ext: expect(ext).toMatch(...)` | yes | keep |
 | commit-story-v2/acceptance-gate.test.ts | journal-graph.js | Rubric violation check | yes | keep |
-| commit-story-v2/acceptance-gate.test.ts | summary-graph.js | `expect(result.status).toBe('success')` | conditional — NDS-003 risk for complex LangGraph pipeline | keep for now (different reconciler profile from journal-graph.js; no documented 5+ consecutive failures) |
+| commit-story-v2/acceptance-gate.test.ts | summary-graph.js | `expect(result.status).toBe('success')` | **no** — see test-calibration-deferred.md Post-M4 Extension | Change to partial-acceptable (updated during M5 after acceptance gate run 25833556848 documented the first `partial` failure for this file — see test-calibration-deferred.md). |
 | commit-story-v2/acceptance-gate.test.ts | summary-graph.js | `expect(result.spansAdded).toBeGreaterThanOrEqual(6)` | conditional — non-deterministic span count | keep — represents the desired target; the `>=` bound is permissive |
 | commit-story-v2/acceptance-gate.test.ts | summary-graph.js | `expect(result.schemaExtensions.length).toBeGreaterThan(0)` | **conditional** — non-deterministic | Same fix as summarize.js. |
 | commit-story-v2/acceptance-gate.test.ts | summary-graph.js | Rubric violation check | yes | keep |

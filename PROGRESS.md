@@ -8,15 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-07-04) Added a spiny orb weaver illustration to the top of README.md, above the project title, so the README has a visual identity beyond the license badge.
+
+- (2026-07-03) Ran a README accuracy scan — setup commands, code examples, and configuration tables were reviewed against the real CLI and codebase where safe. Found three stale spots (an outdated example transcript missing a helpful tip, a formatting mismatch in one config value, and a GitHub Action example showing an old default version) and flagged one gap where a JavaScript-only example is presented as covering both JavaScript and TypeScript. Findings are recorded for the next round of README fixes.
+
 - (2026-07-02) Added a "CLI app considerations" section to README.md documenting the root-span-loss failure mode in CLI apps: `process.exit()` calls inside `main()` skip the `finally` block that would end a root span, and missing `sdk.shutdown()` causes buffered spans to be lost (surfacing as SPA-002, orphan spans with no parent). Documents three required-together fixes in dependency order: refactor `process.exit()` calls to return codes, call `sdk.shutdown()` before the final `process.exit()`, and wrap the CLI entry point in a root span. Fixes issue #953.
 
 ### Changed
+
+- (2026-07-05) Finished the README validation pass: fixed a relative link left broken by the root-directory cleanup below (it pointed to the old `research/` path instead of the new `docs/research/` location), confirmed every other internal link and anchor in README.md resolves, and removed the scratch scan-findings file used to track the validation work.
+
+- (2026-07-05) Cleaned up the repository's root directory listing on GitHub: removed a stray `FETCH_HEAD` file left over from a git fetch, stopped tracking `.DS_Store`, and moved two directories of internal reference material (past validation-rule audit notes and research artifacts) into `docs/` so the project's home page shows fewer unrelated files to a first-time visitor.
 
 - (2026-07-02) Updated `prds/970-readme-validate-and-update.md` to mark milestone M4 superseded — issue #953 was resolved independently via PR #1021 with a fuller in-README fix than M4 originally specified, so M4 now only verifies that work during M1's scan instead of duplicating it. Also flagged README-wide JavaScript/TypeScript example parity as a scan category for M1, per a decision recorded on issue #953.
 
 - (2026-07-01) Reorganized `docs/ROADMAP.md` around a new "Path to Python" section — a strict numbered sequence from talk-prep through the small-issue batch, a commit-story-v2 eval run, and the Python and Go language providers. Consolidated the recurring "Watch" items (#1008, #1014, #927, #954, #958) into a dedicated "Watch issues" section, deferred until future eval runs. The existing Short-term/Medium-term/Long-term buckets are retained but rescoped to work that comes after the Python/Go path. Fixes issue #1019.
 
 ### Fixed
+
+- (2026-07-04) Corrected two spots in README.md that described TypeScript support as a future feature — the Language Provider API section and the Configuration Reference `language` row — when TypeScript is already a fully implemented, registered language provider. Also reviewed every JavaScript-specific section of the README and added short inline notes wherever TypeScript needs a callout (SDK init file detection, source file discovery, the before/after example, and the auto-instrumentation fallback file), so the README's "JavaScript and TypeScript" claim holds up section by section without a full restructuring into separate per-language pages.
+
+- (2026-07-04) Corrected the README's GitHub Action documentation and Configuration Reference table to match the codebase. The `weaver-version` default shown in the workflow example and inputs table was stale (`0.21.2` instead of the actual `0.22.1` default in `action.yml`). Separately, a direct comparison against the config schema found five configuration fields — `language`, `maxTimePerFile`, `checkpointLocThreshold`, `attributesPerFileThreshold`, and `spansPerFileThreshold` — that were entirely missing from the Configuration Reference table; added rows for all five.
+
+- (2026-07-04) Corrected the `spiny-orb init` example transcripts in the README so the shown configuration summary and tip message match what the command actually prints — removed a stray trailing slash from the schema path and added the missing tip about importing OTel semantic conventions as a registry dependency.
 
 - (2026-06-22) Fixed git auto-GC race condition in `test/helpers/git.ts`. Added `gc.auto = 0` and `maintenance.auto = false` to `makeTestRepo` so git never spawns background `pack-objects` processes during test cleanup. Without this, a second commit in a test could trigger auto-GC, which spawned a background process writing to `.git/objects/pack` while `afterEach` ran `rm({ recursive: true })` — causing an `ENOTEMPTY` failure when `rmdir` ran after Node.js had already emptied the pack directory but before the background process finished writing. The fix propagates to all test suites that call `makeTestRepo`. Fixes the `ENOTEMPTY: directory not empty, rmdir .git/objects/pack` failure in `test/git/per-file-commit.test.ts`.
 
