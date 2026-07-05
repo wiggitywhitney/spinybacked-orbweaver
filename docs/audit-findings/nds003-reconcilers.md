@@ -52,7 +52,7 @@ Reconcilers 7–9 (`reconcileSetAttributeCaptures`, `reconcileSetAttributeMultil
 
 **Recommendation: Proceed with PRD #845 M1, but revise its scope.**
 
-The content-aware classifier approach in PRD #845 M1 is directionally correct — the accumulation of 13 reconciler patterns (9 named functions + 3 normalizeLine sub-cases + 1 inline filter) demonstrates the diff-based approach is straining. However, the patterns fall into two structurally different groups, and PRD #845 M1 should target only one of them.
+The content-aware classifier approach in PRD #845 M1 is directionally correct — the accumulation of 15 reconciler patterns (9 named functions + 5 normalizeLine sub-cases + 1 inline filter) demonstrates the diff-based approach is straining. However, the patterns fall into two structurally different groups, and PRD #845 M1 should target only one of them.
 
 **Group A — Prettier formatting artifacts (4 reconcilers):** reconcileObjectLiteralExpansion, reconcileAgentSplitLines, reconcileIndentReformat, reconcilePartialArgument. All four exist because Prettier reformats code differently at different indentation depths, and the agent's output at a deeper indent level has lines formatted differently than Prettier formatted them in the original. These are the most complex reconcilers (4 tries in reconcileObjectLiteralExpansion, 3 in reconcileAgentSplitLines, prefix matching with a magic-number threshold in reconcileIndentReformat). A content-aware classifier must also handle this, because the agent's output will still be at a deeper indent. The better approach is not a classifier but a normalization change: apply Prettier to both sides at the same indentation depth before comparison. This would eliminate all four Group A reconcilers.
 
