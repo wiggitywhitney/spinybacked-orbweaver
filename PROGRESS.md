@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-07-06) Researched whether Datadog can navigate from a metric data point to a contributing trace using OTel Exemplars, for the demo dashboard project. Found that Datadog has no such feature — its metric-to-trace correlation is based entirely on shared tags like host or container ID, not on exemplars — so the dashboard design will present metrics as a standalone signal rather than promising click-through to traces.
+
 - (2026-07-04) Added a spiny orb weaver illustration to the top of README.md, above the project title, so the README has a visual identity beyond the license badge.
 
 - (2026-07-03) Ran a README accuracy scan — setup commands, code examples, and configuration tables were reviewed against the real CLI and codebase where safe. Found three stale spots (an outdated example transcript missing a helpful tip, a formatting mismatch in one config value, and a GitHub Action example showing an old default version) and flagged one gap where a JavaScript-only example is presented as covering both JavaScript and TypeScript. Findings are recorded for the next round of README fixes.

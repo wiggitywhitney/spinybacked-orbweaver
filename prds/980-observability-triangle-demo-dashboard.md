@@ -46,7 +46,7 @@ Read existing research in `docs/demo/traces-metrics-setup.md`, resolve the metri
 
 ## Milestones
 
-- [ ] **M1: Research spike — Datadog metric-to-trace linking and dashboard capability with span_metrics**
+- [x] **M1: Research spike — Datadog metric-to-trace linking and dashboard capability with span_metrics**
 - [ ] **M2: Establish and validate the complete Metrics Explorer demo queries**
 - [ ] **M3: Create a Datadog demo dashboard via MCP**
 - [ ] **M4: Document the observability triangle navigation story**
@@ -85,7 +85,7 @@ This milestone gates M3 — the dashboard widget design depends on whether metri
 - **Duration**: `traces.span.metrics.duration` from `service:commit-story` grouped by `commit_story.ai.section_type`
 - **Token cost**: `commit_story.llm.output_tokens` from `service:commit-story` grouped by `commit_story.ai.section_type` and `gen_ai.request.model`
 
-**Step 2**: Document the complete navigation path from the APM traces view to Metrics Explorer with the right query. Include the APM trace Metrics tab gotcha (see Background): add a note that the individual trace's Metrics tab shows host infrastructure metrics, NOT span_metrics — and that span_metrics are only reachable via Metrics Explorer or dashboards. If metric-to-trace linking is supported per M1, also document the reverse path (metric data point → contributing traces). Write these as numbered steps in the Decision Log row "Metrics Explorer queries" so M4 can lift them directly into the navigation doc.
+**Step 2**: Document the complete navigation path from the APM traces view to Metrics Explorer with the right query. Include the APM trace Metrics tab gotcha (see Background): add a note that the individual trace's Metrics tab shows host infrastructure metrics, NOT span_metrics — and that span_metrics are only reachable via Metrics Explorer or dashboards. Per M1's Decision Log entry, metric-to-trace linking is not supported in Datadog's UI — do not document a reverse path (metric data point → contributing traces); if a metric→trace story is wanted for the demo narrative, it is manual/narrative only (see M1's Decision Log recommendation). Write these as numbered steps in the Decision Log row "Metrics Explorer queries" so M4 can lift them directly into the navigation doc.
 
 **Step 3**: Record validated query syntax in the Decision Log row "Metrics Explorer queries."
 
@@ -103,7 +103,8 @@ This milestone gates M3 — the dashboard widget design depends on whether metri
 - Span duration by section type: `traces.span.metrics.duration` grouped by `commit_story.ai.section_type`
 - Token cost by section type and model: `commit_story.llm.output_tokens` grouped by `commit_story.ai.section_type` and `gen_ai.request.model`
 - Span rate by model: `traces.span.metrics.calls` grouped by `gen_ai.request.model` (Story A)
-- If metric-to-trace linking is supported (per M1): add the appropriate widget or dashboard link configuration enabling navigation from metric spike to contributing traces.
+
+Per M1's Decision Log entry, metric-to-trace linking is not supported in Datadog's UI — do not design a widget or dashboard link around metric→trace click-through. Present the metrics leg as a standalone signal.
 
 Dashboard title suggestion: `commit-story Observability Triangle` or similar.
 
@@ -124,7 +125,7 @@ Dashboard title suggestion: `commit-story Observability Triangle` or similar.
 Content for this section:
 - The narrative arc for the demo: the `commit_story.ai.section_type` attribute exists to prove an end-to-end chain — schema (Weaver) → instrumentation agent (spiny-orb) → metrics pipeline (OTel Collector span_metrics connector) → Datadog. This chain, not just the metric number, is what makes the demo compelling.
 - The two stories and how to narrate them to a conference audience: Story A (gen_ai.request.model — standard OTel semconv, maps automatically) and Story B (commit_story.ai.section_type — custom schema attribute, proves the chain).
-- Step-by-step navigation: APM Traces view → Metrics Explorer (with exact query syntax from M2's Decision Log) → demo dashboard (URL from M3's Decision Log) → metric-to-trace navigation if supported.
+- Step-by-step navigation: APM Traces view → Metrics Explorer (with exact query syntax from M2's Decision Log) → demo dashboard (URL from M3's Decision Log). Per M1's Decision Log entry, metric-to-trace linking is not supported in Datadog's UI — do not describe a click-through path from a metric data point to its contributing trace; note this limitation explicitly so the presenter doesn't promise it live.
 - **The APM trace Metrics tab gotcha** (must be called out explicitly): the individual APM trace's Metrics tab shows HOST infrastructure metrics — CPU, memory, system stats from the Datadog Agent. It does NOT show span_metrics. If you click it and see CPU graphs, that is not a bug; it is the wrong tab. span_metrics are only in Metrics Explorer and dashboards.
 - What each metric means: what a high `commit_story.ai.section_type=dialogue` vs. `=summary` value tells you about the AI's work per journal section.
 
@@ -169,6 +170,6 @@ Add a `### Added` entry under `## [Unreleased]` in `PROGRESS.md` describing what
 | 2026-06-19 | Research metric-to-trace linking before building dashboard | The demo story is richer if Datadog supports jumping from a metric spike to contributing traces; dashboard widget design depends on the answer |
 | 2026-06-19 | Documentation is a first-class deliverable, not a stretch goal | The navigation story must be documented for future spiny-orb users who receive an instrument branch and want to see their metrics — not just for the demo presenter |
 | 2026-06-19 | Metrics pipeline is confirmed working — do not re-investigate the pipeline | MCP investigation on 2026-06-19 confirmed all three metrics exist in Datadog. If metrics are missing during implementation, the issue is the Collector not running or commit-story not running from the instrument branch — not a pipeline config problem |
-| (pending) | metric-to-trace linking | To be filled in after M1 research |
+| 2026-07-06 | metric-to-trace linking | **Not supported.** Full research: [`docs/research/datadog-exemplars-metric-trace-linking.md`](../docs/research/datadog-exemplars-metric-trace-linking.md). (a) Not supported in Datadog's UI — no element in Metrics Explorer or dashboards lets you click a metric data point to jump to a contributing trace. (b) No Datadog-branded equivalent feature exists ("exemplar" appears nowhere in Datadog's docs). (c) No configuration achieves this — `exemplars: { enabled: true }` on the span_metrics connector is a no-op from Datadog's side; this is a missing capability, not a config gap. (d) Neither span_metrics-connector metrics nor Datadog-native APM metrics support it — the UI capability doesn't exist for either source. (e) Already known (PRD #963): OTel Exemplars are the correct mechanism for attaching trace context to metrics without cardinality blowup, and the span_metrics connector supports emitting them. Newly discovered: Datadog's backend/UI has no rendering path for them. Datadog's actual metric↔trace correlation is attribute-matching (`host.name`/`container.id`, trace→infra-metrics direction) or native APM Trace Metrics — architecturally different and does not achieve metric-datapoint→trace-ID navigation. **Impact on M3**: do not design any dashboard widget around metric→trace click-through; present the metrics leg as a standalone signal. Sources (🟢 high confidence, corroborated across [Correlate OpenTelemetry Traces and Metrics](https://docs.datadoghq.com/opentelemetry/correlate/metrics_and_traces/), [Metrics Explorer](https://docs.datadoghq.com/metrics/explorer/), [Datadog OTLP Metrics Intake Endpoint](https://docs.datadoghq.com/opentelemetry/setup/otlp_ingest/metrics/), and multiple targeted WebSearches that found zero mentions of "exemplar" anywhere in Datadog's documentation). |
 | (pending) | Metrics Explorer queries | To be filled in after M2 validation |
 | (pending) | Demo dashboard URL | To be filled in after M3 creation |
