@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-07-06) Diagnosed why two of the four demo dashboard metrics (`traces.span.metrics.duration` and the LLM token-cost metric) return no groupable tags in Datadog even though their sibling metric groups correctly by the same tags. The cause is a Datadog platform feature called Metrics without Limits™, which decouples ingestion from queryability on a per-metric basis — a tag can be present on every data point and still be unusable in dashboards until it's explicitly added to that metric's tag configuration. The fix is a Datadog configuration change, not a code or schema change, and needs explicit sign-off before it's applied since it touches shared observability platform settings.
+
+- (2026-07-06) Investigated whether the OpenTelemetry Weaver schema format needs a new mechanism for declaring backend-specific indexing hints (e.g., "this attribute must be queryable in Datadog"). Found no such mechanism exists in Weaver today and Datadog publishes no equivalent registry, so no schema changes are needed. The investigation surfaced a more valuable, unrelated gap instead: the validation rule that checks whether a schema-required attribute actually ends up on a span only warns rather than blocking, so a run can report success while quietly missing a required attribute. Tracked as its own initiative to promote that check to a hard blocker.
+
 - (2026-07-06) Researched whether Datadog can navigate from a metric data point to a contributing trace using OTel Exemplars, for the demo dashboard project. Found that Datadog has no such feature — its metric-to-trace correlation is based entirely on shared tags like host or container ID, not on exemplars — so the dashboard design will present metrics as a standalone signal rather than promising click-through to traces.
 
 - (2026-07-04) Added a spiny orb weaver illustration to the top of README.md, above the project title, so the README has a visual identity beyond the license badge.

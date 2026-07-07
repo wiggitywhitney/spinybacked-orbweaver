@@ -54,6 +54,7 @@ These are deferred until after future eval runs surface more data. Do not raise 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 (164 spans/38 packages) and run-15 provide 2+ CLI evals; data condition met. Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections.
+- Blocking gate for Weaver-required attribute presence ([PRD #1024](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1024)) — COV-005 is never wired to real registry data in production and is advisory even when wired; a run can succeed while a required attribute is silently missing.
 
 ## Medium-term
 
