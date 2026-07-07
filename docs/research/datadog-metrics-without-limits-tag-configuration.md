@@ -4,6 +4,7 @@
 **Last Updated:** 2026-07-06
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-07-06 | Initial research — investigating why `traces.span.metrics.duration` and `commit_story.llm.output_tokens` return zero groupable tags in Datadog while sibling metric `traces.span.metrics.calls` returns all configured dimensions |
@@ -21,7 +22,7 @@ This is the most likely root cause for the observed gap between `traces.span.met
 - **Tag presence on the wire ≠ tag queryability.** A metric can be fully ingested with all dimensions attached and still show zero groupable tags in the UI/API if no tag configuration (or an empty/mismatched one) exists for that specific metric name.
 - **Configuring a new tag list overrides, not merges.** "All existing tag configurations for the selected metrics are overridden when you define a new tag configuration" — adding one missing tag requires resubmitting the full desired tag list, not appending to an existing one.
 - **Distribution metrics have an extra dimension: percentile aggregations.** For distribution-type metrics (`traces.span.metrics.duration` is a distribution), the tag configuration API also carries a flag for whether percentile aggregations (p50/p90/p99) are enabled — a second axis of configuration beyond just tag inclusion.
-- **Auto-generated Trace Metrics (`trace.<service>.*`) are NOT covered by this mechanism at all.** Those are capped to a fixed tag set (`env`, `service`, `resource`, `http.status_code`, host tags, primary tags) with no tag-configuration escape hatch. This is a separate, harder limitation — not applicable here since `traces.span.metrics.*` (OTel Collector spanmetrics connector output) is a distinct metric family from Datadog's own `trace.*` namespace auto-generated metrics.
+- **Auto-generated Trace Metrics (`trace.<span_name>.*`) are NOT covered by this mechanism at all.** Those are capped to a fixed tag set (`env`, `service`, `resource`, `http.status_code`, host tags, primary tags) with no tag-configuration escape hatch. This is a separate, harder limitation — not applicable here since `traces.span.metrics.*` (OTel Collector spanmetrics connector output) is a distinct metric family from Datadog's own `trace.*` namespace auto-generated metrics.
 - **Safety check before saving a tag config**: "If the UI or the estimator API returns a resulting number of indexed [series] that is larger than ingested, do not save your tag configuration" — a cardinality sanity check, not optional.
 
 ### Findings by Question

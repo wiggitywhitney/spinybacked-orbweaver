@@ -36,7 +36,7 @@ The attribute-reliability half of this story does not need new Weaver tooling �
 
 ### Caveats
 
-- The Rego policy engine and Component Telemetry Schema annotation mechanism were not tested directly — findings are based on documentation/design-doc descriptions, not hands-on verification against the current Weaver CLI version used in this project (see `~/.claude/rules/weaver-gotchas.md`).
+- The Rego policy engine and Component Telemetry Schema annotation mechanism were not tested directly — findings are based on documentation/design-doc descriptions, not hands-on verification against the current Weaver CLI version used in this project.
 - Absence of a public Datadog Weaver registry is a negative finding (nothing found) rather than a confirmed statement from Datadog that none exists — worth re-checking if Datadog's OTel tooling story changes.
 
 ## Sources
