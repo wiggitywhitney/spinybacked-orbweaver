@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-07-08) Reversed an earlier plan to defer fixing the demo dashboard's LLM token-cost metric behind a schema-change approval. Found that the schema already supports the fix — the actual gap is that the code never sets the token-count value on a span, not a missing schema declaration — so the fix is now scheduled as a normal step before the dashboard's remaining work instead of being pushed out. Folded the previously-decided Datadog tag-configuration change into the same step as an explicit action item.
+
+- (2026-07-08) Corrected research notes on why a Datadog custom metric can have real historical data but not show up in search: confirmed it's because the metric stopped receiving new data points weeks ago, not a metadata-indexing delay — ruling out "just wait longer" as a fix.
+
 - (2026-07-05) Closed out PRD #970 (README validate and update): archived the PRD to `prds/done/` and removed its "Path to Python" entry from `docs/ROADMAP.md` now that the README validation and cleanup work is merged.
 
 - (2026-07-05) Finished the README validation pass: fixed a relative link left broken by the root-directory cleanup below (it pointed to the old `research/` path instead of the new `docs/research/` location), confirmed every other internal link and anchor in README.md resolves, and removed the scratch scan-findings file used to track the validation work.

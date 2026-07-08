@@ -8,6 +8,8 @@
 | Date | Summary |
 |------|---------|
 | 2026-07-06 | Initial research — investigating why `traces.span.metrics.duration` and `commit_story.llm.output_tokens` return zero groupable tags in Datadog while sibling metric `traces.span.metrics.calls` returns all configured dimensions |
+| 2026-07-07 | Added findings on why `commit_story.llm.output_tokens` doesn't appear in Metrics > Summary search or Explorer autocomplete despite having historical data. Root cause found: the metric stopped reporting new data points weeks ago — this is a stale-metric symptom, not a metadata-indexing lag. |
+| 2026-07-08 | Corrected Q4's attributed cause. The `--import examples/instrumentation.js` flag was never the gap — both commit-story-v2 and spinybacked-orbweaver post-commit hooks already add it conditionally, confirmed active via live span `process.command_args` data, and the previously-cited "commit-story-v2 issue #899" does not exist (spinybacked-orbweaver's #899 is an unrelated, already-closed eval-run-APM issue). Live span inspection instead shows LLM-call spans carry `gen_ai.request.*` attributes but no `gen_ai.usage.output_tokens` / `gen_ai.usage.input_tokens` attribute at all — the metric's likely real data source is simply absent from current instrumentation, separate from and in addition to the tag-configuration gap this doc otherwise covers. |
 
 ## Findings
 
@@ -76,7 +78,23 @@ This fix does not touch `commit-story-v2`'s Weaver schema (`telemetry/registry/a
 
 - Exact current UI copy/flow ("Manage Tags") is from Datadog's general docs, not confirmed against Whitney's specific org UI — flow may differ slightly by Datadog UI version.
 - The precise reason `calls` already has correct tag configuration and `duration` doesn't is inferred (recommended-tag auto-population from query history), not directly confirmed — worth checking the actual tag configuration state for both metrics via UI/API before executing a fix, rather than assuming.
-- Whether `commit_story.llm.output_tokens`'s specific blocker is group-by fields, tag configuration, or both is not yet confirmed — check its actual "Generate Metrics from Spans" definition and its Metric Tag Configuration state directly before making any change.
+
+### Q4: Why doesn't `commit_story.llm.output_tokens` appear in Metrics > Summary search or Explorer autocomplete, even though `get_datadog_metric` (scalar, `now-30d`) returns a real nonzero sum (1490.47)?
+
+🟢 High confidence: **This is not a metadata-indexing lag.** The metric genuinely stopped reporting new data points weeks before the search attempt. Re-querying the same metric as a `timeseries` with `raw_data: true` over `now-30d` returned only 4 raw data points, spaced 4 hours apart (`interval_ms: 14400000`), all clustered around `2026-06-18T16:00:00Z`–`2026-06-19T08:00:00Z`. The scalar sum (1490.47) is a real aggregate of those old points — it does not mean the metric is currently reporting. No data point exists anywhere near the search attempt date (2026-07-07), roughly 18 days later.
+
+This matches the one authoritative statement found in Datadog's own issue tracker on this exact symptom:
+
+**Source says:** "If it doesn't autocomplete, then it might mean that we haven't received data for that metric in the last few hours." ([DataDog/documentation issue #61 — "How do I see a custom metric I've just submitted?"](https://github.com/DataDog/documentation/issues/61))
+
+**Interpretation:** Metrics Summary search and Explorer autocomplete/typeahead are driven by **recent reporting activity**, not by whether a metric has ever existed or has historical data. A metric with data from 18 days ago but nothing since will not surface in search — indistinguishable, from the UI's perspective, from a metric that never existed. This is consistent with (but not identical to) the documented 28-hour tag-value search retention window on the Summary page:
+
+**Source says:** "Tag values are retained in the Tag search field for 28 hours" — values "not submitted in the past 28 hours do not appear as search options, even if they remain visible in the metric details side panel." ([Metrics Summary](https://docs.datadoghq.com/metrics/summary/))
+
+No Datadog documentation describes a separate "metadata index" with an independent catch-up/refresh delay distinct from data ingestion — searched explicitly for this and found no such mechanism. The apparent "indexing lag" hypothesis from earlier in this investigation is **not supported by any source** and is superseded by this finding: the real blocker is that the metric has no recent data, not that Datadog hasn't yet indexed a metric that is actively reporting.
+
+**Practical implication for PRD #980 M2:** Waiting longer or using a workaround (raw-query bypass, API-based tag configuration lookup) will not surface this metric in the UI. The metric needs a fresh data point. Live span inspection (2026-07-06/07, this repo's session) rules out the post-commit hook as the blocker — both commit-story-v2 and spinybacked-orbweaver hooks already conditionally add `--import examples/instrumentation.js` when present, confirmed active in production via `process.command_args` on real spans. Instead, LLM-call spans currently carry `gen_ai.request.*` attributes but no `gen_ai.usage.output_tokens` / `gen_ai.usage.input_tokens` attribute — the likely actual data source for this metric appears absent from current instrumentation. A fresh data point requires that attribute to be added to commit-story-v2's spans (via its Weaver schema, pending Whitney's explicit sign-off) and reliably emitted (pending PRD #1024, which governs whether Weaver-required attribute presence is guaranteed rather than probabilistic). Once a new data point lands, it should reappear in Summary search / Explorer autocomplete within the same window normal newly-created metrics do (not separately delayed).
+- Whether `commit_story.llm.output_tokens`'s Metric Tag Configuration (group-by fields, tag allowlist) is otherwise correctly set up is still unconfirmed and cannot be checked via the UI until the metric is reporting again — the Manage Tags dialog requires the metric to be locatable via Summary search first.
 
 ## Sources
 
@@ -85,3 +103,5 @@ This fix does not touch `commit-story-v2`'s Weaver schema (`telemetry/registry/a
 - [DatadogAPIClient::V2::MetricTagConfigurationCreateAttributes](https://datadoghq.dev/datadog-api-client-ruby/DatadogAPIClient/V2/MetricTagConfigurationCreateAttributes.html) — percentile toggle on distribution metrics, queryable tag list field
 - [Generate Custom Metrics from Spans and Traces](https://docs.datadoghq.com/tracing/trace_pipeline/generate_metrics/) — group-by field mechanism for span-derived custom metrics
 - [Trace Metrics](https://docs.datadoghq.com/tracing/metrics/metrics_namespace/) — fixed tag set for auto-generated `trace.*` metrics (confirmed not applicable to `traces.span.metrics.*`)
+- [DataDog/documentation issue #61](https://github.com/DataDog/documentation/issues/61) — confirms autocomplete/search failure means "we haven't received data for that metric in the last few hours," not an indexing delay
+- [Metrics Summary](https://docs.datadoghq.com/metrics/summary/) — 28-hour tag-value search retention window; ingested vs. indexed metric distinction
