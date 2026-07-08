@@ -24,7 +24,7 @@ This matters for two audiences: (1) the demo — conference attendees need to se
 
 **Update (2026-07-08):** `commit_story.llm.output_tokens` has since gone stale in live data. Two independent, still-unresolved causes were identified — see the 2026-07-08 Decision Log rows below. This does not change the finding above (the metric's existence and 2026-06-19 confirmation are still accurate as historical fact) but means "confirmed working" no longer describes the metric's current state.
 
-**The gap is navigation and no dashboard — not a data pipeline problem** (true for Story A and Story B; the Token cost metric now has a separate, deferred data-availability gap on top of the navigation gap).
+**The gap is navigation and no dashboard — not a data pipeline problem** (true for Story A and Story B; the Token cost metric now has a separate data-availability gap on top of the navigation gap — being fixed as part of this PRD's M1.5, not deferred; see the 2026-07-08 Decision Log rows below).
 
 Existing research is documented in `docs/demo/traces-metrics-setup.md`. It covers:
 - The OTel Collector config (span_metrics connector + datadog/connector + logs pipeline)
