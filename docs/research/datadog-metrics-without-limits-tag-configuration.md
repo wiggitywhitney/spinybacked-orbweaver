@@ -67,12 +67,10 @@ This is the most likely root cause for the observed gap between `traces.span.met
 
 ### Recommendation
 
-For PRD #980 M2, the fix for both blocked metrics is a **Datadog platform configuration change only** — no code, Weaver schema, or Collector config changes required:
+For PRD #980 M2, the two blocked metrics have different remediation paths — only one is a pure platform configuration change:
 
-1. `traces.span.metrics.duration`: create/edit its Metric Tag Configuration (Include Tags) to add `commit_story.ai.section_type` and `gen_ai.request.model`, matching what `traces.span.metrics.calls` already has.
-2. `commit_story.llm.output_tokens`: verify its "Generate Metrics from Spans" group-by fields include the desired attributes; separately verify/add its Metric Tag Configuration if the group-by fields are already correct but the tags still aren't queryable.
-
-This fix does not touch `commit-story-v2`'s Weaver schema (`telemetry/registry/attributes.yaml`) or application code — both were independently verified correct earlier in this investigation. It is purely a Datadog UI/API change to metric tag indexing configuration, external to the codebase, and should be proposed to Whitney for explicit approval before execution since it changes shared observability platform state.
+1. `traces.span.metrics.duration`: **Datadog platform configuration change only** — no code, Weaver schema, or Collector config changes required. Create/edit its Metric Tag Configuration (Include Tags) to add `commit_story.ai.section_type` and `gen_ai.request.model`, matching what `traces.span.metrics.calls` already has. This fix does not touch `commit-story-v2`'s Weaver schema (`telemetry/registry/attributes.yaml`) or application code — both were independently verified correct earlier in this investigation. It is purely a Datadog UI/API change to metric tag indexing configuration, external to the codebase, and should be proposed to Whitney for explicit approval before execution since it changes shared observability platform state.
+2. `commit_story.llm.output_tokens`: **has a code prerequisite before any tag-configuration change is actionable.** The registry already declares `gen_ai.usage.output_tokens` / `gen_ai.usage.input_tokens` at `requirement_level: recommended`, but no span currently sets them (tracked in PRD #980's M1.5). Once that code fix lands and a fresh data point is emitted, verify its "Generate Metrics from Spans" group-by fields include the desired attributes; separately verify/add its Metric Tag Configuration if the group-by fields are already correct but the tags still aren't queryable. The tag-configuration step for this metric cannot be validated until the M1.5 code fix ships.
 
 ### Caveats
 
