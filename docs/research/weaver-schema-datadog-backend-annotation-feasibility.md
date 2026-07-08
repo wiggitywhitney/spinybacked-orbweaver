@@ -12,7 +12,7 @@
 
 ### Summary
 
-Weaver's schema format does not currently have a shipped mechanism for declaring backend-specific indexing hints on attributes, and Datadog does not publish a Weaver dependency registry. The attribute-declaration half of the "repeatable Datadog pipeline" story (Weaver schema → Spiny-Orb reliably adds the attribute to spans) is already solved by this project's existing architecture — it does not require anything new from Weaver. The gap is downstream: turning "attribute is reliably on the span" into "attribute is a queryable Datadog metric tag" requires two more hops (Collector `dimensions:` config, then Datadog Metrics without Limits tag configuration) that no tool — not Weaver, not Datadog, not Spiny-Orb today — currently automates from a schema declaration.
+Weaver's schema format can carry backend-specific metadata, but it does not currently ship a mechanism that enforces backend-specific indexing hints on attributes, and Datadog does not publish a Weaver dependency registry. The attribute-declaration half of the "repeatable Datadog pipeline" story (Weaver schema → Spiny-Orb reliably adds the attribute to spans) is representable in this project's existing architecture — it does not require anything new from Weaver — but it is not guaranteed until `src/languages/javascript/rules/cov005.ts` is promoted from advisory to blocking (see PRD #1024). The gap is downstream: turning "attribute is reliably on the span" into "attribute is a queryable Datadog metric tag" requires two more hops (Collector `dimensions:` config, then Datadog Metrics without Limits tag configuration) that no tool — not Weaver, not Datadog, not Spiny-Orb today — currently automates from a schema declaration.
 
 ### Findings by Question
 
