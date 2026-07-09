@@ -59,7 +59,7 @@ This is the most likely root cause for the observed gap between `traces.span.met
 - Create a tag configuration for a metric that doesn't have one yet.
 - Update the tag configuration (also covers "percentile aggregations of a distribution metric").
 - Delete a tag configuration.
-- Cardinality estimator endpoint — dry-run the impact before committing (`estimate=true` with a `percentile` flag for distribution metrics).
+- Cardinality estimator endpoint — dry-run the impact before committing: `GET /api/v2/metrics/{metric_name}/estimate` with `filter[groups]` (the proposed group-by tags) and, for distribution metrics, `filter[pct]=true`.
 - Requires an application key from a user with the **"Manage Tags for Metrics"** permission.
 - `exclude_tags_mode: true` switches the same endpoint from allowlist to denylist semantics.
 
@@ -92,7 +92,7 @@ This matches the one authoritative statement found in Datadog's own issue tracke
 No Datadog documentation describes a separate "metadata index" with an independent catch-up/refresh delay distinct from data ingestion — searched explicitly for this and found no such mechanism. The apparent "indexing lag" hypothesis from earlier in this investigation is **not supported by any source** and is superseded by this finding: the real blocker is that the metric has no recent data, not that Datadog hasn't yet indexed a metric that is actively reporting.
 
 **Practical implication for PRD #980 M2 — historical note, gap since closed:** At the time this finding was written, the metric needed a fresh data point: LLM-call spans carried `gen_ai.request.*` attributes but no `gen_ai.usage.output_tokens` / `gen_ai.usage.input_tokens` attribute, and the missing `span.setAttribute()` calls were tracked in PRD #980's M1.5. PRD #980 records M1.5 as complete as of 2026-07-08, with the code fix shipped and fresh live data confirmed in Datadog — the data gap described in this paragraph is resolved. The reasoning about PRD #1024 (enforcement of already-required attributes, not existence of `gen_ai.usage.*`) and PRD #980's M1.7 (schema promotion from `recommended` to `required` for durability across future spiny-orb instrumentation runs) remains forward-looking and still applies — those are separate, ongoing concerns from the immediate data gap this paragraph originally diagnosed.
-- Whether `commit_story.llm.output_tokens`'s Metric Tag Configuration (group-by fields, tag allowlist) is otherwise correctly set up is still unconfirmed and cannot be checked via the UI until the metric is reporting again — the Manage Tags dialog requires the metric to be locatable via Summary search first.
+- **Historical note — resolved.** At the time this caveat was written, `commit_story.llm.output_tokens`'s Metric Tag Configuration could not be checked via the UI because the metric had stopped reporting. PRD #980 records M1.5 as complete as of 2026-07-08: the metric is reporting fresh data again, and its denylist-mode tag configuration is confirmed working — `commit_story.llm.output_tokens` groups correctly by `commit_story.ai.section_type` and `gen_ai.request.model` via live `get_datadog_metric` queries (see the Recommendation section, item 2, above). The specific UI-side check this caveat originally called for (Manage Tags dialog) was superseded by that API-level confirmation and was not separately re-verified in the UI.
 
 ## Sources
 
