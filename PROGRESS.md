@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-07-08) Resolved a circular dependency between the demo dashboard PRD and the required-attribute-enforcement PRD: the demo dashboard's plan to make its token-cost metric durable (not just fixed on one branch) had been designed to wait on the enforcement work finishing first, which meant neither project could close without the other going first. Split that plan in two — the part that documents the token-count attributes as mandatory in the schema stays with the dashboard work and no longer waits on anything; the part that proves the enforcement mechanism actually catches a missing attribute moved into the enforcement project's own plan, where it now waits on the schema documentation instead of the other way around.
+
 - (2026-07-08) Reversed an earlier plan to defer fixing the demo dashboard's LLM token-cost metric behind a schema-change approval. Found that the schema already supports the fix — the actual gap is that the code never sets the token-count value on a span, not a missing schema declaration — so the fix is now scheduled as a normal step before the dashboard's remaining work instead of being pushed out. Folded the previously-decided Datadog tag-configuration change into the same step as an explicit action item.
 
 - (2026-07-08) Corrected research notes on why a Datadog custom metric can have real historical data but not show up in search: confirmed it's because the metric stopped receiving new data points weeks ago, not a metadata-indexing delay — ruling out "just wait longer" as a fix.
