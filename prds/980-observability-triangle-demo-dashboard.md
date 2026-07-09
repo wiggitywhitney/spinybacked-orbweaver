@@ -49,7 +49,8 @@ Read existing research in `docs/demo/traces-metrics-setup.md`, resolve the metri
 ## Milestones
 
 - [x] **M1: Research spike — Datadog metric-to-trace linking and dashboard capability with span_metrics**
-- [ ] **M1.5: Fix commit-story-v2 token-usage attribute gap and execute the Metric Tag Configuration fix**
+- [x] **M1.5: Fix commit-story-v2 token-usage attribute gap and execute the Metric Tag Configuration fix**
+- [ ] **M1.6: Make the OTel Collector persistent across restarts/reboots (macOS LaunchAgent)** — does not gate M2
 - [ ] **M2: Establish and validate the complete Metrics Explorer demo queries**
 - [ ] **M3: Create a Datadog demo dashboard via MCP**
 - [ ] **M4: Document the observability triangle navigation story**
@@ -92,6 +93,51 @@ Per the "Branch strategy for M1.5 Step 2" Decision Log row (2026-07-08), do this
 **Success criteria**: The Metric Tag Configuration denylist-mode change is live in Datadog for `traces.span.metrics.duration` (already true) and for `commit_story.llm.output_tokens` (applied after Step 2 lands, per the sequencing note in Step 1). `gen_ai.usage.output_tokens`/`gen_ai.usage.input_tokens` are present on live commit-story-v2 LLM-call spans. `commit_story.llm.output_tokens` returns fresh, groupable data via Datadog MCP query.
 
 This milestone gates M2 — M2's four queries, including the Token cost query, depend on both fixes above being complete.
+
+**Status (2026-07-08): Complete.** Both fixes confirmed live via Datadog MCP: `gen_ai.usage.input_tokens`/`gen_ai.usage.output_tokens` are populated on live `dialogue_node`/`summary_node`/`technical_node` spans with real non-zero values (e.g. dialogue 24601 in / 985 out, summary 20204 in / 536 out, technical_decisions 23535 in / 16 out). `commit_story.llm.output_tokens` groups correctly by both `commit_story.ai.section_type` (985/536/16, matching the spans exactly) and `gen_ai.request.model` (1537 total for `claude-haiku-4-5-20251001`) — confirmed via `get_datadog_metric` scalar queries. See the 2026-07-08 "M1.5 confirmed complete via live Datadog data" Decision Log row.
+
+---
+
+### M1.6: Make the OTel Collector persistent across restarts/reboots (macOS LaunchAgent)
+
+**Background**: The M1.5 verification work in this session surfaced an operational gap unrelated to M1.5's actual fixes: the OTel Collector (`otelcol-contrib`) that commit-story-v2's post-commit hook exports spans to is a manually-started foreground process, not a managed service. A machine restart (this happened 2026-07-06) silently kills it. The post-commit hook still runs and exports spans on every commit — with nothing listening on port 4318, telemetry silently drops with no error surfaced to the user. This can recreate the exact "M2 blocker" data-availability confusion this PRD spent two Decision Log rows diagnosing, for an unrelated reason (collector not running, not a tag-configuration or attribute gap).
+
+**Step 1**: Create `~/Library/LaunchAgents/com.whitney.otelcol-contrib.plist` with `RunAtLoad` and `KeepAlive` both `true`, wrapping `otelcol-contrib --config ~/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/is/otelcol-config.yaml` in `vals exec -f ~/Documents/Repositories/spinybacked-orbweaver-eval/.vals.yaml --` so `DD_API_KEY` is injected. `launchd` runs jobs with a minimal environment — it does not source `~/.zshrc` or inherit a login shell's `PATH` — so the `ProgramArguments` command must explicitly prepend `/opt/homebrew/bin` to `PATH` before invoking `vals`/`otelcol-contrib`, the same PATH-stripping issue documented in `~/.claude/rules/is-scoring-gotchas.md` for `vals exec -- bash -c`. Use `/bin/bash -c` as the program with a single argument string:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.whitney.otelcol-contrib</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>export PATH="/opt/homebrew/bin:$PATH" &amp;&amp; vals exec -f /Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval/.vals.yaml -- otelcol-contrib --config /Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/is/otelcol-config.yaml</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/otelcol-contrib.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/otelcol-contrib.log</string>
+</dict>
+</plist>
+```
+
+Present this exact content to Whitney for review before creating the file, per the Infrastructure Safety rule (list planned infrastructure commands before executing).
+
+**Step 2**: Load it with `launchctl load ~/Library/LaunchAgents/com.whitney.otelcol-contrib.plist` and confirm the collector is listening on port 4318 (`lsof -i :4318 -sTCP:LISTEN`) after both a manual `launchctl load` and a full reboot, to verify `RunAtLoad` actually fires at login (not just at `load` time).
+
+**Step 3**: Update `~/.claude/rules/is-scoring-gotchas.md`'s "Full sequence for a scoring run" section to note that the LaunchAgent makes the manual `otelcol-contrib` start step unnecessary going forward — the `lsof` check should now almost always find it already running.
+
+**Success criteria**: `otelcol-contrib` is running after a fresh reboot without any manual start command. Killing the process causes `launchd` to restart it automatically (verify with `kill $(pgrep -f otelcol-contrib)` followed by a re-check of `lsof -i :4318`).
+
+This milestone does not gate M2 — M2 can proceed with the collector started manually, as it has been throughout this PRD so far. This is a durability fix for future sessions, not a blocker for this PRD's own remaining work.
 
 ---
 
@@ -203,5 +249,6 @@ Add a `### Added` entry under `## [Unreleased]` in `PROGRESS.md` describing what
 | 2026-07-08 | M1.5 Step 1 half-executed: `traces.span.metrics.duration` denylist-mode fix applied and confirmed live | Whitney applied "Allow all tags" (the UI's equivalent of `exclude_tags_mode: true` with an empty exclude list) to `traces.span.metrics.duration` via the Datadog UI's Manage Tags dialog. Confirmed working via Metrics Explorer: querying `avg:traces.span.metrics.duration{service:commit-story} by {commit_story.ai.section_type}` now returns a grouped series (currently a single `N/A` bucket, since data points ingested before the tag-config change had the tag stripped at indexing time and cannot be relabeled retroactively — this is expected and not a bug). New commit-story spans will populate `dialogue`/`summary`/`technical_decisions` as separate series once fresh activity accumulates. **`commit_story.llm.output_tokens` has NOT yet had the same fix applied** — deferred until M1.5 Step 2 (the missing `gen_ai.usage.output_tokens`/`input_tokens` attribute code) lands in commit-story-v2, since applying the tag config to a metric with no incoming data wouldn't be verifiable yet. M1.5 Step 1 is therefore partially, not fully, complete. |
 | 2026-07-08 | Branch strategy for M1.5 Step 2: rebase-and-fix on a new demo branch, not on the eval branch, and no fresh eval run | Investigated commit-story-v2's git state before deciding how to land the token-usage attribute fix. The latest instrumented branch (`spiny-orb/instrument-1781909345452`) was cut 2026-06-19; `main` has since gained 4 commits touching `src/managers/journal-manager.js`, `src/managers/summary-manager.js`, `src/generators/prompts/sections/dialogue-prompt.js`, `scripts/install-hook.sh`, `src/utils/failure-placeholder.js` (plus journal/test files). The `dialogue_node`/`summary_node`/`technical_node` span sites live in `src/generators/journal-graph.js` and `src/generators/summary-graph.js` — untouched by main since the branch was cut, so no conflict is expected at the actual edit site; a rebase would only need to resolve conflicts in `journal-manager.js` and `summary-manager.js`, both instrumentation-only overlaps with main's bug fixes. Two alternatives were rejected: (1) a fresh spiny-orb eval run on commit-story-v2 to pick up main's changes and regenerate instrumentation — rejected because it doesn't reliably solve the actual problem (per the "Reverse the defer decision" row above, `recommended`-level attributes aren't a forcing function for the agent, so a fresh run offers no guarantee the attribute gets added, and the manual edit would likely still be needed afterward), it costs eval-team time/coordination per this project's "eval runs are the eval team's job" convention, and Whitney's suggestion to strengthen the schema (e.g., promoting to `required`) to improve those odds is a bigger decision than this fix warrants — it would affect every other attribute at that level and overlaps with PRD #1024's explicitly-excluded scope of schema changes; (2) rebasing and editing `spiny-orb/instrument-1781909345452` directly — rejected because it mutates the eval branch, mixing demo-only code into eval history. Decision: in commit-story-v2, create `demo/980-token-metrics` off `spiny-orb/instrument-1781909345452`, rebase that new branch onto current `main`, then add the missing attribute-setting code at the span sites on `demo/980-token-metrics`. `spiny-orb/instrument-1781909345452` itself stays untouched. Same demo outcome (fresh data flowing for the dashboard), zero eval-history risk, no fresh eval run needed. |
 | 2026-07-08 | M1.5 Step 2 complete: token-usage attribute code fix landed on `demo/980-token-metrics` | Rebased `demo/980-token-metrics` (created off `spiny-orb/instrument-1781909345452`) onto commit-story-v2's current `main`. The rebase produced two conflicts beyond what was predicted: `src/managers/journal-manager.js` and `src/managers/summary-manager.js` both had `<<<<<<<` conflict blocks (6 blocks in `summary-manager.js` alone) where main's newer `_hasRealSummary`/failure-placeholder-aware staleness detection had to be combined with the instrument branch's `tracer.startActiveSpan(...)` span-wrapping and `try/catch/finally` error handling — resolved by keeping main's detection logic and layering the instrument branch's OTel structure around it, consistent across both files. Rebase completed cleanly (32/32 commits); confirmed via `git log --oneline main..HEAD \| wc -l` returning `32`. Added the missing `gen_ai.usage.input_tokens`/`gen_ai.usage.output_tokens` `span.setAttribute()` calls (guarded by `if (result.usage_metadata)`) immediately after each LLM `invoke()` call, at all six span sites named in Step 2: `summaryNode`, `technicalNode`, `dialogueNode` in `src/generators/journal-graph.js`, and `dailySummaryNode`, `weeklySummaryNode`, `monthlySummaryNode` in `src/generators/summary-graph.js`. Ran the existing test suites covering both files (`tests/generators/journal-graph.test.js`, `tests/generators/summary-graph.test.js`, `tests/generators/weekly-summary-graph.test.js`, `tests/generators/monthly-summary-graph.test.js`) — 156/156 passed, no regressions. Committed on `demo/980-token-metrics` (commit `6434ea8`). Re-enabled `.git/hooks/post-commit` (disabled during the rebase to prevent live LLM calls/journal writes firing on every replayed commit) immediately after the rebase completed. **Step 1's `commit_story.llm.output_tokens` half and Step 3 (live span verification) remain open** — Step 1's remaining half requires a live commit-story run against `main` (with this fix merged) to produce verifiable data before the Datadog tag-config change can be confirmed working, per the sequencing note in Step 1. M1.5 is therefore still incomplete: Step 2 done, Step 1 half-done, Step 3 not started. |
+| 2026-07-08 | M1.5 confirmed complete via live Datadog data; added M1.6 to track OTel Collector persistence as separate, non-gating follow-up work | Confirmed both M1.5 fixes are live: `gen_ai.usage.input_tokens`/`gen_ai.usage.output_tokens` populated on fresh spans, and `commit_story.llm.output_tokens` groups correctly by `commit_story.ai.section_type` and `gen_ai.request.model` (verified via `get_datadog_metric` scalar queries, not `get_datadog_metric_context`, which returned empty `tags_data` for both `include_tag_values` values and was not a useful verification signal for this question). Separately, this session's M1.5 verification surfaced that the OTel Collector is a manually-started foreground process with no persistence — a 2026-07-06 machine restart silently killed it, and the post-commit hook exported spans into the void with no error until the gap was noticed. Whitney proposed the fix (macOS LaunchAgent with `RunAtLoad`/`KeepAlive`) but chose not to context-switch to execute it mid-verification, asking instead to track it as PRD work for later. Added **M1.6** for this, explicitly marked as not gating M2 — it is a durability fix for future sessions, not a blocker for this PRD's remaining work. Creating/loading the actual plist requires a separate explicit go-ahead in a future session, per Infrastructure Safety. |
 | (pending) | Metrics Explorer queries | To be filled in after M2 validation |
 | (pending) | Demo dashboard URL | To be filled in after M3 creation |

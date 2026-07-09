@@ -44,6 +44,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-07-08) Confirmed the demo dashboard's LLM token-cost metric fix is live: with fresh commit-story-v2 activity flowing, the metric now groups correctly both by AI section type and by model, and the grouped values match the underlying span data exactly.
+
 - (2026-07-08) Restored the npm link between this repo and commit-story-v2 that its post-commit hook depends on to run the local, instrumented source instead of silently falling back to a published package with no telemetry. A prior `npm install` had pruned the link's symlink from `node_modules` while leaving a stale reference behind, so the hook had been resolving to the fallback path without any visible error. Also root-caused why no fresh telemetry had reached Datadog since July 6: the local OTel Collector that both repos export spans to isn't a persistent service — it's a manually started process with no auto-restart, so a machine restart silently stopped all telemetry capture until it's started again by hand.
 
 - (2026-07-04) Corrected two spots in README.md that described TypeScript support as a future feature — the Language Provider API section and the Configuration Reference `language` row — when TypeScript is already a fully implemented, registered language provider. Also reviewed every JavaScript-specific section of the README and added short inline notes wherever TypeScript needs a callout (SDK init file detection, source file discovery, the before/after example, and the auto-instrumentation fallback file), so the README's "JavaScript and TypeScript" claim holds up section by section without a full restructuring into separate per-language pages.
