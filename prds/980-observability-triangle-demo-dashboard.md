@@ -26,7 +26,7 @@ This matters for two audiences: (1) the demo — conference attendees need to se
 
 **The gap is navigation and no dashboard — not a data pipeline problem** (true for Story A and Story B; the Token cost metric had a separate data-availability gap on top of the navigation gap, now resolved by M1.5; see the 2026-07-08 Decision Log rows below).
 
-**Caveat: "resolved" describes the current instrumentation branch only, not future ones.** M1.5's fix (`gen_ai.usage.output_tokens`/`input_tokens` attribute code) was a targeted manual edit on `demo/980-token-metrics`, not a Weaver schema change — nothing yet forces a *future* spiny-orb instrumentation run on a fresh branch to emit these same attributes/metrics. See M1.7 and the 2026-07-08 "Weaver schema enforcement gap" Decision Log row below.
+**Caveat: "resolved" describes the current instrumentation branch only, not future ones.** M1.5's fix (`gen_ai.usage.output_tokens`/`input_tokens` attribute code) was a targeted manual edit on `demo/980-token-metrics`, not a Weaver schema change — nothing yet forces a *future* spiny-orb instrumentation run on a fresh branch to emit these same attributes/metrics. See M1.7 and the 2026-07-08 "M1.7 scope split — schema promotion stays in PRD #980 and blocks M2; enforcement verification moves to PRD #1024" Decision Log row below.
 
 Existing research is documented in `docs/demo/traces-metrics-setup.md`. It covers:
 - The OTel Collector config (span_metrics connector + datadog/connector + logs pipeline)
