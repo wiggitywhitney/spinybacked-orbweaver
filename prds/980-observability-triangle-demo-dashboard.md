@@ -146,15 +146,15 @@ This milestone does not gate M2 — M2 can proceed with the collector started ma
 
 ---
 
-### M1.7: Promote token-usage attributes to `required` in commit-story-v2's Weaver schema
+### M1.7: Promote token-usage and section-type attributes to `required` in commit-story-v2's Weaver schema
 
 **Step 0**: Read the 2026-07-08 "M1.7 scope split — schema promotion stays in PRD #980 and blocks M2; enforcement verification moves to PRD #1024" Decision Log row before starting. This milestone exists because M1.5's fix only guarantees the token-usage attributes on `demo/980-token-metrics` — nothing yet guarantees a *future* spiny-orb instrumentation run on a fresh branch reproduces `gen_ai.usage.output_tokens`/`gen_ai.usage.input_tokens`. This milestone covers only the Weaver schema change — whether COV-005 actually *enforces* a required attribute during instrumentation is a separate question, tracked as [PRD #1024](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1024)'s M6, not this milestone. The schema promotion has value on its own regardless of #1024's status: it documents the correct requirement level and is a prerequisite #1024's M6 will read.
 
-**Step 1 — Weaver schema change**: In commit-story-v2's `telemetry/registry/attributes.yaml`, promote `gen_ai.usage.output_tokens` and `gen_ai.usage.input_tokens` from `requirement_level: recommended` to `requirement_level: required`. Evaluate whether `commit_story.ai.section_type` should also be promoted, since M2/M3's Story B and Token cost widgets depend on it. This is a schema change to commit-story-v2's registry, not to spinybacked-orbweaver — coordinate with whoever owns that repo's state at the time, per the same cross-repo coordination note used in M1.5.
+**Step 1 — Weaver schema change**: In commit-story-v2's `telemetry/registry/attributes.yaml`, promote `gen_ai.usage.output_tokens`, `gen_ai.usage.input_tokens`, AND `commit_story.ai.section_type` from `requirement_level: recommended` to `requirement_level: required`. `commit_story.ai.section_type` must be promoted, not merely evaluated for promotion — M2/M3's Story B and Token cost widgets depend on it as their grouping key, and leaving it non-required would let a fresh instrumentation run satisfy this milestone's schema promotion while still omitting the attribute those downstream milestones need. This is a schema change to commit-story-v2's registry, not to spinybacked-orbweaver — coordinate with whoever owns that repo's state at the time, per the same cross-repo coordination note used in M1.5.
 
 **Step 2**: Record the promoted attributes and final `requirement_level` values in the Decision Log row "Token-usage attribute schema promotion."
 
-**Success criteria**: The Weaver schema declares `gen_ai.usage.output_tokens`/`gen_ai.usage.input_tokens` as `required` (and `commit_story.ai.section_type` if the Step 1 evaluation determines it should be promoted too). No dependency on PRD #1024's status — this milestone is a schema documentation change, not an enforcement test.
+**Success criteria**: The Weaver schema declares `gen_ai.usage.output_tokens`, `gen_ai.usage.input_tokens`, AND `commit_story.ai.section_type` as `required`. No dependency on PRD #1024's status — this milestone is a schema documentation change, not an enforcement test.
 
 This milestone gates M2 — do not start M2 until the schema promotion lands, since M2's queries should validate against the durable, documented contract rather than the branch-specific fix M1.5 applied.
 
