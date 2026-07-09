@@ -105,7 +105,7 @@ This milestone gates M2 — M2's four queries, including the Token cost query, d
 
 **Background**: The M1.5 verification work in this session surfaced an operational gap unrelated to M1.5's actual fixes: the OTel Collector (`otelcol-contrib`) that commit-story-v2's post-commit hook exports spans to is a manually-started foreground process, not a managed service. A machine restart (this happened 2026-07-06) silently kills it. The post-commit hook still runs and exports spans on every commit — with nothing listening on port 4318, telemetry silently drops with no error surfaced to the user. This can recreate the exact "M2 blocker" data-availability confusion this PRD spent two Decision Log rows diagnosing, for an unrelated reason (collector not running, not a tag-configuration or attribute gap).
 
-**Step 1 (done 2026-07-08)**: Created `~/Library/LaunchAgents/com.whitney.otelcol-contrib.plist` with `RunAtLoad` and `KeepAlive` both `true`. The plist drafted before implementation assumed `otelcol-contrib` lived at `/opt/homebrew/bin` and that exporting `PATH` once, before `vals exec`, would be enough — both assumptions were wrong; see the 2026-07-08 "M1.6 executed" Decision Log row for the three bugs found and fixed. The verified-working plist:
+**Step 1 (done 2026-07-08)**: Created `~/Library/LaunchAgents/com.whitney.otelcol-contrib.plist` with `RunAtLoad` and `KeepAlive` both `true`. The plist drafted before implementation assumed `otelcol-contrib` lived at `/opt/homebrew/bin` and that exporting `PATH` once, before `vals exec`, would be enough — both assumptions were wrong; see the 2026-07-08 "M1.6 executed" Decision Log row for the three bugs found and fixed. The verified-working plist (paths genericized below — substitute your actual home directory; note `WorkingDirectory` must be a literal absolute path since `launchd` does not expand `$HOME` or other env vars in plain plist string values, unlike the `ProgramArguments` strings below which are interpreted by `bash -c` and do expand `$HOME`):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -118,10 +118,10 @@ This milestone gates M2 — M2's four queries, including the Token cost query, d
   <array>
     <string>/bin/bash</string>
     <string>-c</string>
-    <string>export PATH="/opt/homebrew/bin:/Users/whitney.lee/.local/bin:$PATH" &amp;&amp; vals exec -f /Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval/.vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:/Users/whitney.lee/.local/bin:$PATH" &amp;&amp; otelcol-contrib --config /Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/is/otelcol-config.yaml'</string>
+    <string>export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH" &amp;&amp; vals exec -f $HOME/Documents/Repositories/spinybacked-orbweaver-eval/.vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH" &amp;&amp; otelcol-contrib --config $HOME/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/is/otelcol-config.yaml'</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/Users/whitney.lee/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/is</string>
+  <string>/Users/&lt;username&gt;/Documents/Repositories/spinybacked-orbweaver-eval/evaluation/is</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
