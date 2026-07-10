@@ -59,9 +59,9 @@ This is the most likely root cause for the observed gap between `traces.span.met
 - Create a tag configuration for a metric that doesn't have one yet.
 - Update the tag configuration (also covers "percentile aggregations of a distribution metric").
 - Delete a tag configuration.
-- Requires an application key from a user with the **"Manage Tags for Metrics"** permission for the create/update/delete tag-configuration operations listed above.
+- The create/update/delete tag-configuration operations listed above require an application key from a user with the **"Manage Tags for Metrics"** permission (`metric_tags_write`).
 - `exclude_tags_mode: true` switches the same endpoint from allowlist to denylist semantics.
-- Cardinality estimator endpoint — dry-run the impact before committing: `GET /api/v2/metrics/{metric_name}/estimate` with `filter[groups]` (the proposed group-by tags) and, for distribution metrics, `filter[pct]=true`. This is a separate, read-only endpoint authenticated with a standard API + application key pair — it does not require the "Manage Tags for Metrics" permission scoped to the mutating endpoints above.
+- Cardinality estimator endpoint — dry-run the impact before committing: `GET /api/v2/metrics/{metric_name}/estimate` with `filter[groups]` (the proposed group-by tags) and, for distribution metrics, `filter[pct]=true`. This is a separate, read-only endpoint authenticated with a standard API + application key pair — it does not require `metric_tags_write` or any other write permission.
 
 **Source says:** "Update the tag configuration of a metric or percentile aggregations of a distribution metric or custom aggregations of a count, rate, or gauge metric... this endpoint requires a tag configuration to be created first." ([DatadogAPIClient::V2::MetricsAPI](https://datadoghq.dev/datadog-api-client-ruby/DatadogAPIClient/V2/MetricsAPI.html))
 
