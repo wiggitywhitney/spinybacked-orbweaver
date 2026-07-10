@@ -85,7 +85,7 @@ This matches the one authoritative statement found in Datadog's own issue tracke
 
 **Source says:** "If it doesn't autocomplete, then it might mean that we haven't received data for that metric in the last few hours." ([DataDog/documentation issue #61 — "How do I see a custom metric I've just submitted?"](https://github.com/DataDog/documentation/issues/61))
 
-**Interpretation:** Metrics Summary search and Explorer autocomplete/typeahead are driven by **recent reporting activity**, not by whether a metric has ever existed or has historical data. A metric with data from 18 days ago but nothing since will not surface in search — indistinguishable, from the UI's perspective, from a metric that never existed. This is consistent with (but not identical to) the documented 28-hour tag-value search retention window on the Summary page:
+**Interpretation:** For this incident, the lack of recent data explains why the metric did not surface in search or autocomplete — a metric with data from 18 days ago but nothing since will not surface, indistinguishable, from the UI's perspective, from a metric that never existed. The broader claim that Metrics Summary search and Explorer autocomplete/typeahead are *exclusively* driven by recent reporting activity is not independently documented here; Datadog's current documentation describes latest-data search behavior and a 28-hour tag-value retention window (below), not a stronger product-wide guarantee:
 
 **Source says:** "Tag values are retained in the Tag search field for 28 hours" — values "not submitted in the past 28 hours do not appear as search options, even if they remain visible in the metric details side panel." ([Metrics Summary](https://docs.datadoghq.com/metrics/summary/))
 
