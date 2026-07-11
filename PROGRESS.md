@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-07-11) Closed the demo dashboard's durability gap for the token-usage attribute fix: promoted `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, and `commit_story.ai.section_type` from `recommended` to `required` in commit-story-v2's Weaver schema, landed on `main` (not the instrumented demo branch, so commit-story-v2 stays usable as a spiny-orb eval target). A `recommended` attribute isn't a forcing function for a fresh instrumentation run to include it; `required` documents the durable contract so future runs and Datadog dashboard queries can rely on these attributes being present.
+
 - (2026-07-08) Closed the code gap behind the demo dashboard's LLM token-cost metric: commit-story-v2's LLM-generation code was recording responses without ever storing the token counts that came back with them, so the cost metric had nothing to work with. Added the missing token-count capture at all six places the code calls out to the LLM (across its journal and daily/weekly/monthly summary generation), on a new branch rebased onto commit-story-v2's latest code. The Datadog-side configuration fix that depends on this data now existing is still outstanding.
 
 - (2026-07-08) Fixed the demo dashboard's duration metric so it can be grouped by AI section type in Datadog: applied the previously-approved "allow all tags" configuration change to `traces.span.metrics.duration` and confirmed via a live Metrics Explorer query that the metric now groups correctly. The equivalent fix for the token-cost metric is deferred until a related code gap (span attributes for token counts) lands, since there's no incoming data to verify against yet.
