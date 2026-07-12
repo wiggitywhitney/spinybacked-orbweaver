@@ -75,7 +75,7 @@ For PRD #980 M2, the two blocked metrics have different remediation paths — on
 ### Caveats
 
 - Exact current UI copy/flow ("Manage Tags") is from Datadog's general docs, not confirmed against Whitney's specific org UI — flow may differ slightly by Datadog UI version.
-- The precise reason `calls` already has correct tag configuration and `duration` doesn't is inferred (recommended-tag auto-population from query history), not directly confirmed — worth checking the actual tag configuration state for both metrics via UI/API before executing a fix, rather than assuming.
+- **Historical note.** The precise reason `calls` already had correct tag configuration and `duration` didn't was inferred (recommended-tag auto-population from query history), not directly confirmed at the time this caveat was written. The denylist-mode fix has since been executed (see Recommendation, item 1) — this caveat's original call to "check before executing" is no longer actionable, but the underlying inference about `calls`'s auto-population remains unverified.
 
 ### Q4: Why doesn't `commit_story.llm.output_tokens` appear in Metrics > Summary search or Explorer autocomplete, even though `get_datadog_metric` (scalar, `now-30d`) returns a real nonzero sum (1490.47)?
 
