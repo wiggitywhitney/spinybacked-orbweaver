@@ -10,6 +10,7 @@
 | 2026-07-06 | Initial research — investigating why `traces.span.metrics.duration` and `commit_story.llm.output_tokens` return zero groupable tags in Datadog while sibling metric `traces.span.metrics.calls` returns all configured dimensions |
 | 2026-07-07 | Added findings on why `commit_story.llm.output_tokens` doesn't appear in Metrics > Summary search or Explorer autocomplete despite having historical data. Root cause found: the metric stopped reporting new data points weeks ago — this is a stale-metric symptom, not a metadata-indexing lag. |
 | 2026-07-08 | Corrected Q4's attributed cause. The `--import examples/instrumentation.js` flag was never the gap — both commit-story-v2 and spinybacked-orbweaver post-commit hooks already add it conditionally, confirmed active via live span `process.command_args` data, and the previously-cited "commit-story-v2 issue #899" does not exist (spinybacked-orbweaver's #899 is an unrelated, already-closed eval-run-APM issue). Live span inspection instead shows LLM-call spans carry `gen_ai.request.*` attributes but no `gen_ai.usage.output_tokens` / `gen_ai.usage.input_tokens` attribute at all — the metric's likely real data source is simply absent from current instrumentation, separate from and in addition to the tag-configuration gap this doc otherwise covers. |
+| 2026-07-09 | Added historical-note annotations reflecting PRD #980's M1.5 status correction: denylist tag configs executed/reporting for both metrics, but the mandatory cardinality-estimator safety check remains unconfirmed. |
 
 ## Findings
 
