@@ -10,12 +10,12 @@ This document explains how to navigate from `service:commit-story` APM traces to
 
 The compelling part of this demo isn't a metric number — it's the chain that produced it: **schema (Weaver) → instrumentation agent (spiny-orb) → metrics pipeline (OTel Collector `span_metrics` connector) → Datadog.**
 
-`commit_story.ai.section_type` is the attribute that proves this chain end to end. It starts as a custom attribute definition in commit-story-v2's Weaver schema. spiny-orb reads that schema and guarantees every section-generation span carries the attribute with the exact name the schema defines. The OTel Collector's `span_metrics` connector is configured to use that same attribute as a metric dimension. The result: a Datadog metric grouped by a value that a schema defined and an agent enforced, with no manual wiring in between. That's the story — not just that a chart has data in it, but that the chart's shape traces back to a schema decision.
+`commit_story.ai.section_type` is the attribute that proves this chain end to end. It starts as a custom attribute definition in commit-story-v2's Weaver schema. spiny-orb reads that schema and is intended to add the schema-defined attribute to every section-generation span; PRD #1024 will wire and make blocking the validation rule (COV-005) that would catch a span missing it, but as of this writing that check is not yet wired to real registry data and is advisory only even when it runs. The OTel Collector's `span_metrics` connector is configured to use that same attribute as a metric dimension. Collector dimensions and Datadog tag configuration remain explicit setup steps, not automatic consequences of the schema. That's the story — not just that a chart has data in it, but that the chart's shape traces back to a schema decision.
 
 ### The two stories
 
-- **Story A — `gen_ai.request.model`**: A standard OTel GenAI semantic convention attribute. Datadog maps it automatically because it's recognized vocabulary — no Datadog-side configuration needed. Narrate this as: "this attribute costs nothing extra because it's a standard, not something we invented."
-- **Story B — `commit_story.ai.section_type`**: A custom attribute defined in commit-story-v2's own Weaver schema, not in OTel semconv. Narrate this as: "this is where spiny-orb earns its keep — the schema defines the vocabulary, spiny-orb enforces the right attribute name on every span, and the metrics config knows exactly what to group by." This is the more important widget of the two for the demo, because it's the one that couldn't exist without the schema-driven pipeline.
+- **Story A — `gen_ai.request.model`**: A standard OTel GenAI semantic convention attribute. Datadog recognizes it as vocabulary automatically, so no Datadog-side config is needed to make it appear on spans — but it can still need per-metric queryable-tag allowlisting (Metric Tag Configuration / Metrics without Limits™) before it's usable as a group-by dimension in Metrics Explorer. Narrate this as: "this attribute costs nothing extra to define because it's a standard, not something we invented."
+- **Story B — `commit_story.ai.section_type`**: A custom attribute defined in commit-story-v2's own Weaver schema, not in OTel semconv. Narrate this as: "this is where spiny-orb earns its keep — the schema defines the vocabulary, spiny-orb is intended to add the right attribute name to every span, and the metrics config knows exactly what to group by." This is the more important widget of the two for the demo, because it's the one that couldn't exist without the schema-driven pipeline.
 
 ### Step-by-step navigation
 
@@ -29,13 +29,14 @@ The compelling part of this demo isn't a metric number — it's the chain that p
    - Token cost: `avg:commit_story.llm.output_tokens{*} by {commit_story.ai.section_type,gen_ai.request.model}`
 5. For the full triangle in one view, open the demo dashboard instead of querying ad hoc: **[commit-story Observability Triangle](https://app.datadoghq.com/dashboard/gmf-rra-var)**.
 
-Datadog does not support navigating from a metric data point back to its contributing traces — there is no click-through from Metrics Explorer or a dashboard widget to a specific trace. Don't promise this live; if a metric-to-trace narrative beat is wanted, deliver it as spoken narration, not a UI action.
+Metrics Explorer itself has no click-through from a data point back to a specific contributing trace. Some dashboard widget types can open the APM Traces side panel scoped to the clicked series and time window, but that's a filtered trace list for that window, not a one-to-one link to the exact trace that produced the point. Don't promise a metric-to-specific-trace click live; if a metric-to-trace narrative beat is wanted, deliver it as spoken narration, not a UI action.
 
 By the time this demo runs, all three legs — Story A, Story B, and Token cost — should show live data. If the Token cost widget looks empty at demo time, don't assume the underlying fix regressed. Check in this order before improvising a "coming soon" caveat live:
 
 1. Has commit-story run recently enough to produce fresh data?
 2. Is the OTel Collector actually running? Check `lsof -i :4318` and `/tmp/otelcol.log` (see the startup procedure in `docs/demo/traces-metrics-setup.md`) — a dead Collector drops telemetry silently with no error surfaced anywhere.
-3. Only after ruling out both of the above, suspect a regression in the token-usage attribute fix itself.
+3. Is `gen_ai.request.model` (or `commit_story.ai.section_type`) actually allowed as a queryable tag on `commit_story.llm.output_tokens`? A tag can arrive on every data point and still be ungroupable until it's allowed in that metric's Metric Tag Configuration (Metrics without Limits™) — see `docs/research/datadog-metrics-without-limits-tag-configuration.md`. A widget that looks empty for this reason is a configuration gap, not a regression.
+4. Only after ruling out all of the above, suspect a regression in the token-usage attribute fix itself.
 
 ### The APM trace Metrics tab gotcha
 
