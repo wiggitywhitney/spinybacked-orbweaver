@@ -23,10 +23,12 @@ The compelling part of this demo isn't a metric number — it's the chain that p
 2. Do not click the trace's **Metrics** tab. See the gotcha below — this shows host infrastructure metrics, not the metrics this demo is about.
 3. Navigate to **Metrics Explorer** directly from the left nav (not from inside the trace view).
 4. Enter one of the validated queries:
-   - Story A: `avg:traces.span.metrics.calls{service:commit-story} by {gen_ai.request.model}`
-   - Story B: `avg:traces.span.metrics.calls{service:commit-story} by {commit_story.ai.section_type}`
+   - Story A: `sum:traces.span.metrics.calls{service:commit-story} by {gen_ai.request.model}`
+   - Story B: `sum:traces.span.metrics.calls{service:commit-story} by {commit_story.ai.section_type}`
    - Duration: `avg:traces.span.metrics.duration{service:commit-story} by {commit_story.ai.section_type}`
    - Token cost: `avg:commit_story.llm.output_tokens{*} by {commit_story.ai.section_type,gen_ai.request.model}`
+
+   `traces.span.metrics.calls` is a count metric — `sum:` gives the actual call total for the queried window; `avg:` averages the per-interval count and understates it. The live dashboard's Story A/B widgets currently use `avg:` (see PRD #980's Decision Log), so don't be surprised if the numbers on screen differ slightly from what `sum:` returns here — both are valid readings of the same metric, they answer different questions (rate vs. total).
 5. For the full triangle in one view, open the demo dashboard instead of querying ad hoc: **[commit-story Observability Triangle](https://app.datadoghq.com/dashboard/gmf-rra-var)**.
 
 Metrics Explorer itself has no click-through from a data point back to a specific contributing trace. Some dashboard widget types can open the APM Traces side panel scoped to the clicked series and time window, but that's a filtered trace list for that window, not a one-to-one link to the exact trace that produced the point. Don't promise a metric-to-specific-trace click live; if a metric-to-trace narrative beat is wanted, deliver it as spoken narration, not a UI action.
@@ -66,13 +68,13 @@ This is the single most common point of confusion for anyone new to this pipelin
 ### Navigating to your own metrics
 
 1. Open **Metrics Explorer** from Datadog's left nav.
-2. Query `avg:traces.span.metrics.calls{service:<your-service-name>}` to confirm span-derived metrics are flowing at all.
+2. Query `sum:traces.span.metrics.calls{service:<your-service-name>}` to confirm span-derived metrics are flowing at all — `sum:` gives the actual call total; `avg:` averages the per-interval count and understates it.
 3. Add `by {<your-custom-attribute>}` to group by any custom dimension you've configured in the Collector.
 4. If nothing appears, check three things in order: the Collector isn't running (check its logs); the attribute isn't in the connector's `dimensions:` list yet; or the attribute is on the wire but not queryable — see the tag configuration step below, which is the gap most likely to be missed.
 
 ### Prerequisite: Collector configuration
 
-Span-derived metrics require the `span_metrics` connector to be running with `add_resource_attributes: true` set — without it, `env` and `version` tags are silently missing from your metrics, which breaks unified-service-tagging navigation even when your OTel SDK sets those attributes correctly on spans. See `docs/demo/traces-metrics-setup.md` for the full Collector config reference, including how to add your own custom attributes to `dimensions:`.
+Span-derived metrics require the `span_metrics` connector to be running — that alone is enough for `calls` and `duration` to appear. `add_resource_attributes: true` is a separate, optional setting on top of that: without it, `env` and `version` tags are silently missing from your generated metrics, which breaks unified-service-tagging navigation even when your OTel SDK sets those attributes correctly on spans. Set it if you need `env`/`version` on these metrics; it is not required for span-derived metrics to exist at all. See `docs/demo/traces-metrics-setup.md` for the full Collector config reference, including how to add your own custom attributes to `dimensions:`.
 
 ### Prerequisite: Datadog tag configuration (Metrics without Limits™)
 
