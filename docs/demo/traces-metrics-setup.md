@@ -151,3 +151,7 @@ Once commit-story is running from a spiny-orb instrument branch with the Collect
 - **Logs Explorer** — pino log records with `trace_id` and `span_id` populated for lines emitted during active spans. "View related logs" in the APM trace view navigates directly to these.
 
 The logs↔traces correlation requires the pino bridge setup from commit-story-v2 PRD #77, which is a separate configuration step covered in the logs setup guide.
+
+---
+
+See also: [Observability Triangle Navigation](observability-triangle-navigation.md) for the demo presenter's step-by-step navigation path and the guide for future spiny-orb users checking their own metrics.

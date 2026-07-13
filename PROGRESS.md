@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- (2026-07-13) Wrote a navigation guide (`docs/demo/observability-triangle-navigation.md`) explaining how to get from an APM trace to the metrics that trace produced, since Datadog's UI puts that path one non-obvious click away and has a trap along the way: an individual trace's own "Metrics" tab shows unrelated host CPU/memory data, not the trace-derived metrics this project cares about. The guide covers both the live conference demo (with the narrative behind each of its two example metrics, and a troubleshooting order to follow if a widget looks empty on stage) and future users checking their own service's metrics after receiving spiny-orb instrumentation.
+
 - (2026-07-13) Created the observability triangle demo dashboard in Datadog: four widgets showing span rate and duration by AI section type, LLM token cost by section type and model, and span rate by model — all built from the metric queries validated the day before, with no new query syntax introduced. This is the visual artifact the demo project has been building toward.
 
 - (2026-07-12) Made the local OTel Collector survive a full machine reboot, not just a crash. The macOS LaunchAgent that keeps `otelcol-contrib` running (added 2026-07-08, crash-recovery already confirmed) had one untested condition: whether `RunAtLoad` actually fires at real login rather than only when manually loaded. Confirmed after an actual reboot — the Collector was already listening on its port and forwarding to Datadog with no manual start command. This closes the demo dashboard PRD's last infrastructure-durability gap before the dashboard itself gets built.

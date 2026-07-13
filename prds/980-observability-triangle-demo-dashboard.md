@@ -56,7 +56,7 @@ Read existing research in `docs/demo/traces-metrics-setup.md`, resolve the metri
 - [x] **M1.7: Promote token-usage attributes to `required` in commit-story-v2's Weaver schema** — complete, verified on `main`
 - [x] **M2: Establish and validate the complete Metrics Explorer demo queries**
 - [x] **M3: Create a Datadog demo dashboard via MCP**
-- [ ] **M4: Document the observability triangle navigation story**
+- [x] **M4: Document the observability triangle navigation story** — `docs/demo/observability-triangle-navigation.md` written with both sections; widget queries verified live against the dashboard via Datadog MCP; "See also" pointer added to `docs/demo/traces-metrics-setup.md`
 - [ ] **M5: Update PROGRESS.md with a changelog entry**
 
 ---
