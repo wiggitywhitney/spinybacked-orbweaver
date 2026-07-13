@@ -56,7 +56,7 @@ If you've received an instrument branch from spiny-orb and want to confirm your 
 Once your instrumented service is running with an OTel Collector configured with the `span_metrics` connector:
 
 - **Span-derived RED metrics** (`traces.span.metrics.calls`, `traces.span.metrics.duration`, and related error-rate metrics) appear automatically for `service:<your-service-name>`, with no extra code required beyond spiny-orb's instrumentation.
-- **Custom attribute dimensions** appear only for attributes you've explicitly added to the connector's `dimensions:` list in your Collector config — see `docs/demo/traces-metrics-setup.md` for the config shape. If your Weaver schema defines a custom attribute (like `commit_story.ai.section_type` in this demo) and spiny-orb has added it to your spans, you can group span-derived metrics by it the same way this demo does for Story B.
+- **Custom attribute dimensions** appear only for attributes you've explicitly added to the connector's `dimensions:` list in your Collector config — see `docs/demo/traces-metrics-setup.md` for the config shape. If your Weaver schema defines a custom attribute (like `commit_story.ai.section_type` in this demo) and spiny-orb has added it to your spans, you can group span-derived metrics by it the same way this demo does for Story B. **`dimensions:` alone is not enough** — see the tag configuration step below.
 
 ### The Metrics tab gotcha (read this first)
 
@@ -67,10 +67,14 @@ This is the single most common point of confusion for anyone new to this pipelin
 1. Open **Metrics Explorer** from Datadog's left nav.
 2. Query `avg:traces.span.metrics.calls{service:<your-service-name>}` to confirm span-derived metrics are flowing at all.
 3. Add `by {<your-custom-attribute>}` to group by any custom dimension you've configured in the Collector.
-4. If nothing appears, the two most common causes are: the Collector isn't running (check its logs), or the attribute isn't in the connector's `dimensions:` list yet.
+4. If nothing appears, check three things in order: the Collector isn't running (check its logs); the attribute isn't in the connector's `dimensions:` list yet; or the attribute is on the wire but not queryable — see the tag configuration step below, which is the gap most likely to be missed.
 
 ### Prerequisite: Collector configuration
 
 Span-derived metrics require the `span_metrics` connector to be running with `add_resource_attributes: true` set — without it, `env` and `version` tags are silently missing from your metrics, which breaks unified-service-tagging navigation even when your OTel SDK sets those attributes correctly on spans. See `docs/demo/traces-metrics-setup.md` for the full Collector config reference, including how to add your own custom attributes to `dimensions:`.
+
+### Prerequisite: Datadog tag configuration (Metrics without Limits™)
+
+Adding an attribute to the Collector's `dimensions:` list is not sufficient on its own. Datadog decouples ingestion from queryability: a tag can arrive on every data point and still be unusable in Metrics Explorer, dashboards, or monitors until it's explicitly allowed in that metric's **Metric Tag Configuration** (Metrics without Limits™). This is a separate, per-metric step in Datadog, done after the Collector-side config, not instead of it. Without it, a correctly configured Collector can still yield a metric with zero groupable tags. See `docs/research/datadog-metrics-without-limits-tag-configuration.md` for the full research and the UI/API steps to set this up.
 
 This section is the source material for issue #970 (README refresh for external users). If you're implementing #970, start here.
