@@ -57,7 +57,7 @@ Read existing research in `docs/demo/traces-metrics-setup.md`, resolve the metri
 - [x] **M2: Establish and validate the complete Metrics Explorer demo queries**
 - [x] **M3: Create a Datadog demo dashboard via MCP**
 - [x] **M4: Document the observability triangle navigation story** — `docs/demo/observability-triangle-navigation.md` written with both sections; widget queries verified live against the dashboard via Datadog MCP; "See also" pointer added to `docs/demo/traces-metrics-setup.md`
-- [ ] **M5: Update PROGRESS.md with a changelog entry**
+- [x] **M5: Update PROGRESS.md with a changelog entry** — dashboard URL added to the existing 2026-07-13 dashboard entry; navigation doc path already present in its own entry
 
 ---
 
