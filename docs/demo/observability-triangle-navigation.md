@@ -34,7 +34,7 @@ Datadog does not support navigating from a metric data point back to its contrib
 By the time this demo runs, all three legs — Story A, Story B, and Token cost — should show live data. If the Token cost widget looks empty at demo time, don't assume the underlying fix regressed. Check in this order before improvising a "coming soon" caveat live:
 
 1. Has commit-story run recently enough to produce fresh data?
-2. Is the OTel Collector actually running? Check `launchctl list com.whitney.otelcol-contrib` and `/tmp/otelcol-contrib.log` — a dead Collector drops telemetry silently with no error surfaced anywhere.
+2. Is the OTel Collector actually running? Check `lsof -i :4318` and `/tmp/otelcol.log` (see the startup procedure in `docs/demo/traces-metrics-setup.md`) — a dead Collector drops telemetry silently with no error surfaced anywhere.
 3. Only after ruling out both of the above, suspect a regression in the token-usage attribute fix itself.
 
 ### The APM trace Metrics tab gotcha
