@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-07-14) Created `docs/eng-talk-story-assets.md` and documented the SCH-002 (schema registration near-synonym detection) catch from commit-story-v2 run 22: the agent declared `commit_story.journal.base_path` as a new schema extension when instrumenting `findUnsummarizedWeeks`, and the validator caught it as a semantic duplicate of the already-registered `commit_story.journal.file_path`, blocking the submission. Preserved as a concrete example for the Datadog engineering team talk on why the schema registry's duplicate-detection rule exists.
 
+### Removed
+
+- (2026-07-14) Removed the completed engineering talk story-asset item from `docs/ROADMAP.md`'s "Path to Python" sequence, since it shipped and closed. ROADMAP is forward-looking only; completed work lives in this changelog instead.
+
 - (2026-07-13) Wrote a navigation guide (`docs/demo/observability-triangle-navigation.md`) explaining how to get from an APM trace to the metrics that trace produced, since Datadog's UI puts that path one non-obvious click away and has a trap along the way: an individual trace's own "Metrics" tab shows unrelated host CPU/memory data, not the trace-derived metrics this project cares about. The guide covers both the live conference demo (with the narrative behind each of its two example metrics, and a troubleshooting order to follow if a widget looks empty on stage) and future users checking their own service's metrics after receiving spiny-orb instrumentation.
 
 - (2026-07-13) Created the observability triangle demo dashboard in Datadog (https://app.datadoghq.com/dashboard/gmf-rra-var, "commit-story Observability Triangle"): four widgets showing span rate and duration by AI section type, LLM token cost by section type and model, and span rate by model — all built from the metric queries validated the day before, with no new query syntax introduced. This is the visual artifact the demo project has been building toward.
