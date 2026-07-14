@@ -147,7 +147,11 @@ Dimension values populate in Metrics Explorer only once live commit-story spans 
 Once commit-story is running from a spiny-orb instrument branch with the Collector active:
 
 - **APM Trace Explorer** — traces for `service:commit-story` with spans carrying `commit_story.ai.section_type` and `gen_ai.request.model` attributes.
-- **Metrics Explorer** — `commit_story.llm.output_tokens` grouped by `commit_story.ai.section_type` and `gen_ai.request.model`; also `traces.commit_story.*` span-derived metrics with the same dimensions.
+- **Metrics Explorer** — `commit_story.llm.output_tokens` grouped by `commit_story.ai.section_type` and `gen_ai.request.model`; also `traces.span.metrics.*` span-derived metrics with the same dimensions.
 - **Logs Explorer** — pino log records with `trace_id` and `span_id` populated for lines emitted during active spans. "View related logs" in the APM trace view navigates directly to these.
 
 The logs↔traces correlation requires the pino bridge setup from commit-story-v2 PRD #77, which is a separate configuration step covered in the logs setup guide.
+
+---
+
+See also: [Observability Triangle Navigation](observability-triangle-navigation.md) for the demo presenter's step-by-step navigation path and the guide for future spiny-orb users checking their own metrics.

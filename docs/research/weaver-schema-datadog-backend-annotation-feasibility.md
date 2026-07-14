@@ -1,0 +1,48 @@
+# Research: Weaver Schema Support for Datadog Backend Indexing Annotations
+
+**Project:** spinybacked-orbweaver
+**Last Updated:** 2026-07-06
+
+## Update Log
+
+| Date | Summary |
+|------|---------|
+| 2026-07-06 | Initial research — investigating whether Weaver's schema format has a mechanism for declaring backend-specific indexing hints (e.g. "this attribute must be a Datadog Metrics without Limits queryable tag"), and whether Datadog publishes an official Weaver dependency registry |
+
+## Findings
+
+### Summary
+
+Weaver ships a Rego-based policy engine that can validate custom annotations/policies against its resolved model (see Q1) — that mechanism itself is not a future extension. Whether Weaver's schema format currently recognizes and preserves arbitrary custom annotation fields (e.g. a vendor-defined `x-datadog-index` key) through to that resolved model is unconfirmed — this has not been exercised against the pinned Weaver version used in this project, and Q1's own findings treat it as an untested hypothesis, not a verified capability. What's missing regardless is Datadog-specific interpretation of any such annotation: Weaver has no shipped mechanism that recognizes or enforces a Datadog backend-indexing hint specifically, and no public Datadog-maintained Weaver dependency registry was found in the sources reviewed. Turning a generic annotation into an enforced "this attribute must be a Datadog-indexed tag" rule would require a separate tool (built on top of Weaver's existing annotation/policy support) that Datadog does not currently publish. The attribute-declaration half of the "repeatable Datadog pipeline" story (Weaver schema → Spiny-Orb reliably adds the attribute to spans) is representable in this project's existing architecture — it does not require anything new from Weaver — but two things must both be true before it's guaranteed, not one: `src/languages/javascript/rules/cov005.ts` must be promoted from advisory (`blocking: false`) to blocking, AND COV-005 must actually be wired to read Weaver's resolved `requirement_level` from real registry data (per PRD #980's Decision Log, it is not wired to real registry data today and is advisory even once wired) — PRD #980's M1.7 owns the Weaver schema promotion itself; PRD #1024 owns the COV-005 wiring, blocking behavior, and enforcement verification. Flipping `blocking: true` alone, without the wiring, changes nothing observable. Note also that even fully wired and blocking, COV-005 is an enforcement gate, not an attribute injector — it can only reject a run that's missing a required attribute, not add the attribute itself; remediation still happens in the LLM-driven instrumentation workflow, with COV-005 acting as the check that catches a run where remediation failed. The gap is downstream: turning "attribute is reliably on the span" into "attribute is a queryable Datadog metric tag" requires two more hops (Collector `dimensions:` config, then Datadog Metrics without Limits tag configuration); no such automation from a schema declaration — in Weaver, Datadog, or Spiny-Orb — was found in the sources and project materials reviewed.
+
+### Findings by Question
+
+**Q1: Does Weaver's schema format support vendor-specific backend metadata/annotations on attributes?**
+
+🟡 Medium confidence: Not as a shipped feature. Weaver has a Rego-based policy engine for validating custom annotations/policies (e.g., enforcing naming prefixes), and a forward-looking design doc from the f5/otel-weaver POC describes a planned general annotation/tagging mechanism for the broader "Component Telemetry Schema" concept, explicitly intended to let vendors "extend the definition of concepts defined by OpenTelemetry." But this is a proposal, not current behavior. This finding is a hypothesis, not a verified test result: a custom annotation key (e.g. `x-datadog-index: true`) would likely parse as valid YAML in a Weaver registry definition today — YAML validity alone does not show Weaver accepts or acts on unrecognized registry fields, and the f5 doc describes design intent, not a shipped mechanism. Untested, it should be treated as inert metadata that a separate tool would need to be written to consume, not as a confirmed Weaver capability.
+
+**Source says:** "for all the elements that make up the Component Telemetry Schema, a general mechanism of annotation or tagging will be integrated in order to attach additional traits, characteristics, or constraints, allowing vendors and companies to extend the definition of concepts defined by OpenTelemetry." ([f5/otel-weaver component-telemetry-schema.md](https://github.com/f5/otel-weaver/blob/main/docs/component-telemetry-schema.md))
+
+**Q2: Does Datadog publish an official Weaver dependency/semantic-convention registry?**
+
+🟢 High confidence: No public registry was found in the sources reviewed. Datadog's OTel integration is documentation-based mapping tables (["OpenTelemetry Semantic Conventions and Datadog Conventions"](https://docs.datadoghq.com/opentelemetry/mapping/semantic_mapping/)) plus Agent/Collector-side inference logic (e.g. `span.type` inferred from attributes present). No Datadog-maintained repo with a Weaver `registry_manifest.yaml` and `dependencies:` block analogous to `open-telemetry/semantic-conventions-genai` was found.
+
+**Q3: Is there an established pattern for encoding "this attribute must be an indexed metric tag in Datadog" as part of a Weaver registry?**
+
+🟡 Medium confidence: No established pattern was found in the sources and project materials reviewed, but the underlying reason isn't that indexing is conceptually the wrong layer — it's that no tool connecting a Weaver-declared intent to Datadog's tag-configuration API was found. Even with a working annotation mechanism, Metrics without Limits tag configuration is applied per **metric name** inside Datadog, not per **attribute** — so a Weaver annotation on the attribute definition would still need a translation step (reading the Weaver registry, reading the Collector's `dimensions:` config to know which metrics carry the attribute, then calling Datadog's tag-configuration API for each) that is genuinely new scope, not a config toggle.
+
+### Recommendation
+
+The attribute-reliability half of this story does not need new Weaver tooling — it needs two changes together, not either alone: (1) COV-005 (`src/languages/javascript/rules/cov005.ts`) wired to read Weaver's resolved `requirement_level` from real registry data, since it is not wired to real registry data today, and (2) the rule promoted from advisory (`blocking: false`) to blocking. Only with both in place is "Weaver declares it required → missing attributes block the run" actually guaranteed by a validation gate rather than by LLM behavior alone — promoting `blocking` on an unwired rule enforces nothing. COV-005 stops a non-compliant run from succeeding; it does not itself make Spiny-Orb add the missing attribute — that remediation is still performed by the instrumentation workflow. See project decision discussion (PRD #980) for the two-layer boundary this unlocks: Spiny-Orb-guaranteed attribute presence vs. manually-built-but-trustworthy downstream pipeline (Collector dimensions + Datadog tag configuration).
+
+### Caveats
+
+- The Rego policy engine and Component Telemetry Schema annotation mechanism were not tested directly — findings are based on documentation/design-doc descriptions, not hands-on verification against the current Weaver CLI version used in this project.
+- The "no public Datadog Weaver registry was found" finding is a negative search finding (nothing found in the sources reviewed) rather than a confirmed statement from Datadog that none exists — worth re-checking if Datadog's OTel tooling story changes.
+
+## Sources
+
+- [f5/otel-weaver component-telemetry-schema.md](https://github.com/f5/otel-weaver/blob/main/docs/component-telemetry-schema.md) — planned general annotation/tagging mechanism design
+- [open-telemetry/weaver define-your-own-telemetry-schema.md](https://github.com/open-telemetry/weaver/blob/main/docs/define-your-own-telemetry-schema.md) — custom registry manifest and dependency mechanics
+- [Datadog: OpenTelemetry Semantic Conventions and Datadog Conventions](https://docs.datadoghq.com/opentelemetry/mapping/semantic_mapping/) — confirms documentation-based mapping, not a Weaver registry
+- [open-telemetry/semantic-conventions-genai](https://github.com/open-telemetry/semantic-conventions-genai) — reference example of an actual Weaver dependency-registry pattern (used for comparison; no Datadog equivalent found)

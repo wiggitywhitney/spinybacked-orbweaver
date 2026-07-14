@@ -31,18 +31,14 @@ Before opening any PRD that adds, removes, or modifies validation rules or recon
 
 A strict sequential path — complete each step before starting the next. This is the near-term critical path; everything else in Short-term/Medium-term/Long-term below happens after Go, unless it's a Watch item (see Watch issues, below).
 
-1. Talk prep: demo dashboard — observability triangle navigation for spiny-orb instrumented services ([PRD #980](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/980)) — metrics pipeline confirmed working but no dashboard and no documented navigation path from APM traces to Metrics Explorer; PRD covers research, dashboard creation, and navigation docs for both demo and future users.
-2. Talk prep: engineering talk story asset — SCH-002 near-synonym catch from run 22 ([issue #924](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/924)) — agent invented `commit_story.journal.base_path` instead of reusing registered `commit_story.journal.file_path`; validator caught it; capture for engineering team talk.
-3. Small-issue batch (juggling order 1–8; #954 and #958 are blocked, work around them):
+1. Talk prep: engineering talk story asset — SCH-002 near-synonym catch from run 22 ([issue #924](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/924)) — agent invented `commit_story.journal.base_path` instead of reusing registered `commit_story.journal.file_path`; validator caught it; capture for engineering team talk.
+2. Small-issue batch — step 2 is complete once #993 (the only unblocked item) is done; #954 and #958 stay blocked and do not gate progress to step 3:
    - resolves.ts oscillation root cause investigation ([issue #954](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/954)) — **BLOCKED: no diagnostic data available.** resolves.ts recovered in run-16 (6 spans committed), so no debug dump was written. The run-15 tsc error is still unknown. Cannot proceed until a future eval run where resolves.ts fails again with `--debug-dump-dir` active. Do not start.
    - resolves.ts oscillation fix ([issue #958](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/958)) — **BLOCKED: depends on #954.**
-   - README CLI getting-started guidance: forceFlush and parent span ([issue #953](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/953)) — SPA-002 and SPA-001 are onboarding pitfalls; document the fix pattern.
-   - Per-target SPA-001 threshold in IS scoring ([eval issue #134](https://github.com/wiggitywhitney/spinybacked-orbweaver-eval/issues/134)) — taze's per-package HTTP spans legitimately exceed the current fixed threshold; fix lives in eval repo's `score-is.js`.
-   - Eval repo onboarding checklist ([eval issue #133](https://github.com/wiggitywhitney/spinybacked-orbweaver-eval/issues/133)) — add forceFlush setup and per-target SPA-001 threshold as required steps for new eval targets. Depends on eval #134.
    - Agent prompt: minimum-attribute threshold and registered-vs-extension decision framework ([issue #993](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/993)) — root cause of run-to-run attribute variance across all eval targets; research spike required before implementation.
-5. Eval run: commit-story-v2, positioned immediately before Python work begins (per [Eval cadence](#eval-cadence) above — run after any agent-behavior change made in step 4).
-6. Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
-7. Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)), including its OD-10 packaging research spike gate — multi-language rule architecture ✓ cleared (PRD #507 merged).
+3. Eval run: commit-story-v2, positioned immediately before Python work begins (per [Eval cadence](#eval-cadence) above — run after any agent-behavior change made in step 2).
+4. Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
+5. Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)), including its OD-10 packaging research spike gate — multi-language rule architecture ✓ cleared (PRD #507 merged).
 
 ## Watch issues
 
@@ -57,6 +53,8 @@ These are deferred until after future eval runs surface more data. Do not raise 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 (164 spans/38 packages) and run-15 provide 2+ CLI evals; data condition met. Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections.
+- Blocking gate for Weaver-required attribute presence ([PRD #1024](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1024)) — COV-005 is never wired to real registry data in production and is advisory even when wired; a run can succeed while a required attribute is silently missing.
+- Backfill broken and missing journal entries, June 6 – July 7 2026 ([issue #1027](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1027)) — journal generation silently failed for weeks, leaving placeholder text in entries and summaries; manual regeneration using existing commit-story-v2 tooling.
 
 ## Medium-term
 
