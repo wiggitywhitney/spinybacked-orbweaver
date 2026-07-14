@@ -1,7 +1,7 @@
 # Research: Datadog Metrics without Limits — Tag Configuration and Missing Groupable Tags
 
 **Project:** spinybacked-orbweaver
-**Last Updated:** 2026-07-09
+**Last Updated:** 2026-07-14
 
 ## Update Log
 
@@ -11,12 +11,13 @@
 | 2026-07-07 | Added findings on why `commit_story.llm.output_tokens` doesn't appear in Metrics > Summary search or Explorer autocomplete despite having historical data. Root cause found: the metric stopped reporting new data points weeks ago — this is a stale-metric symptom, not a metadata-indexing lag. |
 | 2026-07-08 | Corrected Q4's attributed cause. The `--import examples/instrumentation.js` flag was never the gap — both commit-story-v2 and spinybacked-orbweaver post-commit hooks already add it conditionally, confirmed active via live span `process.command_args` data, and the previously-cited "commit-story-v2 issue #899" does not exist (spinybacked-orbweaver's #899 is an unrelated, already-closed eval-run-APM issue). Live span inspection instead shows LLM-call spans carry `gen_ai.request.*` attributes but no `gen_ai.usage.output_tokens` / `gen_ai.usage.input_tokens` attribute at all — the metric's likely real data source is simply absent from current instrumentation, separate from and in addition to the tag-configuration gap this doc otherwise covers. |
 | 2026-07-09 | Added historical-note annotations reflecting PRD #980's M1.5 status correction: denylist tag configs executed/reporting for both metrics, but the mandatory cardinality-estimator safety check remains unconfirmed. |
+| 2026-07-14 | Clarified the summary's "zero queryable tags" claim to distinguish a tag that was never attached to a metric (a generation-time gap) from an attached tag that isn't queryable (a tag-configuration gap), and expanded the API section with concrete request methods/paths and required fields. |
 
 ## Findings
 
 ### Summary
 
-Datadog decouples metric **ingestion** from metric **indexing/queryability** via a feature called **Metrics without Limits™**. A tag can be present on every ingested data point and still be unusable in Metrics Explorer, dashboards, monitors, or `get_datadog_metric_context` unless it is explicitly added to that metric's **tag configuration** (an allowlist, or a denylist if `exclude_tags_mode: true`). This applies per metric name — two metrics emitted by the same pipeline with the same dimensions can have completely different queryable-tag outcomes depending on their tag configuration. A metric with no tag configuration at all has every tag queryable by default; zero queryable tags always means a restrictive configuration (an allowlist that omits the dimension, or a denylist that excludes it) exists for that metric, never the absence of one. **For this project, PRD #980's Decision Log approves denylist mode (`exclude_tags_mode: true` with an empty exclude list) over a per-metric allowlist** — it allows all tags immediately rather than requiring every new dimension to be added to a maintained per-metric list. Findings and recommendations below describe both modes; treat denylist as the approved implementation, not allowlist.
+Datadog decouples metric **ingestion** from metric **indexing/queryability** via a feature called **Metrics without Limits™**. A tag can be present on every ingested data point and still be unusable in Metrics Explorer, dashboards, monitors, or `get_datadog_metric_context` unless it is explicitly added to that metric's **tag configuration** (an allowlist, or a denylist if `exclude_tags_mode: true`). This applies per metric name — two metrics emitted by the same pipeline with the same dimensions can have completely different queryable-tag outcomes depending on their tag configuration. A metric with no tag configuration at all has every attached tag queryable by default. Zero queryable tags on a metric that does have dimensions attached at generation time (see Q2 below) means a restrictive tag configuration exists — an allowlist that omits the dimension, an explicit empty allowlist, or a denylist that excludes it — never the absence of a configuration. This is distinct from a tag that was never attached to the metric in the first place, which is a generation-time gap (group-by fields, or Collector `dimensions:`), not a tag-configuration gap. **For this project, PRD #980's Decision Log approves denylist mode (`exclude_tags_mode: true` with an empty exclude list) over a per-metric allowlist** — it allows all tags immediately rather than requiring every new dimension to be added to a maintained per-metric list. Findings and recommendations below describe both modes; treat denylist as the approved implementation, not allowlist.
 
 This is the most likely root cause for the observed gap between `traces.span.metrics.calls` (all dimensions queryable) and `traces.span.metrics.duration` (zero queryable tags) — both are emitted by the same `spanmetricsconnector` instance with the same `dimensions:` config, so the difference cannot be explained by the Collector config (verified: `otelcol-config.yaml` declares `dimensions: [gen_ai.request.model, commit_story.ai.section_type]` once at the connector level, applying uniformly to all its output metrics). The difference must live in Datadog's per-metric tag configuration.
 
@@ -56,12 +57,14 @@ This is the most likely root cause for the observed gap between `traces.span.met
 5. Check the **Estimated New Volume** shown before saving — do not save if it reports indexed volume exceeding ingested volume (a sign of a runaway cardinality config).
 6. Save.
 
-**Via API:** Datadog's v2 Metrics API has dedicated tag-configuration lifecycle endpoints (exact operation IDs, per `datadog-api-client`):
-- Create a tag configuration for a metric that doesn't have one yet.
-- Update the tag configuration (also covers "percentile aggregations of a distribution metric").
-- Delete a tag configuration.
+**Via API:** Datadog's v2 Metrics API has dedicated tag-configuration lifecycle endpoints, all under `/api/v2/metrics/{metric_name}/tags`:
+- `POST /api/v2/metrics/{metric_name}/tags` — create a tag configuration for a metric that doesn't have one yet. Body: `{"data": {"type": "manage_tags", "id": "<metric_name>", "attributes": {"metric_type": "<distribution|count|gauge|rate>", "tags": [...], "exclude_tags_mode": false, "include_percentiles": false}}}`.
+- `GET /api/v2/metrics/{metric_name}/tags` — read the current tag configuration.
+- `PATCH /api/v2/metrics/{metric_name}/tags` — update the tag configuration (also covers "percentile aggregations of a distribution metric" via `include_percentiles`). Requires a tag configuration to already exist.
+- `DELETE /api/v2/metrics/{metric_name}/tags` — delete the tag configuration.
+- `metric_type` is required on create/update and must match the metric's actual type; `tags` is the allowlist (or denylist, see below); `include_percentiles` only applies to distribution metrics.
 - The create/update/delete tag-configuration operations listed above require an application key from a user with the **"Manage Tags for Metrics"** permission (`metric_tags_write`).
-- `exclude_tags_mode: true` switches the same endpoint from allowlist to denylist semantics.
+- `exclude_tags_mode: true` switches the same endpoint from allowlist to denylist semantics — `tags` then becomes the exclude list.
 - Cardinality estimator endpoint — dry-run the impact before committing: `GET /api/v2/metrics/{metric_name}/estimate` with `filter[groups]` (the proposed group-by tags) and, for distribution metrics, `filter[pct]=true`. This is a separate, read-only endpoint authenticated with a standard API + application key pair — it does not require `metric_tags_write` or any other write permission. **The estimator (both this endpoint and the UI's "Estimated New Volume" preview at step 5 above) only works once the metric is older than 48 hours** — a metric younger than that has no estimate available yet, not a zero/safe estimate.
 
 **Source says:** "Update the tag configuration of a metric or percentile aggregations of a distribution metric or custom aggregations of a count, rate, or gauge metric... this endpoint requires a tag configuration to be created first." ([DatadogAPIClient::V2::MetricsAPI](https://datadoghq.dev/datadog-api-client-ruby/DatadogAPIClient/V2/MetricsAPI.html))

@@ -23,12 +23,12 @@ The compelling part of this demo isn't a metric number — it's the chain that p
 2. Do not click the trace's **Metrics** tab. See the gotcha below — this shows host infrastructure metrics, not the metrics this demo is about.
 3. Navigate to **Metrics Explorer** directly from the left nav (not from inside the trace view).
 4. Enter one of the validated queries:
-   - Story A: `sum:traces.span.metrics.calls{service:commit-story} by {gen_ai.request.model}`
-   - Story B: `sum:traces.span.metrics.calls{service:commit-story} by {commit_story.ai.section_type}`
+   - Story A: `avg:traces.span.metrics.calls{service:commit-story} by {gen_ai.request.model}`
+   - Story B: `avg:traces.span.metrics.calls{service:commit-story} by {commit_story.ai.section_type}`
    - Duration: `avg:traces.span.metrics.duration{service:commit-story} by {commit_story.ai.section_type}`
    - Token cost: `avg:commit_story.llm.output_tokens{*} by {commit_story.ai.section_type,gen_ai.request.model}`
 
-   `traces.span.metrics.calls` is a count metric — `sum:` gives the actual call total for the queried window; `avg:` averages the per-interval count and understates it. The live dashboard's Story A/B widgets currently use `avg:` (see PRD #980's Decision Log), so don't be surprised if the numbers on screen differ slightly from what `sum:` returns here — both are valid readings of the same metric, they answer different questions (rate vs. total).
+   `traces.span.metrics.calls` is a count metric — `avg:` matches what the live dashboard's Story A/B widgets use (see PRD #980's Decision Log), so the numbers you see here should match the dashboard. If you want the actual call total for the queried window instead of the per-interval average, swap in `sum:` — both are valid readings of the same metric, they just answer different questions (rate vs. total).
 5. For the full triangle in one view, open the demo dashboard instead of querying ad hoc: **[commit-story Observability Triangle](https://app.datadoghq.com/dashboard/gmf-rra-var)**.
 
 Metrics Explorer itself has no click-through from a data point back to a specific contributing trace. Some dashboard widget types can open the APM Traces side panel scoped to the clicked series and time window, but that's a filtered trace list for that window, not a one-to-one link to the exact trace that produced the point. Don't promise a metric-to-specific-trace click live; if a metric-to-trace narrative beat is wanted, deliver it as spoken narration, not a UI action.
@@ -36,7 +36,7 @@ Metrics Explorer itself has no click-through from a data point back to a specifi
 By the time this demo runs, all three legs — Story A, Story B, and Token cost — should show live data. If the Token cost widget looks empty at demo time, don't assume the underlying fix regressed. Check in this order before improvising a "coming soon" caveat live:
 
 1. Has commit-story run recently enough to produce fresh data?
-2. Is the OTel Collector actually running? Check `lsof -i :4318` and `/tmp/otelcol.log` (see the startup procedure in `docs/demo/traces-metrics-setup.md`) — a dead Collector drops telemetry silently with no error surfaced anywhere.
+2. Is the OTel Collector actually running? Check `lsof -i :4318`. If it's running via the persistent macOS LaunchAgent (the normal case), its log is at `/tmp/otelcol-contrib.log`; if it was started manually as a fallback, check `/tmp/otelcol.log` instead (see the startup procedure in `docs/demo/traces-metrics-setup.md`). A dead Collector drops telemetry silently with no error surfaced anywhere.
 3. Is `gen_ai.request.model` (or `commit_story.ai.section_type`) actually allowed as a queryable tag on `commit_story.llm.output_tokens`? A tag can arrive on every data point and still be ungroupable until it's allowed in that metric's Metric Tag Configuration (Metrics without Limits™) — see `docs/research/datadog-metrics-without-limits-tag-configuration.md`. A widget that looks empty for this reason is a configuration gap, not a regression.
 4. Only after ruling out all of the above, suspect a regression in the token-usage attribute fix itself.
 
