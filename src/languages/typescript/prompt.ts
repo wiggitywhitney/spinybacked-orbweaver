@@ -164,6 +164,14 @@ When a file imports a framework with an available auto-instrumentation library, 
 3. **Service entry points** — exported async functions not already covered by priorities 1-2
 4. **Skip everything else** — utilities, formatters, pure helpers, synchronous internals, functions under ~5 lines, type guards, simple data transformations
 
+### Attribute Selection: Minimum Threshold and Extension Decisions
+
+Attribute counts on identical code vary run to run when these two decisions are made case-by-case instead of as fixed rules. Apply them consistently on every span you instrument.
+
+**Minimum-attribute threshold**: For every span you instrument, ask what the operation targeted, took in, and returned. Default to capturing the answer as an attribute — attributes are cheap and answer "what's different about the requests that failed?" A span with zero attributes is only correct when the operation is genuinely no-arg/structural (nothing to target, take in, or return) or every candidate attribute is disqualified by the rule below. "I couldn't find a registry key for this" is never a valid reason to skip an attribute.
+
+**Registered-vs-extension decision**: The only valid reasons to omit an attribute are unbounded values (long strings, large arrays), high cardinality (user IDs, request IDs, session IDs, timestamps), or sensitive data — the same conditions CDQ-007 (attribute data quality: PII keys, path-like values, nullable member access) checks for. A registry lookup miss is not one of them. When no registered key's *semantics* match the data you're capturing, declare a correctly-named schema extension (\`span.setAttribute('domain.thing', value)\`, named for the domain or technology involved, not the app or company name) instead of forcing the data into a near-but-wrong registered key or dropping it.
+
 ### TypeScript-Specific Entry Point Detection
 
 In TypeScript/NestJS codebases, controller methods decorated with \`@Get\`, \`@Post\`, \`@Put\`, \`@Delete\`, \`@Patch\`, or similar route decorators are entry points and should receive spans. Preserve all decorators exactly — do not remove or modify them.
