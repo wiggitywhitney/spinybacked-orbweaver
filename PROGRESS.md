@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- (2026-07-15) Removed the minimum-attribute-threshold and registered-vs-extension decision framework item from `docs/ROADMAP.md`'s "Path to Python" sequence, since it shipped and closed as issue #993. ROADMAP is forward-looking only; completed work lives in this changelog instead.
+
 - (2026-07-14) Removed the completed engineering talk story-asset item from `docs/ROADMAP.md`'s "Path to Python" sequence, since it shipped and closed. ROADMAP is forward-looking only; completed work lives in this changelog instead.
 
 - (2026-07-13) Wrote a navigation guide (`docs/demo/observability-triangle-navigation.md`) explaining how to get from an APM trace to the metrics that trace produced, since Datadog's UI puts that path one non-obvious click away and has a trap along the way: an individual trace's own "Metrics" tab shows unrelated host CPU/memory data, not the trace-derived metrics this project cares about. The guide covers both the live conference demo (with the narrative behind each of its two example metrics, and a troubleshooting order to follow if a widget looks empty on stage) and future users checking their own service's metrics after receiving spiny-orb instrumentation.
