@@ -19,7 +19,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Removed
 
 - (2026-07-15) Removed the minimum-attribute-threshold and registered-vs-extension decision framework item from `docs/ROADMAP.md`'s "Path to Python" sequence, since it shipped and closed as issue #993. ROADMAP is forward-looking only; completed work lives in this changelog instead.
-- (2026-07-17) Removed the schema registration completeness research spike from `docs/ROADMAP.md` now that it concluded with a No-go verdict and closed. ROADMAP is forward-looking only; the research outcome is recorded in this changelog's Added section instead.
 
 - (2026-07-14) Removed the completed engineering talk story-asset item from `docs/ROADMAP.md`'s "Path to Python" sequence, since it shipped and closed. ROADMAP is forward-looking only; completed work lives in this changelog instead.
 
