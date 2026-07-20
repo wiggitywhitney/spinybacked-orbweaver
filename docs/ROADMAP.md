@@ -53,6 +53,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - SPA-001: design discussion — span granularity for CLI tools processing large collections ([issue #731](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/731)) — taze run-13 (164 spans/38 packages) and run-15 provide 2+ CLI evals; data condition met. Design question: per-item vs. batched spans for CLI tools iterating user-controlled collections.
 - Blocking gate for Weaver-required attribute presence ([PRD #1024](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1024)) — COV-005 is never wired to real registry data in production and is advisory even when wired; a run can succeed while a required attribute is silently missing.
 - Backfill broken and missing journal entries, June 6 – July 7 2026 ([issue #1027](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1027)) — journal generation silently failed for weeks, leaving placeholder text in entries and summaries; manual regeneration using existing commit-story-v2 tooling.
+- LLM Day talk deck refresh ahead of July 28, 2026 re-presentation ([PRD #1038](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1038)) — hard external deadline, not gated by the Path to Python after-Go sequencing above; minimal section-by-section update covering TypeScript framing, rule corrections, orchestration/fix-loop diagram rebuilds, a live Datadog demo cue, and a one-line LLM-judge example.
 
 ## Medium-term
 
