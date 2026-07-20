@@ -66,6 +66,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - Research spike: registry semantic integrity ([issue #907](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/907)) — detecting spans that pass all current rules but capture only input parameters with no output/state attributes. Taze run-15 complete; second eval target data condition met.
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
+- Acceptance gate: agent invented dd.http.product_id instead of reusing registry attribute ([issue #1025](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1025)) — recurred twice (2026-07-05, 2026-07-20) despite PR #1030's prompt fix; next step is assessing whether a validation rule should catch and block registry-attribute duplication rather than relying on prompt wording alone.
 
 ## Long-term
 
