@@ -42,7 +42,7 @@ Every implementing session should read these before starting any milestone:
 |------|---------------|
 | `talk/slides-llmday/index.qmd` | The file being refreshed — read current state at the start of each milestone |
 | `docs/rules-reference.md` | Canonical rule reference — source of truth for M2's NDS-008 and SCH-001/002 corrections |
-| `~/.claude/rules/writing-voice.md` | Whitney's documented voice rules — every drafted slide/speaker-note sentence must comply before she reviews it |
+| `~/.claude/rules/writing-voice.md` | Whitney's documented voice rules — every drafted slide/speaker-note sentence must comply before she reviews it. This is a machine-local prerequisite (Whitney's global Claude Code config, not repo-tracked); an implementer without access to it must ask Whitney for the current rules before drafting prose. |
 | `README.md` | Current authoritative architecture description for cross-checking diagram accuracy |
 
 **Style precedent:** `prds/done/847-llmday-austin-talk-slides.md` — the PRD that built this deck originally. Its "Style Reference," Mermaid gotchas, and "one slide at a time, render, wait for approval" working pattern all still apply here. Its Decision Log entries (progressive-build pattern, `wrappingWidth` sizing, no `\n` in node labels, `flowchart LR` for landscape slides, unique `classDef` names per diagram) are binding unless a milestone below says otherwise.
@@ -77,7 +77,7 @@ Every implementing session should read these before starting any milestone:
 
 **Do NOT:**
 - Add a new slide dedicated to TypeScript — this is a wording correction across existing slides, not new content.
-- Cite more than #955/#961 or explain what those issues found in detail — the audience doesn't need the calibration story, just the fact that TS is now well-tested.
+- Cite more than #955/#961 or explain what those issues found in detail — the audience doesn't need the calibration story, just the fact that TS has been more rigorously tested since. Keep the deck's existing "Experimental" framing for TypeScript status — do not imply it has graduated beyond that.
 
 **Success criteria:** Every place the deck implies JS-only support now reflects JS + TS. Whitney approves. `quarto render talk/slides-llmday/index.qmd` succeeds.
 
@@ -93,7 +93,7 @@ Every implementing session should read these before starting any milestone:
 - (a) Add NDS-008 (Invalid Regex Flag Syntax, added 2026-06-19) as the deck's missing 5th Tier-1 structural gate, alongside the existing four (syntax validation, elision detection, lint check, Weaver static check).
 - (b) Remove the framing that SCH-001/SCH-002 are conditional ("LLM judge only if new names"). They are now unconditionally blocking — the old sparse-registry advisory-downgrade path was removed in PRD #508. Update the wording to reflect that these are blocking checks with an optional LLM judge only for a narrower "is this a semantic near-duplicate" sub-question, not a gate on whether the check applies at all.
 
-**Step 4:** Add one link to `docs/rules-reference.md` — for anyone in the audience who wants exact rule counts or descriptions — on the validation-pipeline slide or in speaker notes.
+**Step 4:** Add one link to `docs/rules-reference.md` — for anyone in the audience who wants exact rule counts or descriptions — on the validation-pipeline slide or in speaker notes. `talk/slides-llmday/index.qmd` does not live at the repo root, so a bare relative path resolves incorrectly from the deck's location — use the canonical hosted GitHub URL (`https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md`) instead of a relative path.
 
 **Do NOT:**
 - Put an exact rule count on any slide.
