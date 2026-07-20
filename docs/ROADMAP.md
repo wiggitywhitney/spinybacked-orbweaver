@@ -56,6 +56,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - CDQ-007: reconcile self-identified-but-unapplied fixes with the no-new-imports prompt constraint ([issue #1035](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1035)) — run-26 found the agent self-diagnosed a raw-path CDQ-007 defect but left it unfixed because the fix required a new import.
 - PR summary undercounts attributes and omits SCH-003 type-mismatch defects ([issue #1036](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1036)) — run-26 found the PR summary only reflects `attributesCreated`, not total `setAttribute` calls, and has no mechanism to surface SCH-003-type defects; related to #948.
 - SCH-003: String()-wrapped numeric value shipped for int-declared attribute, undetected by validator ([issue #1037](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1037)) — run-26 found a type mismatch matching #948's stated backstop coverage table that didn't get flagged; needs investigation into whether the backstop's AST check has a gap or isn't wired into this code path.
+- LLM Day talk deck refresh ahead of July 28, 2026 re-presentation ([PRD #1038](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1038)) — hard external deadline, not gated by the Path to Python after-Go sequencing above; minimal section-by-section update covering TypeScript framing, rule corrections, orchestration/fix-loop diagram rebuilds, a live Datadog demo cue, and a one-line LLM-judge example.
 
 ## Medium-term
 
