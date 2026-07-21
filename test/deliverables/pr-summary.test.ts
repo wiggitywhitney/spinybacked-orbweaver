@@ -62,6 +62,15 @@ function _makeRunResult(overrides: Partial<RunResult> = {}): RunResult {
   };
 }
 
+/** Extract only the "## Span Category Breakdown" section from rendered markdown. */
+function _extractSpanCategorySection(md: string): string {
+  const start = md.indexOf('## Span Category Breakdown');
+  if (start === -1) return '';
+  const rest = md.slice(start);
+  const nextHeading = rest.indexOf('\n## ', 1);
+  return nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+}
+
 /** Minimal AgentConfig for rendering. */
 function _makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -294,17 +303,130 @@ describe('renderPrSummary', () => {
       }
     });
 
-    it('skips table when no files have span categories', () => {
+    it('skips table entirely when there are no committed files', () => {
       const result = _makeRunResult({
         fileResults: [
-          _makeFileResult({ spanCategories: null }),
-          _makeFileResult({ spanCategories: undefined }),
+          _makeFileResult({ status: 'failed', spanCategories: null }),
+          _makeFileResult({ status: 'skipped', spanCategories: undefined }),
         ],
       });
       const md = renderPrSummary(result, _makeConfig());
 
       // Should not crash, no table rendered
       expect(md).not.toMatch(/external calls/i);
+    });
+
+    it('shows a "not reported" row for a committed file with spanCategories: null after a successful retry', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/journal-graph.js',
+            status: 'success',
+            spanCategories: null,
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Committed file must still appear in the table, not be silently dropped
+      const section = _extractSpanCategorySection(md);
+      const row = section.split('\n').find(l => l.includes('journal-graph.js'));
+      expect(row).toMatch(/not reported/i);
+    });
+
+    it('labels the table as self-reported, unverified data', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            spanCategories: {
+              externalCalls: 1,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 5,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toMatch(/self-reported|not independently verified|not verified/i);
+    });
+
+    it('notes that External Calls excludes auto-instrumented library calls', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            librariesNeeded: [{ package: '@traceloop/instrumentation-langchain', importName: 'LangchainInstrumentation' }],
+            spanCategories: {
+              externalCalls: 0,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 4,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toMatch(/auto-instrument/i);
+    });
+
+    it('surfaces reused attribute count alongside new schema extensions', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/git-collector.js',
+            attributesCreated: 9,
+            schemaExtensions: [],
+            spanCategories: {
+              externalCalls: 0,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 6,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const section = _extractSpanCategorySection(md);
+      const row = section.split('\n').find(l => l.includes('git-collector.js'));
+      // All 9 attributes reused, 0 new — reuse must be visible, not just "0"
+      expect(row).toMatch(/9/);
+    });
+
+    it('keeps per-row category values consistent with that file\'s own reported data', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/claude-collector.js',
+            spanCategories: {
+              externalCalls: 0,
+              schemaDefined: 0,
+              serviceEntryPoints: 1,
+              totalFunctionsInFile: 8,
+            },
+          }),
+          _makeFileResult({
+            path: '/project/src/other.js',
+            spanCategories: {
+              externalCalls: 2,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 3,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const section = _extractSpanCategorySection(md);
+      const rowA = section.split('\n').find(l => l.includes('claude-collector.js'));
+      const rowB = section.split('\n').find(l => l.includes('other.js'));
+      // Each row must reflect its own file's numbers, not another file's
+      expect(rowA).toContain('8');
+      expect(rowA).not.toContain('| 3 |');
+      expect(rowB).toContain('3');
     });
   });
 

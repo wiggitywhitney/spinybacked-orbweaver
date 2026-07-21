@@ -76,6 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-07-21) Fixed the PR report's Span Category Breakdown table to stop presenting unverified LLM self-report as fact and to stop silently dropping files. Committed files with `spanCategories: null` (e.g., after a successful fix-loop retry) now appear with explicit "not reported" cells instead of being omitted entirely; a new table caption labels the data as self-reported and clarifies that "External Calls" excludes calls covered by an auto-instrumentation library; and a new "Attrs Reused / New" column surfaces attribute reuse alongside newly proposed schema extensions. Fixes issue #1042.
+
 - (2026-07-08) Confirmed the demo dashboard's LLM token-cost metric fix is live: with fresh commit-story-v2 activity flowing, the metric now groups correctly both by AI section type and by model, and the grouped values match the underlying span data exactly.
 
 - (2026-07-08) Restored the npm link between this repo and commit-story-v2 that its post-commit hook depends on to run the local, instrumented source instead of silently falling back to a published package with no telemetry. A prior `npm install` had pruned the link's symlink from `node_modules` while leaving a stale reference behind, so the hook had been resolving to the fallback path without any visible error. Also root-caused why no fresh telemetry had reached Datadog since July 6: the local OTel Collector that both repos export spans to isn't a persistent service — it's a manually started process with no auto-restart, so a machine restart silently stopped all telemetry capture until it's started again by hand.

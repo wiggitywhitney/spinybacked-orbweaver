@@ -169,27 +169,63 @@ function sanitizeCell(value: string): string {
   return value.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
 }
 
+/**
+ * Count new attribute-type schema extensions proposed by a file (as opposed to
+ * span-type extensions, which are tracked separately by collectSpanExtensionIds).
+ */
+function countNewAttributeExtensions(file: FileResult): number {
+  let count = 0;
+  for (const ext of file.schemaExtensions) {
+    const idMatch = ext.match(/id:\s*(\S+)/);
+    const typeMatch = ext.match(/type:\s*(\S+)/);
+    if (idMatch) {
+      const id = idMatch[1];
+      const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
+      if (!isSpan) count++;
+    } else {
+      const trimmed = ext.trim();
+      if (!trimmed.startsWith('span.')) count++;
+    }
+  }
+  return count;
+}
+
 function renderSpanCategoryBreakdown(runResult: RunResult, display: DisplayFn): string {
-  // Only show span categories for committed files — failed files carry
-  // spanCategories from rejected agent output which doesn't reflect the branch.
-  const filesWithCategories = runResult.fileResults.filter(
-    (f): f is FileResult & { spanCategories: NonNullable<FileResult['spanCategories']> } =>
-      f.spanCategories != null && (f.status === 'success' || f.status === 'partial'),
+  // Only show committed files with at least one span — failed/skipped files carry
+  // spanCategories from rejected agent output that doesn't reflect the branch, and
+  // zero-span files have nothing to categorize (they're already compressed in the
+  // Per-File Results table).
+  const committedFiles = runResult.fileResults.filter(
+    f => (f.status === 'success' || f.status === 'partial') && f.spansAdded > 0,
   );
 
-  if (filesWithCategories.length === 0) return '';
+  if (committedFiles.length === 0) return '';
 
   const lines: string[] = ['## Span Category Breakdown'];
   lines.push('');
-  lines.push('| File | External Calls | Schema-Defined | Service Entry Points | Total Functions |');
-  lines.push('|------|---------------|----------------|---------------------|-----------------|');
+  lines.push(
+    '*Self-reported by the LLM, not independently verified against the diff. ' +
+      '"External Calls" counts manually-wrapped spans only — calls covered by an ' +
+      'auto-instrumentation library are not included.*',
+  );
+  lines.push('');
+  lines.push('| File | External Calls | Schema-Defined | Service Entry Points | Total Functions | Attrs Reused / New |');
+  lines.push('|------|---------------|----------------|---------------------|-----------------|---------------------|');
 
-  for (const file of filesWithCategories) {
+  for (const file of committedFiles) {
     const name = display(file.path);
     const cats = file.spanCategories;
-    lines.push(
-      `| ${name} | ${cats.externalCalls} | ${cats.schemaDefined} | ${cats.serviceEntryPoints} | ${cats.totalFunctionsInFile} |`,
-    );
+    const newAttrs = countNewAttributeExtensions(file);
+    const reusedAttrs = Math.max(file.attributesCreated - newAttrs, 0);
+    const attrsCell = `${reusedAttrs} / ${newAttrs}`;
+
+    if (cats == null) {
+      lines.push(`| ${name} | not reported | not reported | not reported | not reported | ${attrsCell} |`);
+    } else {
+      lines.push(
+        `| ${name} | ${cats.externalCalls} | ${cats.schemaDefined} | ${cats.serviceEntryPoints} | ${cats.totalFunctionsInFile} | ${attrsCell} |`,
+      );
+    }
   }
 
   return lines.join('\n');
