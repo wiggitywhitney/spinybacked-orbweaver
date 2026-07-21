@@ -30,7 +30,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderSummaryHeader(runResult, config));
   sections.push(renderPerFileStatus(runResult, config, display));
   sections.push(renderSpanCategoryBreakdown(runResult, display));
-  sections.push(renderSchemaChanges(runResult));
+  sections.push(renderSchemaChanges(runResult, display));
   sections.push(renderReviewSensitivity(runResult, config, display));
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderRecommendedRefactors(runResult, display));
@@ -138,9 +138,16 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
     const libs = isCommitted
       ? (file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—')
       : '—';
-    const exts = isCommitted && file.schemaExtensions.length > 0
-      ? file.schemaExtensions.map(e => `\`${sanitizeCell(e)}\``).join(', ')
-      : '—';
+    // Extension detail lives in the Schema Changes section (New Span IDs /
+    // New Attribute Extensions, both grouped by file) — show only a count
+    // here to avoid printing the same identifiers in two places.
+    const extCount = isCommitted
+      ? (() => {
+          const { spanIds, attributeIds } = dedupeExtensionIds(file.schemaExtensions);
+          return spanIds.size + attributeIds.size;
+        })()
+      : 0;
+    const exts = extCount > 0 ? `${extCount} (see Schema Changes)` : '—';
     let costStr = '—';
     try {
       costStr = formatDollars(tokensToDollars(file.tokenUsage, config.agentModel));
@@ -169,58 +176,83 @@ function sanitizeCell(value: string): string {
   return value.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
 }
 
+/**
+ * Parse a single schema extension entry and classify it as span vs attribute.
+ * Extensions come in two formats:
+ * 1. YAML-like: "id: span.myapp.op\ntype: span"
+ * 2. Bare string: "span.myapp.op" (from supplementSchemaExtensions)
+ */
+function classifyExtension(ext: string): { id: string; isSpan: boolean } {
+  const idMatch = ext.match(/id:\s*(\S+)/);
+  const typeMatch = ext.match(/type:\s*(\S+)/);
+  if (idMatch) {
+    const id = idMatch[1];
+    return { id, isSpan: id.startsWith('span.') || typeMatch?.[1] === 'span' };
+  }
+  const trimmed = ext.trim();
+  return { id: trimmed, isSpan: trimmed.startsWith('span.') };
+}
+
+/**
+ * Deduplicate a file's raw schemaExtensions into unique span and attribute IDs.
+ * Single source of truth for extension parsing — used by the Per-File Results
+ * count, the Schema Changes per-file listings, and the attribute-count summary
+ * so all three agree on what counts as a unique extension.
+ */
+function dedupeExtensionIds(extensions: string[]): { spanIds: Set<string>; attributeIds: Set<string> } {
+  const spanIds = new Set<string>();
+  const attributeIds = new Set<string>();
+  for (const ext of extensions) {
+    const { id, isSpan } = classifyExtension(ext);
+    (isSpan ? spanIds : attributeIds).add(id);
+  }
+  return { spanIds, attributeIds };
+}
+
+/**
+ * Count new attribute-type schema extensions proposed by a file (as opposed to
+ * span-type extensions, which are tracked separately by collectSpanExtensionIdsByFile).
+ * Deduplicated, mirroring collectAttributeExtensionIdsByFile's per-file Set dedup.
+ */
+function countNewAttributeExtensions(file: FileResult): number {
+  return dedupeExtensionIds(file.schemaExtensions).attributeIds.size;
+}
+
 function renderSpanCategoryBreakdown(runResult: RunResult, display: DisplayFn): string {
-  // Only show span categories for committed files — failed files carry
-  // spanCategories from rejected agent output which doesn't reflect the branch.
-  const filesWithCategories = runResult.fileResults.filter(
-    (f): f is FileResult & { spanCategories: NonNullable<FileResult['spanCategories']> } =>
-      f.spanCategories != null && (f.status === 'success' || f.status === 'partial'),
+  // Only show committed files with at least one span — failed/skipped files carry
+  // spanCategories from rejected agent output that doesn't reflect the branch, and
+  // zero-span files have nothing to categorize (they're already compressed in the
+  // Per-File Results table).
+  const committedFiles = runResult.fileResults.filter(
+    f => (f.status === 'success' || f.status === 'partial') && f.spansAdded > 0,
   );
 
-  if (filesWithCategories.length === 0) return '';
+  if (committedFiles.length === 0) return '';
 
   const lines: string[] = ['## Span Category Breakdown'];
   lines.push('');
-  lines.push('| File | External Calls | Schema-Defined | Service Entry Points | Total Functions |');
-  lines.push('|------|---------------|----------------|---------------------|-----------------|');
+  lines.push(
+    '*Self-reported by the LLM, not independently verified against the diff. ' +
+      '"External Calls" counts manually-wrapped spans only — calls covered by an ' +
+      'auto-instrumentation library are not included.*',
+  );
+  lines.push('');
+  lines.push('| File | External Calls | Schema-Defined | Service Entry Points | Total Functions | Attrs Reused / New |');
+  lines.push('|------|---------------|----------------|---------------------|-----------------|---------------------|');
 
-  for (const file of filesWithCategories) {
+  for (const file of committedFiles) {
     const name = display(file.path);
     const cats = file.spanCategories;
-    lines.push(
-      `| ${name} | ${cats.externalCalls} | ${cats.schemaDefined} | ${cats.serviceEntryPoints} | ${cats.totalFunctionsInFile} |`,
-    );
-  }
+    const newAttrs = countNewAttributeExtensions(file);
+    const reusedAttrs = Math.max(file.attributesCreated - newAttrs, 0);
+    const attrsCell = `${reusedAttrs} / ${newAttrs}`;
 
-  return lines.join('\n');
-}
-
-function renderSchemaChanges(runResult: RunResult): string {
-  const lines: string[] = ['## Schema Changes'];
-  lines.push('');
-
-  if (runResult.schemaDiff) {
-    // Only add a heading when the diff doesn't already contain its own ### headings.
-    // Real Weaver output uses plain-text labels; test fixtures may contain markdown headers.
-    if (!/^###\s/m.test(runResult.schemaDiff)) {
-      lines.push('### New Attribute Keys');
-      lines.push('');
-    }
-    lines.push(runResult.schemaDiff);
-  } else {
-    lines.push('No schema changes detected.');
-  }
-
-  // Supplement with span extension listing from committed files.
-  // The weaver registry diff may not include individual span entries prominently,
-  // so we list them explicitly from the FileResult schema extensions.
-  const spanExtensions = collectSpanExtensionIds(runResult);
-  if (spanExtensions.length > 0) {
-    lines.push('');
-    lines.push(`### New Span IDs (${spanExtensions.length})`);
-    lines.push('');
-    for (const spanId of spanExtensions) {
-      lines.push(`- \`${spanId}\``);
+    if (cats == null) {
+      lines.push(`| ${name} | not reported | not reported | not reported | not reported | ${attrsCell} |`);
+    } else {
+      lines.push(
+        `| ${name} | ${cats.externalCalls} | ${cats.schemaDefined} | ${cats.serviceEntryPoints} | ${cats.totalFunctionsInFile} | ${attrsCell} |`,
+      );
     }
   }
 
@@ -228,36 +260,111 @@ function renderSchemaChanges(runResult: RunResult): string {
 }
 
 /**
- * Collect deduplicated span extension IDs from committed file results.
- * Span extensions have IDs starting with "span." or type "span".
+ * Shift every markdown heading in raw tool output down by two levels (capped at H6),
+ * so an embedded "# H1" can't outrank the "## Schema Changes" section it's nested in.
  */
-function collectSpanExtensionIds(runResult: RunResult): string[] {
-  const seen = new Set<string>();
-  for (const file of runResult.fileResults) {
-    if (file.status !== 'success' && file.status !== 'partial') continue;
-    for (const ext of file.schemaExtensions) {
-      // Extensions come in two formats:
-      // 1. YAML-like: "id: span.myapp.op\ntype: span"
-      // 2. Bare string: "span.myapp.op" (from supplementSchemaExtensions)
-      const idMatch = ext.match(/id:\s*(\S+)/);
-      const typeMatch = ext.match(/type:\s*(\S+)/);
+function downlevelHeadings(diff: string): string {
+  return diff.replace(/^(#{1,6})(\s)/gm, (_match, hashes: string, space: string) => {
+    const shifted = Math.min(hashes.length + 2, 6);
+    return `${'#'.repeat(shifted)}${space}`;
+  });
+}
 
-      if (idMatch) {
-        const id = idMatch[1];
-        const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
-        if (isSpan && !seen.has(id)) {
-          seen.add(id);
-        }
-      } else {
-        // Bare string — check if it's a span extension directly
-        const trimmed = ext.trim();
-        if (trimmed.startsWith('span.') && !seen.has(trimmed)) {
-          seen.add(trimmed);
-        }
+/** Strip trailing whitespace per line and collapse runs of blank lines to at most one. */
+function normalizeBlankLines(diff: string): string {
+  return diff
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function renderSchemaChanges(runResult: RunResult, display: DisplayFn): string {
+  const lines: string[] = ['## Schema Changes'];
+  lines.push('');
+
+  if (runResult.schemaDiff) {
+    // Raw tool output (Weaver's registry diff) may embed its own headings. Detect
+    // them in the original text — before downlevelHeadings() shifts every level by
+    // +2 — so a synthetic heading isn't added redundantly above content that
+    // already has its own (soon-to-be-shifted) heading.
+    const normalized = normalizeBlankLines(runResult.schemaDiff);
+    const hasOwnHeading = /^#{1,6}\s/m.test(normalized);
+    const sanitized = downlevelHeadings(normalized);
+    if (!hasOwnHeading) {
+      lines.push('### New Attribute Keys');
+      lines.push('');
+    }
+    lines.push(sanitized);
+  } else {
+    lines.push('No schema changes detected.');
+  }
+
+  // Supplement with span extension listing from committed files, grouped by file
+  // so it's additive to (not a redundant flat dump alongside) the Per-File Results table.
+  const spanExtensionsByFile = collectSpanExtensionIdsByFile(runResult, display);
+  if (spanExtensionsByFile.size > 0) {
+    lines.push('');
+    lines.push('### New Span IDs');
+    for (const [fileName, spanIds] of spanExtensionsByFile) {
+      lines.push('');
+      lines.push(`**${fileName}**`);
+      for (const spanId of spanIds) {
+        lines.push(`- \`${spanId}\``);
       }
     }
   }
-  return [...seen].sort();
+
+  // Supplement with attribute extension listing from committed files, grouped by
+  // file — mirrors New Span IDs above. This is the only place attribute keys are
+  // listed per-file; the Per-File Results table shows only a count.
+  const attributeExtensionsByFile = collectAttributeExtensionIdsByFile(runResult, display);
+  if (attributeExtensionsByFile.size > 0) {
+    lines.push('');
+    lines.push('### New Attribute Extensions');
+    for (const [fileName, attrIds] of attributeExtensionsByFile) {
+      lines.push('');
+      lines.push(`**${fileName}**`);
+      for (const attrId of attrIds) {
+        lines.push(`- \`${attrId}\``);
+      }
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Collect span extension IDs from committed file results, grouped by file
+ * (in file order) and deduplicated within each file. Span extensions have
+ * IDs starting with "span." or type "span".
+ */
+function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
+  const byFile = new Map<string, string[]>();
+  for (const file of runResult.fileResults) {
+    if (file.status !== 'success' && file.status !== 'partial') continue;
+    const { spanIds } = dedupeExtensionIds(file.schemaExtensions);
+    if (spanIds.size > 0) {
+      byFile.set(display(file.path), [...spanIds].sort());
+    }
+  }
+  return byFile;
+}
+
+/**
+ * Collect attribute extension IDs from committed file results, grouped by file
+ * (in file order) and deduplicated within each file. Mirrors
+ * collectSpanExtensionIdsByFile but selects the complementary (non-span) subset.
+ */
+function collectAttributeExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
+  const byFile = new Map<string, string[]>();
+  for (const file of runResult.fileResults) {
+    if (file.status !== 'success' && file.status !== 'partial') continue;
+    const { attributeIds } = dedupeExtensionIds(file.schemaExtensions);
+    if (attributeIds.size > 0) {
+      byFile.set(display(file.path), [...attributeIds].sort());
+    }
+  }
+  return byFile;
 }
 
 /**
@@ -366,6 +473,16 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     for (let i = 0; i < fileEntries.length; i++) {
       const [, { fileDisplay, annotations }] = fileEntries[i];
       lines.push(`**${fileDisplay}**`);
+
+      // Group occurrences of the same rule within a file so a finding repeated
+      // across many lines states its rule ID, name, and description once instead
+      // of repeating the full "RULE-ID (Name): description" prefix per occurrence.
+      // Grouped by (ruleId, displayText) rather than ruleId alone — when no human
+      // description is registered, distinct occurrences of the same rule can carry
+      // distinct agent-facing messages, and those must not collapse into just the
+      // first occurrence's text.
+      const ruleGroups = new Map<string, { ruleId: string; displayText: string; lineNumbers: number[] }>();
+      const ruleOrder: string[] = [];
       for (const ann of annotations) {
         // Prefer human-facing description when registered; fall back to the agent-facing message.
         // Agent-facing messages are terse and directive (written for the fix-loop, not for humans).
@@ -373,8 +490,27 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
         const humanDesc = getRuleHumanDescription(ann.ruleId);
         const displayText = humanDesc
           ?? expandRuleCodesInText(ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, ''));
-        lines.push(`- ${formatRuleId(ann.ruleId)}: ${displayText}`);
+        const key = `${ann.ruleId} ${displayText}`;
+        const existing = ruleGroups.get(key);
+        if (existing) {
+          if (ann.lineNumber != null) existing.lineNumbers.push(ann.lineNumber);
+        } else {
+          ruleGroups.set(key, { ruleId: ann.ruleId, displayText, lineNumbers: ann.lineNumber != null ? [ann.lineNumber] : [] });
+          ruleOrder.push(key);
+        }
       }
+
+      for (const key of ruleOrder) {
+        const { ruleId, displayText, lineNumbers } = ruleGroups.get(key)!;
+        if (lineNumbers.length === 1) {
+          lines.push(`- ${formatRuleId(ruleId)}:${lineNumbers[0]}: ${displayText}`);
+        } else if (lineNumbers.length > 1) {
+          lines.push(`- ${formatRuleId(ruleId)}: ${displayText} (lines ${lineNumbers.join(', ')})`);
+        } else {
+          lines.push(`- ${formatRuleId(ruleId)}: ${displayText}`);
+        }
+      }
+
       if (i < fileEntries.length - 1) {
         lines.push('');
       }
@@ -756,7 +892,7 @@ function renderLiveCheckCompliance(runResult: RunResult): string {
     // (raw reports can reach hundreds of megabytes and cause E2BIG on gh pr create).
     if (liveCheckStatus.spansReceived && endOfRunValidation) {
       lines.push('');
-      lines.push(`Full compliance report: \`${LIVE_CHECK_ARTIFACT_FILENAME}\``);
+      lines.push(`Full compliance report: [${LIVE_CHECK_ARTIFACT_FILENAME}](./${LIVE_CHECK_ARTIFACT_FILENAME})`);
     }
   } else if (endOfRunValidation) {
     // Backward compat: no liveCheckStatus but raw report present

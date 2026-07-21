@@ -62,6 +62,15 @@ function _makeRunResult(overrides: Partial<RunResult> = {}): RunResult {
   };
 }
 
+/** Extract only the "## Span Category Breakdown" section from rendered markdown. */
+function _extractSpanCategorySection(md: string): string {
+  const start = md.indexOf('## Span Category Breakdown');
+  if (start === -1) return '';
+  const rest = md.slice(start);
+  const nextHeading = rest.indexOf('\n## ', 1);
+  return nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+}
+
 /** Minimal AgentConfig for rendering. */
 function _makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -294,17 +303,130 @@ describe('renderPrSummary', () => {
       }
     });
 
-    it('skips table when no files have span categories', () => {
+    it('skips table entirely when there are no committed files', () => {
       const result = _makeRunResult({
         fileResults: [
-          _makeFileResult({ spanCategories: null }),
-          _makeFileResult({ spanCategories: undefined }),
+          _makeFileResult({ status: 'failed', spanCategories: null }),
+          _makeFileResult({ status: 'skipped', spanCategories: undefined }),
         ],
       });
       const md = renderPrSummary(result, _makeConfig());
 
       // Should not crash, no table rendered
       expect(md).not.toMatch(/external calls/i);
+    });
+
+    it('shows a "not reported" row for a committed file with spanCategories: null after a successful retry', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/journal-graph.js',
+            status: 'success',
+            spanCategories: null,
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Committed file must still appear in the table, not be silently dropped
+      const section = _extractSpanCategorySection(md);
+      const row = section.split('\n').find(l => l.includes('journal-graph.js'));
+      expect(row).toMatch(/not reported/i);
+    });
+
+    it('labels the table as self-reported, unverified data', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            spanCategories: {
+              externalCalls: 1,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 5,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toMatch(/self-reported|not independently verified|not verified/i);
+    });
+
+    it('notes that External Calls excludes auto-instrumented library calls', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            librariesNeeded: [{ package: '@traceloop/instrumentation-langchain', importName: 'LangchainInstrumentation' }],
+            spanCategories: {
+              externalCalls: 0,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 4,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toMatch(/auto-instrument/i);
+    });
+
+    it('surfaces reused attribute count alongside new schema extensions', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/git-collector.js',
+            attributesCreated: 9,
+            schemaExtensions: [],
+            spanCategories: {
+              externalCalls: 0,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 6,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const section = _extractSpanCategorySection(md);
+      const row = section.split('\n').find(l => l.includes('git-collector.js'));
+      // All 9 attributes reused, 0 new — reuse must be visible, not just "0"
+      expect(row).toMatch(/9/);
+    });
+
+    it('keeps per-row category values consistent with that file\'s own reported data', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/claude-collector.js',
+            spanCategories: {
+              externalCalls: 0,
+              schemaDefined: 0,
+              serviceEntryPoints: 1,
+              totalFunctionsInFile: 8,
+            },
+          }),
+          _makeFileResult({
+            path: '/project/src/other.js',
+            spanCategories: {
+              externalCalls: 2,
+              schemaDefined: 0,
+              serviceEntryPoints: 0,
+              totalFunctionsInFile: 3,
+            },
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const section = _extractSpanCategorySection(md);
+      const rowA = section.split('\n').find(l => l.includes('claude-collector.js'));
+      const rowB = section.split('\n').find(l => l.includes('other.js'));
+      // Each row must reflect its own file's numbers, not another file's
+      expect(rowA).toContain('8');
+      expect(rowA).not.toContain('| 3 |');
+      expect(rowB).toContain('3');
     });
   });
 
@@ -317,6 +439,15 @@ describe('renderPrSummary', () => {
 
       expect(md).toContain('myapp.api_client.fetch_data');
       expect(md).toContain('http.method');
+    });
+
+    it('does not add a redundant synthetic heading when schemaDiff already has its own heading', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added Spans\n- `myapp.api_client.fetch_data`\n\n### Added Attributes\n- `http.method`',
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('New Attribute Keys');
     });
 
     it('shows "no schema changes" message when diff is absent', () => {
@@ -360,25 +491,23 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain('New Span IDs');
     });
 
-    it('deduplicates span extensions across multiple files', () => {
+    it('deduplicates repeated span extensions within the same file', () => {
       const result = _makeRunResult({
         schemaDiff: '### Added',
         fileResults: [
           _makeFileResult({
-            path: '/project/src/a.js',
-            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span'],
-          }),
-          _makeFileResult({
             path: '/project/src/b.js',
-            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span', 'id: span.myapp.save\ntype: span'],
+            schemaExtensions: [
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: span.myapp.save\ntype: span',
+            ],
           }),
         ],
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // fetch_data appears in both files but should render once
-      const matches = md.match(/span\.myapp\.fetch_data/g);
-      // One in per-file table extensions column + one in New Span IDs list
+      // fetch_data appears twice in this file's own extensions but should render once
       const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
       expect(spanSection.match(/span\.myapp\.fetch_data/g)).toHaveLength(1);
       expect(spanSection).toContain('span.myapp.save');
@@ -436,6 +565,101 @@ describe('renderPrSummary', () => {
       // Non-span bare string should not appear in the New Span IDs section
       const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
       expect(spanSection).not.toContain('myapp.request.method');
+    });
+
+    it('groups New Span IDs by file instead of one flat alphabetical list', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added',
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/a.js',
+            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span'],
+          }),
+          _makeFileResult({
+            path: '/project/src/b.js',
+            schemaExtensions: ['id: span.myapp.save\ntype: span'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
+      expect(spanSection).toContain('a.js');
+      expect(spanSection).toContain('b.js');
+      // Each file's span must appear after its own file label, not before it
+      const aIndex = spanSection.indexOf('a.js');
+      const fetchIndex = spanSection.indexOf('span.myapp.fetch_data');
+      const bIndex = spanSection.indexOf('b.js');
+      const saveIndex = spanSection.indexOf('span.myapp.save');
+      expect(aIndex).toBeLessThan(fetchIndex);
+      expect(bIndex).toBeLessThan(saveIndex);
+    });
+
+    it('down-levels embedded raw H1 headings in schemaDiff and trims trailing blank lines', () => {
+      const result = _makeRunResult({
+        schemaDiff: '# Summary of Schema Changes\n\n### Added Attributes\n- `http.method`   \n\n\n\n',
+        fileResults: [],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const schemaSection = md.split('## Schema Changes')[1]?.split(/\n## /)[0] ?? '';
+      // No heading above H3 (i.e. no bare "# " or "## ") inside the section
+      expect(schemaSection).not.toMatch(/^#{1,2}\s/m);
+      // No run of 3+ consecutive newlines (more than one blank line)
+      expect(schemaSection).not.toMatch(/\n{3,}/);
+    });
+
+    it('lists new attribute extensions from committed files, grouped by file', () => {
+      const result = _makeRunResult({
+        schemaDiff: undefined,
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/a.js',
+            schemaExtensions: ['id: myapp.request.method\ntype: string'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const schemaSection = md.split('## Schema Changes')[1]?.split(/\n## /)[0] ?? '';
+      expect(schemaSection).toContain('New Attribute Extensions');
+      expect(schemaSection).toContain('a.js');
+      expect(schemaSection).toContain('myapp.request.method');
+    });
+
+    it('excludes span extensions from the New Attribute Extensions section', () => {
+      const result = _makeRunResult({
+        schemaDiff: undefined,
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: [
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: myapp.request.method\ntype: string',
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const attrSection = md.split('### New Attribute Extensions')[1]?.split('##')[0] ?? '';
+      expect(attrSection).not.toContain('span.myapp.fetch_data');
+      expect(attrSection).toContain('myapp.request.method');
+    });
+
+    it('does not duplicate attribute keys already listed in the Per-File Results table', () => {
+      const result = _makeRunResult({
+        schemaDiff: undefined,
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/a.js',
+            schemaExtensions: ['id: myapp.request.method\ntype: string'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const perFileSection = md.split('## Per-File Results')[1]?.split('##')[0] ?? '';
+      expect(perFileSection).not.toContain('myapp.request.method');
     });
   });
 
@@ -567,6 +791,54 @@ describe('renderPrSummary', () => {
 
       // Rule ID should include human-readable label
       expect(md).toContain('CDQ-001 (Spans Closed)');
+    });
+
+    it('includes the line number when finding.lineNumber is present', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'CDQ-001',
+                passed: false,
+                filePath: '/project/src/api-client.js',
+                lineNumber: 42,
+                message: 'Span name uses camelCase',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Consistent with reasoning-report.ts: "RULE-ID (Name):LINE: description"
+      expect(md).toContain('CDQ-001 (Spans Closed):42:');
+    });
+
+    it('omits the line number segment when finding.lineNumber is null', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'CDQ-001',
+                passed: false,
+                filePath: '/project/src/api-client.js',
+                lineNumber: null,
+                message: 'Span name uses camelCase',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('CDQ-001 (Spans Closed):');
+      expect(md).not.toMatch(/CDQ-001 \(Spans Closed\):\d/);
     });
 
     it('uses getRuleHumanDescription when available (COV-005) instead of agent-facing message', () => {
@@ -759,6 +1031,35 @@ describe('renderPrSummary', () => {
       expect(advisorySection).toContain('**c.js**');
       // Blank lines separate the file sections
       expect(advisorySection).toContain('\n\n');
+    });
+
+    it('groups repeated occurrences of the same rule within a file instead of repeating the rule prefix', () => {
+      const makeAnnotation = (line: number) => ({
+        ruleId: 'COV-005',
+        passed: false,
+        filePath: '/project/src/db.js',
+        lineNumber: line,
+        message: 'COV-005: Required (must add): db.query.text. Add setAttribute() calls.',
+        tier: 2 as const,
+        blocking: false,
+      });
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/db.js',
+            advisoryAnnotations: [makeAnnotation(12), makeAnnotation(34), makeAnnotation(56)],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const advisorySection = md.split('### Advisory Findings')[1]?.split('##')[0] ?? '';
+      // The rule prefix "COV-005 (Domain Attributes)" should appear exactly once for this file,
+      // not once per occurrence.
+      const prefixOccurrences = advisorySection.split('COV-005 (Domain Attributes)').length - 1;
+      expect(prefixOccurrences).toBe(1);
+      // All three occurrence line numbers should be listed together.
+      expect(advisorySection).toContain('lines 12, 34, 56');
     });
 
   describe('agent notes section', () => {
@@ -1432,6 +1733,18 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain(fullReport);
       // Artifact file reference must appear instead
       expect(md).toContain('spiny-orb-live-check-report.json');
+    });
+
+    it('renders the artifact reference as a real markdown link, not bare backticks', () => {
+      const fullReport = JSON.stringify({ statistics: { total_entities: 5 } });
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: true, spanCount: 5, totalAdvisories: 0 },
+        endOfRunValidation: fullReport,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('[spiny-orb-live-check-report.json](./spiny-orb-live-check-report.json)');
+      expect(md).not.toContain('`spiny-orb-live-check-report.json`');
     });
 
     it('omits full compliance report when no spans received (nothing to show)', () => {

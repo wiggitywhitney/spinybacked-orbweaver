@@ -214,7 +214,7 @@ Spinybacked Orbweaver
 An AI agent that instruments code with OpenTelemetry
 
 ::: {.notes}
-Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. It analyzes your JavaScript code, adds OpenTelemetry spans, validates its own output, and opens a pull request.
+Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. It analyzes your JavaScript and TypeScript code, adds OpenTelemetry spans, validates its own output, and opens a pull request.
 :::
 
 ## {data-transition="none"}
@@ -440,7 +440,7 @@ Built on community projects
 
 <div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
 <a href="https://github.com/open-telemetry/weaver" style="color:#E91E63; text-decoration:none;">OpenTelemetry Weaver</a><br>
-<a href="https://github.com/instrumentation-score/spec" style="color:#F57C00; text-decoration:none;">Instrumentation Score</a>
+<a href="https://instrumentation-score.com/" style="color:#F57C00; text-decoration:none;">Instrumentation Score</a>
 </div>
 
 ::: {.notes}
@@ -762,14 +762,14 @@ On a pass, the orchestrator writes any new schema conventions back to the Weaver
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -821,14 +821,14 @@ Instrumented file comes out of the AI agent. Now it hits the validator.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -871,7 +871,13 @@ committed`"])
 ```
 
 ::: {.notes}
-First: the blocking structural gate. Four checks, all deterministic.
+First: the blocking structural gate. Fail any check, and the file is reverted to its original state.
+
+- Syntax: the file still compiles.
+- Regex: no whitespace between a regex's closing slash and its flag, which produces a confusing compiler error.
+- Elision: no existing code was deleted.
+- Lint: the file still passes Prettier's formatting check — same tool for JavaScript and TypeScript.
+- Weaver: schema extensions, if any, are structurally valid.
 :::
 
 ## {.center data-transition="none"}
@@ -881,14 +887,14 @@ First: the blocking structural gate. Four checks, all deterministic.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -943,14 +949,14 @@ Any fail — structural fail, file rejected.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -996,7 +1002,12 @@ committed`"])
 ```
 
 ::: {.notes}
-All pass — blocking quality checks run.
+Structural gate passed. Now the blocking quality checks run — fail any one, and the file goes to the fix loop.
+
+- Schema fidelity: span names and attributes must match the registry exactly, or — for genuinely new names — pass an LLM judge check confirming they are not a semantic duplicate of something that already exists.
+- Coverage: entry points and outbound calls have spans, errors get recorded.
+- Code quality: spans are closed and properly guarded.
+- API-only: instrumentation depends only on the OTel API, not the SDK.
 :::
 
 ## {.center data-transition="none"}
@@ -1006,14 +1017,14 @@ All pass — blocking quality checks run.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1060,7 +1071,12 @@ committed`"])
 ```
 
 ::: {.notes}
-Non-blocking advisory checks run in parallel.
+Non-blocking advisory checks run in parallel — these never fail the file, but the agent is directed to address them.
+
+- No Utility Spans: flags spans added to trivial, pure functions that add noise without value.
+- Async: flags async functions that are missing a span.
+- Attribute quality: flags PII in attribute values, unsafe null checks, and missing type coercion.
+- etc.: a few smaller checks, like preferring `startActiveSpan` over `startSpan`.
 :::
 
 ## {.center data-transition="none"}
@@ -1070,14 +1086,14 @@ Non-blocking advisory checks run in parallel.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1135,14 +1151,14 @@ Blocking quality fail — findings returned.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1200,14 +1216,14 @@ Advisory findings surface in the fail output too — blocking failures plus advi
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1257,7 +1273,7 @@ committed`"])
 ```
 
 ::: {.notes}
-All blocking checks pass — the agent gets one improvement pass: the passing file plus all advisory findings.
+All blocking checks pass and there are advisory findings — the agent gets one improvement pass: the passing file plus all advisory findings.
 :::
 
 ## {.center data-transition="none"}
@@ -1267,14 +1283,14 @@ All blocking checks pass — the agent gets one improvement pass: the passing fi
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1334,14 +1350,14 @@ Advisory findings feed the improvement pass from both paths.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1401,14 +1417,14 @@ Full validation re-run on the improved file.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1470,14 +1486,14 @@ All blocking checks pass — improved file committed.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1530,6 +1546,8 @@ committed`"])
 
 ::: {.notes}
 Any blocking check still fails — prior passing file committed. Either way, something good goes out.
+
+Full rule descriptions: https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md
 :::
 
 
@@ -1543,6 +1561,7 @@ Any blocking check still fails — prior passing file committed. Either way, som
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1591,6 +1610,7 @@ When validation fails — something structurally or semantically wrong — we do
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1640,6 +1660,7 @@ First: the same agent gets the full failure report and retries.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1690,6 +1711,7 @@ Validator checks again.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1742,6 +1764,7 @@ If it passes — great. Most files do.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1795,6 +1818,7 @@ If not — a fresh agent takes over with clean context. Key: it receives the sam
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1848,6 +1872,7 @@ Validator checks again.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1902,6 +1927,7 @@ The fresh context often breaks the loop.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1957,6 +1983,7 @@ Still failing — the orchestrator decomposes the file. Each function is instrum
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -2012,6 +2039,7 @@ Each function is validated on its own.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -2068,6 +2096,7 @@ Most functions pass individually even when the whole file didn't.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent

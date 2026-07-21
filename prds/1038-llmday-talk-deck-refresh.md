@@ -1,6 +1,6 @@
 # PRD #1038: LLM Day Talk Deck Refresh
 
-**Status**: Not Started
+**Status**: In Progress
 **Priority**: High
 **Created**: 2026-07-20
 **GitHub Issue**: wiggitywhitney/spinybacked-orbweaver#1038
@@ -59,7 +59,7 @@ Every implementing session should read these before starting any milestone:
 ## Milestones
 
 - [ ] M1: TypeScript reframe
-- [ ] M2: Rule count/category correction
+- [x] M2: Rule count/category correction
 - [ ] M3: Orchestration diagram — full rebuild to current state
 - [ ] M4: Fix-loop diagram — add deterministic auto-fixes
 - [ ] M5: Demo section — live Datadog click-through
