@@ -30,7 +30,7 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderSummaryHeader(runResult, config));
   sections.push(renderPerFileStatus(runResult, config, display));
   sections.push(renderSpanCategoryBreakdown(runResult, display));
-  sections.push(renderSchemaChanges(runResult));
+  sections.push(renderSchemaChanges(runResult, display));
   sections.push(renderReviewSensitivity(runResult, config, display));
   sections.push(renderAgentNotes(runResult, display));
   sections.push(renderRecommendedRefactors(runResult, display));
@@ -231,32 +231,55 @@ function renderSpanCategoryBreakdown(runResult: RunResult, display: DisplayFn): 
   return lines.join('\n');
 }
 
-function renderSchemaChanges(runResult: RunResult): string {
+/**
+ * Shift every markdown heading in raw tool output down by two levels (capped at H6),
+ * so an embedded "# H1" can't outrank the "## Schema Changes" section it's nested in.
+ */
+function downlevelHeadings(diff: string): string {
+  return diff.replace(/^(#{1,6})(\s)/gm, (_match, hashes: string, space: string) => {
+    const shifted = Math.min(hashes.length + 2, 6);
+    return `${'#'.repeat(shifted)}${space}`;
+  });
+}
+
+/** Strip trailing whitespace per line and collapse runs of blank lines to at most one. */
+function normalizeBlankLines(diff: string): string {
+  return diff
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function renderSchemaChanges(runResult: RunResult, display: DisplayFn): string {
   const lines: string[] = ['## Schema Changes'];
   lines.push('');
 
   if (runResult.schemaDiff) {
-    // Only add a heading when the diff doesn't already contain its own ### headings.
-    // Real Weaver output uses plain-text labels; test fixtures may contain markdown headers.
-    if (!/^###\s/m.test(runResult.schemaDiff)) {
+    // Raw tool output (Weaver's registry diff) may embed its own headings —
+    // shift them below the section's own level and trim stray whitespace
+    // before deciding whether a synthetic heading is still needed.
+    const sanitized = normalizeBlankLines(downlevelHeadings(runResult.schemaDiff));
+    if (!/^###\s/m.test(sanitized)) {
       lines.push('### New Attribute Keys');
       lines.push('');
     }
-    lines.push(runResult.schemaDiff);
+    lines.push(sanitized);
   } else {
     lines.push('No schema changes detected.');
   }
 
-  // Supplement with span extension listing from committed files.
-  // The weaver registry diff may not include individual span entries prominently,
-  // so we list them explicitly from the FileResult schema extensions.
-  const spanExtensions = collectSpanExtensionIds(runResult);
-  if (spanExtensions.length > 0) {
+  // Supplement with span extension listing from committed files, grouped by file
+  // so it's additive to (not a redundant flat dump alongside) the Per-File Results table.
+  const spanExtensionsByFile = collectSpanExtensionIdsByFile(runResult, display);
+  if (spanExtensionsByFile.size > 0) {
     lines.push('');
-    lines.push(`### New Span IDs (${spanExtensions.length})`);
-    lines.push('');
-    for (const spanId of spanExtensions) {
-      lines.push(`- \`${spanId}\``);
+    lines.push('### New Span IDs');
+    for (const [fileName, spanIds] of spanExtensionsByFile) {
+      lines.push('');
+      lines.push(`**${fileName}**`);
+      for (const spanId of spanIds) {
+        lines.push(`- \`${spanId}\``);
+      }
     }
   }
 
@@ -264,13 +287,15 @@ function renderSchemaChanges(runResult: RunResult): string {
 }
 
 /**
- * Collect deduplicated span extension IDs from committed file results.
- * Span extensions have IDs starting with "span." or type "span".
+ * Collect span extension IDs from committed file results, grouped by file
+ * (in file order) and deduplicated within each file. Span extensions have
+ * IDs starting with "span." or type "span".
  */
-function collectSpanExtensionIds(runResult: RunResult): string[] {
-  const seen = new Set<string>();
+function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
+  const byFile = new Map<string, string[]>();
   for (const file of runResult.fileResults) {
     if (file.status !== 'success' && file.status !== 'partial') continue;
+    const seen = new Set<string>();
     for (const ext of file.schemaExtensions) {
       // Extensions come in two formats:
       // 1. YAML-like: "id: span.myapp.op\ntype: span"
@@ -281,19 +306,18 @@ function collectSpanExtensionIds(runResult: RunResult): string[] {
       if (idMatch) {
         const id = idMatch[1];
         const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
-        if (isSpan && !seen.has(id)) {
-          seen.add(id);
-        }
+        if (isSpan) seen.add(id);
       } else {
         // Bare string — check if it's a span extension directly
         const trimmed = ext.trim();
-        if (trimmed.startsWith('span.') && !seen.has(trimmed)) {
-          seen.add(trimmed);
-        }
+        if (trimmed.startsWith('span.')) seen.add(trimmed);
       }
     }
+    if (seen.size > 0) {
+      byFile.set(display(file.path), [...seen].sort());
+    }
   }
-  return [...seen].sort();
+  return byFile;
 }
 
 /**

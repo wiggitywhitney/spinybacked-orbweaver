@@ -482,25 +482,23 @@ describe('renderPrSummary', () => {
       expect(md).not.toContain('New Span IDs');
     });
 
-    it('deduplicates span extensions across multiple files', () => {
+    it('deduplicates repeated span extensions within the same file', () => {
       const result = _makeRunResult({
         schemaDiff: '### Added',
         fileResults: [
           _makeFileResult({
-            path: '/project/src/a.js',
-            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span'],
-          }),
-          _makeFileResult({
             path: '/project/src/b.js',
-            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span', 'id: span.myapp.save\ntype: span'],
+            schemaExtensions: [
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: span.myapp.save\ntype: span',
+            ],
           }),
         ],
       });
       const md = renderPrSummary(result, _makeConfig());
 
-      // fetch_data appears in both files but should render once
-      const matches = md.match(/span\.myapp\.fetch_data/g);
-      // One in per-file table extensions column + one in New Span IDs list
+      // fetch_data appears twice in this file's own extensions but should render once
       const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
       expect(spanSection.match(/span\.myapp\.fetch_data/g)).toHaveLength(1);
       expect(spanSection).toContain('span.myapp.save');
@@ -558,6 +556,48 @@ describe('renderPrSummary', () => {
       // Non-span bare string should not appear in the New Span IDs section
       const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
       expect(spanSection).not.toContain('myapp.request.method');
+    });
+
+    it('groups New Span IDs by file instead of one flat alphabetical list', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added',
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/a.js',
+            schemaExtensions: ['id: span.myapp.fetch_data\ntype: span'],
+          }),
+          _makeFileResult({
+            path: '/project/src/b.js',
+            schemaExtensions: ['id: span.myapp.save\ntype: span'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const spanSection = md.split('### New Span IDs')[1]?.split('##')[0] ?? '';
+      expect(spanSection).toContain('a.js');
+      expect(spanSection).toContain('b.js');
+      // Each file's span must appear after its own file label, not before it
+      const aIndex = spanSection.indexOf('a.js');
+      const fetchIndex = spanSection.indexOf('span.myapp.fetch_data');
+      const bIndex = spanSection.indexOf('b.js');
+      const saveIndex = spanSection.indexOf('span.myapp.save');
+      expect(aIndex).toBeLessThan(fetchIndex);
+      expect(bIndex).toBeLessThan(saveIndex);
+    });
+
+    it('down-levels embedded raw H1 headings in schemaDiff and trims trailing blank lines', () => {
+      const result = _makeRunResult({
+        schemaDiff: '# Summary of Schema Changes\n\n### Added Attributes\n- `http.method`   \n\n\n\n',
+        fileResults: [],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const schemaSection = md.split('## Schema Changes')[1]?.split(/\n## /)[0] ?? '';
+      // No heading above H3 (i.e. no bare "# " or "## ") inside the section
+      expect(schemaSection).not.toMatch(/^#{1,2}\s/m);
+      // No run of 3+ consecutive newlines (more than one blank line)
+      expect(schemaSection).not.toMatch(/\n{3,}/);
     });
   });
 
