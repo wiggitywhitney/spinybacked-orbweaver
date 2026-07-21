@@ -441,6 +441,15 @@ describe('renderPrSummary', () => {
       expect(md).toContain('http.method');
     });
 
+    it('does not add a redundant synthetic heading when schemaDiff already has its own heading', () => {
+      const result = _makeRunResult({
+        schemaDiff: '### Added Spans\n- `myapp.api_client.fetch_data`\n\n### Added Attributes\n- `http.method`',
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).not.toContain('New Attribute Keys');
+    });
+
     it('shows "no schema changes" message when diff is absent', () => {
       const result = _makeRunResult({ schemaDiff: undefined });
       const md = renderPrSummary(result, _makeConfig());

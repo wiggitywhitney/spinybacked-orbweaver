@@ -174,23 +174,24 @@ function sanitizeCell(value: string): string {
 
 /**
  * Count new attribute-type schema extensions proposed by a file (as opposed to
- * span-type extensions, which are tracked separately by collectSpanExtensionIds).
+ * span-type extensions, which are tracked separately by collectSpanExtensionIdsByFile).
+ * Deduplicated, mirroring collectAttributeExtensionIdsByFile's per-file Set dedup.
  */
 function countNewAttributeExtensions(file: FileResult): number {
-  let count = 0;
+  const seen = new Set<string>();
   for (const ext of file.schemaExtensions) {
     const idMatch = ext.match(/id:\s*(\S+)/);
     const typeMatch = ext.match(/type:\s*(\S+)/);
     if (idMatch) {
       const id = idMatch[1];
       const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
-      if (!isSpan) count++;
+      if (!isSpan) seen.add(id);
     } else {
       const trimmed = ext.trim();
-      if (!trimmed.startsWith('span.')) count++;
+      if (!trimmed.startsWith('span.')) seen.add(trimmed);
     }
   }
-  return count;
+  return seen.size;
 }
 
 function renderSpanCategoryBreakdown(runResult: RunResult, display: DisplayFn): string {
@@ -258,11 +259,14 @@ function renderSchemaChanges(runResult: RunResult, display: DisplayFn): string {
   lines.push('');
 
   if (runResult.schemaDiff) {
-    // Raw tool output (Weaver's registry diff) may embed its own headings —
-    // shift them below the section's own level and trim stray whitespace
-    // before deciding whether a synthetic heading is still needed.
-    const sanitized = normalizeBlankLines(downlevelHeadings(runResult.schemaDiff));
-    if (!/^###\s/m.test(sanitized)) {
+    // Raw tool output (Weaver's registry diff) may embed its own headings. Detect
+    // them in the original text — before downlevelHeadings() shifts every level by
+    // +2 — so a synthetic heading isn't added redundantly above content that
+    // already has its own (soon-to-be-shifted) heading.
+    const normalized = normalizeBlankLines(runResult.schemaDiff);
+    const hasOwnHeading = /^#{1,6}\s/m.test(normalized);
+    const sanitized = downlevelHeadings(normalized);
+    if (!hasOwnHeading) {
       lines.push('### New Attribute Keys');
       lines.push('');
     }
