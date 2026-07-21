@@ -58,7 +58,7 @@ Every implementing session should read these before starting any milestone:
 
 ## Milestones
 
-- [ ] M1: TypeScript reframe
+- [x] M1: TypeScript reframe
 - [x] M2: Rule count/category correction
 - [ ] M3: Orchestration diagram — full rebuild to current state
 - [ ] M4: Fix-loop diagram — add deterministic auto-fixes
@@ -185,6 +185,13 @@ Every implementing session should read these before starting any milestone:
 - Expand into a full example walkthrough of the SCH-002 near-synonym detection pipeline.
 
 **Success criteria:** One line citing the SCH-002 near-synonym catch appears on the LLM-judge slide or in its speaker notes. Whitney approves. `quarto render` succeeds.
+
+---
+
+## Decision Log
+
+- **M1 closed without the #955/#961 footnote.** Whitney's explicit call: the deck already reads "JavaScript and TypeScript" everywhere (an incidental side effect of the M2 commit, `859d9608`), and adding a footnote citing #955/#961 was judged unnecessary given proximity to the July 28, 2026 presentation. M1 is marked complete as-is; no deck text changed in this session.
+- **M4 diagram shape agreed in principle, not implemented.** For the fix-loop diagram, insert one `Auto-fix` node between each escalation tier's agent node and its `Pass?` decision (`R1 → AF1 → D1`, `R2 → AF2 → D2`, `R3 → AF3 → D3`) rather than one shared node — the six deterministic fixers (SCH-001/002, SCH-003, CDQ-001/006/009/011) are independent functions invoked at the same pipeline position in each retry tier, not a single unified mechanism, so three repeated nodes avoid implying false unification and avoid crossing edges in the LR layout. New classDef `flauto` (`fill:#E0F7FA,stroke:#00695C,stroke-width:2px,color:#004D40`). On-slide label stays generic ("naming · types · guards"); the six specific rule IDs are reserved for speaker notes per M4 Step 3. Deferred entirely — no file changes — due to proximity to the July 28, 2026 presentation. A future session can implement this directly from this entry without re-deriving the design.
 
 ---
 
