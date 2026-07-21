@@ -76,6 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-07-21) Fixed the PR report's Advisory Findings section to include line numbers and stop double-printing rule names. Findings with a populated `lineNumber` now render `RULE-ID (Name):LINE:` consistent with `reasoning-report.ts`'s format, instead of always omitting the location. Also stripped the redundant `RULE-ID (Name)` prefix from every `RULE_HUMAN_DESCRIPTIONS` entry in `src/validation/rule-names.ts`, since callers already prepend that text via `formatRuleId()` — descriptions were restating their own rule ID and name at the start of every rendered line. Fixes issue #1043.
+
 - (2026-07-21) Fixed the PR report's Span Category Breakdown table to stop presenting unverified LLM self-report as fact and to stop silently dropping files. Committed files with `spanCategories: null` (e.g., after a successful fix-loop retry) now appear with explicit "not reported" cells instead of being omitted entirely; a new table caption labels the data as self-reported and clarifies that "External Calls" excludes calls covered by an auto-instrumentation library; and a new "Attrs Reused / New" column surfaces attribute reuse alongside newly proposed schema extensions. Fixes issue #1042.
 
 - (2026-07-08) Confirmed the demo dashboard's LLM token-cost metric fix is live: with fresh commit-story-v2 activity flowing, the metric now groups correctly both by AI section type and by model, and the grouped values match the underlying span data exactly.

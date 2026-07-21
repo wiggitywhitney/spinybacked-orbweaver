@@ -2,7 +2,13 @@
 // ABOUTME: Verifies getRuleName, formatRuleId, and getRuleHumanDescription for known and unknown rule IDs.
 
 import { describe, it, expect } from 'vitest';
-import { getRuleName, formatRuleId, expandRuleCodesInText, getRuleHumanDescription } from '../../src/validation/rule-names.ts';
+import {
+  getRuleName,
+  formatRuleId,
+  expandRuleCodesInText,
+  getRuleHumanDescription,
+  getRuleIdsWithHumanDescriptions,
+} from '../../src/validation/rule-names.ts';
 
 describe('getRuleName', () => {
   it('returns human-readable name for known rule IDs', () => {
@@ -93,5 +99,22 @@ describe('getRuleHumanDescription', () => {
     // The caller is responsible for the ?? fallback (gets message from CheckResult directly)
     // CDQ-002 (Tracer Acquired) has no human description
     expect(getRuleHumanDescription('CDQ-002')).toBeUndefined();
+  });
+
+  it('never restates its own rule ID and name at the start of its text', () => {
+    // Callers render `${formatRuleId(ruleId)}: ${description}` — if the description also
+    // opens with "RULE-ID (Name)", the rendered line shows the rule name twice.
+    for (const ruleId of getRuleIdsWithHumanDescriptions()) {
+      const description = getRuleHumanDescription(ruleId) as string;
+      const prefix = formatRuleId(ruleId);
+      expect(description.startsWith(prefix)).toBe(false);
+    }
+  });
+
+  it('renders CDQ-007 through formatRuleId without duplicating the rule name', () => {
+    const rendered = `${formatRuleId('CDQ-007')}: ${getRuleHumanDescription('CDQ-007')}`;
+    expect(rendered).toBe('CDQ-007 (Attribute Data Quality): Fired for one or more of: a PII attribute name (like author, email, or username) or a raw filesystem path where a basename would be safer. PII in traces can violate privacy policies and is worth fixing. The path finding is lower severity — fix it when the code will run in a context where the basename utility is already imported.');
+    expect(rendered.match(/CDQ-007/g)).toHaveLength(1);
+    expect(rendered.match(/Attribute Data Quality/g)).toHaveLength(1);
   });
 });

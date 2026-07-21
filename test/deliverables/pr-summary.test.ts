@@ -691,6 +691,54 @@ describe('renderPrSummary', () => {
       expect(md).toContain('CDQ-001 (Spans Closed)');
     });
 
+    it('includes the line number when finding.lineNumber is present', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'CDQ-001',
+                passed: false,
+                filePath: '/project/src/api-client.js',
+                lineNumber: 42,
+                message: 'Span name uses camelCase',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Consistent with reasoning-report.ts: "RULE-ID (Name):LINE: description"
+      expect(md).toContain('CDQ-001 (Spans Closed):42:');
+    });
+
+    it('omits the line number segment when finding.lineNumber is null', () => {
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            advisoryAnnotations: [
+              {
+                ruleId: 'CDQ-001',
+                passed: false,
+                filePath: '/project/src/api-client.js',
+                lineNumber: null,
+                message: 'Span name uses camelCase',
+                tier: 2,
+                blocking: false,
+              },
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('CDQ-001 (Spans Closed):');
+      expect(md).not.toMatch(/CDQ-001 \(Spans Closed\):\d/);
+    });
+
     it('uses getRuleHumanDescription when available (COV-005) instead of agent-facing message', () => {
       // COV-005 has a human description registered in RULE_HUMAN_DESCRIPTIONS.
       // The PR summary should show that description, not the terse agent-facing message.

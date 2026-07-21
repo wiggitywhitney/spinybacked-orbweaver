@@ -409,7 +409,8 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
         const humanDesc = getRuleHumanDescription(ann.ruleId);
         const displayText = humanDesc
           ?? expandRuleCodesInText(ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, ''));
-        lines.push(`- ${formatRuleId(ann.ruleId)}: ${displayText}`);
+        const location = ann.lineNumber ? `:${ann.lineNumber}` : '';
+        lines.push(`- ${formatRuleId(ann.ruleId)}${location}: ${displayText}`);
       }
       if (i < fileEntries.length - 1) {
         lines.push('');
