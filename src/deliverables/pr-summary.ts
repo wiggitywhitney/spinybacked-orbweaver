@@ -793,7 +793,7 @@ function renderLiveCheckCompliance(runResult: RunResult): string {
     // (raw reports can reach hundreds of megabytes and cause E2BIG on gh pr create).
     if (liveCheckStatus.spansReceived && endOfRunValidation) {
       lines.push('');
-      lines.push(`Full compliance report: \`${LIVE_CHECK_ARTIFACT_FILENAME}\``);
+      lines.push(`Full compliance report: [${LIVE_CHECK_ARTIFACT_FILENAME}](./${LIVE_CHECK_ARTIFACT_FILENAME})`);
     }
   } else if (endOfRunValidation) {
     // Backward compat: no liveCheckStatus but raw report present

@@ -1604,6 +1604,18 @@ describe('renderPrSummary', () => {
       expect(md).toContain('spiny-orb-live-check-report.json');
     });
 
+    it('renders the artifact reference as a real markdown link, not bare backticks', () => {
+      const fullReport = JSON.stringify({ statistics: { total_entities: 5 } });
+      const result = _makeRunResult({
+        liveCheckStatus: { spansReceived: true, spanCount: 5, totalAdvisories: 0 },
+        endOfRunValidation: fullReport,
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md).toContain('[spiny-orb-live-check-report.json](./spiny-orb-live-check-report.json)');
+      expect(md).not.toContain('`spiny-orb-live-check-report.json`');
+    });
+
     it('omits full compliance report when no spans received (nothing to show)', () => {
       const fullReport = JSON.stringify({ statistics: { total_entities: 0 } });
       const result = _makeRunResult({
