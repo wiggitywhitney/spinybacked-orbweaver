@@ -1543,6 +1543,7 @@ Any blocking check still fails — prior passing file committed. Either way, som
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1591,6 +1592,7 @@ When validation fails — something structurally or semantically wrong — we do
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1640,6 +1642,7 @@ First: the same agent gets the full failure report and retries.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1690,6 +1693,7 @@ Validator checks again.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1742,6 +1746,7 @@ If it passes — great. Most files do.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1795,6 +1800,7 @@ If not — a fresh agent takes over with clean context. Key: it receives the sam
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1848,6 +1854,7 @@ Validator checks again.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1902,6 +1909,7 @@ The fresh context often breaks the loop.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1957,6 +1965,7 @@ Still failing — the orchestrator decomposes the file. Each function is instrum
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -2012,6 +2021,7 @@ Each function is validated on its own.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -2068,6 +2078,7 @@ Most functions pass individually even when the whole file didn't.
 
 ```{mermaid}
 %%| mermaid-format: js
+%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
