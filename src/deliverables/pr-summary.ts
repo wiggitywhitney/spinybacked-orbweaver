@@ -138,8 +138,11 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
     const libs = isCommitted
       ? (file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—')
       : '—';
+    // Extension detail lives in the Schema Changes section (New Span IDs /
+    // New Attribute Extensions, both grouped by file) — show only a count
+    // here to avoid printing the same identifiers in two places.
     const exts = isCommitted && file.schemaExtensions.length > 0
-      ? file.schemaExtensions.map(e => `\`${sanitizeCell(e)}\``).join(', ')
+      ? `${file.schemaExtensions.length} (see Schema Changes)`
       : '—';
     let costStr = '—';
     try {
@@ -283,6 +286,22 @@ function renderSchemaChanges(runResult: RunResult, display: DisplayFn): string {
     }
   }
 
+  // Supplement with attribute extension listing from committed files, grouped by
+  // file — mirrors New Span IDs above. This is the only place attribute keys are
+  // listed per-file; the Per-File Results table shows only a count.
+  const attributeExtensionsByFile = collectAttributeExtensionIdsByFile(runResult, display);
+  if (attributeExtensionsByFile.size > 0) {
+    lines.push('');
+    lines.push('### New Attribute Extensions');
+    for (const [fileName, attrIds] of attributeExtensionsByFile) {
+      lines.push('');
+      lines.push(`**${fileName}**`);
+      for (const attrId of attrIds) {
+        lines.push(`- \`${attrId}\``);
+      }
+    }
+  }
+
   return lines.join('\n');
 }
 
@@ -311,6 +330,36 @@ function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn)
         // Bare string — check if it's a span extension directly
         const trimmed = ext.trim();
         if (trimmed.startsWith('span.')) seen.add(trimmed);
+      }
+    }
+    if (seen.size > 0) {
+      byFile.set(display(file.path), [...seen].sort());
+    }
+  }
+  return byFile;
+}
+
+/**
+ * Collect attribute extension IDs from committed file results, grouped by file
+ * (in file order) and deduplicated within each file. Mirrors
+ * collectSpanExtensionIdsByFile but selects the complementary (non-span) subset.
+ */
+function collectAttributeExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
+  const byFile = new Map<string, string[]>();
+  for (const file of runResult.fileResults) {
+    if (file.status !== 'success' && file.status !== 'partial') continue;
+    const seen = new Set<string>();
+    for (const ext of file.schemaExtensions) {
+      const idMatch = ext.match(/id:\s*(\S+)/);
+      const typeMatch = ext.match(/type:\s*(\S+)/);
+
+      if (idMatch) {
+        const id = idMatch[1];
+        const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
+        if (!isSpan) seen.add(id);
+      } else {
+        const trimmed = ext.trim();
+        if (!trimmed.startsWith('span.')) seen.add(trimmed);
       }
     }
     if (seen.size > 0) {
@@ -426,6 +475,12 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
     for (let i = 0; i < fileEntries.length; i++) {
       const [, { fileDisplay, annotations }] = fileEntries[i];
       lines.push(`**${fileDisplay}**`);
+
+      // Group occurrences of the same rule within a file so a finding repeated
+      // across many lines states its rule ID, name, and description once instead
+      // of repeating the full "RULE-ID (Name): description" prefix per occurrence.
+      const ruleGroups = new Map<string, { displayText: string; lineNumbers: number[] }>();
+      const ruleOrder: string[] = [];
       for (const ann of annotations) {
         // Prefer human-facing description when registered; fall back to the agent-facing message.
         // Agent-facing messages are terse and directive (written for the fix-loop, not for humans).
@@ -433,9 +488,26 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
         const humanDesc = getRuleHumanDescription(ann.ruleId);
         const displayText = humanDesc
           ?? expandRuleCodesInText(ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, ''));
-        const location = ann.lineNumber ? `:${ann.lineNumber}` : '';
-        lines.push(`- ${formatRuleId(ann.ruleId)}${location}: ${displayText}`);
+        const existing = ruleGroups.get(ann.ruleId);
+        if (existing) {
+          if (ann.lineNumber != null) existing.lineNumbers.push(ann.lineNumber);
+        } else {
+          ruleGroups.set(ann.ruleId, { displayText, lineNumbers: ann.lineNumber != null ? [ann.lineNumber] : [] });
+          ruleOrder.push(ann.ruleId);
+        }
       }
+
+      for (const ruleId of ruleOrder) {
+        const { displayText, lineNumbers } = ruleGroups.get(ruleId)!;
+        if (lineNumbers.length === 1) {
+          lines.push(`- ${formatRuleId(ruleId)}:${lineNumbers[0]}: ${displayText}`);
+        } else if (lineNumbers.length > 1) {
+          lines.push(`- ${formatRuleId(ruleId)}: ${displayText} (lines ${lineNumbers.join(', ')})`);
+        } else {
+          lines.push(`- ${formatRuleId(ruleId)}: ${displayText}`);
+        }
+      }
+
       if (i < fileEntries.length - 1) {
         lines.push('');
       }

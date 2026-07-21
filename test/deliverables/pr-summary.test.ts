@@ -599,6 +599,59 @@ describe('renderPrSummary', () => {
       // No run of 3+ consecutive newlines (more than one blank line)
       expect(schemaSection).not.toMatch(/\n{3,}/);
     });
+
+    it('lists new attribute extensions from committed files, grouped by file', () => {
+      const result = _makeRunResult({
+        schemaDiff: undefined,
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/a.js',
+            schemaExtensions: ['id: myapp.request.method\ntype: string'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const schemaSection = md.split('## Schema Changes')[1]?.split(/\n## /)[0] ?? '';
+      expect(schemaSection).toContain('New Attribute Extensions');
+      expect(schemaSection).toContain('a.js');
+      expect(schemaSection).toContain('myapp.request.method');
+    });
+
+    it('excludes span extensions from the New Attribute Extensions section', () => {
+      const result = _makeRunResult({
+        schemaDiff: undefined,
+        fileResults: [
+          _makeFileResult({
+            schemaExtensions: [
+              'id: span.myapp.fetch_data\ntype: span',
+              'id: myapp.request.method\ntype: string',
+            ],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const attrSection = md.split('### New Attribute Extensions')[1]?.split('##')[0] ?? '';
+      expect(attrSection).not.toContain('span.myapp.fetch_data');
+      expect(attrSection).toContain('myapp.request.method');
+    });
+
+    it('does not duplicate attribute keys already listed in the Per-File Results table', () => {
+      const result = _makeRunResult({
+        schemaDiff: undefined,
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/a.js',
+            schemaExtensions: ['id: myapp.request.method\ntype: string'],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const perFileSection = md.split('## Per-File Results')[1]?.split('##')[0] ?? '';
+      expect(perFileSection).not.toContain('myapp.request.method');
+    });
   });
 
   describe('review sensitivity annotations', () => {
@@ -969,6 +1022,35 @@ describe('renderPrSummary', () => {
       expect(advisorySection).toContain('**c.js**');
       // Blank lines separate the file sections
       expect(advisorySection).toContain('\n\n');
+    });
+
+    it('groups repeated occurrences of the same rule within a file instead of repeating the rule prefix', () => {
+      const makeAnnotation = (line: number) => ({
+        ruleId: 'COV-005',
+        passed: false,
+        filePath: '/project/src/db.js',
+        lineNumber: line,
+        message: 'COV-005: Required (must add): db.query.text. Add setAttribute() calls.',
+        tier: 2 as const,
+        blocking: false,
+      });
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({
+            path: '/project/src/db.js',
+            advisoryAnnotations: [makeAnnotation(12), makeAnnotation(34), makeAnnotation(56)],
+          }),
+        ],
+      });
+      const md = renderPrSummary(result, _makeConfig());
+
+      const advisorySection = md.split('### Advisory Findings')[1]?.split('##')[0] ?? '';
+      // The rule prefix "COV-005 (Domain Attributes)" should appear exactly once for this file,
+      // not once per occurrence.
+      const prefixOccurrences = advisorySection.split('COV-005 (Domain Attributes)').length - 1;
+      expect(prefixOccurrences).toBe(1);
+      // All three occurrence line numbers should be listed together.
+      expect(advisorySection).toContain('lines 12, 34, 56');
     });
 
   describe('agent notes section', () => {
