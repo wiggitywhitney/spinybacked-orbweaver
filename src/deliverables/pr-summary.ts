@@ -141,9 +141,13 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
     // Extension detail lives in the Schema Changes section (New Span IDs /
     // New Attribute Extensions, both grouped by file) — show only a count
     // here to avoid printing the same identifiers in two places.
-    const exts = isCommitted && file.schemaExtensions.length > 0
-      ? `${file.schemaExtensions.length} (see Schema Changes)`
-      : '—';
+    const extCount = isCommitted
+      ? (() => {
+          const { spanIds, attributeIds } = dedupeExtensionIds(file.schemaExtensions);
+          return spanIds.size + attributeIds.size;
+        })()
+      : 0;
+    const exts = extCount > 0 ? `${extCount} (see Schema Changes)` : '—';
     let costStr = '—';
     try {
       costStr = formatDollars(tokensToDollars(file.tokenUsage, config.agentModel));
@@ -173,25 +177,45 @@ function sanitizeCell(value: string): string {
 }
 
 /**
+ * Parse a single schema extension entry and classify it as span vs attribute.
+ * Extensions come in two formats:
+ * 1. YAML-like: "id: span.myapp.op\ntype: span"
+ * 2. Bare string: "span.myapp.op" (from supplementSchemaExtensions)
+ */
+function classifyExtension(ext: string): { id: string; isSpan: boolean } {
+  const idMatch = ext.match(/id:\s*(\S+)/);
+  const typeMatch = ext.match(/type:\s*(\S+)/);
+  if (idMatch) {
+    const id = idMatch[1];
+    return { id, isSpan: id.startsWith('span.') || typeMatch?.[1] === 'span' };
+  }
+  const trimmed = ext.trim();
+  return { id: trimmed, isSpan: trimmed.startsWith('span.') };
+}
+
+/**
+ * Deduplicate a file's raw schemaExtensions into unique span and attribute IDs.
+ * Single source of truth for extension parsing — used by the Per-File Results
+ * count, the Schema Changes per-file listings, and the attribute-count summary
+ * so all three agree on what counts as a unique extension.
+ */
+function dedupeExtensionIds(extensions: string[]): { spanIds: Set<string>; attributeIds: Set<string> } {
+  const spanIds = new Set<string>();
+  const attributeIds = new Set<string>();
+  for (const ext of extensions) {
+    const { id, isSpan } = classifyExtension(ext);
+    (isSpan ? spanIds : attributeIds).add(id);
+  }
+  return { spanIds, attributeIds };
+}
+
+/**
  * Count new attribute-type schema extensions proposed by a file (as opposed to
  * span-type extensions, which are tracked separately by collectSpanExtensionIdsByFile).
  * Deduplicated, mirroring collectAttributeExtensionIdsByFile's per-file Set dedup.
  */
 function countNewAttributeExtensions(file: FileResult): number {
-  const seen = new Set<string>();
-  for (const ext of file.schemaExtensions) {
-    const idMatch = ext.match(/id:\s*(\S+)/);
-    const typeMatch = ext.match(/type:\s*(\S+)/);
-    if (idMatch) {
-      const id = idMatch[1];
-      const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
-      if (!isSpan) seen.add(id);
-    } else {
-      const trimmed = ext.trim();
-      if (!trimmed.startsWith('span.')) seen.add(trimmed);
-    }
-  }
-  return seen.size;
+  return dedupeExtensionIds(file.schemaExtensions).attributeIds.size;
 }
 
 function renderSpanCategoryBreakdown(runResult: RunResult, display: DisplayFn): string {
@@ -318,26 +342,9 @@ function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn)
   const byFile = new Map<string, string[]>();
   for (const file of runResult.fileResults) {
     if (file.status !== 'success' && file.status !== 'partial') continue;
-    const seen = new Set<string>();
-    for (const ext of file.schemaExtensions) {
-      // Extensions come in two formats:
-      // 1. YAML-like: "id: span.myapp.op\ntype: span"
-      // 2. Bare string: "span.myapp.op" (from supplementSchemaExtensions)
-      const idMatch = ext.match(/id:\s*(\S+)/);
-      const typeMatch = ext.match(/type:\s*(\S+)/);
-
-      if (idMatch) {
-        const id = idMatch[1];
-        const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
-        if (isSpan) seen.add(id);
-      } else {
-        // Bare string — check if it's a span extension directly
-        const trimmed = ext.trim();
-        if (trimmed.startsWith('span.')) seen.add(trimmed);
-      }
-    }
-    if (seen.size > 0) {
-      byFile.set(display(file.path), [...seen].sort());
+    const { spanIds } = dedupeExtensionIds(file.schemaExtensions);
+    if (spanIds.size > 0) {
+      byFile.set(display(file.path), [...spanIds].sort());
     }
   }
   return byFile;
@@ -352,22 +359,9 @@ function collectAttributeExtensionIdsByFile(runResult: RunResult, display: Displ
   const byFile = new Map<string, string[]>();
   for (const file of runResult.fileResults) {
     if (file.status !== 'success' && file.status !== 'partial') continue;
-    const seen = new Set<string>();
-    for (const ext of file.schemaExtensions) {
-      const idMatch = ext.match(/id:\s*(\S+)/);
-      const typeMatch = ext.match(/type:\s*(\S+)/);
-
-      if (idMatch) {
-        const id = idMatch[1];
-        const isSpan = id.startsWith('span.') || typeMatch?.[1] === 'span';
-        if (!isSpan) seen.add(id);
-      } else {
-        const trimmed = ext.trim();
-        if (!trimmed.startsWith('span.')) seen.add(trimmed);
-      }
-    }
-    if (seen.size > 0) {
-      byFile.set(display(file.path), [...seen].sort());
+    const { attributeIds } = dedupeExtensionIds(file.schemaExtensions);
+    if (attributeIds.size > 0) {
+      byFile.set(display(file.path), [...attributeIds].sort());
     }
   }
   return byFile;
@@ -483,7 +477,11 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
       // Group occurrences of the same rule within a file so a finding repeated
       // across many lines states its rule ID, name, and description once instead
       // of repeating the full "RULE-ID (Name): description" prefix per occurrence.
-      const ruleGroups = new Map<string, { displayText: string; lineNumbers: number[] }>();
+      // Grouped by (ruleId, displayText) rather than ruleId alone — when no human
+      // description is registered, distinct occurrences of the same rule can carry
+      // distinct agent-facing messages, and those must not collapse into just the
+      // first occurrence's text.
+      const ruleGroups = new Map<string, { ruleId: string; displayText: string; lineNumbers: number[] }>();
       const ruleOrder: string[] = [];
       for (const ann of annotations) {
         // Prefer human-facing description when registered; fall back to the agent-facing message.
@@ -492,17 +490,18 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
         const humanDesc = getRuleHumanDescription(ann.ruleId);
         const displayText = humanDesc
           ?? expandRuleCodesInText(ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, ''));
-        const existing = ruleGroups.get(ann.ruleId);
+        const key = `${ann.ruleId} ${displayText}`;
+        const existing = ruleGroups.get(key);
         if (existing) {
           if (ann.lineNumber != null) existing.lineNumbers.push(ann.lineNumber);
         } else {
-          ruleGroups.set(ann.ruleId, { displayText, lineNumbers: ann.lineNumber != null ? [ann.lineNumber] : [] });
-          ruleOrder.push(ann.ruleId);
+          ruleGroups.set(key, { ruleId: ann.ruleId, displayText, lineNumbers: ann.lineNumber != null ? [ann.lineNumber] : [] });
+          ruleOrder.push(key);
         }
       }
 
-      for (const ruleId of ruleOrder) {
-        const { displayText, lineNumbers } = ruleGroups.get(ruleId)!;
+      for (const key of ruleOrder) {
+        const { ruleId, displayText, lineNumbers } = ruleGroups.get(key)!;
         if (lineNumbers.length === 1) {
           lines.push(`- ${formatRuleId(ruleId)}:${lineNumbers[0]}: ${displayText}`);
         } else if (lineNumbers.length > 1) {
