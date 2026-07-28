@@ -105,9 +105,11 @@ Every implementing session should read these before starting any milestone:
 
 ### M3: Orchestration diagram — full rebuild to current state
 
-**Step 1:** Read the current orchestration diagram in `talk/slides-llmday/index.qmd` (built in PRD #847, M4) and `src/coordinator/coordinate.ts` for the current orchestration flow.
+**Follow the diagram-rebuild process from the Decision Log (2026-07-27 entry) throughout this milestone.**
 
-**Step 2:** Design the rebuilt Mermaid diagram, adding all four missing mechanisms to whatever the diagram already shows:
+**Step 1:** Read `talk/slides-llmday/index.qmd` and find the *last* slide of the current orchestration-diagram unfolding (built in PRD #847, M4) — the one showing the complete current diagram. Read `src/coordinator/coordinate.ts` for the current orchestration flow. Duplicate that last slide's diagram as the starting point; leave the existing slide sequence untouched for now.
+
+**Step 2:** Design the rebuilt Mermaid diagram from the duplicate, adding all four missing mechanisms to whatever the diagram already shows:
 - Dependency-graph topological (leaves-first) file ordering, before dispatch begins.
 - Baseline test-suite gate: abort before instrumenting if the target's existing tests already fail (PRDs #934/#935).
 - End-of-run Weaver live-check with automatic rollback/retry on ambiguous failures.
@@ -115,9 +117,9 @@ Every implementing session should read these before starting any milestone:
 
 **Step 3:** Present the complete rebuilt diagram as a Mermaid code block in conversation first. Do not write it to the QMD file yet. Wait for Whitney's explicit approval on the shape before writing any slides — per her instruction to "build everything, cull later," all four mechanisms go in now even though the 20-minute slot may require cutting some in a later pass.
 
-**Step 4:** Once approved, write the progressive slides to `talk/slides-llmday/index.qmd`, replacing the existing orchestration-diagram sequence. Add one element per slide as in the original build. Use `data-transition="none"`.
+**Step 4:** Once the diagram shape is approved, rebuild the entire progressive-build slide sequence from the first slide — not just an append to the old sequence's end. Some new elements (e.g., topological file ordering) belong earlier in the pipeline than where the old sequence ended, so the build order itself may need to change. Add the new sequence to the file alongside the old one rather than overwriting it in place, so the old sequence stays intact and referenceable while drafting. Add one element per slide as in the original build. Use `data-transition="none"`.
 
-**Step 5:** Tell Whitney to run `quarto render talk/slides-llmday/index.qmd`. Wait for approval.
+**Step 5:** Tell Whitney to run `quarto render talk/slides-llmday/index.qmd`. Note that both the old and new orchestration-diagram sequences will render and appear in the deck while the old one is still present — this is expected during drafting. Direct her to review only the new sequence for approval. Once Whitney approves the new sequence, remove the old orchestration-diagram sequence from the file — the milestone is not complete until the old sequence is deleted.
 
 **Do NOT:**
 - Remove or alter the pre-scan step, Resolved Schema, Source File, Fresh LLM, or Validator nodes already in the diagram — this milestone adds to the existing diagram, it doesn't redesign it.
@@ -130,17 +132,19 @@ Every implementing session should read these before starting any milestone:
 
 ### M4: Fix-loop diagram — add deterministic auto-fixes
 
-**Step 1:** Read the current fix-loop diagram in `talk/slides-llmday/index.qmd` (built in PRD #847, M6) and `src/fix-loop/instrument-with-retry.ts` / `src/fix-loop/oscillation.ts` for the current fix-loop structure.
+**Follow the diagram-rebuild process from the Decision Log (2026-07-27 entry) throughout this milestone.**
 
-**Step 2:** Design an added node showing that a specific set of rule violations get corrected by plain deterministic code before the LLM is ever asked to fix anything: delimiter-variant SCH-001/SCH-002 names, attribute-type coercion, CDQ-006 isRecording guards, CDQ-009 null-safe guards, CDQ-011 canonical tracer name, and CDQ-001 span-end-before-process.exit. This sits ahead of (or alongside, whichever reads clearer) the existing retry → fresh-regeneration → function-level-fallback escalation path.
+**Step 1:** Read `talk/slides-llmday/index.qmd` and find the *last* slide of the current fix-loop diagram unfolding (built in PRD #847, M6) — the one showing the complete current diagram. Read `src/fix-loop/instrument-with-retry.ts` / `src/fix-loop/oscillation.ts` for the current fix-loop structure. Duplicate that last slide's diagram as the starting point; leave the existing slide sequence untouched for now.
+
+**Step 2:** Design an added node from the duplicate showing that a specific set of rule violations get corrected by plain deterministic code before the LLM is ever asked to fix anything: delimiter-variant SCH-001/SCH-002 names, attribute-type coercion, CDQ-006 isRecording guards, CDQ-009 null-safe guards, CDQ-011 canonical tracer name, and CDQ-001 span-end-before-process.exit. Per Decision Log, insert one `Auto-fix` node between each escalation tier's agent node and its `Pass?` decision (`R1 → AF1 → D1`, `R2 → AF2 → D2`, `R3 → AF3 → D3`) rather than one shared node, using classDef `flauto` (`fill:#E0F7FA,stroke:#00695C,stroke-width:2px,color:#004D40`); on-slide label stays generic ("naming · types · guards").
 
 **Step 3:** In speaker notes, note this is an established multi-issue capability (#908, #984, #990, #994, #995, #998, #999), not a one-off fix — this reinforces the talk's core thesis that determinism enforces quality, not just repeated LLM attempts. Do not put the issue numbers on the slide itself.
 
 **Step 4:** Present the updated diagram as a Mermaid code block in conversation first. Wait for Whitney's explicit approval on the shape before writing any slides.
 
-**Step 5:** Once approved, write the progressive slides, replacing the existing fix-loop sequence where the new node is introduced. Use `data-transition="none"`.
+**Step 5:** Once the diagram shape is approved, rebuild the entire progressive-build slide sequence from the first slide — not just an insertion at the point the new node appears. Add the new sequence to the file alongside the old one rather than overwriting it in place, so the old sequence stays intact and referenceable while drafting. Use `data-transition="none"`.
 
-**Step 6:** Tell Whitney to run `quarto render talk/slides-llmday/index.qmd`. Wait for approval.
+**Step 6:** Tell Whitney to run `quarto render talk/slides-llmday/index.qmd`. Note that both the old and new fix-loop sequences will render and appear in the deck while the old one is still present — this is expected during drafting. Direct her to review only the new sequence for approval. Once Whitney approves the new sequence, remove the old fix-loop sequence from the file — the milestone is not complete until the old sequence is deleted.
 
 **Do NOT:**
 - Reframe function-level fallback as a failure path — per PRD #847 Decision Log, it's a deliberate design choice for complex files, and that framing carries forward unchanged.
@@ -192,6 +196,11 @@ Every implementing session should read these before starting any milestone:
 
 - **M1 closed without the #955/#961 footnote.** Whitney's explicit call: the deck already reads "JavaScript and TypeScript" everywhere (an incidental side effect of the M2 commit, `859d9608`), and adding a footnote citing #955/#961 was judged unnecessary given proximity to the July 28, 2026 presentation. M1 is marked complete as-is; no deck text changed in this session.
 - **M4 diagram shape agreed in principle, not implemented.** For the fix-loop diagram, insert one `Auto-fix` node between each escalation tier's agent node and its `Pass?` decision (`R1 → AF1 → D1`, `R2 → AF2 → D2`, `R3 → AF3 → D3`) rather than one shared node — the six deterministic fixers (SCH-001/002, SCH-003, CDQ-001/006/009/011) are independent functions invoked at the same pipeline position in each retry tier, not a single unified mechanism, so three repeated nodes avoid implying false unification and avoid crossing edges in the LR layout. New classDef `flauto` (`fill:#E0F7FA,stroke:#00695C,stroke-width:2px,color:#004D40`). On-slide label stays generic ("naming · types · guards"); the six specific rule IDs are reserved for speaker notes per M4 Step 3. Deferred entirely — no file changes — due to proximity to the July 28, 2026 presentation. A future session can implement this directly from this entry without re-deriving the design.
+- **Diagram-rebuild process clarified for M3 and M4 (2026-07-27).** Both milestones rebuild a diagram that's actually a progressive-build "unfolding" (one element added per slide, ending at a slide showing the complete diagram) — not a single static image. The rebuild process for each:
+  1. **Duplicate the end-state diagram, not the whole slide sequence.** The diagram to start from is the one shown on the *last* slide of the current unfolding (it already contains every element the earlier slides built up to). Copy that single diagram as the starting point for redesign — do not attempt to duplicate every slide in the sequence at this stage.
+  2. **Modify the duplicate to the target architecture** and present it as a Mermaid code block in conversation (already specified in M3 Step 3 / M4 Step 4). Iterate until Whitney approves the shape — this part of the process is unchanged.
+  3. **Rebuild the entire progressive-build sequence from the first slide, not just append or insert.** Some new elements (e.g., M3's topological file-ordering step) belong earlier in the pipeline than where the old sequence ended, so the build order itself may need to change — a full re-sequencing from slide 1, not a patch onto the end.
+  4. **Do not overwrite the existing slide sequence in place while rebuilding.** Build the new sequence alongside the old one (e.g., as new slides added elsewhere in the file, or in a scratch location) so the old, working sequence stays intact and referenceable throughout drafting. Only remove the old sequence once the new one is fully built and Whitney has approved it. This avoids destructively editing good, working slides to a point where they're hard to recover if the rebuild goes sideways mid-session.
 
 ---
 

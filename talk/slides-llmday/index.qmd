@@ -221,6 +221,7 @@ Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">passing tests</span><br>
 <span style="color:white;">source file →</span><br>
 <span style="color:white;">schema →</span><br>
 <span style="color:white;">rules →</span>
@@ -243,6 +244,31 @@ Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
+<span style="color:white;">source file →</span><br>
+<span style="color:white;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+Before instrumentation starts, we confirm your existing test suite is passing. That's a precondition we check, not something the agent reads — it's how we know later whether a test failure was caused by instrumentation or was already broken.
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:white;">schema →</span><br>
 <span style="color:white;">rules →</span>
@@ -265,6 +291,7 @@ Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <span style="color:white;">rules →</span>
@@ -287,6 +314,7 @@ Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -310,6 +338,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -332,6 +361,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -354,6 +384,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -376,6 +407,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
