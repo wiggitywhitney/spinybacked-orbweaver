@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-08-18) Addressed CodeRabbit findings surfaced while closing out the LLM Day talk deck refresh: removed 11 stray Mermaid `%%{init}%%` directives from the fix-loop diagram sequence (explicitly prohibited — they can cause unclosed `<div>` nesting and break slide navigation once a deck has many Mermaid blocks), corrected a slide that described the SCH-001/SCH-002 semantic-duplicate LLM judge as a required pass when it's actually advisory, softened a diagram note that implied an explicit "advisory findings present" gate the diagram doesn't show, and corrected factual errors in the decktape research doc (it's listed by reveal.js as an alternative export method, not a recommendation over browser print-to-PDF; corrected an issue's opening year and Quarto's actual documented PDF export mechanism).
+
 ### Added
 
 - (2026-08-17) Drafted a rebuilt orchestration diagram for the LLM Day talk deck (PRD #1038), adding leaves-first file ordering, a baseline test-gate abort path, and an end-of-run Weaver live-check with rollback/retry branching — awaiting shape approval on the rendered slide before the full progressive-build sequence is built out. Also corrected the PRD's own diagram-approval process: a Mermaid code block pasted into chat isn't a valid approval artifact, since it isn't human-readable to a non-technical reviewer — approval now always happens on rendered, browser-viewed slides.

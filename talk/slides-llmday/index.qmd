@@ -1036,7 +1036,7 @@ committed`"])
 ::: {.notes}
 Structural gate passed. Now the blocking quality checks run — fail any one, and the file goes to the fix loop.
 
-- Schema fidelity: span names and attributes must match the registry exactly, or — for genuinely new names — pass an LLM judge check confirming they are not a semantic duplicate of something that already exists.
+- Schema fidelity: span names and attributes must match the registry exactly — this is blocking. For genuinely new names, an optional LLM judge checks for semantic duplicates; a duplicate flag there is advisory, and the agent decides whether to reuse the existing name or keep the distinct one.
 - Coverage: entry points and outbound calls have spans, errors get recorded.
 - Code quality: spans are closed and properly guarded.
 - API-only: instrumentation depends only on the OTel API, not the SDK.
@@ -1305,7 +1305,7 @@ committed`"])
 ```
 
 ::: {.notes}
-All blocking checks pass and there are advisory findings — the agent gets one improvement pass: the passing file plus all advisory findings.
+All blocking checks pass — the agent gets one improvement pass over the passing file plus any advisory findings from this run.
 :::
 
 ## {.center data-transition="none"}
@@ -1593,7 +1593,6 @@ Full rule descriptions: https://github.com/wiggitywhitney/spinybacked-orbweaver/
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1642,7 +1641,6 @@ When validation fails — something structurally or semantically wrong — we do
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1692,7 +1690,6 @@ First: the same agent gets the full failure report and retries.
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1743,7 +1740,6 @@ Validator checks again.
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1796,7 +1792,6 @@ If it passes — great. Most files do.
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1850,7 +1845,6 @@ If not — a fresh agent takes over with clean context. Key: it receives the sam
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1904,7 +1898,6 @@ Validator checks again.
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -1959,7 +1952,6 @@ The fresh context often breaks the loop.
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -2015,7 +2007,6 @@ Still failing — the orchestrator decomposes the file. Each function is instrum
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -2071,7 +2062,6 @@ Each function is validated on its own.
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
@@ -2128,7 +2118,6 @@ Most functions pass individually even when the whole file didn't.
 
 ```{mermaid}
 %%| mermaid-format: js
-%%{init: {'flowchart': {'wrappingWidth': 700, 'rankSpacing': 25}}}%%
 flowchart LR
     FAIL(["Validation fails"])
     R1["`**Retry**: same agent
