@@ -26,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- (2026-08-18) Abandoned the LLM Day talk deck refresh (PRD #1038) after two of six milestones shipped. Working through the remaining milestones surfaced that most of what was left — rule-conditionality wording, orchestration-diagram mechanisms like topological file ordering and a baseline test gate, and a per-rule-ID breakdown of automatic fixes — was accuracy detail that matters to someone already deep in the project, not to a first-time conference audience. Reverted the in-progress orchestration diagram draft back to its last approved state and removed the refresh from `docs/ROADMAP.md`. The TypeScript-reframe and rule-framing corrections that already shipped stay in the deck.
+
 - (2026-07-15) Removed the minimum-attribute-threshold and registered-vs-extension decision framework item from `docs/ROADMAP.md`'s "Path to Python" sequence, since it shipped and closed as issue #993. ROADMAP is forward-looking only; completed work lives in this changelog instead.
 
 - (2026-07-14) Removed the completed engineering talk story-asset item from `docs/ROADMAP.md`'s "Path to Python" sequence, since it shipped and closed. ROADMAP is forward-looking only; completed work lives in this changelog instead.

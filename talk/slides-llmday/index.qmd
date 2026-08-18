@@ -781,62 +781,6 @@ mostly deterministic`"]
 On a pass, the orchestrator writes any new schema conventions back to the Weaver schema and advances to the next file. The loop closes.
 :::
 
-<!-- M3 REBUILD DRAFT — shape-approval slide, per PRD #1038 diagram-rebuild process. Old sequence above stays intact until this is approved. -->
-
-## {data-transition="none"}
-
-```{mermaid}
-flowchart LR
-    FILES["`Source Files`"]
-    ORDER["`Topological Order
-leaves-first`"]
-    GATE["`Test Gate`"]
-    ABORT["`Abort`"]
-    ORCH["`**Orchestrator**
-deterministic`"]
-    AGENT["`**AI Agent**
-instrumentation only`"]
-    VAL["`Validator
-mostly deterministic`"]
-    SCHEMA["`Weaver Schema`"]
-    LIVECHECK["`Weaver Live-check`"]
-    ROLLBACK["`Rollback + Retry`"]
-    FLAG["`Retry + Flag`"]
-
-    FILES --> ORDER
-    ORDER --> GATE
-    GATE -->|tests failing| ABORT
-    GATE -->|"tests passing"| ORCH
-    SCHEMA -->|resolved schema| ORCH
-    ORCH -->|"file + schema + rules"| AGENT
-    AGENT -->|"instrumented output"| ORCH
-    ORCH -->|instrumented output| VAL
-    VAL -->|result + findings| ORCH
-    ORCH -->|schema extensions| SCHEMA
-    ORCH -->|end of run| LIVECHECK
-    LIVECHECK -->|direct error| ROLLBACK
-    LIVECHECK -->|ambiguous failure| FLAG
-    ROLLBACK -->|retry| ORCH
-
-    classDef det fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
-    classDef ai fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
-    classDef val fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
-    classDef io fill:#F5F5F5,stroke:#9E9E9E,stroke-width:1px,color:#424242
-    classDef orchAbort fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#B71C1C
-
-    class ORCH,ORDER,GATE,LIVECHECK,ROLLBACK,FLAG det
-    class SCHEMA,FILES io
-    class AGENT ai
-    class VAL val
-    class ABORT orchAbort
-```
-
-::: {.notes}
-DRAFT — shape approval only. Adds: topological (leaves-first) file ordering, a baseline test-suite gate that aborts before dispatch if tests are already failing, and an end-of-run Weaver live-check that branches into a targeted rollback+retry (direct/unambiguous errors) or a retry+flag with no rollback (ambiguous failures).
-:::
-
-<!-- END M3 REBUILD DRAFT -->
-
 ## {.center}
 
 [How it works]{style="font-size:1.1em; opacity:0.65; display:block; margin-bottom:0.4em;"}
