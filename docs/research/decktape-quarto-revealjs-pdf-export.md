@@ -32,7 +32,7 @@ decktape (`astefanutti/decktape`) is a CLI for converting reveal.js presentation
 | Install | `npm install -g decktape` (global) or `npx decktape ...` (no install) |
 | Basic usage | `decktape [command] <url> <filename>` — defaults to the `automatic` command if omitted, which auto-detects the `reveal` plugin |
 | Relevant flags | `-s/--size <WxH>` (viewport size), `--load-pause <ms>` (wait after page load before capture, default 0), `-p/--pause <ms>` (wait before each slide capture, default 1000), `--buffer-timeout <ms>` (per-slide render wait, default 30000), `--slides <range>` (export a subset, e.g. `1-3,5,8`), `--pdf-title`/`--pdf-author`/`--pdf-subject` (PDF metadata) |
-| Known troubleshooting flags | `--chrome-arg=--no-sandbox` (Linux "No usable sandbox!" error), `--allow-running-insecure-content` (mixed-content blocking), `--disable-web-security` (CORS on local stylesheets) |
+| Known troubleshooting flags | `--chrome-arg=--no-sandbox` (Linux "No usable sandbox!" error), `--allow-running-insecure-content` (mixed-content blocking), `--disable-web-security` (CORS on local stylesheets) — these disable real Chromium security protections; use only against trusted local content and only as temporary troubleshooting |
 
 **Source says:** "You can also use decktape to convert your presentation to PDF via the command line." ([reveal.js PDF Export docs](https://revealjs.com/pdf-export/))
 **Interpretation:** reveal.js's docs list decktape under "Alternative Ways to Export" — it's presented as an option alongside browser print-to-PDF, not as the recommended path over it.
