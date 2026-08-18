@@ -57,7 +57,7 @@ export interface GitWorkflowDeps {
   renderPrSummary: (runResult: RunResult, config: AgentConfig, projectDir?: string) => string;
   writePrSummary: (projectDir: string, content: string) => Promise<string>;
   writeLiveCheckArtifact: (projectDir: string, report: string) => Promise<string>;
-  commitPrSummary: (projectDir: string, summaryPath: string) => Promise<void>;
+  commitPrSummary: (projectDir: string, summaryPath: string, extraPaths?: string[]) => Promise<void>;
   createPr: (projectDir: string, title: string, body: string, options?: { draft?: boolean; head?: string }) => Promise<string>;
   checkGhAvailable: () => Promise<boolean | { available: boolean; warning?: string }>;
   stderr: (msg: string) => void;
@@ -174,13 +174,19 @@ export async function runGitWorkflow(
     deps.stderr(`PR summary saved to ${prSummaryPath}`);
 
     // Write raw live-check compliance report to artifact file so the PR body stays small.
+    let liveCheckArtifactPath: string | undefined;
     if (runResult.endOfRunValidation) {
-      const artifactPath = await deps.writeLiveCheckArtifact(projectDir, runResult.endOfRunValidation);
-      deps.stderr(`Live-check report saved to ${artifactPath}`);
+      liveCheckArtifactPath = await deps.writeLiveCheckArtifact(projectDir, runResult.endOfRunValidation);
+      deps.stderr(`Live-check report saved to ${liveCheckArtifactPath}`);
     }
 
-    // Commit the PR summary on the instrument branch so it survives push failures.
-    await deps.commitPrSummary(projectDir, prSummaryPath);
+    // Commit the PR summary (and live-check artifact, when written) on the instrument
+    // branch so both survive push failures and travel with the branch.
+    if (liveCheckArtifactPath) {
+      await deps.commitPrSummary(projectDir, prSummaryPath, [liveCheckArtifactPath]);
+    } else {
+      await deps.commitPrSummary(projectDir, prSummaryPath);
+    }
 
     const ghResult = await deps.checkGhAvailable();
     // Support both old boolean return and new object return

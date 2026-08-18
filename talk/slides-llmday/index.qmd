@@ -214,13 +214,14 @@ Spinybacked Orbweaver
 An AI agent that instruments code with OpenTelemetry
 
 ::: {.notes}
-Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. It analyzes your JavaScript code, adds OpenTelemetry spans, validates its own output, and opens a pull request.
+Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. It analyzes your JavaScript and TypeScript code, adds OpenTelemetry spans, validates its own output, and opens a pull request.
 :::
 
 ## {data-transition="none"}
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">passing tests</span><br>
 <span style="color:white;">source file →</span><br>
 <span style="color:white;">schema →</span><br>
 <span style="color:white;">rules →</span>
@@ -243,6 +244,31 @@ Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
+<span style="color:white;">source file →</span><br>
+<span style="color:white;">schema →</span><br>
+<span style="color:white;">rules →</span>
+</div>
+<div style="flex:0 0 auto; text-align:center;">
+<img src="images/spinybacked-orbweaver-spider.png" width="240px">
+</div>
+<div style="flex:1; text-align:left; font-size:0.9em; line-height:2.4;">
+<span style="color:white;">→ instrumented file</span><br>
+<span style="color:white;">→ reasoning report</span><br>
+<span style="color:white;">→ passing tests</span><br>
+<span style="color:white;">→ live-check pass</span>
+</div>
+</div>
+
+::: {.notes}
+Before instrumentation starts, we confirm your existing test suite is passing. That's a precondition we check, not something the agent reads — it's how we know later whether a test failure was caused by instrumentation or was already broken.
+:::
+
+## {data-transition="none"}
+
+<div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
+<div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:white;">schema →</span><br>
 <span style="color:white;">rules →</span>
@@ -265,6 +291,7 @@ Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <span style="color:white;">rules →</span>
@@ -287,6 +314,7 @@ Meet Spinybacked Orbweaver. It's an AI-powered telemetry instrumentation agent. 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -310,6 +338,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -332,6 +361,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -354,6 +384,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -376,6 +407,7 @@ Spinybacked Orbweaver takes three inputs: your uninstrumented source code, your 
 
 <div style="display:flex; align-items:center; justify-content:center; width:100%; gap:2em;">
 <div style="flex:1; text-align:right; font-size:0.9em; line-height:2.4;">
+<span style="color:#0097A7;">passing tests</span><br>
 <span style="color:#E91E63;">source file →</span><br>
 <span style="color:#F57C00;">schema →</span><br>
 <a href="https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md" style="color:#2E7D32; text-decoration:none;">rules →</a>
@@ -440,7 +472,7 @@ Built on community projects
 
 <div style="font-size: 1.3em; line-height: 2.2; text-align: center;">
 <a href="https://github.com/open-telemetry/weaver" style="color:#E91E63; text-decoration:none;">OpenTelemetry Weaver</a><br>
-<a href="https://github.com/instrumentation-score/spec" style="color:#F57C00; text-decoration:none;">Instrumentation Score</a>
+<a href="https://instrumentation-score.com/" style="color:#F57C00; text-decoration:none;">Instrumentation Score</a>
 </div>
 
 ::: {.notes}
@@ -762,14 +794,14 @@ On a pass, the orchestrator writes any new schema conventions back to the Weaver
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -821,14 +853,14 @@ Instrumented file comes out of the AI agent. Now it hits the validator.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -871,7 +903,13 @@ committed`"])
 ```
 
 ::: {.notes}
-First: the blocking structural gate. Four checks, all deterministic.
+First: the blocking structural gate. Fail any check, and the file is reverted to its original state.
+
+- Syntax: the file still compiles.
+- Regex: no whitespace between a regex's closing slash and its flag, which produces a confusing compiler error.
+- Elision: no existing code was deleted.
+- Lint: the file still passes Prettier's formatting check — same tool for JavaScript and TypeScript.
+- Weaver: schema extensions, if any, are structurally valid.
 :::
 
 ## {.center data-transition="none"}
@@ -881,14 +919,14 @@ First: the blocking structural gate. Four checks, all deterministic.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -943,14 +981,14 @@ Any fail — structural fail, file rejected.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -996,7 +1034,12 @@ committed`"])
 ```
 
 ::: {.notes}
-All pass — blocking quality checks run.
+Structural gate passed. Now the blocking quality checks run — fail any one, and the file goes to the fix loop.
+
+- Schema fidelity: span names and attributes must match the registry exactly — this is blocking. For genuinely new names, an optional LLM judge checks for semantic duplicates; a duplicate flag there is advisory, and the agent decides whether to reuse the existing name or keep the distinct one.
+- Coverage: entry points and outbound calls have spans, errors get recorded.
+- Code quality: spans are closed and properly guarded.
+- API-only: instrumentation depends only on the OTel API, not the SDK.
 :::
 
 ## {.center data-transition="none"}
@@ -1006,14 +1049,14 @@ All pass — blocking quality checks run.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1060,7 +1103,12 @@ committed`"])
 ```
 
 ::: {.notes}
-Non-blocking advisory checks run in parallel.
+Non-blocking advisory checks run in parallel — these never fail the file, but the agent is directed to address them.
+
+- No Utility Spans: flags spans added to trivial, pure functions that add noise without value.
+- Async: flags async functions that are missing a span.
+- Attribute quality: flags PII in attribute values, unsafe null checks, and missing type coercion.
+- etc.: a few smaller checks, like preferring `startActiveSpan` over `startSpan`.
 :::
 
 ## {.center data-transition="none"}
@@ -1070,14 +1118,14 @@ Non-blocking advisory checks run in parallel.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1135,14 +1183,14 @@ Blocking quality fail — findings returned.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1200,14 +1248,14 @@ Advisory findings surface in the fail output too — blocking failures plus advi
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1257,7 +1305,7 @@ committed`"])
 ```
 
 ::: {.notes}
-All blocking checks pass — the agent gets one improvement pass: the passing file plus all advisory findings.
+All blocking checks pass — the agent gets one improvement pass over the passing file plus any advisory findings from this run.
 :::
 
 ## {.center data-transition="none"}
@@ -1267,14 +1315,14 @@ All blocking checks pass — the agent gets one improvement pass: the passing fi
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1334,14 +1382,14 @@ Advisory findings feed the improvement pass from both paths.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1401,14 +1449,14 @@ Full validation re-run on the improved file.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1470,14 +1518,14 @@ All blocking checks pass — improved file committed.
 flowchart LR
     IN["Instrumented file"]
     GATE["`**Blocking structural gate**
-Syntax · Elision
+Syntax · Elision · Regex flags
 Lint · Weaver`"]
     REJECT(["`Structural fail
 file rejected`"])
     BLOCKING["`**Blocking quality checks**
-Schema fidelity · Coverage
-Code quality · API-only
-LLM judge (if new names)`"]
+Schema fidelity (+ LLM judge)
+Coverage · Code quality
+API-only`"]
     ADVISORY["`**Non-blocking advisory**
 No Utility Spans · Async
 Attribute quality · etc.`"]
@@ -1530,6 +1578,8 @@ committed`"])
 
 ::: {.notes}
 Any blocking check still fails — prior passing file committed. Either way, something good goes out.
+
+Full rule descriptions: https://github.com/wiggitywhitney/spinybacked-orbweaver/blob/main/docs/rules-reference.md
 :::
 
 

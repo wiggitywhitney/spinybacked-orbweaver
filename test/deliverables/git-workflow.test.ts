@@ -601,6 +601,27 @@ describe('runGitWorkflow', () => {
       expect(deps.commitPrSummary).toHaveBeenCalledWith('/project', '/project/spiny-orb-pr-summary.md');
     });
 
+    it('stages the live-check artifact alongside the PR summary when one was written', async () => {
+      const runResult = makeRunResult({ endOfRunValidation: 'RAW WEAVER REPORT JSON' });
+      const deps = makeDeps({
+        coordinate: vi.fn().mockImplementation(async (_dir: string, _config: unknown, callbacks: { onFileComplete?: (result: FileResult, index: number, total: number) => void }) => {
+          callbacks?.onFileComplete?.(runResult.fileResults[0], 0, 1);
+          return runResult;
+        }),
+        writePrSummary: vi.fn().mockResolvedValue('/project/spiny-orb-pr-summary.md'),
+        writeLiveCheckArtifact: vi.fn().mockResolvedValue('/project/spiny-orb-live-check-report.json'),
+      });
+
+      await runGitWorkflow(makeOptions(), deps);
+
+      expect(deps.commitPrSummary).toHaveBeenCalledWith(
+        '/project',
+        '/project/spiny-orb-pr-summary.md',
+        ['/project/spiny-orb-live-check-report.json'],
+      );
+    });
+
+
     it('returns prSummaryPath in the result', async () => {
       const deps = makeDeps({
         writePrSummary: vi.fn().mockResolvedValue('/project/spiny-orb-pr-summary.md'),
