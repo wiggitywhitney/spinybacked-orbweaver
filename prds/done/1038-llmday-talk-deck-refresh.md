@@ -1,9 +1,10 @@
 # PRD #1038: LLM Day Talk Deck Refresh
 
-**Status**: Abandoned (2026-08-18) — see Decision Log
+**Status**: Abandoned — see Decision Log
 **Priority**: High
 **Created**: 2026-07-20
-**GitHub Issue**: wiggitywhitney/spinybacked-orbweaver#1038
+**Closed**: 2026-08-18
+**GitHub Issue**: wiggitywhitney/spinybacked-orbweaver#1038 (closed as not planned)
 **Branch**: `docs/llmday-slides-refresh-audit` (already created)
 
 ---
