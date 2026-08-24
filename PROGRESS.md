@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-08-24) Bumped `package.json` to `2.0.0` — major version bump because PRD #752 changed `--thinking`'s behavior from "failed files only" to "all files," a breaking change for anyone scripting against the old output shape. Documented a release-time version-classification process in `.claude/CLAUDE.md`'s "npm Release Workflow" section so future releases classify accumulated `PROGRESS.md` changes (major/minor/patch) before bumping the version.
+
+## [2.0.0] - 2026-08-24
+
 ### Fixed
 
 - (2026-08-18) Addressed CodeRabbit findings surfaced while closing out the LLM Day talk deck refresh: removed 11 stray Mermaid `%%{init}%%` directives from the fix-loop diagram sequence (explicitly prohibited — they can cause unclosed `<div>` nesting and break slide navigation once a deck has many Mermaid blocks), corrected a slide that described the SCH-001/SCH-002 semantic-duplicate LLM judge as a required pass when it's actually advisory, softened a diagram note that implied an explicit "advisory findings present" gate the diagram doesn't show, and corrected factual errors in the decktape research doc (it's listed by reveal.js as an alternative export method, not a recommendation over browser print-to-PDF; corrected an issue's opening year and Quarto's actual documented PDF export mechanism).

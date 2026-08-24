@@ -163,6 +163,14 @@ If `npm-release-test.yml` fails after a release, the package was published but t
 
 To trigger `npm-release-test.yml` manually before a release (e.g., to validate packaging changes), create a PR with the `run-acceptance` label.
 
+**Before creating a future GitHub Release**, classify the accumulated `[Unreleased]` `PROGRESS.md` entries since the last release by their highest-severity item, then bump `package.json` and rename the `[Unreleased]` header to the new dated version section accordingly:
+
+- Any breaking change → major version bump
+- Any additive feature with no breaking change → minor version bump
+- Otherwise (fixes, docs, internal changes only) → patch version bump
+
+This is a judgment call made at release time — it is not a per-PR gate, and nothing enforces the classification's correctness beyond npm rejecting a duplicate version number.
+
 ## Communicating About Validation Rules
 
 When discussing validation rules with Whitney, always state what the rule checks for in plain English alongside its ID. Never refer to a rule by its code name alone — "COV-001" means nothing in conversation without the description.
