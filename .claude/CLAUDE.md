@@ -169,6 +169,8 @@ To trigger `npm-release-test.yml` manually before a release (e.g., to validate p
 - Any additive feature with no breaking change → minor version bump
 - Otherwise (fixes, docs, internal changes only) → patch version bump
 
+After renaming, add a fresh empty `## [Unreleased]` header above the newly dated release section so future changes have a section to land in.
+
 This is a judgment call made at release time — it is not a per-PR gate, and nothing enforces the classification's correctness beyond npm rejecting a duplicate version number.
 
 ## Communicating About Validation Rules

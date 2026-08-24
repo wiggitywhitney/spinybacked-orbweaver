@@ -6,11 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
+## [2.0.0] - 2026-08-24
+
+### Changed
 
 - (2026-08-24) Bumped `package.json` to `2.0.0` — major version bump because PRD #752 changed `--thinking`'s behavior from "failed files only" to "all files," a breaking change for anyone scripting against the old output shape. Documented a release-time version-classification process in `.claude/CLAUDE.md`'s "npm Release Workflow" section so future releases classify accumulated `PROGRESS.md` changes (major/minor/patch) before bumping the version.
-
-## [2.0.0] - 2026-08-24
 
 ### Fixed
 
