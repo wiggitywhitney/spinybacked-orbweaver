@@ -1,7 +1,11 @@
 // ABOUTME: Unit tests for CLI argument parsing scaffold.
 // ABOUTME: Verifies yargs commands, flags, defaults, and help output for init and instrument commands.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import yargsFactory from 'yargs';
 import { buildParser } from '../../src/interfaces/cli.ts';
 
 /**
@@ -113,6 +117,30 @@ describe('CLI scaffold', () => {
       const help = await parser.getHelp();
       expect(help).toContain('instrument');
       expect(help).toContain('Instrument');
+    });
+  });
+
+  describe('--version flag', () => {
+    it('is set explicitly from spiny-orb\'s own package.json, not left to yargs auto-detection', () => {
+      // yargs auto-detects a version at construction time by walking up from
+      // wherever the yargs package itself is installed — which resolves to the
+      // *consuming project's* package.json when yargs is hoisted there (see
+      // issue #1050). buildParser() must override that with an explicit call.
+      const probe = yargsFactory();
+      const proto = Object.getPrototypeOf(probe);
+      const versionSpy = vi.spyOn(proto, 'version');
+      try {
+        buildParser();
+        const expectedVersion = JSON.parse(
+          readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../package.json'), 'utf-8'),
+        ).version;
+        const explicitCalls = versionSpy.mock.calls.filter(
+          (args) => args.length > 0 && typeof args[0] === 'string',
+        );
+        expect(explicitCalls).toContainEqual([expectedVersion]);
+      } finally {
+        versionSpy.mockRestore();
+      }
     });
   });
 });
