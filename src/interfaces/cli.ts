@@ -3,6 +3,7 @@
 // ABOUTME: Defines init and instrument commands with yargs, wired to real handlers.
 
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { resolve } from 'node:path';
@@ -13,14 +14,24 @@ import { loadConfig } from '../config/loader.ts';
 import { coordinate } from '../coordinator/coordinate.ts';
 import { promptConfirm } from './prompt.ts';
 
+const require = createRequire(import.meta.url);
+const { version: CLI_VERSION } = require('../../package.json') as { version: string };
+
 /**
  * Build the yargs parser with all commands and options.
  * Exported separately from execution so tests can invoke the parser directly.
+ *
+ * Passes CLI_VERSION explicitly rather than relying on yargs' default
+ * version auto-detection: yargs resolves the nearest package.json by
+ * walking up from wherever the yargs package itself is installed, which
+ * finds the *consuming project's* package.json when yargs is hoisted to
+ * its top-level node_modules (the normal case for a common dependency).
  */
 export function buildParser() {
   return yargs()
     .scriptName('spiny-orb')
     .usage('$0 <command> [options]')
+    .version(CLI_VERSION)
     .command(
       'init',
       'Initialize telemetry agent configuration',
