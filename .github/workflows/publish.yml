@@ -16,6 +16,13 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      # Install Weaver — required for spiny-orb schema validation tests in the test suite
+      - name: Install Weaver CLI
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.22.1/weaver-installer.sh | sh
+          weaver --version
+
       - run: npm install -g npm@latest   # Ensure npm >= 11.5.1
       - run: npm ci
       - run: npm publish --provenance    # --provenance must be explicit; do not rely on automatic generation

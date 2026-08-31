@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- (2026-08-28) Fixed the `v2.0.0` GitHub Release's failed npm publish (issue #1052): `publish.yml`'s runner never installed the Weaver CLI, so `prepublishOnly`'s full test suite failed on the 13 files that depend on the real Weaver binary (per this project's "never mock Weaver" testing rule), and `npm publish --provenance` never ran. Added the same Weaver CLI install step already used in `npm-release-test.yml` (curl-based installer, pinned version) to `publish.yml`, immediately after `actions/setup-node`. Reproduced locally by stripping Weaver from `PATH` and confirmed all 248 tests across the 13 previously-failing files pass once Weaver is restored.
+
 ## [2.0.0] - 2026-08-24
 
 ### Changed
