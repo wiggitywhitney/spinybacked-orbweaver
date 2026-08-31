@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- (2026-08-28) Fixed the `v2.0.0` GitHub Release's failed npm publish (issue #1052): `publish.yml`'s runner never installed the Weaver CLI, so `prepublishOnly`'s full test suite failed on the 13 files that depend on the real Weaver binary (per this project's "never mock Weaver" testing rule), and `npm publish --provenance` never ran. Added the same Weaver CLI install step already used in `npm-release-test.yml` (curl-based installer, pinned version) to `publish.yml`, immediately after `actions/setup-node`. Reproduced locally by stripping Weaver from `PATH` and confirmed all 248 tests across the 13 previously-failing files pass once Weaver is restored.
+- (2026-08-28) Fixed the `v2.0.0` GitHub Release's failed npm publish (issue #1052): `publish.yml`'s runner never installed the Weaver CLI, so `prepublishOnly`'s full test suite failed on the 13 files that depend on the real Weaver binary (per this project's "never mock Weaver" testing rule), and `npm publish --provenance` never ran. Added the same Weaver CLI install step already used in `npm-release-test.yml` (curl-based installer, pinned version) to `publish.yml`, immediately after `actions/setup-node`. Reproduced locally by stripping Weaver from `PATH` and confirmed all 248 tests across the 13 previously-failing files pass once Weaver is restored. With the fix on `main`, the `v2.0.0` release and tag were deleted and recreated to retry the publish — `Publish to npm` and `Test npm Release` both succeeded, and `npm view spiny-orb version` now reports `2.0.0`.
+
+### Removed
+
+- (2026-08-31) Removed issues #1048 and #1052 from `docs/ROADMAP.md`'s Short-term section — both closed, and ROADMAP is forward-looking (completed work lives in this changelog, not there).
 
 ## [2.0.0] - 2026-08-24
 
