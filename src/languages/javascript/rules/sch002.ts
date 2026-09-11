@@ -200,6 +200,26 @@ const GENERIC_TOKENS = new Set([
 ]);
 
 /**
+ * Common words ending in a single "s" that are NOT plurals — naive singularization
+ * (strip trailing "s") would otherwise mangle these into non-words (e.g. "status" ->
+ * "statu"), breaking their match against GENERIC_TOKENS and any cross-site comparison.
+ */
+const NON_PLURAL_TERMINAL_S_WORDS = new Set([
+  'status', 'address', 'progress', 'success', 'access', 'process', 'series', 'species',
+]);
+
+/**
+ * Naive singularization for word tokens: "categories" -> "category", "weeks" -> "week",
+ * but known non-plural words ending in "s" (e.g. "status") are left unchanged.
+ */
+function singularize(word: string): string {
+  if (NON_PLURAL_TERMINAL_S_WORDS.has(word)) return word;
+  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
+/**
  * Split an identifier into lowercase, singularized word tokens for meaning-consistency
  * comparison (e.g. "weeks" -> ["week"], "dates_count" -> ["date", "count"]).
  */
@@ -209,7 +229,7 @@ function tokenize(identifier: string): Set<string> {
     .split(/[^a-zA-Z0-9]+/)
     .map((w) => w.toLowerCase())
     .filter(Boolean)
-    .map((w) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w));
+    .map(singularize);
   return new Set(words);
 }
 

@@ -390,6 +390,75 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
 
       expect(results.some((r) => !r.passed)).toBe(true);
     });
+
+    it('fails when a newly-declared extension key is reused across different subjects both ending in a double-s word (ordersStatus vs paymentsStatus)', async () => {
+      // "status" ends in a double-s and is not a plural. If naive singularization
+      // mangled it to "statu", GENERIC_TOKENS's "status" entry would no longer match it,
+      // so "statu" would stay in the meaningful-token set for BOTH identifiers and be
+      // treated as a shared, meaningful token — incorrectly making "ordersStatus" and
+      // "paymentsStatus" look like the same concept even though the real subjects
+      // ("orders" vs "payments") differ. Singularization must leave "status" unchanged
+      // so it's correctly recognized and excluded as generic.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeOrders(ordersStatus) {',
+        '  return tracer.startActiveSpan("summarizeOrders", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.status_summary", ordersStatus);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizePayments(paymentsStatus) {',
+        '  return tracer.startActiveSpan("summarizePayments", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.status_summary", paymentsStatus);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.batch.status_summary'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+    });
+
+    it('passes when a newly-declared extension key is reused for the same concept across singular/plural (-ies) forms (category vs categories)', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeOne(category) {',
+        '  return tracer.startActiveSpan("summarizeOne", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.catalog.category_label", category);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizeMany(categories) {',
+        '  return tracer.startActiveSpan("summarizeMany", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.catalog.category_label", categories);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.catalog.category_label'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
   });
 
   describe('CheckResult structure', () => {
