@@ -593,8 +593,8 @@ function extractFromSetAttributes(
         } else if (Node.isIdentifier(nameNode)) {
           key = nameNode.getText();
         }
-        if (key !== null) {
-          const initializer = prop.getInitializer()!;
+        const initializer = prop.getInitializer();
+        if (key !== null && initializer) {
           entries.push({
             key,
             line: prop.getStartLineNumber(),
