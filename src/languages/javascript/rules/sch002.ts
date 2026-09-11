@@ -120,11 +120,28 @@ const COERCION_FUNCTIONS = new Set([
 ]);
 
 /**
+ * Generic/structural method names whose receiver — not the method name itself — carries
+ * the source concept (e.g. `orders.filter(...)` should resolve to "orders", not "filter").
+ * Method names NOT in this set are treated as concept-bearing themselves (e.g. `getDates()`,
+ * `.getWeeks()`) — the method name resolves to the base identifier rather than its receiver,
+ * since a domain-specific getter/accessor name is the meaningful signal, not the object it's
+ * called on.
+ */
+const GENERIC_TRANSFORM_METHODS = new Set([
+  'map', 'filter', 'reduce', 'reduceRight', 'slice', 'splice', 'forEach', 'join',
+  'split', 'toString', 'valueOf', 'trim', 'trimStart', 'trimEnd', 'replace', 'replaceAll',
+  'concat', 'reverse', 'sort', 'flat', 'flatMap', 'includes', 'indexOf', 'lastIndexOf',
+  'find', 'findIndex', 'some', 'every', 'keys', 'values', 'entries', 'toLowerCase',
+  'toUpperCase', 'padStart', 'padEnd', 'toFixed',
+]);
+
+/**
  * Walk a value expression down to the base identifier of its source (e.g. "dates" for
- * `dates.length`, "weeks" for `String(weeks.length)`). Used by the extension-key
- * meaning-consistency check to detect when the same novel attribute key is fed by
- * unrelated source variables across different call sites in the same file.
- * Returns null when the expression is a literal or the base can't be determined statically.
+ * `dates.length`, "weeks" for `String(weeks.length)`, "getDates" for `getDates().length`).
+ * Used by the extension-key meaning-consistency check to detect when the same novel
+ * attribute key is fed by unrelated source variables/accessors across different call
+ * sites in the same file. Returns null when the expression is a literal or the base
+ * can't be determined statically.
  */
 function getSourceIdentifierBase(node: Node): string | null {
   let current: Node = node;
@@ -142,13 +159,26 @@ function getSourceIdentifierBase(node: Node): string | null {
       continue;
     }
     if (Node.isCallExpression(current)) {
-      const calleeText = current.getExpression().getText();
+      const callee = current.getExpression();
+      const calleeText = callee.getText();
       const args = current.getArguments();
       if (COERCION_FUNCTIONS.has(calleeText) && args.length > 0) {
         current = args[0];
         continue;
       }
-      current = current.getExpression();
+      // Method call (obj.method(...)): a domain-specific method name (e.g. getDates,
+      // calculateWeeks) IS the concept-bearing signal and must not be discarded in favor
+      // of the receiver. Generic transform methods (filter, map, ...) carry no concept
+      // of their own — fall through to the receiver instead.
+      if (Node.isPropertyAccessExpression(callee)) {
+        const methodName = callee.getName();
+        if (!GENERIC_TRANSFORM_METHODS.has(methodName)) {
+          return methodName;
+        }
+        current = callee.getExpression();
+        continue;
+      }
+      current = callee;
       continue;
     }
     break;
@@ -156,6 +186,18 @@ function getSourceIdentifierBase(node: Node): string | null {
   if (Node.isIdentifier(current)) return current.getText();
   return null;
 }
+
+/**
+ * Generic/structural word tokens that appear across many unrelated concepts (counts,
+ * statuses, wrappers) and would otherwise create false "same concept" matches between
+ * genuinely different concepts that happen to share only a structural word — e.g.
+ * "ordersFailed" and "paymentsFailed" share "failed" but represent different subjects.
+ */
+const GENERIC_TOKENS = new Set([
+  'count', 'total', 'sum', 'length', 'size', 'value', 'result', 'data', 'info', 'list',
+  'item', 'num', 'number', 'id', 'name', 'type', 'status', 'flag', 'failed', 'success',
+  'error', 'response', 'request', 'get', 'set', 'is', 'has',
+]);
 
 /**
  * Split an identifier into lowercase, singularized word tokens for meaning-consistency
@@ -171,10 +213,26 @@ function tokenize(identifier: string): Set<string> {
   return new Set(words);
 }
 
-/** True when two identifiers share at least one normalized word token. */
+/**
+ * Narrow a token set to its non-generic (concept-bearing) tokens, falling back to the
+ * full set when every token is generic — comparing wholly-generic identifiers still
+ * needs something to compare against.
+ */
+function meaningfulTokens(tokens: Set<string>): Set<string> {
+  const specific = new Set([...tokens].filter((t) => !GENERIC_TOKENS.has(t)));
+  return specific.size > 0 ? specific : tokens;
+}
+
+/**
+ * True when two identifiers share at least one normalized, non-generic word token.
+ * Generic structural tokens (see GENERIC_TOKENS) are excluded from the comparison
+ * whenever a more specific token is available, so two different subjects that merely
+ * share a generic suffix/prefix (e.g. "ordersFailed" vs "paymentsFailed") are not
+ * treated as the same concept.
+ */
 function sharesToken(a: string, b: string): boolean {
-  const tokensA = tokenize(a);
-  const tokensB = tokenize(b);
+  const tokensA = meaningfulTokens(tokenize(a));
+  const tokensB = meaningfulTokens(tokenize(b));
   for (const t of tokensA) {
     if (tokensB.has(t)) return true;
   }

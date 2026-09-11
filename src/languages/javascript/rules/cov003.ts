@@ -302,7 +302,8 @@ export function isExpectedConditionCatch(catchClause: import('ts-morph').CatchCl
  * the same block, by an unconditional `throw`. This is the same graceful-degradation
  * pattern as the negated rethrow (`if (err.code !== 'ENOENT') throw err;`) — ENOENT is
  * the handled case, and everything else rethrows to an outer span. Requires:
- * - An IfStatement whose condition contains `.code === 'ENOENT'`
+ * - An IfStatement whose ENTIRE condition (not a sub-expression of a compound condition
+ *   such as `&&`/`||`) is an equality comparison of the form `X.code === 'ENOENT'`
  * - No else branch (an else would mean the rethrow isn't truly unconditional fallthrough)
  * - A then-branch consisting solely of a ReturnStatement (bare or with a value)
  * - The next sibling statement in the block is a ThrowStatement
@@ -314,8 +315,7 @@ function hasPositiveConditionReturnThenRethrow(block: import('ts-morph').Block):
     if (!Node.isIfStatement(stmt)) continue;
     if (stmt.getElseStatement()) continue;
 
-    const cond = stmt.getExpression().getText();
-    if (!/\.code\s*===\s*['"]ENOENT['"]/.test(cond)) continue;
+    if (!isSoleEnoentEqualityCondition(stmt.getExpression())) continue;
 
     const thenStmt = stmt.getThenStatement();
     const thenIsReturn =
@@ -330,6 +330,25 @@ function hasPositiveConditionReturnThenRethrow(block: import('ts-morph').Block):
     }
   }
   return false;
+}
+
+/**
+ * True when `expr` (unwrapping any surrounding parentheses) is, in its entirety, an
+ * equality comparison `X.code === 'ENOENT'` — not a sub-expression of a compound
+ * condition like `X.code === 'ENOENT' && somethingElse`. Rejecting compound conditions
+ * prevents the return-then-fallthrough exemption from firing when the ENOENT check is
+ * only part of a larger condition with additional, unvetted requirements.
+ */
+function isSoleEnoentEqualityCondition(expr: import('ts-morph').Node): boolean {
+  let current = expr;
+  while (Node.isParenthesizedExpression(current)) {
+    current = current.getExpression();
+  }
+  if (!Node.isBinaryExpression(current)) return false;
+  if (current.getOperatorToken().getText() !== '===') return false;
+  const rightText = current.getRight().getText();
+  if (rightText !== '"ENOENT"' && rightText !== "'ENOENT'") return false;
+  return /\.code$/.test(current.getLeft().getText());
 }
 
 /**

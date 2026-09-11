@@ -321,6 +321,75 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
 
       expect(results.every((r) => r.passed)).toBe(true);
     });
+
+    it('fails when a newly-declared extension key is reused across unrelated method calls (getDates vs getWeeks)', async () => {
+      // The receiver ("this") is the same in both calls, but the method name is the
+      // concept-bearing signal here — losing it to the shared receiver would create a
+      // false negative for exactly the kind of reuse this check exists to catch.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'class Journal {',
+        '  summarizeDates() {',
+        '    return tracer.startActiveSpan("summarizeDates", (span) => {',
+        '      try {',
+        '        span.setAttribute("commit_story.journal.dates_count", this.getDates().length);',
+        '        return 1;',
+        '      } finally { span.end(); }',
+        '    });',
+        '  }',
+        '  summarizeWeeks() {',
+        '    return tracer.startActiveSpan("summarizeWeeks", (span) => {',
+        '      try {',
+        '        span.setAttribute("commit_story.journal.dates_count", this.getWeeks().length);',
+        '        return 1;',
+        '      } finally { span.end(); }',
+        '    });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['commit_story.journal.dates_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+    });
+
+    it('fails when a newly-declared extension key is reused across different subjects sharing only a generic word (ordersFailed vs paymentsFailed)', async () => {
+      // "failed" is shared but is a generic structural word — the distinguishing
+      // subject ("orders" vs "payments") differs, so this must still be flagged.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeOrders(ordersFailed) {',
+        '  return tracer.startActiveSpan("summarizeOrders", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.failed_count", ordersFailed.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizePayments(paymentsFailed) {',
+        '  return tracer.startActiveSpan("summarizePayments", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.failed_count", paymentsFailed.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.batch.failed_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+    });
   });
 
   describe('CheckResult structure', () => {

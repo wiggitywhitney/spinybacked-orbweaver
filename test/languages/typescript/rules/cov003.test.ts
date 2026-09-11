@@ -264,6 +264,29 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('still flags a compound ENOENT condition (logical AND) as needing error recording', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        "export function loadIfExists(path: string, allowMissing: boolean): Buffer | null {",
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code === "ENOENT" && allowMissing) return null;',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('handles a function with both the negated and positive-condition ENOENT rethrow shapes (readMonthWeeklySummaries-style)', () => {
       const code = [
         "import { trace } from '@opentelemetry/api';",

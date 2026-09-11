@@ -358,6 +358,31 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('still flags a compound ENOENT condition (logical AND) as needing error recording', () => {
+      // The ENOENT check is only part of a larger condition — the exemption must not
+      // fire just because '.code === "ENOENT"' appears as a sub-expression.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function loadIfExists(path, allowMissing) {',
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      if (err.code === "ENOENT" && allowMissing) return null;',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('handles a function with both the negated and positive-condition ENOENT rethrow shapes (readMonthWeeklySummaries-style)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',
