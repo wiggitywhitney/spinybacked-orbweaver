@@ -212,6 +212,93 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when catch uses positive-condition ENOENT return-then-fallthrough rethrow', () => {
+      // Structurally the same graceful-degradation pattern as the negated form above,
+      // just phrased as a positive-condition early return followed by an unconditional
+      // rethrow of everything else.
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        "export function loadIfExists(path: string): Buffer | null {",
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags positive-condition ENOENT check with an else branch (not unconditional fallthrough)', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        "export function loadIfExists(path: string): Buffer | null {",
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code === "ENOENT") {',
+        '        return null;',
+        '      } else {',
+        '        throw err;',
+        '      }',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('handles a function with both the negated and positive-condition ENOENT rethrow shapes (readMonthWeeklySummaries-style)', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        "export async function readDayEntries(path: string): Promise<string[]> {",
+        '  return tracer.startActiveSpan("readDayEntries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+        "export async function readMonthWeeklySummaries(path: string): Promise<string[]> {",
+        '  return tracer.startActiveSpan("readMonthWeeklySummaries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err: unknown) {',
+        '      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;',
+        '      return [];',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('still flags catch where .code !== ENOENT appears in if-body that does not throw (over-match regression)', () => {
       // `.code !== 'ENOENT'` is present but in an if-body that logs, not a rethrow guard.
       // The unconditional throw after means error recording is required — exemption must NOT fire.

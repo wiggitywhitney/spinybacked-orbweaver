@@ -110,6 +110,77 @@ function normalizeRegistryType(type: ResolvedRegistryAttribute['type']): string 
   return type;
 }
 
+/**
+ * Coercion functions whose argument (not the call itself) is the meaningful source
+ * expression — e.g. `String(weeks.length)` should resolve to "weeks", not "String".
+ */
+const COERCION_FUNCTIONS = new Set([
+  'String', 'Number', 'Boolean', 'parseInt', 'parseFloat',
+  'Math.round', 'Math.floor', 'Math.ceil',
+]);
+
+/**
+ * Walk a value expression down to the base identifier of its source (e.g. "dates" for
+ * `dates.length`, "weeks" for `String(weeks.length)`). Used by the extension-key
+ * meaning-consistency check to detect when the same novel attribute key is fed by
+ * unrelated source variables across different call sites in the same file.
+ * Returns null when the expression is a literal or the base can't be determined statically.
+ */
+function getSourceIdentifierBase(node: Node): string | null {
+  let current: Node = node;
+  for (let i = 0; i < 20; i++) {
+    if (
+      Node.isParenthesizedExpression(current) ||
+      Node.isNonNullExpression(current) ||
+      Node.isAsExpression(current)
+    ) {
+      current = current.getExpression();
+      continue;
+    }
+    if (Node.isPropertyAccessExpression(current)) {
+      current = current.getExpression();
+      continue;
+    }
+    if (Node.isCallExpression(current)) {
+      const calleeText = current.getExpression().getText();
+      const args = current.getArguments();
+      if (COERCION_FUNCTIONS.has(calleeText) && args.length > 0) {
+        current = args[0];
+        continue;
+      }
+      current = current.getExpression();
+      continue;
+    }
+    break;
+  }
+  if (Node.isIdentifier(current)) return current.getText();
+  return null;
+}
+
+/**
+ * Split an identifier into lowercase, singularized word tokens for meaning-consistency
+ * comparison (e.g. "weeks" -> ["week"], "dates_count" -> ["date", "count"]).
+ */
+function tokenize(identifier: string): Set<string> {
+  const words = identifier
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .split(/[^a-zA-Z0-9]+/)
+    .map((w) => w.toLowerCase())
+    .filter(Boolean)
+    .map((w) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w));
+  return new Set(words);
+}
+
+/** True when two identifiers share at least one normalized word token. */
+function sharesToken(a: string, b: string): boolean {
+  const tokensA = tokenize(a);
+  const tokensB = tokenize(b);
+  for (const t of tokensA) {
+    if (tokensB.has(t)) return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Main check
 // ---------------------------------------------------------------------------
@@ -171,6 +242,10 @@ export async function checkAttributeKeysMatchRegistry(
 
   const allResults: CheckResult[] = [];
   const allJudgeTokenUsage: TokenUsage[] = [];
+
+  // Accepted (non-duplicate) attribute extension keys declared in this pass — used by the
+  // same-pass meaning-consistency check below.
+  const acceptedExtensionKeys = new Set<string>();
 
   // ---------------------------------------------------------------------------
   // Extension acceptance: check declared attribute extensions for semantic duplicates.
@@ -244,7 +319,40 @@ export async function checkAttributeKeysMatchRegistry(
         // extensions in the same declaration are checked against this newly accepted one.
         registryNames.add(ext);
         registryEntries.push({ name: ext, type: inferredType !== 'unknown' ? inferredType : undefined });
+        acceptedExtensionKeys.add(ext);
       }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Same-pass meaning-consistency check: a newly-declared extension key must represent
+  // the same concept everywhere it's used in this file. Detected by comparing the base
+  // source identifier feeding each call site's value — e.g. `dates.length` at one site
+  // and `weeks.length` at another site for the same key is a strong signal the key is
+  // being reused for two different concepts, even though both sites pass type-checking.
+  // ---------------------------------------------------------------------------
+  for (const ext of acceptedExtensionKeys) {
+    const sites = usedKeys.filter((k) => k.key === ext && k.sourceIdentifier !== null);
+    if (sites.length < 2) continue;
+
+    const baseline = sites[0];
+    for (const site of sites.slice(1)) {
+      if (sharesToken(baseline.sourceIdentifier!, site.sourceIdentifier!)) continue;
+
+      allResults.push({
+        ruleId: 'SCH-002',
+        passed: false,
+        filePath,
+        lineNumber: site.line,
+        message:
+          `SCH-002 check failed: declared attribute extension "${ext}" is used with an ` +
+          `inconsistent value source at line ${site.line} ("${site.sourceIdentifier}") — ` +
+          `it was first used with "${baseline.sourceIdentifier}" at line ${baseline.line}, ` +
+          `a different concept. Declare a separate attribute key for this value, or use this ` +
+          `key consistently for the same concept everywhere it appears in this file.`,
+        tier: 2,
+        blocking: true,
+      });
     }
   }
 
@@ -321,6 +429,12 @@ interface AttributeKeyEntry {
   line: number;
   /** Inferred type of the value argument, used for type-compatibility pre-filtering. */
   inferredType: InferredType;
+  /**
+   * Base identifier of the value expression's source (e.g. "dates" for `dates.length`),
+   * used for the same-pass extension-key meaning-consistency check. Null when the value
+   * is a literal or the base cannot be statically determined.
+   */
+  sourceIdentifier: string | null;
 }
 
 /**
@@ -374,6 +488,7 @@ function extractFromSetAttribute(
       key: firstArg.getLiteralValue(),
       line: firstArg.getStartLineNumber(),
       inferredType: inferValueType(secondArg),
+      sourceIdentifier: getSourceIdentifierBase(secondArg),
     });
   }
 }
@@ -401,10 +516,12 @@ function extractFromSetAttributes(
           key = nameNode.getText();
         }
         if (key !== null) {
+          const initializer = prop.getInitializer()!;
           entries.push({
             key,
             line: prop.getStartLineNumber(),
-            inferredType: inferValueType(prop.getInitializer()!),
+            inferredType: inferValueType(initializer),
+            sourceIdentifier: getSourceIdentifierBase(initializer),
           });
         }
       } else if (Node.isShorthandPropertyAssignment(prop)) {
@@ -412,6 +529,7 @@ function extractFromSetAttributes(
           key: prop.getName(),
           line: prop.getStartLineNumber(),
           inferredType: 'unknown',
+          sourceIdentifier: prop.getName(),
         });
       }
     }

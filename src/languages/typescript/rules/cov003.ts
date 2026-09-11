@@ -238,12 +238,57 @@ function isExpectedConditionCatch(catchClause: import('ts-morph').CatchClause): 
     return true;
   }
 
+  // Positive-condition return-then-fallthrough rethrow: `if (err.code === 'ENOENT') return;
+  // throw err;` — structurally the same graceful-degradation pattern as the negated form
+  // above, just phrased as a positive-condition early return followed by an unconditional
+  // rethrow of everything else. ENOENT is still the handled (graceful) case; the fallthrough
+  // throw rethrows to an outer span that already records the error. Not a genuine error path.
+  if (hasPositiveConditionReturnThenRethrow(block)) {
+    return true;
+  }
+
   if (EXPECTED_CONDITION_PATTERNS.some((pattern) => bodyText.includes(pattern))) {
     // Even though expected-condition patterns are present, the rethrow means
     // there's a genuine error path. Return false — error recording is needed.
     return false;
   }
 
+  return false;
+}
+
+/**
+ * Detect the positive-condition return-then-fallthrough rethrow shape:
+ * `if (err.code === 'ENOENT') return;` immediately followed, as a sibling statement in
+ * the same block, by an unconditional `throw`. This is the same graceful-degradation
+ * pattern as the negated rethrow (`if (err.code !== 'ENOENT') throw err;`) — ENOENT is
+ * the handled case, and everything else rethrows to an outer span. Requires:
+ * - An IfStatement whose condition contains `.code === 'ENOENT'`
+ * - No else branch (an else would mean the rethrow isn't truly unconditional fallthrough)
+ * - A then-branch consisting solely of a ReturnStatement (bare or with a value)
+ * - The next sibling statement in the block is a ThrowStatement
+ */
+function hasPositiveConditionReturnThenRethrow(block: import('ts-morph').Block): boolean {
+  const statements = block.getStatements();
+  for (let i = 0; i < statements.length - 1; i++) {
+    const stmt = statements[i];
+    if (!Node.isIfStatement(stmt)) continue;
+    if (stmt.getElseStatement()) continue;
+
+    const cond = stmt.getExpression().getText();
+    if (!/\.code\s*===\s*['"]ENOENT['"]/.test(cond)) continue;
+
+    const thenStmt = stmt.getThenStatement();
+    const thenIsReturn =
+      Node.isReturnStatement(thenStmt) ||
+      (Node.isBlock(thenStmt) &&
+        thenStmt.getStatements().length === 1 &&
+        Node.isReturnStatement(thenStmt.getStatements()[0]));
+    if (!thenIsReturn) continue;
+
+    if (Node.isThrowStatement(statements[i + 1])) {
+      return true;
+    }
+  }
   return false;
 }
 

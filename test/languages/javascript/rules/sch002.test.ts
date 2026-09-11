@@ -254,6 +254,75 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
     });
   });
 
+  describe('same-pass extension-key meaning consistency', () => {
+    it('fails when a newly-declared extension key is reused for a different concept in the same file (RUN27-2)', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function runSummarize(dates) {',
+        '  return tracer.startActiveSpan("runSummarize", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", dates.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function runWeeklySummarize(weeks) {',
+        '  return tracer.startActiveSpan("runWeeklySummarize", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", weeks.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['commit_story.journal.dates_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+      const failure = results.find((r) => !r.passed)!;
+      expect(failure.ruleId).toBe('SCH-002');
+      expect(failure.message).toContain('commit_story.journal.dates_count');
+      expect(failure.message).toContain('weeks');
+      expect(failure.message).toContain('dates');
+    });
+
+    it('passes when a newly-declared extension key is reused consistently for the same concept', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeDates(dates) {',
+        '  return tracer.startActiveSpan("summarizeDates", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", dates.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizeMoreDates(dateList) {',
+        '  return tracer.startActiveSpan("summarizeMoreDates", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", dateList.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['commit_story.journal.dates_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure for passing check', async () => {
       const code = [
