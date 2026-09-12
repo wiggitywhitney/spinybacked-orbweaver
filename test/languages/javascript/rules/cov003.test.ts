@@ -306,7 +306,10 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('flags ENOENT catch that rethrows non-expected errors (mixed path)', () => {
+    it('passes when catch uses positive-condition ENOENT return-then-fallthrough rethrow', () => {
+      // Structurally the same graceful-degradation pattern as the negated form
+      // (`if (err.code !== 'ENOENT') throw err;`), just phrased as a positive-condition
+      // early return followed by an unconditional rethrow of everything else.
       const code = [
         'const { trace } = require("@opentelemetry/api");',
         'const tracer = trace.getTracer("svc");',
@@ -326,7 +329,93 @@ describe('checkErrorVisibility (COV-003)', () => {
 
       const results = checkErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags positive-condition ENOENT check with an else branch (not unconditional fallthrough)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function loadIfExists(path) {',
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      if (err.code === "ENOENT") {',
+        '        return null;',
+        '      } else {',
+        '        throw err;',
+        '      }',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
+    });
+
+    it('still flags a compound ENOENT condition (logical AND) as needing error recording', () => {
+      // The ENOENT check is only part of a larger condition — the exemption must not
+      // fire just because '.code === "ENOENT"' appears as a sub-expression.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function loadIfExists(path, allowMissing) {',
+        '  return tracer.startActiveSpan("loadIfExists", (span) => {',
+        '    try {',
+        '      return readFileSync(path);',
+        '    } catch (err) {',
+        '      if (err.code === "ENOENT" && allowMissing) return null;',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('handles a function with both the negated and positive-condition ENOENT rethrow shapes (readMonthWeeklySummaries-style)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'async function readDayEntries(path) {',
+        '  return tracer.startActiveSpan("readDayEntries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err) {',
+        '      if (err.code === "ENOENT") return [];',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+        'async function readMonthWeeklySummaries(path) {',
+        '  return tracer.startActiveSpan("readMonthWeeklySummaries", async (span) => {',
+        '    try {',
+        '      return await readFile(path, "utf8");',
+        '    } catch (err) {',
+        '      if (err.code !== "ENOENT") throw err;',
+        '      return [];',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
 
     it('passes when ENOENT catch does not rethrow (pure fallback)', () => {

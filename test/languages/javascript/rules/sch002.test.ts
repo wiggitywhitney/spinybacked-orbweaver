@@ -254,6 +254,213 @@ describe('checkAttributeKeysMatchRegistry (SCH-002)', () => {
     });
   });
 
+  describe('same-pass extension-key meaning consistency', () => {
+    it('fails when a newly-declared extension key is reused for a different concept in the same file (RUN27-2)', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function runSummarize(dates) {',
+        '  return tracer.startActiveSpan("runSummarize", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", dates.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function runWeeklySummarize(weeks) {',
+        '  return tracer.startActiveSpan("runWeeklySummarize", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", weeks.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['commit_story.journal.dates_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+      const failure = results.find((r) => !r.passed)!;
+      expect(failure.ruleId).toBe('SCH-002');
+      expect(failure.message).toContain('commit_story.journal.dates_count');
+      expect(failure.message).toContain('weeks');
+      expect(failure.message).toContain('dates');
+    });
+
+    it('passes when a newly-declared extension key is reused consistently for the same concept', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeDates(dates) {',
+        '  return tracer.startActiveSpan("summarizeDates", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", dates.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizeMoreDates(dateList) {',
+        '  return tracer.startActiveSpan("summarizeMoreDates", (span) => {',
+        '    try {',
+        '      span.setAttribute("commit_story.journal.dates_count", dateList.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['commit_story.journal.dates_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+
+    it('fails when a newly-declared extension key is reused across unrelated method calls (getDates vs getWeeks)', async () => {
+      // The receiver ("this") is the same in both calls, but the method name is the
+      // concept-bearing signal here — losing it to the shared receiver would create a
+      // false negative for exactly the kind of reuse this check exists to catch.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'class Journal {',
+        '  summarizeDates() {',
+        '    return tracer.startActiveSpan("summarizeDates", (span) => {',
+        '      try {',
+        '        span.setAttribute("commit_story.journal.dates_count", this.getDates().length);',
+        '        return 1;',
+        '      } finally { span.end(); }',
+        '    });',
+        '  }',
+        '  summarizeWeeks() {',
+        '    return tracer.startActiveSpan("summarizeWeeks", (span) => {',
+        '      try {',
+        '        span.setAttribute("commit_story.journal.dates_count", this.getWeeks().length);',
+        '        return 1;',
+        '      } finally { span.end(); }',
+        '    });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['commit_story.journal.dates_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+    });
+
+    it('fails when a newly-declared extension key is reused across different subjects sharing only a generic word (ordersFailed vs paymentsFailed)', async () => {
+      // "failed" is shared but is a generic structural word — the distinguishing
+      // subject ("orders" vs "payments") differs, so this must still be flagged.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeOrders(ordersFailed) {',
+        '  return tracer.startActiveSpan("summarizeOrders", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.failed_count", ordersFailed.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizePayments(paymentsFailed) {',
+        '  return tracer.startActiveSpan("summarizePayments", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.failed_count", paymentsFailed.length);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.batch.failed_count'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+    });
+
+    it('fails when a newly-declared extension key is reused across different subjects both ending in a double-s word (ordersStatus vs paymentsStatus)', async () => {
+      // "status" ends in a double-s and is not a plural. If naive singularization
+      // mangled it to "statu", GENERIC_TOKENS's "status" entry would no longer match it,
+      // so "statu" would stay in the meaningful-token set for BOTH identifiers and be
+      // treated as a shared, meaningful token — incorrectly making "ordersStatus" and
+      // "paymentsStatus" look like the same concept even though the real subjects
+      // ("orders" vs "payments") differ. Singularization must leave "status" unchanged
+      // so it's correctly recognized and excluded as generic.
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeOrders(ordersStatus) {',
+        '  return tracer.startActiveSpan("summarizeOrders", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.status_summary", ordersStatus);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizePayments(paymentsStatus) {',
+        '  return tracer.startActiveSpan("summarizePayments", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.batch.status_summary", paymentsStatus);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.batch.status_summary'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.some((r) => !r.passed)).toBe(true);
+    });
+
+    it('passes when a newly-declared extension key is reused for the same concept across singular/plural (-ies) forms (category vs categories)', async () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function summarizeOne(category) {',
+        '  return tracer.startActiveSpan("summarizeOne", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.catalog.category_label", category);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+        'function summarizeMany(categories) {',
+        '  return tracer.startActiveSpan("summarizeMany", (span) => {',
+        '    try {',
+        '      span.setAttribute("myapp.catalog.category_label", categories);',
+        '      return 1;',
+        '    } finally { span.end(); }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const declaredExtensions = ['myapp.catalog.category_label'];
+
+      const { results } = await checkAttributeKeysMatchRegistry(
+        code, filePath, resolvedSchema, declaredExtensions,
+      );
+
+      expect(results.every((r) => r.passed)).toBe(true);
+    });
+  });
+
   describe('CheckResult structure', () => {
     it('returns correct structure for passing check', async () => {
       const code = [
