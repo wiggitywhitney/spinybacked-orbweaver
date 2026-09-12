@@ -37,11 +37,8 @@ A strict sequential path — complete each step before starting the next. This i
    - resolves.ts oscillation root cause investigation ([issue #954](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/954)) — **BLOCKED: no diagnostic data available.** resolves.ts recovered in run-16 (6 spans committed), so no debug dump was written. The run-15 tsc error is still unknown. Cannot proceed until a future eval run where resolves.ts fails again with `--debug-dump-dir` active. Do not start.
    - resolves.ts oscillation fix ([issue #958](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/958)) — **BLOCKED: depends on #954.**
 2. Eval run: commit-story-v2, positioned immediately before Python work begins (per [Eval cadence](#eval-cadence) above — run after any agent-behavior change made in step 1). Run-27 ✓ complete.
-3. Fix rule-logic bugs that a new language provider would otherwise inherit — each language provider hand-implements its own copy of every rule (see `src/languages/javascript/rules/` vs `src/languages/typescript/rules/`), so a bug in shared rule *logic* gets copied into Python's copy if not fixed first:
-   - COV-003 catch-shape detection gap ([issue #1055](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1055))
-   - SCH-002 schema-key-meaning consistency ([issue #1056](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1056))
-4. Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged).
-5. Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)), including its OD-10 packaging research spike gate — multi-language rule architecture ✓ cleared (PRD #507 merged).
+3. Python language provider ([PRD #373](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/373)) — TypeScript canary prerequisite ✓ cleared (0/27 interface changes); multi-language rule architecture ✓ cleared (PRD #507 merged); rule-logic bugs a new language provider would otherwise inherit ✓ fixed (COV-003 catch-shape detection gap, [issue #1055](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1055) — closed; SCH-002 schema-key-meaning consistency, [issue #1056](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1056) — closed).
+4. Go language provider ([PRD #374](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/374)), including its OD-10 packaging research spike gate — multi-language rule architecture ✓ cleared (PRD #507 merged).
 
 ## Watch issues
 
