@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-09-15) Created PRD #1059 for adopting `dot-agent-deck`, a terminal dashboard and daemon that runs multiple agent CLI sessions as coordinated panes, to split PRD work across dedicated orchestrator/coder/tester/reviewer/auditor/release/documenter roles instead of one session doing all four. Carries over decisions already resolved for the same tool in the content-manager repo (role set, single-vendor model choice, config-generator approach, notification security requirements) rather than re-deciding them here, and reserves a design-decisions milestone for what's genuinely repo-specific — notification destination and the test-plan format against this repo's real test tiers. PRD #778 (SDK bootstrap scaffold generation) is the planned first live validation workload, chosen over PRD #373 (blocked, high decision density), PRD #699 (viable but more judgment-heavy), and PRD #1024 (cross-PRD dependency, higher blast radius) for being fully self-contained and mechanical.
+
 ### Fixed
 
 - (2026-09-11) Fixed COV-003 (failable operations have error visibility) not recognizing the positive-condition return-then-fallthrough graceful-degradation shape (issue #1055): `if (err.code === 'ENOENT') return null; throw err;` was flagged as needing error recording even though it's structurally the same idiomatic file-reading pattern as the already-exempt negated form (`if (err.code !== 'ENOENT') throw err;`) — just phrased the other way around. Added `hasPositiveConditionReturnThenRethrow` to both the JavaScript and TypeScript COV-003 implementations to recognize this shape (no `else` branch, then-branch is a bare/valued `return`, next sibling statement is an unconditional `throw`). This was causing `summary-manager.js` in the commit-story-v2 eval target to oscillate between clean and partial commits across runs depending on which shape the agent happened to generate.
