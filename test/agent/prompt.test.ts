@@ -284,6 +284,13 @@ describe('buildSystemPrompt', () => {
       expect(prompt).toContain('CDQ-001');
       expect(prompt).toContain('CDQ-007');
     });
+
+    it('offers an import-free fallback for CDQ-007 path sanitization when basename is not imported', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain('filePath.split(/[\\\\/]/).pop()');
+      expect(prompt).toContain('do NOT add any new non-OTel import — including `basename`');
+    });
   });
 
   it('includes auto-instrumentation library allowlist', () => {
