@@ -69,6 +69,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - Diagnostic agent for persistent test failures ([PRD #699](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/699)) — when end-of-run failure handling cannot establish a specific cause, invoke an AI agent to diagnose and surface the finding in the PR. Depends on PRD #698 ✓ complete (PRD #687 ✓ complete).
 - Weaver code generation for domain-specific constants ([PRD #379](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/379)).
 - Acceptance gate: agent invented dd.http.product_id instead of reusing registry attribute ([issue #1025](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1025)) — recurred twice (2026-07-05, 2026-07-20) despite PR #1030's prompt fix; next step is assessing whether a validation rule should catch and block registry-attribute duplication rather than relying on prompt wording alone.
+- CDQ-007's three sub-checks collapse into one undifferentiated PR-summary bullet ([issue #1060](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1060)) — a PII finding, a path finding, and a nullable-access finding in the same file all render as the same generic advisory text; split out from issue #1035 as a different fix shape (rendering/grouping, not prompt guidance).
 
 ## Long-term
 
