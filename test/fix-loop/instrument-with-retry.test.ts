@@ -466,6 +466,82 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
   });
 });
 
+describe('instrumentWithRetry — distinguishing abandoned-after-failure from a genuine zero-span skip (#1062)', () => {
+  let testDir: string;
+  let testFilePath: string;
+  const originalContent = 'const hello = "world";\nexport function greet() { return hello; }\n';
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-abandon-test-'));
+    testFilePath = join(testDir, 'target.js');
+    writeFileSync(testFilePath, originalContent, 'utf-8');
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('flags abandonedAfterFailure when a later attempt reverts to the unmodified original after an earlier blocking failure', async () => {
+    let callCount = 0;
+    const badOutput = makeInstrumentationOutput({
+      instrumentedCode: 'const bad = syntax error;\n',
+    });
+    // Attempt 2 gives up: returns the file byte-for-byte unchanged (0 spans).
+    const abandonedOutput = makeInstrumentationOutput({
+      instrumentedCode: originalContent,
+      spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+    });
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            success: true,
+            output: badOutput,
+            conversationContext: { userMessage: 'x', assistantResponseBlocks: [] },
+          } as InstrumentFileResult;
+        }
+        return { success: true, output: abandonedOutput } as InstrumentFileResult;
+      },
+      validateFile: async (input) => {
+        if (input.instrumentedCode === 'const bad = syntax error;\n') {
+          return makeFailingValidation(testFilePath);
+        }
+        return makePassingValidation(testFilePath);
+      },
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig({ maxFixAttempts: 1 }), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.spansAdded).toBe(0);
+    expect(result.abandonedAfterFailure).toBe(true);
+    expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+  });
+
+  it('does not flag abandonedAfterFailure when the file genuinely needs no spans on the first attempt', async () => {
+    const output = makeInstrumentationOutput({
+      instrumentedCode: 'const x = 1;\n',
+      spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+    });
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.spansAdded).toBe(0);
+    expect(result.abandonedAfterFailure).toBeUndefined();
+  });
+});
+
 describe('instrumentWithRetry — token budget tracking', () => {
   let testDir: string;
   let testFilePath: string;

@@ -81,13 +81,21 @@ function displayPath(filePath: string, projectDir?: string): string {
 
 function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string {
   const committed = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
-  const correctSkips = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded === 0).length;
+  const correctSkips = runResult.fileResults.filter(
+    r => r.status === 'success' && r.spansAdded === 0 && !r.abandonedAfterFailure,
+  ).length;
+  const abandoned = runResult.fileResults.filter(
+    r => r.status === 'success' && r.spansAdded === 0 && r.abandonedAfterFailure,
+  ).length;
   const lines: string[] = ['## Summary'];
   lines.push('');
   lines.push(`- **Files processed**: ${runResult.filesProcessed}`);
   lines.push(`- **Committed**: ${committed}`);
   if (correctSkips > 0) {
     lines.push(`- **No changes needed**: ${correctSkips}`);
+  }
+  if (abandoned > 0) {
+    lines.push(`- **Abandoned after failure (needs review)**: ${abandoned}`);
   }
   if (runResult.filesFailed > 0) {
     lines.push(`- **Failed**: ${runResult.filesFailed}`);
@@ -111,9 +119,15 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
 }
 
 function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
-  // Separate zero-span success files (correct skips) from files with spans
-  const zeroSpanFiles = runResult.fileResults.filter(f => f.status === 'success' && f.spansAdded === 0);
-  const actionableFiles = runResult.fileResults.filter(f => !(f.status === 'success' && f.spansAdded === 0));
+  // Separate genuine zero-span correct skips (compressed into a summary line) from
+  // everything that needs its own row — including abandoned-after-failure files,
+  // which must stay visible rather than being silently folded into "no changes needed".
+  const zeroSpanFiles = runResult.fileResults.filter(
+    f => f.status === 'success' && f.spansAdded === 0 && !f.abandonedAfterFailure,
+  );
+  const actionableFiles = runResult.fileResults.filter(
+    f => !(f.status === 'success' && f.spansAdded === 0 && !f.abandonedAfterFailure),
+  );
 
   const lines: string[] = ['## Per-File Results'];
   lines.push('');
@@ -123,7 +137,9 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
   for (const file of actionableFiles) {
     const name = display(file.path);
     let statusText: string;
-    if (file.status === 'success') {
+    if (file.status === 'success' && file.abandonedAfterFailure) {
+      statusText = 'abandoned after failure (needs review)';
+    } else if (file.status === 'success') {
       statusText = 'success';
     } else if (file.status === 'failed') {
       statusText = file.reason ? `failed: ${sanitizeCell(file.reason)}` : 'failed';

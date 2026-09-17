@@ -1900,6 +1900,39 @@ describe('renderPrSummary', () => {
     });
   });
 
+  describe('abandoned-after-failure vs genuine zero-span skip (#1062)', () => {
+    it('lists an abandoned-after-failure file separately from the correct-skip summary line', () => {
+      const files = [
+        _makeFileResult({ path: '/project/src/api.js', spansAdded: 3 }),
+        _makeFileResult({ path: '/project/src/skip.js', spansAdded: 0 }),
+        _makeFileResult({ path: '/project/src/gave-up.js', spansAdded: 0, abandonedAfterFailure: true }),
+      ];
+      const result = _makeRunResult({ fileResults: files, filesSucceeded: 3 });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Correct skip still compresses into the summary line
+      expect(md).toContain('No changes needed');
+      expect(md).toContain('skip.js');
+      // Abandoned file gets its own visible row/callout, not silently grouped with correct skips
+      const noChangesLine = md.split('\n').find(l => l.includes('No changes needed') && l.startsWith('**'));
+      expect(noChangesLine).toBeDefined();
+      expect(noChangesLine).not.toContain('gave-up.js');
+      expect(md).toContain('gave-up.js');
+      expect(md.toLowerCase()).toContain('abandoned');
+    });
+
+    it('counts abandoned-after-failure files separately in the summary header', () => {
+      const files = [
+        _makeFileResult({ path: '/project/src/skip.js', spansAdded: 0 }),
+        _makeFileResult({ path: '/project/src/gave-up.js', spansAdded: 0, abandonedAfterFailure: true }),
+      ];
+      const result = _makeRunResult({ fileResults: files, filesSucceeded: 2 });
+      const md = renderPrSummary(result, _makeConfig());
+
+      expect(md.toLowerCase()).toContain('abandoned');
+    });
+  });
+
   describe('short-lived setup guidance section', () => {
     it('includes setup guidance section when targetType is short-lived', () => {
       const result = _makeRunResult();

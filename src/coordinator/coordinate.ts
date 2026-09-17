@@ -349,20 +349,10 @@ export async function coordinate(
     throw new CoordinatorAbortError(`File discovery failed: ${message}`);
   }
 
-  // Step 2b: Reorder files by dependency graph (leaves first, callers last)
-  // Files with no local imports are processed first so each agent sees the full
-  // instrumentation picture of its dependencies before it runs.
-  // Falls back to alphabetical order from discovery if graph construction fails.
-  try {
-    filePaths = topoSort(buildDepGraph(filePaths), deps?.verbose);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    depGraphWarnings.push(`Dependency graph ordering failed (degraded to alphabetical): ${message}`);
-  }
-
-  // Step 2c: Baseline test check — abort before the cost ceiling if tests are already failing.
+  // Step 2b: Baseline test check — abort before the cost ceiling if tests are already failing.
   // Running instrumentation against a broken test suite wastes tokens on work that checkpoint
   // rollback would undo, and produces misleading checkpoint failures that look like regressions.
+  // Runs before dependency graph construction so an aborted run never pays for topo sort.
   // Dry-run skips this — files are reverted, test results would be meaningless.
   let baselineTestPassed: boolean | undefined;
   let checkpointTestRunner: ((pd: string, tc: string) => Promise<{ passed: boolean; error?: string }>) | undefined;
@@ -393,6 +383,17 @@ export async function coordinate(
         checkpointTestWarnings.push(`Baseline test recording failed (degraded): ${message}`);
       }
     }
+  }
+
+  // Step 2c: Reorder files by dependency graph (leaves first, callers last)
+  // Files with no local imports are processed first so each agent sees the full
+  // instrumentation picture of its dependencies before it runs.
+  // Falls back to alphabetical order from discovery if graph construction fails.
+  try {
+    filePaths = topoSort(buildDepGraph(filePaths), deps?.verbose);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    depGraphWarnings.push(`Dependency graph ordering failed (degraded to alphabetical): ${message}`);
   }
 
   // Step 3: Compute cost ceiling

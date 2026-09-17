@@ -148,4 +148,12 @@ export interface FileResult {
   suggestedRefactors?: SuggestedRefactor[];
   /** tsc invocations from per-function instrumentation attempts, for oscillation debugging. */
   tscAttempts?: TscAttemptRecord[];
+  /**
+   * True when a later attempt reverted to leaving the file byte-for-byte unmodified
+   * (0 spans) after an earlier attempt on this file produced a blocking validator
+   * failure. Distinguishes a give-up from a genuine correct skip (a file that
+   * legitimately needs no instrumentation, e.g. RST-001/RST-004 exempt) — both
+   * otherwise report identical status: 'success', spansAdded: 0.
+   */
+  abandonedAfterFailure?: boolean;
 }

@@ -570,6 +570,10 @@ async function executeRetryLoop(
   let lastConversationContext: ConversationContext | undefined;
   let lastStrategy: ValidationStrategy = 'initial-generation';
   let completedAttempts = 0;
+  // True once any attempt on this file has produced a blocking validation failure.
+  // Distinguishes an eventual zero-span "success" that gave up after a failure
+  // from a genuine correct skip (see abandonedAfterFailure on FileResult).
+  let hadBlockingFailure = false;
 
   // Deterministic output token sizing: budget scales with file size, escalates on truncation
   const fileLines = originalCode.split('\n').length;
@@ -831,6 +835,9 @@ async function executeRetryLoop(
         });
 
     lastValidation = validation;
+    if (validation.blockingFailures.length > 0) {
+      hadBlockingFailure = true;
+    }
     errorProgression.push(summarizeErrors(validation));
     lastErrorByAttempt.push(
       validation.blockingFailures.map(f => `${f.ruleId}: ${f.message}`).join('\n'),
@@ -950,6 +957,7 @@ async function executeRetryLoop(
         agentVersion: AGENT_VERSION,
         tokenUsage: tokens,
         thinkingBlocksByAttempt: thinkingBlocksByAttempt.some(b => b.length > 0) ? thinkingBlocksByAttempt : undefined,
+        abandonedAfterFailure: spansAdded === 0 && hadBlockingFailure ? true : undefined,
       });
 
       // Advisory-only pass: when file passes but has advisory findings and budget allows.
