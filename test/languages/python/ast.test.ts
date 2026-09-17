@@ -135,6 +135,30 @@ describe('findPythonImports', () => {
     expect(imports).toHaveLength(1);
     expect(imports[0]).toMatchObject({ moduleSpecifier: '..pkg', importedNames: ['thing'] });
   });
+
+  it('finds an import nested inside a function body', () => {
+    const source = [
+      'def handler():',
+      '    from opentelemetry import trace',
+      '    return trace',
+    ].join('\n');
+    const imports = findPythonImports(source);
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toMatchObject({ moduleSpecifier: 'opentelemetry', importedNames: ['trace'], lineNumber: 2 });
+  });
+
+  it('finds an import nested inside a try/except block', () => {
+    const source = [
+      'try:',
+      '    import ujson as json',
+      'except ImportError:',
+      '    import json',
+    ].join('\n');
+    const imports = findPythonImports(source);
+    expect(imports).toHaveLength(2);
+    expect(imports[0]).toMatchObject({ moduleSpecifier: 'ujson', alias: 'json' });
+    expect(imports[1]).toMatchObject({ moduleSpecifier: 'json', alias: undefined });
+  });
 });
 
 describe('findPythonExports', () => {
@@ -173,6 +197,11 @@ describe('detectPythonExistingInstrumentation', () => {
 
   it('returns true when a span-creation call pattern is present without an opentelemetry import', () => {
     const source = 'def handler():\n    with tracer.start_as_current_span("x") as span:\n        pass\n';
+    expect(detectPythonExistingInstrumentation(source)).toBe(true);
+  });
+
+  it('returns true when the opentelemetry import is nested inside a function body', () => {
+    const source = 'def handler():\n    from opentelemetry import trace\n    return trace\n';
     expect(detectPythonExistingInstrumentation(source)).toBe(true);
   });
 });

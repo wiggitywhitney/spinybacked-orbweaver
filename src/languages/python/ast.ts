@@ -134,64 +134,85 @@ export function findPythonFunctions(source: string): FunctionInfo[] {
  *
  * @param source - Python source code text
  */
+function collectImportStatement(stmt: Node, imports: ImportInfo[]): void {
+  for (const nameNode of stmt.childrenForFieldName('name')) {
+    if (nameNode === null) continue;
+    const lineNumber = toLine(nameNode);
+    if (nameNode.type === 'aliased_import') {
+      const moduleNode = nameNode.childForFieldName('name');
+      const aliasNode = nameNode.childForFieldName('alias');
+      if (moduleNode === null) continue;
+      imports.push({
+        moduleSpecifier: moduleNode.text,
+        importedNames: [],
+        alias: aliasNode?.text,
+        lineNumber,
+      });
+    } else {
+      imports.push({ moduleSpecifier: nameNode.text, importedNames: [], alias: undefined, lineNumber });
+    }
+  }
+}
+
+function collectImportFromStatement(stmt: Node, imports: ImportInfo[]): void {
+  const moduleNode = stmt.childForFieldName('module_name');
+  if (moduleNode === null) return;
+
+  const hasWildcard = Array.from({ length: stmt.childCount }, (_, i) => stmt.child(i)).some(
+    c => c?.type === 'wildcard_import',
+  );
+
+  const importedNames: string[] = [];
+  if (!hasWildcard) {
+    for (const nameNode of stmt.childrenForFieldName('name')) {
+      if (nameNode === null) continue;
+      if (nameNode.type === 'aliased_import') {
+        const originalName = nameNode.childForFieldName('name');
+        if (originalName !== null) importedNames.push(originalName.text);
+      } else {
+        importedNames.push(nameNode.text);
+      }
+    }
+  }
+
+  imports.push({
+    moduleSpecifier: moduleNode.text,
+    importedNames,
+    alias: undefined,
+    lineNumber: toLine(stmt),
+  });
+}
+
+/**
+ * Find all import statements in Python source, at any nesting depth.
+ *
+ * Unlike JS/TS (where `import` is syntactically restricted to the top level
+ * of a module), Python allows `import`/`from ... import` anywhere a statement
+ * is valid — inside functions, `try`/`except`, `if` blocks, and class bodies
+ * (e.g. a defensive/lazy import). Recurses through the whole tree so these
+ * are not missed; missing a nested `from opentelemetry import trace` would
+ * make `detectPythonExistingInstrumentation()` wrongly report a file as not
+ * yet instrumented.
+ */
 export function findPythonImports(source: string): ImportInfo[] {
   const tree = parsePython(source);
   const imports: ImportInfo[] = [];
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt === null) continue;
-
-    if (stmt.type === 'import_statement') {
-      for (const nameNode of stmt.childrenForFieldName('name')) {
-        if (nameNode === null) continue;
-        const lineNumber = toLine(nameNode);
-        if (nameNode.type === 'aliased_import') {
-          const moduleNode = nameNode.childForFieldName('name');
-          const aliasNode = nameNode.childForFieldName('alias');
-          if (moduleNode === null) continue;
-          imports.push({
-            moduleSpecifier: moduleNode.text,
-            importedNames: [],
-            alias: aliasNode?.text,
-            lineNumber,
-          });
-        } else {
-          imports.push({ moduleSpecifier: nameNode.text, importedNames: [], alias: undefined, lineNumber });
-        }
-      }
-      continue;
+  function walk(node: Node): void {
+    if (node.type === 'import_statement') {
+      collectImportStatement(node, imports);
+      return;
     }
-
-    if (stmt.type === 'import_from_statement') {
-      const moduleNode = stmt.childForFieldName('module_name');
-      if (moduleNode === null) continue;
-
-      const hasWildcard = Array.from({ length: stmt.childCount }, (_, i) => stmt.child(i)).some(
-        c => c?.type === 'wildcard_import',
-      );
-
-      const importedNames: string[] = [];
-      if (!hasWildcard) {
-        for (const nameNode of stmt.childrenForFieldName('name')) {
-          if (nameNode === null) continue;
-          if (nameNode.type === 'aliased_import') {
-            const originalName = nameNode.childForFieldName('name');
-            if (originalName !== null) importedNames.push(originalName.text);
-          } else {
-            importedNames.push(nameNode.text);
-          }
-        }
-      }
-
-      imports.push({
-        moduleSpecifier: moduleNode.text,
-        importedNames,
-        alias: undefined,
-        lineNumber: toLine(stmt),
-      });
+    if (node.type === 'import_from_statement') {
+      collectImportFromStatement(node, imports);
+      return;
+    }
+    for (const child of node.namedChildren) {
+      if (child !== null) walk(child);
     }
   }
 
+  walk(tree.rootNode);
   tree.delete();
   return imports;
 }
