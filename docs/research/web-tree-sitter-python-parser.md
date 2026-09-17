@@ -47,8 +47,8 @@ Confirm OD-1 as: tree-sitter-python via `web-tree-sitter`, with the grammar's `.
 - **ABI compatibility note:** `web-tree-sitter` v0.27.0 measures a supported parser ABI range of [13, 15] (🟡 medium confidence — sourced from a third-party GitHub PR discussion, not tree-sitter's own docs). `tree-sitter-python` v0.25.0 was built with `tree-sitter-cli ^0.25.9` (per its own `devDependencies`), which targets ABI 15 — within range. This is not a guarantee for future grammar releases; re-verify ABI compatibility (via `Language.abiVersion` after `Parser.init()`) whenever either dependency is upgraded, since `web-tree-sitter`'s binding docs separately warn that some older prebuilt `.wasm` files using a legacy dynamic-linking format may need rebuilding with a current CLI.
 
 ## Sources
-- [web-tree-sitter registry metadata](https://registry.npmjs.org/web-tree-sitter) — current version (0.27.0), no `engines` restriction
+- [web-tree-sitter registry metadata (0.27.0)](https://registry.npmjs.org/web-tree-sitter/0.27.0) — version-pinned; confirms no `engines` restriction
 - [tree-sitter/tree-sitter binding_web README](https://github.com/tree-sitter/tree-sitter/blob/master/lib/binding_web/README.md) — init/load/parse API, memory management, `.wasm`-sourcing options, Node.js performance note
-- [tree-sitter-python npm registry metadata](https://registry.npmjs.org/tree-sitter-python/0.25.0) — confirms native-addon install path (`node-gyp-build`), no shipped `.wasm`
-- [tree-sitter-python GitHub Releases (latest)](https://api.github.com/repos/tree-sitter/tree-sitter-python/releases/latest) — confirms `tree-sitter-python.wasm` asset is published per release
+- [tree-sitter-python npm registry metadata (0.25.0)](https://registry.npmjs.org/tree-sitter-python/0.25.0) — confirms native-addon install path (`node-gyp-build`), no shipped `.wasm`
+- [tree-sitter-python GitHub Release v0.25.0](https://github.com/tree-sitter/tree-sitter-python/releases/tag/v0.25.0) — pinned to the version actually evaluated; confirms `tree-sitter-python.wasm` asset is published as a release asset
 - [web-tree-sitter - npm](https://www.npmjs.com/package/web-tree-sitter) — general package overview (npmjs.com page itself returned 403 on direct fetch; registry API used instead for version/engines data)
