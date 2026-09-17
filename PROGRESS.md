@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-09-17) Vendored the `tree-sitter-python` grammar file the upcoming Python language provider needs (PRD #373's OD-1 follow-up decision): `resources/tree-sitter-python.wasm`, downloaded from `tree-sitter-python`'s GitHub Release `v0.25.0` and verified against its published SHA-256, with provenance and an upgrade procedure documented in `resources/README.md`. Added `web-tree-sitter@^0.27.0` as a project dependency and confirmed it can actually load and parse with the vendored file — `Language.abiVersion` reports `15`, inside `web-tree-sitter` 0.27.0's supported range of [13, 15], closing an ABI-compatibility question the earlier OD-1 research had flagged as unverified.
+
 ### Fixed
 
 - (2026-09-17) Fixed the fix-loop reporting an abandoned instrumentation attempt identically to a genuine correct skip (issue #1062): when an attempt failed a blocking validator check and the next attempt gave up by leaving the file byte-for-byte unmodified, the trivial NDS-003 (Code Preserved) pass on an unchanged file led to `status: "success"` with 0 spans added — indistinguishable from a file that legitimately needed no instrumentation. Added an `abandonedAfterFailure` flag to `FileResult`, set in `src/fix-loop/instrument-with-retry.ts` when a file's final zero-span success followed an earlier blocking validation failure in the same retry loop. `src/deliverables/pr-summary.ts` now reports these files separately from the "No changes needed" summary line, with their own per-file row labeled "abandoned after failure (needs review)" instead of silently folding them into the correct-skip count.
