@@ -868,6 +868,7 @@ async function executeRetryLoop(
         return !checkPart.startsWith(`${expectedNamespacePrefix}.`);
       });
       if (wrongNamespace.length > 0) {
+        hadBlockingFailure = true;
         const feedback =
           `Schema extensions rejected: namespace must be "${expectedNamespacePrefix}" but got ${wrongNamespace.join(', ')}. ` +
           `All extensions must start with "${expectedNamespacePrefix}." ` +

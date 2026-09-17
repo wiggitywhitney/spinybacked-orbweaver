@@ -4704,6 +4704,44 @@ describe('instrumentWithRetry — namespace prefix enforcement (#722)', () => {
     expect(result.status).toBe('success');
     expect(result.validationAttempts).toBe(1);
   });
+
+  it('flags abandonedAfterFailure when a namespace-rejected attempt is followed by a zero-span pass (#1062)', async () => {
+    let attempt = 0;
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => {
+        attempt++;
+        if (attempt === 1) {
+          // Wrong namespace on attempt 1 — a blocking failure for this file.
+          return {
+            success: true,
+            output: makeInstrumentationOutput({
+              schemaExtensions: ['generic.request.id'],
+              instrumentedCode: 'const x = 1;\n',
+            }),
+          } as InstrumentFileResult;
+        }
+        // Retry gives up: no extensions, no spans.
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            schemaExtensions: [],
+            instrumentedCode: 'const x = 1;\n',
+            spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+          }),
+        } as InstrumentFileResult;
+      },
+      validateFile: async () => makePassingValidation(testFilePath),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, 'export async function fetchData() {}', {}, makeConfig({ maxFixAttempts: 2 }),
+      { deps, provider: jsProvider, expectedNamespacePrefix: 'myapp' },
+    );
+
+    expect(result.status).toBe('success');
+    expect(result.spansAdded).toBe(0);
+    expect(result.abandonedAfterFailure).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
