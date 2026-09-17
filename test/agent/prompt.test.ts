@@ -298,6 +298,18 @@ describe('buildSystemPrompt', () => {
       expect(prompt).toContain("call it matching how it was imported — `basename(...)` for a named import");
       expect(prompt).toContain('`path.basename(...)` only if the file imports the whole module as `path`');
     });
+
+    it('exempts OTel file.* attribute keys from CDQ-007 path sanitization', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain('Do NOT sanitize path values for attribute keys starting with `file.`');
+    });
+
+    it('warns that basename() uses host-platform semantics for CDQ-007 path sanitization', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain('`basename()` uses host-platform semantics, so on POSIX it will NOT strip a Windows-style backslash path');
+    });
   });
 
   it('includes auto-instrumentation library allowlist', () => {
