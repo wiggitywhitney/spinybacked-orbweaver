@@ -956,7 +956,7 @@ async function executeRetryLoop(
         // mistake it for something that shipped.
         librariesNeeded: isAbandonedAfterFailure ? [] : mergeLibraries(output.librariesNeeded, fileDetectedLibraries),
         schemaExtensions: isAbandonedAfterFailure ? [] : supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode, registryNamesForAttempt),
-        attributesCreated: output.attributesCreated,
+        attributesCreated: isAbandonedAfterFailure ? 0 : output.attributesCreated,
         validationAttempts: attempt,
         validationStrategyUsed: actualStrategy,
         errorProgression,

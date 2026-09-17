@@ -520,11 +520,12 @@ describe('instrumentWithRetry — distinguishing abandoned-after-failure from a 
     expect(result.spansAdded).toBe(0);
     expect(result.abandonedAfterFailure).toBe(true);
     expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
-    // The abandoned attempt's leftover librariesNeeded/schemaExtensions (from
-    // makeInstrumentationOutput's non-empty defaults) must not carry over —
+    // The abandoned attempt's leftover librariesNeeded/schemaExtensions/attributesCreated
+    // (from makeInstrumentationOutput's non-empty defaults) must not carry over —
     // nothing was actually committed for this file.
     expect(result.librariesNeeded).toEqual([]);
     expect(result.schemaExtensions).toEqual([]);
+    expect(result.attributesCreated).toBe(0);
   });
 
   it('does not flag abandonedAfterFailure when the file genuinely needs no spans on the first attempt', async () => {
