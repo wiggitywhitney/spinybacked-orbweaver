@@ -243,6 +243,8 @@ These follow the Part 8 checklist from the research doc. All items are unchecked
 
 ### Pre-implementation gate
 
+**Step 0:** Read related research before starting: [Research: web-tree-sitter for Python structural analysis](../docs/research/web-tree-sitter-python-parser.md)
+
 **All items below must be complete before writing any Go provider code. Record each decision in the Decision Log before proceeding.**
 
 - [ ] **OD-1 (NDS-004 policy):** Adopt the strong recommendation: Option B (only instrument functions that already accept `context.Context`). Record using the table column order (ID | Decision | Rationale | Date): `| OD-1 | Option B — only instrument functions with existing ctx parameter | Research doc Part 5.3 strong recommendation; avoids compiler-breaking changes in caller code | [date] |`. If you believe Option A or C is better, document the counterargument before overriding.
