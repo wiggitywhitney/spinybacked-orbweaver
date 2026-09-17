@@ -204,7 +204,7 @@ _Populate as decisions are made during implementation._
 
 ## Milestones
 
-These follow the Part 8 checklist from the research doc. All OD-1 through OD-7 design decisions are resolved (see Decision Log above); all implementation checkboxes remain unchecked — no provider code has been written yet.
+These follow the Part 8 checklist from the research doc. All OD-1 through OD-7 design decisions are resolved (see Decision Log above). Milestone D1 is partially implemented — directory scaffolding and `ast.ts`'s structural-analysis functions are done (see the checked items below); the remaining unchecked items (function classification, extraction/reassembly, formatting/linting, provider registration) are still to be built.
 
 ### Milestone D1: Implement PythonProvider
 
