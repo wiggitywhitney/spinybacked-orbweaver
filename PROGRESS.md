@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-09-17) Decided how the upcoming Python language provider will parse Python source code (PRD #373's OD-1): via `web-tree-sitter`, with the `tree-sitter-python` grammar file downloaded from its GitHub Releases page rather than installed as an npm package — installing that package via npm triggers a native compiled build, which defeats the whole point of choosing a WebAssembly-based parser (avoiding a Node version requirement for native builds). Documented in `docs/research/web-tree-sitter-python-parser.md`.
 - (2026-09-11) Added a `docs/ROADMAP.md` entry for eval run-27 (13 committed, 1 partial, 0 failures, 18 correct skips; IS 100/100 for a third consecutive run) and inserted a new prerequisite step into the Path to Python sequence: COV-003 catch-shape detection gap (issue #1055) and SCH-002 schema-key-meaning consistency (issue #1056) must be fixed before PRD #373 (Python language provider) begins, since each language provider hand-implements its own copy of every validation rule and would otherwise inherit these bugs.
 
 ### Removed
