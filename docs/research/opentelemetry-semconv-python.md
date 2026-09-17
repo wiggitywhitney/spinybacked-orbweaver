@@ -4,9 +4,11 @@
 **Last Updated:** 2026-09-17
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-09-17 | Initial research — resolves PRD #373 OD-8 research spike |
+| 2026-09-17 | Verified `URL_PATH` stability directly against the primary registry source (`open-telemetry/semantic-conventions` `model/url/registry.yaml`: `url.path` has `stability: stable`) rather than inferring it by analogy. Upgraded confidence from 🟡 medium to 🟢 high. |
 
 ## Findings
 
@@ -59,13 +61,14 @@ span.set_attribute(url_attributes.URL_FULL, url)                  # "url.full"
 |---|---|---|---|---|
 | HTTP method | `opentelemetry.semconv.attributes.http_attributes` | `HTTP_REQUEST_METHOD` | `http.request.method` | 🟢 Stable |
 | HTTP status code | `opentelemetry.semconv.attributes.http_attributes` | `HTTP_RESPONSE_STATUS_CODE` | `http.response.status_code` | 🟢 Stable |
-| URL path | `opentelemetry.semconv.attributes.url_attributes` | `URL_PATH` | `url.path` | 🟡 Medium confidence — inferred by direct analogy to the confirmed `URL_FULL`/`URL_SCHEME` constants in the same stable module; no source in this research pass showed a `URL_PATH` import example directly (client-side examples use `URL_FULL`, since `URL_PATH` is the server-side counterpart) |
+| URL path | `opentelemetry.semconv.attributes.url_attributes` | `URL_PATH` | `url.path` | 🟢 Stable — confirmed directly against the primary registry source (`model/url/registry.yaml`: `id: url.path`, `stability: stable`), not inferred by analogy |
 | DB system | `opentelemetry.semconv.attributes.db_attributes` | `DB_SYSTEM_NAME` | `db.system.name` | 🟢 Stable — matches the already-documented JS rename (`db.system` → `db.system.name`) in `~/.claude/rules/otel-semconv-gotchas.md` |
 
-**Source says (HTTP):** "from opentelemetry.semconv.attributes import http_attributes, url_attributes, server_attributes ... span.set_attributes({ http_attributes.HTTP_REQUEST_METHOD: \"GET\" ..." (synthesized from multiple corroborating usage examples surfaced via WebSearch; the direct `http_attributes.py` source file was not independently fetched in this pass — 🟡 medium confidence, corroborated by 3+ independent example sources but not verified against raw GitHub source)
-**Source says (DB):** "print(db_attributes.DB_SYSTEM_NAME) # \"db.system.name\"" (synthesized from corroborating usage examples; not independently fetched from raw source — 🟡 medium confidence)
+**Source says (HTTP):** `HTTP_REQUEST_METHOD: Final = "http.request.method"` and `HTTP_RESPONSE_STATUS_CODE: Final = "http.response.status_code"`, with no `![Development]` badge on either docstring (fetched directly from [`http_attributes.py`](https://github.com/open-telemetry/opentelemetry-python/blob/main/opentelemetry-semantic-conventions/src/opentelemetry/semconv/attributes/http_attributes.py))
+**Source says (DB):** `DB_SYSTEM_NAME: Final = "db.system.name"`, no `![Development]` badge (fetched directly from [`db_attributes.py`](https://github.com/open-telemetry/opentelemetry-python/blob/main/opentelemetry-semantic-conventions/src/opentelemetry/semconv/attributes/db_attributes.py))
+**Source says (URL path):** `URL_PATH: Final = "url.path"`, no `![Development]` badge in the Python module (fetched directly from [`url_attributes.py`](https://github.com/open-telemetry/opentelemetry-python/blob/main/opentelemetry-semantic-conventions/src/opentelemetry/semconv/attributes/url_attributes.py)); independently cross-checked against the upstream spec registry, where `id: url.path` carries `stability: stable` explicitly ([`model/url/registry.yaml`](https://github.com/open-telemetry/semantic-conventions/blob/main/model/url/registry.yaml))
 
-**Caveat:** Unlike OD-1's tree-sitter research (which fetched and read primary GitHub source files directly), this pass relied on WebSearch-synthesized summaries of GitHub source content for the specific attribute module contents (http_attributes.py, db_attributes.py, url_attributes.py) rather than fetching those files directly — WebFetch on the `trace/__init__.py` deprecation notice succeeded, but the stable attribute modules themselves were not independently re-fetched. Before implementing `formatCode`/prompt.ts references to these exact constant names, do a targeted `WebFetch` of the actual `http_attributes.py`, `db_attributes.py`, and `url_attributes.py` source files to confirm exact constant names and values at implementation time — treat this file's attribute-name table as 🟡 medium confidence pending that direct verification.
+All four attribute constants in the table above were fetched and read directly from their raw GitHub source files in this pass (not inferred from WebSearch-synthesized examples) — 🟢 high confidence for all four rows. Note that `url_attributes.py` and `registry.yaml` do use inline `![Development](...)` badges elsewhere in the file, but those annotate specific sub-clauses (e.g., an optional sensitive-query-parameter override mechanism on `url.full`/`url.query`), not the base attribute's own stability — reading a stray badge anywhere in an attribute's docstring as "this attribute is Development" is a misread of the source; the attribute's actual stability is the `stability:` field on its own registry entry.
 
 **5. Version pinning constraints relative to `opentelemetry-api`:**
 
@@ -100,3 +103,7 @@ None — all sources (PyPI packaging metadata, GitHub deprecation notices, `pypr
 - [opentelemetry-python-contrib/instrumentation/opentelemetry-instrumentation-flask/pyproject.toml](https://github.com/open-telemetry/opentelemetry-python-contrib/blob/main/instrumentation/opentelemetry-instrumentation-flask/pyproject.toml) — confirms loose-pin API / exact-pin semconv convention in a downstream instrumentation package
 - [dapr/dapr-agents issue #779](https://github.com/dapr/dapr-agents/issues/779) — real-world downstream breakage from exact-pinning `opentelemetry-semantic-conventions`
 - [Document OTEL_SEMCONV_STABILITY_OPT_IN · Issue #4202 · opentelemetry-python-contrib](https://github.com/open-telemetry/opentelemetry-python-contrib/issues/4202) — confirms stable HTTP semconv requires an opt-in env var for instrumentation libraries, a related but distinct concern from spiny-orb's manual instrumentation use case
+- [opentelemetry-python/.../semconv/attributes/http_attributes.py](https://github.com/open-telemetry/opentelemetry-python/blob/main/opentelemetry-semantic-conventions/src/opentelemetry/semconv/attributes/http_attributes.py) — directly fetched; confirmed `HTTP_REQUEST_METHOD`/`HTTP_RESPONSE_STATUS_CODE` constants and values
+- [opentelemetry-python/.../semconv/attributes/db_attributes.py](https://github.com/open-telemetry/opentelemetry-python/blob/main/opentelemetry-semantic-conventions/src/opentelemetry/semconv/attributes/db_attributes.py) — directly fetched; confirmed `DB_SYSTEM_NAME` constant and value
+- [opentelemetry-python/.../semconv/attributes/url_attributes.py](https://github.com/open-telemetry/opentelemetry-python/blob/main/opentelemetry-semantic-conventions/src/opentelemetry/semconv/attributes/url_attributes.py) — directly fetched; confirmed `URL_PATH` constant and value, and that inline `![Development]` badges elsewhere in the file annotate sub-clauses, not attribute-level stability
+- [open-telemetry/semantic-conventions/.../model/url/registry.yaml](https://github.com/open-telemetry/semantic-conventions/blob/main/model/url/registry.yaml) — directly fetched; the canonical spec source confirming `url.path`'s `stability: stable` field (used to correct a CodeRabbit review false positive that misread an unrelated `![Development]` badge as applying to `url.path`)
