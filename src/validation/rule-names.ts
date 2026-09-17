@@ -122,8 +122,9 @@ const RULE_HUMAN_DESCRIPTIONS: Partial<Record<string, string>> = {
 
   'CDQ-007': 'Fired for one or more of: a PII attribute name ' +
     '(like author, email, or username) or a raw filesystem path where a basename would be safer. ' +
-    'PII in traces can violate privacy policies and is worth fixing. The path finding is lower ' +
-    'severity — fix it when the code will run in a context where the basename utility is already imported.',
+    'PII in traces can violate privacy policies and is worth fixing. For the path finding, prefer ' +
+    'basename() when already imported, or inline filePath.split(/[\\\\/]/).filter(Boolean).pop() ?? \'\' ' +
+    'otherwise — no new import required either way.',
 
   'CDQ-009': 'Fired because an attribute value is guarded with ' +
     '`!== undefined` before being passed to setAttribute(). That guard doesn\'t protect against ' +
