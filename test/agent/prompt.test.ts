@@ -288,8 +288,15 @@ describe('buildSystemPrompt', () => {
     it('offers an import-free fallback for CDQ-007 path sanitization when basename is not imported', () => {
       const prompt = buildSystemPrompt(schema, undefined, jsProvider);
 
-      expect(prompt).toContain('filePath.split(/[\\\\/]/).pop()');
+      expect(prompt).toContain("filePath.split(/[\\\\/]/).filter(Boolean).pop() ?? ''");
       expect(prompt).toContain('do NOT add any new non-OTel import — including `basename`');
+    });
+
+    it('distinguishes named vs. namespace basename import forms for CDQ-007', () => {
+      const prompt = buildSystemPrompt(schema, undefined, jsProvider);
+
+      expect(prompt).toContain("call it matching how it was imported — `basename(...)` for a named import");
+      expect(prompt).toContain('`path.basename(...)` only if the file imports the whole module as `path`');
     });
   });
 

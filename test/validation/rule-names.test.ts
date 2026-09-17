@@ -113,7 +113,7 @@ describe('getRuleHumanDescription', () => {
 
   it('renders CDQ-007 through formatRuleId without duplicating the rule name', () => {
     const rendered = `${formatRuleId('CDQ-007')}: ${getRuleHumanDescription('CDQ-007')}`;
-    expect(rendered).toBe('CDQ-007 (Attribute Data Quality): Fired for one or more of: a PII attribute name (like author, email, or username) or a raw filesystem path where a basename would be safer. PII in traces can violate privacy policies and is worth fixing. For the path finding, prefer basename() when already imported, or inline filePath.split(/[\\\\/]/).pop() otherwise — no new import required either way.');
+    expect(rendered).toBe('CDQ-007 (Attribute Data Quality): Fired for one or more of: a PII attribute name (like author, email, or username) or a raw filesystem path where a basename would be safer. PII in traces can violate privacy policies and is worth fixing. For the path finding, prefer basename() when already imported, or inline filePath.split(/[\\\\/]/).filter(Boolean).pop() ?? \'\' otherwise — no new import required either way.');
     expect(rendered.match(/CDQ-007/g)).toHaveLength(1);
     expect(rendered.match(/Attribute Data Quality/g)).toHaveLength(1);
   });
