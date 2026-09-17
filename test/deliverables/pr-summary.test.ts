@@ -1931,6 +1931,27 @@ describe('renderPrSummary', () => {
 
       expect(md.toLowerCase()).toContain('abandoned');
     });
+
+    it('does not render libraries or schema extensions for an abandoned file as if committed', () => {
+      const files = [
+        _makeFileResult({
+          path: '/project/src/gave-up.js',
+          spansAdded: 0,
+          abandonedAfterFailure: true,
+          librariesNeeded: [{ package: 'stale-lib', importName: 'staleLib' }],
+          schemaExtensions: ['stale.attribute.leftover'],
+        }),
+      ];
+      const result = _makeRunResult({ fileResults: files, filesSucceeded: 1 });
+      const md = renderPrSummary(result, _makeConfig());
+
+      // Nothing was actually committed for this file (it was reverted to the original) —
+      // the stale librariesNeeded/schemaExtensions from the abandoned attempt must not surface.
+      expect(md).not.toContain('stale-lib');
+      expect(md).not.toContain('stale.attribute.leftover');
+      const tableRow = md.split('\n').find(l => l.includes('gave-up.js'));
+      expect(tableRow).toContain('—');
+    });
   });
 
   describe('short-lived setup guidance section', () => {

@@ -150,7 +150,9 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
     }
     // For failed files, libraries and extensions are from rejected agent output —
     // showing them misleads reviewers into thinking they're in the committed code.
-    const isCommitted = file.status === 'success' || file.status === 'partial';
+    // An abandoned-after-failure file was reverted to its original content, so it
+    // committed nothing either, despite carrying status: 'success'.
+    const isCommitted = (file.status === 'success' && !file.abandonedAfterFailure) || file.status === 'partial';
     const libs = isCommitted
       ? (file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—')
       : '—';
@@ -357,7 +359,7 @@ function renderSchemaChanges(runResult: RunResult, display: DisplayFn): string {
 function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
   const byFile = new Map<string, string[]>();
   for (const file of runResult.fileResults) {
-    if (file.status !== 'success' && file.status !== 'partial') continue;
+    if (file.status !== 'partial' && !(file.status === 'success' && !file.abandonedAfterFailure)) continue;
     const { spanIds } = dedupeExtensionIds(file.schemaExtensions);
     if (spanIds.size > 0) {
       byFile.set(display(file.path), [...spanIds].sort());
@@ -374,7 +376,7 @@ function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn)
 function collectAttributeExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
   const byFile = new Map<string, string[]>();
   for (const file of runResult.fileResults) {
-    if (file.status !== 'success' && file.status !== 'partial') continue;
+    if (file.status !== 'partial' && !(file.status === 'success' && !file.abandonedAfterFailure)) continue;
     const { attributeIds } = dedupeExtensionIds(file.schemaExtensions);
     if (attributeIds.size > 0) {
       byFile.set(display(file.path), [...attributeIds].sort());
