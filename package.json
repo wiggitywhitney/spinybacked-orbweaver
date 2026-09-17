@@ -21,7 +21,8 @@
   },
   "files": [
     "dist/",
-    "bin/"
+    "bin/",
+    "resources/"
   ],
   "publishConfig": {
     "access": "public"
