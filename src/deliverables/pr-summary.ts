@@ -79,6 +79,14 @@ function displayPath(filePath: string, projectDir?: string): string {
   return basename(filePath);
 }
 
+/**
+ * Render the top-level run summary: file counts by outcome, SDK init status,
+ * and auto-instrumentation library install results.
+ *
+ * @param runResult - Aggregate result from the coordinator
+ * @param config - Agent configuration (unused here but kept for signature consistency with sibling render* functions)
+ * @returns Markdown for the "## Summary" section
+ */
 function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string {
   const committed = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
   const correctSkips = runResult.fileResults.filter(
@@ -118,6 +126,16 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
   return lines.join('\n');
 }
 
+/**
+ * Render the per-file results table: one row per actionable file (committed,
+ * failed, partial, skipped, or abandoned-after-failure), with a compact summary
+ * line for genuine zero-span correct skips instead of individual rows.
+ *
+ * @param runResult - Aggregate result from the coordinator
+ * @param config - Agent configuration (used for per-file cost formatting via `config.agentModel`)
+ * @param display - Converts a file path to a display-friendly string
+ * @returns Markdown for the "## Per-File Results" section
+ */
 function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
   // Separate genuine zero-span correct skips (compressed into a summary line) from
   // everything that needs its own row — including abandoned-after-failure files,
