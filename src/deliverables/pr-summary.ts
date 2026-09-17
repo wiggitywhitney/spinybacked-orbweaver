@@ -79,15 +79,31 @@ function displayPath(filePath: string, projectDir?: string): string {
   return basename(filePath);
 }
 
+/**
+ * Render the top-level run summary: file counts by outcome, SDK init status,
+ * and auto-instrumentation library install results.
+ *
+ * @param runResult - Aggregate result from the coordinator
+ * @param config - Agent configuration (unused here but kept for signature consistency with sibling render* functions)
+ * @returns Markdown for the "## Summary" section
+ */
 function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string {
   const committed = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded > 0).length;
-  const correctSkips = runResult.fileResults.filter(r => r.status === 'success' && r.spansAdded === 0).length;
+  const correctSkips = runResult.fileResults.filter(
+    r => r.status === 'success' && r.spansAdded === 0 && !r.abandonedAfterFailure,
+  ).length;
+  const abandoned = runResult.fileResults.filter(
+    r => r.status === 'success' && r.spansAdded === 0 && r.abandonedAfterFailure,
+  ).length;
   const lines: string[] = ['## Summary'];
   lines.push('');
   lines.push(`- **Files processed**: ${runResult.filesProcessed}`);
   lines.push(`- **Committed**: ${committed}`);
   if (correctSkips > 0) {
     lines.push(`- **No changes needed**: ${correctSkips}`);
+  }
+  if (abandoned > 0) {
+    lines.push(`- **Abandoned after failure (needs review)**: ${abandoned}`);
   }
   if (runResult.filesFailed > 0) {
     lines.push(`- **Failed**: ${runResult.filesFailed}`);
@@ -110,10 +126,26 @@ function renderSummaryHeader(runResult: RunResult, config: AgentConfig): string 
   return lines.join('\n');
 }
 
+/**
+ * Render the per-file results table: one row per actionable file (committed,
+ * failed, partial, skipped, or abandoned-after-failure), with a compact summary
+ * line for genuine zero-span correct skips instead of individual rows.
+ *
+ * @param runResult - Aggregate result from the coordinator
+ * @param config - Agent configuration (used for per-file cost formatting via `config.agentModel`)
+ * @param display - Converts a file path to a display-friendly string
+ * @returns Markdown for the "## Per-File Results" section
+ */
 function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display: DisplayFn): string {
-  // Separate zero-span success files (correct skips) from files with spans
-  const zeroSpanFiles = runResult.fileResults.filter(f => f.status === 'success' && f.spansAdded === 0);
-  const actionableFiles = runResult.fileResults.filter(f => !(f.status === 'success' && f.spansAdded === 0));
+  // Separate genuine zero-span correct skips (compressed into a summary line) from
+  // everything that needs its own row — including abandoned-after-failure files,
+  // which must stay visible rather than being silently folded into "no changes needed".
+  const zeroSpanFiles = runResult.fileResults.filter(
+    f => f.status === 'success' && f.spansAdded === 0 && !f.abandonedAfterFailure,
+  );
+  const actionableFiles = runResult.fileResults.filter(
+    f => !(f.status === 'success' && f.spansAdded === 0 && !f.abandonedAfterFailure),
+  );
 
   const lines: string[] = ['## Per-File Results'];
   lines.push('');
@@ -123,7 +155,9 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
   for (const file of actionableFiles) {
     const name = display(file.path);
     let statusText: string;
-    if (file.status === 'success') {
+    if (file.status === 'success' && file.abandonedAfterFailure) {
+      statusText = 'abandoned after failure (needs review)';
+    } else if (file.status === 'success') {
       statusText = 'success';
     } else if (file.status === 'failed') {
       statusText = file.reason ? `failed: ${sanitizeCell(file.reason)}` : 'failed';
@@ -134,7 +168,9 @@ function renderPerFileStatus(runResult: RunResult, config: AgentConfig, display:
     }
     // For failed files, libraries and extensions are from rejected agent output —
     // showing them misleads reviewers into thinking they're in the committed code.
-    const isCommitted = file.status === 'success' || file.status === 'partial';
+    // An abandoned-after-failure file was reverted to its original content, so it
+    // committed nothing either, despite carrying status: 'success'.
+    const isCommitted = (file.status === 'success' && !file.abandonedAfterFailure) || file.status === 'partial';
     const libs = isCommitted
       ? (file.librariesNeeded.map(l => `\`${l.package}\``).join(', ') || '—')
       : '—';
@@ -341,7 +377,7 @@ function renderSchemaChanges(runResult: RunResult, display: DisplayFn): string {
 function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
   const byFile = new Map<string, string[]>();
   for (const file of runResult.fileResults) {
-    if (file.status !== 'success' && file.status !== 'partial') continue;
+    if (file.status !== 'partial' && !(file.status === 'success' && !file.abandonedAfterFailure)) continue;
     const { spanIds } = dedupeExtensionIds(file.schemaExtensions);
     if (spanIds.size > 0) {
       byFile.set(display(file.path), [...spanIds].sort());
@@ -358,7 +394,7 @@ function collectSpanExtensionIdsByFile(runResult: RunResult, display: DisplayFn)
 function collectAttributeExtensionIdsByFile(runResult: RunResult, display: DisplayFn): Map<string, string[]> {
   const byFile = new Map<string, string[]>();
   for (const file of runResult.fileResults) {
-    if (file.status !== 'success' && file.status !== 'partial') continue;
+    if (file.status !== 'partial' && !(file.status === 'success' && !file.abandonedAfterFailure)) continue;
     const { attributeIds } = dedupeExtensionIds(file.schemaExtensions);
     if (attributeIds.size > 0) {
       byFile.set(display(file.path), [...attributeIds].sort());

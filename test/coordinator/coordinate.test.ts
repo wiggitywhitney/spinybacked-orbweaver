@@ -16,6 +16,17 @@ vi.mock('../../src/validation/judge.ts', () => ({
 }));
 import { callJudge } from '../../src/validation/judge.ts';
 
+vi.mock('../../src/coordinator/dep-graph.ts', async () => {
+  const actual = await vi.importActual<typeof import('../../src/coordinator/dep-graph.ts')>(
+    '../../src/coordinator/dep-graph.ts',
+  );
+  return {
+    buildDepGraph: vi.fn(actual.buildDepGraph),
+    topoSort: vi.fn(actual.topoSort),
+  };
+});
+import { buildDepGraph, topoSort } from '../../src/coordinator/dep-graph.ts';
+
 /** Minimal config for testing. */
 function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -959,6 +970,24 @@ describe('coordinate', () => {
       expect(options.baselineTestPassed).toBeUndefined();
       // executeProjectTests called once for baseline (via the coordinate function's runTests reference)
       // But checkpointTestRunner is undefined when hasTestSuite returns false, so baseline is skipped
+    });
+
+    it('does not build the dependency graph or topo sort when baseline test check fails', async () => {
+      vi.mocked(buildDepGraph).mockClear();
+      vi.mocked(topoSort).mockClear();
+      const dispatchFiles = vi.fn();
+      const deps = makeDeps({
+        dispatchFiles,
+        hasTestSuite: vi.fn().mockResolvedValue(true),
+        executeProjectTests: vi.fn().mockResolvedValue({ passed: false, error: 'pre-existing failures' }),
+      });
+      const config = makeConfig({ testCommand: 'vitest run', confirmEstimate: false });
+
+      await expect(coordinate('/project', config, undefined, deps))
+        .rejects.toThrow(CoordinatorAbortError);
+
+      expect(buildDepGraph).not.toHaveBeenCalled();
+      expect(topoSort).not.toHaveBeenCalled();
     });
 
     it('degrades gracefully when baseline test recording throws', async () => {
