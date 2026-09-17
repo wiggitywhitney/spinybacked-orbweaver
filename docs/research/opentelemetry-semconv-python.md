@@ -9,6 +9,7 @@
 |------|---------|
 | 2026-09-17 | Initial research — resolves PRD #373 OD-8 research spike |
 | 2026-09-17 | Verified `URL_PATH` stability directly against the primary registry source (`open-telemetry/semantic-conventions` `model/url/registry.yaml`: `url.path` has `stability: stable`) rather than inferring it by analogy. Upgraded confidence from 🟡 medium to 🟢 high. |
+| 2026-09-17 | Corrected two CodeRabbit-caught issues: the import-path code example used `url_attributes.URL_FULL`, inconsistent with the checker-relevant attribute (`url.path`) named everywhere else in this doc — changed to `URL_PATH`. Also narrowed the version-pinning finding's scope: its source is a contrib instrumentation package's `pyproject.toml` (`opentelemetry-instrumentation-flask`), not the core SDK, so the "OTel Python project's own convention" framing overstated what one contrib package's pinning choice actually proves. |
 
 ## Findings
 
@@ -47,7 +48,7 @@ from opentelemetry.semconv.attributes import http_attributes, url_attributes, se
 
 span.set_attribute(http_attributes.HTTP_REQUEST_METHOD, method)   # "http.request.method"
 span.set_attribute(http_attributes.HTTP_RESPONSE_STATUS_CODE, code)  # "http.response.status_code"
-span.set_attribute(url_attributes.URL_FULL, url)                  # "url.full"
+span.set_attribute(url_attributes.URL_PATH, path)                 # "url.path"
 ```
 
 **3. Stable vs. incubating split — mirrors the JS package's shape:**
@@ -73,7 +74,7 @@ All four attribute constants in the table above were fetched and read directly f
 **5. Version pinning constraints relative to `opentelemetry-api`:**
 
 **Source says:** "dependencies = [\"opentelemetry-api ~= 1.4\", \"opentelemetry-semantic-conventions == 0.57b0\", ...]" (opentelemetry-instrumentation package pyproject.toml, per [opentelemetry-python-contrib pyproject.toml examples](https://github.com/open-telemetry/opentelemetry-python-contrib/blob/main/instrumentation/opentelemetry-instrumentation-flask/pyproject.toml))
-**Interpretation:** The OTel Python project's own convention is to pin `opentelemetry-api` loosely (compatible-release range, e.g. `~= 1.4`) but pin `opentelemetry-semantic-conventions` to an **exact** beta version. This is a strong signal from the maintainers themselves that the semconv package is not yet safe to consume with a loose range. If spiny-orb's `installCommand()` adds `opentelemetry-semconv` to a project's dependencies (OD-8b), it should follow this same convention — exact-pin the semconv package, loose-pin the API package — rather than treating them symmetrically.
+**Interpretation:** This pinning example is from a **contrib instrumentation package** (`opentelemetry-instrumentation-flask`), not the core SDK — it should not be read as an OTel-Python-wide or SDK-wide convention. Within that scope, the contrib package pins `opentelemetry-api` loosely (compatible-release range, e.g. `~= 1.4`) but pins `opentelemetry-semantic-conventions` to an **exact** beta version — a signal that at least the contrib-instrumentation maintainers don't yet consider the semconv package safe to consume with a loose range. If spiny-orb's `installCommand()` adds `opentelemetry-semconv` to a project's dependencies (OD-8b), treating this contrib-package convention as the pattern to follow — exact-pin the semconv package, loose-pin the API package — is an inference from that one data point, not a confirmed project-wide rule.
 
 ### Conflicting Findings
 
