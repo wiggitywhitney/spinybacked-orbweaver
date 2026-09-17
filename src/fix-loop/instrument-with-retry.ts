@@ -936,6 +936,11 @@ async function executeRetryLoop(
       }
 
       const extensionWarnings = detectMalformedExtensions(output.schemaExtensions);
+      // Scoped to a byte-for-byte revert to the original file (the give-up pattern in
+      // #1062's evidence) rather than any zero-span success — a fresh-regeneration
+      // attempt can legitimately declare new schemaExtensions/librariesNeeded while
+      // producing code with no detectable span pattern, and that metadata is real.
+      const isAbandonedAfterFailure = spansAdded === 0 && hadBlockingFailure && output.instrumentedCode === originalCode;
       const buildSuccessResult = (
         advisoryAnnotations: FileResult['advisoryAnnotations'],
         tokens: TokenUsage,
@@ -946,8 +951,11 @@ async function executeRetryLoop(
         path: filePath,
         status: 'success',
         spansAdded,
-        librariesNeeded: mergeLibraries(output.librariesNeeded, fileDetectedLibraries),
-        schemaExtensions: supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode, registryNamesForAttempt),
+        // An abandoned attempt committed nothing — clear metadata from the rejected
+        // attempt's output so downstream consumers (PR summary, coordinator) can't
+        // mistake it for something that shipped.
+        librariesNeeded: isAbandonedAfterFailure ? [] : mergeLibraries(output.librariesNeeded, fileDetectedLibraries),
+        schemaExtensions: isAbandonedAfterFailure ? [] : supplementSchemaExtensions(output.schemaExtensions, output.instrumentedCode, registryNamesForAttempt),
         attributesCreated: output.attributesCreated,
         validationAttempts: attempt,
         validationStrategyUsed: actualStrategy,
@@ -958,7 +966,7 @@ async function executeRetryLoop(
         agentVersion: AGENT_VERSION,
         tokenUsage: tokens,
         thinkingBlocksByAttempt: thinkingBlocksByAttempt.some(b => b.length > 0) ? thinkingBlocksByAttempt : undefined,
-        abandonedAfterFailure: spansAdded === 0 && hadBlockingFailure ? true : undefined,
+        abandonedAfterFailure: isAbandonedAfterFailure ? true : undefined,
       });
 
       // Advisory-only pass: when file passes but has advisory findings and budget allows.

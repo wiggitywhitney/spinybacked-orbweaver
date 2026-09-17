@@ -520,6 +520,11 @@ describe('instrumentWithRetry — distinguishing abandoned-after-failure from a 
     expect(result.spansAdded).toBe(0);
     expect(result.abandonedAfterFailure).toBe(true);
     expect(readFileSync(testFilePath, 'utf-8')).toBe(originalContent);
+    // The abandoned attempt's leftover librariesNeeded/schemaExtensions (from
+    // makeInstrumentationOutput's non-empty defaults) must not carry over —
+    // nothing was actually committed for this file.
+    expect(result.librariesNeeded).toEqual([]);
+    expect(result.schemaExtensions).toEqual([]);
   });
 
   it('does not flag abandonedAfterFailure when the file genuinely needs no spans on the first attempt', async () => {
@@ -4720,12 +4725,12 @@ describe('instrumentWithRetry — namespace prefix enforcement (#722)', () => {
             }),
           } as InstrumentFileResult;
         }
-        // Retry gives up: no extensions, no spans.
+        // Retry gives up: reverts to the byte-for-byte original, no extensions, no spans.
         return {
           success: true,
           output: makeInstrumentationOutput({
             schemaExtensions: [],
-            instrumentedCode: 'const x = 1;\n',
+            instrumentedCode: 'export async function fetchData() {}',
             spanCategories: { externalCalls: 0, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
           }),
         } as InstrumentFileResult;
