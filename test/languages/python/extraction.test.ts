@@ -84,6 +84,19 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(0);
   });
 
+  it('does not skip a function whose docstring merely mentions a span method by name', () => {
+    const source = [
+      'def handler(req):',
+      '    """Call tracer.start_as_current_span() before doing this."""',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(1);
+  });
+
   it('skips underscore-prefixed (non-exported) functions by default', () => {
     const source = ['def _helper():', '    x = 1', '    y = 2', '    return x + y', ''].join('\n');
     const extracted = extractPythonFunctions(source);
@@ -220,6 +233,25 @@ describe('extractPythonFunctions', () => {
     ].join('\n');
     const extracted = extractPythonFunctions(source);
     expect(extracted[0].contextHeader).toContain('from myapp.constants import *');
+  });
+
+  it('uses the import statement\'s exact original text rather than a hand-reconstructed line', () => {
+    const source = [
+      'from myapp.utils import (',
+      '    helper_a,',
+      '    helper_b as hb,',
+      ')',
+      '',
+      'def handler(req):',
+      '    x = helper_a()',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].contextHeader).toContain('from myapp.utils import (');
+    expect(extracted[0].contextHeader).toContain('    helper_a,');
+    expect(extracted[0].contextHeader).toContain('    helper_b as hb,');
   });
 
   it('extracts a class method using its own line range, not the whole class', () => {

@@ -8,8 +8,13 @@ import { parsePython } from './ast.ts';
 /** Minimum number of body statements for a function to be worth instrumenting. */
 const MIN_STATEMENTS = 3;
 
-/** Patterns indicating a function already contains OTel span instrumentation. */
-const OTEL_SPAN_PATTERNS = [/start_as_current_span\s*\(/, /start_span\s*\(/, /\.record_exception\s*\(/];
+/**
+ * Method names indicating a function already contains OTel span instrumentation.
+ * Matched receiver-agnostically against real `call` nodes (see `hasOTelSpanCall()`),
+ * not raw text — a docstring or comment merely mentioning one of these names must
+ * not cause a function to be wrongly treated as already instrumented.
+ */
+const OTEL_SPAN_METHODS = new Set(['start_as_current_span', 'start_span', 'record_exception']);
 
 /** Options for function extraction. */
 export interface ExtractPythonFunctionsOptions {
@@ -23,9 +28,9 @@ interface CollectedFunction {
   isExported: boolean;
   startLine: number;
   endLine: number;
-  bodyText: string;
   statementCount: number;
   docComment: string | null;
+  hasOTelSpanCall: boolean;
 }
 
 function toLine(node: Node): number {
@@ -46,6 +51,30 @@ function getDocstring(bodyNode: Node): string | null {
   const expr = first.namedChild(0);
   if (expr === null || expr.type !== 'string') return null;
   return expr.text;
+}
+
+/**
+ * Whether a function body contains a real call to one of `OTEL_SPAN_METHODS`.
+ * Walks actual `call` AST nodes (receiver-agnostic on the attribute name, matching
+ * the convention `ast.ts`'s `detectPythonOTelInstrumentation()` already uses) rather
+ * than regex-matching raw text, so a docstring or comment merely mentioning a span
+ * method by name can't cause a function to be wrongly treated as already instrumented.
+ */
+function hasOTelSpanCall(bodyNode: Node): boolean {
+  function walk(node: Node): boolean {
+    if (node.type === 'call') {
+      const fn = node.childForFieldName('function');
+      if (fn?.type === 'attribute') {
+        const attribute = fn.childForFieldName('attribute');
+        if (attribute !== null && OTEL_SPAN_METHODS.has(attribute.text)) return true;
+      }
+    }
+    for (const child of node.namedChildren) {
+      if (child !== null && walk(child)) return true;
+    }
+    return false;
+  }
+  return walk(bodyNode);
 }
 
 function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFunction[] {
@@ -74,9 +103,9 @@ function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFuncti
         isExported: !name.startsWith('_'),
         startLine: toLine(boundaryNode),
         endLine: node.endPosition.row + 1,
-        bodyText: bodyNode.text,
         statementCount: bodyNode.namedChildCount,
         docComment: getDocstring(bodyNode),
+        hasOTelSpanCall: hasOTelSpanCall(bodyNode),
       });
       return;
     }
@@ -101,7 +130,7 @@ function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFuncti
 function isWorthInstrumenting(fn: CollectedFunction): boolean {
   const isExportedAsync = fn.isExported && fn.isAsync;
   if (!isExportedAsync && fn.statementCount < MIN_STATEMENTS) return false;
-  if (OTEL_SPAN_PATTERNS.some(pattern => pattern.test(fn.bodyText))) return false;
+  if (fn.hasOTelSpanCall) return false;
   return true;
 }
 
@@ -146,16 +175,19 @@ function collectImportedIdentifiers(source: string): CollectedImports {
       for (const nameNode of stmt.childrenForFieldName('name')) {
         if (nameNode === null) continue;
         if (nameNode.type === 'aliased_import') {
-          const moduleNode = nameNode.childForFieldName('name');
           const aliasNode = nameNode.childForFieldName('alias');
-          if (moduleNode === null || aliasNode === null) continue;
-          identifierToImportLine.set(aliasNode.text, `import ${moduleNode.text} as ${aliasNode.text}`);
+          if (aliasNode === null) continue;
+          // Store the statement's own exact text, not a hand-reconstructed string —
+          // this is correct by construction for any statement shape (multi-line,
+          // parenthesized, compound), and buildContextHeader() dedupes shared text.
+          identifierToImportLine.set(aliasNode.text, stmt.text);
         } else {
           // `import a.b.c` binds only `a` in the current namespace — code refers to
           // it as `a.<anything>`, not the full dotted path, so the lookup key must
-          // be the first component while the reconstructed import keeps the full path.
+          // be the first component (the reconstructed import text is still the
+          // statement's own full text, which naturally includes the full path).
           const boundName = nameNode.text.split('.')[0];
-          identifierToImportLine.set(boundName, `import ${nameNode.text}`);
+          identifierToImportLine.set(boundName, stmt.text);
         }
       }
     } else if (stmt.type === 'import_from_statement') {
@@ -163,19 +195,18 @@ function collectImportedIdentifiers(source: string): CollectedImports {
       if (moduleNode === null) continue;
       const hasWildcard = Array.from({ length: stmt.childCount }, (_, i) => stmt.child(i)).some(c => c?.type === 'wildcard_import');
       if (hasWildcard) {
-        wildcardImports.push(`from ${moduleNode.text} import *`);
+        wildcardImports.push(stmt.text);
         continue;
       }
 
       for (const nameNode of stmt.childrenForFieldName('name')) {
         if (nameNode === null) continue;
         if (nameNode.type === 'aliased_import') {
-          const originalNode = nameNode.childForFieldName('name');
           const aliasNode = nameNode.childForFieldName('alias');
-          if (originalNode === null || aliasNode === null) continue;
-          identifierToImportLine.set(aliasNode.text, `from ${moduleNode.text} import ${originalNode.text} as ${aliasNode.text}`);
+          if (aliasNode === null) continue;
+          identifierToImportLine.set(aliasNode.text, stmt.text);
         } else {
-          identifierToImportLine.set(nameNode.text, `from ${moduleNode.text} import ${nameNode.text}`);
+          identifierToImportLine.set(nameNode.text, stmt.text);
         }
       }
     }
