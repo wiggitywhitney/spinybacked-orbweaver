@@ -39,7 +39,14 @@ export function checkSyntax(filePath: string): CheckResult {
   try {
     execFileSync(
       'python3',
-      ['-c', `compile(open(${JSON.stringify(filePath)}).read(), ${JSON.stringify(filePath)}, 'exec')`],
+      [
+        '-c',
+        // tokenize.open() (not plain open()) honors a PEP 263 encoding declaration
+        // (e.g. `# -*- coding: latin-1 -*-`) — plain open() decodes using the
+        // locale's default encoding and can misdecode or raise UnicodeDecodeError
+        // on a file whose declared encoding differs from that default.
+        `import tokenize; compile(tokenize.open(${JSON.stringify(filePath)}).read(), ${JSON.stringify(filePath)}, 'exec')`,
+      ],
       { timeout: 10_000, stdio: ['pipe', 'pipe', 'pipe'] },
     );
 
@@ -90,6 +97,14 @@ interface FormatAttempt {
   code: string;
   /** True once any formatter binary (ruff or black) was found on PATH, regardless of whether it accepted the input. */
   formatterAvailable: boolean;
+  /**
+   * True when a formatter binary was found but rejected the input (a real
+   * execution failure — e.g. a parse error) rather than accepting it unchanged.
+   * `code` still equals the input source in this case, but that equality does
+   * NOT mean "the formatter found no changes needed" — the formatter never
+   * actually ran to completion. Callers must not treat this as "compliant."
+   */
+  executionFailed: boolean;
 }
 
 /**
@@ -127,14 +142,26 @@ function runFormatter(source: string, configDir: string): FormatAttempt {
   const stdinFilename = join(configDir, '_spiny_orb_format_target.py');
 
   const ruff = tryFormatterBinary('ruff', ['format', '--stdin-filename', stdinFilename, '-'], source, configDir);
-  if (ruff.output !== null) return { code: ruff.output, formatterAvailable: true };
-  if (ruff.found) return { code: source, formatterAvailable: true };
+  if (ruff.output !== null) return { code: ruff.output, formatterAvailable: true, executionFailed: false };
+  if (ruff.found) return { code: source, formatterAvailable: true, executionFailed: true };
 
   const black = tryFormatterBinary('black', ['--stdin-filename', stdinFilename, '-q', '-'], source, configDir);
-  if (black.output !== null) return { code: black.output, formatterAvailable: true };
-  if (black.found) return { code: source, formatterAvailable: true };
+  if (black.output !== null) return { code: black.output, formatterAvailable: true, executionFailed: false };
+  if (black.found) return { code: source, formatterAvailable: true, executionFailed: true };
 
-  return { code: source, formatterAvailable: false };
+  return { code: source, formatterAvailable: false, executionFailed: false };
+}
+
+/**
+ * Whether a formatted-source attempt counts as "compliant" with the formatter.
+ *
+ * An execution failure (the formatter rejected the input) is never compliant,
+ * even though `attempt.code` equals the input in that case — that equality
+ * means "the formatter never produced a real answer," not "no changes needed."
+ */
+function isCompliant(attempt: FormatAttempt, sourceText: string): boolean {
+  if (attempt.executionFailed) return false;
+  return attempt.code === sourceText;
 }
 
 /**
@@ -191,8 +218,8 @@ export async function lintCheck(original: string, instrumented: string): Promise
   }
 
   const instrumentedAttempt = runFormatter(instrumented, configDir);
-  const originalCompliant = originalAttempt.code === original;
-  const outputCompliant = instrumentedAttempt.code === instrumented;
+  const originalCompliant = isCompliant(originalAttempt, original);
+  const outputCompliant = isCompliant(instrumentedAttempt, instrumented);
 
   if (originalCompliant && !outputCompliant) {
     return {

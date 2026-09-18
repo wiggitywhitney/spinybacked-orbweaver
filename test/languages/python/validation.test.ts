@@ -196,6 +196,19 @@ describe('lintCheck', () => {
     expect(result.message.length).toBeGreaterThan(20);
   });
 
+  it('fails when the formatter rejects the instrumented output outright (a real parse error), not just a style violation', async () => {
+    const original = 'def foo(x):\n    return x + 1\n';
+    // Unclosed parenthesis: the formatter can't parse this at all, so it
+    // echoes the input back unchanged rather than reformatting it — that
+    // echo must not be mistaken for "no changes needed" (compliant).
+    const instrumented = 'def foo(x:\n    return x + 1\n';
+
+    const result = await lintCheck(original, instrumented);
+
+    expect(result.passed).toBe(false);
+    expect(result.ruleId).toBe('LINT');
+  });
+
   describe('neither Ruff nor Black installed', () => {
     let originalPath: string | undefined;
 

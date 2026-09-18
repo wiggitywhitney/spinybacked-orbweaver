@@ -28,6 +28,11 @@ jobs:
       - name: Verify Weaver version
         run: weaver --version
 
+      - name: Install Ruff and Black (Python formatters)
+        run: |
+          pipx install ruff
+          pipx install black
+
       - run: npm ci
 
       - name: Typecheck

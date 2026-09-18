@@ -23,6 +23,13 @@ jobs:
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/open-telemetry/weaver/releases/download/v0.22.1/weaver-installer.sh | sh
           weaver --version
 
+      # Install Ruff and Black — required for the Python provider's formatter tests,
+      # which run as part of `npm publish`'s prepublishOnly `npm test` step.
+      - name: Install Ruff and Black (Python formatters)
+        run: |
+          pipx install ruff
+          pipx install black
+
       - run: npm install -g npm@latest   # Ensure npm >= 11.5.1
       - run: npm ci
       - run: npm publish --provenance    # --provenance must be explicit; do not rely on automatic generation

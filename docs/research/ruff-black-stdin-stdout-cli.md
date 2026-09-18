@@ -4,9 +4,11 @@
 **Last Updated:** 2026-09-18
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-09-18 | Initial research, for Milestone D1's checkSyntax()/formatCode()/lintCheck() |
+| 2026-09-18 | Fixed an internal contradiction in the Recommendation section (it said to fall back to Black "on ENOENT or any other failure" in one sentence, then "only fall back on ENOENT" in the next) — corrected to state the ENOENT-only fallback consistently, matching the actual implementation |
 
 ## Findings
 
@@ -64,7 +66,7 @@
 
 ## Recommendation
 
-For `formatCode(source, configDir)`: try `ruff format -` first (spawn with `input: source`); on `ENOENT` (ruff not installed) or any other failure, try `black -` the same way; on `ENOENT` for black too, return `source` unchanged. Do not fall back to Black on a *parse-error* failure from Ruff (exit 2 with a real parse error means the code is genuinely invalid, and Black will fail identically) — only fall back on `ENOENT`. For `lintCheck()`, treat "neither tool installed" (both throw `ENOENT`) as the advisory failure with the canonical OD-2 message.
+For `formatCode(source, configDir)`: try `ruff format -` first (spawn with `input: source`); fall back to `black -` the same way only when Ruff's failure is `ENOENT` (ruff not installed) — not on any other failure. Do not fall back to Black on a *parse-error* failure from Ruff (exit 2 with a real parse error means the code is genuinely invalid, and Black will fail identically). If Black's own attempt also throws `ENOENT`, return `source` unchanged. For `lintCheck()`, treat "neither tool installed" (both throw `ENOENT`) as the advisory failure with the canonical OD-2 message.
 
 For `checkSyntax(filePath)`: shell out to `python3 -c "compile(...)"`, catch the throw, take the line number from the traceback's real-file `File` line (not the first `<string>` one), and surface the trimmed traceback tail (from `SyntaxError:` onward, or the whole stderr) as the message.
 
