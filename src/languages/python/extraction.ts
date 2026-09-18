@@ -88,6 +88,7 @@ function hasOTelSpanCall(bodyNode: Node): boolean {
 const COMPOUND_STATEMENT_TYPES = new Set([
   'if_statement', 'while_statement', 'for_statement', 'with_statement', 'try_statement',
   'elif_clause', 'else_clause', 'except_clause', 'finally_clause',
+  'match_statement', 'case_clause',
 ]);
 
 /**

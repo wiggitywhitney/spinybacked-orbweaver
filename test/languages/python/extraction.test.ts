@@ -493,4 +493,21 @@ describe('extractPythonFunctions', () => {
     expect(extracted[0].referencedImports).toContain('café');
     expect(extracted[0].contextHeader).toContain('from myapp.config import café');
   });
+
+  it('does not skip a function as trivial when its real logic is nested inside a match/case block', () => {
+    const source = [
+      'def handler(x):',
+      '    match x:',
+      '        case 1:',
+      '            a = 1',
+      '            b = 2',
+      '            return a + b',
+      '        case _:',
+      '            return None',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0].name).toBe('handler');
+  });
 });
