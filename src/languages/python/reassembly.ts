@@ -26,7 +26,7 @@ const TRACER_INIT_PATTERN = /^tracer\s*=\s*trace\.get_tracer\s*\(/;
 function extractFunctionFromInstrumentedCode(
   instrumentedCode: string,
   functionName: string,
-): { text: string; baseIndent: string } | null {
+): { text: string; baseIndent: string; hasDecorator: boolean } | null {
   const tree = parsePython(instrumentedCode);
   const lines = instrumentedCode.split('\n');
 
@@ -67,6 +67,7 @@ function extractFunctionFromInstrumentedCode(
   const { boundary, defRow, defColumn } = found;
   const startRow = boundary.startPosition.row;
   const endRow = boundary.endPosition.row;
+  const hasDecorator = boundary.type === 'decorated_definition';
   tree.delete();
 
   const text = lines.slice(startRow, endRow + 1).join('\n');
@@ -75,7 +76,7 @@ function extractFunctionFromInstrumentedCode(
   // otherwise get a baseIndent that never actually matches any line's real
   // prefix, silently defeating reindent()'s startsWith(fromIndent) check.
   const baseIndent = lines[defRow].slice(0, defColumn);
-  return { text, baseIndent };
+  return { text, baseIndent, hasDecorator };
 }
 
 /**
@@ -259,6 +260,14 @@ export function reassemblePythonFunctions(
 
     const found = extractFunctionFromInstrumentedCode(result.instrumentedCode, fn.name);
     if (!found) continue;
+
+    // If the original function had a decorator but the LLM's returned function
+    // doesn't, splicing it in would silently delete a potentially runtime-affecting
+    // decorator (e.g. @app.route(...)) from the file. Treat this the same as a
+    // failed result for this function — leave the original code unchanged — rather
+    // than ever destructively dropping a decorator.
+    const originalHasDecorator = /^\s*@/.test(fn.sourceText.split('\n')[0] ?? '');
+    if (originalHasDecorator && !found.hasDecorator) continue;
 
     const originalDefLine = fn.sourceText.split('\n').find(line => DEF_PATTERN.test(line));
     const originalDefIndent = originalDefLine ? (DEF_PATTERN.exec(originalDefLine)?.[1] ?? '') : '';

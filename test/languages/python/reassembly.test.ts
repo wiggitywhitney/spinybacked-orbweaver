@@ -298,14 +298,11 @@ describe('reassemblePythonFunctions', () => {
     ]);
     const lines = reassembled.split('\n');
     // The original multi-line import must remain intact — nothing spliced between its lines.
-    const origOpenIdx = lines.findIndex(l => l === 'from myapp.config import (');
-    const origCloseIdx = lines.findIndex(l => l === ')');
-    expect(lines[origOpenIdx + 1]).toBe('    SETTING_A,');
-    expect(lines[origOpenIdx + 2]).toBe('    SETTING_B,');
-    expect(lines[origCloseIdx - 1]).toBe('    SETTING_B,');
-    // The new multi-line import must appear complete, not truncated to its opening line.
-    expect(reassembled).toContain('from opentelemetry import (');
-    expect(reassembled).toContain('    trace,');
+    expect(reassembled).toContain(['from myapp.config import (', '    SETTING_A,', '    SETTING_B,', ')'].join('\n'));
+    // The new multi-line import must appear complete, not truncated to its opening line —
+    // asserted as one contiguous block so a truncated "from opentelemetry import (" alone
+    // (with the rest split off or missing) would fail this.
+    expect(reassembled).toContain(['from opentelemetry import (', '    trace,', ')'].join('\n'));
   });
 
   it('inserts a new import after a module docstring preceded by leading comments', () => {
@@ -412,6 +409,31 @@ describe('reassemblePythonFunctions', () => {
     expect(topLevelInitIdx).toBeLessThan(handlerIdx);
   });
 
+  it('leaves the original function unchanged rather than silently dropping a decorator the LLM omitted', () => {
+    const original = [
+      '@app.route("/foo")',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    // The LLM's returned function is missing the original @app.route decorator —
+    // this must not result in the decorator being deleted from the file.
+    const instrumented = [
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    expect(reassembled).toBe(original);
+  });
+
   it('does not confuse two different classes\' methods that share the same name', () => {
     const original = [
       'class Foo:',
@@ -447,8 +469,15 @@ describe('reassemblePythonFunctions', () => {
       result({ name: 'process', instrumentedCode: fooInstrumented }),
       result({ name: 'process', instrumentedCode: barInstrumented }),
     ]);
-    expect(reassembled).toContain('start_as_current_span("Foo.process")');
-    expect(reassembled).toContain('start_as_current_span("Bar.process")');
+    // Assert each method's instrumentation stayed with its own class as one
+    // contiguous block — a bare substring check on the span name alone would
+    // still pass even if the two methods' bodies got swapped between classes.
+    expect(reassembled).toContain(
+      ['class Foo:', '    def process(self, req):', '        with tracer.start_as_current_span("Foo.process") as span:'].join('\n'),
+    );
+    expect(reassembled).toContain(
+      ['class Bar:', '    def process(self, req):', '        with tracer.start_as_current_span("Bar.process") as span:'].join('\n'),
+    );
   });
 
   it('inserts only one tracer init even when two functions each generate a differently-worded one', () => {
