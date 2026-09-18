@@ -143,4 +143,139 @@ describe('reassemblePythonFunctions', () => {
     ]);
     expect(reassembled.match(/from opentelemetry import trace/g)).toHaveLength(1);
   });
+
+  it('preserves a multi-line decorator whose continuation lines do not start with "@"', () => {
+    const original = [
+      '@app.route(',
+      '    "/foo",',
+      '    methods=["GET", "POST"],',
+      ')',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      '@app.route(',
+      '    "/foo",',
+      '    methods=["GET", "POST"],',
+      ')',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    expect(reassembled).toContain('methods=["GET", "POST"],');
+    expect(reassembled.match(/@app\.route/g)).toHaveLength(1);
+  });
+
+  it('does not treat a nested import inside a spliced function body as the module import block', () => {
+    const original = [
+      'import os',
+      '',
+      'def handler(req):',
+      '    if req.debug:',
+      '        import pdb',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      '',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        if req.debug:',
+      '            import pdb',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    const lines = reassembled.split('\n');
+    const importLine = lines.findIndex(l => l === 'from opentelemetry import trace');
+    const osImportLine = lines.findIndex(l => l === 'import os');
+    const pdbImportLine = lines.findIndex(l => l.includes('import pdb'));
+    expect(importLine).toBeGreaterThanOrEqual(0);
+    expect(importLine).toBeLessThan(pdbImportLine);
+    expect(osImportLine).toBeLessThan(pdbImportLine);
+  });
+
+  it('inserts a new import after the module docstring when the file has no existing imports', () => {
+    const original = [
+      '"""Module docstring."""',
+      '',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      '',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    const lines = reassembled.split('\n');
+    expect(lines[0]).toBe('"""Module docstring."""');
+    const importIdx = lines.findIndex(l => l === 'from opentelemetry import trace');
+    expect(importIdx).toBeGreaterThan(0);
+  });
+
+  it('does not confuse two different classes\' methods that share the same name', () => {
+    const original = [
+      'class Foo:',
+      '    def process(self, req):',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+      '',
+      'class Bar:',
+      '    def process(self, req):',
+      '        c = 3',
+      '        d = 4',
+      '        return c + d',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original, { includeNonExported: true });
+    expect(extracted).toHaveLength(2);
+    const fooInstrumented = [
+      'def process(self, req):',
+      '    with tracer.start_as_current_span("Foo.process") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n');
+    const barInstrumented = [
+      'def process(self, req):',
+      '    with tracer.start_as_current_span("Bar.process") as span:',
+      '        c = 3',
+      '        d = 4',
+      '        return c + d',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'process', instrumentedCode: fooInstrumented }),
+      result({ name: 'process', instrumentedCode: barInstrumented }),
+    ]);
+    expect(reassembled).toContain('start_as_current_span("Foo.process")');
+    expect(reassembled).toContain('start_as_current_span("Bar.process")');
+  });
 });
