@@ -209,6 +209,18 @@ describe('lintCheck', () => {
     expect(result.ruleId).toBe('LINT');
   });
 
+  it('fails on an instrumented parse error even when the original was already non-compliant', async () => {
+    // The original's own non-compliance must not let a parse failure on the
+    // instrumented output fall through to the "not a new error" pass branch.
+    const original = 'def foo(x):\n    return   x+1\n';
+    const instrumented = 'def foo(x:\n    return   x+1\n';
+
+    const result = await lintCheck(original, instrumented);
+
+    expect(result.passed).toBe(false);
+    expect(result.ruleId).toBe('LINT');
+  });
+
   describe('neither Ruff nor Black installed', () => {
     let originalPath: string | undefined;
 

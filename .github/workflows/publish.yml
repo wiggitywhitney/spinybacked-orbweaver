@@ -27,8 +27,8 @@ jobs:
       # which run as part of `npm publish`'s prepublishOnly `npm test` step.
       - name: Install Ruff and Black (Python formatters)
         run: |
-          pipx install ruff
-          pipx install black
+          pipx install ruff==0.15.2
+          pipx install black==25.1.0
 
       - run: npm install -g npm@latest   # Ensure npm >= 11.5.1
       - run: npm ci

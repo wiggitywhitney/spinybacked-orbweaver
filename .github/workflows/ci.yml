@@ -30,8 +30,8 @@ jobs:
 
       - name: Install Ruff and Black (Python formatters)
         run: |
-          pipx install ruff
-          pipx install black
+          pipx install ruff==0.15.2
+          pipx install black==25.1.0
 
       - run: npm ci
 

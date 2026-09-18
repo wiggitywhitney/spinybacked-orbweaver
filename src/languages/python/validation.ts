@@ -218,6 +218,29 @@ export async function lintCheck(original: string, instrumented: string): Promise
   }
 
   const instrumentedAttempt = runFormatter(instrumented, configDir);
+
+  // A formatter execution failure on the instrumented output (a real parse
+  // error, not a style violation) is reported on its own — regardless of
+  // whether the original was itself compliant. Folding this into the
+  // ordinary compliance matrix would let it fall through to the "original
+  // was already non-compliant, so this isn't a new error" pass branch
+  // whenever the original also happened to be non-compliant, which
+  // mischaracterizes a parse failure as an unremarkable style issue.
+  if (instrumentedAttempt.executionFailed) {
+    return {
+      ruleId: 'LINT',
+      passed: false,
+      filePath,
+      lineNumber: null,
+      message:
+        `LINT check failed: the formatter could not parse the instrumented output at all. ` +
+        `This indicates the agent's output has a structural problem beyond a formatting style violation. ` +
+        `Run Ruff or Black directly on the output to see the parse error.`,
+      tier: 1,
+      blocking: true,
+    };
+  }
+
   const originalCompliant = isCompliant(originalAttempt, original);
   const outputCompliant = isCompliant(instrumentedAttempt, instrumented);
 
