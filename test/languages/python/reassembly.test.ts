@@ -450,4 +450,77 @@ describe('reassemblePythonFunctions', () => {
     expect(reassembled).toContain('start_as_current_span("Foo.process")');
     expect(reassembled).toContain('start_as_current_span("Bar.process")');
   });
+
+  it('inserts only one tracer init even when two functions each generate a differently-worded one', () => {
+    const original = [
+      'def handler_one(req):',
+      '    a = 1',
+      '    b = 2',
+      '    return a + b',
+      '',
+      'def handler_two(req):',
+      '    c = 1',
+      '    d = 2',
+      '    return c + d',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumentedOne = [
+      'from opentelemetry import trace',
+      '',
+      'tracer = trace.get_tracer("service-a")',
+      '',
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n');
+    const instrumentedTwo = [
+      'from opentelemetry import trace',
+      '',
+      'tracer = trace.get_tracer("service-b")',
+      '',
+      'def handler_two(req):',
+      '    with tracer.start_as_current_span("handler_two") as span:',
+      '        c = 1',
+      '        d = 2',
+      '        return c + d',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler_one', instrumentedCode: instrumentedOne }),
+      result({ name: 'handler_two', instrumentedCode: instrumentedTwo }),
+    ]);
+    const matches = reassembled.match(/^tracer = trace\.get_tracer\(/gm);
+    expect(matches).toHaveLength(1);
+  });
+
+  it('recognizes a single/double-quoted (non-triple-quoted) module docstring for import placement', () => {
+    const original = [
+      "'A short single-quoted module docstring.'",
+      '',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      '',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    const lines = reassembled.split('\n');
+    expect(lines[0]).toBe("'A short single-quoted module docstring.'");
+    const importIdx = lines.findIndex(l => l === 'from opentelemetry import trace');
+    expect(importIdx).toBeGreaterThan(0);
+  });
 });

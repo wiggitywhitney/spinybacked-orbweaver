@@ -175,33 +175,31 @@ function findModuleLevelTracerInitLines(code: string): string[] {
 }
 
 /**
- * Find where the module's prologue (shebang, PEP 263 encoding declaration, module
- * docstring) ends, so a new import inserted into a file with no existing imports
- * lands after these rather than before or inside them.
+ * Find where the module's prologue (shebang, PEP 263 encoding declaration —
+ * both parsed as `comment` nodes by this grammar — and module docstring) ends,
+ * so a new import inserted into a file with no existing imports lands after
+ * these rather than before or inside them.
+ *
+ * Uses tree-sitter to recognize the docstring so any quote style (`'...'`,
+ * `"..."`, `'''...'''`, `"""..."""`) is detected, not just triple-quotes.
  */
-function findPrologueEnd(lines: string[]): number {
+function findPrologueEnd(code: string): number {
+  const tree = parsePython(code);
   let idx = 0;
-  if (lines[idx]?.startsWith('#!')) idx++;
-  if (/coding[:=]\s*[-\w.]+/.test(lines[idx] ?? '')) idx++;
 
-  // Leading blank lines and full-line comments (e.g. a copyright header) can
-  // appear before the module docstring without disqualifying it — skip past
-  // them so the docstring is still recognized and its __doc__ role preserved.
-  while (idx < lines.length && (lines[idx].trim() === '' || lines[idx].trim().startsWith('#'))) idx++;
-
-  const docstringLine = lines[idx];
-  const quoteMatch = docstringLine ? /^[rubURB]{0,2}("""|''')/.exec(docstringLine) : null;
-  if (quoteMatch) {
-    const quote = quoteMatch[1];
-    const afterOpening = docstringLine.slice(docstringLine.indexOf(quote) + quote.length);
-    if (afterOpening.includes(quote)) {
-      idx++;
-    } else {
-      idx++;
-      while (idx < lines.length && !lines[idx].includes(quote)) idx++;
-      if (idx < lines.length) idx++;
+  for (const child of tree.rootNode.namedChildren) {
+    if (child === null) break;
+    if (child.type === 'comment') {
+      idx = child.endPosition.row + 1;
+      continue;
     }
+    if (child.type === 'expression_statement' && child.namedChild(0)?.type === 'string') {
+      idx = child.endPosition.row + 1;
+    }
+    break;
   }
+
+  tree.delete();
   return idx;
 }
 
@@ -212,8 +210,9 @@ function findPrologueEnd(lines: string[]): number {
  * if any exist, otherwise after the module's prologue (shebang/encoding/docstring).
  */
 function findImportInsertPosition(lines: string[]): number {
-  const ranges = findModuleLevelImportRanges(lines.join('\n'));
-  if (ranges.length === 0) return findPrologueEnd(lines);
+  const code = lines.join('\n');
+  const ranges = findModuleLevelImportRanges(code);
+  if (ranges.length === 0) return findPrologueEnd(code);
   return Math.max(...ranges.map(r => r.endRow)) + 1;
 }
 
@@ -270,8 +269,15 @@ export function reassemblePythonFunctions(
     for (const range of findModuleLevelImportRanges(result.instrumentedCode)) {
       if (!originalImportLines.has(range.text) && !newImports.includes(range.text)) newImports.push(range.text);
     }
-    for (const init of findModuleLevelTracerInitLines(result.instrumentedCode)) {
-      if (!originalTracerInits.has(init) && !newTracerInits.includes(init)) newTracerInits.push(init);
+    // A module needs at most one tracer init. Different functions instrumented in
+    // the same pass may each generate their own (typically identical, but not
+    // guaranteed to be — e.g. a different service-name argument), so once one
+    // already exists (originally, or already queued from an earlier function in
+    // this loop), any further one is redundant regardless of whether its exact
+    // text matches — comparing by text would let multiple distinct ones through.
+    if (originalTracerInits.size === 0 && newTracerInits.length === 0) {
+      const [firstInit] = findModuleLevelTracerInitLines(result.instrumentedCode);
+      if (firstInit !== undefined) newTracerInits.push(firstInit);
     }
   }
 

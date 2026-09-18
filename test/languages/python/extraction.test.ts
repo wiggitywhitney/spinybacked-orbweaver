@@ -254,6 +254,28 @@ describe('extractPythonFunctions', () => {
     expect(extracted[0].contextHeader).toContain('    helper_b as hb,');
   });
 
+  it('captures a module-level import guarded by a try/except optional-dependency pattern', () => {
+    const source = [
+      'try:',
+      '    import ujson as json',
+      'except ImportError:',
+      '    import json',
+      '',
+      'def handler(req):',
+      '    x = json.dumps({})',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].referencedImports).toContain('json');
+    // The guard itself must be preserved — including the bare "import json" line
+    // without its try/except would raise ImportError on any system without ujson.
+    expect(extracted[0].contextHeader).toContain('try:');
+    expect(extracted[0].contextHeader).toContain('except ImportError:');
+    expect(extracted[0].contextHeader).toContain('import ujson as json');
+  });
+
   it('extracts a class method using its own line range, not the whole class', () => {
     const source = [
       'class Service:',

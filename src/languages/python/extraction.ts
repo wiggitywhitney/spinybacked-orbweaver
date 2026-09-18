@@ -163,6 +163,68 @@ interface CollectedImports {
   wildcardImports: string[];
 }
 
+/**
+ * Collect import(s) from `node`, recording `boundaryText` — not `node`'s own
+ * text — as the reconstructed import context. `boundaryText` is the top-level
+ * module statement that contains `node`: for a bare top-level import it's the
+ * import itself, but for one nested inside a guard (`try:`/`if:`) it's the
+ * *entire guard block*, so a function's contextHeader gets the full guarded
+ * form (e.g. `try: import ujson as json \n except ImportError: import json`)
+ * rather than a bare `import json` that would raise `ImportError` on any
+ * system lacking the optional dependency the guard exists to handle.
+ */
+function collectFromStatement(node: Node, boundaryText: string, identifierToImportLine: Map<string, string>, wildcardImports: string[]): void {
+  if (node.type === 'import_statement') {
+    for (const nameNode of node.childrenForFieldName('name')) {
+      if (nameNode === null) continue;
+      if (nameNode.type === 'aliased_import') {
+        const aliasNode = nameNode.childForFieldName('alias');
+        if (aliasNode === null) continue;
+        identifierToImportLine.set(aliasNode.text, boundaryText);
+      } else {
+        // `import a.b.c` binds only `a` in the current namespace — code refers to
+        // it as `a.<anything>`, not the full dotted path, so the lookup key must
+        // be the first component (the reconstructed import context still carries
+        // the full statement, which naturally includes the full dotted path).
+        const boundName = nameNode.text.split('.')[0];
+        identifierToImportLine.set(boundName, boundaryText);
+      }
+    }
+    return;
+  }
+
+  if (node.type === 'import_from_statement') {
+    const moduleNode = node.childForFieldName('module_name');
+    if (moduleNode === null) return;
+    const hasWildcard = Array.from({ length: node.childCount }, (_, i) => node.child(i)).some(c => c?.type === 'wildcard_import');
+    if (hasWildcard) {
+      wildcardImports.push(boundaryText);
+      return;
+    }
+
+    for (const nameNode of node.childrenForFieldName('name')) {
+      if (nameNode === null) continue;
+      if (nameNode.type === 'aliased_import') {
+        const aliasNode = nameNode.childForFieldName('alias');
+        if (aliasNode === null) continue;
+        identifierToImportLine.set(aliasNode.text, boundaryText);
+      } else {
+        identifierToImportLine.set(nameNode.text, boundaryText);
+      }
+    }
+    return;
+  }
+
+  // Don't cross into a nested function/class — an import there isn't module-level.
+  if (node.type === 'function_definition' || node.type === 'class_definition') return;
+
+  // Descend into compound statements (try/except, if/elif/else, with, etc.) to find
+  // imports guarded by them, still using the outer boundaryText for all of them.
+  for (const child of node.namedChildren) {
+    if (child !== null) collectFromStatement(child, boundaryText, identifierToImportLine, wildcardImports);
+  }
+}
+
 function collectImportedIdentifiers(source: string): CollectedImports {
   const tree = parsePython(source);
   const identifierToImportLine = new Map<string, string>();
@@ -170,46 +232,10 @@ function collectImportedIdentifiers(source: string): CollectedImports {
 
   for (const stmt of tree.rootNode.namedChildren) {
     if (stmt === null) continue;
-
-    if (stmt.type === 'import_statement') {
-      for (const nameNode of stmt.childrenForFieldName('name')) {
-        if (nameNode === null) continue;
-        if (nameNode.type === 'aliased_import') {
-          const aliasNode = nameNode.childForFieldName('alias');
-          if (aliasNode === null) continue;
-          // Store the statement's own exact text, not a hand-reconstructed string —
-          // this is correct by construction for any statement shape (multi-line,
-          // parenthesized, compound), and buildContextHeader() dedupes shared text.
-          identifierToImportLine.set(aliasNode.text, stmt.text);
-        } else {
-          // `import a.b.c` binds only `a` in the current namespace — code refers to
-          // it as `a.<anything>`, not the full dotted path, so the lookup key must
-          // be the first component (the reconstructed import text is still the
-          // statement's own full text, which naturally includes the full path).
-          const boundName = nameNode.text.split('.')[0];
-          identifierToImportLine.set(boundName, stmt.text);
-        }
-      }
-    } else if (stmt.type === 'import_from_statement') {
-      const moduleNode = stmt.childForFieldName('module_name');
-      if (moduleNode === null) continue;
-      const hasWildcard = Array.from({ length: stmt.childCount }, (_, i) => stmt.child(i)).some(c => c?.type === 'wildcard_import');
-      if (hasWildcard) {
-        wildcardImports.push(stmt.text);
-        continue;
-      }
-
-      for (const nameNode of stmt.childrenForFieldName('name')) {
-        if (nameNode === null) continue;
-        if (nameNode.type === 'aliased_import') {
-          const aliasNode = nameNode.childForFieldName('alias');
-          if (aliasNode === null) continue;
-          identifierToImportLine.set(aliasNode.text, stmt.text);
-        } else {
-          identifierToImportLine.set(nameNode.text, stmt.text);
-        }
-      }
-    }
+    if (stmt.type === 'function_definition' || stmt.type === 'class_definition') continue;
+    // stmt.text is the boundary for every import found within it — a bare import's own
+    // text, or the full text of whatever compound statement wraps a nested import.
+    collectFromStatement(stmt, stmt.text, identifierToImportLine, wildcardImports);
   }
 
   tree.delete();
