@@ -6,11 +6,21 @@ import type { ExtractedFunction } from '../types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
 import { parsePython } from './ast.ts';
 
-/** Matches a Python `def`/`async def` line, capturing its own indentation and name. */
-const DEF_PATTERN = /^(\s*)(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/;
-
 /** Matches a module-level tracer initialization statement like `tracer = trace.get_tracer("service-name")`. */
 const TRACER_INIT_PATTERN = /^tracer\s*=\s*trace\.get_tracer\s*\(/;
+
+/**
+ * Known OTel module prefixes. Only new imports matching one of these are ever
+ * spliced into the file from an instrumented function's output — matches the
+ * JavaScript provider's `OTEL_IMPORT_PREFIXES`/`isOtelImport()` convention.
+ * Without this restriction, any other module-level import the LLM added for
+ * its own unrelated reasons (or hallucinated) would get spliced in too.
+ */
+const OTEL_IMPORT_PREFIXES = ['opentelemetry'];
+
+function isOtelImport(importText: string): boolean {
+  return OTEL_IMPORT_PREFIXES.some(prefix => importText.includes(prefix));
+}
 
 /**
  * Extract a named function (including its full decorator range, however many
@@ -40,7 +50,11 @@ function getDecoratorTexts(boundary: Node): string[] {
  * plain, unindented function-only echo of it).
  */
 function normalizeDecoratorText(text: string): string {
-  return text.split('\n').map(line => line.trimStart()).join('\n');
+  const protectedRows = findMultilineStringProtectedRows(text);
+  return text
+    .split('\n')
+    .map((line, i) => (protectedRows.has(i) ? line : line.trimStart()))
+    .join('\n');
 }
 
 function extractFunctionFromInstrumentedCode(
@@ -281,6 +295,12 @@ export function reassemblePythonFunctions(
     const found = extractFunctionFromInstrumentedCode(result.instrumentedCode, fn.name);
     if (!found) continue;
 
+    // Parse the original function once (rather than re-deriving its decorators
+    // and indentation through two separate mechanisms) so both checks below
+    // are consistent with how the instrumented side is analyzed.
+    const originalFound = extractFunctionFromInstrumentedCode(fn.sourceText, fn.name);
+    if (!originalFound) continue;
+
     // If the LLM's returned function is missing any of the original's decorators —
     // not just "has no decorator at all", but a different set or a different order —
     // splicing it in could silently delete a runtime-affecting decorator (e.g. an
@@ -288,7 +308,7 @@ export function reassemblePythonFunctions(
     // @app.route survives). Treat any mismatch the same as a failed result for this
     // function — leave the original code unchanged — rather than ever destructively
     // dropping a decorator.
-    const originalDecorators = (extractFunctionFromInstrumentedCode(fn.sourceText, fn.name)?.decoratorTexts ?? []).map(normalizeDecoratorText);
+    const originalDecorators = originalFound.decoratorTexts.map(normalizeDecoratorText);
     const foundDecorators = found.decoratorTexts.map(normalizeDecoratorText);
     const decoratorsMatch = originalDecorators.length === foundDecorators.length
       && originalDecorators.every((d, idx) => d === foundDecorators[idx]);
@@ -296,14 +316,12 @@ export function reassemblePythonFunctions(
     // where the original had none at all, not just dropping or changing one.
     if (!decoratorsMatch) continue;
 
-    const originalDefLine = fn.sourceText.split('\n').find(line => DEF_PATTERN.test(line));
-    const originalDefIndent = originalDefLine ? (DEF_PATTERN.exec(originalDefLine)?.[1] ?? '') : '';
-    const reconciledText = reindent(found.text, found.baseIndent, originalDefIndent);
+    const reconciledText = reindent(found.text, found.baseIndent, originalFound.baseIndent);
 
     replacements.push({ startLine: fn.startLine, endLine: fn.endLine, newLines: reconciledText.split('\n') });
 
     for (const range of findModuleLevelImportRanges(result.instrumentedCode)) {
-      if (!originalImportLines.has(range.text) && !newImports.includes(range.text)) newImports.push(range.text);
+      if (isOtelImport(range.text) && !originalImportLines.has(range.text) && !newImports.includes(range.text)) newImports.push(range.text);
     }
     // A module needs at most one tracer init. Different functions instrumented in
     // the same pass may each generate their own (typically identical, but not

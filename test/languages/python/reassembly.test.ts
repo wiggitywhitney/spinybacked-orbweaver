@@ -674,4 +674,67 @@ describe('reassemblePythonFunctions', () => {
     ]);
     expect(reassembled).toBe(original);
   });
+
+  it('does not splice in an unrelated, non-OTel import the LLM added on its own', () => {
+    const original = [
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      'import requests',
+      '',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    expect(reassembled).toContain('from opentelemetry import trace');
+    expect(reassembled).not.toContain('import requests');
+  });
+
+  it('treats two decorators as different when they differ only in meaningful internal string whitespace', () => {
+    const original = [
+      'class Service:',
+      '    @app.route(',
+      '        """',
+      '            indented content',
+      '        """,',
+      '    )',
+      '    def method(self, req):',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original, { includeNonExported: true });
+    // Same decorator structure, but the string argument's own internal leading
+    // whitespace has been stripped — a real, meaningful change to the string's
+    // value, not incidental code-indentation noise. A naive per-line trimStart()
+    // would wrongly treat this as "the same decorator".
+    const instrumentedStrippedString = [
+      '@app.route(',
+      '    """',
+      'indented content',
+      '""",',
+      ')',
+      'def method(self, req):',
+      '    with tracer.start_as_current_span("method") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'method', instrumentedCode: instrumentedStrippedString }),
+    ]);
+    expect(reassembled).toBe(original);
+  });
 });

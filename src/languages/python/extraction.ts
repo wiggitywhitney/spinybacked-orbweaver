@@ -175,6 +175,15 @@ interface CollectedImports {
    * for a shared name wins at runtime.
    */
   importOrder: Map<string, number>;
+  /**
+   * `from __future__ import ...` directives. These bind no identifier a function
+   * body would reference by name, so they can't be matched via `referencedImports`
+   * the way named imports are — like wildcard imports, always included. Unlike
+   * wildcard imports, always placed first in `contextHeader`: `__future__` imports
+   * must be the first statement in a real module (other than the docstring), so
+   * presenting one anywhere else would show the LLM an invalid statement order.
+   */
+  futureImports: string[];
 }
 
 /** Append `boundaryText` to `identifier`'s context list, without duplicating an identical entry. */
@@ -266,17 +275,22 @@ function collectImportedIdentifiers(source: string): CollectedImports {
   const identifierToImportLine = new Map<string, string[]>();
   const importOrder = new Map<string, number>();
   const wildcardImports: string[] = [];
+  const futureImports: string[] = [];
 
   for (const stmt of tree.rootNode.namedChildren) {
     if (stmt === null) continue;
     if (stmt.type === 'function_definition' || stmt.type === 'class_definition') continue;
+    if (stmt.type === 'future_import_statement') {
+      futureImports.push(stmt.text);
+      continue;
+    }
     // stmt.text is the boundary for every import found within it — a bare import's own
     // text, or the full text of whatever compound statement wraps a nested import.
     collectFromStatement(stmt, stmt.text, stmt.startPosition.row, identifierToImportLine, wildcardImports, importOrder);
   }
 
   tree.delete();
-  return { identifierToImportLine, wildcardImports, importOrder };
+  return { identifierToImportLine, wildcardImports, importOrder, futureImports };
 }
 
 function findReferencedImports(bodyText: string, identifierToImportLine: Map<string, string[]>): string[] {
@@ -289,6 +303,7 @@ function buildContextHeader(
   identifierToImportLine: Map<string, string[]>,
   wildcardImports: string[],
   importOrder: Map<string, number>,
+  futureImports: string[],
 ): string {
   const namedImportLines = referencedImports.flatMap(name => identifierToImportLine.get(name) ?? []);
   const importLines = [...new Set([...wildcardImports, ...namedImportLines])];
@@ -296,9 +311,13 @@ function buildContextHeader(
   // Python name binding follows execution order, so this ordering can matter for
   // which import's binding actually wins for a name shared between two imports.
   importLines.sort((a, b) => (importOrder.get(a) ?? 0) - (importOrder.get(b) ?? 0));
+  // __future__ imports must be first in a real module — placed ahead of everything
+  // else here rather than sorted by importOrder, which would put them at row 0
+  // anyway in a valid file, but this doesn't depend on that invariant holding.
+  const allImportLines = [...new Set(futureImports)].concat(importLines);
   const sections: string[] = [];
-  if (importLines.length > 0) {
-    sections.push(...importLines, '');
+  if (allImportLines.length > 0) {
+    sections.push(...allImportLines, '');
   }
   sections.push(sourceText);
   return sections.join('\n');
@@ -317,7 +336,7 @@ function buildContextHeader(
 export function extractPythonFunctions(source: string, options?: ExtractPythonFunctionsOptions): ExtractedFunction[] {
   const includeNonExported = options?.includeNonExported ?? false;
   const tree = parsePython(source);
-  const { identifierToImportLine, wildcardImports, importOrder } = collectImportedIdentifiers(source);
+  const { identifierToImportLine, wildcardImports, importOrder, futureImports } = collectImportedIdentifiers(source);
   const lines = source.split('\n');
 
   const results: ExtractedFunction[] = [];
@@ -338,7 +357,7 @@ export function extractPythonFunctions(source: string, options?: ExtractPythonFu
       sourceText,
       docComment: fn.docComment,
       referencedImports,
-      contextHeader: buildContextHeader(sourceText, referencedImports, identifierToImportLine, wildcardImports, importOrder),
+      contextHeader: buildContextHeader(sourceText, referencedImports, identifierToImportLine, wildcardImports, importOrder, futureImports),
       startLine: fn.startLine,
       endLine: fn.endLine,
     });

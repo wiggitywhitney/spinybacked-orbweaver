@@ -328,4 +328,21 @@ describe('extractPythonFunctions', () => {
     expect(extracted[0].contextHeader).toContain('import json');
     expect(extracted[0].contextHeader).toContain('import ujson as json');
   });
+
+  it('includes a from __future__ import in contextHeader, placed before ordinary imports', () => {
+    const source = [
+      'from __future__ import annotations',
+      'import os',
+      '',
+      'def handler(req):',
+      '    x = os.getcwd()',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    const header = extracted[0].contextHeader;
+    expect(header).toContain('from __future__ import annotations');
+    expect(header.indexOf('from __future__ import annotations')).toBeLessThan(header.indexOf('import os'));
+  });
 });
