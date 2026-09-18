@@ -26,7 +26,7 @@ const WASM_PATH = join(PACKAGE_ROOT, 'resources/tree-sitter-python.wasm');
 // WASM parser satisfy the LanguageProvider interface's synchronous AST method contract.
 await Parser.init();
 const PythonLanguage = await Language.load(WASM_PATH);
-const parser = new Parser();
+export const parser = new Parser();
 parser.setLanguage(PythonLanguage);
 
 const SPAN_CREATION_METHODS = new Set(['start_as_current_span', 'start_span']);
@@ -44,7 +44,7 @@ function toLine(node: Node): number {
 }
 
 /** `parser.parse()` only returns `null` when parsing is aborted (e.g. a timeout); spiny-orb sets neither. */
-function parsePython(source: string) {
+export function parsePython(source: string) {
   const tree = parser.parse(source);
   if (tree === null) throw new Error('tree-sitter-python failed to parse source (parse() returned null)');
   return tree;

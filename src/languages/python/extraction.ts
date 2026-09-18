@@ -1,21 +1,9 @@
 // ABOUTME: Extracts Python functions for per-function instrumentation (the fix loop's fallback path).
 // ABOUTME: Uses tree-sitter-python for structural analysis; identifies referenced imports for context building.
 
-import { Parser, Language, type Node } from 'web-tree-sitter';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import type { Node } from 'web-tree-sitter';
 import type { ExtractedFunction } from '../types.ts';
-import { findPythonImports } from './ast.ts';
-
-const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../');
-const WASM_PATH = join(PACKAGE_ROOT, 'resources/tree-sitter-python.wasm');
-
-// See ast.ts D-D1-2: top-level await lets this inherently-async WASM init
-// satisfy synchronous exported functions, guaranteed by ESM module init order.
-await Parser.init();
-const PythonLanguage = await Language.load(WASM_PATH);
-const parser = new Parser();
-parser.setLanguage(PythonLanguage);
+import { findPythonImports, parsePython } from './ast.ts';
 
 /** Minimum number of body statements for a function to be worth instrumenting. */
 const MIN_STATEMENTS = 3;
@@ -42,13 +30,6 @@ interface CollectedFunction {
 
 function toLine(node: Node): number {
   return node.startPosition.row + 1;
-}
-
-/** `parser.parse()` only returns `null` when parsing is aborted; spiny-orb never sets that. */
-function parsePython(source: string) {
-  const tree = parser.parse(source);
-  if (tree === null) throw new Error('tree-sitter-python failed to parse source (parse() returned null)');
-  return tree;
 }
 
 function isAsyncFunctionDefinition(fnNode: Node): boolean {
