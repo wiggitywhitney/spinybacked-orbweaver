@@ -453,4 +453,44 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(1);
     expect(extracted[0].name).toBe('handler');
   });
+
+  it('dedents contextHeader for a class method, while sourceText keeps its real indentation', () => {
+    const source = [
+      'class Service:',
+      '    def method(self, req):',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source, { includeNonExported: true });
+    // sourceText must retain real indentation — reassembly splices it back at the
+    // original column via reindent()'s startsWith(fromIndent) match, and dedenting
+    // it here would break that.
+    expect(extracted[0].sourceText.startsWith('    def method')).toBe(true);
+    // contextHeader is a standalone snippet handed to the LLM — presenting it with
+    // leading indentation (as if it were nested inside an invisible class) is not
+    // valid standalone Python and could confuse the model about the real structure.
+    const header = extracted[0].contextHeader;
+    const defLine = header.split('\n').find(l => l.includes('def method'));
+    expect(defLine).toBe('def method(self, req):');
+  });
+
+  it('resolves a referenced identifier ending in a non-ASCII Unicode letter', () => {
+    const source = [
+      'from myapp.config import café',
+      '',
+      'def handler(req):',
+      '    x = café',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    // JS regex \b is ASCII-only ("word" = [A-Za-z0-9_]) — "é" doesn't count as a
+    // word character to \b, so a plain \bcafé\b can fail to recognize the boundary
+    // right after "é", even though "café" is a single valid Python identifier.
+    expect(extracted[0].referencedImports).toContain('café');
+    expect(extracted[0].contextHeader).toContain('from myapp.config import café');
+  });
 });

@@ -98,12 +98,22 @@ export function findPythonFunctions(source: string): FunctionInfo[] {
       return;
     }
 
-    if (node.type === 'class_definition' && !insideClass) {
+    if (node.type === 'class_definition') {
+      if (insideClass) return; // Nested class — don't recurse into its methods.
       const body = node.childForFieldName('body');
       if (body === null) return;
       for (const child of body.namedChildren) {
         if (child !== null) collect(child, true);
       }
+      return;
+    }
+
+    // Descend into compound statements (if/elif/else, try/except, while, for, with)
+    // to find a function or method defined conditionally, e.g. `if PY3: def f(): ...`
+    // — a real Python idiom that would otherwise be invisible to discovery, since
+    // only function_definition/class_definition are otherwise recognized here.
+    for (const child of node.namedChildren) {
+      if (child !== null) collect(child, insideClass);
     }
   }
 
@@ -207,6 +217,11 @@ export function findPythonImports(source: string): ImportInfo[] {
       collectImportFromStatement(node, imports);
       return;
     }
+    if (node.type === 'future_import_statement') {
+      const importedNames = node.childrenForFieldName('name').filter((n): n is Node => n !== null).map(n => n.text);
+      imports.push({ moduleSpecifier: '__future__', importedNames, alias: undefined, lineNumber: toLine(node) });
+      return;
+    }
     for (const child of node.namedChildren) {
       if (child !== null) walk(child);
     }
@@ -232,25 +247,34 @@ export function findPythonExports(source: string): ExportInfo[] {
   const tree = parsePython(source);
   const exports: ExportInfo[] = [];
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt === null) continue;
-
-    let node = stmt;
-    let boundaryNode = stmt;
+  function collect(stmtNode: Node): void {
+    let node = stmtNode;
+    let boundaryNode = stmtNode;
     if (node.type === 'decorated_definition') {
       const inner = node.childForFieldName('definition');
-      if (inner === null) continue;
-      boundaryNode = stmt;
+      if (inner === null) return;
+      boundaryNode = stmtNode;
       node = inner;
     }
 
     if (node.type === 'function_definition' || node.type === 'class_definition') {
       const nameNode = node.childForFieldName('name');
-      if (nameNode === null) continue;
+      if (nameNode === null) return;
       if (!nameNode.text.startsWith('_')) {
         exports.push({ name: nameNode.text, lineNumber: toLine(boundaryNode), isDefault: false });
       }
+      return; // Don't descend into the definition's own body — only module-level names are exports.
     }
+
+    // Descend into compound statements (if/elif/else, try/except, while, for, with)
+    // to find a definition made conditionally, e.g. `if PY3: def f(): ...`.
+    for (const child of node.namedChildren) {
+      if (child !== null) collect(child);
+    }
+  }
+
+  for (const stmt of tree.rootNode.namedChildren) {
+    if (stmt !== null) collect(stmt);
   }
 
   tree.delete();

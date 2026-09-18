@@ -78,6 +78,13 @@ describe('findPythonFunctions', () => {
     const functions = findPythonFunctions(source);
     expect(functions[0]).toMatchObject({ startLine: 1, endLine: 4, lineCount: 4 });
   });
+
+  it('finds a module-level function defined conditionally inside an if block', () => {
+    const source = ['if PY3:', '    def handler():', '        pass', ''].join('\n');
+    const functions = findPythonFunctions(source);
+    expect(functions).toHaveLength(1);
+    expect(functions[0]?.name).toBe('handler');
+  });
 });
 
 describe('findPythonImports', () => {
@@ -159,6 +166,12 @@ describe('findPythonImports', () => {
     expect(imports[0]).toMatchObject({ moduleSpecifier: 'ujson', alias: 'json' });
     expect(imports[1]).toMatchObject({ moduleSpecifier: 'json', alias: undefined });
   });
+
+  it('finds a from __future__ import', () => {
+    const imports = findPythonImports('from __future__ import annotations\n');
+    expect(imports).toHaveLength(1);
+    expect(imports[0]).toMatchObject({ moduleSpecifier: '__future__', importedNames: ['annotations'] });
+  });
 });
 
 describe('findPythonExports', () => {
@@ -174,6 +187,13 @@ describe('findPythonExports', () => {
     const exports = findPythonExports(source);
     expect(exports).toHaveLength(1);
     expect(exports[0]).toMatchObject({ name: 'Public', isDefault: false });
+  });
+
+  it('reports a module-level function defined conditionally inside an if block', () => {
+    const source = ['if PY3:', '    def handler():', '        pass', ''].join('\n');
+    const exports = findPythonExports(source);
+    expect(exports).toHaveLength(1);
+    expect(exports[0]).toMatchObject({ name: 'handler', isDefault: false });
   });
 });
 

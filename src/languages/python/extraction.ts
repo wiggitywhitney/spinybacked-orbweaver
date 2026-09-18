@@ -352,8 +352,64 @@ function collectImportedIdentifiers(source: string): CollectedImports {
   return { identifierToImportLine, wildcardImports, importOrder, futureImports };
 }
 
+/**
+ * Matches `name` at an identifier boundary, using Unicode-aware lookarounds
+ * instead of `\b` — JS regex's `\b` treats "word" as ASCII-only ([A-Za-z0-9_]),
+ * so a name ending in a non-ASCII letter (e.g. Python's valid `café` identifier)
+ * can fail to match correctly right after that letter.
+ */
+function identifierBoundaryPattern(name: string): RegExp {
+  return new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(name)}(?![\\p{L}\\p{N}_])`, 'u');
+}
+
 function findReferencedImports(bodyText: string, identifierToImportLine: Map<string, string[]>): string[] {
-  return [...identifierToImportLine.keys()].filter(name => new RegExp(`\\b${escapeRegex(name)}\\b`).test(bodyText));
+  return [...identifierToImportLine.keys()].filter(name => identifierBoundaryPattern(name).test(bodyText));
+}
+
+/**
+ * Row indices (0-indexed, relative to `text`) inside a multi-line string literal,
+ * excluding its own opening line — mirrors `reassembly.ts`'s identically-named
+ * helper (kept separate since extraction and reassembly are independent modules,
+ * both already depending only on `ast.ts`).
+ */
+function findMultilineStringProtectedRows(text: string): Set<number> {
+  const tree = parsePython(text);
+  const protectedRows = new Set<number>();
+
+  function walk(node: Node): void {
+    if (node.type === 'string' && node.startPosition.row !== node.endPosition.row) {
+      for (let row = node.startPosition.row + 1; row <= node.endPosition.row; row++) {
+        protectedRows.add(row);
+      }
+    }
+    for (const child of node.namedChildren) {
+      if (child !== null) walk(child);
+    }
+  }
+
+  walk(tree.rootNode);
+  tree.delete();
+  return protectedRows;
+}
+
+/**
+ * Dedent a function's source text for presentation in `contextHeader` only —
+ * `sourceText` itself must keep its real indentation for reassembly to splice it
+ * back in at the correct column. A class method's or conditionally-defined
+ * function's `sourceText` retains whatever indentation it had in the original
+ * file (e.g. 4 spaces inside a class); handed to the LLM as-is, that's not valid
+ * standalone Python and could confuse the model about the function's real
+ * structure. Never dedents a line inside a multi-line string literal (other than
+ * its own opening line) — that's meaningful content, not code indentation.
+ */
+function dedentForContext(text: string): string {
+  const lines = text.split('\n');
+  const baseIndent = /^\s*/.exec(lines[0] ?? '')?.[0] ?? '';
+  if (baseIndent === '') return text;
+  const protectedRows = findMultilineStringProtectedRows(text);
+  return lines
+    .map((line, i) => (protectedRows.has(i) || !line.startsWith(baseIndent) ? line : line.slice(baseIndent.length)))
+    .join('\n');
 }
 
 /**
@@ -371,7 +427,7 @@ function expandImportClosure(selected: string[], identifierToImportLine: Map<str
     changed = false;
     for (const text of [...result]) {
       for (const [identifier, contexts] of identifierToImportLine) {
-        if (!new RegExp(`\\b${escapeRegex(identifier)}\\b`).test(text)) continue;
+        if (!identifierBoundaryPattern(identifier).test(text)) continue;
         for (const ctx of contexts) {
           if (!result.has(ctx)) {
             result.add(ctx);
@@ -444,7 +500,7 @@ export function extractPythonFunctions(source: string, options?: ExtractPythonFu
       sourceText,
       docComment: fn.docComment,
       referencedImports,
-      contextHeader: buildContextHeader(sourceText, referencedImports, identifierToImportLine, wildcardImports, importOrder, futureImports),
+      contextHeader: buildContextHeader(dedentForContext(sourceText), referencedImports, identifierToImportLine, wildcardImports, importOrder, futureImports),
       startLine: fn.startLine,
       endLine: fn.endLine,
     });
