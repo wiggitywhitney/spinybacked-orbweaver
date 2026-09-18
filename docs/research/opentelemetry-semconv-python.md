@@ -17,7 +17,7 @@
 
 ### Summary
 
-`opentelemetry-semantic-conventions` for Python is packaged as `Production/Stable` (Development Status classifier) but is still versioned as a beta release (`0.65b0` as of 2026-07-16, paired with `opentelemetry-api` 1.44.0) — it has **not reached GA/1.0**. The import path spiny-orb's PRD assumed (`from opentelemetry.semconv.trace import SpanAttributes`) is **deprecated since v1.25.0**. The current pattern splits by stability: stable attributes live under `opentelemetry.semconv.attributes.<namespace>_attributes` (no version qualifier needed in the import path itself), and incubating/experimental attributes live under the underscore-prefixed `opentelemetry.semconv._incubating.attributes.<namespace>_attributes` (explicitly marked internal/unstable by Python convention). All four attributes spiny-orb's checkers care about — HTTP method, HTTP status code, URL path, DB system — have reached the **stable** module. Downstream instrumentation packages pin the package with an exact `==` version (not a compatible-release range) — a data point suggesting real-world breaking changes between betas, though not confirmed as a project-wide rule (see Finding 5 below) — so spiny-orb's prompt should default to **raw attribute key strings**, per the PRD's own fallback rule for a still-beta package.
+`opentelemetry-semantic-conventions` for Python is packaged as `Production/Stable` (Development Status classifier) but is still versioned as a beta release (`0.65b0` as of 2026-07-16, paired with `opentelemetry-api` 1.44.0) — it has **not reached GA/1.0**. The import path spiny-orb's PRD assumed (`from opentelemetry.semconv.trace import SpanAttributes`) is **deprecated since v1.25.0**. The current pattern splits by stability: stable attributes live under `opentelemetry.semconv.attributes.<namespace>_attributes` (no version qualifier needed in the import path itself), and incubating/experimental attributes live under the underscore-prefixed `opentelemetry.semconv._incubating.attributes.<namespace>_attributes` (explicitly marked internal/unstable by Python convention). All four attributes spiny-orb's checkers care about — HTTP method, HTTP status code, URL path, DB system — have reached the **stable** module. At least one identified downstream package (`dapr-agents`) pins it with an exact `==` version (not a compatible-release range) — a data point suggesting real-world breaking changes between betas, though not confirmed as a general pattern across downstream packages (see Finding 5 below) — so spiny-orb's prompt should default to **raw attribute key strings**, per the PRD's own fallback rule for a still-beta package.
 
 ### Surprises & Gotchas
 
@@ -46,11 +46,12 @@ No published GA/1.0 timeline was found in this research pass; none of the fetche
 **Interpretation:** `from opentelemetry.semconv.trace import SpanAttributes; SpanAttributes.HTTP_METHOD` (the pattern named in PRD #373's Big Picture Context section) is the deprecated legacy form. The current pattern imports a namespace module and reads its constant:
 
 ```python
-from opentelemetry.semconv.attributes import http_attributes, url_attributes, server_attributes
+from opentelemetry.semconv.attributes import http_attributes, url_attributes, db_attributes
 
 span.set_attribute(http_attributes.HTTP_REQUEST_METHOD, method)   # "http.request.method"
 span.set_attribute(http_attributes.HTTP_RESPONSE_STATUS_CODE, code)  # "http.response.status_code"
 span.set_attribute(url_attributes.URL_PATH, path)                 # "url.path"
+span.set_attribute(db_attributes.DB_SYSTEM_NAME, "postgresql")     # "db.system.name"
 ```
 
 **3. Stable vs. incubating split — mirrors the JS package's shape:**
