@@ -568,4 +568,29 @@ describe('extractPythonFunctions', () => {
     expect(handler?.contextHeader).toContain('import ujson as json');
     expect(handler?.contextHeader).not.toContain('do_something_expensive_and_long');
   });
+
+  it('preserves tab indentation on the pass placeholder that replaces a pruned nested definition', () => {
+    const source = [
+      'try:',
+      '\timport ujson as json',
+      '\tdef unrelated_helper():',
+      '\t\treturn 42',
+      'except ImportError:',
+      '\timport json',
+      '',
+      'def handler(req):',
+      '    x = json.dumps({})',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source, { includeNonExported: true });
+    const handler = extracted.find(fn => fn.name === 'handler');
+    // Reconstructing the placeholder's indentation from the column count (as N
+    // spaces) rather than slicing the real leading whitespace would silently
+    // convert this file's tabs to spaces, mixing indentation styles in a
+    // presented snippet.
+    expect(handler?.contextHeader).toContain('\tpass');
+    expect(handler?.contextHeader).not.toContain('    pass');
+  });
 });

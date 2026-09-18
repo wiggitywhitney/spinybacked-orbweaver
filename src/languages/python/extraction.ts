@@ -374,7 +374,13 @@ function pruneNestedDefinitions(node: Node): string {
 
   function walk(n: Node): void {
     if (n.type === 'function_definition' || n.type === 'class_definition' || n.type === 'decorated_definition') {
-      replacements.push({ startRow: n.startPosition.row, endRow: n.endPosition.row, indent: ' '.repeat(n.startPosition.column) });
+      // Slice the real leading characters from the definition's own line rather than
+      // reconstructing N spaces from its column — a tab-indented file would otherwise
+      // get its indentation silently rewritten as spaces (same class of bug fixed
+      // earlier in reassembly.ts's baseIndent computation).
+      const sourceLine = lines[n.startPosition.row - baseRow];
+      const indent = sourceLine?.slice(0, n.startPosition.column) ?? '';
+      replacements.push({ startRow: n.startPosition.row, endRow: n.endPosition.row, indent });
       return; // Don't descend into a definition already scheduled for replacement.
     }
     for (const child of n.namedChildren) {
