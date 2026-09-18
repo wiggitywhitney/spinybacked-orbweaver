@@ -92,16 +92,47 @@ const COMPOUND_STATEMENT_TYPES = new Set([
 ]);
 
 /**
- * Count "real" statements in a function body for the triviality check, descending
- * into compound statements (if/while/for/with/try and their clauses) rather than
- * counting only `bodyNode`'s direct children — a function whose actual logic sits
- * inside an `if` block (a common early-return-guard shape) would otherwise be
- * undercounted as trivial. Only a compound statement's own block/clause children
- * are descended into (never its condition, iterable, context manager, or caught
- * exception type expression), and a nested function/class/decorated-definition/
- * lambda counts as a single statement without descending into it.
+ * Count real statements inside a compound statement's own children (its `block`
+ * child, and any clause children such as `elif_clause`/`else_clause`/`except_clause`/
+ * `finally_clause`/`case_clause`) — never its condition, iterable, context manager,
+ * or caught-exception-type expression, since those aren't statements.
+ *
+ * Kept as a distinct function from `countStatementsInBlock()` rather than reusing
+ * it directly on a compound-type node: a compound statement's own children are NOT
+ * a plain sequence of statements (they're a fixed shape — condition, body block,
+ * optional clauses) the way a `block` node's children are. A clause node
+ * (`elif_clause`/`finally_clause`/etc.) has the same "not a plain statement
+ * sequence" shape as its parent compound statement, so it must also be dispatched
+ * through this function, never through `countStatementsInBlock()` — a clause like
+ * `finally_clause` has no condition to visibly miscount, so passing it to the
+ * wrong function silently collapses its entire real body down to a single
+ * unit instead of throwing.
  */
-function countStatements(blockNode: Node): number {
+function countStatementsInCompound(node: Node): number {
+  let count = 0;
+  for (const child of node.namedChildren) {
+    if (child === null) continue;
+    if (child.type === 'block') {
+      count += countStatementsInBlock(child);
+    } else if (COMPOUND_STATEMENT_TYPES.has(child.type)) {
+      count += countStatementsInCompound(child);
+    }
+    // Anything else (condition, iterable, context manager, exception type, case
+    // pattern) is not a statement — intentionally not counted.
+  }
+  return count;
+}
+
+/**
+ * Count "real" statements in a function body (or any other `block` node) for the
+ * triviality check, descending into compound statements (if/while/for/with/try and
+ * their clauses) rather than counting only the block's direct children — a
+ * function whose actual logic sits inside an `if` block (a common early-return-
+ * guard shape) would otherwise be undercounted as trivial. A nested function/
+ * class/decorated-definition/lambda counts as a single statement without
+ * descending into it.
+ */
+function countStatementsInBlock(blockNode: Node): number {
   let count = 0;
   for (const stmt of blockNode.namedChildren) {
     if (stmt === null) continue;
@@ -111,11 +142,7 @@ function countStatements(blockNode: Node): number {
       continue;
     }
     if (COMPOUND_STATEMENT_TYPES.has(stmt.type)) {
-      for (const child of stmt.namedChildren) {
-        if (child !== null && (child.type === 'block' || COMPOUND_STATEMENT_TYPES.has(child.type))) {
-          count += countStatements(child);
-        }
-      }
+      count += countStatementsInCompound(stmt);
       continue;
     }
     count += 1;
@@ -149,7 +176,7 @@ function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFuncti
         isExported: !name.startsWith('_'),
         startLine: toLine(boundaryNode),
         endLine: node.endPosition.row + 1,
-        statementCount: countStatements(bodyNode),
+        statementCount: countStatementsInBlock(bodyNode),
         docComment: getDocstring(bodyNode),
         hasOTelSpanCall: hasOTelSpanCall(bodyNode),
       });
@@ -330,6 +357,43 @@ function collectFromStatement(
   }
 }
 
+/**
+ * Replace any nested function/class definition inside a guard block's text with a
+ * `pass` placeholder at the same indentation, before that text is used as an
+ * import's context. A conditionally-defined function/class sitting alongside a
+ * guarded import (e.g. `try: import ujson as json \n    def helper(): ...`) is
+ * already extracted separately with its own dedicated `contextHeader` — without
+ * this, its entire body would also be duplicated inside every unrelated
+ * function's isolated context that merely references the guard's import,
+ * wasting tokens and risking confusing the LLM about what it's meant to touch.
+ */
+function pruneNestedDefinitions(node: Node): string {
+  const lines = node.text.split('\n');
+  const baseRow = node.startPosition.row;
+  const replacements: Array<{ startRow: number; endRow: number; indent: string }> = [];
+
+  function walk(n: Node): void {
+    if (n.type === 'function_definition' || n.type === 'class_definition' || n.type === 'decorated_definition') {
+      replacements.push({ startRow: n.startPosition.row, endRow: n.endPosition.row, indent: ' '.repeat(n.startPosition.column) });
+      return; // Don't descend into a definition already scheduled for replacement.
+    }
+    for (const child of n.namedChildren) {
+      if (child !== null) walk(child);
+    }
+  }
+  walk(node);
+
+  if (replacements.length === 0) return node.text;
+
+  replacements.sort((a, b) => b.startRow - a.startRow);
+  for (const r of replacements) {
+    const start = r.startRow - baseRow;
+    const end = r.endRow - baseRow;
+    lines.splice(start, end - start + 1, `${r.indent}pass`);
+  }
+  return lines.join('\n');
+}
+
 function collectImportedIdentifiers(source: string): CollectedImports {
   const tree = parsePython(source);
   const identifierToImportLine = new Map<string, string[]>();
@@ -344,9 +408,14 @@ function collectImportedIdentifiers(source: string): CollectedImports {
       futureImports.push(stmt.text);
       continue;
     }
-    // stmt.text is the boundary for every import found within it — a bare import's own
-    // text, or the full text of whatever compound statement wraps a nested import.
-    collectFromStatement(stmt, stmt.text, stmt.startPosition.row, identifierToImportLine, wildcardImports, importOrder);
+    // The boundary text for every import found within `stmt`: a bare import's own
+    // text as-is, or — for a compound statement wrapping a nested import — its
+    // text with any nested function/class definition pruned out (see
+    // pruneNestedDefinitions()), since that definition is already extracted and
+    // presented separately with its own contextHeader.
+    const isBareImport = stmt.type === 'import_statement' || stmt.type === 'import_from_statement';
+    const boundaryText = isBareImport ? stmt.text : pruneNestedDefinitions(stmt);
+    collectFromStatement(stmt, boundaryText, stmt.startPosition.row, identifierToImportLine, wildcardImports, importOrder);
   }
 
   tree.delete();

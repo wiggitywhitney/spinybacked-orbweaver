@@ -510,4 +510,62 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(1);
     expect(extracted[0].name).toBe('handler');
   });
+
+  it('does not skip a function as trivial when its real logic is nested inside a finally block', () => {
+    const source = [
+      'def handler(req):',
+      '    try:',
+      '        pass',
+      '    finally:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0].name).toBe('handler');
+  });
+
+  it('does not skip a function as trivial when its real logic is nested inside an elif branch', () => {
+    const source = [
+      'def handler(req):',
+      '    if req.trivial:',
+      '        pass',
+      '    elif req.debug:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+      '    return None',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0].name).toBe('handler');
+  });
+
+  it('does not embed a conditionally-defined function\'s entire body inside another function\'s contextHeader via a shared guard block', () => {
+    const source = [
+      'try:',
+      '    import ujson as json',
+      '    def unrelated_helper():',
+      '        do_something_expensive_and_long()',
+      '        return 42',
+      'except ImportError:',
+      '    import json',
+      '',
+      'def handler(req):',
+      '    x = json.dumps({})',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source, { includeNonExported: true });
+    const handler = extracted.find(fn => fn.name === 'handler');
+    // The guard's import must still be present, but the unrelated function's body
+    // (already extracted separately with its own contextHeader) must not be
+    // duplicated inside handler's isolated context.
+    expect(handler?.contextHeader).toContain('import ujson as json');
+    expect(handler?.contextHeader).not.toContain('do_something_expensive_and_long');
+  });
 });
