@@ -354,7 +354,7 @@ function collectImportedIdentifiers(source: string): CollectedImports {
 
 /**
  * Matches `name` at an identifier boundary, using Unicode-aware lookarounds
- * instead of `\b` — JS regex's `\b` treats "word" as ASCII-only ([A-Za-z0-9_]),
+ * instead of `\b` — JS regex's `\b` treats "word" as ASCII characters only ([A-Za-z0-9_]),
  * so a name ending in a non-ASCII letter (e.g. Python's valid `café` identifier)
  * can fail to match correctly right after that letter.
  */

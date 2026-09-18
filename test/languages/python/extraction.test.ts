@@ -487,8 +487,8 @@ describe('extractPythonFunctions', () => {
       '',
     ].join('\n');
     const extracted = extractPythonFunctions(source);
-    // JS regex \b is ASCII-only ("word" = [A-Za-z0-9_]) — "é" doesn't count as a
-    // word character to \b, so a plain \bcafé\b can fail to recognize the boundary
+    // JS regex \b treats "word" as ASCII characters only ([A-Za-z0-9_]) — "é" doesn't
+    // count as a word character to \b, so a plain \bcafé\b can fail to recognize the boundary
     // right after "é", even though "café" is a single valid Python identifier.
     expect(extracted[0].referencedImports).toContain('café');
     expect(extracted[0].contextHeader).toContain('from myapp.config import café');
