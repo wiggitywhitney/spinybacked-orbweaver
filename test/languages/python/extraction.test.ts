@@ -406,4 +406,33 @@ describe('extractPythonFunctions', () => {
     expect(handler?.contextHeader).not.toContain('@some_decorator');
     expect(handler?.contextHeader).not.toContain('other_function');
   });
+
+  it('finds a module-level function defined conditionally inside an if block', () => {
+    const source = [
+      'if PY3:',
+      '    def handler(req):',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0].name).toBe('handler');
+  });
+
+  it('finds a class method defined conditionally inside an if block within the class body', () => {
+    const source = [
+      'class Service:',
+      '    if PY3:',
+      '        def method(self, req):',
+      '            x = 1',
+      '            y = 2',
+      '            return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source, { includeNonExported: true });
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0].name).toBe('method');
+  });
 });

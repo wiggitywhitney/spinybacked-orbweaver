@@ -117,12 +117,23 @@ function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFuncti
       return;
     }
 
-    if (node.type === 'class_definition' && !insideClass) {
+    if (node.type === 'class_definition') {
+      if (insideClass) return; // Nested class — don't recurse into its methods (unchanged, tested behavior).
       const body = node.childForFieldName('body');
       if (body === null) return;
       for (const child of body.namedChildren) {
         if (child !== null) collect(child, true);
       }
+      return;
+    }
+
+    // Descend into compound statements (if/elif/else, try/except, while, for, with)
+    // to find a function or method that's defined conditionally — a real Python
+    // idiom (e.g. `if PY3: def handler(): ...`) that would otherwise be silently
+    // invisible to extraction, since only function_definition/class_definition are
+    // otherwise recognized as containing a definition.
+    for (const child of node.namedChildren) {
+      if (child !== null) collect(child, insideClass);
     }
   }
 
