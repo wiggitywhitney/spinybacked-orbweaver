@@ -435,4 +435,22 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(1);
     expect(extracted[0].name).toBe('method');
   });
+
+  it('does not skip a function as trivial when its real logic is nested inside an if block', () => {
+    const source = [
+      'def handler(req):',
+      '    if req.debug:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+      '    return None',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    // bodyNode.namedChildCount alone is 2 (the if_statement, the trailing return) —
+    // undercounting the 3 real statements nested inside the if block would wrongly
+    // classify this as trivial.
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0].name).toBe('handler');
+  });
 });

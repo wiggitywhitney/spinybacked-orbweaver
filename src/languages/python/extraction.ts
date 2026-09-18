@@ -84,6 +84,44 @@ function hasOTelSpanCall(bodyNode: Node): boolean {
   return walk(bodyNode, true);
 }
 
+/** Compound-statement types whose block/clause children (not condition/iterable/etc.) hold real statements. */
+const COMPOUND_STATEMENT_TYPES = new Set([
+  'if_statement', 'while_statement', 'for_statement', 'with_statement', 'try_statement',
+  'elif_clause', 'else_clause', 'except_clause', 'finally_clause',
+]);
+
+/**
+ * Count "real" statements in a function body for the triviality check, descending
+ * into compound statements (if/while/for/with/try and their clauses) rather than
+ * counting only `bodyNode`'s direct children — a function whose actual logic sits
+ * inside an `if` block (a common early-return-guard shape) would otherwise be
+ * undercounted as trivial. Only a compound statement's own block/clause children
+ * are descended into (never its condition, iterable, context manager, or caught
+ * exception type expression), and a nested function/class/decorated-definition/
+ * lambda counts as a single statement without descending into it.
+ */
+function countStatements(blockNode: Node): number {
+  let count = 0;
+  for (const stmt of blockNode.namedChildren) {
+    if (stmt === null) continue;
+    if (stmt.type === 'function_definition' || stmt.type === 'class_definition'
+      || stmt.type === 'decorated_definition' || stmt.type === 'lambda') {
+      count += 1;
+      continue;
+    }
+    if (COMPOUND_STATEMENT_TYPES.has(stmt.type)) {
+      for (const child of stmt.namedChildren) {
+        if (child !== null && (child.type === 'block' || COMPOUND_STATEMENT_TYPES.has(child.type))) {
+          count += countStatements(child);
+        }
+      }
+      continue;
+    }
+    count += 1;
+  }
+  return count;
+}
+
 function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFunction[] {
   const functions: CollectedFunction[] = [];
 
@@ -110,7 +148,7 @@ function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFuncti
         isExported: !name.startsWith('_'),
         startLine: toLine(boundaryNode),
         endLine: node.endPosition.row + 1,
-        statementCount: bodyNode.namedChildCount,
+        statementCount: countStatements(bodyNode),
         docComment: getDocstring(bodyNode),
         hasOTelSpanCall: hasOTelSpanCall(bodyNode),
       });
