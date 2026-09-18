@@ -400,11 +400,12 @@ describe('extractPythonFunctions', () => {
     ].join('\n');
     const extracted = extractPythonFunctions(source, { includeNonExported: true });
     const handler = extracted.find(fn => fn.name === 'handler');
+    expect(handler).toBeDefined();
     // "json" here is only local to other_function() — handler() referencing the
     // same bare name must not pull in other_function's entire decorated body
     // as if it were a legitimate module-level guarded import context.
-    expect(handler?.contextHeader).not.toContain('@some_decorator');
-    expect(handler?.contextHeader).not.toContain('other_function');
+    expect(handler!.contextHeader).not.toContain('@some_decorator');
+    expect(handler!.contextHeader).not.toContain('other_function');
   });
 
   it('finds a module-level function defined conditionally inside an if block', () => {
@@ -562,11 +563,12 @@ describe('extractPythonFunctions', () => {
     ].join('\n');
     const extracted = extractPythonFunctions(source, { includeNonExported: true });
     const handler = extracted.find(fn => fn.name === 'handler');
+    expect(handler).toBeDefined();
     // The guard's import must still be present, but the unrelated function's body
     // (already extracted separately with its own contextHeader) must not be
     // duplicated inside handler's isolated context.
-    expect(handler?.contextHeader).toContain('import ujson as json');
-    expect(handler?.contextHeader).not.toContain('do_something_expensive_and_long');
+    expect(handler!.contextHeader).toContain('import ujson as json');
+    expect(handler!.contextHeader).not.toContain('do_something_expensive_and_long');
   });
 
   it('preserves tab indentation on the pass placeholder that replaces a pruned nested definition', () => {
@@ -586,11 +588,12 @@ describe('extractPythonFunctions', () => {
     ].join('\n');
     const extracted = extractPythonFunctions(source, { includeNonExported: true });
     const handler = extracted.find(fn => fn.name === 'handler');
+    expect(handler).toBeDefined();
     // Reconstructing the placeholder's indentation from the column count (as N
     // spaces) rather than slicing the real leading whitespace would silently
     // convert this file's tabs to spaces, mixing indentation styles in a
     // presented snippet.
-    expect(handler?.contextHeader).toContain('\tpass');
-    expect(handler?.contextHeader).not.toContain('    pass');
+    expect(handler!.contextHeader).toContain('\tpass');
+    expect(handler!.contextHeader).not.toContain('    pass');
   });
 });
