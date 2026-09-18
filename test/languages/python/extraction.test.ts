@@ -307,4 +307,25 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(1);
     expect(extracted[0]).toMatchObject({ name: 'method', startLine: 2, endLine: 5 });
   });
+
+  it('preserves an earlier top-level import when a later, separate top-level statement rebinds the same identifier', () => {
+    const source = [
+      'import json',
+      '',
+      'if FAST_MODE:',
+      '    import ujson as json',
+      '',
+      'def handler(req):',
+      '    x = json.dumps({})',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    // These are two distinct top-level statements, each its own boundary context.
+    // If the second overwrites the first in the identifier map, the isolated
+    // context silently loses the plain "import json" fallback.
+    expect(extracted[0].contextHeader).toContain('import json');
+    expect(extracted[0].contextHeader).toContain('import ujson as json');
+  });
 });

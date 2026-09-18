@@ -29,6 +29,20 @@ function getDecoratorTexts(boundary: Node): string[] {
   return boundary.namedChildren.filter((c): c is Node => c !== null && c.type === 'decorator').map(c => c.text);
 }
 
+/**
+ * Normalize a decorator's text for equality comparison, ignoring incidental
+ * indentation differences. A decorator node's own text starts at `@` (no
+ * leading whitespace), but a multi-line decorator's continuation lines are
+ * raw source slices that retain whatever column they happened to sit at —
+ * comparing two semantically-identical decorators without normalizing would
+ * false-negative whenever they came from different indentation contexts
+ * (e.g. a class method's original decorator vs. the LLM's decorator on a
+ * plain, unindented function-only echo of it).
+ */
+function normalizeDecoratorText(text: string): string {
+  return text.split('\n').map(line => line.trimStart()).join('\n');
+}
+
 function extractFunctionFromInstrumentedCode(
   instrumentedCode: string,
   functionName: string,
@@ -274,10 +288,13 @@ export function reassemblePythonFunctions(
     // @app.route survives). Treat any mismatch the same as a failed result for this
     // function — leave the original code unchanged — rather than ever destructively
     // dropping a decorator.
-    const originalDecorators = extractFunctionFromInstrumentedCode(fn.sourceText, fn.name)?.decoratorTexts ?? [];
-    const decoratorsMatch = originalDecorators.length === found.decoratorTexts.length
-      && originalDecorators.every((d, idx) => d === found.decoratorTexts[idx]);
-    if (originalDecorators.length > 0 && !decoratorsMatch) continue;
+    const originalDecorators = (extractFunctionFromInstrumentedCode(fn.sourceText, fn.name)?.decoratorTexts ?? []).map(normalizeDecoratorText);
+    const foundDecorators = found.decoratorTexts.map(normalizeDecoratorText);
+    const decoratorsMatch = originalDecorators.length === foundDecorators.length
+      && originalDecorators.every((d, idx) => d === foundDecorators[idx]);
+    // Reject any mismatch unconditionally — including the LLM adding a decorator
+    // where the original had none at all, not just dropping or changing one.
+    if (!decoratorsMatch) continue;
 
     const originalDefLine = fn.sourceText.split('\n').find(line => DEF_PATTERN.test(line));
     const originalDefIndent = originalDefLine ? (DEF_PATTERN.exec(originalDefLine)?.[1] ?? '') : '';

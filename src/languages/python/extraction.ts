@@ -151,8 +151,14 @@ function escapeRegex(str: string): string {
  * make a function that uses the alias fail to have it in its contextHeader.
  */
 interface CollectedImports {
-  /** Named/aliased identifiers, resolved to the import line that binds them. */
-  identifierToImportLine: Map<string, string>;
+  /**
+   * Named/aliased identifiers, resolved to every distinct import context that
+   * binds them (an ordered list, not a single value) — two separate top-level
+   * statements can bind the same name (e.g. a plain `import json` followed by
+   * a conditional `if FAST_MODE: import ujson as json`), and a single-value
+   * map would silently lose whichever one was recorded first.
+   */
+  identifierToImportLine: Map<string, string[]>;
   /**
    * `from x import *` statements. Their exported names are unknowable without
    * evaluating the target module, so they can't be matched against a function's
@@ -171,6 +177,16 @@ interface CollectedImports {
   importOrder: Map<string, number>;
 }
 
+/** Append `boundaryText` to `identifier`'s context list, without duplicating an identical entry. */
+function addImportContext(identifierToImportLine: Map<string, string[]>, identifier: string, boundaryText: string): void {
+  const existing = identifierToImportLine.get(identifier);
+  if (existing === undefined) {
+    identifierToImportLine.set(identifier, [boundaryText]);
+  } else if (!existing.includes(boundaryText)) {
+    existing.push(boundaryText);
+  }
+}
+
 /**
  * Collect import(s) from `node`, recording `boundaryText` — not `node`'s own
  * text — as the reconstructed import context. `boundaryText` is the top-level
@@ -185,7 +201,7 @@ function collectFromStatement(
   node: Node,
   boundaryText: string,
   boundaryRow: number,
-  identifierToImportLine: Map<string, string>,
+  identifierToImportLine: Map<string, string[]>,
   wildcardImports: string[],
   importOrder: Map<string, number>,
 ): void {
@@ -195,7 +211,7 @@ function collectFromStatement(
       if (nameNode.type === 'aliased_import') {
         const aliasNode = nameNode.childForFieldName('alias');
         if (aliasNode === null) continue;
-        identifierToImportLine.set(aliasNode.text, boundaryText);
+        addImportContext(identifierToImportLine, aliasNode.text, boundaryText);
         importOrder.set(boundaryText, boundaryRow);
       } else {
         // `import a.b.c` binds only `a` in the current namespace — code refers to
@@ -203,7 +219,7 @@ function collectFromStatement(
         // be the first component (the reconstructed import context still carries
         // the full statement, which naturally includes the full dotted path).
         const boundName = nameNode.text.split('.')[0];
-        identifierToImportLine.set(boundName, boundaryText);
+        addImportContext(identifierToImportLine, boundName, boundaryText);
         importOrder.set(boundaryText, boundaryRow);
       }
     }
@@ -225,10 +241,10 @@ function collectFromStatement(
       if (nameNode.type === 'aliased_import') {
         const aliasNode = nameNode.childForFieldName('alias');
         if (aliasNode === null) continue;
-        identifierToImportLine.set(aliasNode.text, boundaryText);
+        addImportContext(identifierToImportLine, aliasNode.text, boundaryText);
         importOrder.set(boundaryText, boundaryRow);
       } else {
-        identifierToImportLine.set(nameNode.text, boundaryText);
+        addImportContext(identifierToImportLine, nameNode.text, boundaryText);
         importOrder.set(boundaryText, boundaryRow);
       }
     }
@@ -247,7 +263,7 @@ function collectFromStatement(
 
 function collectImportedIdentifiers(source: string): CollectedImports {
   const tree = parsePython(source);
-  const identifierToImportLine = new Map<string, string>();
+  const identifierToImportLine = new Map<string, string[]>();
   const importOrder = new Map<string, number>();
   const wildcardImports: string[] = [];
 
@@ -263,18 +279,18 @@ function collectImportedIdentifiers(source: string): CollectedImports {
   return { identifierToImportLine, wildcardImports, importOrder };
 }
 
-function findReferencedImports(bodyText: string, identifierToImportLine: Map<string, string>): string[] {
+function findReferencedImports(bodyText: string, identifierToImportLine: Map<string, string[]>): string[] {
   return [...identifierToImportLine.keys()].filter(name => new RegExp(`\\b${escapeRegex(name)}\\b`).test(bodyText));
 }
 
 function buildContextHeader(
   sourceText: string,
   referencedImports: string[],
-  identifierToImportLine: Map<string, string>,
+  identifierToImportLine: Map<string, string[]>,
   wildcardImports: string[],
   importOrder: Map<string, number>,
 ): string {
-  const namedImportLines = referencedImports.map(name => identifierToImportLine.get(name)).filter((l): l is string => l !== undefined);
+  const namedImportLines = referencedImports.flatMap(name => identifierToImportLine.get(name) ?? []);
   const importLines = [...new Set([...wildcardImports, ...namedImportLines])];
   // Preserve original source order rather than always listing wildcards first —
   // Python name binding follows execution order, so this ordering can matter for

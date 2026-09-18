@@ -616,4 +616,62 @@ describe('reassemblePythonFunctions', () => {
     expect(newImportIdx).toBeLessThan(configIdx);
     expect(newImportIdx).toBeLessThan(laterImportIdx);
   });
+
+  it('accepts a matching multi-line decorator even when its continuation lines have different indentation', () => {
+    const original = [
+      'class Service:',
+      '    @app.route(',
+      '        "/foo",',
+      '        methods=["GET"],',
+      '    )',
+      '    def method(self, req):',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original, { includeNonExported: true });
+    // The LLM returned the function at column 0, so its decorator's continuation
+    // lines carry different leading whitespace than the original's, even though
+    // the decorator is semantically identical once that difference is factored out.
+    const instrumented = [
+      '@app.route(',
+      '    "/foo",',
+      '    methods=["GET"],',
+      ')',
+      'def method(self, req):',
+      '    with tracer.start_as_current_span("method") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'method', instrumentedCode: instrumented }),
+    ]);
+    expect(reassembled).toContain('start_as_current_span("method")');
+  });
+
+  it('rejects a replacement that adds a decorator where the original had none', () => {
+    const original = [
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    // The LLM hallucinated a decorator that was never there.
+    const instrumented = [
+      '@app.route("/foo")',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    expect(reassembled).toBe(original);
+  });
 });
