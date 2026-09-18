@@ -100,6 +100,41 @@ describe('checkSyntax', () => {
       expect(result.passed).toBe(false);
       expect(result.message).toContain('NDS-001');
     });
+
+    it('does not claim a syntax error for a non-syntax failure (e.g. a missing file)', async () => {
+      // A FileNotFoundError from tokenize.open() is a real failure, but not a
+      // SyntaxError — the message must not say "fix the syntax error".
+      const filePath = join(tempDir, 'does-not-exist.py');
+
+      const result = await checkSyntax(filePath);
+      expect(result.lineNumber).toBeNull();
+      expect(result.message).not.toContain('Fix the Python syntax error');
+    });
+  });
+
+  describe('python3 not installed', () => {
+    let originalPath: string | undefined;
+
+    beforeEach(() => {
+      originalPath = process.env.PATH;
+      process.env.PATH = '/nonexistent-spiny-orb-test-path';
+    });
+
+    afterEach(() => {
+      process.env.PATH = originalPath;
+    });
+
+    it('fails with a distinct "not found" message rather than a syntax-error message', async () => {
+      const filePath = join(tempDir, 'valid.py');
+      writeFileSync(filePath, 'def foo(x):\n    return x + 1\n', 'utf-8');
+
+      const result = await checkSyntax(filePath);
+
+      expect(result.passed).toBe(false);
+      expect(result.ruleId).toBe('NDS-001');
+      expect(result.lineNumber).toBeNull();
+      expect(result.message).toContain('python3 was not found on PATH');
+    });
   });
 });
 

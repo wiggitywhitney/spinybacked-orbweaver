@@ -26,6 +26,17 @@ function parsePythonLineNumber(stderr: string): number | null {
 }
 
 /**
+ * Whether a `compile()` traceback is actually a syntax error, as opposed to
+ * some other failure (a crash, an out-of-memory condition, an unrelated
+ * exception raised while opening the file). Only the SyntaxError family
+ * gets "fix the syntax error at line N" framing and a parsed line number —
+ * anything else is a generic tool failure with no such claim.
+ */
+function isPythonSyntaxErrorTraceback(stderr: string): boolean {
+  return /\b(SyntaxError|IndentationError|TabError)\b/.test(stderr);
+}
+
+/**
  * Run `python3 -c "compile(open(f).read(), f, 'exec')"` to validate Python syntax.
  *
  * `compile()` performs a full parse without executing the module, so it catches
@@ -61,11 +72,36 @@ export function checkSyntax(filePath: string): CheckResult {
     };
   } catch (error: unknown) {
     const isErrorObj = error !== null && typeof error === 'object';
+
+    if (isErrorObj && 'code' in error && error.code === 'ENOENT') {
+      return {
+        ruleId: 'NDS-001',
+        passed: false,
+        filePath,
+        lineNumber: null,
+        message: 'NDS-001 check failed: python3 was not found on PATH. Install Python 3 to run the syntax check.',
+        tier: 1,
+        blocking: true,
+      };
+    }
+
     const stderr = isErrorObj && 'stderr' in error && error.stderr instanceof Buffer
       ? error.stderr.toString()
       : error instanceof Error
         ? error.message
         : String(error);
+
+    if (!isPythonSyntaxErrorTraceback(stderr)) {
+      return {
+        ruleId: 'NDS-001',
+        passed: false,
+        filePath,
+        lineNumber: null,
+        message: `NDS-001 check failed: could not complete the syntax check. ${stderr.trim()}`,
+        tier: 1,
+        blocking: true,
+      };
+    }
 
     const lineNumber = parsePythonLineNumber(stderr);
 
@@ -98,13 +134,16 @@ interface FormatAttempt {
   /** True once any formatter binary (ruff or black) was found on PATH, regardless of whether it accepted the input. */
   formatterAvailable: boolean;
   /**
-   * True when a formatter binary was found but rejected the input (a real
-   * execution failure — e.g. a parse error) rather than accepting it unchanged.
-   * `code` still equals the input source in this case, but that equality does
-   * NOT mean "the formatter found no changes needed" — the formatter never
-   * actually ran to completion. Callers must not treat this as "compliant."
+   * True when a formatter binary was found but rejected the input — could be
+   * a real parse error in the source, or an unrelated execution/configuration
+   * problem (e.g. a malformed `pyproject.toml`). `code` still equals the
+   * input source in this case, but that equality does NOT mean "the
+   * formatter found no changes needed" — the formatter never actually ran to
+   * completion. Callers must not treat this as "compliant."
    */
   executionFailed: boolean;
+  /** Trimmed stderr from the failing invocation, when `executionFailed` is true. Empty otherwise. */
+  executionError: string;
 }
 
 /**
@@ -113,9 +152,11 @@ interface FormatAttempt {
  * @returns The formatted stdout on success, or null if the binary is missing
  *   (`ENOENT`) or the invocation failed for any other reason (e.g. the binary
  *   is installed but rejected the input — a real parse error, not a "not
- *   installed" case).
+ *   installed" case). `error` carries the trimmed stderr for a non-ENOENT
+ *   failure, so callers can surface *why* the formatter rejected the input
+ *   rather than assuming it was necessarily a parse error.
  */
-function tryFormatterBinary(binary: string, args: string[], source: string, configDir: string): { output: string | null; found: boolean } {
+function tryFormatterBinary(binary: string, args: string[], source: string, configDir: string): { output: string | null; found: boolean; error: string } {
   try {
     const output = execFileSync(binary, args, {
       input: source,
@@ -123,10 +164,16 @@ function tryFormatterBinary(binary: string, args: string[], source: string, conf
       timeout: 10_000,
       stdio: ['pipe', 'pipe', 'pipe'],
     }).toString();
-    return { output, found: true };
+    return { output, found: true, error: '' };
   } catch (error: unknown) {
-    const isEnoent = error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT';
-    return { output: null, found: !isEnoent };
+    const isErrorObj = error !== null && typeof error === 'object';
+    const isEnoent = isErrorObj && 'code' in error && error.code === 'ENOENT';
+    const stderr = isErrorObj && 'stderr' in error && error.stderr instanceof Buffer
+      ? error.stderr.toString().trim()
+      : error instanceof Error
+        ? error.message
+        : String(error);
+    return { output: null, found: !isEnoent, error: isEnoent ? '' : stderr };
   }
 }
 
@@ -142,14 +189,14 @@ function runFormatter(source: string, configDir: string): FormatAttempt {
   const stdinFilename = join(configDir, '_spiny_orb_format_target.py');
 
   const ruff = tryFormatterBinary('ruff', ['format', '--stdin-filename', stdinFilename, '-'], source, configDir);
-  if (ruff.output !== null) return { code: ruff.output, formatterAvailable: true, executionFailed: false };
-  if (ruff.found) return { code: source, formatterAvailable: true, executionFailed: true };
+  if (ruff.output !== null) return { code: ruff.output, formatterAvailable: true, executionFailed: false, executionError: '' };
+  if (ruff.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: ruff.error };
 
   const black = tryFormatterBinary('black', ['--stdin-filename', stdinFilename, '-q', '-'], source, configDir);
-  if (black.output !== null) return { code: black.output, formatterAvailable: true, executionFailed: false };
-  if (black.found) return { code: source, formatterAvailable: true, executionFailed: true };
+  if (black.output !== null) return { code: black.output, formatterAvailable: true, executionFailed: false, executionError: '' };
+  if (black.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: black.error };
 
-  return { code: source, formatterAvailable: false, executionFailed: false };
+  return { code: source, formatterAvailable: false, executionFailed: false, executionError: '' };
 }
 
 /**
@@ -220,12 +267,13 @@ export async function lintCheck(original: string, instrumented: string): Promise
   const instrumentedAttempt = runFormatter(instrumented, configDir);
 
   // A formatter execution failure on the instrumented output (a real parse
-  // error, not a style violation) is reported on its own — regardless of
-  // whether the original was itself compliant. Folding this into the
-  // ordinary compliance matrix would let it fall through to the "original
-  // was already non-compliant, so this isn't a new error" pass branch
-  // whenever the original also happened to be non-compliant, which
-  // mischaracterizes a parse failure as an unremarkable style issue.
+  // failure — a parse error, or an unrelated execution/config problem — is
+  // reported on its own — regardless of whether the original was itself
+  // compliant. Folding this into the ordinary compliance matrix would let
+  // it fall through to the "original was already non-compliant, so this
+  // isn't a new error" pass branch whenever the original also happened to
+  // be non-compliant, which mischaracterizes a real failure as an
+  // unremarkable style issue.
   if (instrumentedAttempt.executionFailed) {
     return {
       ruleId: 'LINT',
@@ -233,9 +281,10 @@ export async function lintCheck(original: string, instrumented: string): Promise
       filePath,
       lineNumber: null,
       message:
-        `LINT check failed: the formatter could not parse the instrumented output at all. ` +
-        `This indicates the agent's output has a structural problem beyond a formatting style violation. ` +
-        `Run Ruff or Black directly on the output to see the parse error.`,
+        `LINT check failed: the formatter could not process the instrumented output. ` +
+        `${instrumentedAttempt.executionError} ` +
+        `This may be a parse error in the agent's output, or an unrelated formatter/configuration problem — ` +
+        `run Ruff or Black directly on the output to see the underlying error.`,
       tier: 1,
       blocking: true,
     };
