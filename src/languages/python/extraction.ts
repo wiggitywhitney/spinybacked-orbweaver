@@ -61,7 +61,14 @@ function getDocstring(bodyNode: Node): string | null {
  * method by name can't cause a function to be wrongly treated as already instrumented.
  */
 function hasOTelSpanCall(bodyNode: Node): boolean {
-  function walk(node: Node): boolean {
+  function walk(node: Node, isRoot: boolean): boolean {
+    // Don't descend into a nested scope — a nested function/class/lambda's own
+    // span call says nothing about whether *this* function is instrumented.
+    if (!isRoot && (node.type === 'function_definition' || node.type === 'class_definition'
+      || node.type === 'decorated_definition' || node.type === 'lambda')) {
+      return false;
+    }
+
     if (node.type === 'call') {
       const fn = node.childForFieldName('function');
       if (fn?.type === 'attribute') {
@@ -70,11 +77,11 @@ function hasOTelSpanCall(bodyNode: Node): boolean {
       }
     }
     for (const child of node.namedChildren) {
-      if (child !== null && walk(child)) return true;
+      if (child !== null && walk(child, false)) return true;
     }
     return false;
   }
-  return walk(bodyNode);
+  return walk(bodyNode, true);
 }
 
 function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFunction[] {
@@ -297,6 +304,34 @@ function findReferencedImports(bodyText: string, identifierToImportLine: Map<str
   return [...identifierToImportLine.keys()].filter(name => new RegExp(`\\b${escapeRegex(name)}\\b`).test(bodyText));
 }
 
+/**
+ * Expand `selected` import texts to a closure: a selected import context (e.g.
+ * a `try:`/`if:` guard block) can itself reference another tracked identifier
+ * in its own guard condition (e.g. `if TYPE_CHECKING:`), and that identifier's
+ * own import (`from typing import TYPE_CHECKING`) must also be present for the
+ * snippet to be self-contained — otherwise the guard condition references an
+ * undefined name in the isolated context handed to the LLM.
+ */
+function expandImportClosure(selected: string[], identifierToImportLine: Map<string, string[]>): string[] {
+  const result = new Set(selected);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const text of [...result]) {
+      for (const [identifier, contexts] of identifierToImportLine) {
+        if (!new RegExp(`\\b${escapeRegex(identifier)}\\b`).test(text)) continue;
+        for (const ctx of contexts) {
+          if (!result.has(ctx)) {
+            result.add(ctx);
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+  return [...result];
+}
+
 function buildContextHeader(
   sourceText: string,
   referencedImports: string[],
@@ -306,7 +341,7 @@ function buildContextHeader(
   futureImports: string[],
 ): string {
   const namedImportLines = referencedImports.flatMap(name => identifierToImportLine.get(name) ?? []);
-  const importLines = [...new Set([...wildcardImports, ...namedImportLines])];
+  const importLines = expandImportClosure([...new Set([...wildcardImports, ...namedImportLines])], identifierToImportLine);
   // Preserve original source order rather than always listing wildcards first —
   // Python name binding follows execution order, so this ordering can matter for
   // which import's binding actually wins for a name shared between two imports.

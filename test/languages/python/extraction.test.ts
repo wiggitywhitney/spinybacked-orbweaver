@@ -345,4 +345,43 @@ describe('extractPythonFunctions', () => {
     expect(header).toContain('from __future__ import annotations');
     expect(header.indexOf('from __future__ import annotations')).toBeLessThan(header.indexOf('import os'));
   });
+
+  it('does not skip a function whose nested inner function contains an OTel span call', () => {
+    const source = [
+      'def handler(req):',
+      '    def inner():',
+      '        with tracer.start_as_current_span("inner") as span:',
+      '            return 1',
+      '    x = inner()',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    // The outer function itself has no span call of its own — only its nested
+    // helper does. That must not cause the outer function to be skipped.
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0].name).toBe('handler');
+  });
+
+  it('includes a TYPE_CHECKING-guarded import\'s own prerequisite import in contextHeader', () => {
+    const source = [
+      'from typing import TYPE_CHECKING',
+      '',
+      'if TYPE_CHECKING:',
+      '    from myapp.models import SomeType',
+      '',
+      'def handler(req: "SomeType"):',
+      '    x = 1',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    // contextHeader includes the TYPE_CHECKING guard block (referencing SomeType
+    // in the annotation), but that guard's own condition needs TYPE_CHECKING
+    // itself imported for the snippet to be valid — that import must be pulled
+    // in too, not just the guard block that happens to reference the name.
+    expect(extracted[0].contextHeader).toContain('from typing import TYPE_CHECKING');
+  });
 });
