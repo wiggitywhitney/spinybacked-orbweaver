@@ -384,4 +384,26 @@ describe('extractPythonFunctions', () => {
     // in too, not just the guard block that happens to reference the name.
     expect(extracted[0].contextHeader).toContain('from typing import TYPE_CHECKING');
   });
+
+  it('does not treat an import nested inside a decorated function as a module-level guarded import', () => {
+    const source = [
+      '@some_decorator',
+      'def other_function():',
+      '    import json',
+      '    return json.dumps({})',
+      '',
+      'def handler(req):',
+      '    x = json.dumps({})',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source, { includeNonExported: true });
+    const handler = extracted.find(fn => fn.name === 'handler');
+    // "json" here is only local to other_function() — handler() referencing the
+    // same bare name must not pull in other_function's entire decorated body
+    // as if it were a legitimate module-level guarded import context.
+    expect(handler?.contextHeader).not.toContain('@some_decorator');
+    expect(handler?.contextHeader).not.toContain('other_function');
+  });
 });

@@ -268,7 +268,10 @@ function collectFromStatement(
   }
 
   // Don't cross into a nested function/class — an import there isn't module-level.
-  if (node.type === 'function_definition' || node.type === 'class_definition') return;
+  // `decorated_definition` always wraps one of these two, so excluding it here is
+  // redundant with that check firing one level deeper when recursion reaches the
+  // wrapped node — but stated explicitly rather than relying on that incidentally.
+  if (node.type === 'function_definition' || node.type === 'class_definition' || node.type === 'decorated_definition') return;
 
   // Descend into compound statements (try/except, if/elif/else, with, etc.) to find
   // imports guarded by them, still using the outer boundaryText for all of them.
@@ -286,7 +289,7 @@ function collectImportedIdentifiers(source: string): CollectedImports {
 
   for (const stmt of tree.rootNode.namedChildren) {
     if (stmt === null) continue;
-    if (stmt.type === 'function_definition' || stmt.type === 'class_definition') continue;
+    if (stmt.type === 'function_definition' || stmt.type === 'class_definition' || stmt.type === 'decorated_definition') continue;
     if (stmt.type === 'future_import_statement') {
       futureImports.push(stmt.text);
       continue;
