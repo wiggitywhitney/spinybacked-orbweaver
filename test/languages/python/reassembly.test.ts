@@ -308,6 +308,38 @@ describe('reassemblePythonFunctions', () => {
     expect(reassembled).toContain('    trace,');
   });
 
+  it('inserts a new import after a module docstring preceded by leading comments', () => {
+    const original = [
+      '# Copyright 2026 Example Corp.',
+      '# All rights reserved.',
+      '"""Module docstring."""',
+      '',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      '',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    const lines = reassembled.split('\n');
+    const docstringIdx = lines.findIndex(l => l === '"""Module docstring."""');
+    const importIdx = lines.findIndex(l => l === 'from opentelemetry import trace');
+    expect(docstringIdx).toBeGreaterThanOrEqual(0);
+    expect(importIdx).toBeGreaterThan(docstringIdx);
+  });
+
   it('does not confuse two different classes\' methods that share the same name', () => {
     const original = [
       'class Foo:',

@@ -162,6 +162,52 @@ describe('extractPythonFunctions', () => {
     expect(extracted[0].contextHeader).toContain('from myapp.client import Client as sdk');
   });
 
+  it('captures an import referenced only in a decorator argument, not the body', () => {
+    const source = [
+      'from myapp.routes import ROUTE_PREFIX',
+      '',
+      '@app.route(ROUTE_PREFIX + "/foo")',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].referencedImports).toContain('ROUTE_PREFIX');
+    expect(extracted[0].contextHeader).toContain('from myapp.routes import ROUTE_PREFIX');
+  });
+
+  it('captures an import referenced only in a parameter default value', () => {
+    const source = [
+      'from myapp.config import DEFAULT_TIMEOUT',
+      '',
+      'def handler(req, timeout=DEFAULT_TIMEOUT):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].referencedImports).toContain('DEFAULT_TIMEOUT');
+    expect(extracted[0].contextHeader).toContain('from myapp.config import DEFAULT_TIMEOUT');
+  });
+
+  it('resolves a dotted import by its bound base name, not the full dotted path', () => {
+    const source = [
+      'import os.path',
+      '',
+      'def handler(req):',
+      '    x = os.getcwd()',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].referencedImports).toContain('os');
+    expect(extracted[0].contextHeader).toContain('import os.path');
+  });
+
   it('extracts a class method using its own line range, not the whole class', () => {
     const source = [
       'class Service:',

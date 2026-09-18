@@ -137,7 +137,11 @@ function collectImportedIdentifiers(source: string): Map<string, string> {
           if (moduleNode === null || aliasNode === null) continue;
           identifierToImportLine.set(aliasNode.text, `import ${moduleNode.text} as ${aliasNode.text}`);
         } else {
-          identifierToImportLine.set(nameNode.text, `import ${nameNode.text}`);
+          // `import a.b.c` binds only `a` in the current namespace — code refers to
+          // it as `a.<anything>`, not the full dotted path, so the lookup key must
+          // be the first component while the reconstructed import keeps the full path.
+          const boundName = nameNode.text.split('.')[0];
+          identifierToImportLine.set(boundName, `import ${nameNode.text}`);
         }
       }
     } else if (stmt.type === 'import_from_statement') {
@@ -200,7 +204,10 @@ export function extractPythonFunctions(source: string, options?: ExtractPythonFu
     if (!isWorthInstrumenting(fn)) continue;
 
     const sourceText = lines.slice(fn.startLine - 1, fn.endLine).join('\n');
-    const referencedImports = findReferencedImports(fn.bodyText, identifierToImportLine);
+    // Scan the full sourceText, not just the body: a decorator argument or a
+    // parameter default value can reference a module-level import that never
+    // appears inside the function body itself.
+    const referencedImports = findReferencedImports(sourceText, identifierToImportLine);
 
     results.push({
       name: fn.name,

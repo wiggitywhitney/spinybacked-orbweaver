@@ -162,6 +162,11 @@ function findPrologueEnd(lines: string[]): number {
   if (lines[idx]?.startsWith('#!')) idx++;
   if (/coding[:=]\s*[-\w.]+/.test(lines[idx] ?? '')) idx++;
 
+  // Leading blank lines and full-line comments (e.g. a copyright header) can
+  // appear before the module docstring without disqualifying it — skip past
+  // them so the docstring is still recognized and its __doc__ role preserved.
+  while (idx < lines.length && (lines[idx].trim() === '' || lines[idx].trim().startsWith('#'))) idx++;
+
   const docstringLine = lines[idx];
   const quoteMatch = docstringLine ? /^[rubURB]{0,2}("""|''')/.exec(docstringLine) : null;
   if (quoteMatch) {
