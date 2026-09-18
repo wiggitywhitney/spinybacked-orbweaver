@@ -23,10 +23,16 @@ const TRACER_INIT_PATTERN = /^tracer\s*=\s*trace\.get_tracer\s*\(/;
  * full — a line-by-line backward scan for lines starting with `@` misses
  * continuation lines that don't start with `@`.
  */
+/** Text of each `decorator` child of a `decorated_definition` node, in source order. */
+function getDecoratorTexts(boundary: Node): string[] {
+  if (boundary.type !== 'decorated_definition') return [];
+  return boundary.namedChildren.filter((c): c is Node => c !== null && c.type === 'decorator').map(c => c.text);
+}
+
 function extractFunctionFromInstrumentedCode(
   instrumentedCode: string,
   functionName: string,
-): { text: string; baseIndent: string; hasDecorator: boolean } | null {
+): { text: string; baseIndent: string; decoratorTexts: string[] } | null {
   const tree = parsePython(instrumentedCode);
   const lines = instrumentedCode.split('\n');
 
@@ -67,7 +73,7 @@ function extractFunctionFromInstrumentedCode(
   const { boundary, defRow, defColumn } = found;
   const startRow = boundary.startPosition.row;
   const endRow = boundary.endPosition.row;
-  const hasDecorator = boundary.type === 'decorated_definition';
+  const decoratorTexts = getDecoratorTexts(boundary);
   tree.delete();
 
   const text = lines.slice(startRow, endRow + 1).join('\n');
@@ -76,7 +82,7 @@ function extractFunctionFromInstrumentedCode(
   // otherwise get a baseIndent that never actually matches any line's real
   // prefix, silently defeating reindent()'s startsWith(fromIndent) check.
   const baseIndent = lines[defRow].slice(0, defColumn);
-  return { text, baseIndent, hasDecorator };
+  return { text, baseIndent, decoratorTexts };
 }
 
 /**
@@ -176,17 +182,24 @@ function findModuleLevelTracerInitLines(code: string): string[] {
 }
 
 /**
- * Find where the module's prologue (shebang, PEP 263 encoding declaration —
- * both parsed as `comment` nodes by this grammar — and module docstring) ends,
- * so a new import inserted into a file with no existing imports lands after
- * these rather than before or inside them.
+ * Find the line index (0-indexed) after which new imports/tracer-init lines
+ * should be inserted: after the module's prologue (shebang and PEP 263 encoding
+ * declaration — both parsed as `comment` nodes by this grammar — and an
+ * optional module docstring, recognized via the parsed AST so any quote style
+ * is detected, not just triple-quotes), then after the *leading contiguous run*
+ * of module-level imports that immediately follows, if any.
  *
- * Uses tree-sitter to recognize the docstring so any quote style (`'...'`,
- * `"..."`, `'''...'''`, `"""..."""`) is detected, not just triple-quotes.
+ * Deliberately does not use `Math.max()` over every import found anywhere in
+ * the file: a later, out-of-place top-level import (unusual but legal Python)
+ * would otherwise push the insertion point past intervening executable code,
+ * placing a new tracer/import declaration after statements that may need it
+ * already defined, instead of immediately after the file's real leading
+ * import block.
  */
-function findPrologueEnd(code: string): number {
-  const tree = parsePython(code);
+function findImportInsertPosition(lines: string[]): number {
+  const tree = parsePython(lines.join('\n'));
   let idx = 0;
+  let sawImport = false;
 
   for (const child of tree.rootNode.namedChildren) {
     if (child === null) break;
@@ -194,27 +207,20 @@ function findPrologueEnd(code: string): number {
       idx = child.endPosition.row + 1;
       continue;
     }
-    if (child.type === 'expression_statement' && child.namedChild(0)?.type === 'string') {
+    if (!sawImport && child.type === 'expression_statement' && child.namedChild(0)?.type === 'string') {
       idx = child.endPosition.row + 1;
+      continue;
+    }
+    if (child.type === 'import_statement' || child.type === 'import_from_statement') {
+      idx = child.endPosition.row + 1;
+      sawImport = true;
+      continue;
     }
     break;
   }
 
   tree.delete();
   return idx;
-}
-
-/**
- * Find the line index (0-indexed) after which new imports/tracer-init lines
- * should be inserted: after the last module-level import (by its own last
- * line, so a multi-line import's continuation lines are never split into)
- * if any exist, otherwise after the module's prologue (shebang/encoding/docstring).
- */
-function findImportInsertPosition(lines: string[]): number {
-  const code = lines.join('\n');
-  const ranges = findModuleLevelImportRanges(code);
-  if (ranges.length === 0) return findPrologueEnd(code);
-  return Math.max(...ranges.map(r => r.endRow)) + 1;
 }
 
 /**
@@ -261,13 +267,17 @@ export function reassemblePythonFunctions(
     const found = extractFunctionFromInstrumentedCode(result.instrumentedCode, fn.name);
     if (!found) continue;
 
-    // If the original function had a decorator but the LLM's returned function
-    // doesn't, splicing it in would silently delete a potentially runtime-affecting
-    // decorator (e.g. @app.route(...)) from the file. Treat this the same as a
-    // failed result for this function — leave the original code unchanged — rather
-    // than ever destructively dropping a decorator.
-    const originalHasDecorator = /^\s*@/.test(fn.sourceText.split('\n')[0] ?? '');
-    if (originalHasDecorator && !found.hasDecorator) continue;
+    // If the LLM's returned function is missing any of the original's decorators —
+    // not just "has no decorator at all", but a different set or a different order —
+    // splicing it in could silently delete a runtime-affecting decorator (e.g. an
+    // @login_required authorization check kept alongside @app.route, where only
+    // @app.route survives). Treat any mismatch the same as a failed result for this
+    // function — leave the original code unchanged — rather than ever destructively
+    // dropping a decorator.
+    const originalDecorators = extractFunctionFromInstrumentedCode(fn.sourceText, fn.name)?.decoratorTexts ?? [];
+    const decoratorsMatch = originalDecorators.length === found.decoratorTexts.length
+      && originalDecorators.every((d, idx) => d === found.decoratorTexts[idx]);
+    if (originalDecorators.length > 0 && !decoratorsMatch) continue;
 
     const originalDefLine = fn.sourceText.split('\n').find(line => DEF_PATTERN.test(line));
     const originalDefIndent = originalDefLine ? (DEF_PATTERN.exec(originalDefLine)?.[1] ?? '') : '';

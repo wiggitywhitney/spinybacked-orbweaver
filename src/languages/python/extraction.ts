@@ -161,6 +161,14 @@ interface CollectedImports {
    * any function might depend on a name it provides.
    */
   wildcardImports: string[];
+  /**
+   * Each distinct import context's source row, so `buildContextHeader()` can
+   * emit imports in their original relative order. Python name binding follows
+   * execution order — presenting a wildcard import ahead of a named import that
+   * actually came first in the source would misrepresent which one's binding
+   * for a shared name wins at runtime.
+   */
+  importOrder: Map<string, number>;
 }
 
 /**
@@ -173,7 +181,14 @@ interface CollectedImports {
  * rather than a bare `import json` that would raise `ImportError` on any
  * system lacking the optional dependency the guard exists to handle.
  */
-function collectFromStatement(node: Node, boundaryText: string, identifierToImportLine: Map<string, string>, wildcardImports: string[]): void {
+function collectFromStatement(
+  node: Node,
+  boundaryText: string,
+  boundaryRow: number,
+  identifierToImportLine: Map<string, string>,
+  wildcardImports: string[],
+  importOrder: Map<string, number>,
+): void {
   if (node.type === 'import_statement') {
     for (const nameNode of node.childrenForFieldName('name')) {
       if (nameNode === null) continue;
@@ -181,6 +196,7 @@ function collectFromStatement(node: Node, boundaryText: string, identifierToImpo
         const aliasNode = nameNode.childForFieldName('alias');
         if (aliasNode === null) continue;
         identifierToImportLine.set(aliasNode.text, boundaryText);
+        importOrder.set(boundaryText, boundaryRow);
       } else {
         // `import a.b.c` binds only `a` in the current namespace — code refers to
         // it as `a.<anything>`, not the full dotted path, so the lookup key must
@@ -188,6 +204,7 @@ function collectFromStatement(node: Node, boundaryText: string, identifierToImpo
         // the full statement, which naturally includes the full dotted path).
         const boundName = nameNode.text.split('.')[0];
         identifierToImportLine.set(boundName, boundaryText);
+        importOrder.set(boundaryText, boundaryRow);
       }
     }
     return;
@@ -199,6 +216,7 @@ function collectFromStatement(node: Node, boundaryText: string, identifierToImpo
     const hasWildcard = Array.from({ length: node.childCount }, (_, i) => node.child(i)).some(c => c?.type === 'wildcard_import');
     if (hasWildcard) {
       wildcardImports.push(boundaryText);
+      importOrder.set(boundaryText, boundaryRow);
       return;
     }
 
@@ -208,8 +226,10 @@ function collectFromStatement(node: Node, boundaryText: string, identifierToImpo
         const aliasNode = nameNode.childForFieldName('alias');
         if (aliasNode === null) continue;
         identifierToImportLine.set(aliasNode.text, boundaryText);
+        importOrder.set(boundaryText, boundaryRow);
       } else {
         identifierToImportLine.set(nameNode.text, boundaryText);
+        importOrder.set(boundaryText, boundaryRow);
       }
     }
     return;
@@ -221,13 +241,14 @@ function collectFromStatement(node: Node, boundaryText: string, identifierToImpo
   // Descend into compound statements (try/except, if/elif/else, with, etc.) to find
   // imports guarded by them, still using the outer boundaryText for all of them.
   for (const child of node.namedChildren) {
-    if (child !== null) collectFromStatement(child, boundaryText, identifierToImportLine, wildcardImports);
+    if (child !== null) collectFromStatement(child, boundaryText, boundaryRow, identifierToImportLine, wildcardImports, importOrder);
   }
 }
 
 function collectImportedIdentifiers(source: string): CollectedImports {
   const tree = parsePython(source);
   const identifierToImportLine = new Map<string, string>();
+  const importOrder = new Map<string, number>();
   const wildcardImports: string[] = [];
 
   for (const stmt of tree.rootNode.namedChildren) {
@@ -235,11 +256,11 @@ function collectImportedIdentifiers(source: string): CollectedImports {
     if (stmt.type === 'function_definition' || stmt.type === 'class_definition') continue;
     // stmt.text is the boundary for every import found within it — a bare import's own
     // text, or the full text of whatever compound statement wraps a nested import.
-    collectFromStatement(stmt, stmt.text, identifierToImportLine, wildcardImports);
+    collectFromStatement(stmt, stmt.text, stmt.startPosition.row, identifierToImportLine, wildcardImports, importOrder);
   }
 
   tree.delete();
-  return { identifierToImportLine, wildcardImports };
+  return { identifierToImportLine, wildcardImports, importOrder };
 }
 
 function findReferencedImports(bodyText: string, identifierToImportLine: Map<string, string>): string[] {
@@ -251,9 +272,14 @@ function buildContextHeader(
   referencedImports: string[],
   identifierToImportLine: Map<string, string>,
   wildcardImports: string[],
+  importOrder: Map<string, number>,
 ): string {
   const namedImportLines = referencedImports.map(name => identifierToImportLine.get(name)).filter((l): l is string => l !== undefined);
   const importLines = [...new Set([...wildcardImports, ...namedImportLines])];
+  // Preserve original source order rather than always listing wildcards first —
+  // Python name binding follows execution order, so this ordering can matter for
+  // which import's binding actually wins for a name shared between two imports.
+  importLines.sort((a, b) => (importOrder.get(a) ?? 0) - (importOrder.get(b) ?? 0));
   const sections: string[] = [];
   if (importLines.length > 0) {
     sections.push(...importLines, '');
@@ -275,7 +301,7 @@ function buildContextHeader(
 export function extractPythonFunctions(source: string, options?: ExtractPythonFunctionsOptions): ExtractedFunction[] {
   const includeNonExported = options?.includeNonExported ?? false;
   const tree = parsePython(source);
-  const { identifierToImportLine, wildcardImports } = collectImportedIdentifiers(source);
+  const { identifierToImportLine, wildcardImports, importOrder } = collectImportedIdentifiers(source);
   const lines = source.split('\n');
 
   const results: ExtractedFunction[] = [];
@@ -296,7 +322,7 @@ export function extractPythonFunctions(source: string, options?: ExtractPythonFu
       sourceText,
       docComment: fn.docComment,
       referencedImports,
-      contextHeader: buildContextHeader(sourceText, referencedImports, identifierToImportLine, wildcardImports),
+      contextHeader: buildContextHeader(sourceText, referencedImports, identifierToImportLine, wildcardImports, importOrder),
       startLine: fn.startLine,
       endLine: fn.endLine,
     });

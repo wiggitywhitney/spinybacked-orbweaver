@@ -276,6 +276,24 @@ describe('extractPythonFunctions', () => {
     expect(extracted[0].contextHeader).toContain('import ujson as json');
   });
 
+  it('orders a named import before a wildcard import when that is their original source order', () => {
+    const source = [
+      'from myapp.constants import SOME_CONSTANT',
+      'from myapp.other import *',
+      '',
+      'def handler(req):',
+      '    x = SOME_CONSTANT',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    const header = extracted[0].contextHeader;
+    // Reordering to "wildcard first" would misrepresent which import's binding
+    // for a shared name actually wins at runtime (later import wins).
+    expect(header.indexOf('from myapp.constants import SOME_CONSTANT')).toBeLessThan(header.indexOf('from myapp.other import *'));
+  });
+
   it('extracts a class method using its own line range, not the whole class', () => {
     const source = [
       'class Service:',

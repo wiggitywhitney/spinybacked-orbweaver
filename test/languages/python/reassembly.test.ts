@@ -552,4 +552,68 @@ describe('reassemblePythonFunctions', () => {
     const importIdx = lines.findIndex(l => l === 'from opentelemetry import trace');
     expect(importIdx).toBeGreaterThan(0);
   });
+
+  it('rejects a replacement that drops one of several original decorators', () => {
+    const original = [
+      '@login_required',
+      '@app.route("/foo")',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    // The LLM kept @app.route but dropped @login_required — an authorization
+    // check silently disappearing must not be allowed through.
+    const instrumented = [
+      '@app.route("/foo")',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    expect(reassembled).toBe(original);
+  });
+
+  it('inserts a new import right after the leading import block, not after a later stray import', () => {
+    const original = [
+      'import os',
+      'import sys',
+      '',
+      'CONFIG = os.environ.get("X")',
+      '',
+      'import json',
+      '',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      '',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    const lines = reassembled.split('\n');
+    const newImportIdx = lines.findIndex(l => l === 'from opentelemetry import trace');
+    const configIdx = lines.findIndex(l => l.startsWith('CONFIG ='));
+    const laterImportIdx = lines.findIndex(l => l === 'import json');
+    expect(newImportIdx).toBeGreaterThan(0);
+    expect(newImportIdx).toBeLessThan(configIdx);
+    expect(newImportIdx).toBeLessThan(laterImportIdx);
+  });
 });
