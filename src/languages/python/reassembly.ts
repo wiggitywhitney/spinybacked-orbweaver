@@ -6,9 +6,6 @@ import type { ExtractedFunction } from '../types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
 import { parsePython } from './ast.ts';
 
-/** Matches `import module` / `from module import a, b` at column 0 (module-level) only. */
-const IMPORT_PATTERN = /^(import\s+\S.*|from\s+\S.*\s+import\s+\S.*)$/;
-
 /** Matches a Python `def`/`async def` line, capturing its own indentation and name. */
 const DEF_PATTERN = /^(\s*)(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/;
 
@@ -76,17 +73,79 @@ function extractFunctionFromInstrumentedCode(
   return { text, baseIndent: ' '.repeat(defColumn) };
 }
 
-/** Reindent every line of `text` by replacing its common base indentation with `targetIndent`. */
+/**
+ * Row indices (0-indexed, relative to `text`) that fall inside a multi-line
+ * string literal, excluding the literal's own opening line — that line's
+ * leading whitespace is code indentation, but every following line up to and
+ * including the closing quotes is the string's literal content and must not
+ * be touched.
+ */
+function findMultilineStringProtectedRows(text: string): Set<number> {
+  const tree = parsePython(text);
+  const protectedRows = new Set<number>();
+
+  function walk(node: Node): void {
+    if (node.type === 'string' && node.startPosition.row !== node.endPosition.row) {
+      for (let row = node.startPosition.row + 1; row <= node.endPosition.row; row++) {
+        protectedRows.add(row);
+      }
+    }
+    for (const child of node.namedChildren) {
+      if (child !== null) walk(child);
+    }
+  }
+
+  walk(tree.rootNode);
+  tree.delete();
+  return protectedRows;
+}
+
+/**
+ * Reindent every line of `text` by replacing its common base indentation with
+ * `targetIndent` — except lines inside a multi-line string literal (other than
+ * its opening line), which are left byte-for-byte unchanged. A blind per-line
+ * prefix rewrite would otherwise corrupt a docstring or any other multi-line
+ * string's actual runtime value.
+ */
 function reindent(text: string, fromIndent: string, targetIndent: string): string {
   if (fromIndent === targetIndent) return text;
+  const protectedRows = findMultilineStringProtectedRows(text);
   return text
     .split('\n')
-    .map(line => (line.startsWith(fromIndent) ? targetIndent + line.slice(fromIndent.length) : line))
+    .map((line, i) => {
+      if (protectedRows.has(i)) return line;
+      return line.startsWith(fromIndent) ? targetIndent + line.slice(fromIndent.length) : line;
+    })
     .join('\n');
 }
 
-function extractImportLines(code: string): string[] {
-  return code.split('\n').filter(line => IMPORT_PATTERN.test(line));
+/**
+ * Find every top-level (module-scope) `import`/`from ... import` statement in
+ * `code`, each as its full source text (which may span multiple lines, e.g. a
+ * parenthesized `from x import (\n    a,\n    b,\n)`) and its ending row.
+ *
+ * Scoped to `tree.rootNode.namedChildren` only (not a recursive walk or a
+ * line-based regex), so a statement nested inside a function/class/try block
+ * is never mistaken for a module-level import, and a multi-line import's
+ * continuation lines are never mistaken for a second, separate import.
+ */
+function findModuleLevelImportRanges(code: string): Array<{ text: string; endRow: number }> {
+  const tree = parsePython(code);
+  const lines = code.split('\n');
+  const ranges: Array<{ text: string; endRow: number }> = [];
+
+  for (const stmt of tree.rootNode.namedChildren) {
+    if (stmt === null) continue;
+    if (stmt.type === 'import_statement' || stmt.type === 'import_from_statement') {
+      ranges.push({
+        text: lines.slice(stmt.startPosition.row, stmt.endPosition.row + 1).join('\n'),
+        endRow: stmt.endPosition.row,
+      });
+    }
+  }
+
+  tree.delete();
+  return ranges;
 }
 
 function extractTracerInitLines(code: string): string[] {
@@ -121,16 +180,14 @@ function findPrologueEnd(lines: string[]): number {
 
 /**
  * Find the line index (0-indexed) after which new imports/tracer-init lines
- * should be inserted: after the last module-level (column-0) import if any
- * exist, otherwise after the module's prologue (shebang/encoding/docstring).
+ * should be inserted: after the last module-level import (by its own last
+ * line, so a multi-line import's continuation lines are never split into)
+ * if any exist, otherwise after the module's prologue (shebang/encoding/docstring).
  */
 function findImportInsertPosition(lines: string[]): number {
-  let lastImportIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (IMPORT_PATTERN.test(lines[i])) lastImportIdx = i;
-  }
-  if (lastImportIdx >= 0) return lastImportIdx + 1;
-  return findPrologueEnd(lines);
+  const ranges = findModuleLevelImportRanges(lines.join('\n'));
+  if (ranges.length === 0) return findPrologueEnd(lines);
+  return Math.max(...ranges.map(r => r.endRow)) + 1;
 }
 
 /**
@@ -162,7 +219,7 @@ export function reassemblePythonFunctions(
 
   const lines = original.split('\n');
 
-  const originalImportLines = new Set(lines.filter(l => IMPORT_PATTERN.test(l)));
+  const originalImportLines = new Set(findModuleLevelImportRanges(original).map(r => r.text));
   const originalTracerInits = new Set(lines.filter(l => TRACER_INIT_PATTERN.test(l)));
 
   const newImports: string[] = [];
@@ -183,8 +240,8 @@ export function reassemblePythonFunctions(
 
     replacements.push({ startLine: fn.startLine, endLine: fn.endLine, newLines: reconciledText.split('\n') });
 
-    for (const imp of extractImportLines(result.instrumentedCode)) {
-      if (!originalImportLines.has(imp) && !newImports.includes(imp)) newImports.push(imp);
+    for (const range of findModuleLevelImportRanges(result.instrumentedCode)) {
+      if (!originalImportLines.has(range.text) && !newImports.includes(range.text)) newImports.push(range.text);
     }
     for (const init of extractTracerInitLines(result.instrumentedCode)) {
       if (!originalTracerInits.has(init) && !newTracerInits.includes(init)) newTracerInits.push(init);
@@ -201,8 +258,9 @@ export function reassemblePythonFunctions(
   if (newImports.length > 0) {
     let insertIdx = findImportInsertPosition(lines);
     for (const imp of newImports) {
-      lines.splice(insertIdx, 0, imp);
-      insertIdx++;
+      const impLines = imp.split('\n');
+      lines.splice(insertIdx, 0, ...impLines);
+      insertIdx += impLines.length;
     }
   }
 

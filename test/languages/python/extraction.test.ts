@@ -129,6 +129,39 @@ describe('extractPythonFunctions', () => {
     expect(extracted[0].contextHeader).toContain('def handler(req):');
   });
 
+  it('does not pull a nested (function-scoped) import into contextHeader', () => {
+    const source = [
+      'def handler(req):',
+      '    if req.debug:',
+      '        import pdb',
+      '        pdb.set_trace()',
+      '    x = 1',
+      '    return x',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].referencedImports).not.toContain('pdb');
+    // "import pdb" legitimately appears once, as part of the function's own body —
+    // it must not also be prepended as a header import ahead of the function text.
+    expect(extracted[0].contextHeader.match(/import pdb/g)).toHaveLength(1);
+    expect(extracted[0].contextHeader.trimStart().startsWith('def handler')).toBe(true);
+  });
+
+  it('resolves a referenced identifier through its import alias', () => {
+    const source = [
+      'from myapp.client import Client as sdk',
+      '',
+      'def handler(req):',
+      '    conn = sdk()',
+      '    result = conn.fetch()',
+      '    return result',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].referencedImports).toContain('sdk');
+    expect(extracted[0].contextHeader).toContain('from myapp.client import Client as sdk');
+  });
+
   it('extracts a class method using its own line range, not the whole class', () => {
     const source = [
       'class Service:',

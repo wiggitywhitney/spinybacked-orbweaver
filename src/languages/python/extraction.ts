@@ -3,7 +3,7 @@
 
 import type { Node } from 'web-tree-sitter';
 import type { ExtractedFunction } from '../types.ts';
-import { findPythonImports, parsePython } from './ast.ts';
+import { parsePython } from './ast.ts';
 
 /** Minimum number of body statements for a function to be worth instrumenting. */
 const MIN_STATEMENTS = 3;
@@ -109,22 +109,58 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Collect the identifiers a module's imports bind (module name, alias, or imported member). */
+/**
+ * Collect the identifiers bound by the module's *top-level* imports only, mapped
+ * to a reconstructed import line that preserves any `as` alias.
+ *
+ * Deliberately does not use `findPythonImports()` from `ast.ts`: that helper
+ * recurses into nested scopes (by design, for OTel-instrumentation detection)
+ * and drops per-name aliases from `from x import a as b` (by design, for its
+ * own callers). Neither behavior is correct here — a name bound only inside
+ * some other function's guarded/lazy import isn't a module-level global this
+ * function's isolated LLM context can reference, and dropping an alias would
+ * make a function that uses the alias fail to have it in its contextHeader.
+ */
 function collectImportedIdentifiers(source: string): Map<string, string> {
+  const tree = parsePython(source);
   const identifierToImportLine = new Map<string, string>();
-  for (const imp of findPythonImports(source)) {
-    if (imp.importedNames.length === 0) {
-      // `import module` or `import module as alias` — moduleSpecifier is the bound name absent an alias.
-      const name = imp.alias ?? imp.moduleSpecifier;
-      const line = imp.alias ? `import ${imp.moduleSpecifier} as ${imp.alias}` : `import ${imp.moduleSpecifier}`;
-      identifierToImportLine.set(name, line);
-    } else {
-      const line = `from ${imp.moduleSpecifier} import ${imp.importedNames.join(', ')}`;
-      for (const name of imp.importedNames) {
-        identifierToImportLine.set(name, line);
+
+  for (const stmt of tree.rootNode.namedChildren) {
+    if (stmt === null) continue;
+
+    if (stmt.type === 'import_statement') {
+      for (const nameNode of stmt.childrenForFieldName('name')) {
+        if (nameNode === null) continue;
+        if (nameNode.type === 'aliased_import') {
+          const moduleNode = nameNode.childForFieldName('name');
+          const aliasNode = nameNode.childForFieldName('alias');
+          if (moduleNode === null || aliasNode === null) continue;
+          identifierToImportLine.set(aliasNode.text, `import ${moduleNode.text} as ${aliasNode.text}`);
+        } else {
+          identifierToImportLine.set(nameNode.text, `import ${nameNode.text}`);
+        }
+      }
+    } else if (stmt.type === 'import_from_statement') {
+      const moduleNode = stmt.childForFieldName('module_name');
+      if (moduleNode === null) continue;
+      const hasWildcard = Array.from({ length: stmt.childCount }, (_, i) => stmt.child(i)).some(c => c?.type === 'wildcard_import');
+      if (hasWildcard) continue;
+
+      for (const nameNode of stmt.childrenForFieldName('name')) {
+        if (nameNode === null) continue;
+        if (nameNode.type === 'aliased_import') {
+          const originalNode = nameNode.childForFieldName('name');
+          const aliasNode = nameNode.childForFieldName('alias');
+          if (originalNode === null || aliasNode === null) continue;
+          identifierToImportLine.set(aliasNode.text, `from ${moduleNode.text} import ${originalNode.text} as ${aliasNode.text}`);
+        } else {
+          identifierToImportLine.set(nameNode.text, `from ${moduleNode.text} import ${nameNode.text}`);
+        }
       }
     }
   }
+
+  tree.delete();
   return identifierToImportLine;
 }
 
