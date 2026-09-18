@@ -340,6 +340,78 @@ describe('reassemblePythonFunctions', () => {
     expect(importIdx).toBeGreaterThan(docstringIdx);
   });
 
+  it('preserves the def line\'s own tab indentation rather than reconstructing it with spaces', () => {
+    const original = [
+      'class Service:',
+      '\tdef method(self, req):',
+      '\t\tx = 1',
+      '\t\ty = 2',
+      '\t\treturn x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original, { includeNonExported: true });
+    const instrumented = [
+      'def method(self, req):',
+      '    with tracer.start_as_current_span("method") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'method', instrumentedCode: instrumented }),
+    ]);
+    const lines = reassembled.split('\n');
+    // Reconstructing baseIndent from defColumn as N spaces (rather than slicing
+    // the real leading characters) would produce '    def method' here instead
+    // of a real tab — this is the exact bug the fix targets.
+    const methodLine = lines.find(l => l.includes('def method'));
+    expect(methodLine).toBe('\tdef method(self, req):');
+  });
+
+  it('does not treat a tracer-init-shaped line embedded in a docstring as a real module tracer init', () => {
+    const original = [
+      'def handler(req):',
+      '    """',
+      'tracer = trace.get_tracer("my-service")',
+      '    """',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      '',
+      'tracer = trace.get_tracer("my-service")',
+      '',
+      'def handler(req):',
+      '    """',
+      'tracer = trace.get_tracer("my-service")',
+      '    """',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    // The real module-level tracer init must actually be inserted — the
+    // docstring's identical-looking text must not be mistaken for it already
+    // being present in the original file. Both occurrences (the real
+    // top-level init and the one preserved verbatim inside the docstring)
+    // must exist; if the real one was wrongly deduped away as "already
+    // present," only the docstring's copy would remain.
+    expect(reassembled).toContain('from opentelemetry import trace');
+    const matches = reassembled.match(/^tracer = trace\.get_tracer\("my-service"\)$/gm);
+    expect(matches).toHaveLength(2);
+    const lines = reassembled.split('\n');
+    const handlerIdx = lines.findIndex(l => l === 'def handler(req):');
+    const topLevelInitIdx = lines.findIndex(l => l === 'tracer = trace.get_tracer("my-service")');
+    expect(topLevelInitIdx).toBeLessThan(handlerIdx);
+  });
+
   it('does not confuse two different classes\' methods that share the same name', () => {
     const original = [
       'class Foo:',

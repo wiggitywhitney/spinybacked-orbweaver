@@ -208,6 +208,20 @@ describe('extractPythonFunctions', () => {
     expect(extracted[0].contextHeader).toContain('import os.path');
   });
 
+  it('includes a wildcard import in every contextHeader, since its exported names are unknown', () => {
+    const source = [
+      'from myapp.constants import *',
+      '',
+      'def handler(req):',
+      '    x = SOME_CONSTANT',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted[0].contextHeader).toContain('from myapp.constants import *');
+  });
+
   it('extracts a class method using its own line range, not the whole class', () => {
     const source = [
       'class Service:',

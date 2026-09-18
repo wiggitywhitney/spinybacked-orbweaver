@@ -121,9 +121,23 @@ function escapeRegex(str: string): string {
  * function's isolated LLM context can reference, and dropping an alias would
  * make a function that uses the alias fail to have it in its contextHeader.
  */
-function collectImportedIdentifiers(source: string): Map<string, string> {
+interface CollectedImports {
+  /** Named/aliased identifiers, resolved to the import line that binds them. */
+  identifierToImportLine: Map<string, string>;
+  /**
+   * `from x import *` statements. Their exported names are unknowable without
+   * evaluating the target module, so they can't be matched against a function's
+   * referenced identifiers the way named imports are — instead, every wildcard
+   * import is included in every function's contextHeader unconditionally, since
+   * any function might depend on a name it provides.
+   */
+  wildcardImports: string[];
+}
+
+function collectImportedIdentifiers(source: string): CollectedImports {
   const tree = parsePython(source);
   const identifierToImportLine = new Map<string, string>();
+  const wildcardImports: string[] = [];
 
   for (const stmt of tree.rootNode.namedChildren) {
     if (stmt === null) continue;
@@ -148,7 +162,10 @@ function collectImportedIdentifiers(source: string): Map<string, string> {
       const moduleNode = stmt.childForFieldName('module_name');
       if (moduleNode === null) continue;
       const hasWildcard = Array.from({ length: stmt.childCount }, (_, i) => stmt.child(i)).some(c => c?.type === 'wildcard_import');
-      if (hasWildcard) continue;
+      if (hasWildcard) {
+        wildcardImports.push(`from ${moduleNode.text} import *`);
+        continue;
+      }
 
       for (const nameNode of stmt.childrenForFieldName('name')) {
         if (nameNode === null) continue;
@@ -165,15 +182,21 @@ function collectImportedIdentifiers(source: string): Map<string, string> {
   }
 
   tree.delete();
-  return identifierToImportLine;
+  return { identifierToImportLine, wildcardImports };
 }
 
 function findReferencedImports(bodyText: string, identifierToImportLine: Map<string, string>): string[] {
   return [...identifierToImportLine.keys()].filter(name => new RegExp(`\\b${escapeRegex(name)}\\b`).test(bodyText));
 }
 
-function buildContextHeader(sourceText: string, referencedImports: string[], identifierToImportLine: Map<string, string>): string {
-  const importLines = [...new Set(referencedImports.map(name => identifierToImportLine.get(name)).filter((l): l is string => l !== undefined))];
+function buildContextHeader(
+  sourceText: string,
+  referencedImports: string[],
+  identifierToImportLine: Map<string, string>,
+  wildcardImports: string[],
+): string {
+  const namedImportLines = referencedImports.map(name => identifierToImportLine.get(name)).filter((l): l is string => l !== undefined);
+  const importLines = [...new Set([...wildcardImports, ...namedImportLines])];
   const sections: string[] = [];
   if (importLines.length > 0) {
     sections.push(...importLines, '');
@@ -195,7 +218,7 @@ function buildContextHeader(sourceText: string, referencedImports: string[], ide
 export function extractPythonFunctions(source: string, options?: ExtractPythonFunctionsOptions): ExtractedFunction[] {
   const includeNonExported = options?.includeNonExported ?? false;
   const tree = parsePython(source);
-  const identifierToImportLine = collectImportedIdentifiers(source);
+  const { identifierToImportLine, wildcardImports } = collectImportedIdentifiers(source);
   const lines = source.split('\n');
 
   const results: ExtractedFunction[] = [];
@@ -216,7 +239,7 @@ export function extractPythonFunctions(source: string, options?: ExtractPythonFu
       sourceText,
       docComment: fn.docComment,
       referencedImports,
-      contextHeader: buildContextHeader(sourceText, referencedImports, identifierToImportLine),
+      contextHeader: buildContextHeader(sourceText, referencedImports, identifierToImportLine, wildcardImports),
       startLine: fn.startLine,
       endLine: fn.endLine,
     });

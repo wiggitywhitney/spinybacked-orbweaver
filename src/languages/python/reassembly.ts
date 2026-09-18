@@ -30,7 +30,7 @@ function extractFunctionFromInstrumentedCode(
   const tree = parsePython(instrumentedCode);
   const lines = instrumentedCode.split('\n');
 
-  function walk(node: Node): { boundary: Node; defColumn: number } | null {
+  function walk(node: Node): { boundary: Node; defRow: number; defColumn: number } | null {
     let inner = node;
     const boundary = node;
     if (node.type === 'decorated_definition') {
@@ -42,7 +42,7 @@ function extractFunctionFromInstrumentedCode(
     if (inner.type === 'function_definition') {
       const nameNode = inner.childForFieldName('name');
       if (nameNode !== null && nameNode.text === functionName) {
-        return { boundary, defColumn: inner.startPosition.column };
+        return { boundary, defRow: inner.startPosition.row, defColumn: inner.startPosition.column };
       }
       return null;
     }
@@ -64,13 +64,18 @@ function extractFunctionFromInstrumentedCode(
   // Read every position off `boundary` before deleting the tree — the WASM-backed
   // Node object is invalidated once its tree is deleted, and reading positions
   // afterward silently returns stale/zeroed data instead of throwing.
-  const { boundary, defColumn } = found;
+  const { boundary, defRow, defColumn } = found;
   const startRow = boundary.startPosition.row;
   const endRow = boundary.endPosition.row;
   tree.delete();
 
   const text = lines.slice(startRow, endRow + 1).join('\n');
-  return { text, baseIndent: ' '.repeat(defColumn) };
+  // Slice the definition line's own leading characters rather than reconstructing
+  // `defColumn` spaces — a file indented with tabs (or mixed whitespace) would
+  // otherwise get a baseIndent that never actually matches any line's real
+  // prefix, silently defeating reindent()'s startsWith(fromIndent) check.
+  const baseIndent = lines[defRow].slice(0, defColumn);
+  return { text, baseIndent };
 }
 
 /**
@@ -148,8 +153,25 @@ function findModuleLevelImportRanges(code: string): Array<{ text: string; endRow
   return ranges;
 }
 
-function extractTracerInitLines(code: string): string[] {
-  return code.split('\n').filter(line => TRACER_INIT_PATTERN.test(line));
+/**
+ * Find module-level tracer-init statements in `code`, scoped to
+ * `tree.rootNode.namedChildren` the same way `findModuleLevelImportRanges()`
+ * is — a line-based regex would false-positive on identical-looking text
+ * inside a docstring or nested scope.
+ */
+function findModuleLevelTracerInitLines(code: string): string[] {
+  const tree = parsePython(code);
+  const lines = code.split('\n');
+  const results: string[] = [];
+
+  for (const stmt of tree.rootNode.namedChildren) {
+    if (stmt === null) continue;
+    const text = lines.slice(stmt.startPosition.row, stmt.endPosition.row + 1).join('\n');
+    if (TRACER_INIT_PATTERN.test(text)) results.push(text);
+  }
+
+  tree.delete();
+  return results;
 }
 
 /**
@@ -225,7 +247,7 @@ export function reassemblePythonFunctions(
   const lines = original.split('\n');
 
   const originalImportLines = new Set(findModuleLevelImportRanges(original).map(r => r.text));
-  const originalTracerInits = new Set(lines.filter(l => TRACER_INIT_PATTERN.test(l)));
+  const originalTracerInits = new Set(findModuleLevelTracerInitLines(original));
 
   const newImports: string[] = [];
   const newTracerInits: string[] = [];
@@ -248,7 +270,7 @@ export function reassemblePythonFunctions(
     for (const range of findModuleLevelImportRanges(result.instrumentedCode)) {
       if (!originalImportLines.has(range.text) && !newImports.includes(range.text)) newImports.push(range.text);
     }
-    for (const init of extractTracerInitLines(result.instrumentedCode)) {
+    for (const init of findModuleLevelTracerInitLines(result.instrumentedCode)) {
       if (!originalTracerInits.has(init) && !newTracerInits.includes(init)) newTracerInits.push(init);
     }
   }
@@ -276,8 +298,9 @@ export function reassemblePythonFunctions(
       insertIdx++;
     }
     for (const init of newTracerInits) {
-      lines.splice(insertIdx, 0, init);
-      insertIdx++;
+      const initLines = init.split('\n');
+      lines.splice(insertIdx, 0, ...initLines);
+      insertIdx += initLines.length;
     }
   }
 
