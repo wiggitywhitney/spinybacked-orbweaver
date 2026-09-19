@@ -464,8 +464,7 @@ describe('PythonProvider', () => {
       const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
       try {
         const formatted = await provider.formatCode('def foo(x):\n    return x+1\n', tmpDir);
-        expect(typeof formatted).toBe('string');
-        expect(formatted.length).toBeGreaterThan(0);
+        expect(formatted).toBe('def foo(x):\n    return x + 1\n');
       } finally {
         await rm(tmpDir, { recursive: true });
       }
@@ -477,7 +476,7 @@ describe('PythonProvider', () => {
       const original = 'def foo(x):\n    return x + 1\n';
       const result = await provider.lintCheck(original, original);
       expect(result.ruleId).toBe('LINT');
-      expect(typeof result.passed).toBe('boolean');
+      expect(result.passed).toBe(true);
     });
   });
 });

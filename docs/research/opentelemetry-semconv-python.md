@@ -83,7 +83,7 @@ All four attribute constants in the table above were fetched and read directly f
 
 ### Conflicting Findings
 
-None — all sources (PyPI packaging metadata, GitHub deprecation notices, `pyproject.toml` pinning conventions across two repos, and independent usage-example sources) corroborated each other on the core facts (beta status, deprecated old import path, stable/incubating split mechanism).
+All sources agree on the core facts (beta status, deprecated old import path, stable/incubating split mechanism). The two repos' `pyproject.toml` pinning conventions do **not** corroborate each other, however — they diverge: the core SDK's own releases exact-pin `opentelemetry-api` and `opentelemetry-semantic-conventions` together in lockstep (same-release exact pins on both), while the separately-cited Flask contrib package (Finding 5) pins `opentelemetry-api` loosely (`~=`) but pins `opentelemetry-semantic-conventions` exactly (`==`) — a different shape, not a second instance of the same pattern. Both are still evidence that the ecosystem treats the semconv package cautiously; they just aren't the same convention.
 
 ### Recommendation
 
