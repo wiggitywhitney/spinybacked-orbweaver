@@ -610,9 +610,10 @@ describe('reassemblePythonFunctions', () => {
     ]);
     const lines = reassembled.split('\n');
     const newImportIdx = lines.findIndex(l => l === 'from opentelemetry import trace');
+    const sysImportIdx = lines.findIndex(l => l === 'import sys');
     const configIdx = lines.findIndex(l => l.startsWith('CONFIG ='));
     const laterImportIdx = lines.findIndex(l => l === 'import json');
-    expect(newImportIdx).toBeGreaterThan(0);
+    expect(newImportIdx).toBeGreaterThan(sysImportIdx);
     expect(newImportIdx).toBeLessThan(configIdx);
     expect(newImportIdx).toBeLessThan(laterImportIdx);
   });

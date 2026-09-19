@@ -407,6 +407,20 @@ describe('PythonProvider', () => {
       }
     });
 
+    it('does not attribute a Poetry [[tool.poetry.source]] array-of-tables name to the project', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(
+          join(tmpDir, 'pyproject.toml'),
+          '[project]\nversion = "1.0.0"\n\n[[tool.poetry.source]]\nname = "private-registry"\nurl = "https://example.com/simple"\n',
+        );
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBeUndefined();
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
     it('reads the name field from [tool.poetry] when present instead of [project]', async () => {
       const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
       try {

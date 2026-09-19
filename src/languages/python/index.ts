@@ -29,7 +29,13 @@ import { reassemblePythonFunctions } from './reassembly.ts';
 import { checkSyntax, formatCode, lintCheck } from './validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 
-const TOML_TABLE_HEADER_PATTERN = /^\s*\[([^[\]]+)\]\s*(?:#.*)?$/;
+/**
+ * Matches both a single-bracket table header (`[project]`) and a double-bracket
+ * array-of-tables header (`[[tool.poetry.source]]`), with an optional trailing
+ * comment. Capture group 1 is the second `[` when present (array-of-tables);
+ * group 2 is the table name.
+ */
+const TOML_TABLE_HEADER_PATTERN = /^\s*\[(\[?)([^[\]]+)\]\]?\s*(?:#.*)?$/;
 const NAME_ASSIGNMENT_PATTERN = /^\s*name\s*=\s*["']([^"']+)["']/;
 /** Tables whose `name` field identifies the project (PEP 621 `[project]`, or Poetry's own `[tool.poetry]`). */
 const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);
@@ -40,14 +46,20 @@ const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);
  * Line-based table tracking, not a full TOML parser — structural-analysis-only scope
  * per OD-1. Scoping to these two tables (rather than matching the first `name = "..."`
  * anywhere in the file) avoids picking up an unrelated tool's own `name` field, e.g.
- * `[tool.some-plugin]` sections that happen to declare their own `name`.
+ * `[tool.some-plugin]` sections that happen to declare their own `name`, or Poetry's
+ * `[[tool.poetry.source]]` array-of-tables entries (each has its own unrelated `name`
+ * identifying a package source, not the project).
  */
 function extractProjectNameFromPyproject(content: string): string | undefined {
   let currentTable: string | undefined;
   for (const line of content.split('\n')) {
     const tableMatch = TOML_TABLE_HEADER_PATTERN.exec(line);
     if (tableMatch) {
-      currentTable = tableMatch[1]?.trim();
+      // An array-of-tables header (`[[...]]`) is never `[project]`/`[tool.poetry]`
+      // (neither is defined as an array-of-tables in valid TOML) — reset instead
+      // of tracking its name, so a `name = "..."` inside it isn't misattributed
+      // to whichever single-bracket table preceded it.
+      currentTable = tableMatch[1] === '[' ? undefined : tableMatch[2]?.trim();
       continue;
     }
     if (currentTable !== undefined && PROJECT_NAME_TABLES.has(currentTable)) {
