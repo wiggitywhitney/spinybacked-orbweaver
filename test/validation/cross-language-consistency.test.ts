@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { checkEntryPointSpans } from '../../src/languages/javascript/rules/cov001.ts';
 import { checkEntryPointSpansTs } from '../../src/languages/typescript/rules/cov001.ts';
 import { checkPythonEntryPointSpans } from '../../src/languages/python/rules/cov001.ts';
+import { checkOutboundCallSpans } from '../../src/languages/javascript/rules/cov002.ts';
+import { checkPythonOutboundCallSpans } from '../../src/languages/python/rules/cov002.ts';
 import { checkErrorVisibility } from '../../src/languages/javascript/rules/cov003.ts';
 import { checkErrorVisibilityTs } from '../../src/languages/typescript/rules/cov003.ts';
 import { checkExportedSignaturePreservation } from '../../src/languages/javascript/rules/nds004.ts';
@@ -150,6 +152,82 @@ describe('COV-001: Entry points have spans', () => {
     ].join('\n');
 
     const results = checkPythonEntryPointSpans(code, '/routes/users.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COV-002: Outbound calls have spans
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('COV-002: Outbound calls have spans', () => {
+  it('catches missing span on JS outbound fetch() call', () => {
+    const code = [
+      'async function getData() {',
+      '  const res = await fetch("https://api.example.com/data");',
+      '  return await res.json();',
+      '}',
+    ].join('\n');
+
+    const results = checkOutboundCallSpans(code, '/services/data.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-002');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when JS outbound fetch() call is inside a span', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'async function getData() {',
+      '  return tracer.startActiveSpan("getData", async (span) => {',
+      '    try {',
+      '      const res = await fetch("https://api.example.com/data");',
+      '      return await res.json();',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkOutboundCallSpans(code, '/services/data.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('catches missing span on Python outbound requests.get() call', () => {
+    const code = [
+      'def fetch_user(user_id):',
+      '    return requests.get(f"https://api.example.com/users/{user_id}")',
+      '',
+    ].join('\n');
+
+    const results = checkPythonOutboundCallSpans(code, '/services/user.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-002');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when Python outbound requests.get() call is inside a `with` span', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def fetch_user(user_id):',
+      '    with tracer.start_as_current_span("fetch_user"):',
+      '        return requests.get(f"https://api.example.com/users/{user_id}")',
+      '',
+    ].join('\n');
+
+    const results = checkPythonOutboundCallSpans(code, '/services/user.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 

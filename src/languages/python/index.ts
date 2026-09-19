@@ -30,9 +30,10 @@ import { reassemblePythonFunctions } from './reassembly.ts';
 import { checkSyntax, formatCode, lintCheck } from './validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 import { cov001PythonRule } from './rules/cov001.ts';
+import { cov002PythonRule } from './rules/cov002.ts';
 
 /** Python-specific ValidationRules, registered on provider construction. Milestone D3 populates this incrementally. */
-const PYTHON_RULES = [cov001PythonRule] as const;
+const PYTHON_RULES = [cov001PythonRule, cov002PythonRule] as const;
 
 /**
  * Matches both a single-bracket table header (`[project]`) and a double-bracket
