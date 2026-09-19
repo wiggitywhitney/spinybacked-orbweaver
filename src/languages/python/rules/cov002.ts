@@ -39,6 +39,9 @@ const OUTBOUND_PATTERNS: Array<{
   // httpx — module-level functions, always apply
   { objectPattern: /^httpx$/, methodPattern: /^(get|post|put|patch|delete|head|options|request)$/, label: 'httpx' },
 
+  // aiohttp — module-level function, always apply (aiohttp only exposes `request`, not get/post/etc. shortcuts)
+  { objectPattern: /^aiohttp$/, methodPattern: /^request$/, label: 'aiohttp' },
+
   // httpx/aiohttp client/session instances — generic receiver names, gated on import
   { objectPattern: /^(?:client|session|http_client|async_client)$/i, methodPattern: /^(get|post|put|patch|delete|head|options|request)$/, label: 'http client', requiredImport: /^(?:httpx|aiohttp)$/ },
 ];
@@ -112,31 +115,60 @@ function buildModuleAliasMap(imports: ImportInfo[]): Map<string, string> {
 }
 
 /**
- * Map each directly-imported bare identifier (`from requests import get`) to
- * the module it came from, so a call invoked without a receiver (`get(url)`
- * rather than `requests.get(url)`) is still recognized as outbound. Only
- * covers unaliased `from module import name` — `findPythonImports()` records
- * the pre-alias name for `from module import name as alias` (not the bound
- * local name), so `from requests import get as fetch` can't be resolved back
- * to `requests` here; that's a limitation of the shared import-tracking
- * helper, not something specific to this checker.
+ * Map each directly-imported bare identifier (`from requests import get`, or
+ * its aliased form `from requests import get as fetch`) to the module it
+ * came from, so a call invoked without a receiver (`get(url)`/`fetch(url)`
+ * rather than `requests.get(url)`) is still recognized as outbound.
+ *
+ * Walks the tree directly rather than using `findPythonImports()`'s
+ * `ImportInfo` — that shared helper records only the pre-alias name for
+ * `from module import name as alias` (not the bound local name), since
+ * `ImportInfo.alias` is populated only for bare `import module as alias`
+ * (see its own doc comment in `../../types.ts`). Resolving the real bound
+ * name here needs the `aliased_import` node's `alias` field directly.
  */
-function buildDirectImportMap(imports: ImportInfo[]): Map<string, string> {
+function buildDirectImportMap(root: Node): Map<string, string> {
   const map = new Map<string, string>();
-  for (const imp of imports) {
-    for (const name of imp.importedNames) {
-      map.set(name, imp.moduleSpecifier);
+
+  function walk(node: Node): void {
+    if (node.type === 'import_from_statement') {
+      const moduleText = node.childForFieldName('module_name')?.text;
+      if (moduleText !== undefined && DIRECT_IMPORT_MODULES.has(moduleText)) {
+        for (const nameNode of node.childrenForFieldName('name')) {
+          if (nameNode === null) continue;
+          if (nameNode.type === 'aliased_import') {
+            const original = nameNode.childForFieldName('name');
+            const alias = nameNode.childForFieldName('alias');
+            if (original !== null && alias !== null && HTTP_METHOD_NAMES.test(original.text)) {
+              map.set(alias.text, moduleText);
+            }
+          } else if (HTTP_METHOD_NAMES.test(nameNode.text)) {
+            map.set(nameNode.text, moduleText);
+          }
+        }
+      }
+    }
+    for (const child of node.namedChildren) {
+      if (child !== null) walk(child);
     }
   }
+
+  walk(root);
   return map;
 }
 
-/** Whether a bare identifier call (`get(url)`, not `requests.get(url)`) is a directly-imported outbound HTTP method. */
+/**
+ * Whether a bare identifier call (`get(url)`/`fetch(url)`, not `requests.get(url)`)
+ * is a directly-imported outbound HTTP method. `directImports` is already filtered
+ * to entries whose *original* (pre-alias) import name matched an HTTP method — do
+ * not re-check `name` against `HTTP_METHOD_NAMES` here, since an aliased import
+ * (`from requests import get as fetch`) makes the call site's bare identifier an
+ * arbitrary local name, not necessarily one of the HTTP method names itself.
+ */
 function matchDirectImportCall(callNode: Node, directImports: Map<string, string>): string | null {
   const fn = callNode.childForFieldName('function');
   if (fn?.type !== 'identifier') return null;
   const name = fn.text;
-  if (!HTTP_METHOD_NAMES.test(name)) return null;
   const module = directImports.get(name);
   if (module === undefined || !DIRECT_IMPORT_MODULES.has(module)) return null;
   return name;
@@ -188,7 +220,7 @@ export function checkPythonOutboundCallSpans(code: string, filePath: string): Ch
   const imports = findPythonImports(code);
   const importSources = new Set(imports.map(imp => imp.moduleSpecifier));
   const moduleAliases = buildModuleAliasMap(imports);
-  const directImports = buildDirectImportMap(imports);
+  const directImports = buildDirectImportMap(tree.rootNode);
   const unspannedCalls: Array<{ line: number; callText: string }> = [];
 
   function walk(node: Node): void {

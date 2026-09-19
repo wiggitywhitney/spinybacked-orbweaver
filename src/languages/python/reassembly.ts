@@ -28,6 +28,13 @@ const TRACER_INIT_PATTERN = /^tracer\s*=\s*trace\.get_tracer\s*\(/;
  * make an accidental substring collision with an unrelated package effectively
  * impossible. Python's bare `opentelemetry` has no such delimiter.
  */
+// TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
+// milestone that surfaced it) that this pattern only anchors at the start of
+// the statement, so a compound import mixing an OTel module with an unrelated
+// one on the same line (e.g. `import opentelemetry, os`) would match and get
+// the whole statement — including the unrelated module — spliced in verbatim.
+// Needs a fix that validates every module named in the statement, not just
+// the first, before accepting it as OTel-only.
 const OTEL_IMPORT_PATTERN = /^(?:from|import)\s+opentelemetry\b(?:\.[A-Za-z_][A-Za-z0-9_]*)*/;
 
 function isOtelImport(importText: string): boolean {

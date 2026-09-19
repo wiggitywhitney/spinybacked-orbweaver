@@ -37,11 +37,12 @@ function isPythonSyntaxErrorTraceback(stderr: string): boolean {
 }
 
 /**
- * Run `python3 -c "compile(open(f).read(), f, 'exec')"` to validate Python syntax.
+ * Run `python3 -c "import tokenize; compile(tokenize.open(f).read(), f, 'exec')"` to validate Python syntax.
  *
  * `compile()` performs a full parse without executing the module, so it catches
  * syntax errors (unclosed brackets, bad indentation, invalid statements) without
- * running arbitrary code from the instrumented file.
+ * running arbitrary code from the instrumented file. `tokenize.open()` (not plain
+ * `open()`) honors a file's own PEP 263 encoding declaration.
  *
  * @param filePath - Absolute path to the Python file to check
  * @returns CheckResult with ruleId 'NDS-001', tier 1, blocking true

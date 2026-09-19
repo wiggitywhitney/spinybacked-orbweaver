@@ -132,6 +132,37 @@ describe('checkPythonOutboundCallSpans (COV-002)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags a directly-imported call aliased with `as`, resolved through the alias', () => {
+      const code = [
+        'from requests import get as fetch',
+        '',
+        'def fetch_user(user_id):',
+        '    return fetch(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when an aliased directly-imported call is inside a `with` span', () => {
+      const code = [
+        'from requests import get as fetch',
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        return fetch(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('httpx', () => {
@@ -211,6 +242,34 @@ describe('checkPythonOutboundCallSpans (COV-002)', () => {
   });
 
   describe('aiohttp', () => {
+    it('flags a module-level aiohttp.request() call with no enclosing span', () => {
+      const code = [
+        'async def fetch_user(user_id):',
+        '    return await aiohttp.request("GET", f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when a module-level aiohttp.request() call is inside a `with` span', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'async def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        return await aiohttp.request("GET", f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('flags a session.get() call when aiohttp is imported', () => {
       const code = [
         'import aiohttp',
