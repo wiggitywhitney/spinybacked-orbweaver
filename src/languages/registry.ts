@@ -4,6 +4,7 @@
 import type { LanguageProvider } from './types.ts';
 import { JavaScriptProvider } from './javascript/index.ts';
 import { TypeScriptProvider } from './typescript/index.ts';
+import { PythonProvider } from './python/index.ts';
 
 /** Map from file extension (e.g. '.js') to the registered LanguageProvider. */
 const byExtension = new Map<string, LanguageProvider>();
@@ -79,3 +80,4 @@ export function _resetForTest(): void {
 // this module get JS and TS support without any explicit registration call.
 registerProvider(new JavaScriptProvider());
 registerProvider(new TypeScriptProvider());
+registerProvider(new PythonProvider());

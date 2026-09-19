@@ -1608,6 +1608,26 @@ describe('coordinate', () => {
       expect(capturedDiscoverName).toBe('JavaScript');
       expect(capturedDispatchName).toBe('JavaScript');
     });
+
+    it('passes python provider to both discoverFiles and dispatchFiles when language is python', async () => {
+      let capturedDiscoverName: string | undefined;
+      let capturedDispatchName: string | undefined;
+      const deps = makeDeps({
+        discoverFiles: vi.fn().mockImplementation(async (_dir: string, opts: { provider?: { displayName: string } }) => {
+          capturedDiscoverName = opts.provider?.displayName;
+          return ['/project/src/a.py'];
+        }),
+        dispatchFiles: vi.fn().mockImplementation(async (_paths: string[], _dir: string, _cfg: unknown, _cb: unknown, opts: { provider?: { displayName: string } }) => {
+          capturedDispatchName = opts?.provider?.displayName;
+          return ['/project/src/a.py'].map(fp => makeSuccessResult(fp));
+        }),
+      });
+
+      await coordinate('/project', makeConfig({ language: 'python' }), undefined, deps);
+
+      expect(capturedDiscoverName).toBe('Python');
+      expect(capturedDispatchName).toBe('Python');
+    });
   });
 
   describe('check-failure message format (#518)', () => {

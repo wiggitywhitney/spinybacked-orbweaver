@@ -56,7 +56,7 @@ export const AgentConfigSchema = z.strictObject({
   targetType: TargetType.default('long-lived'),
 
   // Language provider selection
-  language: z.enum(['javascript', 'typescript']).default('javascript'),
+  language: z.enum(['javascript', 'typescript', 'python']).default('javascript'),
 
   // Dependency strategy
   dependencyStrategy: DependencyStrategy.default('dependencies'),
