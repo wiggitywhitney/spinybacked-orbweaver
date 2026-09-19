@@ -16,10 +16,22 @@ const TRACER_INIT_PATTERN = /^tracer\s*=\s*trace\.get_tracer\s*\(/;
  * Without this restriction, any other module-level import the LLM added for
  * its own unrelated reasons (or hallucinated) would get spliced in too.
  */
-const OTEL_IMPORT_PREFIXES = ['opentelemetry'];
+/**
+ * Matches `import opentelemetry...` or `from opentelemetry... import ...`, requiring
+ * the module path to be exactly `opentelemetry` or a dotted submodule of it (a `\b`
+ * after the name rejects an unrelated module that merely starts with the same
+ * letters, e.g. `opentelemetry_stubs` or `myopentelemetrywrapper`).
+ *
+ * Unlike the JavaScript provider's own `OTEL_IMPORT_PREFIXES`/`isOtelImport()` (which
+ * this convention is modeled on), a plain substring check is not safe here: JS's
+ * prefix is the scoped package name `'@opentelemetry/'`, whose `@`/`/` delimiters
+ * make an accidental substring collision with an unrelated package effectively
+ * impossible. Python's bare `opentelemetry` has no such delimiter.
+ */
+const OTEL_IMPORT_PATTERN = /^(?:from|import)\s+opentelemetry\b(?:\.[A-Za-z_][A-Za-z0-9_]*)*/;
 
 function isOtelImport(importText: string): boolean {
-  return OTEL_IMPORT_PREFIXES.some(prefix => importText.includes(prefix));
+  return OTEL_IMPORT_PATTERN.test(importText);
 }
 
 /**

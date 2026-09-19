@@ -701,6 +701,34 @@ describe('reassemblePythonFunctions', () => {
     expect(reassembled).not.toContain('import requests');
   });
 
+  it('does not splice in an unrelated import whose module name merely contains "opentelemetry" as a substring', () => {
+    const original = [
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return x + y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(original);
+    const instrumented = [
+      'from opentelemetry import trace',
+      'import myopentelemetrywrapper',
+      'import opentelemetry_stubs',
+      '',
+      'def handler(req):',
+      '    with tracer.start_as_current_span("handler") as span:',
+      '        x = 1',
+      '        y = 2',
+      '        return x + y',
+    ].join('\n');
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler', instrumentedCode: instrumented }),
+    ]);
+    expect(reassembled).toContain('from opentelemetry import trace');
+    expect(reassembled).not.toContain('myopentelemetrywrapper');
+    expect(reassembled).not.toContain('opentelemetry_stubs');
+  });
+
   it('treats two decorators as different when they differ only in meaningful internal string whitespace', () => {
     const original = [
       'class Service:',

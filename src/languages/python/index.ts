@@ -29,7 +29,7 @@ import { reassemblePythonFunctions } from './reassembly.ts';
 import { checkSyntax, formatCode, lintCheck } from './validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 
-const TOML_TABLE_HEADER_PATTERN = /^\s*\[([^[\]]+)\]\s*$/;
+const TOML_TABLE_HEADER_PATTERN = /^\s*\[([^[\]]+)\]\s*(?:#.*)?$/;
 const NAME_ASSIGNMENT_PATTERN = /^\s*name\s*=\s*["']([^"']+)["']/;
 /** Tables whose `name` field identifies the project (PEP 621 `[project]`, or Poetry's own `[tool.poetry]`). */
 const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);

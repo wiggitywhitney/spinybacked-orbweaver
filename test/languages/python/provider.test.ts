@@ -396,6 +396,17 @@ describe('PythonProvider', () => {
       }
     });
 
+    it('recognizes a table header with a trailing inline comment', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '[project]  # PEP 621 metadata\nname = "commented-header-project"\n');
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('commented-header-project');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
     it('reads the name field from [tool.poetry] when present instead of [project]', async () => {
       const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
       try {
