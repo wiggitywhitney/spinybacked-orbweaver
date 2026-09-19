@@ -103,6 +103,13 @@ function extractFunctionFromInstrumentedCode(
 
   const found = walk(tree.rootNode);
 
+  // TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
+  // milestone that surfaced it) that `found` is accepted here even when
+  // `found.boundary.hasError` is true — a malformed LLM output could still
+  // parse (via tree-sitter's error recovery) and match `functionName`, extracting
+  // text from a syntactically broken node instead of being rejected outright.
+  // Needs verification against real malformed-output fixtures before fixing,
+  // given this function's existing hardening (9+ prior CodeRabbit rounds).
   if (found === null) {
     tree.delete();
     return null;
