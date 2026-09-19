@@ -16,6 +16,7 @@ import type {
 } from '../types.ts';
 import type { CheckResult } from '../../validation/types.ts';
 import type { FunctionResult } from '../../fix-loop/types.ts';
+import { registerRule } from '../../validation/rule-registry.ts';
 import {
   findPythonFunctions,
   findPythonImports,
@@ -28,6 +29,10 @@ import { extractPythonFunctions } from './extraction.ts';
 import { reassemblePythonFunctions } from './reassembly.ts';
 import { checkSyntax, formatCode, lintCheck } from './validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
+import { cov001PythonRule } from './rules/cov001.ts';
+
+/** Python-specific ValidationRules, registered on provider construction. Milestone D3 populates this incrementally. */
+const PYTHON_RULES = [cov001PythonRule] as const;
 
 /**
  * Matches both a single-bracket table header (`[project]`) and a double-bracket
@@ -81,11 +86,20 @@ function extractProjectNameFromPyproject(content: string): string | undefined {
  * - prompt.ts: Python-specific LLM prompt sections and examples (Milestone D2,
  *   merged into this same implementation pass per Decision D-D1-3 — see PRD #373)
  *
- * No Python ValidationRules exist yet (Milestone D3 populates
- * `src/languages/python/rules/`), so this provider registers none and
- * `hasImplementation()` returns `false` for every rule ID until then.
+ * Milestone D3 populates `src/languages/python/rules/` incrementally; each
+ * rule registers itself via `PYTHON_RULES` and `hasImplementation()` reflects
+ * actual coverage as rules are added.
  */
 export class PythonProvider implements LanguageProvider {
+  constructor() {
+    // Register all Python ValidationRules with the shared rule registry, so
+    // the validation chain can dispatch through getRulesForLanguage('python')
+    // instead of direct imports — same pattern as JavaScriptProvider/TypeScriptProvider.
+    for (const rule of PYTHON_RULES) {
+      registerRule(rule, 'python');
+    }
+  }
+
   // ── Identity ──────────────────────────────────────────────────────────────
 
   readonly id = 'python';
@@ -260,9 +274,9 @@ export class PythonProvider implements LanguageProvider {
 
   // ── Feature parity check ──────────────────────────────────────────────────
 
-  hasImplementation(_ruleId: string): boolean {
-    // No Python-specific rules exist yet — Milestone D3 populates
-    // src/languages/python/rules/ and updates this to check a PYTHON_RULES registry.
-    return false;
+  hasImplementation(ruleId: string): boolean {
+    // Check whether this provider has registered a ValidationRule for the given ID.
+    // The constructor registers all Python rules; this query reflects actual coverage.
+    return PYTHON_RULES.some(rule => rule.ruleId === ruleId);
   }
 }

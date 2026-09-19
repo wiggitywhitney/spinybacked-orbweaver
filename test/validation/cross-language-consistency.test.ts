@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { checkEntryPointSpans } from '../../src/languages/javascript/rules/cov001.ts';
 import { checkEntryPointSpansTs } from '../../src/languages/typescript/rules/cov001.ts';
+import { checkPythonEntryPointSpans } from '../../src/languages/python/rules/cov001.ts';
 import { checkErrorVisibility } from '../../src/languages/javascript/rules/cov003.ts';
 import { checkErrorVisibilityTs } from '../../src/languages/typescript/rules/cov003.ts';
 import { checkExportedSignaturePreservation } from '../../src/languages/javascript/rules/nds004.ts';
@@ -119,7 +120,40 @@ describe('COV-001: Entry points have spans', () => {
     expect(results.every(r => r.passed)).toBe(true);
   });
 
-  // Python and Go cases added when those providers merge (PRD #373, PRD #374)
+  it('catches missing span on Python Flask route handler', () => {
+    const code = [
+      '@app.route("/users")',
+      'def list_users():',
+      '    return jsonify([])',
+      '',
+    ].join('\n');
+
+    const results = checkPythonEntryPointSpans(code, '/routes/users.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-001');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when Python Flask route handler has span', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      '@app.route("/users")',
+      'def list_users():',
+      '    with tracer.start_as_current_span("list_users"):',
+      '        return jsonify([])',
+      '',
+    ].join('\n');
+
+    const results = checkPythonEntryPointSpans(code, '/routes/users.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

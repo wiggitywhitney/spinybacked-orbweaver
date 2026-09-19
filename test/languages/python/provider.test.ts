@@ -99,8 +99,11 @@ describe('PythonProvider', () => {
   // ─── Feature parity ─────────────────────────────────────────────────────
 
   describe('hasImplementation', () => {
-    it('returns false for all rule IDs (no Python rules until Milestone D3)', () => {
-      expect(provider.hasImplementation('COV-001')).toBe(false);
+    it('returns true for rule IDs with a registered Python implementation', () => {
+      expect(provider.hasImplementation('COV-001')).toBe(true);
+    });
+
+    it('returns false for rule IDs without a Python implementation yet (Milestone D3 in progress)', () => {
       expect(provider.hasImplementation('NDS-001')).toBe(false);
       expect(provider.hasImplementation('UNKNOWN-001')).toBe(false);
       expect(provider.hasImplementation('')).toBe(false);

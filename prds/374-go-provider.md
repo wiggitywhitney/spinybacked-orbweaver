@@ -264,6 +264,8 @@ These follow the Part 8 checklist from the research doc. All items are unchecked
 
 **Cross-reference — PRD #373 Decision D-D1-3 (2026-09-18):** `LanguageProvider` declares `getSystemPromptSections()`/`getInstrumentationExamples()` as non-optional (no fallback, unlike the optional `preInstrumentationAnalysis()`), so `GoProvider` cannot compile, register in `registry.ts`, or pass this milestone's own `npm run typecheck`/`npm test` gates without real content backing those methods — which is Milestone E2's `prompt.ts`. PRD #373 resolved the equivalent conflict for Python by merging D1 (provider wiring) and D2 (prompt sections) into one implementation pass/PR rather than shipping E1 with a placeholder. Consider the same merge for E1+E2 rather than rediscovering this blocker mid-implementation.
 
+**Cross-reference — PRD #373 Decision D-D3-1 (2026-09-19):** `classifyFunction()` should stay a permanent `'unknown'` stub for Go too, matching the convention already established by all three other providers (JavaScript, TypeScript, Python). `FunctionClassification` needs call-pattern context (route-registration decorator/call shape) that bare `FunctionInfo` doesn't carry, so real entry-point detection for `http.HandleFunc`/`http.Handler`/gRPC/Gin/Echo/Fiber belongs in Milestone E3's `cov001.ts`, which re-walks the Go AST directly — not in `classifyFunction()` below. Don't rediscover this split mid-implementation.
+
 Following Part 8 checklist, Step 1:
 
 - [ ] Create `src/languages/go/` directory
