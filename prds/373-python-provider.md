@@ -274,7 +274,7 @@ Following Part 8 checklist, Step 2:
 
 Following Part 8 checklist, Step 3:
 
-**Progress note (2026-09-19):** `src/languages/python/rules/` exists; `cov001.ts` is implemented and registered (`cov001PythonRule`, registered via `PythonProvider`'s constructor into the shared `rule-registry.ts`, following the same `PYTHON_RULES`-array pattern as `JS_RULES`/TS rules). See Decision D-D3-1 for why `classifyPythonFunction()` was left as a permanent `'unknown'` stub rather than implementing Flask/FastAPI detection there. Remaining rules (`cov002.ts` onward) are not yet started.
+**Progress note (2026-09-19):** `src/languages/python/rules/` exists; `cov001.ts` is implemented and registered (`cov001PythonRule`, registered via `PythonProvider`'s constructor into the shared `rule-registry.ts`, following the same `PYTHON_RULES`-array pattern as `JS_RULES`/TS rules). See Decision D-D3-1 for why `classifyPythonFunction()` was left as a permanent `'unknown'` stub rather than implementing Flask/FastAPI detection there. A CodeRabbit review round on this milestone's first commit caught two real gaps, since fixed: the parsed tree returned by `parsePython()` was never released with `tree.delete()` (a WASM-backed resource leak per the project's own `web-tree-sitter` gotcha), and a decorated *class* (e.g. `@dataclass class Handlers: ...`) caused the traversal to return immediately without descending into the class body, so a route-decorated method nested inside a decorated class was invisible to the check. Remaining rules (`cov002.ts` onward) are not yet started.
 
 - [x] Create `src/languages/python/rules/` directory
 - [ ] For each shared-concept rule, implement Python-specific version:

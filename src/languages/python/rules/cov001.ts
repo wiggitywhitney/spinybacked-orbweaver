@@ -89,15 +89,22 @@ export function checkPythonEntryPointSpans(code: string, filePath: string): Chec
       const fnDef = node.namedChildren.find(
         (c): c is Node => c !== null && c.type === 'function_definition',
       );
-      if (fnDef !== undefined && hasEntryPointDecorator(node)) {
-        if (!hasSpanCreationCall(fnDef, true)) {
+      if (fnDef !== undefined) {
+        if (hasEntryPointDecorator(node) && !hasSpanCreationCall(fnDef, true)) {
           const name = fnDef.childForFieldName('name')?.text ?? '<anonymous>';
           unspanned.push({ line: toLine(node), description: `route handler: ${name}()` });
         }
+        // Don't descend into a decorated function's own body here — hasSpanCreationCall
+        // already walked it, and a nested decorated definition inside a route handler
+        // is not itself a distinct top-level entry point.
+        return;
       }
-      // Don't descend into a decorated function's own body here — hasSpanCreationCall
-      // already walked it, and a nested decorated definition inside a route handler
-      // is not itself a distinct top-level entry point.
+      // A decorated class (or other non-function decorated definition) has no
+      // fnDef of its own — walk its children so a route-decorated method nested
+      // inside it is still found.
+      for (const child of node.namedChildren) {
+        if (child !== null) walk(child);
+      }
       return;
     }
     for (const child of node.namedChildren) {
@@ -106,6 +113,7 @@ export function checkPythonEntryPointSpans(code: string, filePath: string): Chec
   }
 
   walk(tree.rootNode);
+  tree.delete();
 
   if (unspanned.length === 0) {
     return [{

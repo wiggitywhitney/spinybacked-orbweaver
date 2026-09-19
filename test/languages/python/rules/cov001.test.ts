@@ -158,6 +158,23 @@ describe('checkPythonEntryPointSpans (COV-001)', () => {
     });
   });
 
+  describe('decorated classes', () => {
+    it('flags a route-decorated method nested inside a decorated class', () => {
+      const code = [
+        '@dataclass',
+        'class Handlers:',
+        '    @app.route("/x")',
+        '    def bar(self):',
+        '        return "x"',
+        '',
+      ].join('\n');
+
+      const results = checkPythonEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('multiple entry points', () => {
     it('reports one finding per unspanned entry point', () => {
       const code = [
