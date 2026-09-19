@@ -86,6 +86,52 @@ describe('checkPythonOutboundCallSpans (COV-002)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags a directly-imported get() call with no enclosing span', () => {
+      const code = [
+        'from requests import get',
+        '',
+        'def fetch_user(user_id):',
+        '    return get(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when a directly-imported get() call is inside a `with` span', () => {
+      const code = [
+        'from requests import get',
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        return get(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag a bare get() call with no matching import', () => {
+      const code = [
+        'def get(x):',
+        '    return x',
+        '',
+        'def use_it():',
+        '    return get("value")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('httpx', () => {

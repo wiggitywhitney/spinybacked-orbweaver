@@ -43,6 +43,10 @@ const OUTBOUND_PATTERNS: Array<{
   { objectPattern: /^(?:client|session|http_client|async_client)$/i, methodPattern: /^(get|post|put|patch|delete|head|options|request)$/, label: 'http client', requiredImport: /^(?:httpx|aiohttp)$/ },
 ];
 
+const HTTP_METHOD_NAMES = /^(get|post|put|patch|delete|head|options|request)$/;
+/** Modules whose directly-imported HTTP methods (`from requests import get`) count as outbound calls. */
+const DIRECT_IMPORT_MODULES = new Set(['requests', 'httpx']);
+
 function toLine(node: Node): number {
   return node.startPosition.row + 1;
 }
@@ -107,6 +111,37 @@ function buildModuleAliasMap(imports: ImportInfo[]): Map<string, string> {
   return map;
 }
 
+/**
+ * Map each directly-imported bare identifier (`from requests import get`) to
+ * the module it came from, so a call invoked without a receiver (`get(url)`
+ * rather than `requests.get(url)`) is still recognized as outbound. Only
+ * covers unaliased `from module import name` — `findPythonImports()` records
+ * the pre-alias name for `from module import name as alias` (not the bound
+ * local name), so `from requests import get as fetch` can't be resolved back
+ * to `requests` here; that's a limitation of the shared import-tracking
+ * helper, not something specific to this checker.
+ */
+function buildDirectImportMap(imports: ImportInfo[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const imp of imports) {
+    for (const name of imp.importedNames) {
+      map.set(name, imp.moduleSpecifier);
+    }
+  }
+  return map;
+}
+
+/** Whether a bare identifier call (`get(url)`, not `requests.get(url)`) is a directly-imported outbound HTTP method. */
+function matchDirectImportCall(callNode: Node, directImports: Map<string, string>): string | null {
+  const fn = callNode.childForFieldName('function');
+  if (fn?.type !== 'identifier') return null;
+  const name = fn.text;
+  if (!HTTP_METHOD_NAMES.test(name)) return null;
+  const module = directImports.get(name);
+  if (module === undefined || !DIRECT_IMPORT_MODULES.has(module)) return null;
+  return name;
+}
+
 /** The receiver name and method name of a call expression, if it matches a known outbound pattern. */
 function matchOutboundPattern(callNode: Node, importSources: Set<string>, moduleAliases: Map<string, string>): string | null {
   const fn = callNode.childForFieldName('function');
@@ -153,11 +188,12 @@ export function checkPythonOutboundCallSpans(code: string, filePath: string): Ch
   const imports = findPythonImports(code);
   const importSources = new Set(imports.map(imp => imp.moduleSpecifier));
   const moduleAliases = buildModuleAliasMap(imports);
+  const directImports = buildDirectImportMap(imports);
   const unspannedCalls: Array<{ line: number; callText: string }> = [];
 
   function walk(node: Node): void {
     if (node.type === 'call') {
-      const match = matchOutboundPattern(node, importSources, moduleAliases);
+      const match = matchOutboundPattern(node, importSources, moduleAliases) ?? matchDirectImportCall(node, directImports);
       if (match !== null && !isInsideSpanScope(node)) {
         unspannedCalls.push({ line: toLine(node), callText: match });
       }
