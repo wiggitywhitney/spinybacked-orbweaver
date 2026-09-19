@@ -55,6 +55,37 @@ describe('checkPythonOutboundCallSpans (COV-002)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags req.get() with no enclosing span when requests is imported under an alias', () => {
+      const code = [
+        'import requests as req',
+        '',
+        'def fetch_user(user_id):',
+        '    return req.get(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when req.get() is inside a `with` span, resolved through an alias', () => {
+      const code = [
+        'import requests as req',
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        return req.get(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('httpx', () => {
@@ -163,6 +194,29 @@ describe('checkPythonOutboundCallSpans (COV-002)', () => {
       const results = checkPythonOutboundCallSpans(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('nested function scope boundary', () => {
+    it('flags a requests.get() call inside a function nested within a spanned `with` block', () => {
+      // The inner closure may be invoked after the outer `with` block has
+      // already exited (e.g. stored and called later), so it must not be
+      // treated as covered by the outer span.
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def make_fetcher(user_id):',
+        '    with tracer.start_as_current_span("make_fetcher"):',
+        '        def fetch():',
+        '            return requests.get(f"https://api.example.com/users/{user_id}")',
+        '        return fetch',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
     });
   });
 

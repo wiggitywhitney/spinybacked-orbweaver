@@ -4,9 +4,20 @@
 import { type Node } from 'web-tree-sitter';
 import { parsePython, findPythonImports } from '../ast.ts';
 import type { CheckResult } from '../../../validation/types.ts';
+import type { ImportInfo } from '../../types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
 
 const SPAN_CREATION_METHODS = new Set(['start_as_current_span', 'start_span']);
+
+/**
+ * Node types that stop the ancestor walk in `isInsideSpanScope()`. A call
+ * inside a nested function/class/lambda defined within a spanned `with`
+ * block may execute after the `with` block has already exited (e.g. a
+ * closure stored and invoked later), so it must not be treated as covered
+ * by the outer span. Mirrors `cov001.ts`'s `hasSpanCreationCall()` scope
+ * boundaries, keeping both checkers' nested-scope handling consistent.
+ */
+const SCOPE_BOUNDARIES = new Set(['function_definition', 'lambda', 'class_definition', 'decorated_definition']);
 
 /**
  * Known outbound call patterns, mirroring the JavaScript COV-002 checker's
@@ -67,6 +78,7 @@ function withClauseHasSpanCall(withClause: Node): boolean {
 function isInsideSpanScope(node: Node): boolean {
   let current = node.parent;
   while (current !== null) {
+    if (SCOPE_BOUNDARIES.has(current.type)) return false;
     if (current.type === 'with_statement') {
       const clause = current.namedChildren.find(
         (c): c is Node => c !== null && c.type === 'with_clause',
@@ -78,8 +90,25 @@ function isInsideSpanScope(node: Node): boolean {
   return false;
 }
 
+/**
+ * Map each bare-import bound identifier (e.g. `requests` in `import requests`,
+ * or `req` in `import requests as req`) to its real module specifier, so an
+ * aliased module-level import still matches the canonical pattern. Only
+ * bare `import module[.sub][ as alias]` statements bind a usable receiver
+ * identifier this way — `from x import y` binds `y` directly, not a module
+ * object with attribute-style calls, so those are excluded.
+ */
+function buildModuleAliasMap(imports: ImportInfo[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const imp of imports) {
+    if (imp.importedNames.length > 0) continue;
+    map.set(imp.alias ?? imp.moduleSpecifier, imp.moduleSpecifier);
+  }
+  return map;
+}
+
 /** The receiver name and method name of a call expression, if it matches a known outbound pattern. */
-function matchOutboundPattern(callNode: Node, importSources: Set<string>): string | null {
+function matchOutboundPattern(callNode: Node, importSources: Set<string>, moduleAliases: Map<string, string>): string | null {
   const fn = callNode.childForFieldName('function');
   if (fn?.type !== 'attribute') return null;
 
@@ -89,9 +118,14 @@ function matchOutboundPattern(callNode: Node, importSources: Set<string>): strin
 
   const objectText = receiver.text;
   const methodName = method.text;
+  // Module-level patterns (`requests`/`httpx`) match the canonical module name
+  // behind an alias; generic receiver patterns (`client`/`session`) match the
+  // local variable name as written — they're never import bindings themselves.
+  const canonicalObject = moduleAliases.get(objectText) ?? objectText;
 
   for (const pattern of OUTBOUND_PATTERNS) {
-    if (!pattern.objectPattern.test(objectText)) continue;
+    const matchTarget = pattern.requiredImport ? objectText : canonicalObject;
+    if (!pattern.objectPattern.test(matchTarget)) continue;
     if (!pattern.methodPattern.test(methodName)) continue;
     if (pattern.requiredImport) {
       const hasRequiredImport = [...importSources].some(src => pattern.requiredImport!.test(src));
@@ -116,12 +150,14 @@ function matchOutboundPattern(callNode: Node, importSources: Set<string>): strin
  */
 export function checkPythonOutboundCallSpans(code: string, filePath: string): CheckResult[] {
   const tree = parsePython(code);
-  const importSources = new Set(findPythonImports(code).map(imp => imp.moduleSpecifier));
+  const imports = findPythonImports(code);
+  const importSources = new Set(imports.map(imp => imp.moduleSpecifier));
+  const moduleAliases = buildModuleAliasMap(imports);
   const unspannedCalls: Array<{ line: number; callText: string }> = [];
 
   function walk(node: Node): void {
     if (node.type === 'call') {
-      const match = matchOutboundPattern(node, importSources);
+      const match = matchOutboundPattern(node, importSources, moduleAliases);
       if (match !== null && !isInsideSpanScope(node)) {
         unspannedCalls.push({ line: toLine(node), callText: match });
       }
