@@ -42,15 +42,11 @@ export function getSystemPromptSections(): LanguagePromptSections {
 \`\`\`python
 def my_function(params):
     with tracer.start_as_current_span("my_service.operation_name") as span:
-        try:
-            # original function body
-            span.set_attribute("relevant.attribute", value)
-            return result
-        except Exception as e:
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, str(e)))
-            raise
+        span.set_attribute("relevant.attribute", value)
+        return do_work(params)
 \`\`\`
+
+**Do not add a \`try/except\` block whose only purpose is to record an exception before re-raising it.** \`start_as_current_span()\` defaults to \`record_exception=True\` and \`set_status_on_exception=True\` — any exception that propagates out of the \`with\` block is automatically recorded on the span and sets its status to \`ERROR\`. This is different from JavaScript's \`startActiveSpan()\`, which requires manual \`recordException\`/\`setStatus\` calls in every case. Adding \`except Exception as e: span.record_exception(e); span.set_status(...); raise\` around code that would otherwise let the exception propagate creates a duplicate exception event on the span.
 
 For \`async def\` functions, use \`with\` the same way — \`start_as_current_span\` is a synchronous context manager regardless of whether the wrapped function is async:
 
@@ -61,16 +57,16 @@ async def fetch_data(url):
         return await client.get(url)
 \`\`\`
 
-For functions with existing \`try/except\` blocks, wrap the entire function body — preserve the existing exception handling inside the \`try\` block and add OTel error recording at the top of the corresponding \`except\` block. Never add an explicit \`span.end()\` — the \`with\` block closes the span when it exits, including when an exception propagates out.`,
+For functions with an existing \`try/except\` block that re-raises (a bare \`raise\`, or \`raise NewError(...) from e\`), preserve it exactly as written and do not add error-recording calls to it — the exception still propagates out of the \`with\` block, so the automatic recording above already covers it. Manual error recording only belongs in an \`except\` block that swallows a real error instead of re-raising — see Error Handling below. Never add an explicit \`span.end()\` — the \`with\` block closes the span when it exits, including when an exception propagates out.`,
 
-    errorHandling: `Every \`except\` block inside a span that represents a real error MUST have both \`span.record_exception(e)\` AND \`span.set_status(Status(StatusCode.ERROR, str(e)))\`. One without the other is incomplete:
-- \`set_status\` alone marks the span as errored but loses the exception details and stack trace.
-- \`record_exception\` alone attaches the exception event but doesn't change the span's status.
-- Using \`span.set_attribute('error', ...)\` instead is wrong — use the standard OTel error recording API.
+    errorHandling: `\`start_as_current_span()\` automatically calls \`span.record_exception(e)\` and sets the span status to \`ERROR\` for any exception that propagates out of the \`with\` block — this is the OTel Python SDK's default (\`record_exception=True\`, \`set_status_on_exception=True\`). This changes where manual error recording belongs:
 
-Both calls require \`from opentelemetry.trace import Status, StatusCode\` at module scope.
+- **Do NOT add manual \`record_exception\`/\`set_status\` calls to an \`except\` block that re-raises** (bare \`raise\`, or \`raise NewError(...) from e\`). The exception still propagates out of the \`with\` block, so it is already recorded automatically — a manual call there produces a second, duplicate exception event on the same span.
+- **DO add manual \`span.record_exception(e)\` AND \`span.set_status(Status(StatusCode.ERROR, str(e)))\` to an \`except\` block that swallows a real error** — returns a fallback value, logs and continues, etc., without re-raising or otherwise letting the exception propagate. The automatic recording above only fires for exceptions that leave the \`with\` block; a swallowed exception never reaches it and would otherwise go unrecorded entirely.
 
-**Exception — expected-condition catches (control flow):** If the original \`except\` block is empty (\`except Exception: pass\`) or handles an expected condition (e.g. \`except FileNotFoundError:\` for an optional config file, \`except ImportError:\` for an optional dependency, a graceful fallback path), do NOT add \`record_exception\` or \`set_status\`. These catches represent normal control flow, not errors. \`set_status\` is a one-way latch — once set to \`ERROR\`, it cannot be changed back. Marking expected conditions as errors pollutes error metrics and triggers false alerts.`,
+Both manual calls require \`from opentelemetry.trace import Status, StatusCode\` at module scope.
+
+**Exception — expected-condition catches (control flow):** If the original \`except\` block is empty (\`except Exception: pass\`) or handles an expected condition (e.g. \`except FileNotFoundError:\` for an optional config file, \`except ImportError:\` for an optional dependency, a graceful fallback path), do NOT add \`record_exception\` or \`set_status\` even though it swallows the exception. These catches represent normal control flow, not errors. \`set_status\` is a one-way latch — once set to \`ERROR\`, it cannot be changed back. Marking expected conditions as errors pollutes error metrics and triggers false alerts.`,
 
     otelPatterns: `### What to Instrument (Priority Order)
 
@@ -114,7 +110,6 @@ def get_user(user_id):
     return jsonify(user.to_dict())`,
       after: `from flask import Flask, jsonify
 from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
 
 app = Flask(__name__)
 tracer = trace.get_tracer("my-service")
@@ -123,15 +118,10 @@ tracer = trace.get_tracer("my-service")
 @app.route("/users/<user_id>")
 def get_user(user_id):
     with tracer.start_as_current_span("my_service.users.get_user") as span:
-        span.set_attribute("user.id", user_id)
-        try:
-            user = db.query(User).filter_by(id=user_id).first()
-            return jsonify(user.to_dict())
-        except Exception as e:
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, str(e)))
-            raise`,
-      notes: 'The @app.route decorator is preserved exactly and stays directly above the def line. The span wraps the entire handler body as a service entry point.',
+        user = db.query(User).filter_by(id=user_id).first()
+        span.set_attribute("user.lookup.found", user is not None)
+        return jsonify(user.to_dict())`,
+      notes: 'The @app.route decorator is preserved exactly and stays directly above the def line. The span wraps the entire handler body as a service entry point. `user_id` itself is not captured as an attribute — it is high-cardinality (a per-request identifier); `user.lookup.found` captures the bounded, useful fact instead. No manual except block is added: if `get_user` raises, `start_as_current_span`\'s default `record_exception=True`/`set_status_on_exception=True` records it automatically.',
     },
     {
       description: 'FastAPI async endpoint',
@@ -146,7 +136,6 @@ async def get_order(order_id: str):
     return order`,
       after: `from fastapi import FastAPI
 from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
 
 app = FastAPI()
 tracer = trace.get_tracer("my-service")
@@ -155,25 +144,20 @@ tracer = trace.get_tracer("my-service")
 @app.get("/orders/{order_id}")
 async def get_order(order_id: str):
     with tracer.start_as_current_span("my_service.orders.get_order") as span:
-        span.set_attribute("order.id", order_id)
-        try:
-            order = await order_service.fetch(order_id)
-            return order
-        except Exception as e:
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, str(e)))
-            raise`,
-      notes: '`async def` is preserved — the with-statement span context manager works identically for sync and async functions since start_as_current_span is not itself awaited.',
+        order = await order_service.fetch(order_id)
+        span.set_attribute("order.lookup.found", order is not None)
+        return order`,
+      notes: '`async def` is preserved — the with-statement span context manager works identically for sync and async functions since start_as_current_span is not itself awaited. `order_id` is not captured directly (high-cardinality); `order.lookup.found` captures the bounded fact instead. No manual except block is added — an exception from `order_service.fetch` is recorded automatically by start_as_current_span\'s default behavior.',
     },
     {
-      description: 'Function with try/except error recording',
+      description: 'Function with try/except that swallows a real error (manual recording needed)',
       before: `def load_config(path):
     try:
         with open(path) as f:
             return json.load(f)
     except json.JSONDecodeError as e:
         logger.error(f"Invalid config at {path}: {e}")
-        raise ConfigError(f"Could not parse {path}") from e`,
+        return {}`,
       after: `from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
@@ -190,8 +174,8 @@ def load_config(path):
             span.record_exception(e)
             span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Invalid config at {path}: {e}")
-            raise ConfigError(f"Could not parse {path}") from e`,
-      notes: 'The existing except block and its logging/re-raise behavior are preserved unchanged; OTel error recording is added at the top of the block.',
+            return {}`,
+      notes: 'The except block swallows the JSONDecodeError — it returns a fallback value instead of re-raising, so the exception never propagates out of the with block and start_as_current_span\'s automatic recording never fires for it. This is the one case where adding manual record_exception/set_status is correct, not redundant: without it, this real error would go completely unrecorded on the span.',
     },
     {
       description: 'Function with outbound HTTP call',
@@ -200,7 +184,6 @@ def load_config(path):
     response.raise_for_status()
     return response.json()`,
       after: `from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
 
 tracer = trace.get_tracer("my-service")
 
@@ -208,16 +191,11 @@ tracer = trace.get_tracer("my-service")
 def fetch_weather(city):
     with tracer.start_as_current_span("my_service.weather.fetch_weather") as span:
         span.set_attribute("weather.city", city)
-        try:
-            response = requests.get(f"https://api.weather.example/v1/{city}")
-            response.raise_for_status()
-            span.set_attribute("http.response.status_code", response.status_code)
-            return response.json()
-        except Exception as e:
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, str(e)))
-            raise`,
-      notes: 'requests has a trusted OTel auto-instrumentation library (opentelemetry-instrumentation-requests); the manual span here covers this function as the orchestrating call site, giving visibility into the application-level operation in addition to whatever auto-instrumentation captures on the underlying requests.get call.',
+        response = requests.get(f"https://api.weather.example/v1/{city}")
+        response.raise_for_status()
+        span.set_attribute("http.response.status_code", response.status_code)
+        return response.json()`,
+      notes: 'requests has a trusted OTel auto-instrumentation library (opentelemetry-instrumentation-requests); the manual span here covers this function as the orchestrating call site, giving visibility into the application-level operation in addition to whatever auto-instrumentation captures on the underlying requests.get call. No manual except block is added — if raise_for_status() raises, start_as_current_span\'s default record_exception=True/set_status_on_exception=True records it automatically.',
     },
     {
       description: 'Nested function with span context propagation',
@@ -228,7 +206,6 @@ def fetch_weather(city):
 
     return [process_item(item) for item in items]`,
       after: `from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
 
 tracer = trace.get_tracer("my-service")
 
@@ -241,13 +218,8 @@ def process_batch(items):
             validated = validate(item)
             return transform(validated)
 
-        try:
-            return [process_item(item) for item in items]
-        except Exception as e:
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, str(e)))
-            raise`,
-      notes: 'process_item is a nested, unexported helper — it inherits the active span context from process_batch\'s with-block automatically (OTel context propagation is implicit in Python via contextvars); it does not need its own span.',
+        return [process_item(item) for item in items]`,
+      notes: 'process_item is a nested, unexported helper — it inherits the active span context from process_batch\'s with-block automatically (OTel context propagation is implicit in Python via contextvars); it does not need its own span. No manual except block is added — if process_item raises, start_as_current_span\'s default record_exception=True/set_status_on_exception=True records it automatically on process_batch\'s span.',
     },
   ];
 }

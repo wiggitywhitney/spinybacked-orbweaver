@@ -308,6 +308,13 @@ describe('PythonProvider', () => {
       const sections = provider.getSystemPromptSections();
       expect(sections.libraryInstallation).toBe('pip install opentelemetry-api');
     });
+
+    it('errorHandling and spanCreation warn against duplicate exception recording on re-raise', () => {
+      const sections = provider.getSystemPromptSections();
+      expect(sections.errorHandling).toMatch(/do not add manual.*re-raises/i);
+      expect(sections.errorHandling).toMatch(/duplicate exception event/i);
+      expect(sections.spanCreation).toMatch(/duplicate exception event/i);
+    });
   });
 
   describe('getInstrumentationExamples', () => {
@@ -327,6 +334,21 @@ describe('PythonProvider', () => {
       for (const ex of examples) {
         expect(ex.after).not.toMatch(/span\.end\(\)/);
       }
+    });
+
+    it('no example captures a high-cardinality user_id or order_id attribute', () => {
+      const examples = provider.getInstrumentationExamples();
+      for (const ex of examples) {
+        expect(ex.after).not.toMatch(/set_attribute\("user\.id"/);
+        expect(ex.after).not.toMatch(/set_attribute\("order\.id"/);
+      }
+    });
+
+    it('only the swallowed-exception example manually calls record_exception', () => {
+      const examples = provider.getInstrumentationExamples();
+      const withManualRecording = examples.filter(ex => /record_exception/.test(ex.after));
+      expect(withManualRecording).toHaveLength(1);
+      expect(withManualRecording[0]?.description).toMatch(/swallows a real error/i);
     });
 
     it('includes a Flask example and a FastAPI example', () => {
@@ -355,6 +377,31 @@ describe('PythonProvider', () => {
       try {
         const name = await provider.readProjectName(tmpDir);
         expect(name).toBeUndefined();
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
+    it('ignores a name field in an unrelated table and reads the [project] table instead', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(
+          join(tmpDir, 'pyproject.toml'),
+          '[tool.some-plugin]\nname = "not-the-project-name"\n\n[project]\nname = "my-python-project"\n',
+        );
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('my-python-project');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
+    it('reads the name field from [tool.poetry] when present instead of [project]', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '[tool.poetry]\nname = "poetry-project"\nversion = "1.0.0"\n');
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('poetry-project');
       } finally {
         await rm(tmpDir, { recursive: true });
       }

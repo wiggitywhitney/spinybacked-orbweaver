@@ -163,6 +163,10 @@ function tryFormatterBinary(binary: string, args: string[], source: string, conf
       cwd: configDir,
       timeout: 10_000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      // Node's execFileSync default maxBuffer is 1 MiB — a large source file's
+      // formatted output could exceed that and throw ENOBUFS/"maxBuffer exceeded"
+      // instead of returning the formatted code.
+      maxBuffer: 64 * 1024 * 1024,
     }).toString();
     return { output, found: true, error: '' };
   } catch (error: unknown) {

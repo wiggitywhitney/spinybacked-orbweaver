@@ -29,8 +29,34 @@ import { reassemblePythonFunctions } from './reassembly.ts';
 import { checkSyntax, formatCode, lintCheck } from './validation.ts';
 import { getSystemPromptSections, getInstrumentationExamples } from './prompt.ts';
 
-/** Matches `name = "..."` (or `'...'`) directly under a `[project]` table in `pyproject.toml`. */
-const PYPROJECT_NAME_PATTERN = /^\s*name\s*=\s*["']([^"']+)["']/m;
+const TOML_TABLE_HEADER_PATTERN = /^\s*\[([^[\]]+)\]\s*$/;
+const NAME_ASSIGNMENT_PATTERN = /^\s*name\s*=\s*["']([^"']+)["']/;
+/** Tables whose `name` field identifies the project (PEP 621 `[project]`, or Poetry's own `[tool.poetry]`). */
+const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);
+
+/**
+ * Extract the project name from `pyproject.toml`'s `[project]` or `[tool.poetry]` table.
+ *
+ * Line-based table tracking, not a full TOML parser — structural-analysis-only scope
+ * per OD-1. Scoping to these two tables (rather than matching the first `name = "..."`
+ * anywhere in the file) avoids picking up an unrelated tool's own `name` field, e.g.
+ * `[tool.some-plugin]` sections that happen to declare their own `name`.
+ */
+function extractProjectNameFromPyproject(content: string): string | undefined {
+  let currentTable: string | undefined;
+  for (const line of content.split('\n')) {
+    const tableMatch = TOML_TABLE_HEADER_PATTERN.exec(line);
+    if (tableMatch) {
+      currentTable = tableMatch[1]?.trim();
+      continue;
+    }
+    if (currentTable !== undefined && PROJECT_NAME_TABLES.has(currentTable)) {
+      const nameMatch = NAME_ASSIGNMENT_PATTERN.exec(line);
+      if (nameMatch?.[1] !== undefined) return nameMatch[1];
+    }
+  }
+  return undefined;
+}
 
 /**
  * Python language provider.
@@ -208,12 +234,7 @@ export class PythonProvider implements LanguageProvider {
   async readProjectName(projectDir: string): Promise<string | undefined> {
     try {
       const content = await readFile(join(projectDir, 'pyproject.toml'), 'utf-8');
-      // Line-based extraction, not a full TOML parser — structural-analysis-only
-      // scope per OD-1. Matches the first top-level `name = "..."` line, which in
-      // a well-formed pyproject.toml belongs to the [project] (or [tool.poetry])
-      // table; a project with no such line has nothing to report.
-      const match = PYPROJECT_NAME_PATTERN.exec(content);
-      return match?.[1];
+      return extractProjectNameFromPyproject(content);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         // pyproject.toml doesn't exist — per OD-3, fall back to requirements.txt.
