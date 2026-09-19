@@ -274,6 +274,8 @@ Following Part 8 checklist, Step 2:
 
 Following Part 8 checklist, Step 3:
 
+**Before writing any further D3 rule:** read `src/languages/python/rules/cov001.ts` and `test/languages/python/rules/cov001.test.ts` in full — this is the established Python Tier 2 checker pattern (file location, `ValidationRule` shape, tree-sitter traversal via `parsePython()`, `tree.delete()` placement, and how the rule gets registered into `PYTHON_RULES` in `src/languages/python/index.ts`). Also read the corresponding JavaScript rule (e.g. `src/languages/javascript/rules/cov002.ts`) for the semantic behavior each rule should match — the shared-concept rule list below names which JS rule each Python rule mirrors.
+
 **Progress note (2026-09-19):** `src/languages/python/rules/` exists; `cov001.ts` is implemented and registered (`cov001PythonRule`, registered via `PythonProvider`'s constructor into the shared `rule-registry.ts`, following the same `PYTHON_RULES`-array pattern as `JS_RULES`/TS rules). See Decision D-D3-1 for why `classifyPythonFunction()` was left as a permanent `'unknown'` stub rather than implementing Flask/FastAPI detection there. A CodeRabbit review round on this milestone's first commit caught two real gaps, since fixed: the parsed tree returned by `parsePython()` was never released with `tree.delete()` (a WASM-backed resource leak per the project's own `web-tree-sitter` gotcha), and a decorated *class* (e.g. `@dataclass class Handlers: ...`) caused the traversal to return immediately without descending into the class body, so a route-decorated method nested inside a decorated class was invisible to the check. Remaining rules (`cov002.ts` onward) are not yet started.
 
 - [x] Create `src/languages/python/rules/` directory
