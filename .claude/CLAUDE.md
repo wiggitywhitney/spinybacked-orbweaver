@@ -41,6 +41,8 @@ vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:/Users/whitne
 
 Do not dismiss `validation.test.ts` formatCode/lintCheck failures as "pre-existing" or "environment-related, unrelated to this change" without first confirming the real binary is reachable under the PATH the test run actually used.
 
+**Do not "fix" the hardcoded `/Users/whitney.lee/.pyenv/shims` path above by deriving it dynamically via `pyenv root`.** `pyenv root` itself depends on `$HOME` (defaulting to `$HOME/.pyenv`), and `vals exec` strips `HOME`, so `pyenv root` under `vals exec` resolves to the broken path `/.pyenv` instead of the real one. The hardcoded path is the correct fix specifically because `vals exec`'s environment can't compute the "proper" dynamic path at all.
+
 ## TypeScript: erasableSyntaxOnly
 
 This project uses Node.js 24.x native type stripping. TypeScript annotations are erased at runtime — no transpilation step. Run files directly with `node src/index.ts`.
