@@ -164,6 +164,29 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags a swallowed except block whose record_exception() call is on an unrelated receiver, not the bound span variable', () => {
+      // `audit.record_exception(e)` is not the span bound by `as span` —
+      // calling it does not record anything on the actual span, so this
+      // must still be flagged rather than treated as satisfying COV-003.
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user") as span:',
+        '        try:',
+        '            return requests.get(f"https://api.example.com/users/{user_id}")',
+        '        except requests.RequestException as e:',
+        '            audit.record_exception(e)',
+        '            return None',
+        '',
+      ].join('\n');
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('nested function scope boundary', () => {

@@ -84,6 +84,25 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(0);
   });
 
+  it('does not skip a function that calls record_exception() without creating a span', () => {
+    // record_exception()/set_status() record an error on a span that must
+    // already exist — they don't create one. A function calling only one of
+    // these (with no start_as_current_span()/start_span() of its own) is not
+    // yet instrumented and must still be offered for instrumentation.
+    const source = [
+      'def handler(span, req):',
+      '    try:',
+      '        return do_work()',
+      '    except ValueError as e:',
+      '        span.record_exception(e)',
+      '        return None',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0]).toMatchObject({ name: 'handler' });
+  });
+
   it('does not skip a function whose docstring merely mentions a span method by name', () => {
     const source = [
       'def handler(req):',

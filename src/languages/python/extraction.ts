@@ -9,12 +9,19 @@ import { parsePython } from './ast.ts';
 const MIN_STATEMENTS = 3;
 
 /**
- * Method names indicating a function already contains OTel span instrumentation.
- * Matched receiver-agnostically against real `call` nodes (see `hasOTelSpanCall()`),
- * not raw text — a docstring or comment merely mentioning one of these names must
- * not cause a function to be wrongly treated as already instrumented.
+ * Method names indicating a function already contains OTel span *creation*
+ * instrumentation. Matched receiver-agnostically against real `call` nodes
+ * (see `hasOTelSpanCall()`), not raw text — a docstring or comment merely
+ * mentioning one of these names must not cause a function to be wrongly
+ * treated as already instrumented. Deliberately excludes `record_exception`/
+ * `set_status` — those record an error on a span that must already exist,
+ * they don't create one, so a function calling only one of them (without
+ * `start_as_current_span`/`start_span`) is not yet instrumented and must
+ * still be offered for instrumentation. Matches the JavaScript/TypeScript
+ * providers' own `OTEL_SPAN_PATTERNS`, which is span-creation-only
+ * (`startActiveSpan`/`startSpan`/`span.end()`) for the same reason.
  */
-const OTEL_SPAN_METHODS = new Set(['start_as_current_span', 'start_span', 'record_exception']);
+const OTEL_SPAN_METHODS = new Set(['start_as_current_span', 'start_span']);
 
 /** Options for function extraction. */
 export interface ExtractPythonFunctionsOptions {

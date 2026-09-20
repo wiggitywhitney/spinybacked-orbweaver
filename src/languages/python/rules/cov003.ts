@@ -10,8 +10,14 @@ const SPAN_CREATION_METHODS = new Set(['start_as_current_span', 'start_span']);
 
 /**
  * Error-recording method names that satisfy COV-003, mirroring the JavaScript
- * checker's `ERROR_RECORDING_PATTERNS` (`.recordException(`, `.setStatus(`) —
- * matched receiver-agnostically, the same convention `cov001.ts`/`cov002.ts` use.
+ * checker's `ERROR_RECORDING_PATTERNS` (`.recordException(`, `.setStatus(`).
+ * Unlike `cov001.ts`/`cov002.ts`'s receiver-agnostic `SPAN_CREATION_METHODS`
+ * matching, these are matched against the *specific* span variable bound by
+ * the enclosing `with ... as span:` clause (see `findEnclosingSpanScope()`) —
+ * matching JS COV-003's `hasErrorRecording()`, which checks `${spanParam}${pattern}`
+ * rather than any receiver. An unrelated object also named `record_exception`/
+ * `set_status` (e.g. `audit.record_exception(e)`) must not be mistaken for
+ * recording on the actual span.
  */
 const ERROR_RECORDING_METHODS = new Set(['record_exception', 'set_status']);
 
@@ -37,9 +43,13 @@ function isSpanCreationCall(node: Node): boolean {
   return attribute !== null && SPAN_CREATION_METHODS.has(attribute.text);
 }
 
-/** Whether a `with_clause` contains a `with_item` whose expression creates a span. */
-function withClauseHasSpanCall(withClause: Node): boolean {
-  return withClause.namedChildren.some((item) => {
+/**
+ * The `with_item` in a `with_clause` whose expression creates a span, if any.
+ * Returns the matching `with_item` node itself (not just a boolean) so the
+ * caller can also extract its `as`-bound variable name, if one exists.
+ */
+function findSpanWithItem(withClause: Node): Node | undefined {
+  return withClause.namedChildren.find((item): item is Node => {
     if (item === null || item.type !== 'with_item') return false;
     const expr = item.namedChild(0);
     if (expr === null) return false;
@@ -50,25 +60,55 @@ function withClauseHasSpanCall(withClause: Node): boolean {
 }
 
 /**
- * Whether a node is enclosed in a `with` block whose clause creates a span.
- * Mirrors `cov002.ts`'s `isInsideSpanScope()` exactly — an `except` block
- * outside any span scope has no span to record errors on, so it is not this
- * check's concern (nothing to flag; there's no span for the error to be
- * missing from).
+ * The identifier bound by a span-creating `with_item`'s `as` clause (e.g. the
+ * `span` in `with tracer.start_as_current_span(...) as span:`), or `null` if
+ * the `with` has no `as` binding at all (`with tracer.start_as_current_span(...):`).
  */
-function isInsideSpanScope(node: Node): boolean {
+function spanVarNameFromWithItem(withItem: Node): string | null {
+  const expr = withItem.namedChild(0);
+  if (expr?.type !== 'as_pattern') return null;
+  const target = expr.namedChild(1); // `as_pattern_target`
+  const identifier = target?.namedChild(0);
+  return identifier?.type === 'identifier' ? identifier.text : null;
+}
+
+/** The result of resolving the nearest enclosing spanned `with` scope for a node. */
+interface SpanScope {
+  /** Whether the node is enclosed in a `with` block whose clause creates a span. */
+  readonly inScope: boolean;
+  /**
+   * The span variable bound by that `with`'s `as` clause, or `null` if
+   * `inScope` is `false`, or if the `with` has no `as` binding (in which case
+   * no identifier in the block can refer to the span at all).
+   */
+  readonly spanVarName: string | null;
+}
+
+/**
+ * Resolve the nearest enclosing `with`-scoped span for a node, and the span
+ * variable name it bound (if any). Mirrors `cov002.ts`'s `isInsideSpanScope()`
+ * scope-boundary walk exactly — an `except` block outside any span scope has
+ * no span to record errors on, so it is not this check's concern (nothing to
+ * flag; there's no span for the error to be missing from).
+ */
+function findEnclosingSpanScope(node: Node): SpanScope {
   let current = node.parent;
   while (current !== null) {
-    if (SCOPE_BOUNDARIES.has(current.type)) return false;
+    if (SCOPE_BOUNDARIES.has(current.type)) return { inScope: false, spanVarName: null };
     if (current.type === 'with_statement') {
       const clause = current.namedChildren.find(
         (c): c is Node => c !== null && c.type === 'with_clause',
       );
-      if (clause !== undefined && withClauseHasSpanCall(clause)) return true;
+      if (clause !== undefined) {
+        const spanItem = findSpanWithItem(clause);
+        if (spanItem !== undefined) {
+          return { inScope: true, spanVarName: spanVarNameFromWithItem(spanItem) };
+        }
+      }
     }
     current = current.parent;
   }
-  return false;
+  return { inScope: false, spanVarName: null };
 }
 
 /**
@@ -90,18 +130,31 @@ function containsReraise(node: Node, isRoot: boolean): boolean {
   return false;
 }
 
-/** Whether a subtree contains a call to `record_exception`/`set_status` on any receiver, reachable without crossing a nested scope boundary. */
-function containsErrorRecordingCall(node: Node, isRoot: boolean): boolean {
+/**
+ * Whether a subtree contains a call to `record_exception`/`set_status` on the
+ * span variable bound by the enclosing `with ... as span:` clause, reachable
+ * without crossing a nested scope boundary. `spanVarName === null` means the
+ * enclosing `with` had no `as` binding — no identifier in scope can refer to
+ * the span, so no call can satisfy this (matches JS COV-003's `spanParam`
+ * requirement, which is likewise required for `hasErrorRecording()` to match
+ * anything).
+ */
+function containsErrorRecordingCall(node: Node, isRoot: boolean, spanVarName: string | null): boolean {
+  if (spanVarName === null) return false;
   if (!isRoot && SCOPE_BOUNDARIES.has(node.type)) return false;
   if (node.type === 'call') {
     const fn = node.childForFieldName('function');
     if (fn?.type === 'attribute') {
+      const receiver = fn.childForFieldName('object');
       const attribute = fn.childForFieldName('attribute');
-      if (attribute !== null && ERROR_RECORDING_METHODS.has(attribute.text)) return true;
+      if (receiver?.type === 'identifier' && receiver.text === spanVarName
+        && attribute !== null && ERROR_RECORDING_METHODS.has(attribute.text)) {
+        return true;
+      }
     }
   }
   for (const child of node.namedChildren) {
-    if (child !== null && containsErrorRecordingCall(child, false)) return true;
+    if (child !== null && containsErrorRecordingCall(child, false, spanVarName)) return true;
   }
   return false;
 }
@@ -130,7 +183,9 @@ export function checkPythonErrorVisibility(code: string, filePath: string): Chec
 
   function walk(node: Node): void {
     if (node.type === 'except_clause') {
-      if (isInsideSpanScope(node) && !containsReraise(node, true) && !containsErrorRecordingCall(node, true)) {
+      const scope = findEnclosingSpanScope(node);
+      if (scope.inScope && !containsReraise(node, true)
+        && !containsErrorRecordingCall(node, true, scope.spanVarName)) {
         unrecorded.push({ line: toLine(node) });
       }
       // Descend anyway — a nested try/except inside this except block's
