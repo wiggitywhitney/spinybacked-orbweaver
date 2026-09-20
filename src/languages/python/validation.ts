@@ -193,6 +193,13 @@ function tryFormatterBinary(binary: string, args: string[], source: string, conf
 function runFormatter(source: string, configDir: string): FormatAttempt {
   const stdinFilename = join(configDir, '_spiny_orb_format_target.py');
 
+  // TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
+  // milestone that surfaced it) that when Ruff is installed but fails on this
+  // specific input (`ruff.found === true`, a real execution failure, not ENOENT),
+  // this returns immediately without trying Black — unlike the ENOENT path just
+  // below, which does fall through to Black. Needs verification against a real
+  // input Ruff rejects but Black accepts before changing this, given this
+  // function's existing hardening (three prior CodeRabbit rounds).
   const ruff = tryFormatterBinary('ruff', ['format', '--stdin-filename', stdinFilename, '-'], source, configDir);
   if (ruff.output !== null) return { code: ruff.output, formatterAvailable: true, executionFailed: false, executionError: '' };
   if (ruff.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: ruff.error };
