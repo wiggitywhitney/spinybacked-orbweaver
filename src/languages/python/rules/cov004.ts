@@ -33,6 +33,37 @@ function isAsyncFunctionDefinition(fnNode: Node): boolean {
 }
 
 /**
+ * The dotted method name of a decorator, if it is a call to an `attribute`
+ * expression (e.g. `@tracer.start_as_current_span("name")`). Mirrors
+ * `cov001.ts`'s `decoratorMethodName()`.
+ */
+function decoratorMethodName(decoratorNode: Node): string | undefined {
+  const expr = decoratorNode.namedChild(0);
+  const call = expr?.type === 'call' ? expr : undefined;
+  const target = call ? call.childForFieldName('function') : expr;
+  if (target?.type !== 'attribute') return undefined;
+  return target.childForFieldName('attribute')?.text;
+}
+
+/**
+ * Whether a `decorated_definition` carries a span-creation decorator, e.g.
+ * `@tracer.start_as_current_span("name")`. This is a real, working Python
+ * idiom — `start_as_current_span()` is a `contextlib.contextmanager`-based
+ * generator, and `contextlib`'s generated context managers double as
+ * `ContextDecorator`s, so applying one directly as a decorator wraps the
+ * entire function call in a span (verified against `opentelemetry-api`
+ * 1.35.0 / `opentelemetry-sdk` at runtime, 2026-09-20). `hasSpanCreationCall()`
+ * alone can't see this — the span-creation call lives in the decorator, not
+ * in the function body.
+ */
+function hasSpanDecorator(decoratedDef: Node): boolean {
+  return decoratedDef.namedChildren.some(
+    (child): child is Node => child !== null && child.type === 'decorator'
+      && SPAN_CREATION_METHODS.has(decoratorMethodName(child) ?? ''),
+  );
+}
+
+/**
  * Whether a subtree contains a real call to a span-creation method, reachable
  * without crossing a nested scope boundary. Mirrors `cov001.ts`'s
  * `hasSpanCreationCall()` — receiver-agnostic on the attribute name, walking
@@ -76,16 +107,19 @@ export function checkPythonAsyncOperationSpans(code: string, filePath: string): 
   function collect(stmtNode: Node, insideClass: boolean): void {
     let node = stmtNode;
     let boundaryNode = stmtNode;
+    let decorated = false;
 
     if (node.type === 'decorated_definition') {
       const inner = node.childForFieldName('definition');
       if (inner === null) return;
       boundaryNode = stmtNode;
       node = inner;
+      decorated = true;
     }
 
     if (node.type === 'function_definition') {
-      if (isAsyncFunctionDefinition(node) && !hasSpanCreationCall(node, true)) {
+      const hasSpan = hasSpanCreationCall(node, true) || (decorated && hasSpanDecorator(boundaryNode));
+      if (isAsyncFunctionDefinition(node) && !hasSpan) {
         const name = node.childForFieldName('name')?.text ?? '<anonymous>';
         unspanned.push({ line: toLine(boundaryNode), name });
       }

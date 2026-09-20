@@ -85,6 +85,43 @@ describe('checkPythonAsyncOperationSpans (COV-004)', () => {
     });
   });
 
+  describe('span-creation decorator', () => {
+    it('passes when an async function is decorated with @tracer.start_as_current_span', () => {
+      // `start_as_current_span()` is a `contextlib.contextmanager`-based
+      // generator, and generator-based context managers double as
+      // `ContextDecorator`s — applying one directly as a decorator wraps the
+      // entire function call in a span. `hasSpanCreationCall()` alone can't
+      // see this, since the span-creation call lives in the decorator, not
+      // the function body.
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@tracer.start_as_current_span("fetch_user")',
+        'async def fetch_user(user_id):',
+        '    return await db.find(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags an async function whose decorator is unrelated to span creation', () => {
+      const code = [
+        '@app.get("/users/{user_id}")',
+        'async def get_user(user_id: int):',
+        '    return await db.find(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('async class method', () => {
     it('flags an async method with no span', () => {
       const code = [
