@@ -33,6 +33,14 @@ vals exec -f .vals.yaml -- <command>
 vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" && npx vitest run ...'
 ```
 
+**pyenv-installed tools (ruff, black) are NOT covered by the Homebrew PATH fix above.** On machines where `ruff`/`black` are installed via `pyenv` rather than Homebrew, they live at `~/.pyenv/shims/`, not `/opt/homebrew/bin`. `execFileSync('ruff', ...)` in `src/languages/python/validation.ts` inherits `process.env.PATH`, so Python provider tests (`test/languages/python/validation.test.ts`) that shell out to the real formatter will fail to find the binary and report `passed: false` on the "formatter compliant" tests — even though the tests and code are correct. This looks like a flaky or unrelated failure but is not: verify by checking `which ruff black` and adding whichever directory they resolve to onto PATH:
+
+```bash
+vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:/Users/whitney.lee/.pyenv/shims:$PATH" && npx vitest run ...'
+```
+
+Do not dismiss `validation.test.ts` formatCode/lintCheck failures as "pre-existing" or "environment-related, unrelated to this change" without first confirming the real binary is reachable under the PATH the test run actually used.
+
 ## TypeScript: erasableSyntaxOnly
 
 This project uses Node.js 24.x native type stripping. TypeScript annotations are erased at runtime — no transpilation step. Run files directly with `node src/index.ts`.

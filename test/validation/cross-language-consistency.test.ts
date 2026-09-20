@@ -11,6 +11,7 @@ import { checkOutboundCallSpans } from '../../src/languages/javascript/rules/cov
 import { checkPythonOutboundCallSpans } from '../../src/languages/python/rules/cov002.ts';
 import { checkErrorVisibility } from '../../src/languages/javascript/rules/cov003.ts';
 import { checkErrorVisibilityTs } from '../../src/languages/typescript/rules/cov003.ts';
+import { checkPythonErrorVisibility } from '../../src/languages/python/rules/cov003.ts';
 import { checkExportedSignaturePreservation } from '../../src/languages/javascript/rules/nds004.ts';
 import { checkExportedSignaturePreservationTs } from '../../src/languages/typescript/rules/nds004.ts';
 import { checkModuleSystemMatch } from '../../src/languages/javascript/rules/nds006.ts';
@@ -331,7 +332,54 @@ describe('COV-003: Failable operations have error visibility', () => {
     expect(results.every(r => r.passed)).toBe(true);
   });
 
-  // Python and Go cases added when those providers merge (PRD #373, PRD #374)
+  it('catches a swallowed exception in a Python except block with no error recording', () => {
+    // Per OD-4's 2026-09-18 correction, Python's checker only flags a
+    // *swallowed* exception (no re-raise) — a re-raising except block is
+    // already covered by start_as_current_span()'s automatic recording,
+    // unlike JavaScript's startActiveSpan(), which has no such default.
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def fetch_user(user_id):',
+      '    with tracer.start_as_current_span("fetch_user") as span:',
+      '        try:',
+      '            return db.find(user_id)',
+      '        except LookupError as e:',
+      '            return None',
+      '',
+    ].join('\n');
+
+    const results = checkPythonErrorVisibility(code, '/services/user.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-003');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when a swallowed Python except block records the error on the span', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def fetch_user(user_id):',
+      '    with tracer.start_as_current_span("fetch_user") as span:',
+      '        try:',
+      '            return db.find(user_id)',
+      '        except LookupError as e:',
+      '            span.record_exception(e)',
+      '            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))',
+      '            return None',
+      '',
+    ].join('\n');
+
+    const results = checkPythonErrorVisibility(code, '/services/user.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
