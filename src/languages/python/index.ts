@@ -42,6 +42,10 @@ const PYTHON_RULES = [cov001PythonRule, cov002PythonRule] as const;
  * group 2 is the table name.
  */
 const TOML_TABLE_HEADER_PATTERN = /^\s*\[(\[?)([^[\]]+)\]\]?\s*(?:#.*)?$/;
+// TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
+// milestone that surfaced it) that this only matches a bare `name` key, not
+// TOML's quoted-key form (`"name" = "..."`), which is valid syntax though rare
+// in practice for `[project]`/`[tool.poetry]` tables.
 const NAME_ASSIGNMENT_PATTERN = /^\s*name\s*=\s*["']([^"']+)["']/;
 /** Tables whose `name` field identifies the project (PEP 621 `[project]`, or Poetry's own `[tool.poetry]`). */
 const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);

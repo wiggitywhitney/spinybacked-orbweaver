@@ -1,6 +1,6 @@
 # Research: OpenTelemetry Semantic Conventions for Python (`opentelemetry-semantic-conventions`)
 
-**Project:** spinybacked-orbweaver
+**Project:** spiny-orb
 **Last Updated:** 2026-09-18
 
 ## Update Log
@@ -95,7 +95,7 @@ All sources agree on the core facts (beta status, deprecated old import path, st
 
 ### Caveats
 
-- This research answers "is it stable enough to use today" as of 2026-09-17. Because the package versions on a beta train with no announced GA date, this finding has a shelf life — re-check `pypi.org/project/opentelemetry-semantic-conventions/` before Milestone D2 (prompt writing) actually begins, in case a GA shipped between OD-8 resolution and implementation.
+- This research answers "is it stable enough to use today" as of 2026-09-17. Because the package versions on a beta train with no announced GA date, this finding has a shelf life — re-check `pypi.org/project/opentelemetry-semantic-conventions/` before any future OD-8 review or prompt semantic-convention guidance update, in case a GA has shipped since this research pass. (Milestone D2 itself is already complete, per Decision D-D1-3 — this caveat now applies to any later revisit of OD-8a/b/c, not to D2's own implementation.)
 - The four specific constants in item 4's table (`HTTP_REQUEST_METHOD`, `HTTP_RESPONSE_STATUS_CODE`, `URL_PATH`, `DB_SYSTEM_NAME`) were fetched and read directly from their raw GitHub source files in this pass — see the "Source says" citations under item 4. Broader module contents beyond those four specific names (e.g., the full attribute list in each namespace module) were not exhaustively enumerated; if OD-8a is ever revisited to "yes," re-check any additional constant names against the raw source before use.
 - No source in this pass gave a specific GA target date for the semconv package — this is an absence of evidence, not evidence that no GA is planned. Check the project's own issue tracker/roadmap directly if a firmer answer is needed for scheduling purposes.
 
