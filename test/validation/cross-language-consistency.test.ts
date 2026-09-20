@@ -12,6 +12,8 @@ import { checkPythonOutboundCallSpans } from '../../src/languages/python/rules/c
 import { checkErrorVisibility } from '../../src/languages/javascript/rules/cov003.ts';
 import { checkErrorVisibilityTs } from '../../src/languages/typescript/rules/cov003.ts';
 import { checkPythonErrorVisibility } from '../../src/languages/python/rules/cov003.ts';
+import { checkAsyncOperationSpans } from '../../src/languages/javascript/rules/cov004.ts';
+import { checkPythonAsyncOperationSpans } from '../../src/languages/python/rules/cov004.ts';
 import { checkExportedSignaturePreservation } from '../../src/languages/javascript/rules/nds004.ts';
 import { checkExportedSignaturePreservationTs } from '../../src/languages/typescript/rules/nds004.ts';
 import { checkModuleSystemMatch } from '../../src/languages/javascript/rules/nds006.ts';
@@ -376,6 +378,80 @@ describe('COV-003: Failable operations have error visibility', () => {
     ].join('\n');
 
     const results = checkPythonErrorVisibility(code, '/services/user.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COV-004: Async operations have spans
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('COV-004: Async operations have spans', () => {
+  it('catches missing span on a JS async function', () => {
+    const code = [
+      'async function fetchUser(userId) {',
+      '  return await db.find(userId);',
+      '}',
+    ].join('\n');
+
+    const results = checkAsyncOperationSpans(code, '/services/user.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-004');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a JS async function has a span', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'async function fetchUser(userId) {',
+      '  return tracer.startActiveSpan("fetchUser", async (span) => {',
+      '    try {',
+      '      return await db.find(userId);',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkAsyncOperationSpans(code, '/services/user.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('catches a missing span on a Python async def function', () => {
+    const code = [
+      'async def fetch_user(user_id):',
+      '    return await db.find(user_id)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonAsyncOperationSpans(code, '/services/user.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-004');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a Python async def function has a span', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'async def fetch_user(user_id):',
+      '    with tracer.start_as_current_span("fetch_user") as span:',
+      '        return await db.find(user_id)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonAsyncOperationSpans(code, '/services/user.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 
