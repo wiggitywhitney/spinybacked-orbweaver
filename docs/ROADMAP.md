@@ -47,6 +47,7 @@ These are deferred until after future eval runs surface more data. Do not raise 
 - Watch: IS SPA-002 (orphan span) recurrence in taze ([issue #1008](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1008)) — first appeared in taze run-16; possibly stochastic (async span parent race); monitor across future runs before investing in a fix.
 - Watch: P4-3 SDK init failure — possible importName contract mismatch between test and coordinator ([issue #1014](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1014)) — unconfirmed hypothesis; needs coordinator debug dump from Issue #1013 to investigate; do not implement a fix until data is available.
 - Watch: agent notes diverging from committed code ([issue #927](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/927)) — run-21: two confirmed instances; fix issue #918 filed and closed; run-23 clean.
+- Watch: COV-005 `taze.package.latest_version` dropped from both packument.ts fetch spans in taze ([issue #1070](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1070)) — first appeared as TAZE-RUN3-1 in run-16; PR #1012 fixed the other two run-16 carry-forwards but never covered this one; run-17 is investigating it as its primary target — root cause and fix shape depend on that outcome.
 
 ## Short-term (after Go)
 
