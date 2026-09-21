@@ -365,8 +365,41 @@ function collectFromStatement(
 }
 
 /**
+ * The name bound by a function/class definition, unwrapping a `decorated_definition`
+ * to reach its inner `function_definition`/`class_definition` first.
+ */
+function prunedDefinitionName(n: Node): string | undefined {
+  if (n.type === 'decorated_definition') {
+    const inner = n.childForFieldName('definition');
+    return inner === null ? undefined : prunedDefinitionName(inner);
+  }
+  return n.childForFieldName('name')?.text;
+}
+
+/**
+ * A minimal, syntactically valid stub that keeps a pruned definition's name
+ * bound in the guard block's context text, instead of erasing the name
+ * entirely. A bare `pass` in the definition's place would break any later
+ * statement in the *same* guard block that references the name (e.g.
+ * `register(helper)` after `def helper(): ...`) — the name would appear
+ * used but never defined in the presented context, risking a confused or
+ * hallucinated response from the LLM. The stub's own signature doesn't need
+ * to match the original (arity, decorators, base classes) — this text is
+ * read-only context, never spliced back into the real file — it only needs
+ * the name to resolve.
+ */
+function prunedDefinitionStub(n: Node, indent: string): string {
+  const name = prunedDefinitionName(n);
+  if (name === undefined) return `${indent}pass`;
+  const definitionType = n.type === 'decorated_definition' ? n.childForFieldName('definition')?.type : n.type;
+  return definitionType === 'class_definition'
+    ? `${indent}class ${name}: pass`
+    : `${indent}def ${name}(*args, **kwargs): pass`;
+}
+
+/**
  * Replace any nested function/class definition inside a guard block's text with a
- * `pass` placeholder at the same indentation, before that text is used as an
+ * minimal same-name stub at the same indentation, before that text is used as an
  * import's context. A conditionally-defined function/class sitting alongside a
  * guarded import (e.g. `try: import ujson as json \n    def helper(): ...`) is
  * already extracted separately with its own dedicated `contextHeader` — without
@@ -377,7 +410,7 @@ function collectFromStatement(
 function pruneNestedDefinitions(node: Node): string {
   const lines = node.text.split('\n');
   const baseRow = node.startPosition.row;
-  const replacements: Array<{ startRow: number; endRow: number; indent: string }> = [];
+  const replacements: Array<{ startRow: number; endRow: number; indent: string; node: Node }> = [];
 
   function walk(n: Node): void {
     if (n.type === 'function_definition' || n.type === 'class_definition' || n.type === 'decorated_definition') {
@@ -387,7 +420,7 @@ function pruneNestedDefinitions(node: Node): string {
       // earlier in reassembly.ts's baseIndent computation).
       const sourceLine = lines[n.startPosition.row - baseRow];
       const indent = sourceLine?.slice(0, n.startPosition.column) ?? '';
-      replacements.push({ startRow: n.startPosition.row, endRow: n.endPosition.row, indent });
+      replacements.push({ startRow: n.startPosition.row, endRow: n.endPosition.row, indent, node: n });
       return; // Don't descend into a definition already scheduled for replacement.
     }
     for (const child of n.namedChildren) {
@@ -402,7 +435,7 @@ function pruneNestedDefinitions(node: Node): string {
   for (const r of replacements) {
     const start = r.startRow - baseRow;
     const end = r.endRow - baseRow;
-    lines.splice(start, end - start + 1, `${r.indent}pass`);
+    lines.splice(start, end - start + 1, prunedDefinitionStub(r.node, r.indent));
   }
   return lines.join('\n');
 }

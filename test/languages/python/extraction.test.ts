@@ -590,7 +590,7 @@ describe('extractPythonFunctions', () => {
     expect(handler!.contextHeader).not.toContain('do_something_expensive_and_long');
   });
 
-  it('preserves tab indentation on the pass placeholder that replaces a pruned nested definition', () => {
+  it('preserves tab indentation on the stub that replaces a pruned nested definition', () => {
     const source = [
       'try:',
       '\timport ujson as json',
@@ -612,7 +612,57 @@ describe('extractPythonFunctions', () => {
     // spaces) rather than slicing the real leading whitespace would silently
     // convert this file's tabs to spaces, mixing indentation styles in a
     // presented snippet.
-    expect(handler!.contextHeader).toContain('\tpass');
-    expect(handler!.contextHeader).not.toContain('    pass');
+    expect(handler!.contextHeader).toContain('\tdef unrelated_helper');
+    expect(handler!.contextHeader).not.toContain('    def unrelated_helper');
+  });
+
+  it('keeps a pruned definition\'s name bound so a later same-block reference to it still resolves', () => {
+    const source = [
+      'try:',
+      '    import ujson as json',
+      '    def unrelated_helper():',
+      '        return 42',
+      '    register(unrelated_helper)',
+      'except ImportError:',
+      '    import json',
+      '',
+      'def handler(req):',
+      '    x = json.dumps({})',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source, { includeNonExported: true });
+    const handler = extracted.find(fn => fn.name === 'handler');
+    expect(handler).toBeDefined();
+    // A bare `pass` in unrelated_helper's place would leave `register(unrelated_helper)`
+    // referencing a name with no binding anywhere in the presented context.
+    expect(handler!.contextHeader).toContain('def unrelated_helper');
+    expect(handler!.contextHeader).toContain('register(unrelated_helper)');
+    expect(handler!.contextHeader).not.toContain('do_something_expensive_and_long');
+  });
+
+  it('keeps a pruned class definition\'s name bound via a minimal class stub', () => {
+    const source = [
+      'try:',
+      '    import ujson as json',
+      '    class UnrelatedHelper:',
+      '        def method(self):',
+      '            return 42',
+      '    register(UnrelatedHelper)',
+      'except ImportError:',
+      '    import json',
+      '',
+      'def handler(req):',
+      '    x = json.dumps({})',
+      '    y = 2',
+      '    return x, y',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source, { includeNonExported: true });
+    const handler = extracted.find(fn => fn.name === 'handler');
+    expect(handler).toBeDefined();
+    expect(handler!.contextHeader).toContain('class UnrelatedHelper: pass');
+    expect(handler!.contextHeader).toContain('register(UnrelatedHelper)');
   });
 });
