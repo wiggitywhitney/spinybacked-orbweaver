@@ -98,38 +98,77 @@ function isUseSpanCall(node: Node): boolean {
 }
 
 /**
- * Whether a `with_statement` closes the given span variable via
- * `use_span(<spanVarName>, ...)` — the lower-level context manager
- * `start_as_current_span()` itself is built on (see
- * `~/.claude/rules/opentelemetry-python-gotchas.md`). Unlike
- * `start_as_current_span()`'s own automatic-recording defaults, `use_span()`'s
- * own `end_on_exit` parameter defaults to `False` (verified directly against
- * `opentelemetry.trace.use_span()`'s real signature, not assumed) — so an
- * *omitted* `end_on_exit` does NOT close the span. Only an explicit literal
- * `True` (positional or keyword) counts as closing; anything else — omitted,
- * `False`, `None`, `0`, a variable, a parenthesized expression — can't be
- * treated as closing.
+ * Whether a `use_span(...)` call's own arguments have `end_on_exit` set to
+ * the exact literal `True` (positional or keyword) — the only value that
+ * counts as closing. `use_span()`'s `end_on_exit` parameter defaults to
+ * `False` (verified directly against `opentelemetry.trace.use_span()`'s real
+ * signature, not assumed — the opposite of `start_as_current_span()`'s own
+ * automatic-recording defaults, see `~/.claude/rules/opentelemetry-python-gotchas.md`),
+ * so an *omitted* `end_on_exit` does NOT close the span; neither does any
+ * other unverifiable value (`None`, `0`, a variable, a parenthesized expression).
  */
-function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
-  const clause = withStatement.namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
-  const withItem = clause?.namedChildren.find((c): c is Node => c !== null && c.type === 'with_item');
-  const expr = withItem?.namedChild(0);
-  const call = expr?.type === 'as_pattern' ? expr.namedChild(0) : expr;
-  if (call === null || call === undefined || !isUseSpanCall(call)) return false;
-
-  const args = call.childForFieldName('arguments');
+function useSpanExplicitlyEndsOnExit(useSpanCall: Node): boolean {
+  const args = useSpanCall.childForFieldName('arguments');
   const positionalArgs = args?.namedChildren.filter(
     (a): a is Node => a !== null && a.type !== 'keyword_argument',
   ) ?? [];
-  if (positionalArgs[0]?.text !== spanVarName) return false;
-
   const endOnExitKeyword = args?.namedChildren.find(
     (a): a is Node => a !== null && a.type === 'keyword_argument'
       && a.childForFieldName('name')?.text === 'end_on_exit',
   );
   const endOnExitValue = endOnExitKeyword?.childForFieldName('value')?.text ?? positionalArgs[1]?.text;
-
   return endOnExitValue === 'True';
+}
+
+/**
+ * Whether a `with_statement` closes the given span variable via
+ * `use_span(<spanVarName>, ...)` — the lower-level context manager
+ * `start_as_current_span()` itself is built on. Checks every `with_item` in
+ * the `with_clause`, not just the first — `use_span(...)` may appear
+ * alongside another unrelated context manager in the same `with` statement
+ * (e.g. `with open(f) as fh, use_span(span, end_on_exit=True):`).
+ */
+function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
+  const clause = withStatement.namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
+  const withItems = clause?.namedChildren.filter((c): c is Node => c !== null && c.type === 'with_item') ?? [];
+
+  return withItems.some((withItem) => {
+    const expr = withItem.namedChild(0);
+    const call = expr?.type === 'as_pattern' ? expr.namedChild(0) : expr;
+    if (call === null || call === undefined || !isUseSpanCall(call)) return false;
+
+    const args = call.childForFieldName('arguments');
+    const positionalArgs = args?.namedChildren.filter(
+      (a): a is Node => a !== null && a.type !== 'keyword_argument',
+    ) ?? [];
+    if (positionalArgs[0]?.text !== spanVarName) return false;
+
+    return useSpanExplicitlyEndsOnExit(call);
+  });
+}
+
+/**
+ * Whether a raw `start_span()` call is passed directly as `use_span()`'s
+ * first positional argument, itself used as a `with` context manager (e.g.
+ * `with use_span(tracer.start_span("x"), end_on_exit=True):`) — a valid,
+ * if unusual, idiom that never binds the span to a variable at all, so it
+ * would otherwise be wrongly flagged as "never assigned, can never be closed."
+ */
+function isInlineUseSpanClosure(startSpanCall: Node): boolean {
+  const argList = startSpanCall.parent;
+  if (argList?.type !== 'argument_list') return false;
+  const useSpanCall = argList.parent;
+  if (useSpanCall === null || !isUseSpanCall(useSpanCall)) return false;
+
+  const positionalArgs = argList.namedChildren.filter(
+    (a): a is Node => a !== null && a.type !== 'keyword_argument',
+  );
+  if (positionalArgs[0]?.startIndex !== startSpanCall.startIndex) return false;
+
+  const withItem = useSpanCall.parent?.type === 'as_pattern' ? useSpanCall.parent.parent : useSpanCall.parent;
+  if (withItem?.type !== 'with_item') return false;
+
+  return useSpanExplicitlyEndsOnExit(useSpanCall);
 }
 
 /**
@@ -201,7 +240,7 @@ export function checkPythonSpansClosed(code: string, filePath: string): CheckRes
   const unclosed: Array<{ line: number; description: string }> = [];
 
   function walk(node: Node): void {
-    if (isRawStartSpanCall(node) && !isWithBoundStartSpan(node)) {
+    if (isRawStartSpanCall(node) && !isWithBoundStartSpan(node) && !isInlineUseSpanClosure(node)) {
       const assignment = node.parent?.type === 'assignment' ? node.parent : undefined;
       const assignmentStatement = assignment?.parent;
       const left = assignment?.childForFieldName('left');

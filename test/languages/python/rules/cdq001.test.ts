@@ -137,6 +137,43 @@ describe('checkPythonSpansClosed (CDQ-001)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('passes when use_span appears alongside another context manager in the same with statement', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with open("f") as fh, use_span(span, end_on_exit=True):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when a raw start_span is passed inline as use_span()\'s first argument', () => {
+      const code = [
+        'def do_work():',
+        '    with use_span(tracer.start_span("doWork"), end_on_exit=True):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('fails when a raw start_span is passed inline as use_span()\'s first argument without end_on_exit=True', () => {
+      const code = [
+        'def do_work():',
+        '    with use_span(tracer.start_span("doWork")):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('attribute-target spans (self.span)', () => {
