@@ -14,6 +14,8 @@ import { checkErrorVisibilityTs } from '../../src/languages/typescript/rules/cov
 import { checkPythonErrorVisibility } from '../../src/languages/python/rules/cov003.ts';
 import { checkAsyncOperationSpans } from '../../src/languages/javascript/rules/cov004.ts';
 import { checkPythonAsyncOperationSpans } from '../../src/languages/python/rules/cov004.ts';
+import { checkAutoInstrumentationPreference } from '../../src/languages/javascript/rules/cov006.ts';
+import { checkPythonAutoInstrumentationPreference } from '../../src/languages/python/rules/cov006.ts';
 import { checkExportedSignaturePreservation } from '../../src/languages/javascript/rules/nds004.ts';
 import { checkExportedSignaturePreservationTs } from '../../src/languages/typescript/rules/nds004.ts';
 import { checkModuleSystemMatch } from '../../src/languages/javascript/rules/nds006.ts';
@@ -456,6 +458,83 @@ describe('COV-004: Async operations have spans', () => {
   });
 
   // Go cases added when that provider merges (PRD #374)
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COV-006: Auto-instrumentation preferred over manual spans
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('COV-006: Auto-instrumentation preferred over manual spans', () => {
+  it('catches a manual span wrapping only an outbound http call in JS', () => {
+    const code = [
+      'function fetchUser(userId) {',
+      '  return tracer.startActiveSpan("fetchUser", (span) => {',
+      '    return https.get(`https://api.example.com/users/${userId}`);',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkAutoInstrumentationPreference(code, '/services/user.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-006');
+    expect(failures[0].tier).toBe(2);
+  });
+
+  it('passes when a JS span does more than wrap the outbound call', () => {
+    const code = [
+      'function fetchUser(userId) {',
+      '  return tracer.startActiveSpan("fetchUser", (span) => {',
+      '    const result = https.get(`https://api.example.com/users/${userId}`);',
+      '    logger.info("fetched user", userId);',
+      '    return result;',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkAutoInstrumentationPreference(code, '/services/user.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('catches a manual span wrapping only a requests.get() call in Python', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def fetch_user(user_id):',
+      '    with tracer.start_as_current_span("fetch_user"):',
+      '        return requests.get(f"https://api.example.com/users/{user_id}")',
+      '',
+    ].join('\n');
+
+    const results = checkPythonAutoInstrumentationPreference(code, '/services/user.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-006');
+    expect(failures[0].tier).toBe(2);
+  });
+
+  it('passes when a Python span does more than wrap the requests.get() call', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def fetch_user(user_id):',
+      '    with tracer.start_as_current_span("fetch_user"):',
+      '        resp = requests.get(f"https://api.example.com/users/{user_id}")',
+      '        log.info("fetched user %s", user_id)',
+      '        return resp',
+      '',
+    ].join('\n');
+
+    const results = checkPythonAutoInstrumentationPreference(code, '/services/user.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374) — per OD-5, COV-006 is
+  // applicableTo('go') = false, so no Go case applies here.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

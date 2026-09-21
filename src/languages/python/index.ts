@@ -33,9 +33,10 @@ import { cov001PythonRule } from './rules/cov001.ts';
 import { cov002PythonRule } from './rules/cov002.ts';
 import { cov003PythonRule } from './rules/cov003.ts';
 import { cov004PythonRule } from './rules/cov004.ts';
+import { cov006PythonRule } from './rules/cov006.ts';
 
 /** Python-specific ValidationRules, registered on provider construction. Milestone D3 populates this incrementally. */
-const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule] as const;
+const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule] as const;
 
 /**
  * Matches both a single-bracket table header (`[project]`) and a double-bracket
