@@ -111,6 +111,32 @@ describe('checkPythonSpansClosed (CDQ-001)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('fails when end_on_exit is a variable that cannot be statically proven True', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with use_span(span, end_on_exit=should_close):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when end_on_exit=True is passed positionally', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with use_span(span, True):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('attribute-target spans (self.span)', () => {

@@ -102,9 +102,10 @@ function isUseSpanCall(node: Node): boolean {
  * `use_span(<spanVarName>, ...)` — the lower-level context manager
  * `start_as_current_span()` itself is built on (see
  * `~/.claude/rules/opentelemetry-python-gotchas.md`). `use_span()`'s
- * `end_on_exit` parameter defaults to `True`; only an explicit
- * `end_on_exit=False` keyword argument means the `with` block does *not*
- * close the span.
+ * `end_on_exit` parameter (positional or keyword) defaults to `True` when
+ * omitted entirely; any other explicit value — `False`, `None`, `0`, a
+ * variable, a parenthesized expression — can't be statically proven `True`,
+ * so only an exact literal `True` (or omission) counts as closing.
  */
 function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
   const clause = withStatement.namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
@@ -114,16 +115,18 @@ function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
   if (call === null || call === undefined || !isUseSpanCall(call)) return false;
 
   const args = call.childForFieldName('arguments');
-  const positional = args?.namedChildren.find(
+  const positionalArgs = args?.namedChildren.filter(
     (a): a is Node => a !== null && a.type !== 'keyword_argument',
-  );
-  if (positional?.text !== spanVarName) return false;
+  ) ?? [];
+  if (positionalArgs[0]?.text !== spanVarName) return false;
 
-  const endOnExit = args?.namedChildren.find(
+  const endOnExitKeyword = args?.namedChildren.find(
     (a): a is Node => a !== null && a.type === 'keyword_argument'
       && a.childForFieldName('name')?.text === 'end_on_exit',
   );
-  return endOnExit?.childForFieldName('value')?.text !== 'False';
+  const endOnExitValue = endOnExitKeyword?.childForFieldName('value')?.text ?? positionalArgs[1]?.text;
+
+  return endOnExitValue === undefined || endOnExitValue === 'True';
 }
 
 /**
