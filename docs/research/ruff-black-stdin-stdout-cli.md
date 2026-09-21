@@ -1,7 +1,7 @@
 # Research: Ruff and Black CLI stdin/stdout formatting, and Python compile() syntax errors
 
 **Project:** spinybacked-orbweaver
-**Last Updated:** 2026-09-18
+**Last Updated:** 2026-09-21
 
 ## Update Log
 
@@ -9,6 +9,7 @@
 |------|---------|
 | 2026-09-18 | Initial research, for Milestone D1's checkSyntax()/formatCode()/lintCheck() |
 | 2026-09-18 | Fixed an internal contradiction in the Recommendation section (it said to fall back to Black "on ENOENT or any other failure" in one sentence, then "only fall back on ENOENT" in the next) — corrected to state the ENOENT-only fallback consistently, matching the actual implementation |
+| 2026-09-21 | Updated the Recommendation section again: `runFormatter()` was changed (during the CDQ-001 milestone) to fall through to Black on *any* Ruff failure, not just `ENOENT` — Ruff and Black's parsers can diverge on edge cases, so a Ruff parse-error failure doesn't reliably mean Black would fail identically, the assumption the ENOENT-only policy was based on |
 
 ## Findings
 

@@ -10,7 +10,7 @@ export function getSystemPromptSections(): LanguagePromptSections {
 - **Indentation is syntax in Python, not style.** Reformatting that changes a line's indentation level changes which block that line belongs to — it can silently change program behavior or break the file outright. Preserve the exact indentation of every line you do not intentionally add.
 - **Never change \`async def\` to \`def\`, or vice versa.** They are different function types with different calling conventions.
 - **Preserve every decorator exactly as written**, including order and arguments. Do not drop, reorder, or add decorators.
-- All OpenTelemetry imports must come from \`opentelemetry\` (\`from opentelemetry import trace\`) only. Do not import from \`opentelemetry.sdk.*\`, \`opentelemetry.instrumentation.*\`, or any other OTel SDK/instrumentation package — those are deployer concerns, not library concerns.
+- OpenTelemetry imports must come from the \`opentelemetry\` API package only — \`from opentelemetry import trace\` for the tracer, and \`from opentelemetry.trace import Status, StatusCode\` when recording an error status. Do not import from \`opentelemetry.sdk.*\`, \`opentelemetry.instrumentation.*\`, or any other OTel SDK/instrumentation package — those are deployer concerns, not library concerns.
 - The \`instrumentedCode\` field must contain the complete file — not a diff, not a partial file. Files containing placeholder comments (\`# ...\`, \`# existing code\`, \`# rest of function\`, \`"""..."""\` used as a stand-in for real code) will be rejected by validation.
 - Do not add comments explaining the instrumentation. The code speaks for itself.
 - Do not add, modify, or duplicate docstrings. Preserve an existing docstring exactly as-is.
@@ -166,7 +166,6 @@ tracer = trace.get_tracer("my-service")
 
 def load_config(path):
     with tracer.start_as_current_span("my_service.config.load_config") as span:
-        span.set_attribute("config.path", path)
         try:
             with open(path) as f:
                 return json.load(f)
