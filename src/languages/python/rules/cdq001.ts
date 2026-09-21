@@ -98,6 +98,26 @@ function isUseSpanCall(node: Node): boolean {
 }
 
 /**
+ * The node passed as `use_span()`'s `span` argument — its first positional
+ * argument, or an explicit `span=...` keyword argument (`span` is a
+ * positional-or-keyword parameter in the real `use_span()` signature, so
+ * both forms are valid Python).
+ */
+function useSpanArgument(useSpanCall: Node): Node | undefined {
+  const args = useSpanCall.childForFieldName('arguments');
+  const positionalArgs = args?.namedChildren.filter(
+    (a): a is Node => a !== null && a.type !== 'keyword_argument',
+  ) ?? [];
+  if (positionalArgs[0] !== undefined) return positionalArgs[0];
+
+  const spanKeyword = args?.namedChildren.find(
+    (a): a is Node => a !== null && a.type === 'keyword_argument'
+      && a.childForFieldName('name')?.text === 'span',
+  );
+  return spanKeyword?.childForFieldName('value') ?? undefined;
+}
+
+/**
  * Whether a `use_span(...)` call's own arguments have `end_on_exit` set to
  * the exact literal `True` (positional or keyword) — the only value that
  * counts as closing. `use_span()`'s `end_on_exit` parameter defaults to
@@ -136,12 +156,7 @@ function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
     const expr = withItem.namedChild(0);
     const call = expr?.type === 'as_pattern' ? expr.namedChild(0) : expr;
     if (call === null || call === undefined || !isUseSpanCall(call)) return false;
-
-    const args = call.childForFieldName('arguments');
-    const positionalArgs = args?.namedChildren.filter(
-      (a): a is Node => a !== null && a.type !== 'keyword_argument',
-    ) ?? [];
-    if (positionalArgs[0]?.text !== spanVarName) return false;
+    if (useSpanArgument(call)?.text !== spanVarName) return false;
 
     return useSpanExplicitlyEndsOnExit(call);
   });
@@ -155,15 +170,16 @@ function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
  * would otherwise be wrongly flagged as "never assigned, can never be closed."
  */
 function isInlineUseSpanClosure(startSpanCall: Node): boolean {
-  const argList = startSpanCall.parent;
+  // A positional argument's parent is the `argument_list` directly; a
+  // `span=...` keyword argument's parent is its own `keyword_argument` node,
+  // one level further from the `argument_list` (see the tree shape for
+  // `use_span(span=tracer.start_span(...))`, verified directly, not assumed).
+  const parent = startSpanCall.parent;
+  const argList = parent?.type === 'keyword_argument' ? parent.parent : parent;
   if (argList?.type !== 'argument_list') return false;
   const useSpanCall = argList.parent;
   if (useSpanCall === null || !isUseSpanCall(useSpanCall)) return false;
-
-  const positionalArgs = argList.namedChildren.filter(
-    (a): a is Node => a !== null && a.type !== 'keyword_argument',
-  );
-  if (positionalArgs[0]?.startIndex !== startSpanCall.startIndex) return false;
+  if (useSpanArgument(useSpanCall)?.startIndex !== startSpanCall.startIndex) return false;
 
   const withItem = useSpanCall.parent?.type === 'as_pattern' ? useSpanCall.parent.parent : useSpanCall.parent;
   if (withItem?.type !== 'with_item') return false;

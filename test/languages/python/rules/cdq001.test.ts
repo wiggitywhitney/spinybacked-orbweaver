@@ -174,6 +174,31 @@ describe('checkPythonSpansClosed (CDQ-001)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('passes when the span is passed to use_span() as a keyword argument', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with use_span(span=span, end_on_exit=True):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when a raw start_span is passed inline as use_span()\'s span= keyword argument', () => {
+      const code = [
+        'def do_work():',
+        '    with use_span(span=tracer.start_span("doWork"), end_on_exit=True):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('attribute-target spans (self.span)', () => {

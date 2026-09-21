@@ -84,6 +84,23 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(0);
   });
 
+  it('skips a function already instrumented via a span-creation decorator, even with no span call in its body', () => {
+    // start_as_current_span()'s generated context manager doubles as a
+    // ContextDecorator, so `@tracer.start_as_current_span("handler")` wraps
+    // the whole function call in a span with no span call anywhere in the
+    // body itself. hasOTelSpanCall() alone (body-only) would miss this.
+    const source = [
+      '@tracer.start_as_current_span("handler")',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return do_work(x, y)',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(0);
+  });
+
   it('does not skip a function that calls record_exception() without creating a span', () => {
     // record_exception()/set_status() record an error on a span that must
     // already exist — they don't create one. A function calling only one of

@@ -91,6 +91,32 @@ function hasOTelSpanCall(bodyNode: Node): boolean {
   return walk(bodyNode, true);
 }
 
+/** The dotted method name of a decorator, if it is a call to an `attribute` expression (e.g. `tracer.start_as_current_span`), mirroring `cov001.ts`'s `decoratorMethodName()`. */
+function decoratorMethodName(decoratorNode: Node): string | undefined {
+  const expr = decoratorNode.namedChild(0);
+  const call = expr?.type === 'call' ? expr : undefined;
+  const target = call ? call.childForFieldName('function') : expr;
+  if (target?.type !== 'attribute') return undefined;
+  return target.childForFieldName('attribute')?.text;
+}
+
+/**
+ * Whether a `decorated_definition` carries a span-creation decorator, e.g.
+ * `@tracer.start_as_current_span("name")` — a real, working Python idiom
+ * (`start_as_current_span()`'s generated context manager doubles as a
+ * `ContextDecorator`, see `cov004.ts`'s own `hasSpanDecorator()`, which this
+ * mirrors). `hasOTelSpanCall()` alone only scans a function's *body*, so a
+ * function instrumented purely via this decorator form — with no span call
+ * inside its body at all — would otherwise be wrongly treated as not yet
+ * instrumented and offered for extraction again.
+ */
+function hasSpanCreationDecorator(decoratedDef: Node): boolean {
+  return decoratedDef.namedChildren.some(
+    (child): child is Node => child !== null && child.type === 'decorator'
+      && OTEL_SPAN_METHODS.has(decoratorMethodName(child) ?? ''),
+  );
+}
+
 /** Compound-statement types whose block/clause children (not condition/iterable/etc.) hold real statements. */
 const COMPOUND_STATEMENT_TYPES = new Set([
   'if_statement', 'while_statement', 'for_statement', 'with_statement', 'try_statement',
@@ -185,7 +211,8 @@ function collectFunctions(tree: ReturnType<typeof parsePython>): CollectedFuncti
         endLine: node.endPosition.row + 1,
         statementCount: countStatementsInBlock(bodyNode),
         docComment: getDocstring(bodyNode),
-        hasOTelSpanCall: hasOTelSpanCall(bodyNode),
+        hasOTelSpanCall: hasOTelSpanCall(bodyNode)
+          || (boundaryNode.type === 'decorated_definition' && hasSpanCreationDecorator(boundaryNode)),
       });
       return;
     }
