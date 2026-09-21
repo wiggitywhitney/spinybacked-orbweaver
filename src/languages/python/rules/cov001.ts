@@ -43,6 +43,24 @@ function hasEntryPointDecorator(decoratedDef: Node): boolean {
 }
 
 /**
+ * Whether a `decorated_definition` also carries a `@tracer.start_as_current_span(...)`
+ * decorator alongside its entry-point decorator (e.g. `@app.route(...)` stacked with
+ * `@tracer.start_as_current_span(...)`) — a real, working Python idiom (mirrors
+ * `cov004.ts`'s own `hasSpanDecorator()`). `hasSpanCreationCall()` alone only scans
+ * the function's *body*, so a handler spanned purely via this decorator form — with
+ * no span call in its body at all — would otherwise be wrongly flagged as unspanned.
+ * Deliberately checks only `start_as_current_span`, not `start_span`: `start_span()`
+ * returns a plain `Span` object with no `__call__` protocol, so using it as a
+ * decorator isn't a working idiom at all (see `cov004.ts`'s own note on this).
+ */
+function hasSpanDecorator(decoratedDef: Node): boolean {
+  return decoratedDef.namedChildren.some(
+    (child): child is Node => child !== null && child.type === 'decorator'
+      && decoratorMethodName(child) === 'start_as_current_span',
+  );
+}
+
+/**
  * Whether a function body contains a real call to a span-creation method.
  * Walks actual `call` AST nodes (receiver-agnostic on the attribute name, matching
  * `ast.ts`'s `detectPythonOTelInstrumentation()` convention) rather than
@@ -90,7 +108,7 @@ export function checkPythonEntryPointSpans(code: string, filePath: string): Chec
         (c): c is Node => c !== null && c.type === 'function_definition',
       );
       if (fnDef !== undefined) {
-        if (hasEntryPointDecorator(node) && !hasSpanCreationCall(fnDef, true)) {
+        if (hasEntryPointDecorator(node) && !hasSpanCreationCall(fnDef, true) && !hasSpanDecorator(node)) {
           const name = fnDef.childForFieldName('name')?.text ?? '<anonymous>';
           unspanned.push({ line: toLine(node), description: `route handler: ${name}()` });
         }

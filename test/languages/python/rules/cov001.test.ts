@@ -57,6 +57,44 @@ describe('checkPythonEntryPointSpans (COV-001)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('passes when @app.route handler is spanned via a stacked @tracer.start_as_current_span decorator, not a body call', () => {
+      // start_as_current_span()'s generated context manager doubles as a
+      // ContextDecorator, so a handler stacked with both @app.route and
+      // @tracer.start_as_current_span has a real span with no span call in
+      // its body at all. hasSpanCreationCall() alone (body-only) would miss this.
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@app.route("/users")',
+        '@tracer.start_as_current_span("list_users")',
+        'def list_users():',
+        '    return jsonify([])',
+        '',
+      ].join('\n');
+
+      const results = checkPythonEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags @app.route handler decorated with @tracer.start_span, which is not a working decorator idiom', () => {
+      // start_span() returns a plain Span object with no __call__ protocol —
+      // using it as a decorator isn't a real idiom (it would raise
+      // "TypeError: 'Span' object is not callable" at decoration time).
+      const code = [
+        '@app.route("/users")',
+        '@tracer.start_span("list_users")',
+        'def list_users():',
+        '    return jsonify([])',
+        '',
+      ].join('\n');
+
+      const results = checkPythonEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('FastAPI entry points', () => {
