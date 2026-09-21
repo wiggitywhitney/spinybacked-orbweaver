@@ -513,7 +513,7 @@ describe('PythonProvider', () => {
   describe('lintCheck', () => {
     it('passes when instrumented code introduces no new formatting violation', async () => {
       const original = 'def foo(x):\n    return x + 1\n';
-      const result = await provider.lintCheck(original, original, process.cwd());
+      const result = await provider.lintCheck(original, original, join(process.cwd(), 'file.py'));
       expect(result.ruleId).toBe('LINT');
       expect(result.passed).toBe(true);
     });

@@ -539,11 +539,14 @@ export interface LanguageProvider {
    *
    * @param original - Original source code before instrumentation
    * @param instrumented - Instrumented source code to check
-   * @param projectDir - Directory to resolve linter config from (e.g. the file's
-   *   own directory, so project-level config like `pyproject.toml`/`.eslintrc`
-   *   resolves correctly regardless of the running process's own working directory)
+   * @param filePath - The file's real on-disk path (matching `checkSyntax(filePath)`'s
+   *   own parameter) — providers derive their linter's config-resolution directory
+   *   from this (e.g. `dirname(filePath)`) so project-level config like
+   *   `pyproject.toml`/`.eslintrc` resolves correctly regardless of the running
+   *   process's own working directory, and use it (or a derived path) as the
+   *   returned `CheckResult.filePath`
    */
-  lintCheck(original: string, instrumented: string, projectDir: string): Promise<CheckResult>;
+  lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult>;
 
   // -------------------------------------------------------------------------
   // AST analysis (synchronous — pure in-memory)

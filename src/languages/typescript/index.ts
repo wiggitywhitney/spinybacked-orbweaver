@@ -2,7 +2,7 @@
 // ABOUTME: Delegates to ts-morph for AST analysis (ts-morph handles TypeScript natively) and tsc for syntax checking.
 
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import type {
   LanguageProvider,
   FunctionInfo,
@@ -140,15 +140,13 @@ export class TypeScriptProvider implements LanguageProvider {
 
   // ── Tier 1: Linting ───────────────────────────────────────────────────────
 
-  lintCheck(original: string, instrumented: string, _projectDir: string): Promise<CheckResult> {
-    // Use file.tsx so Prettier resolves config with the TypeScript parser.
-    // The TypeScript parser handles both .ts and .tsx content correctly;
-    // using .tsx ensures JSX syntax is accepted for .tsx source files.
-    // `_projectDir` is accepted to satisfy the shared LanguageProvider
-    // interface (see Python's own lintCheck(), which does use it) but unused
-    // here — fixing JS/TS's own pre-existing 'file.tsx' constant is a
-    // separate, unrelated gap.
-    return checkLint(original, instrumented, 'file.tsx');
+  lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult> {
+    // Keep the synthetic 'file.tsx' *name* so Prettier always resolves the
+    // TypeScript parser and accepts JSX syntax regardless of the real file's
+    // own extension — but resolve it against the real file's directory so
+    // Prettier's own config search starts from where the file actually
+    // lives, not wherever the spiny-orb process happens to run.
+    return checkLint(original, instrumented, join(dirname(filePath), 'file.tsx'));
   }
 
   // ── AST analysis (synchronous) ────────────────────────────────────────────

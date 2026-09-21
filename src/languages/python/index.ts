@@ -162,8 +162,8 @@ export class PythonProvider implements LanguageProvider {
 
   // ── Tier 1: Linting ───────────────────────────────────────────────────────
 
-  lintCheck(original: string, instrumented: string, projectDir: string): Promise<CheckResult> {
-    return lintCheck(original, instrumented, projectDir);
+  lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult> {
+    return lintCheck(original, instrumented, filePath);
   }
 
   // ── AST analysis (synchronous) ────────────────────────────────────────────

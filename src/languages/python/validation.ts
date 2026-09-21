@@ -2,7 +2,7 @@
 // ABOUTME: Mirrors javascript/validation.ts and typescript/validation.ts, but formats via Ruff-first/Black-fallback per OD-2.
 
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import type { CheckResult } from '../../validation/types.ts';
 
 // ─── syntax (checkSyntax) ─────────────────────────────────────────────────────
@@ -250,11 +250,12 @@ export function formatCode(source: string, configDir: string): Promise<string> {
  *
  * @param original - Original source code before instrumentation
  * @param instrumented - Instrumented source code to check
- * @param projectDir - Directory to resolve Ruff/Black config from (matches `formatCode()`'s own `configDir` parameter)
+ * @param filePath - The file's real on-disk path; Ruff/Black config is resolved
+ *   from its directory (matches `formatCode()`'s own `configDir` parameter)
  * @returns CheckResult with ruleId 'LINT', tier 1, blocking true
  */
-export async function lintCheck(original: string, instrumented: string, projectDir: string): Promise<CheckResult> {
-  const filePath = 'file.py';
+export async function lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult> {
+  const projectDir = dirname(filePath);
 
   const originalAttempt = runFormatter(original, projectDir);
   if (!originalAttempt.formatterAvailable) {

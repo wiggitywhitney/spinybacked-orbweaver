@@ -55,7 +55,7 @@ describe('validateFile', () => {
       expect(result.blockingFailures).toHaveLength(0);
     });
 
-    it('passes the file\'s own directory (not process.cwd()) as lintCheck\'s projectDir', async () => {
+    it('passes the file\'s own real path (not process.cwd()) to lintCheck, matching checkSyntax()', async () => {
       // Linter config (pyproject.toml, .eslintrc) must resolve from where the
       // file actually lives, not from wherever the spiny-orb process happens
       // to be running — those can differ when instrumenting a target project.
@@ -76,7 +76,7 @@ describe('validateFile', () => {
 
       await validateFile(input);
 
-      expect(lintCheckSpy).toHaveBeenCalledWith(original, instrumented, tempDir);
+      expect(lintCheckSpy).toHaveBeenCalledWith(original, instrumented, filePath);
       lintCheckSpy.mockRestore();
     });
   });

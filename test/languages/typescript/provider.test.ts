@@ -133,6 +133,36 @@ describe('TypeScriptProvider', () => {
     });
   });
 
+  describe('lintCheck', () => {
+    it('resolves Prettier config from the passed file path\'s own directory, not process.cwd()', async () => {
+      // A non-default .prettierrc (arrowParens: 'avoid') placed in a temp
+      // dir, well outside process.cwd(), must still be picked up. This
+      // specific setting is a reliable discriminator: under the real
+      // Prettier *default* (arrowParens: 'always'), the parenless original
+      // below would itself already be non-compliant — which the pass/fail
+      // decision matrix always tolerates (no *new* violation), so a wrongly
+      // cwd-resolved config would make this test pass for the wrong reason.
+      // Only with the custom config actually loaded is the original
+      // compliant and the agent's added parens flagged as a new violation.
+      const tmpDir = await mkdtemp(join(tmpdir(), 'ts-provider-lint-test-'));
+      try {
+        await writeFile(join(tmpDir, '.prettierrc'), JSON.stringify({ arrowParens: 'avoid' }));
+        const filePath = join(tmpDir, 'handler.ts');
+        // A single untyped param keeps arrowParens's effect visible — a typed
+        // param (`span: Span`) would require parens regardless of the setting.
+        const original = 'const fn = async span => {\n  span.end();\n};\n';
+        const instrumented = 'const fn = async (span) => {\n  span.end();\n};\n';
+
+        const result = await provider.lintCheck(original, instrumented, filePath);
+
+        expect(result.ruleId).toBe('LINT');
+        expect(result.passed).toBe(false);
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+  });
+
   // ─── AST analysis ──────────────────────────────────────────────────────
 
   describe('findFunctions', () => {
