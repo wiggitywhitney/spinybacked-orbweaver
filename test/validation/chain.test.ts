@@ -1,7 +1,7 @@
 // ABOUTME: Tests for the validation chain orchestration (chain.ts).
 // ABOUTME: Verifies Tier 1 short-circuiting, Tier 2 conditional execution, and result aggregation.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -53,6 +53,31 @@ describe('validateFile', () => {
       expect(result.passed).toBe(true);
       expect(result.tier1Results.length).toBeGreaterThanOrEqual(3); // elision, syntax, lint (weaver skipped)
       expect(result.blockingFailures).toHaveLength(0);
+    });
+
+    it('passes the file\'s own directory (not process.cwd()) as lintCheck\'s projectDir', async () => {
+      // Linter config (pyproject.toml, .eslintrc) must resolve from where the
+      // file actually lives, not from wherever the spiny-orb process happens
+      // to be running — those can differ when instrumenting a target project.
+      const filePath = join(tempDir, 'valid.js');
+      const original = 'const x = 1;\n';
+      const instrumented = 'const x = 1;\nconst y = 2;\n';
+      writeFileSync(filePath, instrumented, 'utf-8');
+
+      const lintCheckSpy = vi.spyOn(jsProvider, 'lintCheck');
+
+      const input: ValidateFileInput = {
+        originalCode: original,
+        instrumentedCode: instrumented,
+        filePath,
+        config: defaultConfig,
+        provider: jsProvider,
+      };
+
+      await validateFile(input);
+
+      expect(lintCheckSpy).toHaveBeenCalledWith(original, instrumented, tempDir);
+      lintCheckSpy.mockRestore();
     });
   });
 

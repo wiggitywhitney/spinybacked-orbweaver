@@ -46,11 +46,11 @@ const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov0
  * group 2 is the table name.
  */
 const TOML_TABLE_HEADER_PATTERN = /^\s*\[(\[?)([^[\]]+)\]\]?\s*(?:#.*)?$/;
-// TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
-// milestone that surfaced it) that this only matches a bare `name` key, not
-// TOML's quoted-key form (`"name" = "..."`), which is valid syntax though rare
-// in practice for `[project]`/`[tool.poetry]` tables.
-const NAME_ASSIGNMENT_PATTERN = /^\s*name\s*=\s*["']([^"']+)["']/;
+// Matches both a bare `name` key and TOML's quoted-key form (`"name" = "..."`
+// or `'name' = ...`) — valid TOML syntax, though rare in practice for
+// `[project]`/`[tool.poetry]` tables. Fixed 2026-09-21 (previously only
+// matched the bare form).
+const NAME_ASSIGNMENT_PATTERN = /^\s*["']?name["']?\s*=\s*["']([^"']+)["']/;
 /** Tables whose `name` field identifies the project (PEP 621 `[project]`, or Poetry's own `[tool.poetry]`). */
 const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);
 
@@ -162,8 +162,8 @@ export class PythonProvider implements LanguageProvider {
 
   // ── Tier 1: Linting ───────────────────────────────────────────────────────
 
-  lintCheck(original: string, instrumented: string): Promise<CheckResult> {
-    return lintCheck(original, instrumented);
+  lintCheck(original: string, instrumented: string, projectDir: string): Promise<CheckResult> {
+    return lintCheck(original, instrumented, projectDir);
   }
 
   // ── AST analysis (synchronous) ────────────────────────────────────────────

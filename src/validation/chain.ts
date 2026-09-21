@@ -1,6 +1,7 @@
 // ABOUTME: Validation chain orchestrator — runs Tier 1 then Tier 2 checks.
 // ABOUTME: Short-circuits on first Tier 1 failure; skips Tier 2 if Tier 1 fails.
 
+import { dirname } from 'node:path';
 import { checkElision } from './tier1/elision.ts';
 import { checkWeaver } from './tier1/weaver.ts';
 import { getRulesForLanguage } from './rule-registry.ts';
@@ -44,8 +45,11 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
     return buildResult(tier1Results, tier2Results);
   }
 
-  // 3. Lint checking (diff-based) — dispatched through provider
-  const lintResult = await provider.lintCheck(originalCode, instrumentedCode);
+  // 3. Lint checking (diff-based) — dispatched through provider. Resolve
+  // linter config from the file's own directory (not process.cwd()) so
+  // project-level config (pyproject.toml, .eslintrc) resolves correctly
+  // regardless of the running process's own working directory.
+  const lintResult = await provider.lintCheck(originalCode, instrumentedCode, dirname(filePath));
   tier1Results.push(lintResult);
   if (!lintResult.passed) {
     return buildResult(tier1Results, tier2Results);

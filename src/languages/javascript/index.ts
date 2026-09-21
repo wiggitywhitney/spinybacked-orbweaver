@@ -141,11 +141,14 @@ export class JavaScriptProvider implements LanguageProvider {
 
   // ── Tier 1: Linting ───────────────────────────────────────────────────────
 
-  lintCheck(original: string, instrumented: string): Promise<CheckResult> {
+  lintCheck(original: string, instrumented: string, _projectDir: string): Promise<CheckResult> {
     // The underlying checkLint needs a filePath for Prettier config resolution
     // and parser detection. Without the actual file path (not in the interface),
     // use 'file.js' so Prettier applies the babel parser and looks for
-    // .prettierrc starting from the process working directory.
+    // .prettierrc starting from the process working directory. `_projectDir`
+    // is accepted to satisfy the shared LanguageProvider interface (see
+    // Python's own lintCheck(), which does use it) but unused here — fixing
+    // JS/TS's own pre-existing 'file.js' constant is a separate, unrelated gap.
     return checkLint(original, instrumented, 'file.js');
   }
 

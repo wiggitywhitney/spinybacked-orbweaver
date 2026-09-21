@@ -539,8 +539,11 @@ export interface LanguageProvider {
    *
    * @param original - Original source code before instrumentation
    * @param instrumented - Instrumented source code to check
+   * @param projectDir - Directory to resolve linter config from (e.g. the file's
+   *   own directory, so project-level config like `pyproject.toml`/`.eslintrc`
+   *   resolves correctly regardless of the running process's own working directory)
    */
-  lintCheck(original: string, instrumented: string): Promise<CheckResult>;
+  lintCheck(original: string, instrumented: string, projectDir: string): Promise<CheckResult>;
 
   // -------------------------------------------------------------------------
   // AST analysis (synchronous — pure in-memory)

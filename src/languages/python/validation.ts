@@ -250,18 +250,13 @@ export function formatCode(source: string, configDir: string): Promise<string> {
  *
  * @param original - Original source code before instrumentation
  * @param instrumented - Instrumented source code to check
+ * @param projectDir - Directory to resolve Ruff/Black config from (matches `formatCode()`'s own `configDir` parameter)
  * @returns CheckResult with ruleId 'LINT', tier 1, blocking true
  */
-export async function lintCheck(original: string, instrumented: string): Promise<CheckResult> {
+export async function lintCheck(original: string, instrumented: string, projectDir: string): Promise<CheckResult> {
   const filePath = 'file.py';
 
-  // No real on-disk config directory is available from this interface (the
-  // LanguageProvider contract doesn't pass one to lintCheck); use the process
-  // working directory so project-level pyproject.toml/ruff.toml still resolve
-  // for the common case of running spiny-orb from the project root.
-  const configDir = process.cwd();
-
-  const originalAttempt = runFormatter(original, configDir);
+  const originalAttempt = runFormatter(original, projectDir);
   if (!originalAttempt.formatterAvailable) {
     return {
       ruleId: 'LINT',
@@ -274,7 +269,7 @@ export async function lintCheck(original: string, instrumented: string): Promise
     };
   }
 
-  const instrumentedAttempt = runFormatter(instrumented, configDir);
+  const instrumentedAttempt = runFormatter(instrumented, projectDir);
 
   // A formatter execution failure on the instrumented output (a real parse
   // failure — a parse error, or an unrelated execution/config problem — is

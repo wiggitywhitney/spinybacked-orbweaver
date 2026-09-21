@@ -410,6 +410,17 @@ describe('PythonProvider', () => {
       }
     });
 
+    it('recognizes a quoted name key ("name" = "...")', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '[project]\n"name" = "quoted-key-project"\n');
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('quoted-key-project');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
     it('does not attribute a Poetry [[tool.poetry.source]] array-of-tables name to the project', async () => {
       const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
       try {
@@ -502,7 +513,7 @@ describe('PythonProvider', () => {
   describe('lintCheck', () => {
     it('passes when instrumented code introduces no new formatting violation', async () => {
       const original = 'def foo(x):\n    return x + 1\n';
-      const result = await provider.lintCheck(original, original);
+      const result = await provider.lintCheck(original, original, process.cwd());
       expect(result.ruleId).toBe('LINT');
       expect(result.passed).toBe(true);
     });

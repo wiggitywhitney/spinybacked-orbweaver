@@ -225,7 +225,7 @@ describe('lintCheck', () => {
     const original = 'def foo(x):\n    return x + 1\n';
     const instrumented = 'def foo(x):\n    span.set_attribute("x", x)\n    return x + 1\n';
 
-    const result = await lintCheck(original, instrumented);
+    const result = await lintCheck(original, instrumented, process.cwd());
 
     expect(result.ruleId).toBe('LINT');
     expect(result.tier).toBe(1);
@@ -238,7 +238,7 @@ describe('lintCheck', () => {
     const original = 'def foo(x):\n    return   x+1\n';
     const instrumented = 'def foo(x):\n    return   x+1\n    # comment\n';
 
-    const result = await lintCheck(original, instrumented);
+    const result = await lintCheck(original, instrumented, process.cwd());
 
     expect(result.passed).toBe(true);
   });
@@ -247,7 +247,7 @@ describe('lintCheck', () => {
     const original = 'def foo(x):\n    return x + 1\n';
     const instrumented = 'def foo(x):\n    return   x+1\n';
 
-    const result = await lintCheck(original, instrumented);
+    const result = await lintCheck(original, instrumented, process.cwd());
 
     expect(result.passed).toBe(false);
     expect(result.ruleId).toBe('LINT');
@@ -257,7 +257,7 @@ describe('lintCheck', () => {
     const original = 'def foo(x):\n    return x + 1\n';
     const instrumented = 'def foo(x):\n    return   x+1\n';
 
-    const result = await lintCheck(original, instrumented);
+    const result = await lintCheck(original, instrumented, process.cwd());
 
     expect(result.message.length).toBeGreaterThan(20);
   });
@@ -269,7 +269,7 @@ describe('lintCheck', () => {
     // echo must not be mistaken for "no changes needed" (compliant).
     const instrumented = 'def foo(x:\n    return x + 1\n';
 
-    const result = await lintCheck(original, instrumented);
+    const result = await lintCheck(original, instrumented, process.cwd());
 
     expect(result.passed).toBe(false);
     expect(result.ruleId).toBe('LINT');
@@ -281,7 +281,7 @@ describe('lintCheck', () => {
     const original = 'def foo(x):\n    return   x+1\n';
     const instrumented = 'def foo(x:\n    return   x+1\n';
 
-    const result = await lintCheck(original, instrumented);
+    const result = await lintCheck(original, instrumented, process.cwd());
 
     expect(result.passed).toBe(false);
     expect(result.ruleId).toBe('LINT');
@@ -301,7 +301,7 @@ describe('lintCheck', () => {
     });
 
     it('fails with the canonical OD-2 missing-formatter message', async () => {
-      const result = await lintCheck('def foo():\n    pass\n', 'def foo():\n    pass\n');
+      const result = await lintCheck('def foo():\n    pass\n', 'def foo():\n    pass\n', process.cwd());
 
       expect(result.passed).toBe(false);
       expect(result.ruleId).toBe('LINT');
