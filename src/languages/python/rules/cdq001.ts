@@ -49,12 +49,6 @@ function getSpanName(callNode: Node): string {
   return firstArg.text.replace(/^['"]|['"]$/g, '');
 }
 
-/** Build a regex matching `<identifier>.end()` for a specific span variable. */
-function spanEndPattern(spanVarName: string): RegExp {
-  const escaped = spanVarName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`\\b${escaped}\\s*\\.\\s*end\\s*\\(\\s*\\)`);
-}
-
 /** The `finally_clause`'s own block, found as its last named child of type `block` (no `body` field — see `web-tree-sitter-gotchas.md`). */
 function finallyBlockOf(tryStatement: Node): Node | undefined {
   const clause = tryStatement.namedChildren.find(
@@ -64,15 +58,42 @@ function finallyBlockOf(tryStatement: Node): Node | undefined {
 }
 
 /**
+ * Whether a subtree contains a `call` node invoking `.end()` on the given span
+ * variable, reachable without crossing a nested scope boundary. Walks real AST
+ * `call` nodes (receiver-agnostic to nothing else — the receiver must match
+ * `spanVarName` exactly) rather than regex-matching the finally block's raw
+ * text, so a string literal or comment that merely contains the text
+ * `<spanVarName>.end()` can't cause a false pass.
+ */
+function containsSpanEndCall(node: Node, spanVarName: string, isRoot: boolean): boolean {
+  if (!isRoot && SCOPE_BOUNDARIES.has(node.type)) return false;
+  if (node.type === 'call') {
+    const fn = node.childForFieldName('function');
+    if (fn?.type === 'attribute') {
+      const receiver = fn.childForFieldName('object');
+      const attribute = fn.childForFieldName('attribute');
+      if (receiver?.type === 'identifier' && receiver.text === spanVarName && attribute?.text === 'end') {
+        return true;
+      }
+    }
+  }
+  for (const child of node.namedChildren) {
+    if (child !== null && containsSpanEndCall(child, spanVarName, false)) return true;
+  }
+  return false;
+}
+
+/**
  * Whether a variable bound to a raw `start_span()` result has a paired
  * `<var>.end()` call inside a `finally` block. Mirrors the JS checker's
- * `hasSpanEndInFinally()` sibling-statement search: only a `try_statement`
- * appearing *after* the assignment in the same block can close a span that
- * didn't exist yet when an earlier statement ran. Falls back to walking
- * ancestors for an enclosing `try/finally`, stopping at a scope boundary.
+ * `hasSpanEndInFinally()` sibling-statement search, but requires the closing
+ * `try_statement` to be the *immediate* next statement after the assignment —
+ * a `try_statement` reached after skipping over intervening statements would
+ * leave the span unclosed if one of those intervening statements throws
+ * before the try block is ever entered. Falls back to walking ancestors for
+ * an enclosing `try/finally`, stopping at a scope boundary.
  */
 function hasSpanEndInFinally(assignmentStatement: Node, spanVarName: string): boolean {
-  const endPattern = spanEndPattern(spanVarName);
   // Node objects aren't referentially stable across separate accessor calls (each
   // access constructs a fresh wrapper over the same underlying WASM node) — compare
   // by `startIndex` instead of `===` to identify "the same node" reached two ways.
@@ -82,13 +103,11 @@ function hasSpanEndInFinally(assignmentStatement: Node, spanVarName: string): bo
   if (containingBlock !== null && (containingBlock.type === 'block' || containingBlock.type === 'module')) {
     const statements = containingBlock.namedChildren.filter((c): c is Node => c !== null);
     const declIndex = statements.findIndex(s => s.startIndex === assignmentStart);
-    if (declIndex >= 0) {
-      for (let i = declIndex + 1; i < statements.length; i++) {
-        const stmt = statements[i];
-        if (stmt.type === 'try_statement') {
-          const finallyBlock = finallyBlockOf(stmt);
-          if (finallyBlock !== undefined && endPattern.test(finallyBlock.text)) return true;
-        }
+    if (declIndex >= 0 && declIndex + 1 < statements.length) {
+      const nextStmt = statements[declIndex + 1];
+      if (nextStmt.type === 'try_statement') {
+        const finallyBlock = finallyBlockOf(nextStmt);
+        if (finallyBlock !== undefined && containsSpanEndCall(finallyBlock, spanVarName, true)) return true;
       }
     }
   }
@@ -99,7 +118,7 @@ function hasSpanEndInFinally(assignmentStatement: Node, spanVarName: string): bo
     if (SCOPE_BOUNDARIES.has(current.type)) break;
     if (current.type === 'try_statement') {
       const finallyBlock = finallyBlockOf(current);
-      if (finallyBlock !== undefined && endPattern.test(finallyBlock.text)) return true;
+      if (finallyBlock !== undefined && containsSpanEndCall(finallyBlock, spanVarName, true)) return true;
     }
     current = current.parent;
   }

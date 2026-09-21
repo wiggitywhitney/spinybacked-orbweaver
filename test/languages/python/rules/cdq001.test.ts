@@ -108,6 +108,39 @@ describe('checkPythonSpansClosed (CDQ-001)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('fails when an intervening statement sits between start_span and the closing try/finally', () => {
+      // If prepare_request() throws, the span leaks — the try/finally below
+      // never runs. The closing try must be the *immediate* next statement.
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    prepare_request()',
+        '    try:',
+        '        return compute_result()',
+        '    finally:',
+        '        span.end()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('fails when the finally block only mentions span.end() inside a string, not as a real call', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    try:',
+        '        return compute_result()',
+        '    finally:',
+        '        log("remember to call span.end()")',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('fails when start_span has no try/finally at all', () => {
       const code = [
         'def do_work():',
