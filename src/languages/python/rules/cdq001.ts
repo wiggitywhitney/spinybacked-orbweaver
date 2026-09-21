@@ -101,11 +101,14 @@ function isUseSpanCall(node: Node): boolean {
  * Whether a `with_statement` closes the given span variable via
  * `use_span(<spanVarName>, ...)` — the lower-level context manager
  * `start_as_current_span()` itself is built on (see
- * `~/.claude/rules/opentelemetry-python-gotchas.md`). `use_span()`'s
- * `end_on_exit` parameter (positional or keyword) defaults to `True` when
- * omitted entirely; any other explicit value — `False`, `None`, `0`, a
- * variable, a parenthesized expression — can't be statically proven `True`,
- * so only an exact literal `True` (or omission) counts as closing.
+ * `~/.claude/rules/opentelemetry-python-gotchas.md`). Unlike
+ * `start_as_current_span()`'s own automatic-recording defaults, `use_span()`'s
+ * own `end_on_exit` parameter defaults to `False` (verified directly against
+ * `opentelemetry.trace.use_span()`'s real signature, not assumed) — so an
+ * *omitted* `end_on_exit` does NOT close the span. Only an explicit literal
+ * `True` (positional or keyword) counts as closing; anything else — omitted,
+ * `False`, `None`, `0`, a variable, a parenthesized expression — can't be
+ * treated as closing.
  */
 function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
   const clause = withStatement.namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
@@ -126,7 +129,7 @@ function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
   );
   const endOnExitValue = endOnExitKeyword?.childForFieldName('value')?.text ?? positionalArgs[1]?.text;
 
-  return endOnExitValue === undefined || endOnExitValue === 'True';
+  return endOnExitValue === 'True';
 }
 
 /**

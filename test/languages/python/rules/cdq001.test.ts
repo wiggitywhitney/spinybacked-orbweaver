@@ -60,7 +60,7 @@ describe('checkPythonSpansClosed (CDQ-001)', () => {
   });
 
   describe('use_span() closure', () => {
-    it('passes when a raw start_span is immediately closed by with use_span(span)', () => {
+    it('fails when use_span omits end_on_exit — use_span() defaults it to False, not True', () => {
       const code = [
         'def do_work():',
         '    span = tracer.start_span("doWork")',
@@ -70,7 +70,7 @@ describe('checkPythonSpansClosed (CDQ-001)', () => {
 
       const results = checkPythonSpansClosed(code, filePath);
       expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
+      expect(results[0].passed).toBe(false);
     });
 
     it('passes when use_span explicitly sets end_on_exit=True', () => {
