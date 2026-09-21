@@ -279,14 +279,34 @@ export async function lintCheck(original: string, instrumented: string, filePath
 
   const instrumentedAttempt = runFormatter(instrumented, projectDir, filename);
 
-  // A formatter execution failure on the instrumented output (a real parse
-  // failure — a parse error, or an unrelated execution/config problem — is
-  // reported on its own — regardless of whether the original was itself
-  // compliant. Folding this into the ordinary compliance matrix would let
-  // it fall through to the "original was already non-compliant, so this
-  // isn't a new error" pass branch whenever the original also happened to
-  // be non-compliant, which mischaracterizes a real failure as an
-  // unremarkable style issue.
+  // If the *original*, uninstrumented file also failed to format, the
+  // failure can't be blamed on the agent's output — it's an environment or
+  // configuration problem affecting this file generally (checked first, so
+  // it takes priority over the instrumented-only branch below).
+  if (originalAttempt.executionFailed && instrumentedAttempt.executionFailed) {
+    return {
+      ruleId: 'LINT',
+      passed: false,
+      filePath,
+      lineNumber: null,
+      message:
+        `LINT check failed: the formatter could not process this file, even before instrumentation. ` +
+        `${originalAttempt.executionError} ` +
+        `This is a formatter/configuration/installation problem, not something the agent introduced — ` +
+        `run Ruff or Black directly on the original file to see the underlying error.`,
+      tier: 1,
+      blocking: true,
+    };
+  }
+
+  // A formatter execution failure on the instrumented output alone (a real
+  // parse failure — a parse error, or an unrelated execution/config problem
+  // — is reported on its own — regardless of whether the original was
+  // itself compliant. Folding this into the ordinary compliance matrix
+  // would let it fall through to the "original was already non-compliant,
+  // so this isn't a new error" pass branch whenever the original also
+  // happened to be non-compliant, which mischaracterizes a real failure as
+  // an unremarkable style issue.
   if (instrumentedAttempt.executionFailed) {
     return {
       ruleId: 'LINT',

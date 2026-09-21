@@ -287,6 +287,23 @@ describe('lintCheck', () => {
     expect(result.ruleId).toBe('LINT');
   });
 
+  it('blames the environment, not the agent, when the original file also fails to format', async () => {
+    // Both the original and instrumented files have the same unclosed
+    // parenthesis (a pre-existing problem, not something the agent
+    // introduced) — the failure message must say so, not describe it as an
+    // issue with "the instrumented output" specifically.
+    const original = 'def foo(x:\n    return x + 1\n';
+    const instrumented = 'def foo(x:\n    return x + 1\n    # comment\n';
+
+    const result = await lintCheck(original, instrumented, join(process.cwd(), 'file.py'));
+
+    expect(result.passed).toBe(false);
+    expect(result.ruleId).toBe('LINT');
+    expect(result.message).toContain('even before instrumentation');
+    expect(result.message).toContain('not something the agent introduced');
+    expect(result.message).not.toContain('the instrumented output');
+  });
+
   describe('neither Ruff nor Black installed', () => {
     let originalPath: string | undefined;
 
