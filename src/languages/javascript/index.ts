@@ -142,12 +142,12 @@ export class JavaScriptProvider implements LanguageProvider {
   // ── Tier 1: Linting ───────────────────────────────────────────────────────
 
   lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult> {
-    // Keep the synthetic 'file.js' *name* so Prettier always applies the babel
-    // parser regardless of the real file's extension (.mjs/.cjs/.jsx all
-    // resolve here) — but resolve it against the real file's directory so
-    // Prettier's own config search (.prettierrc) starts from where the file
-    // actually lives, not wherever the spiny-orb process happens to run.
-    return checkLint(original, instrumented, join(dirname(filePath), 'file.js'));
+    // Pass the real file path — checkLint()'s own isPrettierCompliant() sets
+    // parser: 'babel' explicitly, so the babel parser is always used
+    // regardless of extension, without needing to fake the path. Using the
+    // real path lets a project's .prettierrc `overrides` (keyed to a real
+    // extension) still resolve correctly.
+    return checkLint(original, instrumented, filePath);
   }
 
   // ── AST analysis (synchronous) ────────────────────────────────────────────

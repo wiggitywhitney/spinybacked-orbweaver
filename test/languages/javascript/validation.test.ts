@@ -237,6 +237,29 @@ describe('checkLint', () => {
       const result = await checkLint(original, instrumented, filePath);
       expect(result.passed).toBe(true);
     });
+
+    it('respects a .prettierrc override keyed to the real file extension', async () => {
+      // parser: 'babel' is set explicitly in isPrettierCompliant() regardless
+      // of extension, but config *resolution* (including `overrides`) must
+      // still use the real file path — an override scoped to `*.js` must not
+      // silently fail to apply just because a caller once faked the path.
+      writeFileSync(
+        join(tempDir, '.prettierrc'),
+        JSON.stringify({
+          semi: true,
+          overrides: [{ files: '*.js', options: { semi: false } }],
+        }),
+        'utf-8',
+      );
+
+      const filePath = join(tempDir, 'with-override.js');
+      // Compliant with the *.js override (semi: false), not the base config (semi: true)
+      const original = 'const x = 1\n';
+      const instrumented = 'const x = 1\nconst y = 2\n';
+
+      const result = await checkLint(original, instrumented, filePath);
+      expect(result.passed).toBe(true);
+    });
   });
 
   describe('diff in failure message', () => {

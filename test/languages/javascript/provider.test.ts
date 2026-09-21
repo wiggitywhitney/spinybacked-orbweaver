@@ -159,6 +159,37 @@ describe('JavaScriptProvider', () => {
         await rm(tmpDir, { recursive: true });
       }
     });
+
+    it('resolves a .prettierrc override keyed to the real filename, not a faked one', async () => {
+      // The override is scoped to the real basename `handler.js` — a
+      // filename pattern the old faked path (a literal `file.js`, same
+      // directory) would never have matched. Uses the same arrowParens
+      // discriminator as the test above (see its comment for why): only
+      // when the override is actually resolved against the real filename is
+      // the original treated as compliant, letting the agent's added parens
+      // register as a *new* violation and produce passed: false. Under the
+      // old faked-path behavior, the override would never match, Prettier's
+      // real default (`arrowParens: 'always'`) would apply instead, and the
+      // parenless original would itself already be "non-compliant" — which
+      // the pass/fail matrix always tolerates, masking the bug as passed: true.
+      const tmpDir = await mkdtemp(join(tmpdir(), 'js-provider-lint-override-test-'));
+      try {
+        await writeFile(
+          join(tmpDir, '.prettierrc'),
+          JSON.stringify({ overrides: [{ files: 'handler.js', options: { arrowParens: 'avoid' } }] }),
+        );
+        const filePath = join(tmpDir, 'handler.js');
+        const original = 'const fn = async span => {\n  span.end();\n};\n';
+        const instrumented = 'const fn = async (span) => {\n  span.end();\n};\n';
+
+        const result = await provider.lintCheck(original, instrumented, filePath);
+
+        expect(result.ruleId).toBe('LINT');
+        expect(result.passed).toBe(false);
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
   });
 
   // ─── AST analysis ──────────────────────────────────────────────────────

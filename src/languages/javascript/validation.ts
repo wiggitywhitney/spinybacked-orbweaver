@@ -131,13 +131,19 @@ function buildPrettierDiff(before: string, after: string): string {
  * Check if code matches the project's Prettier configuration.
  * Resolves config from the file path to respect .prettierrc.
  *
+ * `parser: 'babel'` is set explicitly rather than relying on `filepath`'s
+ * extension to select it — the real `filePath` (any real extension:
+ * .js/.jsx/.mjs/.cjs) is what's passed in, so a project's `.prettierrc`
+ * `overrides` keyed to a specific extension still resolve correctly, which a
+ * faked extension (e.g. always `'file.js'`) would have silently defeated.
+ *
  * @param code - The code to check
- * @param filePath - File path for config resolution
+ * @param filePath - The file's real path, for config resolution
  * @returns Whether the code is Prettier-compliant
  */
 async function isPrettierCompliant(code: string, filePath: string): Promise<boolean> {
   const config = await prettier.resolveConfig(filePath);
-  return prettier.check(code, { ...config, filepath: filePath });
+  return prettier.check(code, { ...config, filepath: filePath, parser: 'babel' });
 }
 
 /**
@@ -175,7 +181,7 @@ export async function checkLint(
       try {
         const config = await prettier.resolveConfig(filePath);
         const configFilePath = await prettier.resolveConfigFile(filePath);
-        const formatted = await prettier.format(instrumentedCode, { ...config, filepath: filePath });
+        const formatted = await prettier.format(instrumentedCode, { ...config, filepath: filePath, parser: 'babel' });
         const diff = buildPrettierDiff(instrumentedCode, formatted);
         if (diff) {
           diffSection =
