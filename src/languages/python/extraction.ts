@@ -442,30 +442,35 @@ function pruneNestedDefinitions(node: Node): string {
 
 function collectImportedIdentifiers(source: string): CollectedImports {
   const tree = parsePython(source);
-  const identifierToImportLine = new Map<string, string[]>();
-  const importOrder = new Map<string, number>();
-  const wildcardImports: string[] = [];
-  const futureImports: string[] = [];
+  // A tree owns a WASM-backed resource that must be released even if the walk
+  // below throws — an exception mid-loop must not skip cleanup and leak it.
+  try {
+    const identifierToImportLine = new Map<string, string[]>();
+    const importOrder = new Map<string, number>();
+    const wildcardImports: string[] = [];
+    const futureImports: string[] = [];
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt === null) continue;
-    if (stmt.type === 'function_definition' || stmt.type === 'class_definition' || stmt.type === 'decorated_definition') continue;
-    if (stmt.type === 'future_import_statement') {
-      futureImports.push(stmt.text);
-      continue;
+    for (const stmt of tree.rootNode.namedChildren) {
+      if (stmt === null) continue;
+      if (stmt.type === 'function_definition' || stmt.type === 'class_definition' || stmt.type === 'decorated_definition') continue;
+      if (stmt.type === 'future_import_statement') {
+        futureImports.push(stmt.text);
+        continue;
+      }
+      // The boundary text for every import found within `stmt`: a bare import's own
+      // text as-is, or — for a compound statement wrapping a nested import — its
+      // text with any nested function/class definition pruned out (see
+      // pruneNestedDefinitions()), since that definition is already extracted and
+      // presented separately with its own contextHeader.
+      const isBareImport = stmt.type === 'import_statement' || stmt.type === 'import_from_statement';
+      const boundaryText = isBareImport ? stmt.text : pruneNestedDefinitions(stmt);
+      collectFromStatement(stmt, boundaryText, stmt.startPosition.row, identifierToImportLine, wildcardImports, importOrder);
     }
-    // The boundary text for every import found within `stmt`: a bare import's own
-    // text as-is, or — for a compound statement wrapping a nested import — its
-    // text with any nested function/class definition pruned out (see
-    // pruneNestedDefinitions()), since that definition is already extracted and
-    // presented separately with its own contextHeader.
-    const isBareImport = stmt.type === 'import_statement' || stmt.type === 'import_from_statement';
-    const boundaryText = isBareImport ? stmt.text : pruneNestedDefinitions(stmt);
-    collectFromStatement(stmt, boundaryText, stmt.startPosition.row, identifierToImportLine, wildcardImports, importOrder);
-  }
 
-  tree.delete();
-  return { identifierToImportLine, wildcardImports, importOrder, futureImports };
+    return { identifierToImportLine, wildcardImports, importOrder, futureImports };
+  } finally {
+    tree.delete();
+  }
 }
 
 /**
@@ -490,22 +495,27 @@ function findReferencedImports(bodyText: string, identifierToImportLine: Map<str
  */
 function findMultilineStringProtectedRows(text: string): Set<number> {
   const tree = parsePython(text);
-  const protectedRows = new Set<number>();
+  // A tree owns a WASM-backed resource that must be released even if the walk
+  // below throws — an exception mid-walk must not skip cleanup and leak it.
+  try {
+    const protectedRows = new Set<number>();
 
-  function walk(node: Node): void {
-    if (node.type === 'string' && node.startPosition.row !== node.endPosition.row) {
-      for (let row = node.startPosition.row + 1; row <= node.endPosition.row; row++) {
-        protectedRows.add(row);
+    function walk(node: Node): void {
+      if (node.type === 'string' && node.startPosition.row !== node.endPosition.row) {
+        for (let row = node.startPosition.row + 1; row <= node.endPosition.row; row++) {
+          protectedRows.add(row);
+        }
+      }
+      for (const child of node.namedChildren) {
+        if (child !== null) walk(child);
       }
     }
-    for (const child of node.namedChildren) {
-      if (child !== null) walk(child);
-    }
-  }
 
-  walk(tree.rootNode);
-  tree.delete();
-  return protectedRows;
+    walk(tree.rootNode);
+    return protectedRows;
+  } finally {
+    tree.delete();
+  }
 }
 
 /**
@@ -595,33 +605,38 @@ function buildContextHeader(
 export function extractPythonFunctions(source: string, options?: ExtractPythonFunctionsOptions): ExtractedFunction[] {
   const includeNonExported = options?.includeNonExported ?? false;
   const tree = parsePython(source);
-  const { identifierToImportLine, wildcardImports, importOrder, futureImports } = collectImportedIdentifiers(source);
-  const lines = source.split('\n');
+  // A tree owns a WASM-backed resource that must be released even if the loop
+  // below throws — an exception mid-loop must not skip cleanup and leak it.
+  try {
+    const { identifierToImportLine, wildcardImports, importOrder, futureImports } = collectImportedIdentifiers(source);
+    const lines = source.split('\n');
 
-  const results: ExtractedFunction[] = [];
-  for (const fn of collectFunctions(tree)) {
-    if (!includeNonExported && !fn.isExported) continue;
-    if (!isWorthInstrumenting(fn)) continue;
+    const results: ExtractedFunction[] = [];
+    for (const fn of collectFunctions(tree)) {
+      if (!includeNonExported && !fn.isExported) continue;
+      if (!isWorthInstrumenting(fn)) continue;
 
-    const sourceText = lines.slice(fn.startLine - 1, fn.endLine).join('\n');
-    // Scan the full sourceText, not just the body: a decorator argument or a
-    // parameter default value can reference a module-level import that never
-    // appears inside the function body itself.
-    const referencedImports = findReferencedImports(sourceText, identifierToImportLine);
+      const sourceText = lines.slice(fn.startLine - 1, fn.endLine).join('\n');
+      // Scan the full sourceText, not just the body: a decorator argument or a
+      // parameter default value can reference a module-level import that never
+      // appears inside the function body itself.
+      const referencedImports = findReferencedImports(sourceText, identifierToImportLine);
 
-    results.push({
-      name: fn.name,
-      isAsync: fn.isAsync,
-      isExported: fn.isExported,
-      sourceText,
-      docComment: fn.docComment,
-      referencedImports,
-      contextHeader: buildContextHeader(dedentForContext(sourceText), referencedImports, identifierToImportLine, wildcardImports, importOrder, futureImports),
-      startLine: fn.startLine,
-      endLine: fn.endLine,
-    });
+      results.push({
+        name: fn.name,
+        isAsync: fn.isAsync,
+        isExported: fn.isExported,
+        sourceText,
+        docComment: fn.docComment,
+        referencedImports,
+        contextHeader: buildContextHeader(dedentForContext(sourceText), referencedImports, identifierToImportLine, wildcardImports, importOrder, futureImports),
+        startLine: fn.startLine,
+        endLine: fn.endLine,
+      });
+    }
+
+    return results;
+  } finally {
+    tree.delete();
   }
-
-  tree.delete();
-  return results;
 }

@@ -255,6 +255,29 @@ describe('checkPythonAutoInstrumentationPreference (COV-006)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags only the inner span when a broader outer business span wraps an inner span that itself wraps only the outbound call', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("outer"):',
+        '        log.info("starting fetch for %s", user_id)',
+        '        with tracer.start_as_current_span("inner"):',
+        '            return requests.get(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      // The outer span wraps more than just the HTTP call (a log statement plus
+      // the nested with_statement itself), so it's a legitimate business span and
+      // must not be flagged — only the inner span, which wraps nothing but the
+      // call, should produce a finding.
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('"inner"');
+    });
   });
 
   describe('nested function scope boundary', () => {
