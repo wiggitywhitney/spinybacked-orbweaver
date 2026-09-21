@@ -336,11 +336,14 @@ export function checkSyntax(filePath: string): CheckResult {
 /**
  * Check if code matches the project's Prettier configuration.
  *
- * `parser: 'typescript'` is set explicitly rather than relying on `filepath`'s
- * extension to select it — the TypeScript parser handles JSX syntax in both
- * `.ts` and `.tsx` content, so the real `filePath` (whichever real extension)
- * is what's passed in, letting a project's `.prettierrc` `overrides` keyed to
- * a specific extension still resolve correctly.
+ * `parser: 'typescript'` is used as a default, not an override — a
+ * project's own resolved config (e.g. one set by an `overrides` block)
+ * always wins when present. It's needed at all because the TypeScript
+ * parser handles JSX syntax in both `.ts` and `.tsx` content, so defaulting
+ * to it regardless of extension avoids relying on `filepath`-based
+ * inference; the real `filePath` is what's passed in, letting a project's
+ * `.prettierrc` `overrides` keyed to a specific extension still resolve
+ * correctly.
  *
  * @param code - The code to check
  * @param filePath - The file's real path, for config resolution
@@ -348,7 +351,7 @@ export function checkSyntax(filePath: string): CheckResult {
  */
 async function isPrettierCompliant(code: string, filePath: string): Promise<boolean> {
   const config = await prettier.resolveConfig(filePath);
-  return prettier.check(code, { ...config, filepath: filePath, parser: 'typescript' });
+  return prettier.check(code, { ...config, filepath: filePath, parser: config?.parser ?? 'typescript' });
 }
 
 /**

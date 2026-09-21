@@ -101,19 +101,26 @@ function decoratorMethodName(decoratorNode: Node): string | undefined {
 }
 
 /**
- * Whether a `decorated_definition` carries a span-creation decorator, e.g.
- * `@tracer.start_as_current_span("name")` — a real, working Python idiom
- * (`start_as_current_span()`'s generated context manager doubles as a
- * `ContextDecorator`, see `cov004.ts`'s own `hasSpanDecorator()`, which this
- * mirrors). `hasOTelSpanCall()` alone only scans a function's *body*, so a
- * function instrumented purely via this decorator form — with no span call
- * inside its body at all — would otherwise be wrongly treated as not yet
- * instrumented and offered for extraction again.
+ * Whether a `decorated_definition` carries a `start_as_current_span`
+ * decorator, e.g. `@tracer.start_as_current_span("name")` — a real, working
+ * Python idiom (`start_as_current_span()`'s generated context manager
+ * doubles as a `ContextDecorator`, see `cov004.ts`'s own `hasSpanDecorator()`,
+ * which this mirrors). `hasOTelSpanCall()` alone only scans a function's
+ * *body*, so a function instrumented purely via this decorator form — with
+ * no span call inside its body at all — would otherwise be wrongly treated
+ * as not yet instrumented and offered for extraction again.
+ *
+ * Deliberately checks only `start_as_current_span`, not the broader
+ * `OTEL_SPAN_METHODS` set: `start_span()` returns a plain `Span` object with
+ * no `__enter__`/`__call__` protocol, so `@tracer.start_span("name")` used as
+ * a decorator isn't a working idiom at all — it would raise `TypeError:
+ * 'Span' object is not callable` at decoration time. Accepting it here would
+ * wrongly treat a function carrying that (broken) decorator as instrumented.
  */
 function hasSpanCreationDecorator(decoratedDef: Node): boolean {
   return decoratedDef.namedChildren.some(
     (child): child is Node => child !== null && child.type === 'decorator'
-      && OTEL_SPAN_METHODS.has(decoratorMethodName(child) ?? ''),
+      && decoratorMethodName(child) === 'start_as_current_span',
   );
 }
 

@@ -131,11 +131,14 @@ function buildPrettierDiff(before: string, after: string): string {
  * Check if code matches the project's Prettier configuration.
  * Resolves config from the file path to respect .prettierrc.
  *
- * `parser: 'babel'` is set explicitly rather than relying on `filepath`'s
- * extension to select it — the real `filePath` (any real extension:
- * .js/.jsx/.mjs/.cjs) is what's passed in, so a project's `.prettierrc`
- * `overrides` keyed to a specific extension still resolve correctly, which a
- * faked extension (e.g. always `'file.js'`) would have silently defeated.
+ * `parser: 'babel'` is used as a default, not an override — a project's own
+ * resolved config (e.g. an explicit `parser: 'flow'`, or one set by an
+ * `overrides` block) always wins when present. It's needed at all because
+ * `filepath`-based extension inference isn't reliable for every real
+ * extension this provider handles (e.g. `.mjs`/`.cjs`), and the real
+ * `filePath` is what's passed in so a project's `.prettierrc` `overrides`
+ * keyed to a specific extension still resolve correctly — a faked extension
+ * (e.g. always `'file.js'`) would have silently defeated that.
  *
  * @param code - The code to check
  * @param filePath - The file's real path, for config resolution
@@ -143,7 +146,7 @@ function buildPrettierDiff(before: string, after: string): string {
  */
 async function isPrettierCompliant(code: string, filePath: string): Promise<boolean> {
   const config = await prettier.resolveConfig(filePath);
-  return prettier.check(code, { ...config, filepath: filePath, parser: 'babel' });
+  return prettier.check(code, { ...config, filepath: filePath, parser: config?.parser ?? 'babel' });
 }
 
 /**
@@ -181,7 +184,7 @@ export async function checkLint(
       try {
         const config = await prettier.resolveConfig(filePath);
         const configFilePath = await prettier.resolveConfigFile(filePath);
-        const formatted = await prettier.format(instrumentedCode, { ...config, filepath: filePath, parser: 'babel' });
+        const formatted = await prettier.format(instrumentedCode, { ...config, filepath: filePath, parser: config?.parser ?? 'babel' });
         const diff = buildPrettierDiff(instrumentedCode, formatted);
         if (diff) {
           diffSection =

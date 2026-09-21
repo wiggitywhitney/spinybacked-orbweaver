@@ -46,20 +46,28 @@ function decoratorMethodName(decoratorNode: Node): string | undefined {
 }
 
 /**
- * Whether a `decorated_definition` carries a span-creation decorator, e.g.
- * `@tracer.start_as_current_span("name")`. This is a real, working Python
- * idiom — `start_as_current_span()` is a `contextlib.contextmanager`-based
- * generator, and `contextlib`'s generated context managers double as
- * `ContextDecorator`s, so applying one directly as a decorator wraps the
- * entire function call in a span (verified against `opentelemetry-api`
- * 1.35.0 / `opentelemetry-sdk` at runtime, 2026-09-20). `hasSpanCreationCall()`
- * alone can't see this — the span-creation call lives in the decorator, not
- * in the function body.
+ * Whether a `decorated_definition` carries a `start_as_current_span`
+ * decorator, e.g. `@tracer.start_as_current_span("name")`. This is a real,
+ * working Python idiom — `start_as_current_span()` is a
+ * `contextlib.contextmanager`-based generator, and `contextlib`'s generated
+ * context managers double as `ContextDecorator`s, so applying one directly
+ * as a decorator wraps the entire function call in a span (verified against
+ * `opentelemetry-api` 1.35.0 / `opentelemetry-sdk` at runtime, 2026-09-20).
+ * `hasSpanCreationCall()` alone can't see this — the span-creation call
+ * lives in the decorator, not in the function body.
+ *
+ * Deliberately checks only `start_as_current_span`, not the broader
+ * `SPAN_CREATION_METHODS` set: `start_span()` returns a plain `Span` object
+ * with no `__enter__`/`__call__` protocol, so `@tracer.start_span("name")`
+ * used as a decorator isn't a working idiom at all — Python would try to
+ * call the returned `Span` as the decorator and raise `TypeError: 'Span'
+ * object is not callable` at decoration time. Accepting it here would
+ * wrongly treat a function carrying that (broken) decorator as instrumented.
  */
 function hasSpanDecorator(decoratedDef: Node): boolean {
   return decoratedDef.namedChildren.some(
     (child): child is Node => child !== null && child.type === 'decorator'
-      && SPAN_CREATION_METHODS.has(decoratorMethodName(child) ?? ''),
+      && decoratorMethodName(child) === 'start_as_current_span',
   );
 }
 

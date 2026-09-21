@@ -2,7 +2,7 @@
 // ABOUTME: Mirrors javascript/validation.ts and typescript/validation.ts, but formats via Ruff-first/Black-fallback per OD-2.
 
 import { execFileSync } from 'node:child_process';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import type { CheckResult } from '../../validation/types.ts';
 
 // ─── syntax (checkSyntax) ─────────────────────────────────────────────────────
@@ -187,11 +187,17 @@ function tryFormatterBinary(binary: string, args: string[], source: string, conf
  * ruff.toml, etc.) is resolved from `configDir` via the subprocess's `cwd` — Ruff
  * and Black both walk up from the working directory when formatting stdin.
  *
+ * `stdinFilename` defaults to a synthetic placeholder for callers with no real
+ * on-disk path (`formatCode()`), but `lintCheck()` passes the real filename —
+ * Ruff resolves filename-specific config (e.g. `per-file-ignores`) from it,
+ * which a synthetic name would silently defeat.
+ *
  * @param source - Source code to format
  * @param configDir - Directory to resolve formatter config from
+ * @param filename - Real filename to report to Ruff/Black via `--stdin-filename`
  */
-function runFormatter(source: string, configDir: string): FormatAttempt {
-  const stdinFilename = join(configDir, '_spiny_orb_format_target.py');
+function runFormatter(source: string, configDir: string, filename = '_spiny_orb_format_target.py'): FormatAttempt {
+  const stdinFilename = join(configDir, filename);
 
   // A Ruff execution failure (installed but rejects this specific input) falls
   // through to Black rather than returning immediately — Black may still
@@ -256,8 +262,9 @@ export function formatCode(source: string, configDir: string): Promise<string> {
  */
 export async function lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult> {
   const projectDir = dirname(filePath);
+  const filename = basename(filePath);
 
-  const originalAttempt = runFormatter(original, projectDir);
+  const originalAttempt = runFormatter(original, projectDir, filename);
   if (!originalAttempt.formatterAvailable) {
     return {
       ruleId: 'LINT',
@@ -270,7 +277,7 @@ export async function lintCheck(original: string, instrumented: string, filePath
     };
   }
 
-  const instrumentedAttempt = runFormatter(instrumented, projectDir);
+  const instrumentedAttempt = runFormatter(instrumented, projectDir, filename);
 
   // A formatter execution failure on the instrumented output (a real parse
   // failure — a parse error, or an unrelated execution/config problem — is

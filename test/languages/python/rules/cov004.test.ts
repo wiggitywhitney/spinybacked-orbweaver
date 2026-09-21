@@ -120,6 +120,23 @@ describe('checkPythonAsyncOperationSpans (COV-004)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('flags an async function decorated with @tracer.start_span, which is not a working decorator idiom', () => {
+      // start_span() returns a plain Span object with no __enter__/__call__
+      // protocol — using it as a decorator isn't a real idiom (it would
+      // raise "TypeError: 'Span' object is not callable" at decoration
+      // time), unlike start_as_current_span()'s ContextDecorator behavior.
+      const code = [
+        '@tracer.start_span("fetch_user")',
+        'async def fetch_user(user_id):',
+        '    return await db.find(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('async class method', () => {

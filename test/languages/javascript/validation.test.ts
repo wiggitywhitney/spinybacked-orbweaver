@@ -260,6 +260,23 @@ describe('checkLint', () => {
       const result = await checkLint(original, instrumented, filePath);
       expect(result.passed).toBe(true);
     });
+
+    it('respects an explicit parser set in .prettierrc instead of forcing babel', async () => {
+      // parser: 'babel' is only a default when config has no parser of its
+      // own. Setting parser: 'json' (deliberately wrong for JS content) is a
+      // reliable discriminator: if the config's parser is actually honored,
+      // parsing this JS code as JSON throws — surfacing as a LINT failure
+      // with an error message, not a silent pass under the forced-babel default.
+      writeFileSync(join(tempDir, '.prettierrc'), JSON.stringify({ parser: 'json' }), 'utf-8');
+
+      const filePath = join(tempDir, 'with-explicit-parser.js');
+      const original = 'const x = 1;\n';
+      const instrumented = 'const x = 1;\nconst y = 2;\n';
+
+      const result = await checkLint(original, instrumented, filePath);
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('Prettier encountered an error');
+    });
   });
 
   describe('diff in failure message', () => {

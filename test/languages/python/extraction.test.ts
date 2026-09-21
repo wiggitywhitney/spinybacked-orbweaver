@@ -101,6 +101,26 @@ describe('extractPythonFunctions', () => {
     expect(extracted).toHaveLength(0);
   });
 
+  it('does not skip a function decorated with @tracer.start_span, which is not a working decorator idiom', () => {
+    // start_span() returns a plain Span object with no __enter__/__call__
+    // protocol — using it as a decorator isn't a real idiom (it would raise
+    // "TypeError: 'Span' object is not callable" at decoration time), unlike
+    // start_as_current_span()'s ContextDecorator behavior. A function
+    // carrying this broken decorator is not actually instrumented and must
+    // still be offered for real instrumentation.
+    const source = [
+      '@tracer.start_span("handler")',
+      'def handler(req):',
+      '    x = 1',
+      '    y = 2',
+      '    return do_work(x, y)',
+      '',
+    ].join('\n');
+    const extracted = extractPythonFunctions(source);
+    expect(extracted).toHaveLength(1);
+    expect(extracted[0]).toMatchObject({ name: 'handler' });
+  });
+
   it('does not skip a function that calls record_exception() without creating a span', () => {
     // record_exception()/set_status() record an error on a span that must
     // already exist — they don't create one. A function calling only one of

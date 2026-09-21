@@ -2,7 +2,7 @@
 // ABOUTME: Covers the OD-2 formatter fallback chain and the canonical missing-formatter message.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdtempSync, rmSync, chmodSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { checkSyntax, formatCode, lintCheck } from '../../../src/languages/python/validation.ts';
@@ -308,6 +308,43 @@ describe('lintCheck', () => {
       expect(result.message).toContain(
         'Python formatter not found. Install ruff (pip install ruff) or black (pip install black).',
       );
+    });
+  });
+
+  describe('passes the real filename to Ruff', () => {
+    let originalPath: string | undefined;
+    let fakeBinDir: string;
+    let capturedArgsPath: string;
+
+    beforeEach(() => {
+      // A fake `ruff` that records its own argv to a file, so the test can
+      // assert on the real --stdin-filename value it was actually invoked
+      // with — Ruff resolves filename-specific config (e.g. per-file-ignores)
+      // from this, which a synthetic placeholder name would silently defeat.
+      fakeBinDir = mkdtempSync(join(tmpdir(), 'spiny-orb-fake-ruff-argv-'));
+      capturedArgsPath = join(fakeBinDir, 'captured-args.txt');
+      writeFileSync(
+        join(fakeBinDir, 'ruff'),
+        `#!/bin/sh\necho "$@" > '${capturedArgsPath}'\ncat\n`,
+        'utf-8',
+      );
+      chmodSync(join(fakeBinDir, 'ruff'), 0o755);
+      originalPath = process.env.PATH;
+      process.env.PATH = `${fakeBinDir}:${originalPath}`;
+    });
+
+    afterEach(() => {
+      process.env.PATH = originalPath;
+      rmSync(fakeBinDir, { recursive: true, force: true });
+    });
+
+    it('invokes ruff with --stdin-filename set to the real basename, not a placeholder', async () => {
+      const filePath = join(tmpdir(), 'my_handler.py');
+      await lintCheck('x = 1\n', 'x = 1\n', filePath);
+
+      const capturedArgs = readFileSync(capturedArgsPath, 'utf-8');
+      expect(capturedArgs).toContain('my_handler.py');
+      expect(capturedArgs).not.toContain('_spiny_orb_format_target.py');
     });
   });
 });

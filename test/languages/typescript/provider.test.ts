@@ -161,6 +161,30 @@ describe('TypeScriptProvider', () => {
         await rm(tmpDir, { recursive: true });
       }
     });
+
+    it('respects an explicit parser set in .prettierrc instead of forcing typescript', async () => {
+      // parser: 'typescript' is only a default when config has no parser of
+      // its own. Setting parser: 'json' (deliberately wrong for TS content)
+      // is a reliable discriminator: if the config's parser is actually
+      // honored, parsing this TS code as JSON throws — surfacing as a LINT
+      // failure with an error message, not a silent pass under the
+      // forced-typescript default.
+      const tmpDir = await mkdtemp(join(tmpdir(), 'ts-provider-lint-parser-test-'));
+      try {
+        await writeFile(join(tmpDir, '.prettierrc'), JSON.stringify({ parser: 'json' }));
+        const filePath = join(tmpDir, 'with-explicit-parser.ts');
+        const original = 'const x: number = 1;\n';
+        const instrumented = 'const x: number = 1;\nconst y: number = 2;\n';
+
+        const result = await provider.lintCheck(original, instrumented, filePath);
+
+        expect(result.ruleId).toBe('LINT');
+        expect(result.passed).toBe(false);
+        expect(result.message).toContain('Prettier encountered an error');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
   });
 
   // ─── AST analysis ──────────────────────────────────────────────────────
