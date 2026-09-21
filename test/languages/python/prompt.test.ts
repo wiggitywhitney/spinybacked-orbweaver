@@ -17,8 +17,12 @@ describe('Python instrumentation prompt constraints', () => {
 
   it('does not teach recording a raw filesystem path as a span attribute', () => {
     const examples = getInstrumentationExamples();
+    // Matches any path-like identifier as the value (path, file_path,
+    // config_path, ...), not just the literal identifier `path` — the
+    // pattern this is guarding against isn't specific to one variable name.
+    const rawPathAttribute = /set_attribute\(\s*["'][\w.]*path["']\s*,\s*\w*path\w*\s*\)/i;
     for (const example of examples) {
-      expect(example.after).not.toMatch(/set_attribute\(\s*["'][\w.]*path["']\s*,\s*path\s*\)/);
+      expect(example.after).not.toMatch(rawPathAttribute);
     }
   });
 });

@@ -55,6 +55,20 @@ const NAME_ASSIGNMENT_PATTERN = /^\s*["']?name["']?\s*=\s*["']([^"']+)["']/;
 const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);
 
 /**
+ * Normalize a TOML dotted table key by stripping quotes from each
+ * dot-separated segment — `["project"]` and `[tool."poetry"]` are both valid
+ * TOML syntax for the same tables `[project]`/`[tool.poetry]` already match
+ * unquoted, but the header regex captures the quotes verbatim.
+ */
+function normalizeTomlTableKey(rawKey: string): string {
+  return rawKey.split('.').map((segment) => {
+    const trimmed = segment.trim();
+    const quoted = /^(["'])(.*)\1$/.exec(trimmed);
+    return quoted ? quoted[2] : trimmed;
+  }).join('.');
+}
+
+/**
  * Extract the project name from `pyproject.toml`'s `[project]` or `[tool.poetry]` table.
  *
  * Line-based table tracking, not a full TOML parser — structural-analysis-only scope
@@ -73,7 +87,7 @@ function extractProjectNameFromPyproject(content: string): string | undefined {
       // (neither is defined as an array-of-tables in valid TOML) — reset instead
       // of tracking its name, so a `name = "..."` inside it isn't misattributed
       // to whichever single-bracket table preceded it.
-      currentTable = tableMatch[1] === '[' ? undefined : tableMatch[2]?.trim();
+      currentTable = tableMatch[1] === '[' ? undefined : normalizeTomlTableKey(tableMatch[2]?.trim() ?? '');
       continue;
     }
     if (currentTable !== undefined && PROJECT_NAME_TABLES.has(currentTable)) {

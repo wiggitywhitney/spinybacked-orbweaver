@@ -421,6 +421,28 @@ describe('PythonProvider', () => {
       }
     });
 
+    it('recognizes a quoted table header (["project"])', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '["project"]\nname = "quoted-header-project"\n');
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('quoted-header-project');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
+    it('recognizes a table header with a quoted segment ([tool."poetry"])', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '[tool."poetry"]\nname = "quoted-segment-project"\n');
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('quoted-segment-project');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
     it('does not attribute a Poetry [[tool.poetry.source]] array-of-tables name to the project', async () => {
       const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
       try {
