@@ -127,7 +127,7 @@ function buildModuleAliasMap(imports: ImportInfo[]): Map<string, string> {
  * (see its own doc comment in `../../types.ts`). Resolving the real bound
  * name here needs the `aliased_import` node's `alias` field directly.
  */
-function buildDirectImportMap(root: Node): Map<string, string> {
+export function buildDirectImportMap(root: Node): Map<string, string> {
   const map = new Map<string, string>();
 
   function walk(node: Node): void {
@@ -165,7 +165,7 @@ function buildDirectImportMap(root: Node): Map<string, string> {
  * (`from requests import get as fetch`) makes the call site's bare identifier an
  * arbitrary local name, not necessarily one of the HTTP method names itself.
  */
-function matchDirectImportCall(callNode: Node, directImports: Map<string, string>): string | null {
+export function matchDirectImportCall(callNode: Node, directImports: Map<string, string>): string | null {
   const fn = callNode.childForFieldName('function');
   if (fn?.type !== 'identifier') return null;
   const name = fn.text;

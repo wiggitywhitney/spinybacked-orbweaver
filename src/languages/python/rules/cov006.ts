@@ -3,6 +3,7 @@
 
 import { type Node } from 'web-tree-sitter';
 import { parsePython, findPythonImports } from '../ast.ts';
+import { buildDirectImportMap, matchDirectImportCall } from './cov002.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ImportInfo } from '../../types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
@@ -93,10 +94,27 @@ function matchAutoInstrumentedCall(callNode: Node, importSources: Set<string>, m
 }
 
 /**
+ * The module a directly-imported bare-identifier call belongs to (`from requests
+ * import get` -> `get(url)`, or its aliased form `from requests import get as fetch`
+ * -> `fetch(url)`), reusing `cov002.ts`'s direct-import resolution rather than
+ * duplicating it. `matchDirectImportCall()` returns the call's bound identifier;
+ * `directImports` maps that identifier straight to its module.
+ */
+function matchDirectImportModule(callNode: Node, directImports: Map<string, string>): string | null {
+  const identifier = matchDirectImportCall(callNode, directImports);
+  if (identifier === null) return null;
+  return directImports.get(identifier) ?? null;
+}
+
+/**
  * Collect meaningful statements from a `block`'s statement list, recursing into
- * `try_statement`'s own try-clause (business logic lives there, not in the
- * `try`/`except` wrapper) and filtering out span-lifecycle boilerplate —
- * mirroring the JS COV-006 checker's `collectMeaningfulStatements()`.
+ * a `try_statement`'s own try/except/else/finally clause bodies — business
+ * logic can live in any of them, not just the try body — and filtering out
+ * span-lifecycle boilerplate. Mirrors the JS COV-006 checker's
+ * `collectMeaningfulStatements()`, extended for Python's `try` grammar shape:
+ * the try clause's block is `try_statement`'s own `body` field, while each
+ * `except_clause`/`else_clause`/`finally_clause` carries its block as its own
+ * last named child (verified directly against real parser output, not assumed).
  */
 function collectMeaningfulStatements(statements: Node[]): Node[] {
   const results: Node[] = [];
@@ -104,9 +122,18 @@ function collectMeaningfulStatements(statements: Node[]): Node[] {
     if (stmt.type === 'try_statement') {
       const tryBlock = stmt.childForFieldName('body');
       if (tryBlock !== null) results.push(...collectMeaningfulStatements(tryBlock.namedChildren.filter((c): c is Node => c !== null)));
+      for (const clause of stmt.namedChildren) {
+        if (clause === null || clause.type === 'block') continue;
+        const clauseBlock = clause.namedChildren.find((c): c is Node => c !== null && c.type === 'block');
+        if (clauseBlock !== undefined) results.push(...collectMeaningfulStatements(clauseBlock.namedChildren.filter((c): c is Node => c !== null)));
+      }
       continue;
     }
     if (SPAN_BOILERPLATE.test(stmt.text)) continue;
+    // A bare re-raise inside an except clause is control flow, not business
+    // logic that would make this a broader span — matches JS COV-006's
+    // exclusion of bare rethrows.
+    if (stmt.type === 'raise_statement' && stmt.namedChildCount === 0) continue;
     results.push(stmt);
   }
   return results;
@@ -162,12 +189,14 @@ export function checkPythonAutoInstrumentationPreference(code: string, filePath:
   const imports = findPythonImports(code);
   const importSources = new Set(imports.map(imp => imp.moduleSpecifier));
   const moduleAliases = buildModuleAliasMap(imports);
+  const directImports = buildDirectImportMap(tree.rootNode);
   const flagged: Array<{ line: number; library: string; spanName: string }> = [];
 
   function findMatchInScope(node: Node, isRoot: boolean): string | null {
     if (!isRoot && SCOPE_BOUNDARIES.has(node.type)) return null;
     if (node.type === 'call') {
-      const match = matchAutoInstrumentedCall(node, importSources, moduleAliases);
+      const match = matchAutoInstrumentedCall(node, importSources, moduleAliases)
+        ?? matchDirectImportModule(node, directImports);
       if (match !== null) return match;
     }
     for (const child of node.namedChildren) {

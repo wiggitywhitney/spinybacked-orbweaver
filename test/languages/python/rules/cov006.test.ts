@@ -88,6 +88,40 @@ describe('checkPythonAutoInstrumentationPreference (COV-006)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags a manual span wrapping a directly-imported get() call', () => {
+      const code = [
+        'from requests import get',
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        return get(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags a manual span wrapping an aliased directly-imported call', () => {
+      const code = [
+        'from requests import get as fetch',
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        return fetch(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('httpx', () => {
@@ -181,6 +215,45 @@ describe('checkPythonAutoInstrumentationPreference (COV-006)', () => {
       const results = checkPythonAutoInstrumentationPreference(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
+    });
+
+    it('does not flag when real business logic lives in the except clause, not just the try body', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        try:',
+        '            return requests.get(f"https://api.example.com/users/{user_id}")',
+        '        except requests.RequestException:',
+        '            log.warning("fetch failed for %s", user_id)',
+        '            return None',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag when real business logic lives in the finally clause', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user"):',
+        '        try:',
+        '            return requests.get(f"https://api.example.com/users/{user_id}")',
+        '        finally:',
+        '            metrics.increment("fetch_user.calls")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
     });
   });
 
