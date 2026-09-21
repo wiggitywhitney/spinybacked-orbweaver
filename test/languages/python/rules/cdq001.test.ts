@@ -59,6 +59,91 @@ describe('checkPythonSpansClosed (CDQ-001)', () => {
     });
   });
 
+  describe('use_span() closure', () => {
+    it('passes when a raw start_span is immediately closed by with use_span(span)', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with use_span(span):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when use_span explicitly sets end_on_exit=True', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with use_span(span, end_on_exit=True):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('fails when use_span sets end_on_exit=False', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with use_span(span, end_on_exit=False):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('fails when use_span wraps a different span variable', () => {
+      const code = [
+        'def do_work():',
+        '    span = tracer.start_span("doWork")',
+        '    with use_span(other_span):',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
+  describe('attribute-target spans (self.span)', () => {
+    it('passes when self.span is closed via try/finally', () => {
+      const code = [
+        'class Handler:',
+        '    def do_work(self):',
+        '        self.span = tracer.start_span("doWork")',
+        '        try:',
+        '            return compute_result()',
+        '        finally:',
+        '            self.span.end()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('fails when self.span has no closing finally', () => {
+      const code = [
+        'class Handler:',
+        '    def do_work(self):',
+        '        self.span = tracer.start_span("doWork")',
+        '        return compute_result()',
+      ].join('\n');
+
+      const results = checkPythonSpansClosed(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('raw start_span sibling pattern', () => {
     it('passes when start_span has sibling try/finally with span.end()', () => {
       const code = [

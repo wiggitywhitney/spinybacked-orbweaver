@@ -60,10 +60,11 @@ function finallyBlockOf(tryStatement: Node): Node | undefined {
 /**
  * Whether a subtree contains a `call` node invoking `.end()` on the given span
  * variable, reachable without crossing a nested scope boundary. Walks real AST
- * `call` nodes (receiver-agnostic to nothing else — the receiver must match
- * `spanVarName` exactly) rather than regex-matching the finally block's raw
- * text, so a string literal or comment that merely contains the text
- * `<spanVarName>.end()` can't cause a false pass.
+ * `call` nodes (receiver-agnostic to nothing else — the receiver's own text
+ * must match `spanVarName` exactly, whether that's a bare identifier or an
+ * attribute target like `self.span`) rather than regex-matching the finally
+ * block's raw text, so a string literal or comment that merely contains the
+ * text `<spanVarName>.end()` can't cause a false pass.
  */
 function containsSpanEndCall(node: Node, spanVarName: string, isRoot: boolean): boolean {
   if (!isRoot && SCOPE_BOUNDARIES.has(node.type)) return false;
@@ -72,7 +73,7 @@ function containsSpanEndCall(node: Node, spanVarName: string, isRoot: boolean): 
     if (fn?.type === 'attribute') {
       const receiver = fn.childForFieldName('object');
       const attribute = fn.childForFieldName('attribute');
-      if (receiver?.type === 'identifier' && receiver.text === spanVarName && attribute?.text === 'end') {
+      if (receiver !== null && receiver.text === spanVarName && attribute?.text === 'end') {
         return true;
       }
     }
@@ -84,14 +85,58 @@ function containsSpanEndCall(node: Node, spanVarName: string, isRoot: boolean): 
 }
 
 /**
- * Whether a variable bound to a raw `start_span()` result has a paired
- * `<var>.end()` call inside a `finally` block. Mirrors the JS checker's
- * `hasSpanEndInFinally()` sibling-statement search, but requires the closing
- * `try_statement` to be the *immediate* next statement after the assignment —
- * a `try_statement` reached after skipping over intervening statements would
- * leave the span unclosed if one of those intervening statements throws
- * before the try block is ever entered. Falls back to walking ancestors for
- * an enclosing `try/finally`, stopping at a scope boundary.
+ * Whether a `call` node invokes `use_span` on any receiver (receiver-agnostic,
+ * matching `cov001.ts`'s convention) or as a bare `identifier` call (the
+ * common form for a directly-imported `from opentelemetry.trace import use_span`).
+ */
+function isUseSpanCall(node: Node): boolean {
+  if (node.type !== 'call') return false;
+  const fn = node.childForFieldName('function');
+  if (fn?.type === 'identifier') return fn.text === 'use_span';
+  if (fn?.type === 'attribute') return fn.childForFieldName('attribute')?.text === 'use_span';
+  return false;
+}
+
+/**
+ * Whether a `with_statement` closes the given span variable via
+ * `use_span(<spanVarName>, ...)` — the lower-level context manager
+ * `start_as_current_span()` itself is built on (see
+ * `~/.claude/rules/opentelemetry-python-gotchas.md`). `use_span()`'s
+ * `end_on_exit` parameter defaults to `True`; only an explicit
+ * `end_on_exit=False` keyword argument means the `with` block does *not*
+ * close the span.
+ */
+function isUseSpanClosure(withStatement: Node, spanVarName: string): boolean {
+  const clause = withStatement.namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
+  const withItem = clause?.namedChildren.find((c): c is Node => c !== null && c.type === 'with_item');
+  const expr = withItem?.namedChild(0);
+  const call = expr?.type === 'as_pattern' ? expr.namedChild(0) : expr;
+  if (call === null || call === undefined || !isUseSpanCall(call)) return false;
+
+  const args = call.childForFieldName('arguments');
+  const positional = args?.namedChildren.find(
+    (a): a is Node => a !== null && a.type !== 'keyword_argument',
+  );
+  if (positional?.text !== spanVarName) return false;
+
+  const endOnExit = args?.namedChildren.find(
+    (a): a is Node => a !== null && a.type === 'keyword_argument'
+      && a.childForFieldName('name')?.text === 'end_on_exit',
+  );
+  return endOnExit?.childForFieldName('value')?.text !== 'False';
+}
+
+/**
+ * Whether a variable bound to a raw `start_span()` result is properly closed —
+ * either via a paired `<var>.end()` call inside a `finally` block, or via an
+ * immediately following `with use_span(<var>, ...):` block (see
+ * `isUseSpanClosure()`). Mirrors the JS checker's `hasSpanEndInFinally()`
+ * sibling-statement search, but requires the closing construct to be the
+ * *immediate* next statement after the assignment — one reached after
+ * skipping over intervening statements would leave the span unclosed if one
+ * of those intervening statements throws before the closing construct is
+ * ever entered. The `try/finally` form also falls back to walking ancestors
+ * for an enclosing `try/finally`, stopping at a scope boundary.
  */
 function hasSpanEndInFinally(assignmentStatement: Node, spanVarName: string): boolean {
   // Node objects aren't referentially stable across separate accessor calls (each
@@ -109,6 +154,7 @@ function hasSpanEndInFinally(assignmentStatement: Node, spanVarName: string): bo
         const finallyBlock = finallyBlockOf(nextStmt);
         if (finallyBlock !== undefined && containsSpanEndCall(finallyBlock, spanVarName, true)) return true;
       }
+      if (nextStmt.type === 'with_statement' && isUseSpanClosure(nextStmt, spanVarName)) return true;
     }
   }
 
@@ -152,8 +198,12 @@ export function checkPythonSpansClosed(code: string, filePath: string): CheckRes
     if (isRawStartSpanCall(node) && !isWithBoundStartSpan(node)) {
       const assignment = node.parent?.type === 'assignment' ? node.parent : undefined;
       const assignmentStatement = assignment?.parent;
-      const spanVarName = assignment?.childForFieldName('left')?.type === 'identifier'
-        ? assignment.childForFieldName('left')?.text
+      const left = assignment?.childForFieldName('left');
+      // Accept a bare identifier (`span = ...`) or an attribute target
+      // (`self.span = ...`) — both are valid assignment targets, and
+      // `containsSpanEndCall()` matches on the target's exact text either way.
+      const spanVarName = left?.type === 'identifier' || left?.type === 'attribute'
+        ? left.text
         : undefined;
 
       const spanName = getSpanName(node);
