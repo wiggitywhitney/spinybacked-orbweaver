@@ -20,6 +20,8 @@ import { checkExportedSignaturePreservation } from '../../src/languages/javascri
 import { checkExportedSignaturePreservationTs } from '../../src/languages/typescript/rules/nds004.ts';
 import { checkModuleSystemMatch } from '../../src/languages/javascript/rules/nds006.ts';
 import { checkModuleSystemMatchTs } from '../../src/languages/typescript/rules/nds006.ts';
+import { checkSpansClosed } from '../../src/languages/javascript/rules/cdq001.ts';
+import { checkPythonSpansClosed } from '../../src/languages/python/rules/cdq001.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -535,6 +537,95 @@ describe('COV-006: Auto-instrumentation preferred over manual spans', () => {
 
   // Go cases added when that provider merges (PRD #374) — per OD-5, COV-006 is
   // applicableTo('go') = false, so no Go case applies here.
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CDQ-001: Spans closed in all code paths
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CDQ-001: Spans closed in all code paths', () => {
+  it('catches a raw startSpan() in JS with no span.end() in finally', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  const span = tracer.startSpan("doWork");',
+      '  return computeResult();',
+      '}',
+    ].join('\n');
+
+    const results = checkSpansClosed(code, '/services/work.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-001');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when a JS raw startSpan() has span.end() in a sibling finally', () => {
+    const code = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'function doWork() {',
+      '  const span = tracer.startSpan("doWork");',
+      '  try {',
+      '    return computeResult();',
+      '  } finally {',
+      '    span.end();',
+      '  }',
+      '}',
+    ].join('\n');
+
+    const results = checkSpansClosed(code, '/services/work.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('catches a raw start_span() in Python with no span.end() in finally', () => {
+    const code = [
+      'def do_work():',
+      '    span = tracer.start_span("doWork")',
+      '    return compute_result()',
+      '',
+    ].join('\n');
+
+    const results = checkPythonSpansClosed(code, '/services/work.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-001');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when a Python raw start_span() has span.end() in a sibling finally', () => {
+    const code = [
+      'def do_work():',
+      '    span = tracer.start_span("doWork")',
+      '    try:',
+      '        return compute_result()',
+      '    finally:',
+      '        span.end()',
+      '',
+    ].join('\n');
+
+    const results = checkPythonSpansClosed(code, '/services/work.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('passes when a Python start_as_current_span() is used as a with block (no raw start_span involved)', () => {
+    const code = [
+      'def do_work():',
+      '    with tracer.start_as_current_span("doWork") as span:',
+      '        return compute_result()',
+      '',
+    ].join('\n');
+
+    const results = checkPythonSpansClosed(code, '/services/work.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
