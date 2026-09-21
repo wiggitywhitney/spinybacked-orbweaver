@@ -2,7 +2,7 @@
 // ABOUTME: Covers the OD-2 formatter fallback chain and the canonical missing-formatter message.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, rmSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { checkSyntax, formatCode, lintCheck } from '../../../src/languages/python/validation.ts';
@@ -183,6 +183,37 @@ describe('formatCode', () => {
       const result = await formatCode(source, tempDir);
 
       expect(result).toBe(source);
+    });
+  });
+
+  describe('Ruff installed but fails on this input', () => {
+    let originalPath: string | undefined;
+    let fakeBinDir: string;
+
+    beforeEach(() => {
+      // A fake `ruff` that always exits non-zero (a real execution failure,
+      // not ENOENT) is placed ahead of the real PATH, so `ruff` resolves to
+      // this failing stub while `black` still resolves to the real binary —
+      // exercising the "Ruff found but failed" fallback-to-Black path without
+      // needing an input that genuinely breaks the real Ruff.
+      fakeBinDir = mkdtempSync(join(tmpdir(), 'spiny-orb-fake-ruff-'));
+      writeFileSync(join(fakeBinDir, 'ruff'), '#!/bin/sh\necho "simulated ruff failure" >&2\nexit 2\n', 'utf-8');
+      chmodSync(join(fakeBinDir, 'ruff'), 0o755);
+      originalPath = process.env.PATH;
+      process.env.PATH = `${fakeBinDir}:${originalPath}`;
+    });
+
+    afterEach(() => {
+      process.env.PATH = originalPath;
+      rmSync(fakeBinDir, { recursive: true, force: true });
+    });
+
+    it('falls through to Black and still returns formatted output', async () => {
+      const source = 'def foo( x ):\n    return x+1\n';
+      const result = await formatCode(source, tempDir);
+
+      expect(result).toContain('def foo(x):');
+      expect(result).toContain('return x + 1');
     });
   });
 });
