@@ -18,6 +18,7 @@ import { checkAutoInstrumentationPreference } from '../../src/languages/javascri
 import { checkPythonAutoInstrumentationPreference } from '../../src/languages/python/rules/cov006.ts';
 import { checkExportedSignaturePreservation } from '../../src/languages/javascript/rules/nds004.ts';
 import { checkExportedSignaturePreservationTs } from '../../src/languages/typescript/rules/nds004.ts';
+import { checkPythonSignaturePreservation } from '../../src/languages/python/rules/nds004.ts';
 import { checkModuleSystemMatch } from '../../src/languages/javascript/rules/nds006.ts';
 import { checkModuleSystemMatchTs } from '../../src/languages/typescript/rules/nds006.ts';
 import { checkSpansClosed } from '../../src/languages/javascript/rules/cdq001.ts';
@@ -718,7 +719,44 @@ describe('NDS-004: Exported function signatures preserved', () => {
     expect(results.every(r => r.passed)).toBe(true);
   });
 
-  // Python and Go cases added when those providers merge (PRD #373, PRD #374)
+  it('flags signature change on Python exported function', () => {
+    const original = [
+      'def get_user(user_id):',
+      '    return db.find(user_id)',
+      '',
+    ].join('\n');
+
+    const instrumented = [
+      'def get_user(user_id, span):',
+      '    return db.find(user_id)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonSignaturePreservation(original, instrumented, '/services/user.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('NDS-004');
+    expect(failures[0].tier).toBe(2);
+  });
+
+  it('passes when Python exported function signature is unchanged', () => {
+    const original = 'def get_user(user_id):\n    return db.find(user_id)\n';
+    const instrumented = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def get_user(user_id):',
+      '    with tracer.start_as_current_span("get_user") as span:',
+      '        return db.find(user_id)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonSignaturePreservation(original, instrumented, '/services/user.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
