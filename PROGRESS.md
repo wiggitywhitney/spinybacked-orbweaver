@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- (2026-09-22) Processed taze eval run-17 findings into GitHub issues and updated `docs/ROADMAP.md`: opened SCH-003/SCH-004 (issue #1072, count-cast pattern broadened from 2 to 5 files plus a near-synonym attribute) and CDQ-007 (issue #1073, unsanitized filesystem paths regressed to 6 of 13 files) as new short-term work; promoted IS SPA-002 orphan span (issue #1008) from a watch item to a confirmed fix candidate after the same async-boundary shape recurred across run-16 and run-17; closed COV-005 (issue #1070) as resolved; opened resolves.ts schema drift (issue #1071) as a new watch item now that its compilation oscillation (#954/#958) has held stable for 2 consecutive runs.
 - (2026-09-11) Added a `docs/ROADMAP.md` entry for eval run-27 (13 committed, 1 partial, 0 failures, 18 correct skips; IS 100/100 for a third consecutive run) and inserted a new prerequisite step into the Path to Python sequence: COV-003 catch-shape detection gap (issue #1055) and SCH-002 schema-key-meaning consistency (issue #1056) must be fixed before PRD #373 (Python language provider) begins, since each language provider hand-implements its own copy of every validation rule and would otherwise inherit these bugs.
 
 ### Removed
