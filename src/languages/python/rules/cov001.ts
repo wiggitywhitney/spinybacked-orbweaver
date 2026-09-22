@@ -108,7 +108,13 @@ export function checkPythonEntryPointSpans(code: string, filePath: string): Chec
         (c): c is Node => c !== null && c.type === 'function_definition',
       );
       if (fnDef !== undefined) {
-        if (hasEntryPointDecorator(node) && !hasSpanCreationCall(fnDef, true) && !hasSpanDecorator(node)) {
+        // Scan only the function's own body — not the full function_definition
+        // subtree (which also includes the parameter list and any return-type
+        // annotation) — so a span-creation-shaped call in a default argument
+        // value or type annotation can't be mistaken for real request-handling
+        // instrumentation.
+        const body = fnDef.childForFieldName('body');
+        if (hasEntryPointDecorator(node) && (body === null || !hasSpanCreationCall(body, true)) && !hasSpanDecorator(node)) {
           const name = fnDef.childForFieldName('name')?.text ?? '<anonymous>';
           unspanned.push({ line: toLine(node), description: `route handler: ${name}()` });
         }

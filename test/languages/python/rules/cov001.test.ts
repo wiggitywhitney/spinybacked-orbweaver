@@ -95,6 +95,23 @@ describe('checkPythonEntryPointSpans (COV-001)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('flags a handler with no real span even when a span-creation-shaped call appears in a default parameter value', () => {
+      // hasSpanCreationCall() must scan only the function's body, not the
+      // full function_definition subtree (which also includes the parameter
+      // list) — a span-shaped call in a default argument value must not be
+      // mistaken for real request-handling instrumentation in the body.
+      const code = [
+        '@app.route("/users")',
+        'def list_users(span=tracer.start_span("x")):',
+        '    return jsonify([])',
+        '',
+      ].join('\n');
+
+      const results = checkPythonEntryPointSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('FastAPI entry points', () => {
