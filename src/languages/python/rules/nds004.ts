@@ -81,17 +81,21 @@ function extractParams(fnNode: Node): string[] {
  * Scope mirrors `findPythonFunctions()` in `ast.ts`: top-level functions and direct
  * class methods, including one defined conditionally inside a module-level compound
  * statement (`if`/`elif`/`else`, `try`/`except`, `while`, `for`, `with`); does not
- * descend into nested functions or nested classes' methods. A name collision (two
- * methods sharing a name across different classes) resolves first-match-wins, the
- * same limitation JS's and TypeScript's own `nds004.ts` already accept via their
- * `Map<string, ExportedSignature>` lookup.
+ * descend into nested functions or nested classes' methods. Unlike JS's and
+ * TypeScript's own `nds004.ts` (which only ever extract top-level exported functions,
+ * never class methods), Python's does extract class methods — so a bare method-name
+ * key would silently collapse two different classes' same-named methods into one
+ * entry, dropping the second from comparison entirely rather than merely picking one.
+ * `ExportedSignature.name` is therefore class-qualified as `ClassName.methodName` for
+ * a method, and left as the bare name for a top-level function; `_`-prefix export
+ * detection still checks the bare method name, per OD-1's naming convention.
  */
 function extractExportedSignatures(code: string): { tree: Tree; signatures: ExportedSignature[] } {
   const tree = parsePython(code);
   const signatures: ExportedSignature[] = [];
   const seen = new Set<string>();
 
-  function collect(stmtNode: Node, insideClass: boolean): void {
+  function collect(stmtNode: Node, className: string | undefined): void {
     let node = stmtNode;
     let boundaryNode = stmtNode;
 
@@ -107,10 +111,11 @@ function extractExportedSignatures(code: string): { tree: Tree; signatures: Expo
       if (nameNode === null) return;
       const name = nameNode.text;
       if (name.startsWith('_')) return; // Not exported, per OD-1's naming convention.
-      if (seen.has(name)) return;
-      seen.add(name);
+      const qualifiedName = className !== undefined ? `${className}.${name}` : name;
+      if (seen.has(qualifiedName)) return;
+      seen.add(qualifiedName);
       signatures.push({
-        name,
+        name: qualifiedName,
         params: extractParams(node),
         lineNumber: toLine(boundaryNode),
       });
@@ -118,11 +123,13 @@ function extractExportedSignatures(code: string): { tree: Tree; signatures: Expo
     }
 
     if (node.type === 'class_definition') {
-      if (insideClass) return; // Nested class — don't recurse into its methods.
+      if (className !== undefined) return; // Nested class — don't recurse into its methods.
+      const nameNode = node.childForFieldName('name');
+      const classNameText = nameNode?.text;
       const body = node.childForFieldName('body');
-      if (body === null) return;
+      if (body === null || classNameText === undefined) return;
       for (const child of body.namedChildren) {
-        if (child !== null) collect(child, true);
+        if (child !== null) collect(child, classNameText);
       }
       return;
     }
@@ -130,12 +137,12 @@ function extractExportedSignatures(code: string): { tree: Tree; signatures: Expo
     // Descend into compound statements to find a conditionally-defined function
     // or method, matching `findPythonFunctions()`'s own recursion.
     for (const child of node.namedChildren) {
-      if (child !== null) collect(child, insideClass);
+      if (child !== null) collect(child, className);
     }
   }
 
   for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt !== null) collect(stmt, false);
+    if (stmt !== null) collect(stmt, undefined);
   }
 
   return { tree, signatures };

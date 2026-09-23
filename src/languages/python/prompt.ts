@@ -87,7 +87,7 @@ Attribute counts on identical code vary run to run when these two decisions are 
 
 ### Attribute Keys: Raw Strings, Not Typed Constants
 
-Use raw attribute key strings (\`span.set_attribute("http.request.method", method)\`), not \`opentelemetry-semconv\` typed constants. Per PRD #373's OD-8 research spike, \`opentelemetry-semantic-conventions\` is still a beta package (\`0.65b0\`, no GA/1.0 timeline) that downstream packages pin more cautiously than \`opentelemetry-api\` — not yet safe to depend on loosely. \`opentelemetry-semantic-conventions\` is not installed by this provider's \`installCommand()\`.
+Use raw attribute key strings (\`span.set_attribute("http.request.method", method)\`), not \`opentelemetry-semantic-conventions\` typed constants. \`opentelemetry-semantic-conventions\` is still a pre-1.0 beta package with no GA timeline, and is not installed by this instrumentation pass.
 
 Future migration note (not current behavior): if this provider later adopts typed constants, the current stable import path is \`from opentelemetry.semconv.attributes import http_attributes\` then \`http_attributes.HTTP_REQUEST_METHOD\` — NOT \`from opentelemetry.semconv.trace import SpanAttributes\`, which has been deprecated since v1.25.0.`,
 

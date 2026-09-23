@@ -234,6 +234,35 @@ describe('checkPythonSignaturePreservation (NDS-004)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('flags a signature change on the second of two classes sharing a method name', () => {
+      const original = [
+        'class Foo:',
+        '    def process(self, item):',
+        '        pass',
+        '',
+        'class Bar:',
+        '    def process(self, item):',
+        '        pass',
+        '',
+      ].join('\n');
+      const instrumented = [
+        'class Foo:',
+        '    def process(self, item):',
+        '        pass',
+        '',
+        'class Bar:',
+        '    def process(self, item, extra):',
+        '        pass',
+        '',
+      ].join('\n');
+
+      const results = checkPythonSignaturePreservation(original, instrumented, filePath);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('Bar.process');
+    });
   });
 
   describe('CheckResult structure', () => {
