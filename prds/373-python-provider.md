@@ -293,7 +293,7 @@ Following Part 8 checklist, Step 3:
   - `nds006.ts` — module system match: `applicableTo('python') = false` — Python has no CJS/ESM dual module system
   - All other rules: evaluate applicability; document which rules reuse JS logic vs. need Python-specific versions
 - [ ] `PythonProvider.hasImplementation()` returns correct values for all 26 rule IDs
-- [ ] Feature parity assertion test passes for Python
+- [ ] Feature parity assertion test passes for Python. **Context for whoever picks this up:** `test/validation/parity.test.ts` currently only registers `JavaScriptProvider`/`TypeScriptProvider` in its `beforeEach` (via `registerProvider(new JavaScriptProvider())`/`registerProvider(new TypeScriptProvider())`) and has no Python-registering test at all — this milestone item means adding `registerProvider(new PythonProvider())` alongside them and a new `'every applicable rule has a Python implementation'` test mirroring the existing JS/TS ones (iterate `getAllRules()`, check `rule.applicableTo('python')` against `pythonProvider.hasImplementation(rule.ruleId)`). The file's `applicableTo('python')).toBe(false)` assertions for SCH-001/002/003, NDS-006, CDQ-009, CDQ-010 already encode which rules Python is expected to abstain from — read those before writing the applicability list for "all other rules" above.
 - [ ] Add Python cases to `test/validation/cross-language-consistency.test.ts` (created in PRD #372 C4): for each shared-concept rule with a Python implementation, add a test that the same violation caught by the JS checker is also caught by the Python checker (e.g., COV-001 catches missing span on Flask route the same way it catches missing span on Express handler)
 
 ### Milestone D3b: Python COV-006 Flask/FastAPI entry-point detection
