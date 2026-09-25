@@ -75,6 +75,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- (2026-09-25) Removed issue #1069 from `docs/ROADMAP.md`'s Short-term section — closed, and ROADMAP is forward-looking (completed work lives in this changelog, not there). Caught by CodeRabbit during an unrelated PRD #373 review.
 - (2026-08-31) Removed issues #1048 and #1052 from `docs/ROADMAP.md`'s Short-term section — both closed, and ROADMAP is forward-looking (completed work lives in this changelog, not there).
 
 ## [2.0.0] - 2026-08-24
