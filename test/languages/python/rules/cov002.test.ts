@@ -194,7 +194,7 @@ describe('checkPythonOutboundCallSpans (COV-002)', () => {
       expect(results[0].passed).toBe(true);
     });
 
-    it('flags an httpx client call with no import (generic receiver, unmatched)', () => {
+    it('does not flag an httpx client call with no import (generic receiver, unmatched)', () => {
       const code = [
         'def fetch_user(client, user_id):',
         '    return client.get(f"/users/{user_id}")',

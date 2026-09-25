@@ -126,7 +126,12 @@ export function checkPythonAsyncOperationSpans(code: string, filePath: string): 
     }
 
     if (node.type === 'function_definition') {
-      const hasSpan = hasSpanCreationCall(node, true) || (decorated && hasSpanDecorator(boundaryNode));
+      // Scan only the function's own body — not the full function_definition
+      // subtree (which also includes the parameter list and any return-type
+      // annotation) — so a span-creation-shaped call in a default argument
+      // value or type annotation can't be mistaken for real instrumentation.
+      const body = node.childForFieldName('body');
+      const hasSpan = (body !== null && hasSpanCreationCall(body, true)) || (decorated && hasSpanDecorator(boundaryNode));
       if (isAsyncFunctionDefinition(node) && !hasSpan) {
         const name = node.childForFieldName('name')?.text ?? '<anonymous>';
         unspanned.push({ line: toLine(boundaryNode), name });

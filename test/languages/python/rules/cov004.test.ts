@@ -56,6 +56,22 @@ describe('checkPythonAsyncOperationSpans (COV-004)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('flags an async def with no real span even when a span-creation-shaped call appears in a default parameter value', () => {
+      // hasSpanCreationCall() must scan only the function's body, not the
+      // full function_definition subtree (which also includes the parameter
+      // list) — a span-shaped call in a default argument value must not be
+      // mistaken for real instrumentation in the body.
+      const code = [
+        'async def fetch_user(span=tracer.start_span("x")):',
+        '    return await db.find(1)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAsyncOperationSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('decorated async entry point', () => {
