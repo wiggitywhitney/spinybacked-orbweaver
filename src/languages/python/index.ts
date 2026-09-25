@@ -36,9 +36,10 @@ import { cov004PythonRule } from './rules/cov004.ts';
 import { cov006PythonRule } from './rules/cov006.ts';
 import { cdq001PythonRule } from './rules/cdq001.ts';
 import { nds004PythonRule } from './rules/nds004.ts';
+import { rst001PythonRule } from './rules/rst001.ts';
 
-/** Python-specific ValidationRules, registered on provider construction. Milestone D3 populates this incrementally. */
-const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule, cdq001PythonRule, nds004PythonRule] as const;
+/** Python-specific ValidationRules, registered on provider construction. Milestones D3/D3c populate this incrementally. */
+const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule, cdq001PythonRule, nds004PythonRule, rst001PythonRule] as const;
 
 /**
  * Matches both a single-bracket table header (`[project]`) and a double-bracket

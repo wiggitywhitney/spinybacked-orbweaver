@@ -23,6 +23,8 @@ import { checkModuleSystemMatch } from '../../src/languages/javascript/rules/nds
 import { checkModuleSystemMatchTs } from '../../src/languages/typescript/rules/nds006.ts';
 import { checkSpansClosed } from '../../src/languages/javascript/rules/cdq001.ts';
 import { checkPythonSpansClosed } from '../../src/languages/python/rules/cdq001.ts';
+import { checkUtilityFunctionSpans } from '../../src/languages/javascript/rules/rst001.ts';
+import { checkPythonUtilityFunctionSpans } from '../../src/languages/python/rules/rst001.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -863,4 +865,73 @@ describe('NDS-006: Module system preserved', () => {
   });
 
   // Python and Go cases added when those providers merge (PRD #373, PRD #374)
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RST-001: No spans on utility functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('RST-001: No spans on utility functions', () => {
+  it('flags a span on a short, unexported JS utility function', () => {
+    const code = [
+      'function _add(x, y) {',
+      '  return tracer.startActiveSpan("_add", (span) => {',
+      '    try {',
+      '      return x + y;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkUtilityFunctionSpans(code, '/services/math.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-001');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a JS utility function has no span', () => {
+    const code = [
+      'function _add(x, y) {',
+      '  return x + y;',
+      '}',
+    ].join('\n');
+
+    const results = checkUtilityFunctionSpans(code, '/services/math.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a span on a short, unexported Python utility function', () => {
+    const code = [
+      'def _add(x, y):',
+      '    with tracer.start_as_current_span("_add"):',
+      '        return x + y',
+      '',
+    ].join('\n');
+
+    const results = checkPythonUtilityFunctionSpans(code, '/services/math.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-001');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a Python utility function has no span', () => {
+    const code = [
+      'def _add(x, y):',
+      '    return x + y',
+      '',
+    ].join('\n');
+
+    const results = checkPythonUtilityFunctionSpans(code, '/services/math.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
 });
