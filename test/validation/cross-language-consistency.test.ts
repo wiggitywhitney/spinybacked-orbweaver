@@ -27,6 +27,8 @@ import { checkUtilityFunctionSpans } from '../../src/languages/javascript/rules/
 import { checkPythonUtilityFunctionSpans } from '../../src/languages/python/rules/rst001.ts';
 import { checkTrivialAccessorSpans } from '../../src/languages/javascript/rules/rst002.ts';
 import { checkPythonTrivialAccessorSpans } from '../../src/languages/python/rules/rst002.ts';
+import { checkThinWrapperSpans } from '../../src/languages/javascript/rules/rst003.ts';
+import { checkPythonThinWrapperSpans } from '../../src/languages/python/rules/rst003.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1013,4 +1015,85 @@ describe('RST-002: No spans on trivial accessors', () => {
   });
 
   // Go cases added when that provider merges (PRD #374)
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RST-003: No duplicate spans on thin wrappers
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('RST-003: No duplicate spans on thin wrappers', () => {
+  it('flags a span on a JS thin wrapper delegating to a same-file function', () => {
+    const code = [
+      'function realCompute(x) {',
+      '  return x + 1;',
+      '}',
+      '',
+      'function compute(x) {',
+      '  return tracer.startActiveSpan("compute", (span) => {',
+      '    try {',
+      '      return realCompute(x);',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkThinWrapperSpans(code, '/services/math.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-003');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a JS thin wrapper has no span', () => {
+    const code = [
+      'function realCompute(x) {',
+      '  return x + 1;',
+      '}',
+      '',
+      'function compute(x) {',
+      '  return realCompute(x);',
+      '}',
+    ].join('\n');
+
+    const results = checkThinWrapperSpans(code, '/services/math.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a span on a Python thin wrapper delegating to a same-file function', () => {
+    const code = [
+      'def _real_compute(x):',
+      '    return x + 1',
+      '',
+      'def compute(x):',
+      '    with tracer.start_as_current_span("compute"):',
+      '        return _real_compute(x)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonThinWrapperSpans(code, '/services/math.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-003');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a Python thin wrapper has no span', () => {
+    const code = [
+      'def _real_compute(x):',
+      '    return x + 1',
+      '',
+      'def compute(x):',
+      '    return _real_compute(x)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonThinWrapperSpans(code, '/services/math.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
 });
