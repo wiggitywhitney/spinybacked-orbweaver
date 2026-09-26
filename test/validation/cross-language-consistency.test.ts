@@ -37,6 +37,8 @@ import { checkProcessExitSpan } from '../../src/languages/javascript/rules/rst00
 import { checkPythonProcessExitSpan } from '../../src/languages/python/rules/rst006.ts';
 import { checkControlFlowPreservation } from '../../src/languages/javascript/rules/nds005.ts';
 import { checkPythonControlFlowPreservation } from '../../src/languages/python/rules/nds005.ts';
+import { checkNoErrorRecordingInExpectedConditionCatches } from '../../src/languages/javascript/rules/nds007.ts';
+import { checkPythonNoErrorRecordingInExpectedConditionExcepts } from '../../src/languages/python/rules/nds007.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1492,6 +1494,132 @@ describe('NDS-005: Control flow preservation', () => {
     ].join('\n');
 
     const results = checkPythonControlFlowPreservation(original, instrumented, '/services/handler.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NDS-007: Expected-condition catch/except blocks must not gain error recording
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('NDS-007: Expected-condition catch/except blocks must not gain error recording', () => {
+  it('flags recordException() newly added to a swallowing JS catch block', () => {
+    const original = [
+      'function load(path) {',
+      '  try {',
+      '    return readFile(path);',
+      '  } catch (e) {',
+      '    return null;',
+      '  }',
+      '}',
+    ].join('\n');
+    const instrumented = [
+      'function load(path) {',
+      '  return tracer.startActiveSpan("load", (span) => {',
+      '    try {',
+      '      try {',
+      '        return readFile(path);',
+      '      } catch (e) {',
+      '        span.recordException(e);',
+      '        return null;',
+      '      }',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkNoErrorRecordingInExpectedConditionCatches(original, instrumented, '/services/load.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('NDS-007');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when JS error recording is added to a re-raising catch block', () => {
+    const original = [
+      'function load(path) {',
+      '  try {',
+      '    return readFile(path);',
+      '  } catch (e) {',
+      '    throw e;',
+      '  }',
+      '}',
+    ].join('\n');
+    const instrumented = [
+      'function load(path) {',
+      '  return tracer.startActiveSpan("load", (span) => {',
+      '    try {',
+      '      try {',
+      '        return readFile(path);',
+      '      } catch (e) {',
+      '        span.recordException(e);',
+      '        throw e;',
+      '      }',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkNoErrorRecordingInExpectedConditionCatches(original, instrumented, '/services/load.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags record_exception() newly added to a swallowing Python except block', () => {
+    const original = [
+      'def load(path):',
+      '    try:',
+      '        return open(path).read()',
+      '    except FileNotFoundError:',
+      '        return None',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def load(path):',
+      '    with tracer.start_as_current_span("load") as span:',
+      '        try:',
+      '            return open(path).read()',
+      '        except FileNotFoundError as e:',
+      '            span.record_exception(e)',
+      '            return None',
+      '',
+    ].join('\n');
+
+    const results = checkPythonNoErrorRecordingInExpectedConditionExcepts(original, instrumented, '/services/load.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('NDS-007');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when Python error recording is added to a re-raising except block', () => {
+    const original = [
+      'def load(path):',
+      '    try:',
+      '        return open(path).read()',
+      '    except FileNotFoundError:',
+      '        raise',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def load(path):',
+      '    with tracer.start_as_current_span("load") as span:',
+      '        try:',
+      '            return open(path).read()',
+      '        except FileNotFoundError as e:',
+      '            span.record_exception(e)',
+      '            raise',
+      '',
+    ].join('\n');
+
+    const results = checkPythonNoErrorRecordingInExpectedConditionExcepts(original, instrumented, '/services/load.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });

@@ -58,7 +58,7 @@ function clauseBlock(clause: Node): Node | undefined {
  * statements and recurses into a nested try (instrumentation may wrap the
  * body in one, e.g. a raw `start_span()` + `try`/`finally` pattern).
  */
-function extractBodyAnchor(tryStmt: Node): string {
+export function extractBodyAnchor(tryStmt: Node): string {
   const tryBlock = tryStmt.childForFieldName('body');
   const statements = tryBlock?.namedChildren.filter((c): c is Node => c !== null) ?? [];
 

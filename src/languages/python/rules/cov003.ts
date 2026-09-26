@@ -121,7 +121,7 @@ function findEnclosingSpanScope(node: Node): SpanScope {
  * correction, a re-raising except block must NOT be flagged for missing
  * manual recording.
  */
-function containsReraise(node: Node, isRoot: boolean): boolean {
+export function containsReraise(node: Node, isRoot: boolean): boolean {
   if (!isRoot && SCOPE_BOUNDARIES.has(node.type)) return false;
   if (node.type === 'raise_statement') return true;
   for (const child of node.namedChildren) {
