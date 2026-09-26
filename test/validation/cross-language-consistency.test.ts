@@ -31,6 +31,8 @@ import { checkThinWrapperSpans } from '../../src/languages/javascript/rules/rst0
 import { checkPythonThinWrapperSpans } from '../../src/languages/python/rules/rst003.ts';
 import { checkInternalDetailSpans } from '../../src/languages/javascript/rules/rst004.ts';
 import { checkPythonInternalDetailSpans } from '../../src/languages/python/rules/rst004.ts';
+import { checkDoubleInstrumentation } from '../../src/languages/javascript/rules/rst005.ts';
+import { checkPythonDoubleInstrumentation } from '../../src/languages/python/rules/rst005.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1163,6 +1165,104 @@ describe('RST-004: No spans on internal implementation details', () => {
     ].join('\n');
 
     const results = checkPythonInternalDetailSpans(code, '/services/math.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RST-005: No double-instrumentation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('RST-005: No double-instrumentation', () => {
+  it('flags a JS function that already had a span and gained another', () => {
+    const original = [
+      'function handler(x) {',
+      '  return tracer.startActiveSpan("handler", (span) => {',
+      '    try {',
+      '      return x + 1;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+    const instrumented = [
+      'function handler(x) {',
+      '  return tracer.startActiveSpan("handler", (span) => {',
+      '    try {',
+      '      return tracer.startActiveSpan("handler-inner", (innerSpan) => {',
+      '        try {',
+      '          return x + 1;',
+      '        } finally {',
+      '          innerSpan.end();',
+      '        }',
+      '      });',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkDoubleInstrumentation(original, instrumented, '/services/handler.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a JS spanned function is left unchanged', () => {
+    const code = [
+      'function handler(x) {',
+      '  return tracer.startActiveSpan("handler", (span) => {',
+      '    try {',
+      '      return x + 1;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkDoubleInstrumentation(code, code, '/services/handler.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a Python function that already had a span and gained another', () => {
+    const original = [
+      'def handler(x):',
+      '    with tracer.start_as_current_span("handler"):',
+      '        return x + 1',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def handler(x):',
+      '    with tracer.start_as_current_span("handler"):',
+      '        with tracer.start_as_current_span("handler-inner"):',
+      '            return x + 1',
+      '',
+    ].join('\n');
+
+    const results = checkPythonDoubleInstrumentation(original, instrumented, '/services/handler.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a Python spanned function is left unchanged', () => {
+    const code = [
+      'def handler(x):',
+      '    with tracer.start_as_current_span("handler"):',
+      '        return x + 1',
+      '',
+    ].join('\n');
+
+    const results = checkPythonDoubleInstrumentation(code, code, '/services/handler.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
