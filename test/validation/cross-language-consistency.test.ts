@@ -43,6 +43,8 @@ import { checkStartActiveSpanPreferred } from '../../src/languages/javascript/ru
 import { checkPythonStartActiveSpanPreferred } from '../../src/languages/python/rules/cdq005.ts';
 import { checkIsRecordingGuard } from '../../src/languages/javascript/rules/cdq006.ts';
 import { checkPythonIsRecordingGuard } from '../../src/languages/python/rules/cdq006.ts';
+import { checkAttributeDataQuality } from '../../src/languages/javascript/rules/cdq007.ts';
+import { checkPythonAttributeDataQuality } from '../../src/languages/python/rules/cdq007.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1756,6 +1758,50 @@ describe('CDQ-006: setAttribute computed values must be guarded by isRecording()
     ].join('\n');
 
     const results = checkPythonIsRecordingGuard(code, '/services/handler.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CDQ-007: Attribute data quality (PII names, filesystem paths)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CDQ-007: Attribute data quality (PII names, filesystem paths)', () => {
+  it('flags a JS PII attribute key', () => {
+    const code = 'span.setAttribute("email", userEmail);\n';
+
+    const results = checkAttributeDataQuality(code, '/services/handler.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-007');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes for a JS non-PII, non-path attribute', () => {
+    const code = 'span.setAttribute("http.method", "GET");\n';
+
+    const results = checkAttributeDataQuality(code, '/services/handler.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a Python PII attribute key', () => {
+    const code = 'span.set_attribute("email", user_email)\n';
+
+    const results = checkPythonAttributeDataQuality(code, '/services/handler.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-007');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes for a Python non-PII, non-path attribute', () => {
+    const code = 'span.set_attribute("http.method", "GET")\n';
+
+    const results = checkPythonAttributeDataQuality(code, '/services/handler.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
