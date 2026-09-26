@@ -45,6 +45,8 @@ import { checkIsRecordingGuard } from '../../src/languages/javascript/rules/cdq0
 import { checkPythonIsRecordingGuard } from '../../src/languages/python/rules/cdq006.ts';
 import { checkAttributeDataQuality } from '../../src/languages/javascript/rules/cdq007.ts';
 import { checkPythonAttributeDataQuality } from '../../src/languages/python/rules/cdq007.ts';
+import { checkCanonicalTracerName } from '../../src/languages/javascript/rules/cdq011.ts';
+import { checkPythonCanonicalTracerName } from '../../src/languages/python/rules/cdq011.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1802,6 +1804,50 @@ describe('CDQ-007: Attribute data quality (PII names, filesystem paths)', () => 
     const code = 'span.set_attribute("http.method", "GET")\n';
 
     const results = checkPythonAttributeDataQuality(code, '/services/handler.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CDQ-011: Canonical tracer name enforcement
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CDQ-011: Canonical tracer name enforcement', () => {
+  it('flags a mismatched JS trace.getTracer() literal', () => {
+    const code = 'const tracer = trace.getTracer("wrong-name");\n';
+
+    const results = checkCanonicalTracerName(code, '/services/handler.js', 'my-service');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-011');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when JS trace.getTracer() uses the canonical name', () => {
+    const code = 'const tracer = trace.getTracer("my-service");\n';
+
+    const results = checkCanonicalTracerName(code, '/services/handler.js', 'my-service');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a mismatched Python trace.get_tracer() literal', () => {
+    const code = 'tracer = trace.get_tracer("wrong-name")\n';
+
+    const results = checkPythonCanonicalTracerName(code, '/services/handler.py', 'my-service');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-011');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when Python trace.get_tracer() uses the canonical name', () => {
+    const code = 'tracer = trace.get_tracer("my-service")\n';
+
+    const results = checkPythonCanonicalTracerName(code, '/services/handler.py', 'my-service');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });

@@ -47,9 +47,10 @@ import { nds007PythonRule } from './rules/nds007.ts';
 import { cdq005PythonRule } from './rules/cdq005.ts';
 import { cdq006PythonRule } from './rules/cdq006.ts';
 import { cdq007PythonRule } from './rules/cdq007.ts';
+import { cdq011PythonRule } from './rules/cdq011.ts';
 
 /** Python-specific ValidationRules, registered on provider construction. Milestones D3/D3c populate this incrementally. */
-const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule, cdq001PythonRule, nds004PythonRule, rst001PythonRule, rst002PythonRule, rst003PythonRule, rst004PythonRule, rst005PythonRule, rst006PythonRule, nds005PythonRule, nds007PythonRule, cdq005PythonRule, cdq006PythonRule, cdq007PythonRule] as const;
+const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule, cdq001PythonRule, nds004PythonRule, rst001PythonRule, rst002PythonRule, rst003PythonRule, rst004PythonRule, rst005PythonRule, rst006PythonRule, nds005PythonRule, nds007PythonRule, cdq005PythonRule, cdq006PythonRule, cdq007PythonRule, cdq011PythonRule] as const;
 
 /**
  * Matches both a single-bracket table header (`[project]`) and a double-bracket
