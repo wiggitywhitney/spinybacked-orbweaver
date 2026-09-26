@@ -35,6 +35,8 @@ import { checkDoubleInstrumentation } from '../../src/languages/javascript/rules
 import { checkPythonDoubleInstrumentation } from '../../src/languages/python/rules/rst005.ts';
 import { checkProcessExitSpan } from '../../src/languages/javascript/rules/rst006.ts';
 import { checkPythonProcessExitSpan } from '../../src/languages/python/rules/rst006.ts';
+import { checkControlFlowPreservation } from '../../src/languages/javascript/rules/nds005.ts';
+import { checkPythonControlFlowPreservation } from '../../src/languages/python/rules/nds005.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1367,6 +1369,129 @@ describe('RST-006: No agent-added spans on process-exit-adjacent functions', () 
     ].join('\n');
 
     const results = checkPythonProcessExitSpan(original, instrumented, '/services/cli.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NDS-005: Control flow preservation
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('NDS-005: Control flow preservation', () => {
+  it('flags a JS try/catch block entirely removed from the instrumented output', () => {
+    const original = [
+      'function handler(x) {',
+      '  try {',
+      '    risky(x);',
+      '  } catch (e) {',
+      '    log(x);',
+      '  }',
+      '}',
+    ].join('\n');
+    const instrumented = [
+      'function handler(x) {',
+      '  return tracer.startActiveSpan("handler", (span) => {',
+      '    try {',
+      '      risky(x);',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkControlFlowPreservation(original, instrumented, '/services/handler.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('NDS-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when a JS try/catch/finally block is preserved inside the span wrapper', () => {
+    const original = [
+      'function handler(x) {',
+      '  try {',
+      '    risky(x);',
+      '  } catch (e) {',
+      '    log(x);',
+      '  } finally {',
+      '    cleanup();',
+      '  }',
+      '}',
+    ].join('\n');
+    const instrumented = [
+      'function handler(x) {',
+      '  return tracer.startActiveSpan("handler", (span) => {',
+      '    try {',
+      '      try {',
+      '        risky(x);',
+      '      } catch (e) {',
+      '        log(x);',
+      '      } finally {',
+      '        cleanup();',
+      '      }',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkControlFlowPreservation(original, instrumented, '/services/handler.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a Python try/except block entirely removed from the instrumented output', () => {
+    const original = [
+      'def handler(x):',
+      '    try:',
+      '        risky(x)',
+      '    except ValueError:',
+      '        log(x)',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def handler(x):',
+      '    with tracer.start_as_current_span("handler"):',
+      '        risky(x)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonControlFlowPreservation(original, instrumented, '/services/handler.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('NDS-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when a Python try/except/finally block is preserved inside the with-span', () => {
+    const original = [
+      'def handler(x):',
+      '    try:',
+      '        risky(x)',
+      '    except ValueError as e:',
+      '        raise',
+      '    finally:',
+      '        cleanup()',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def handler(x):',
+      '    with tracer.start_as_current_span("handler"):',
+      '        try:',
+      '            risky(x)',
+      '        except ValueError as e:',
+      '            raise',
+      '        finally:',
+      '            cleanup()',
+      '',
+    ].join('\n');
+
+    const results = checkPythonControlFlowPreservation(original, instrumented, '/services/handler.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
