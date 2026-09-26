@@ -29,6 +29,8 @@ import { checkTrivialAccessorSpans } from '../../src/languages/javascript/rules/
 import { checkPythonTrivialAccessorSpans } from '../../src/languages/python/rules/rst002.ts';
 import { checkThinWrapperSpans } from '../../src/languages/javascript/rules/rst003.ts';
 import { checkPythonThinWrapperSpans } from '../../src/languages/python/rules/rst003.ts';
+import { checkInternalDetailSpans } from '../../src/languages/javascript/rules/rst004.ts';
+import { checkPythonInternalDetailSpans } from '../../src/languages/python/rules/rst004.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1094,6 +1096,73 @@ describe('RST-003: No duplicate spans on thin wrappers', () => {
     ].join('\n');
 
     const results = checkPythonThinWrapperSpans(code, '/services/math.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RST-004: No spans on internal implementation details
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('RST-004: No spans on internal implementation details', () => {
+  it('flags a span on an unexported JS function with no I/O', () => {
+    const code = [
+      'function helper(x) {',
+      '  return tracer.startActiveSpan("helper", (span) => {',
+      '    try {',
+      '      return x + 1;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkInternalDetailSpans(code, '/services/math.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-004');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when an unexported JS function has no span', () => {
+    const code = [
+      'function helper(x) {',
+      '  return x + 1;',
+      '}',
+    ].join('\n');
+
+    const results = checkInternalDetailSpans(code, '/services/math.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a span on an unexported Python function with no I/O', () => {
+    const code = [
+      'def _helper(x):',
+      '    with tracer.start_as_current_span("_helper"):',
+      '        return x + 1',
+      '',
+    ].join('\n');
+
+    const results = checkPythonInternalDetailSpans(code, '/services/math.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-004');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when an unexported Python function has no span', () => {
+    const code = [
+      'def _helper(x):',
+      '    return x + 1',
+      '',
+    ].join('\n');
+
+    const results = checkPythonInternalDetailSpans(code, '/services/math.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
