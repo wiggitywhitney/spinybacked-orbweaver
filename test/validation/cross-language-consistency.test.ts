@@ -39,6 +39,8 @@ import { checkControlFlowPreservation } from '../../src/languages/javascript/rul
 import { checkPythonControlFlowPreservation } from '../../src/languages/python/rules/nds005.ts';
 import { checkNoErrorRecordingInExpectedConditionCatches } from '../../src/languages/javascript/rules/nds007.ts';
 import { checkPythonNoErrorRecordingInExpectedConditionExcepts } from '../../src/languages/python/rules/nds007.ts';
+import { checkStartActiveSpanPreferred } from '../../src/languages/javascript/rules/cdq005.ts';
+import { checkPythonStartActiveSpanPreferred } from '../../src/languages/python/rules/cdq005.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1620,6 +1622,75 @@ describe('NDS-007: Expected-condition catch/except blocks must not gain error re
     ].join('\n');
 
     const results = checkPythonNoErrorRecordingInExpectedConditionExcepts(original, instrumented, '/services/load.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CDQ-005: startActiveSpan/start_as_current_span preferred over startSpan/start_span
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CDQ-005: startActiveSpan preferred over startSpan', () => {
+  it('flags a JS tracer.startSpan() call', () => {
+    const code = [
+      'function handler(x) {',
+      '  const span = tracer.startSpan("handler");',
+      '  return x + 1;',
+      '}',
+    ].join('\n');
+
+    const results = checkStartActiveSpanPreferred(code, '/services/handler.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when JS code uses startActiveSpan', () => {
+    const code = [
+      'function handler(x) {',
+      '  return tracer.startActiveSpan("handler", (span) => {',
+      '    try {',
+      '      return x + 1;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkStartActiveSpanPreferred(code, '/services/handler.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a Python tracer.start_span() call', () => {
+    const code = [
+      'def handler(x):',
+      '    span = tracer.start_span("handler")',
+      '    return x + 1',
+      '',
+    ].join('\n');
+
+    const results = checkPythonStartActiveSpanPreferred(code, '/services/handler.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when Python code uses start_as_current_span', () => {
+    const code = [
+      'def handler(x):',
+      '    with tracer.start_as_current_span("handler"):',
+      '        return x + 1',
+      '',
+    ].join('\n');
+
+    const results = checkPythonStartActiveSpanPreferred(code, '/services/handler.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
