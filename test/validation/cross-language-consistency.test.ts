@@ -49,6 +49,8 @@ import { checkCanonicalTracerName } from '../../src/languages/javascript/rules/c
 import { checkPythonCanonicalTracerName } from '../../src/languages/python/rules/cdq011.ts';
 import { checkForbiddenImports } from '../../src/languages/javascript/rules/api001.ts';
 import { checkPythonForbiddenImports } from '../../src/languages/python/rules/api001.ts';
+import { checkDomainAttributes } from '../../src/languages/javascript/rules/cov005.ts';
+import { checkPythonDomainAttributes } from '../../src/languages/python/rules/cov005.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1898,6 +1900,88 @@ describe('API-001/004: Forbidden import detection', () => {
     const instrumented = 'from opentelemetry import trace\ndef handler():\n    return 1\n';
 
     const results = checkPythonForbiddenImports(original, instrumented, '/services/handler.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COV-005: Domain-specific attributes present
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('COV-005: Domain-specific attributes present', () => {
+  const registry = [{
+    spanName: 'create_order',
+    requiredAttributes: ['order.id'],
+    recommendedAttributes: [],
+  }];
+
+  it('flags a JS startActiveSpan missing a required registry attribute', () => {
+    const code = [
+      'function createOrder(orderId) {',
+      '  return tracer.startActiveSpan("create_order", (span) => {',
+      '    try {',
+      '      return orderId;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkDomainAttributes(code, '/services/order.js', registry);
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when the JS span has the required registry attribute', () => {
+    const code = [
+      'function createOrder(orderId) {',
+      '  return tracer.startActiveSpan("create_order", (span) => {',
+      '    try {',
+      '      span.setAttribute("order.id", orderId);',
+      '      return orderId;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkDomainAttributes(code, '/services/order.js', registry);
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a Python with-scoped span missing a required registry attribute', () => {
+    const code = [
+      'def create_order(order_id):',
+      '    with tracer.start_as_current_span("create_order"):',
+      '        return order_id',
+      '',
+    ].join('\n');
+
+    const results = checkPythonDomainAttributes(code, '/services/order.py', registry);
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-005');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when the Python span has the required registry attribute', () => {
+    const code = [
+      'def create_order(order_id):',
+      '    with tracer.start_as_current_span("create_order") as span:',
+      '        span.set_attribute("order.id", order_id)',
+      '        return order_id',
+      '',
+    ].join('\n');
+
+    const results = checkPythonDomainAttributes(code, '/services/order.py', registry);
     expect(results.every(r => r.passed)).toBe(true);
   });
 });

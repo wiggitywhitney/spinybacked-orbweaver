@@ -6,16 +6,19 @@ import { getAllRules, _resetForTest } from '../../src/validation/rule-registry.t
 import { getProviderByLanguage, _resetForTest as _resetProviderRegistry } from '../../src/languages/registry.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
 import { TypeScriptProvider } from '../../src/languages/typescript/index.ts';
+import { PythonProvider } from '../../src/languages/python/index.ts';
 import { registerProvider } from '../../src/languages/registry.ts';
 
 describe('feature parity matrix', () => {
   beforeEach(() => {
     // Reset both registries and re-instantiate with fresh providers.
-    // JavaScriptProvider and TypeScriptProvider constructors re-register all rules on construction.
+    // JavaScriptProvider, TypeScriptProvider, and PythonProvider constructors
+    // re-register all rules on construction.
     _resetForTest();
     _resetProviderRegistry();
     registerProvider(new JavaScriptProvider());
     registerProvider(new TypeScriptProvider());
+    registerProvider(new PythonProvider());
   });
 
   it('every applicable rule has a JS implementation', () => {
@@ -54,6 +57,25 @@ describe('feature parity matrix', () => {
     }
 
     expect(missing, `TypeScript provider missing implementations for: ${missing.join(', ')}`).toHaveLength(0);
+  });
+
+  it('every applicable rule has a Python implementation', () => {
+    const rules = getAllRules();
+    expect(rules.length).toBeGreaterThan(0);
+
+    const pythonProvider = getProviderByLanguage('python');
+    expect(pythonProvider).toBeDefined();
+
+    const missing: string[] = [];
+    for (const rule of rules) {
+      if (rule.applicableTo('python')) {
+        if (!pythonProvider!.hasImplementation(rule.ruleId)) {
+          missing.push(rule.ruleId);
+        }
+      }
+    }
+
+    expect(missing, `Python provider missing implementations for: ${missing.join(', ')}`).toHaveLength(0);
   });
 
   it('all JS provider rules apply to JavaScript', () => {
