@@ -47,6 +47,8 @@ import { checkAttributeDataQuality } from '../../src/languages/javascript/rules/
 import { checkPythonAttributeDataQuality } from '../../src/languages/python/rules/cdq007.ts';
 import { checkCanonicalTracerName } from '../../src/languages/javascript/rules/cdq011.ts';
 import { checkPythonCanonicalTracerName } from '../../src/languages/python/rules/cdq011.ts';
+import { checkForbiddenImports } from '../../src/languages/javascript/rules/api001.ts';
+import { checkPythonForbiddenImports } from '../../src/languages/python/rules/api001.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1848,6 +1850,54 @@ describe('CDQ-011: Canonical tracer name enforcement', () => {
     const code = 'tracer = trace.get_tracer("my-service")\n';
 
     const results = checkPythonCanonicalTracerName(code, '/services/handler.py', 'my-service');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// API-001/API-004: Forbidden import detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('API-001/004: Forbidden import detection', () => {
+  it('flags a newly-added JS OTel SDK import', () => {
+    const original = 'function handler() {\n  return 1;\n}\n';
+    const instrumented = "import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';\nfunction handler() {\n  return 1;\n}\n";
+
+    const results = checkForbiddenImports(original, instrumented, '/services/handler.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('API-001');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when only @opentelemetry/api is imported in JS', () => {
+    const original = 'function handler() {\n  return 1;\n}\n';
+    const instrumented = "import { trace } from '@opentelemetry/api';\nfunction handler() {\n  return 1;\n}\n";
+
+    const results = checkForbiddenImports(original, instrumented, '/services/handler.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a newly-added Python OTel SDK import', () => {
+    const original = 'def handler():\n    return 1\n';
+    const instrumented = 'from opentelemetry.sdk.trace import TracerProvider\ndef handler():\n    return 1\n';
+
+    const results = checkPythonForbiddenImports(original, instrumented, '/services/handler.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('API-001');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(true);
+  });
+
+  it('passes when only the opentelemetry API is imported in Python', () => {
+    const original = 'def handler():\n    return 1\n';
+    const instrumented = 'from opentelemetry import trace\ndef handler():\n    return 1\n';
+
+    const results = checkPythonForbiddenImports(original, instrumented, '/services/handler.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
