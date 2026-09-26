@@ -33,6 +33,8 @@ import { checkInternalDetailSpans } from '../../src/languages/javascript/rules/r
 import { checkPythonInternalDetailSpans } from '../../src/languages/python/rules/rst004.ts';
 import { checkDoubleInstrumentation } from '../../src/languages/javascript/rules/rst005.ts';
 import { checkPythonDoubleInstrumentation } from '../../src/languages/python/rules/rst005.ts';
+import { checkProcessExitSpan } from '../../src/languages/javascript/rules/rst006.ts';
+import { checkPythonProcessExitSpan } from '../../src/languages/python/rules/rst006.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1263,6 +1265,108 @@ describe('RST-005: No double-instrumentation', () => {
     ].join('\n');
 
     const results = checkPythonDoubleInstrumentation(code, code, '/services/handler.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RST-006: No agent-added spans on process-exit-adjacent functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('RST-006: No agent-added spans on process-exit-adjacent functions', () => {
+  it('flags a newly spanned JS function that calls process.exit() at its own top level', () => {
+    const original = [
+      'function fail(msg) {',
+      '  if (msg) {',
+      '    process.exit(1);',
+      '  }',
+      '  return doWork();',
+      '}',
+    ].join('\n');
+    const instrumented = [
+      'function fail(msg) {',
+      '  if (msg) {',
+      '    process.exit(1);',
+      '  }',
+      '  return tracer.startActiveSpan("fail", (span) => {',
+      '    try {',
+      '      return doWork();',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkProcessExitSpan(original, instrumented, '/services/cli.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-006');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a newly spanned JS function has no process.exit() call', () => {
+    const original = [
+      'function compute(x) {',
+      '  return x + 1;',
+      '}',
+    ].join('\n');
+    const instrumented = [
+      'function compute(x) {',
+      '  return tracer.startActiveSpan("compute", (span) => {',
+      '    try {',
+      '      return x + 1;',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    const results = checkProcessExitSpan(original, instrumented, '/services/cli.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a newly spanned Python function that calls sys.exit()', () => {
+    const original = [
+      'def fail(msg):',
+      '    print(msg)',
+      '    sys.exit(1)',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def fail(msg):',
+      '    with tracer.start_as_current_span("fail"):',
+      '        print(msg)',
+      '        sys.exit(1)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonProcessExitSpan(original, instrumented, '/services/cli.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-006');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a newly spanned Python function has no sys.exit()/os._exit() call', () => {
+    const original = [
+      'def compute(x):',
+      '    return x + 1',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def compute(x):',
+      '    with tracer.start_as_current_span("compute"):',
+      '        return x + 1',
+      '',
+    ].join('\n');
+
+    const results = checkPythonProcessExitSpan(original, instrumented, '/services/cli.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
