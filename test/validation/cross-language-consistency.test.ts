@@ -41,6 +41,8 @@ import { checkNoErrorRecordingInExpectedConditionCatches } from '../../src/langu
 import { checkPythonNoErrorRecordingInExpectedConditionExcepts } from '../../src/languages/python/rules/nds007.ts';
 import { checkStartActiveSpanPreferred } from '../../src/languages/javascript/rules/cdq005.ts';
 import { checkPythonStartActiveSpanPreferred } from '../../src/languages/python/rules/cdq005.ts';
+import { checkIsRecordingGuard } from '../../src/languages/javascript/rules/cdq006.ts';
+import { checkPythonIsRecordingGuard } from '../../src/languages/python/rules/cdq006.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -1691,6 +1693,69 @@ describe('CDQ-005: startActiveSpan preferred over startSpan', () => {
     ].join('\n');
 
     const results = checkPythonStartActiveSpanPreferred(code, '/services/handler.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CDQ-006: setAttribute/set_attribute computed values must be guarded by isRecording()
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('CDQ-006: setAttribute computed values must be guarded by isRecording()', () => {
+  it('flags a JS setAttribute() with an expensive computation and no guard', () => {
+    const code = [
+      'function handler(span, x) {',
+      '  span.setAttribute("payload", JSON.stringify(x));',
+      '}',
+    ].join('\n');
+
+    const results = checkIsRecordingGuard(code, '/services/handler.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-006');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a JS setAttribute() expensive computation is guarded', () => {
+    const code = [
+      'function handler(span, x) {',
+      '  if (span.isRecording()) {',
+      '    span.setAttribute("payload", JSON.stringify(x));',
+      '  }',
+      '}',
+    ].join('\n');
+
+    const results = checkIsRecordingGuard(code, '/services/handler.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a Python set_attribute() with an expensive computation and no guard', () => {
+    const code = [
+      'def handler(span, x):',
+      '    span.set_attribute("payload", json.dumps(x))',
+      '',
+    ].join('\n');
+
+    const results = checkPythonIsRecordingGuard(code, '/services/handler.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('CDQ-006');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a Python set_attribute() expensive computation is guarded', () => {
+    const code = [
+      'def handler(span, x):',
+      '    if span.is_recording():',
+      '        span.set_attribute("payload", json.dumps(x))',
+      '',
+    ].join('\n');
+
+    const results = checkPythonIsRecordingGuard(code, '/services/handler.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 });
