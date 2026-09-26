@@ -25,6 +25,8 @@ import { checkSpansClosed } from '../../src/languages/javascript/rules/cdq001.ts
 import { checkPythonSpansClosed } from '../../src/languages/python/rules/cdq001.ts';
 import { checkUtilityFunctionSpans } from '../../src/languages/javascript/rules/rst001.ts';
 import { checkPythonUtilityFunctionSpans } from '../../src/languages/python/rules/rst001.ts';
+import { checkTrivialAccessorSpans } from '../../src/languages/javascript/rules/rst002.ts';
+import { checkPythonTrivialAccessorSpans } from '../../src/languages/python/rules/rst002.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, '../fixtures/languages/javascript');
 
@@ -930,6 +932,83 @@ describe('RST-001: No spans on utility functions', () => {
     ].join('\n');
 
     const results = checkPythonUtilityFunctionSpans(code, '/services/math.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  // Go cases added when that provider merges (PRD #374)
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RST-002: No spans on trivial accessors
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('RST-002: No spans on trivial accessors', () => {
+  it('flags a span on a trivial JS get accessor', () => {
+    const code = [
+      'class Widget {',
+      '  get name() {',
+      '    return tracer.startActiveSpan("name", (span) => {',
+      '      try {',
+      '        return this._name;',
+      '      } finally {',
+      '        span.end();',
+      '      }',
+      '    });',
+      '  }',
+      '}',
+    ].join('\n');
+
+    const results = checkTrivialAccessorSpans(code, '/services/widget.js');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-002');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a JS get accessor has no span', () => {
+    const code = [
+      'class Widget {',
+      '  get name() {',
+      '    return this._name;',
+      '  }',
+      '}',
+    ].join('\n');
+
+    const results = checkTrivialAccessorSpans(code, '/services/widget.js');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('flags a span on a trivial Python @property getter', () => {
+    const code = [
+      'class Widget:',
+      '    @property',
+      '    def name(self):',
+      '        with tracer.start_as_current_span("name"):',
+      '            return self._name',
+      '',
+    ].join('\n');
+
+    const results = checkPythonTrivialAccessorSpans(code, '/services/widget.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-002');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('passes when a Python @property getter has no span', () => {
+    const code = [
+      'class Widget:',
+      '    @property',
+      '    def name(self):',
+      '        return self._name',
+      '',
+    ].join('\n');
+
+    const results = checkPythonTrivialAccessorSpans(code, '/services/widget.py');
     expect(results.every(r => r.passed)).toBe(true);
   });
 
