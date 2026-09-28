@@ -237,8 +237,16 @@ export function checkPythonDomainAttributes(
       }
     } else if (node.type === 'call') {
       const info = spanCreationCallInfo(node);
-      if (info?.method === 'start_span' && info.spanName !== undefined
-        && node.parent?.type !== 'with_item' && node.parent?.parent?.type !== 'as_pattern') {
+      // Exclude a `start_span()` call that's the expression of a `with_item`
+      // (bare `with tracer.start_span(...):`, parent is `with_item` directly)
+      // or wrapped in an `as_pattern` for the `as`-bound form
+      // (`with tracer.start_span(...) as span:`, parent is `as_pattern`,
+      // whose own parent is `with_item`) — that call is already handled by
+      // the `with_statement` branch above; without this exclusion it would
+      // be double-counted as a raw (non-`with`) span too.
+      const isWithBound = node.parent?.type === 'with_item'
+        || (node.parent?.type === 'as_pattern' && node.parent.parent?.type === 'with_item');
+      if (info?.method === 'start_span' && info.spanName !== undefined && !isWithBound) {
         const def = registryByName.get(info.spanName);
         if (def !== undefined) {
           const setAttributes = collectFromRawStartSpan(node);

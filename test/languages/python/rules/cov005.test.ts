@@ -87,6 +87,22 @@ describe('checkPythonDomainAttributes (COV-005)', () => {
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
+
+    it('does not double-count a with-bound start_span() as a raw span too', () => {
+      // start_span() used directly as a with-item's expression (`with
+      // tracer.start_span(...) as span:`) is closed automatically by the
+      // with block — it must be handled once by the with_statement branch,
+      // not a second time by the raw start_span() branch.
+      const code = [
+        'def create_order(order_id):',
+        '    with tracer.start_span("create_order") as span:',
+        '        return order_id',
+        '',
+      ].join('\n');
+
+      const results = checkPythonDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+    });
   });
 
   describe('raw start_span()', () => {
