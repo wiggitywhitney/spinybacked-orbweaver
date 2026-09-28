@@ -222,8 +222,11 @@ export function checkPythonIsRecordingGuard(code: string, filePath: string): Che
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (unguarded.length === 0) {
     return [{
