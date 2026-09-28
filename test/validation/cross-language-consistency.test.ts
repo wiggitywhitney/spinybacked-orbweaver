@@ -1387,7 +1387,31 @@ describe('RST-006: No agent-added spans on process-exit-adjacent functions', () 
     expect(results.every(r => r.passed)).toBe(true);
   });
 
-  it('flags a newly spanned Python function that calls sys.exit()', () => {
+  it('flags a newly spanned Python function that calls os._exit()', () => {
+    const original = [
+      'def fail(msg):',
+      '    print(msg)',
+      '    os._exit(1)',
+      '',
+    ].join('\n');
+    const instrumented = [
+      'def fail(msg):',
+      '    with tracer.start_as_current_span("fail"):',
+      '        print(msg)',
+      '        os._exit(1)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonProcessExitSpan(original, instrumented, '/services/cli.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('RST-006');
+    expect(failures[0].tier).toBe(2);
+    expect(failures[0].blocking).toBe(false);
+  });
+
+  it('does not flag a newly spanned Python function that calls sys.exit() (SystemExit still triggers the with block\'s __exit__)', () => {
     const original = [
       'def fail(msg):',
       '    print(msg)',
@@ -1403,15 +1427,10 @@ describe('RST-006: No agent-added spans on process-exit-adjacent functions', () 
     ].join('\n');
 
     const results = checkPythonProcessExitSpan(original, instrumented, '/services/cli.py');
-    const failures = results.filter(r => !r.passed);
-
-    expect(failures.length).toBeGreaterThan(0);
-    expect(failures[0].ruleId).toBe('RST-006');
-    expect(failures[0].tier).toBe(2);
-    expect(failures[0].blocking).toBe(false);
+    expect(results.every(r => r.passed)).toBe(true);
   });
 
-  it('passes when a newly spanned Python function has no sys.exit()/os._exit() call', () => {
+  it('passes when a newly spanned Python function has no os._exit() call', () => {
     const original = [
       'def compute(x):',
       '    return x + 1',

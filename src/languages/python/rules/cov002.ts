@@ -3,6 +3,7 @@
 
 import { type Node } from 'web-tree-sitter';
 import { parsePython, findPythonImports } from '../ast.ts';
+import { decoratorMethodName } from './cov001.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ImportInfo } from '../../types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
@@ -76,15 +77,41 @@ function withClauseHasSpanCall(withClause: Node): boolean {
 }
 
 /**
+ * Whether a `decorated_definition` carries a `@tracer.start_as_current_span(...)`
+ * decorator (CodeRabbit review finding, 2026-09-28) — mirrors `cov001.ts`'s/
+ * `cov004.ts`'s own `hasSpanDecorator()`. A function spanned purely via this
+ * decorator form has no span-creating `with` block anywhere in its own body,
+ * so `isInsideSpanScope()` must check for this separately rather than relying
+ * on the `with_statement` walk below to ever find it.
+ */
+function hasSpanDecorator(decoratedDef: Node): boolean {
+  return decoratedDef.namedChildren.some(
+    (child): child is Node => child !== null && child.type === 'decorator'
+      && decoratorMethodName(child) === 'start_as_current_span',
+  );
+}
+
+/**
  * Whether a node is enclosed in a `with` block whose clause creates a span
  * (`with tracer.start_as_current_span(...) as span:` or the `start_span`
- * equivalent). Walks up the ancestor chain — mirroring the JavaScript
- * COV-002 checker's `isInsideSpanScope()` — so a nested `with`/function/class
- * anywhere inside the spanned block is still correctly recognized as covered.
+ * equivalent), or in a function carrying a stacked span-creation decorator.
+ * Walks up the ancestor chain — mirroring the JavaScript COV-002 checker's
+ * `isInsideSpanScope()` — so a nested `with`/function/class anywhere inside
+ * the spanned block is still correctly recognized as covered. Hitting a
+ * `function_definition`/`lambda`/`class_definition` boundary stops the walk
+ * (a nested scope may execute after an outer `with` block has already
+ * exited), except when that function's own `decorated_definition` parent
+ * carries the span-creation decorator itself — that decorator spans the
+ * *entire* function, so calls inside it are covered without needing any
+ * `with` block in the body at all.
  */
 function isInsideSpanScope(node: Node): boolean {
   let current = node.parent;
   while (current !== null) {
+    if (current.type === 'function_definition') {
+      const decoratedParent = current.parent;
+      return decoratedParent?.type === 'decorated_definition' && hasSpanDecorator(decoratedParent);
+    }
     if (SCOPE_BOUNDARIES.has(current.type)) return false;
     if (current.type === 'with_statement') {
       const clause = current.namedChildren.find(

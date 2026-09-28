@@ -1,5 +1,6 @@
-// ABOUTME: Tests for the RST-006 Tier 2 check — Python no agent-added spans on sys.exit()/os._exit() functions.
-// ABOUTME: Verifies diff-based detection (pre-existing spans exempt) and sys.exit()/os._exit() call detection.
+// ABOUTME: Tests for the RST-006 Tier 2 check — Python no agent-added spans on os._exit() functions.
+// ABOUTME: Verifies diff-based detection (pre-existing spans exempt) and os._exit() call detection;
+// ABOUTME: sys.exit() is deliberately not flagged since it doesn't bypass a with block's __exit__.
 
 import { describe, it, expect } from 'vitest';
 import { checkPythonProcessExitSpan } from '../../../../src/languages/python/rules/rst006.ts';
@@ -30,8 +31,11 @@ describe('checkPythonProcessExitSpan (RST-006)', () => {
     });
   });
 
-  describe('agent-added span on an exit function', () => {
-    it('flags a newly spanned function that calls sys.exit()', () => {
+  describe('sys.exit() is not flagged (CodeRabbit review finding, 2026-09-28)', () => {
+    it('does not flag a newly spanned function that calls sys.exit()', () => {
+      // SystemExit propagates like any other exception, so `with
+      // tracer.start_as_current_span(...):`'s own __exit__ still runs and
+      // closes the span — unlike os._exit(), sys.exit() has no leak hazard.
       const original = [
         'def fail(msg):',
         '    print(msg)',
@@ -48,12 +52,32 @@ describe('checkPythonProcessExitSpan (RST-006)', () => {
 
       const results = checkPythonProcessExitSpan(original, instrumented, filePath);
       expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
+      expect(results[0].passed).toBe(true);
       expect(results[0].ruleId).toBe('RST-006');
-      expect(results[0].message).toContain('fail');
-      expect(results[0].message).toContain('sys.exit');
     });
 
+    it('does not flag a newly spanned class method calling sys.exit()', () => {
+      const original = [
+        'class Cli:',
+        '    def fail(self, msg):',
+        '        sys.exit(1)',
+        '',
+      ].join('\n');
+      const instrumented = [
+        'class Cli:',
+        '    def fail(self, msg):',
+        '        with tracer.start_as_current_span("fail"):',
+        '            sys.exit(1)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonProcessExitSpan(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('agent-added span on an exit function', () => {
     it('flags a newly spanned function that calls os._exit()', () => {
       const original = [
         'def terminate():',
@@ -72,18 +96,18 @@ describe('checkPythonProcessExitSpan (RST-006)', () => {
       expect(results[0].passed).toBe(false);
     });
 
-    it('flags a newly spanned class method calling sys.exit()', () => {
+    it('flags a newly spanned class method calling os._exit()', () => {
       const original = [
         'class Cli:',
         '    def fail(self, msg):',
-        '        sys.exit(1)',
+        '        os._exit(1)',
         '',
       ].join('\n');
       const instrumented = [
         'class Cli:',
         '    def fail(self, msg):',
         '        with tracer.start_as_current_span("fail"):',
-        '            sys.exit(1)',
+        '            os._exit(1)',
         '',
       ].join('\n');
 
@@ -98,7 +122,7 @@ describe('checkPythonProcessExitSpan (RST-006)', () => {
       const original = [
         'def fail(msg):',
         '    with tracer.start_as_current_span("fail"):',
-        '        sys.exit(1)',
+        '        os._exit(1)',
         '',
       ].join('\n');
       const instrumented = original;
@@ -132,7 +156,7 @@ describe('checkPythonProcessExitSpan (RST-006)', () => {
       const original = [
         'def outer():',
         '    def inner():',
-        '        sys.exit(1)',
+        '        os._exit(1)',
         '    return inner',
         '',
       ].join('\n');
@@ -140,7 +164,7 @@ describe('checkPythonProcessExitSpan (RST-006)', () => {
         'def outer():',
         '    with tracer.start_as_current_span("outer"):',
         '        def inner():',
-        '            sys.exit(1)',
+        '            os._exit(1)',
         '        return inner',
         '',
       ].join('\n');

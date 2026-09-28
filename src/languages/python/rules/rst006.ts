@@ -1,4 +1,4 @@
-// ABOUTME: RST-006 Python Tier 2 advisory check — no agent-added spans on sys.exit()/os._exit() functions.
+// ABOUTME: RST-006 Python Tier 2 advisory check — no agent-added spans on os._exit() functions.
 // ABOUTME: Diff-based: only fires when a span is newly added (not present in originalCode).
 
 import { type Node } from 'web-tree-sitter';
@@ -49,12 +49,23 @@ function hasSpanCreationCall(node: Node, isRoot: boolean): boolean {
 }
 
 /**
- * Whether a `call` node directly invokes `sys.exit(...)` or `os._exit(...)`.
- * Python's process-exit equivalent to JS's `process.exit()` — `os._exit()`
- * bypasses `finally` blocks entirely (like JS's `process.exit()`), and
- * `sys.exit()` raises `SystemExit`, which by convention is not meant to be
- * caught by a broad `except`/`finally` doing cleanup work, so a span wrapping
- * either call risks never having `span.end()` observed to run.
+ * Whether a `call` node directly invokes `os._exit(...)`.
+ *
+ * `os._exit()` terminates the process immediately at the C level — it never
+ * unwinds the Python call stack, so a `with tracer.start_as_current_span(...):`
+ * block's `__exit__` is never invoked and the span leaks at runtime, the same
+ * hazard JS's `process.exit()` poses.
+ *
+ * `sys.exit()` is deliberately NOT matched here (CodeRabbit review finding,
+ * 2026-09-28): it raises `SystemExit`, an ordinary Python exception, which
+ * *does* propagate through a `with` block's `__exit__` the same way any other
+ * exception does — `start_as_current_span()`'s context manager still runs and
+ * closes the span. The "not meant to be caught by a broad except" convention
+ * this comment used to cite is about user-written `except`/`finally` handlers
+ * choosing not to intercept `SystemExit` (so it can actually terminate the
+ * program) — it says nothing about whether the `with` statement's own
+ * automatic exit machinery runs, which it always does regardless of that
+ * convention.
  */
 function isDirectExitCall(node: Node): boolean {
   if (node.type !== 'call') return false;
@@ -63,13 +74,12 @@ function isDirectExitCall(node: Node): boolean {
   const object = fn.childForFieldName('object');
   const attribute = fn.childForFieldName('attribute');
   if (object?.type !== 'identifier' || attribute === null) return false;
-  return (object.text === 'sys' && attribute.text === 'exit')
-    || (object.text === 'os' && attribute.text === '_exit');
+  return object.text === 'os' && attribute.text === '_exit';
 }
 
 /**
  * Whether a function's own scope (not descending into nested function/lambda/
- * class definitions) directly calls `sys.exit()`/`os._exit()`.
+ * class definitions) directly calls `os._exit()`.
  */
 function hasDirectExitCall(node: Node, isRoot: boolean): boolean {
   if (!isRoot && (node.type === 'function_definition' || node.type === 'class_definition'
@@ -164,12 +174,13 @@ function collectFunctionsWithSpans(code: string): Set<string> {
 
 /**
  * RST-006 Python: Detect agent-added spans on functions/methods that directly
- * call `sys.exit()` or `os._exit()`.
+ * call `os._exit()`.
  *
- * Both bypass a `with`/`try`/`finally` block's normal exit path — `os._exit()`
- * terminates the process immediately, and `sys.exit()`'s `SystemExit` is not
- * meant to be caught by ordinary cleanup handling. When the agent wraps such
- * a function in a span, the span never observes a normal close on that path.
+ * `os._exit()` terminates the process immediately at the C level, bypassing
+ * the `with` block's normal exit path entirely. When the agent wraps such a
+ * function in a span, the span never observes a normal close on that path.
+ * `sys.exit()` is deliberately excluded — see `isDirectExitCall()`'s own
+ * comment for why it doesn't share this hazard.
  *
  * Diff-based: only fires when the span is NOT present in `originalCode`.
  * Pre-existing spans are the developer's own concern, not the agent's.
@@ -204,7 +215,7 @@ export function checkPythonProcessExitSpan(
       filePath,
       lineNumber: toLine(candidate.boundaryNode),
       message:
-        `Do not add a span to "${candidate.key}" — it calls \`sys.exit()\`/\`os._exit()\` directly, ` +
+        `Do not add a span to "${candidate.key}" — it calls \`os._exit()\` directly, ` +
         `which bypasses the span's normal close path and causes the span to leak at runtime. ` +
         `Instrument the sub-operations inside it instead.`,
       tier: 2,
@@ -226,13 +237,13 @@ function passingResult(filePath: string): CheckResult {
     passed: true,
     filePath,
     lineNumber: null,
-    message: 'No agent-added spans on sys.exit()/os._exit() functions detected.',
+    message: 'No agent-added spans on os._exit() functions detected.',
     tier: 2,
     blocking: false,
   };
 }
 
-/** RST-006 Python ValidationRule — no agent-added spans on functions/methods that call sys.exit()/os._exit() directly. */
+/** RST-006 Python ValidationRule — no agent-added spans on functions/methods that call os._exit() directly. */
 export const rst006PythonRule: ValidationRule = {
   ruleId: 'RST-006',
   dimension: 'Restraint',

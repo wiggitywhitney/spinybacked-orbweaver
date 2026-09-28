@@ -277,16 +277,24 @@ export function checkPythonControlFlowPreservation(
   filePath: string,
 ): CheckResult[] {
   const originalTree = parsePython(originalCode);
-  const originalBlocks = extractTryBlocks(originalTree.rootNode);
-  originalTree.delete();
+  let originalBlocks: ReturnType<typeof extractTryBlocks>;
+  try {
+    originalBlocks = extractTryBlocks(originalTree.rootNode);
+  } finally {
+    originalTree.delete();
+  }
 
   if (originalBlocks.length === 0) {
     return [passingResult(filePath)];
   }
 
   const instrumentedTree = parsePython(instrumentedCode);
-  const instrumentedBlocks = extractInstrumentedTryBlocks(instrumentedTree.rootNode);
-  instrumentedTree.delete();
+  let instrumentedBlocks: ReturnType<typeof extractInstrumentedTryBlocks>;
+  try {
+    instrumentedBlocks = extractInstrumentedTryBlocks(instrumentedTree.rootNode);
+  } finally {
+    instrumentedTree.delete();
+  }
 
   const violations: CheckResult[] = [];
   const usedIndices = new Set<number>();

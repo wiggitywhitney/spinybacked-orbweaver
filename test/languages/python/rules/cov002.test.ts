@@ -325,6 +325,48 @@ describe('checkPythonOutboundCallSpans (COV-002)', () => {
     });
   });
 
+  describe('decorator-spanned function (CodeRabbit review finding, 2026-09-28)', () => {
+    it('does not flag an outbound call inside a function spanned via a stacked decorator', () => {
+      // The whole function is spanned via `@tracer.start_as_current_span(...)`
+      // rather than a `with` block in its body — isInsideSpanScope() must
+      // recognize this form too, not just the `with`-block one.
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@tracer.start_as_current_span("fetch_user")',
+        'def fetch_user(user_id):',
+        '    return requests.get(f"https://api.example.com/users/{user_id}")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags an outbound call inside a nested function within a decorator-spanned function', () => {
+      // The decorator only spans the outer function's own scope, not a
+      // closure nested inside it — the nested-function scope boundary still
+      // applies the same way it does for the `with`-block form.
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@tracer.start_as_current_span("make_fetcher")',
+        'def make_fetcher(user_id):',
+        '    def fetch():',
+        '        return requests.get(f"https://api.example.com/users/{user_id}")',
+        '    return fetch',
+        '',
+      ].join('\n');
+
+      const results = checkPythonOutboundCallSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('nested with-scope', () => {
     it('passes when the outbound call is inside a nested `with` within a spanned block', () => {
       const code = [
