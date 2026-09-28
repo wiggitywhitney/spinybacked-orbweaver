@@ -202,6 +202,8 @@ Three sub-decisions:
 
 **OD-9c: Rule ID — reuse API-002 or assign a new ID?** Same question as Python OD-9c. Recommendation: match whatever was decided for Python in PRD #373 OD-9c to keep the cross-language convention consistent. If Python chose Option A (reuse API-002), Go does the same; if Python chose Option B (new ID), Go follows. Record in Decision Log with a reference to PRD #373's decision.
 
+**Python's outcome (PRD #373 Decision D-D4-4, 2026-09-28):** Python chose Option A and reuses the API-002 (dependency placement) rule ID, with one implementation per provider gated by `applicableTo`. It also makes the JavaScript-specific `RULE_HUMAN_DESCRIPTIONS['API-002']` entry in `src/validation/rule-names.ts` and the API-002 bullet in `src/agent/prompt.ts` language-aware. Go follows Option A. If Python's Milestone D4 has landed by the time E4 starts, extend its language-aware description and prompt wording with Go's `go.mod` case instead of redoing it.
+
 **Interaction with OD-7 (go.work):** when a Go workspace is detected, the package-hygiene check runs independently against each member module's `go.mod`. A workspace member that is a library must still pass the rule regardless of the workspace root's configuration. Document this behavior in the rule's implementation.
 
 ### OD-10: Does API-002's packaging risk apply to Go at all? (Milestone 0 — run before OD-9)
@@ -347,24 +349,24 @@ This check is **advisory**, not blocking — matching JavaScript API-002's dispo
 - [ ] Check PRD #373 OD-9 resolutions as a reference — the Go implementation should mirror Python's approach where the concepts align (classification method, registry location, test coverage style)
 
 **Implementation:**
-- [ ] Create the Go package-hygiene rule file at the location determined by OD-9c (either `src/languages/go/rules/api002.ts` or a new path per OD-9c's decision)
+- [ ] Create the Go package-hygiene rule file at `src/languages/go/rules/api002.ts` (Updated per PRD #373 Decision D-D4-4: Python reuses the API-002 (dependency placement) rule ID, and Go follows)
 - [ ] Parse `go.mod` to extract declared dependencies from `require` blocks only — `replace` directives are resolution overrides, not dependency declarations; do not count them as requiring OTel packages
 - [ ] Library vs. app classification per OD-9b — scan the module's Go files for any `package main` declaration; if absent, the module is a library
 - [ ] For libraries: verify `go.opentelemetry.io/otel` is in the `require` block (the API is always acceptable in libraries) and that no `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/*`, or `go.opentelemetry.io/contrib/instrumentation/*` package appears in `require` (those are deployer concerns)
 - [ ] For apps: the rule passes trivially — apps can depend on anything they need
 - [ ] Workspace handling per OD-7: when `go.work` is present, apply the rule to each member `go.mod` independently; a library member must pass regardless of the workspace root's configuration
 - [ ] Message references the OTel Libraries guidance URL (same style as JavaScript API-002 after PRD #483 audit)
-- [ ] `applicableTo` gates the rule to Go only (or per OD-9c's decision if a new ID is chosen)
+- [ ] `applicableTo` returns true only for Go in the Go implementation (Updated per PRD #373 Decision D-D4-4: same API-002 (dependency placement) rule ID as the JavaScript and Python rules, one implementation per provider)
 - [ ] Register the rule in the Go provider's rule registry and `hasImplementation()` returns `true` for it
 
 **Tests:**
-- [ ] Unit tests cover: library module correctly declares `go.opentelemetry.io/otel` (passes); library module pins `go.opentelemetry.io/otel/sdk` (fails); library module pins an exporter package (fails); library module pins a contrib instrumentation package (fails); app module pins the SDK (passes — apps are exempt); library module with no OTel API dependency (fails — library must declare go.opentelemetry.io/otel); app module with no OTel dependency at all (passes — apps are not required to declare the API); workspace with one library member pinning the SDK and one app member pinning the SDK (library fails; app passes)
+- [ ] Unit tests cover: library module correctly declares `go.opentelemetry.io/otel` (passes); library module pins `go.opentelemetry.io/otel/sdk` (fails); library module pins an exporter package (fails); library module pins a contrib instrumentation package (fails); app module pins the SDK (passes — apps are exempt); library module with no OTel API dependency (fails — library must declare go.opentelemetry.io/otel); app module with no OTel dependency at all (passes — apps are not required to declare the API; **reconcile before implementing:** PRD #373 Decision D-D4-6 made Python fail an application that does not declare `opentelemetry-api`, matching JavaScript API-002, because instrumented code imports the API directly — decide whether Go follows and record the outcome in this PRD's Decision Log); workspace with one library member pinning the SDK and one app member pinning the SDK (library fails; app passes)
 - [ ] Integration test verifies the rule fires end-to-end through the coordinator/fix-loop pipeline for Go files
 - [ ] `npm test` passes; `npm run typecheck` passes
 
 **Prompt verification (per project CLAUDE.md Rules-related work conventions):**
 - [ ] Grep `src/agent/prompt.ts` for `API-002` and verify any existing guidance still matches the rule's behavior. The prompt's API-002 bullet is currently JavaScript-centric (`package.json`); if Go's API-002 implementation diverges from JS in a way the agent needs to know about (e.g., `go.mod` vs `package.json`, library detection via `package main`), add Go-specific guidance. If the agent's Go instrumentation prompt is a separate file (e.g., `src/languages/go/prompt.ts`), apply the same verification there.
-- [ ] If OD-9c resolved to a new rule ID (not API-002), confirm the new ID is added to the prompt with appropriate guidance, and the rule ID is also added to `src/validation/rule-names.ts`.
+- [ ] Confirm `RULE_HUMAN_DESCRIPTIONS['API-002']` in `src/validation/rule-names.ts` and the API-002 bullet in `src/agent/prompt.ts` cover Go's `go.mod` case (Updated per PRD #373 Decision D-D4-4: the ID is shared across languages, and Python's Milestone D4 makes these language-aware; extend that wording rather than redoing it).
 - [ ] Record the prompt verification outcome in the milestone's PR description (either "prompt updated with Go-specific API-002 guidance" or "no prompt changes required — JS API-002 bullet still accurate").
 
 ### Milestone E5: Golden file tests
