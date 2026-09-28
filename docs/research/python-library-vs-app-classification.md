@@ -8,11 +8,12 @@
 | Date | Summary |
 |------|---------|
 | 2026-09-28 | Initial research (PRD #373 Milestone D4, OD-9b) |
+| 2026-09-28 | Revised after review: a missing `[build-system]` is not an application marker (PyPA specification says tools should not require it); added the `setup.cfg` library criteria and a legacy Poetry caveat |
 
 ## Findings
 
 ### Summary
-No single manifest field reliably separates a Python library from an application. `[build-system]` is present in both (current `uv init` apps and FastAPI's own app template have it). `[project.scripts]` appears in both (Black, HTTPX, pytest, Strawberry and Litestar are libraries or tools with CLIs). The only marks that reliably say "not a distributable library" are negative and opt-in: the `Private :: Do Not Upload` classifier, Poetry's `package-mode = false`, and a `[project]` table with no `[build-system]` (`uv init --no-package`). Separately, real libraries declare `opentelemetry-sdk` in optional-dependency extras, so a rule that scans a whole manifest for SDK packages would flag well-regarded libraries.
+No single manifest field reliably separates a Python library from an application. `[build-system]` is present in both (current `uv init` apps and FastAPI's own app template have it). `[project.scripts]` appears in both (Black, HTTPX, pytest, Strawberry and Litestar are libraries or tools with CLIs). The only marks that reliably say "not a distributable library" are negative and opt-in: the `Private :: Do Not Upload` classifier and Poetry's `package-mode = false`. A missing `[build-system]` is a weaker mark: `uv init --no-package` omits it, but the packaging specification says tools should not require the table, so a library can omit it too. Separately, real libraries declare `opentelemetry-sdk` in optional-dependency extras, so a rule that scans a whole manifest for SDK packages would flag well-regarded libraries.
 
 ### Surprises & Gotchas
 
@@ -28,7 +29,9 @@ No single manifest field reliably separates a Python library from an application
 **Source says:** "A build system is defined, so the project will be installed into the environment." (default `uv init` app) and "Prior to v0.12, uv did not define a build system for applications by default." ([uv: Creating projects](https://docs.astral.sh/uv/concepts/projects/init/))
 **Source says:** FastAPI's own full-stack template backend (an application) has `build-backend = "hatchling.build"`, no `[project.scripts]`, and no `classifiers` key. ([full-stack-fastapi-template pyproject.toml](https://raw.githubusercontent.com/fastapi/full-stack-fastapi-template/master/backend/pyproject.toml))
 **Source says:** The PyPA guide calls the table "strongly recommended" and says it "should always be present, regardless of which build backend you use." ([PyPA: Writing your pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/))
-**Interpretation:** Requiring `[build-system]` as evidence of a library would classify the FastAPI app template and every default `uv init` app as libraries. The only manifest without it is one that opted out (`uv init --no-package`, per the uv docs: "does not include a build system, it is not a package").
+**Interpretation:** Requiring `[build-system]` as evidence of a library would classify the FastAPI app template and every default `uv init` app as libraries. Manifests without it exist (`uv init --no-package` omits it, per the uv docs: "does not include a build system, it is not a package"), but that does not make absence an application marker.
+**Source says:** "Tools should not require the existence of the `[build-system]` table." and "If the file exists but is lacking the `[build-system]` table then the default values as specified above should be used." ([PyPA: pyproject.toml specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/))
+**Interpretation:** A library that relies on the default build semantics is valid, so a missing `[build-system]` alone cannot classify a project as an application.
 
 **2. `[project.scripts]` does not distinguish libraries from apps** 🟢 high (for existence; sample is small)
 **Source says:** Libraries or tools with CLIs, from their own manifests: Black (`black`, `blackd`), HTTPX (`httpx`), pytest (`pytest`, `py.test`), Strawberry (`strawberry`), Litestar (`litestar`). The FastAPI app template has none. Default `uv init` apps include one and `uv init --lib` does not.
@@ -66,9 +69,10 @@ No single manifest field reliably separates a Python library from an application
 ### Recommendation
 Drop the "positive library signal" approach: none exists. Two changes to D4's design follow.
 1. **Scope the check to required runtime dependencies** (`[project].dependencies`, `setup.cfg` `install_requires`), not optional extras. Extras stay allowed. This avoids flagging Strawberry and Litestar.
-2. **Classify by exclusion.** Treat a project as an application (skip the SDK check) if any of these hold: `Private :: Do Not Upload` classifier; Poetry `package-mode = false`; no `[build-system]`; `requirements.txt` is the only manifest. Treat it as a library only when it has `[project]` plus publication intent, meaning at least one PyPI-facing classifier (for example `Development Status ::`). Black, HTTPX and pytest have them, and the FastAPI template and default `uv init` apps do not. This publication-intent signal is **inferred from a six-project sample, not established**, and needs testing.
+2. **Classify by exclusion.** Treat a project as an application (skip the SDK check) if any of these hold: `Private :: Do Not Upload` classifier; Poetry `package-mode = false`; `requirements.txt` is the only manifest (a missing `[build-system]` alone is not an application marker; see finding 1). Treat it as a library only when it has `[project]` (or, for `setup.cfg` projects, `[metadata]` plus `[options]` packages) plus publication intent, meaning at least one PyPI-facing classifier (for example `Development Status ::`). Black, HTTPX and pytest have them, and the FastAPI template and default `uv init` apps do not. This publication-intent signal is **inferred from a six-project sample, not established**, and needs testing.
 
 ### Caveats
+- Poetry's pre-2.0 layout has no `[project]` table and keeps dependencies under `[tool.poetry.dependencies]`. The rule as decided cannot classify or read those manifests, so it skips them with an explicit message (PRD #373 Decision D-D4-2). Parsing `[tool.poetry.dependencies]` was left out of scope.
 - The sample is six real manifests (Black, HTTPX, pytest, Strawberry, Litestar, FastAPI template), plus documented defaults for uv and Poetry. It supports "these signals do not discriminate." It does not measure how often the classifier-presence heuristic is right across the ecosystem.
 - Strawberry's and Litestar's classifiers were not inspected, so the sample does not confirm they would pass the publication-intent test.
 - Flask application samples were not fetched. Flask itself is a library and is not a counterexample.
@@ -77,6 +81,7 @@ Drop the "positive library signal" approach: none exists. Two changes to D4's de
 ## Sources
 - [uv: Creating projects](https://docs.astral.sh/uv/concepts/projects/init/) — app and library defaults, v0.12 build-system change, `--no-package`
 - [PyPA: Writing your pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/) — `Private ::` classifier, `[project.scripts]`, extras, `[build-system]` status
+- [PyPA: pyproject.toml specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/) — `[build-system]` is optional and has default semantics when missing
 - [Poetry: pyproject.toml](https://python-poetry.org/docs/pyproject/) — `package-mode`, scripts
 - [setuptools: declarative config](https://setuptools.pypa.io/en/latest/userguide/declarative_config.html) — `setup.cfg` sections
 - [Black pyproject.toml](https://raw.githubusercontent.com/psf/black/main/pyproject.toml), [HTTPX](https://raw.githubusercontent.com/encode/httpx/master/pyproject.toml), [pytest](https://raw.githubusercontent.com/pytest-dev/pytest/main/pyproject.toml) — library manifests with CLIs, dotted-key scripts
