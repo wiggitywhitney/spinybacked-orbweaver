@@ -1,5 +1,6 @@
 // ABOUTME: Tests for the COV-006 Tier 2 check — Python auto-instrumentation preference.
-// ABOUTME: Verifies requests/httpx call detection inside manual `with`-scoped spans, per Decision D-D3-2.
+// ABOUTME: Verifies requests/httpx call detection (Decision D-D3-2) and Flask/FastAPI
+// ABOUTME: entry-point-duplication detection (Decision D-D3b-1).
 
 import { describe, it, expect } from 'vitest';
 import { checkPythonAutoInstrumentationPreference } from '../../../../src/languages/python/rules/cov006.ts';
@@ -297,6 +298,131 @@ describe('checkPythonAutoInstrumentationPreference (COV-006)', () => {
       const results = checkPythonAutoInstrumentationPreference(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('Flask/FastAPI entry-point duplication (Decision D-D3b-1)', () => {
+    it('flags a route handler carrying a stacked span-creation decorator', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@app.route("/users/<user_id>")',
+        '@tracer.start_as_current_span("get_user")',
+        'def get_user(user_id):',
+        '    return db.fetch(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('"get_user"');
+      expect(results[0].message).toContain('get_user()');
+      expect(results[0].message).toContain('opentelemetry-instrumentation-flask');
+    });
+
+    it('flags a FastAPI route handler whose sole top-level statement is a span-creating with block', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@app.get("/users/{user_id}")',
+        'def get_user(user_id):',
+        '    with tracer.start_as_current_span("get_user"):',
+        '        return db.fetch(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('"get_user"');
+    });
+
+    it('flags a Flask handler whose sole statement after a docstring is a span-creating with block', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@app.route("/users/<user_id>")',
+        'def get_user(user_id):',
+        '    """Fetch a user by ID."""',
+        '    with tracer.start_as_current_span("get_user"):',
+        '        return db.fetch(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('does not flag a route handler with a legitimate nested business span alongside other logic', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@app.route("/users/<user_id>")',
+        'def get_user(user_id):',
+        '    validate(user_id)',
+        '    with tracer.start_as_current_span("db_fetch"):',
+        '        return db.fetch(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag a route handler with no manual span at all', () => {
+      const code = [
+        '@app.route("/users/<user_id>")',
+        'def get_user(user_id):',
+        '    return db.fetch(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag a manual span in a function with no entry-point decorator', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        'def get_user(user_id):',
+        '    with tracer.start_as_current_span("get_user"):',
+        '        return db.fetch(user_id)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags requests/httpx duplication alongside entry-point duplication as separate findings', () => {
+      const code = [
+        'from opentelemetry import trace',
+        'tracer = trace.get_tracer("svc")',
+        '',
+        '@app.route("/proxy")',
+        '@tracer.start_as_current_span("proxy")',
+        'def proxy():',
+        '    with tracer.start_as_current_span("fetch"):',
+        '        return requests.get("https://api.example.com/data")',
+        '',
+      ].join('\n');
+
+      const results = checkPythonAutoInstrumentationPreference(code, filePath);
+      expect(results).toHaveLength(2);
+      expect(results.every(r => r.passed === false)).toBe(true);
+      expect(results.some(r => r.message.includes('opentelemetry-instrumentation-requests'))).toBe(true);
+      expect(results.some(r => r.message.includes('opentelemetry-instrumentation-flask'))).toBe(true);
     });
   });
 

@@ -566,6 +566,48 @@ describe('COV-006: Auto-instrumentation preferred over manual spans', () => {
 
   // Go cases added when that provider merges (PRD #374) — per OD-5, COV-006 is
   // applicableTo('go') = false, so no Go case applies here.
+
+  // Python-only: Flask/FastAPI entry-point duplication (Decision D-D3b-1). No JS
+  // pair exists for this case — Express route registration is a call expression
+  // (already covered by the requests/httpx-style pattern-match above via `app.get`
+  // routing), while Flask/FastAPI route registration is a decorator with no JS/TS
+  // precedent to mirror; see Decision D-D3-2's own framing of this gap.
+  it('catches a manual span duplicating a Flask/FastAPI route handler entirely', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      '@app.route("/users/<user_id>")',
+      'def get_user(user_id):',
+      '    with tracer.start_as_current_span("get_user"):',
+      '        return db.fetch(user_id)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonAutoInstrumentationPreference(code, '/services/user.py');
+    const failures = results.filter(r => !r.passed);
+
+    expect(failures.length).toBeGreaterThan(0);
+    expect(failures[0].ruleId).toBe('COV-006');
+    expect(failures[0].tier).toBe(2);
+  });
+
+  it('passes when a Flask/FastAPI route handler nests a legitimate narrower business span', () => {
+    const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      '@app.route("/users/<user_id>")',
+      'def get_user(user_id):',
+      '    validate(user_id)',
+      '    with tracer.start_as_current_span("db_fetch"):',
+      '        return db.fetch(user_id)',
+      '',
+    ].join('\n');
+
+    const results = checkPythonAutoInstrumentationPreference(code, '/services/user.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

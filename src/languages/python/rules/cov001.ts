@@ -24,7 +24,7 @@ function toLine(node: Node): number {
 }
 
 /** The dotted method name of a decorator, if it is a call to an `attribute` expression (e.g. `app.route`). */
-function decoratorMethodName(decoratorNode: Node): string | undefined {
+export function decoratorMethodName(decoratorNode: Node): string | undefined {
   // `decorator` wraps either a `call` (e.g. `@app.route(...)`) or a bare
   // `identifier`/`attribute` (e.g. `@login_required`, `@app.get` with no call).
   const expr = decoratorNode.namedChild(0);
@@ -35,7 +35,7 @@ function decoratorMethodName(decoratorNode: Node): string | undefined {
 }
 
 /** Whether any decorator on a `decorated_definition` node matches a recognized entry-point pattern. */
-function hasEntryPointDecorator(decoratedDef: Node): boolean {
+export function hasEntryPointDecorator(decoratedDef: Node): boolean {
   return decoratedDef.namedChildren.some(
     (child): child is Node => child !== null && child.type === 'decorator'
       && ENTRY_POINT_METHODS.has(decoratorMethodName(child) ?? ''),

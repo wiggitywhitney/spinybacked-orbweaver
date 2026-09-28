@@ -1,9 +1,11 @@
 // ABOUTME: COV-006 Python Tier 2 check — auto-instrumentation preferred over manual spans.
-// ABOUTME: Flags manual `with`-scoped spans wrapping requests/httpx calls, per Decision D-D3-2.
+// ABOUTME: Flags manual `with`-scoped spans wrapping requests/httpx calls (Decision D-D3-2) and
+// ABOUTME: manual spans duplicating Flask/FastAPI route auto-instrumentation (Decision D-D3b-1).
 
 import { type Node } from 'web-tree-sitter';
 import { parsePython, findPythonImports } from '../ast.ts';
 import { buildDirectImportMap, matchDirectImportCall } from './cov002.ts';
+import { decoratorMethodName, hasEntryPointDecorator } from './cov001.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ImportInfo } from '../../types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
@@ -25,8 +27,8 @@ const SCOPE_BOUNDARIES = new Set(['function_definition', 'lambda', 'class_defini
  * mechanism (textually pattern-match a call expression inside the span's
  * body) has no analog for Flask (route registration is a decorator, never a
  * call expression inside a span body) and Django has no existing detection
- * infrastructure in this codebase to extend (see Decision D-D3-1). Flask/Django
- * auto-instrumentation-preference detection is deferred to Milestone D3b.
+ * infrastructure in this codebase to extend (see Decision D-D3-1). Flask/FastAPI
+ * entry-point duplication is detected separately below, per Decision D-D3b-1.
  */
 const AUTO_INSTRUMENTED_MODULE_PATTERN = /^(?:requests|httpx)$/;
 const AUTO_INSTRUMENTED_METHOD_PATTERN = /^(get|post|put|patch|delete|head|options|request)$/;
@@ -172,13 +174,87 @@ function getSpanCreationCall(withClause: Node): Node | null {
 }
 
 /**
+ * The `@tracer.start_as_current_span(...)` decorator call on a `decorated_definition`,
+ * if present (per Decision D-D3b-1's first structural case). Deliberately checks only
+ * `start_as_current_span`, not the broader `SPAN_CREATION_METHODS` set — `start_span()`
+ * returns a plain `Span` with no `__call__` protocol, so using it as a decorator isn't
+ * a working idiom at all (mirrors `cov001.ts`'s/`cov004.ts`'s own `hasSpanDecorator()`).
+ */
+function getSpanCreationDecoratorCall(decoratedDef: Node): Node | null {
+  for (const child of decoratedDef.namedChildren) {
+    if (child === null || child.type !== 'decorator') continue;
+    if (decoratorMethodName(child) !== 'start_as_current_span') continue;
+    const expr = child.namedChild(0);
+    if (expr?.type === 'call') return expr;
+  }
+  return null;
+}
+
+/**
+ * Whether a function body's only meaningful statement — after skipping an optional
+ * leading docstring — is a single span-creating `with` block (Decision D-D3b-1's
+ * second structural case). Mirrors `rst001.ts`'s/`rst002.ts`'s own convention of
+ * unwrapping a single top-level span-creating `with` block; a span that sits
+ * alongside other top-level statements, or nested inside a conditional/loop, is
+ * left unflagged (abstain per OD-6/OD-4's established policy).
+ */
+function getSoleTopLevelSpanWithClause(body: Node): Node | null {
+  const statements = body.namedChildren.filter((c): c is Node => c !== null);
+  const isDocstring = statements[0]?.type === 'expression_statement' && statements[0].namedChild(0)?.type === 'string';
+  const meaningful = isDocstring ? statements.slice(1) : statements;
+  if (meaningful.length !== 1 || meaningful[0].type !== 'with_statement') return null;
+  const clause = meaningful[0].namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
+  return clause !== undefined && withClauseHasSpanCall(clause) ? clause : null;
+}
+
+/**
+ * COV-006 Python: Flag manual spans duplicating Flask/FastAPI's own route
+ * auto-instrumentation, per Decision D-D3b-1. Reuses `cov001.ts`'s entry-point
+ * decorator matching directly so this check and COV-001 always agree on what
+ * counts as a route handler — the same reuse convention `nds007.ts` established
+ * with `cov003.ts`'s `containsReraise()`.
+ */
+function findEntryPointDuplicates(root: Node): Array<{ line: number; spanName: string; handlerName: string }> {
+  const flagged: Array<{ line: number; spanName: string; handlerName: string }> = [];
+
+  function walk(node: Node): void {
+    if (node.type === 'decorated_definition') {
+      const fnDef = node.namedChildren.find((c): c is Node => c !== null && c.type === 'function_definition');
+      if (fnDef !== undefined && hasEntryPointDecorator(node)) {
+        const handlerName = fnDef.childForFieldName('name')?.text ?? '<anonymous>';
+        const decoratorSpanCall = getSpanCreationDecoratorCall(node);
+        const body = fnDef.childForFieldName('body');
+        const withClause = decoratorSpanCall === null && body !== null ? getSoleTopLevelSpanWithClause(body) : null;
+        const spanCall = decoratorSpanCall ?? (withClause !== null ? getSpanCreationCall(withClause) : null);
+        if (spanCall !== null) {
+          flagged.push({ line: toLine(node), spanName: getSpanName(spanCall), handlerName });
+        }
+        return;
+      }
+      for (const child of node.namedChildren) {
+        if (child !== null) walk(child);
+      }
+      return;
+    }
+    for (const child of node.namedChildren) {
+      if (child !== null) walk(child);
+    }
+  }
+
+  walk(root);
+  return flagged;
+}
+
+/**
  * COV-006 Python: Flag manual spans where auto-instrumentation should be used.
  *
- * Scoped to `requests`/`httpx` per Decision D-D3-2 — see the AUTO_INSTRUMENTED_MODULE_PATTERN
- * comment above. Walks `with_statement` nodes whose `with_clause` creates a span, checks
- * whether the span's own body contains a call matching a known auto-instrumented pattern
- * (not descending into a nested function/class/lambda scope), and skips flagging when the
- * span wraps more than that single call (a legitimate broader business span).
+ * Two independent detection passes:
+ * 1. `requests`/`httpx` per Decision D-D3-2 — see the AUTO_INSTRUMENTED_MODULE_PATTERN
+ *    comment above. Walks `with_statement` nodes whose `with_clause` creates a span, checks
+ *    whether the span's own body contains a call matching a known auto-instrumented pattern
+ *    (not descending into a nested function/class/lambda scope), and skips flagging when the
+ *    span wraps more than that single call (a legitimate broader business span).
+ * 2. Flask/FastAPI entry-point duplication per Decision D-D3b-1 — see `findEntryPointDuplicates()`.
  *
  * @param code - The instrumented Python code to check
  * @param filePath - Path to the file being validated (for CheckResult)
@@ -229,9 +305,10 @@ export function checkPythonAutoInstrumentationPreference(code: string, filePath:
   }
 
   walk(tree.rootNode);
+  const entryPointFlagged = findEntryPointDuplicates(tree.rootNode);
   tree.delete();
 
-  if (flagged.length === 0) {
+  if (flagged.length === 0 && entryPointFlagged.length === 0) {
     return [{
       ruleId: 'COV-006',
       passed: true,
@@ -243,7 +320,7 @@ export function checkPythonAutoInstrumentationPreference(code: string, filePath:
     }];
   }
 
-  return flagged.map((f) => ({
+  const libraryResults = flagged.map((f) => ({
     ruleId: 'COV-006' as const,
     passed: false as const,
     filePath,
@@ -255,6 +332,22 @@ export function checkPythonAutoInstrumentationPreference(code: string, filePath:
     tier: 2 as const,
     blocking: true,
   }));
+
+  const entryPointResults = entryPointFlagged.map((f) => ({
+    ruleId: 'COV-006' as const,
+    passed: false as const,
+    filePath,
+    lineNumber: f.line,
+    message:
+      `COV-006 check failed: span "${f.spanName}" duplicates route handler "${f.handlerName}()"'s own Flask/FastAPI ` +
+      `auto-instrumentation at line ${f.line}. Remove the manual span — opentelemetry-instrumentation-flask/` +
+      `opentelemetry-instrumentation-fastapi already creates a span for this request. If this span exists to ` +
+      `capture a narrower business operation, scope it to just that operation instead of wrapping the entire handler.`,
+    tier: 2 as const,
+    blocking: true,
+  }));
+
+  return [...libraryResults, ...entryPointResults];
 }
 
 /** COV-006 Python ValidationRule — auto-instrumentation must be preferred over manual spans. */
