@@ -50,7 +50,7 @@ All five threw on an unclosed table header, an unterminated string, a duplicate 
 - `@iarna/toml`: "at row 1, col 10, pos 9" in the message.
 - `@ltd/j-toml`: "at line 1" in the message.
 - `toml`: a `SyntaxError` describing expected characters, with no line number in the first message line.
-Only `@iarna/toml` accepted a BOM-prefixed document as an error (`Unknown character "65279"`), as did `@ltd/j-toml`. `smol-toml`, `toml` and `confbox` parsed it.
+`@iarna/toml` (`Unknown character "65279"`) and `@ltd/j-toml` (a `TypeError` that TOML content should not start with a BOM) rejected a BOM-prefixed document. `smol-toml`, `toml` and `confbox` parsed it.
 
 **5. `smol-toml` has an explicit untrusted-key policy** 🟢 high
 **Source says:** the library "is protected against prototype pollution and will correctly assign a plain property named e.g. `__proto__`", and warns that careless use of the result, for example `Object.assign({}, a)`, can still cause pollution. Its `unsafeKeyBehaviour` option (added in 1.9.0) has `keep` (default), `drop`, and `throw` modes. ([smol-toml README](https://github.com/squirrelchat/smol-toml))
