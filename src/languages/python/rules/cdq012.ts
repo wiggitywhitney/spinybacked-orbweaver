@@ -9,6 +9,9 @@ import type { ValidationRule, RuleInput } from '../../types.ts';
 /** The two names generated instrumentation relies on that the rest of the file may not define. */
 const TRACKED_NAMES = new Set(['tracer', 'trace']);
 
+/** Node types that open their own scope for the loop variables they bind. */
+const COMPREHENSION_TYPES = new Set(['list_comprehension', 'set_comprehension', 'dictionary_comprehension', 'generator_expression']);
+
 /** Marker stored in a scope when a wildcard import makes every name in it unknowable. */
 const WILDCARD = '*';
 
@@ -61,13 +64,10 @@ function classifyIdentifier(node: Node): Role {
     case 'assignment':
       return sameNode(parent.childForFieldName('left'), node) ? 'binding' : 'use';
     case 'for_statement':
+    case 'for_in_clause':
       return sameNode(parent.childForFieldName('left'), node) ? 'binding' : 'use';
     case 'named_expression':
       return sameNode(parent.childForFieldName('name'), node) ? 'binding' : 'use';
-    case 'for_in_clause':
-      // A comprehension variable lives in its own scope, which is not modeled: ignoring it
-      // is the conservative choice (it can hide a finding but never invent one).
-      return sameNode(parent.childForFieldName('left'), node) ? 'skip' : 'use';
     case 'function_definition':
     case 'class_definition':
     case 'global_statement':
@@ -146,8 +146,11 @@ function collectUses(root: Node): NameUse[] {
       return;
     }
 
+    // A comprehension's loop variable is visible only inside it, and (like a function) it
+    // cannot see names bound in an enclosing class body.
+    const inner = COMPREHENSION_TYPES.has(node.type) ? [...scopes, { names: new Set<string>(), isClass: false }] : scopes;
     for (const child of node.namedChildren) {
-      if (child !== null) walk(child, scopes);
+      if (child !== null) walk(child, inner);
     }
   }
 

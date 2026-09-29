@@ -192,6 +192,56 @@ describe('checkPythonTracerBound (CDQ-012)', () => {
       expect(failures(code)).toHaveLength(0);
     });
 
+    it('passes when tracer is a comprehension variable', () => {
+      const code = [
+        'def names(items):',
+        '    return [tracer.name for tracer in items]',
+        '',
+      ].join('\n');
+
+      expect(failures(code)).toHaveLength(0);
+    });
+
+    it('passes when trace is a generator, set or dict comprehension variable', () => {
+      const code = [
+        'def check(results):',
+        '    a = any(trace.ok for trace in results)',
+        '    b = {trace.id for trace in results}',
+        '    c = {trace.id: trace for trace in results}',
+        '    return a, b, c',
+        '',
+      ].join('\n');
+
+      expect(failures(code)).toHaveLength(0);
+    });
+
+    it('does not let a comprehension variable bind the name outside the comprehension', () => {
+      const code = [
+        'def names(items):',
+        '    found = [tracer.name for tracer in items]',
+        '    with tracer.start_as_current_span("names"):',
+        '        return found',
+        '',
+      ].join('\n');
+
+      const found = failures(code);
+      expect(found).toHaveLength(1);
+      expect(found[0].lineNumber).toBe(3);
+    });
+
+    it('does not let a class-body binding reach into a comprehension', () => {
+      const code = [
+        'class Service:',
+        '    tracer = None',
+        '    spans = [tracer.start_span(n) for n in range(3)]',
+        '',
+      ].join('\n');
+
+      const found = failures(code);
+      expect(found).toHaveLength(1);
+      expect(found[0].lineNumber).toBe(3);
+    });
+
     it('passes when tracer is assigned inside the function that uses it', () => {
       const code = [
         'from opentelemetry import trace',
