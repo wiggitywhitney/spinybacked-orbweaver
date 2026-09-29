@@ -368,6 +368,7 @@ This check is **advisory**, not blocking — matching JavaScript API-002's dispo
 
 **Before writing code:**
 - [x] Step 0: read `docs/reviews/advisory-rules-audit-2026-04-15.md` in full — especially the API section's rebuild narratives and the Action Items entry on Python/Go package-hygiene
+- [ ] Read `docs/rules-reference.md` in full and scan `src/validation/` for overlapping or contradictory reconcilers before writing the rule (project CLAUDE.md rules-related work conventions; context is cleared between milestones, so do not rely on memory of the reference). The reference documents COV-003 (error recording) as requiring both `recordException` and `setStatus(ERROR)` while both language implementations accept either; that drift is deliberate for now and tracked separately (Decision D-COV003-1), so do not change it in this milestone
 - [x] Resolve OD-9a (manifest scope — `pyproject.toml` / `requirements.txt` / `setup.cfg` detection order) and record the decision in the Decision Log (resolved: Decision D-D4-2)
 - [x] Resolve OD-9b (library vs. app classification for Python projects) and record the decision in the Decision Log (resolved: Decision D-D4-3)
 - [x] Resolve OD-9c (rule ID — reuse API-002 or assign new ID) and record the decision in the Decision Log (resolved: Decision D-D4-4)
