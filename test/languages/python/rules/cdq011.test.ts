@@ -74,6 +74,30 @@ describe('checkPythonCanonicalTracerName (CDQ-011)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when the name is built from a larger expression instead of a standalone literal', () => {
+      const code = 'tracer = trace.get_tracer("prefix-" + service_name)\n';
+
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when the literal starts a conditional expression', () => {
+      const code = 'tracer = trace.get_tracer("a" if debug else "b")\n';
+
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('still flags a mismatched literal that is followed by a version argument', () => {
+      const code = 'tracer = trace.get_tracer("wrong-name", "1.0")\n';
+
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('does not match a string literal that spans a newline', () => {
       const code = 'tracer = trace.get_tracer("abc\nfoo")\n';
 

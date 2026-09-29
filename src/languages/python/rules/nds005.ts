@@ -55,23 +55,39 @@ function clauseBlock(clause: Node): Node | undefined {
 /**
  * Extract a normalized body anchor from the try clause's first meaningful
  * statement — mirrors JS's own `extractBodyAnchor()`. Skips OTel-only
- * statements and recurses into a nested try (instrumentation may wrap the
- * body in one, e.g. a raw `start_span()` + `try`/`finally` pattern).
+ * expression statements, looks inside a span-opening `with` block, and
+ * recurses into a nested try (instrumentation may wrap the body in one, e.g.
+ * a raw `start_span()` + `try`/`finally` pattern).
  */
 export function extractBodyAnchor(tryStmt: Node): string {
   const tryBlock = tryStmt.childForFieldName('body');
-  const statements = tryBlock?.namedChildren.filter((c): c is Node => c !== null) ?? [];
+  return firstMeaningfulAnchor(tryBlock?.namedChildren.filter((c): c is Node => c !== null) ?? []);
+}
 
+/** Whether a `with` statement's header opens a span (`with tracer.start_as_current_span(...) [as span]:`). */
+function opensOtelSpan(withStmt: Node): boolean {
+  const header = withStmt.namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
+  return header !== undefined && isOtelLine(header.text.trim());
+}
+
+function firstMeaningfulAnchor(statements: Node[]): string {
   for (const stmt of statements) {
-    const text = stmt.text.trim();
-    if (isOtelLine(text)) continue;
+    // Only a single expression statement can be OTel-only. A compound statement
+    // that merely contains an OTel call somewhere in its body is real code, so
+    // testing its whole multi-line text would skip it along with the code it holds.
+    if (stmt.type === 'expression_statement' && isOtelLine(stmt.text.trim())) continue;
+    if (stmt.type === 'with_statement' && opensOtelSpan(stmt)) {
+      const body = stmt.childForFieldName('body');
+      const innerAnchor = firstMeaningfulAnchor(body?.namedChildren.filter((c): c is Node => c !== null) ?? []);
+      if (innerAnchor) return innerAnchor;
+      continue;
+    }
     if (stmt.type === 'try_statement') {
       const nestedAnchor = extractBodyAnchor(stmt);
       if (nestedAnchor) return nestedAnchor;
       continue;
     }
-    const firstLine = text.split('\n')[0];
-    return firstLine.slice(0, 80);
+    return stmt.text.trim().split('\n')[0].slice(0, 80);
   }
   return '';
 }
