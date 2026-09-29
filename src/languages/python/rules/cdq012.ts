@@ -106,6 +106,12 @@ function isBound(use: NameUse): boolean {
   });
 }
 
+/**
+ * Walk the tree once, recording every reference to a tracked name together with the scopes that
+ * can see it. Two approximations lean toward treating a name as bound, so neither can invent a
+ * finding: a default parameter value and a comprehension's first iterable are evaluated in the
+ * enclosing scope in Python but are walked here inside the new scope.
+ */
 function collectUses(root: Node): NameUse[] {
   const moduleScope: Scope = { names: new Set(), isClass: false };
   const uses: NameUse[] = [];
