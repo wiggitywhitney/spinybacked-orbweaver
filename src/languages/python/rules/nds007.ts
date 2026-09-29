@@ -1,7 +1,7 @@
 // ABOUTME: NDS-007 Python Tier 2 check — expected-condition except blocks must not gain error recording.
 // ABOUTME: Fires when the agent adds record_exception()/set_status(ERROR) to an except that gracefully swallows errors.
 
-import { type Node } from 'web-tree-sitter';
+import { type Node, type Tree } from 'web-tree-sitter';
 import { parsePython } from '../ast.ts';
 import { containsReraise } from './cov003.ts';
 import { extractBodyAnchor } from './nds005.ts';
@@ -107,14 +107,31 @@ export function checkPythonNoErrorRecordingInExpectedConditionExcepts(
   filePath: string,
 ): CheckResult[] {
   const originalTree = parsePython(originalCode);
-  const originalByAnchor = buildOriginalAnchorMap(originalTree.rootNode);
+  try {
+    const originalByAnchor = buildOriginalAnchorMap(originalTree.rootNode);
+    if (originalByAnchor.size === 0) return [passingResult(filePath)];
 
-  if (originalByAnchor.size === 0) {
+    const instrumentedTree = parsePython(instrumentedCode);
+    try {
+      return findExpectedConditionRecording(instrumentedTree, originalByAnchor, filePath);
+    } finally {
+      instrumentedTree.delete();
+    }
+  } finally {
     originalTree.delete();
-    return [passingResult(filePath)];
   }
+}
 
-  const instrumentedTree = parsePython(instrumentedCode);
+/**
+ * The NDS-007 analysis over already-parsed trees. The caller owns both trees and deletes them
+ * afterwards, so every node read here (including the original's except clauses) happens
+ * before either is released.
+ */
+function findExpectedConditionRecording(
+  instrumentedTree: Tree,
+  originalByAnchor: Map<string, Node[]>,
+  filePath: string,
+): CheckResult[] {
   const violations: CheckResult[] = [];
 
   function walk(node: Node): void {
@@ -164,8 +181,6 @@ export function checkPythonNoErrorRecordingInExpectedConditionExcepts(
   }
 
   walk(instrumentedTree.rootNode);
-  originalTree.delete();
-  instrumentedTree.delete();
 
   if (violations.length === 0) {
     return [passingResult(filePath)];

@@ -98,6 +98,26 @@ describe('checkPythonCanonicalTracerName (CDQ-011)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it.each([
+      ['r', 'tracer = trace.get_tracer(r"wrong-name")\n'],
+      ['R', "tracer = trace.get_tracer(R'wrong-name')\n"],
+      ['u', 'tracer = trace.get_tracer(u"wrong-name")\n'],
+      ['U', "tracer = trace.get_tracer(U'wrong-name')\n"],
+    ])('flags a mismatched literal with a %s string prefix', (_prefix, code) => {
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('wrong-name');
+    });
+
+    it('still treats an f-string as variable-based, even with a prefix', () => {
+      const code = 'tracer = trace.get_tracer(f"wrong-{suffix}")\n';
+
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('does not match a string literal that spans a newline', () => {
       const code = 'tracer = trace.get_tracer("abc\nfoo")\n';
 

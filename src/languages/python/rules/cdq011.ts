@@ -37,7 +37,8 @@ export function checkPythonCanonicalTracerName(
   // opposite quote may appear inside the name, and it cannot span a newline. The
   // literal must be a standalone argument, followed by `,` or `)`; a literal that
   // starts a larger expression (`"a" + b`, `"a" if x else "b"`) is variable-based.
-  const pattern = /\btrace\s*\.\s*get_tracer\s*\(\s*(["'])((?:(?!\1)[^\n])*)\1(?=\s*[,)])/g;
+  // An optional `r`/`R`/`u`/`U` string prefix is accepted; an `f` prefix is not (see above).
+  const pattern = /\btrace\s*\.\s*get_tracer\s*\(\s*[rRuU]?(["'])((?:(?!\1)[^\n])*)\1(?=\s*[,)])/g;
 
   let match;
   while ((match = pattern.exec(code)) !== null) {

@@ -2,10 +2,33 @@
 // ABOUTME: Verifies diff-based detection of agent-added OTel SDK/exporter/instrumentation/semconv imports.
 
 import { describe, it, expect } from 'vitest';
-import { checkPythonForbiddenImports } from '../../../../src/languages/python/rules/api001.ts';
+import {
+  checkPythonForbiddenImports,
+  api001PythonRule,
+  api004PythonRule,
+} from '../../../../src/languages/python/rules/api001.ts';
+import type { RuleInput } from '../../../../src/languages/types.ts';
+import type { CheckResult } from '../../../../src/validation/types.ts';
 
 describe('checkPythonForbiddenImports (API-001/004)', () => {
   const filePath = '/tmp/test-file.py';
+
+  describe('per-rule passing results', () => {
+    const input = { originalCode: 'x = 1\n', instrumentedCode: 'x = 1\n', filePath } as unknown as RuleInput;
+
+    it.each([
+      ['API-001', api001PythonRule],
+      ['API-004', api004PythonRule],
+    ] as const)('%s passing result carries the same blocking flag as the rule declares', async (ruleId, rule) => {
+      const raw = await rule.check(input);
+      expect(Array.isArray(raw)).toBe(true);
+      const results = raw as CheckResult[];
+      expect(results).toHaveLength(1);
+      expect(results[0].ruleId).toBe(ruleId);
+      expect(results[0].passed).toBe(true);
+      expect(results[0].blocking).toBe(true);
+    });
+  });
 
   describe('no forbidden imports', () => {
     it('passes when only the opentelemetry API is imported', () => {

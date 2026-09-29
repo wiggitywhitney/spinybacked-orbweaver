@@ -162,7 +162,7 @@ function filterForbiddenImports(
       lineNumber: null,
       message: `${ruleId}: No forbidden imports found.`,
       tier: 2,
-      blocking: false,
+      blocking: true,
     }];
   }
   return violations;
