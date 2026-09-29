@@ -10,17 +10,20 @@ import type { CheckResult } from '../../validation/types.ts';
 /**
  * Parse the failing line number from a `python3 -c "compile(...)"` traceback.
  *
- * The traceback always has at least two `File "...", line N` entries: the first
- * is `File "<string>", line 1, in <module>` (an artifact of the `-c` wrapper —
- * always line 1, never the real error location), and the real failing line is on
- * a later `File` entry. Taking the LAST match (rather than the first) avoids
- * misreporting every syntax error as line 1.
+ * The traceback has a `File "<string>", line 1, in <module>` entry (an artifact of
+ * the `-c` wrapper — always line 1, never the real error location) and, for a
+ * syntax error, an entry naming the file that was passed to `compile()`. Only that
+ * entry is matched, by its exact path at the start of a line. Matching any
+ * `File "...", line N` text would also accept the echoed source line, whose text
+ * can itself look like a traceback entry.
  *
  * @param stderr - Combined stderr output from the `python3 -c` invocation
+ * @param filePath - The path that was passed to `compile()`
  * @returns The line number of the real syntax error, or null if none found
  */
-function parsePythonLineNumber(stderr: string): number | null {
-  const matches = [...stderr.matchAll(/File "[^"]*", line (\d+)/g)];
+function parsePythonLineNumber(stderr: string, filePath: string): number | null {
+  const escapedPath = filePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = [...stderr.matchAll(new RegExp(`^ {2}File "${escapedPath}", line (\\d+)`, 'gm'))];
   if (matches.length === 0) return null;
   return parseInt(matches[matches.length - 1][1], 10);
 }
@@ -104,7 +107,7 @@ export function checkSyntax(filePath: string): CheckResult {
       };
     }
 
-    const lineNumber = parsePythonLineNumber(stderr);
+    const lineNumber = parsePythonLineNumber(stderr, filePath);
 
     return {
       ruleId: 'NDS-001',

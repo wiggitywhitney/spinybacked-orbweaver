@@ -20,6 +20,20 @@ describe('checkSyntax', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  describe('line number of a syntax error', () => {
+    it('reports the real error line, not a traceback-looking string on the broken line itself', async () => {
+      // The broken line is echoed in the traceback. Its text looks like a traceback entry
+      // (`File "other.py", line 99`), which must not be mistaken for the error location.
+      const filePath = join(tempDir, 'lookalike.py');
+      writeFileSync(filePath, 'x = 1\ny = 2\nFile "other.py", line 99 !!\n', 'utf-8');
+
+      const result = await checkSyntax(filePath);
+
+      expect(result.passed).toBe(false);
+      expect(result.lineNumber).toBe(3);
+    });
+  });
+
   describe('valid Python', () => {
     it('passes for syntactically valid code', async () => {
       const filePath = join(tempDir, 'valid.py');
