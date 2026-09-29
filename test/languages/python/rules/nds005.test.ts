@@ -193,6 +193,63 @@ describe('checkPythonControlFlowPreservation (NDS-005)', () => {
       expect(results.some(r => !r.passed && r.message.includes('Raise statement modified'))).toBe(true);
     });
 
+    describe('raise ... from cause', () => {
+      const original = (raiseLine: string): string => [
+        'def handler(x):',
+        '    try:',
+        '        risky(x)',
+        '    except ValueError as e:',
+        `        ${raiseLine}`,
+        '',
+      ].join('\n');
+      const instrumented = (raiseLine: string): string => [
+        'def handler(x):',
+        '    with tracer.start_as_current_span("handler"):',
+        '        try:',
+        '            risky(x)',
+        '        except ValueError as e:',
+        `            ${raiseLine}`,
+        '',
+      ].join('\n');
+
+      it('flags a raise whose `from` cause was dropped', () => {
+        const results = checkPythonControlFlowPreservation(
+          original('raise RuntimeError("boom") from e'),
+          instrumented('raise RuntimeError("boom")'),
+          filePath,
+        );
+        expect(results.some(r => !r.passed && r.message.includes('Raise statement modified'))).toBe(true);
+      });
+
+      it('flags a raise that gained a `from` cause', () => {
+        const results = checkPythonControlFlowPreservation(
+          original('raise RuntimeError("boom")'),
+          instrumented('raise RuntimeError("boom") from e'),
+          filePath,
+        );
+        expect(results.some(r => !r.passed && r.message.includes('Raise statement modified'))).toBe(true);
+      });
+
+      it('flags a `from None` cause changed to a plain raise', () => {
+        const results = checkPythonControlFlowPreservation(
+          original('raise RuntimeError("boom") from None'),
+          instrumented('raise RuntimeError("boom")'),
+          filePath,
+        );
+        expect(results.some(r => !r.passed && r.message.includes('Raise statement modified'))).toBe(true);
+      });
+
+      it('passes when the raise and its `from` cause are preserved', () => {
+        const results = checkPythonControlFlowPreservation(
+          original('raise RuntimeError("boom") from e'),
+          instrumented('raise RuntimeError("boom") from e'),
+          filePath,
+        );
+        expect(results).toHaveLength(1);
+        expect(results[0].passed).toBe(true);
+      });
+    });
+
     it('flags a raise statement added to an except block that did not have one', () => {
       const original = [
         'def handler(x):',

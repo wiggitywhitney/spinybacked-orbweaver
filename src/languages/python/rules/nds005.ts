@@ -120,7 +120,11 @@ function extractExceptRaises(exceptClause: Node, boundName: string | undefined):
     if (node.type === 'raise_statement') {
       const text = node.text.trim();
       if (!isOtelLine(text)) {
-        let expr = node.namedChild(0)?.text.trim() ?? '';
+        // The `from` cause is part of what a raise means (it sets exception chaining), so
+        // it belongs in the fingerprint: `raise X from e` and `raise X` must differ.
+        const raised = node.namedChild(0)?.text.trim() ?? '';
+        const cause = node.childForFieldName('cause')?.text.trim();
+        let expr = cause === undefined ? raised : `${raised} from ${cause}`;
         if (boundName !== undefined) {
           expr = expr.replace(new RegExp(`\\b${escapeRegExp(boundName)}\\b`, 'g'), '<CATCH_VAR>');
         }
