@@ -38,11 +38,19 @@ export function checkPythonCanonicalTracerName(
   // literal must be a standalone argument, followed by `,` or `)`; a literal that
   // starts a larger expression (`"a" + b`, `"a" if x else "b"`) is variable-based.
   // An optional `r`/`R`/`u`/`U` string prefix is accepted; an `f` prefix is not (see above).
-  const pattern = /\btrace\s*\.\s*get_tracer\s*\(\s*[rRuU]?(["'])((?:(?!\1)[^\n])*)\1(?=\s*[,)])/g;
+  // Groups: 1 = optional string prefix, 2 = opening quote, 3 = literal body. The body consumes a
+  // backslash together with the character after it, so an escaped quote does not end the literal.
+  const pattern = /\btrace\s*\.\s*get_tracer\s*\(\s*([rRuU]?)(["'])((?:\\[\s\S]|(?!\2)[^\n\\])*)\2(?=\s*[,)])/g;
 
   let match;
   while ((match = pattern.exec(code)) !== null) {
-    const found = match[2];
+    const isRaw = match[1] === 'r' || match[1] === 'R';
+    const found = match[3];
+    // A raw literal's backslashes are ordinary characters, so it is compared as written. A non-raw
+    // literal containing a backslash follows Python's escape rules; decoding them all is not worth
+    // it for a tracer name, so it is treated as computed (like an f-string) rather than compared
+    // as text that is not its real value.
+    if (!isRaw && found.includes('\\')) continue;
     if (found !== canonicalTracerName) {
       const before = code.slice(0, match.index);
       const lineNumber = before.split('\n').length;

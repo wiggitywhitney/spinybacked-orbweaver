@@ -110,6 +110,44 @@ describe('checkPythonCanonicalTracerName (CDQ-011)', () => {
       expect(results[0].message).toContain('wrong-name');
     });
 
+    describe('backslash escapes', () => {
+      it('does not read a literal with an escaped quote up to that quote', () => {
+        // Python source: trace.get_tracer("svc\", \"x")  — the escaped quotes do not end the string.
+        const code = 'tracer = trace.get_tracer("svc\\", \\"x")\n';
+
+        const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+        expect(results).toHaveLength(1);
+        expect(results[0].passed).toBe(true);
+      });
+
+      it('treats a non-raw literal containing any escape as computed rather than decoding it', () => {
+        // Python source: trace.get_tracer("my\\service")
+        const code = 'tracer = trace.get_tracer("my\\\\service")\n';
+
+        const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+        expect(results).toHaveLength(1);
+        expect(results[0].passed).toBe(true);
+      });
+
+      it('compares a raw literal verbatim, since its backslashes are ordinary characters', () => {
+        // Python source: trace.get_tracer(r"wrong\name")
+        const code = 'tracer = trace.get_tracer(r"wrong\\name")\n';
+
+        const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+        expect(results).toHaveLength(1);
+        expect(results[0].passed).toBe(false);
+        expect(results[0].message).toContain(JSON.stringify('wrong\\name'));
+      });
+
+      it('passes a raw literal that equals the canonical name including its backslash', () => {
+        const code = 'tracer = trace.get_tracer(r"my\\service")\n';
+
+        const results = checkPythonCanonicalTracerName(code, filePath, 'my\\service');
+        expect(results).toHaveLength(1);
+        expect(results[0].passed).toBe(true);
+      });
+    });
+
     it('still treats an f-string as variable-based, even with a prefix', () => {
       const code = 'tracer = trace.get_tracer(f"wrong-{suffix}")\n';
 

@@ -136,8 +136,11 @@ export function checkPythonEntryPointSpans(code: string, filePath: string): Chec
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (unspanned.length === 0) {
     return [{
