@@ -266,6 +266,55 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
     });
   });
 
+  describe('manually ended span stored on an attribute', () => {
+    const storedSpan = (...exceptBody: string[]): string => py(
+      'class Loader:',
+      '    def fetch(self, path):',
+      '        self.span = tracer.start_span("fetch")',
+      '        try:',
+      '            return read(path)',
+      '        except IOError as e:',
+      ...exceptBody.map(line => `            ${line}`),
+      '        finally:',
+      '            self.span.end()',
+    );
+
+    it('flags a re-raise with no recording on the span attribute', () => {
+      const results = checkPythonErrorVisibility(storedSpan('raise'), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('passes when the except block records on the span attribute before re-raising', () => {
+      const results = checkPythonErrorVisibility(storedSpan('self.span.record_exception(e)', 'raise'), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when the except block swallows the exception', () => {
+      const results = checkPythonErrorVisibility(storedSpan('return None'), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag a re-raise after the span attribute has already been ended', () => {
+      const code = py(
+        'class Loader:',
+        '    def fetch(self, path):',
+        '        self.span = tracer.start_span("fetch")',
+        '        self.span.end()',
+        '        try:',
+        '            return read(path)',
+        '        except IOError:',
+        '            raise',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('nested function scope boundary', () => {
     it("does not treat a nested function's record_exception() call as covering the outer except block", () => {
       const code = py(

@@ -86,14 +86,19 @@ function spanVarNameFromWithItem(withItem: Node): string | null {
   return identifier?.type === 'identifier' ? identifier.text : null;
 }
 
-/** The identifier a statement assigns from a `start_span()` call (`span = tracer.start_span("x")`), or `null`. */
+/**
+ * The name a statement assigns from a `start_span()` call, or `null`: an identifier
+ * (`span = tracer.start_span("x")`) or an attribute (`self.span = tracer.start_span("x")`),
+ * returned as its source text so later `<name>.end()` and `<name>.record_exception()` calls
+ * can be matched by comparing the receiver's text.
+ */
 function spanVariableAssignedFromStartSpan(statement: Node): string | null {
   if (statement.type !== 'expression_statement') return null;
   const assignment = statement.namedChild(0);
   if (assignment?.type !== 'assignment') return null;
   const left = assignment.childForFieldName('left');
   const right = assignment.childForFieldName('right');
-  if (left?.type !== 'identifier' || right === null || right.type !== 'call') return null;
+  if ((left?.type !== 'identifier' && left?.type !== 'attribute') || right === null || right.type !== 'call') return null;
   const fn = right.childForFieldName('function');
   if (fn?.type !== 'attribute') return null;
   return fn.childForFieldName('attribute')?.text === 'start_span' ? left.text : null;
@@ -220,7 +225,7 @@ function containsErrorRecordingCall(node: Node, isRoot: boolean, spanVarName: st
     if (fn?.type === 'attribute') {
       const receiver = fn.childForFieldName('object');
       const attribute = fn.childForFieldName('attribute');
-      if (receiver?.type === 'identifier' && receiver.text === spanVarName
+      if (receiver !== null && receiver.text === spanVarName
         && attribute !== null && ERROR_RECORDING_METHODS.has(attribute.text)) {
         return true;
       }
