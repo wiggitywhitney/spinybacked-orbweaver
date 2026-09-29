@@ -65,6 +65,25 @@ describe('checkPythonDomainAttributes (COV-005)', () => {
     });
   });
 
+  describe('raw start_span() that is not assigned to anything', () => {
+    it('does not credit attributes set on an unrelated span-named variable', () => {
+      // With no variable holding this span, nothing later can be attributed to it, so a
+      // `set_attribute` call on some other span-named object must not satisfy the registry.
+      const code = [
+        'def create_order(order_id, other_span):',
+        '    tracer.start_span("create_order")',
+        '    other_span.set_attribute("order.id", order_id)',
+        '    other_span.set_attribute("order.total", 5)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('order.id');
+    });
+  });
+
   describe('with-scoped span', () => {
     it('flags a with-scoped span missing required and recommended attributes', () => {
       const code = [

@@ -125,6 +125,10 @@ function collectFromRawStartSpan(spanCall: Node): Set<string> {
   if (spanVarName?.type === 'identifier' || spanVarName?.type === 'attribute') {
     knownSpanVarNames.add(spanVarName.text);
   }
+  // A span that is not assigned to anything has no variable later statements could set
+  // attributes on. Scanning them anyway would credit this span with `set_attribute` calls on
+  // any object whose name merely looks like a span.
+  if (knownSpanVarNames.size === 0) return new Set();
 
   let stmt: Node | null = spanCall;
   let block: Node | null = null;

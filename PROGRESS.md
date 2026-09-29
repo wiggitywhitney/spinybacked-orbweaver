@@ -74,6 +74,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-09-29) Fixed Python's control-flow preservation check ignoring the `from` clause on a re-raised exception, so dropping or adding it, which changes how the original error is chained, went unnoticed. A raise is now compared together with its `from` clause.
 
+- (2026-09-29) Fixed Python's required-span-attributes check crediting a span that was created but never assigned to a variable with attributes set on any unrelated object whose name looked like a span. A span with no variable to set attributes on is now treated as having none.
+
 - (2026-09-29) Fixed the last memory leaks in Python parsing: the shared function, import and export finders, the instrumentation detector, the helpers that splice instrumented functions back into a file, and the signature-preservation check now release their parsed copy of a file even when an error interrupts them. Every Python code path that parses a file does this now.
 
 - (2026-09-29) Fixed a memory leak in fourteen more Python checks (attribute data quality, outbound-call spans, span closing, required span attributes, async-function spans, internal-detail spans, span-creation style, auto-instrumentation preference, utility-function spans, trivial-accessor spans, thin-wrapper spans, spans on functions that exit the process, error recording on handled exceptions, and entry-point spans): each released its parsed copy of the file only when the check finished cleanly, so an error partway through left that memory allocated. The same fix was already applied to three other Python checks.
