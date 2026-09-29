@@ -1388,74 +1388,92 @@ async function functionLevelFallback(
   }
 
   let successful = fnResults.filter(r => r.success);
-  if (successful.length === 0) {
-    return null; // All functions failed — fall through to whole-file failure
-  }
 
-  // Short-circuit: if no spans were added, return the original file unchanged.
-  // Reassembly has no valid purpose when nothing was instrumented and can corrupt
-  // code structure (e.g. stripping try/catch blocks). The check at the end of the
-  // success path restores the original too, but only after reassembly and validation
-  // have already run — the partial-results fallback path does not restore cleanly.
-  const preReassemblySpans = successful.reduce((sum, r) => sum + r.spansAdded, 0);
-  if (preReassemblySpans === 0) {
-    await writeFile(filePath, originalCode, 'utf-8');
-    let shortCircuitTokens = { ...wholeFileResult.tokenUsage };
-    for (const r of fnResults) {
-      shortCircuitTokens = addTokenUsage(shortCircuitTokens, r.tokenUsage);
+  // Returns a FileResult or null when there is nothing to assemble, or undefined to
+  // continue. Run before reassembly and again after it, because a provider's
+  // reassembly can mark results it did not splice as failed (Python does), which can
+  // leave no successful function, or none with spans.
+  const checkNothingToAssemble = async (): Promise<FileResult | null | undefined> => {
+    successful = fnResults.filter(r => r.success);
+    if (successful.length === 0) {
+      return null; // All functions failed — fall through to whole-file failure
     }
-    const failedFns = fnResults.filter(r => !r.success);
-    const tscAttemptsResult = tscAttempts.length > 0 ? tscAttempts : undefined;
-    if (failedFns.length > 0) {
-      // Some functions failed validation — not a correct skip. Return 'failed' so the run
-      // summary counts it correctly and the debug dump fires via lastInstrumentedCode.
+
+    // Short-circuit: if no spans were added, return the original file unchanged.
+    // Reassembly has no valid purpose when nothing was instrumented and can corrupt
+    // code structure (e.g. stripping try/catch blocks). The check at the end of the
+    // success path restores the original too, but only after reassembly and validation
+    // have already run — the partial-results fallback path does not restore cleanly.
+    const spansToAssemble = successful.reduce((sum, r) => sum + r.spansAdded, 0);
+    if (spansToAssemble === 0) {
+      await writeFile(filePath, originalCode, 'utf-8');
+      let shortCircuitTokens = { ...wholeFileResult.tokenUsage };
+      for (const r of fnResults) {
+        shortCircuitTokens = addTokenUsage(shortCircuitTokens, r.tokenUsage);
+      }
+      const failedFns = fnResults.filter(r => !r.success);
+      const tscAttemptsResult = tscAttempts.length > 0 ? tscAttempts : undefined;
+      if (failedFns.length > 0) {
+        // Some functions failed validation — not a correct skip. Return 'failed' so the run
+        // summary counts it correctly and the debug dump fires via lastInstrumentedCode.
+        return {
+          ...wholeFileResult,
+          spansAdded: 0,
+          tokenUsage: shortCircuitTokens,
+          lastInstrumentedCode: wholeFileResult.lastInstrumentedCode ?? originalCode,
+          errorProgression: [
+            ...(wholeFileResult.errorProgression ?? []),
+            `function-level: ${successful.length}/${extractedFunctions.length} with no spans, ${failedFns.length} failed`,
+          ],
+          notes: [
+            `Function-level fallback: ${successful.length}/${extractedFunctions.length} functions instrumented (0 spans)`,
+            ...failedFns.map(r => `  failed: ${r.name} — ${r.error}`),
+          ],
+          functionsInstrumented: 0,
+          functionsSkipped: extractedFunctions.length,
+          functionResults: fnResults,
+          tscAttempts: tscAttemptsResult,
+        };
+      }
       return {
-        ...wholeFileResult,
+        path: filePath,
+        status: 'success',
         spansAdded: 0,
-        tokenUsage: shortCircuitTokens,
-        lastInstrumentedCode: wholeFileResult.lastInstrumentedCode ?? originalCode,
+        librariesNeeded: [],
+        schemaExtensions: [],
+        attributesCreated: 0,
+        validationAttempts: wholeFileResult.validationAttempts,
+        validationStrategyUsed: wholeFileResult.validationStrategyUsed,
         errorProgression: [
           ...(wholeFileResult.errorProgression ?? []),
-          `function-level: ${successful.length}/${extractedFunctions.length} with no spans, ${failedFns.length} failed`,
+          `function-level: 0/${extractedFunctions.length} functions instrumented (no spans needed)`,
         ],
         notes: [
-          `Function-level fallback: ${successful.length}/${extractedFunctions.length} functions instrumented (0 spans)`,
-          ...failedFns.map(r => `  failed: ${r.name} — ${r.error}`),
+          `Function-level fallback: 0/${extractedFunctions.length} functions instrumented`,
         ],
+        agentVersion: AGENT_VERSION,
+        tokenUsage: shortCircuitTokens,
         functionsInstrumented: 0,
         functionsSkipped: extractedFunctions.length,
         functionResults: fnResults,
         tscAttempts: tscAttemptsResult,
+        lastInstrumentedCode: wholeFileResult.lastInstrumentedCode ?? originalCode,
       };
     }
-    return {
-      path: filePath,
-      status: 'success',
-      spansAdded: 0,
-      librariesNeeded: [],
-      schemaExtensions: [],
-      attributesCreated: 0,
-      validationAttempts: wholeFileResult.validationAttempts,
-      validationStrategyUsed: wholeFileResult.validationStrategyUsed,
-      errorProgression: [
-        ...(wholeFileResult.errorProgression ?? []),
-        `function-level: 0/${extractedFunctions.length} functions instrumented (no spans needed)`,
-      ],
-      notes: [
-        `Function-level fallback: 0/${extractedFunctions.length} functions instrumented`,
-      ],
-      agentVersion: AGENT_VERSION,
-      tokenUsage: shortCircuitTokens,
-      functionsInstrumented: 0,
-      functionsSkipped: extractedFunctions.length,
-      functionResults: fnResults,
-      tscAttempts: tscAttemptsResult,
-      lastInstrumentedCode: wholeFileResult.lastInstrumentedCode ?? originalCode,
-    };
-  }
+    return undefined;
+  };
+
+  const beforeReassembly = await checkNothingToAssemble();
+  if (beforeReassembly !== undefined) return beforeReassembly;
 
   // Reassemble: replace instrumented functions in the original file via provider
   let reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
+
+  const afterReassembly = await checkNothingToAssemble();
+  if (afterReassembly !== undefined) {
+    await writeFile(filePath, originalCode, 'utf-8');
+    return afterReassembly;
+  }
 
   // Import once — reused by every reassembly path below.
   // NDS-003 (checkNonInstrumentationDiffNormalized) normalizes the ORIGINAL through

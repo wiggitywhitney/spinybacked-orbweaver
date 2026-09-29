@@ -3204,6 +3204,51 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     expect(finalContent).not.toContain('imimport');
   });
 
+  it('reports failure, not success, when Python reassembly skips every function that had spans', async () => {
+    // Both outputs drop the original decorator, so reassembly splices neither and
+    // marks both failed. The file must be reported the same way as when every
+    // function fails before reassembly, not as a zero-span success.
+    const pyFixture = [
+      '@app.get("/a")',
+      'async def alpha(x):',
+      '    a = x + 1',
+      '    b = a * 2',
+      '    return b',
+      '',
+      '@app.get("/b")',
+      'async def beta(y):',
+      '    c = y + 1',
+      '    d = c * 2',
+      '    return d',
+      '',
+    ].join('\n');
+    const pyPath = join(tmpDir, 'module.py');
+    writeFileSync(pyPath, pyFixture, 'utf-8');
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_path, code) => {
+        if (code.includes('def alpha') && code.includes('def beta')) {
+          return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+        }
+        const name = code.includes('def alpha') ? 'alpha' : 'beta';
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            instrumentedCode: [`async def ${name}(v):`, `    with tracer.start_as_current_span("${name}"):`, '        return v'].join('\n'),
+            spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+          }),
+        };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(pyPath, pyFixture, {}, makeConfig(), { deps, provider: new PythonProvider() });
+
+    expect(result.status).toBe('failed');
+    expect(result.spansAdded).toBe(0);
+    expect(readFileSync(pyPath, 'utf-8')).toBe(pyFixture);
+  });
+
   it('isolates a Python culprit that is not the first extracted function when assembly breaks whole-file syntax', async () => {
     // Python reassembly pairs results with extracted functions by position, so the
     // culprit search must pass a full-length results array. `nonlocal` with no
