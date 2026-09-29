@@ -171,9 +171,12 @@ function hasEarlyReturnGuard(setAttrCall: Node): boolean {
   const stmtIndex = statements.findIndex(s => s.startIndex === stmtStart);
   if (stmtIndex <= 0) return false;
 
-  const earlyExitPattern = /if\s+not\s+(?:(?:\w+\.)+)?is_recording\s*\(\s*\)\s*:\s*\n?\s*(return|break|continue|raise)\b/;
+  // Only a preceding sibling that is itself an `if` statement can be the guard, and the
+  // pattern is anchored at its start: guard-shaped text nested inside another statement (a
+  // loop body, a string) does not guard this call.
+  const earlyExitPattern = /^if\s+not\s+(?:(?:\w+\.)+)?is_recording\s*\(\s*\)\s*:\s*\n?\s*(return|break|continue|raise)\b/;
   for (let i = stmtIndex - 1; i >= 0; i--) {
-    if (earlyExitPattern.test(statements[i].text)) return true;
+    if (statements[i].type === 'if_statement' && earlyExitPattern.test(statements[i].text)) return true;
   }
   return false;
 }

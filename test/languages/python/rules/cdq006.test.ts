@@ -120,6 +120,51 @@ describe('checkPythonIsRecordingGuard (CDQ-006)', () => {
     });
   });
 
+  describe('early-exit guard recognition', () => {
+    it('recognizes a direct sibling early-exit guard before the call', () => {
+      const code = [
+        'def handler(span, items):',
+        '    if not span.is_recording():',
+        '        return',
+        '    span.set_attribute("items", json.dumps(items))',
+        '',
+      ].join('\n');
+
+      const results = checkPythonIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not count a guard nested inside another statement as a sibling early exit', () => {
+      // The `return` here only leaves the loop's own path; it does not guard the call below.
+      const code = [
+        'def handler(span, items):',
+        '    for item in items:',
+        '        if not span.is_recording():',
+        '            return',
+        '    span.set_attribute("items", json.dumps(items))',
+        '',
+      ].join('\n');
+
+      const results = checkPythonIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('does not treat guard-shaped text inside a string as a guard', () => {
+      const code = [
+        'def handler(span, items):',
+        '    note = "if not span.is_recording(): return"',
+        '    span.set_attribute("items", json.dumps(items))',
+        '',
+      ].join('\n');
+
+      const results = checkPythonIsRecordingGuard(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+  });
+
   describe('non-span receivers', () => {
     it('does not flag set_attribute on an unrelated object', () => {
       const code = [
