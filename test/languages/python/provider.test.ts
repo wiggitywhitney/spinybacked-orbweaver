@@ -479,6 +479,62 @@ describe('PythonProvider', () => {
       }
     });
 
+    it('reads a name written as a top-level dotted key (project.name = "...")', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), 'project.name = "dotted-project"\n\n[tool.other]\nname = "wrong"\n');
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('dotted-project');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
+    it('reads a name from an inline [tool.poetry] table', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '[tool]\npoetry = { name = "inline-poetry" }\n');
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('inline-poetry');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
+    it('prefers [project] over [tool.poetry] when both declare a name, regardless of file order', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(
+          join(tmpDir, 'pyproject.toml'),
+          '[tool.poetry]\nname = "poetry-name"\n\n[project]\nname = "pep621-name"\n',
+        );
+        const name = await provider.readProjectName(tmpDir);
+        expect(name).toBe('pep621-name');
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
+    it('throws an error naming pyproject.toml when the file is not valid TOML', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '[project\nname = "x"\n');
+        await expect(provider.readProjectName(tmpDir)).rejects.toThrow(/pyproject\.toml/);
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
+    it('throws instead of reading a name from a document containing a __proto__ key', async () => {
+      const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
+      try {
+        await writeFile(join(tmpDir, 'pyproject.toml'), '[__proto__]\npolluted = true\n\n[project]\nname = "x"\n');
+        await expect(provider.readProjectName(tmpDir)).rejects.toThrow(/pyproject\.toml/);
+      } finally {
+        await rm(tmpDir, { recursive: true });
+      }
+    });
+
     it('returns undefined when only requirements.txt exists (no name concept)', async () => {
       const tmpDir = await mkdtemp(join(tmpdir(), 'py-provider-test-'));
       try {

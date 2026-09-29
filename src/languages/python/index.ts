@@ -3,6 +3,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parse } from 'smol-toml';
 import type {
   LanguageProvider,
   FunctionInfo,
@@ -54,63 +55,37 @@ import { cov005PythonRule } from './rules/cov005.ts';
 /** Python-specific ValidationRules, registered on provider construction. Milestones D3/D3c populate this incrementally. */
 const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule, cdq001PythonRule, nds004PythonRule, rst001PythonRule, rst002PythonRule, rst003PythonRule, rst004PythonRule, rst005PythonRule, rst006PythonRule, nds005PythonRule, nds007PythonRule, cdq005PythonRule, cdq006PythonRule, cdq007PythonRule, cdq011PythonRule, api001PythonRule, api004PythonRule, cov005PythonRule] as const;
 
-/**
- * Matches both a single-bracket table header (`[project]`) and a double-bracket
- * array-of-tables header (`[[tool.poetry.source]]`), with an optional trailing
- * comment. Capture group 1 is the second `[` when present (array-of-tables);
- * group 2 is the table name.
- */
-const TOML_TABLE_HEADER_PATTERN = /^\s*\[(\[?)([^[\]]+)\]\]?\s*(?:#.*)?$/;
-// Matches both a bare `name` key and TOML's quoted-key form (`"name" = "..."`
-// or `'name' = ...`) — valid TOML syntax, though rare in practice for
-// `[project]`/`[tool.poetry]` tables. Fixed 2026-09-21 (previously only
-// matched the bare form).
-const NAME_ASSIGNMENT_PATTERN = /^\s*["']?name["']?\s*=\s*["']([^"']+)["']/;
-/** Tables whose `name` field identifies the project (PEP 621 `[project]`, or Poetry's own `[tool.poetry]`). */
-const PROJECT_NAME_TABLES = new Set(['project', 'tool.poetry']);
-
-/**
- * Normalize a TOML dotted table key by stripping quotes from each
- * dot-separated segment — `["project"]` and `[tool."poetry"]` are both valid
- * TOML syntax for the same tables `[project]`/`[tool.poetry]` already match
- * unquoted, but the header regex captures the quotes verbatim.
- */
-function normalizeTomlTableKey(rawKey: string): string {
-  return rawKey.split('.').map((segment) => {
-    const trimmed = segment.trim();
-    const quoted = /^(["'])(.*)\1$/.exec(trimmed);
-    return quoted ? quoted[2] : trimmed;
-  }).join('.');
+/** A non-empty string `name` field of a parsed TOML table, or undefined when the value is not such a table. */
+function readNameField(table: unknown): string | undefined {
+  if (typeof table !== 'object' || table === null) return undefined;
+  const name = (table as Record<string, unknown>).name;
+  return typeof name === 'string' && name !== '' ? name : undefined;
 }
 
 /**
- * Extract the project name from `pyproject.toml`'s `[project]` or `[tool.poetry]` table.
+ * Extract the project name from `pyproject.toml`'s `[project]` (PEP 621) or
+ * `[tool.poetry]` table, with `[project]` taking precedence when both declare one.
  *
- * Line-based table tracking, not a full TOML parser — structural-analysis-only scope
- * per OD-1. Scoping to these two tables (rather than matching the first `name = "..."`
- * anywhere in the file) avoids picking up an unrelated tool's own `name` field, e.g.
- * `[tool.some-plugin]` sections that happen to declare their own `name`, or Poetry's
- * `[[tool.poetry.source]]` array-of-tables entries (each has its own unrelated `name`
- * identifying a package source, not the project).
+ * Parsed with a real TOML parser, not a line scan: valid TOML can spell the same table as
+ * dotted keys (`project.name = "..."`) or an inline table (`poetry = { name = "..." }`), and
+ * a header-based scan misses both. Reading only these two tables avoids picking up an
+ * unrelated tool's own `name` field, or Poetry's `[[tool.poetry.source]]` array-of-tables
+ * entries (each names a package source, not the project). A document containing a
+ * `__proto__`-style key is rejected rather than read, since the file is untrusted input.
+ *
+ * @throws Error naming `pyproject.toml` when the content is not valid TOML
  */
 function extractProjectNameFromPyproject(content: string): string | undefined {
-  let currentTable: string | undefined;
-  for (const line of content.split('\n')) {
-    const tableMatch = TOML_TABLE_HEADER_PATTERN.exec(line);
-    if (tableMatch) {
-      // An array-of-tables header (`[[...]]`) is never `[project]`/`[tool.poetry]`
-      // (neither is defined as an array-of-tables in valid TOML) — reset instead
-      // of tracking its name, so a `name = "..."` inside it isn't misattributed
-      // to whichever single-bracket table preceded it.
-      currentTable = tableMatch[1] === '[' ? undefined : normalizeTomlTableKey(tableMatch[2]?.trim() ?? '');
-      continue;
-    }
-    if (currentTable !== undefined && PROJECT_NAME_TABLES.has(currentTable)) {
-      const nameMatch = NAME_ASSIGNMENT_PATTERN.exec(line);
-      if (nameMatch?.[1] !== undefined) return nameMatch[1];
-    }
+  let document: Record<string, unknown>;
+  try {
+    document = parse(content, { unsafeKeyBehaviour: 'throw' });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    throw new Error(`Could not parse pyproject.toml: ${reason}`, { cause: error });
   }
-  return undefined;
+  const tool = document.tool;
+  const poetry = typeof tool === 'object' && tool !== null ? (tool as Record<string, unknown>).poetry : undefined;
+  return readNameField(document.project) ?? readNameField(poetry);
 }
 
 /**

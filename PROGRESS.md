@@ -44,6 +44,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- (2026-09-29) Fixed Python project-name detection missing a name that valid `pyproject.toml` files write as a dotted key (`project.name = "..."`) or inside an inline table, by reading the file with a real TOML parser instead of scanning for table headers. When both the standard `[project]` table and Poetry's `[tool.poetry]` table declare a name, `[project]` now wins regardless of file order, and a `pyproject.toml` that is not valid TOML now stops with an error naming the file instead of being read leniently.
+
 - (2026-09-29) Fixed Python's control-flow preservation check, and the expected-condition check that shares its matching, picking the wrong statement to identify which `try` block is which once instrumentation had wrapped it. A statement was skipped as "just telemetry" whenever an OpenTelemetry call appeared anywhere in its text, so an `if` block containing a span attribute, or a span-opening `with` block around the real code, hid the original first statement, and a manually ended span's inner `try` was never examined. The check now skips only a single telemetry statement and looks inside a span-opening `with` block.
 
 - (2026-09-29) Fixed Python's canonical tracer name check in two ways: it silently accepted a tracer name containing the opposite quote character, for example `trace.get_tracer("it's")`, because its pattern refused to match any name containing either quote; and it reported a name built from a larger expression, such as `"prefix-" + service_name`, as a wrong fixed name instead of treating it as computed.
