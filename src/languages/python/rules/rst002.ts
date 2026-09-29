@@ -200,8 +200,11 @@ export function checkPythonTrivialAccessorSpans(code: string, filePath: string):
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (flagged.length === 0) {
     return [{

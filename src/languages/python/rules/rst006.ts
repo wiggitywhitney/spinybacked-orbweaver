@@ -165,10 +165,13 @@ function candidateHasSpan(candidate: Candidate): boolean {
 function collectFunctionsWithSpans(code: string): Set<string> {
   const tree = parsePython(code);
   const keys = new Set<string>();
-  for (const candidate of collectCandidates(tree.rootNode)) {
-    if (candidateHasSpan(candidate)) keys.add(candidate.key);
+  try {
+    for (const candidate of collectCandidates(tree.rootNode)) {
+      if (candidateHasSpan(candidate)) keys.add(candidate.key);
+    }
+  } finally {
+    tree.delete();
   }
-  tree.delete();
   return keys;
 }
 
@@ -202,28 +205,30 @@ export function checkPythonProcessExitSpan(
   const tree = parsePython(instrumentedCode);
   const violations: CheckResult[] = [];
 
-  for (const candidate of collectCandidates(tree.rootNode)) {
-    if (originalSpanFunctions.has(candidate.key)) continue; // Pre-existing span, not newly added.
-    if (!candidateHasSpan(candidate)) continue;
+  try {
+    for (const candidate of collectCandidates(tree.rootNode)) {
+      if (originalSpanFunctions.has(candidate.key)) continue; // Pre-existing span, not newly added.
+      if (!candidateHasSpan(candidate)) continue;
 
-    const body = candidate.node.childForFieldName('body');
-    if (body === null || !hasDirectExitCall(body, true)) continue;
+      const body = candidate.node.childForFieldName('body');
+      if (body === null || !hasDirectExitCall(body, true)) continue;
 
-    violations.push({
-      ruleId: 'RST-006',
-      passed: false,
-      filePath,
-      lineNumber: toLine(candidate.boundaryNode),
-      message:
-        `Do not add a span to "${candidate.key}" — it calls \`os._exit()\` directly, ` +
-        `which bypasses the span's normal close path and causes the span to leak at runtime. ` +
-        `Instrument the sub-operations inside it instead.`,
-      tier: 2,
-      blocking: false,
-    });
+      violations.push({
+        ruleId: 'RST-006',
+        passed: false,
+        filePath,
+        lineNumber: toLine(candidate.boundaryNode),
+        message:
+          `Do not add a span to "${candidate.key}" — it calls \`os._exit()\` directly, ` +
+          `which bypasses the span's normal close path and causes the span to leak at runtime. ` +
+          `Instrument the sub-operations inside it instead.`,
+        tier: 2,
+        blocking: false,
+      });
+    }
+  } finally {
+    tree.delete();
   }
-
-  tree.delete();
 
   if (violations.length === 0) {
     return [passingResult(filePath)];
