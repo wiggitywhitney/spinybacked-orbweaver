@@ -41,6 +41,29 @@ describe('checkPythonControlFlowPreservation (NDS-005)', () => {
     });
   });
 
+  describe('a try/finally whose finally only touches the span without closing it', () => {
+    it('still counts it as a real block, so removing it is flagged', () => {
+      // `finally: span.set_attribute(...)` is telemetry, but it does not close the span,
+      // so this is the developer's own error handling and must not be treated as a wrapper.
+      const original = [
+        'def handler(x):',
+        '    try:',
+        '        work(x)',
+        '    finally:',
+        '        span.set_attribute("done", True)',
+        '',
+      ].join('\n');
+      const instrumented = [
+        'def handler(x):',
+        '    work(x)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonControlFlowPreservation(original, instrumented, filePath);
+      expect(results.some(r => !r.passed)).toBe(true);
+    });
+  });
+
   describe('preserved structure', () => {
     it('passes when a try/except/finally block is preserved, wrapped in a with-span', () => {
       const original = [

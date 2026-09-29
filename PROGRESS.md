@@ -52,6 +52,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-09-29) Fixed Python's canonical tracer name check in two ways: it silently accepted a tracer name containing the opposite quote character, for example `trace.get_tracer("it's")`, because its pattern refused to match any name containing either quote; and it reported a name built from a larger expression, such as `"prefix-" + service_name`, as a wrong fixed name instead of treating it as computed.
 
+- (2026-09-29) Fixed Python's control-flow preservation check treating any `finally` block made only of telemetry calls as a span-closing wrapper, so a developer's `try`/`finally` that only set a span attribute could be removed without being noticed. A `finally` now counts as a wrapper only when it also closes the span.
+
 - (2026-09-29) Fixed Python's utility-function span check counting decorator lines toward a function's length, so a short helper with several decorators stacked above it was never reported. Only the function's own lines are counted now.
 
 - (2026-09-29) Fixed Python's control-flow preservation check reporting a developer's own manual-span `try`/`finally` as removed when the agent left it unchanged: the original file's copy was counted while the instrumented file's identical copy was excluded. Both sides now skip try/finally blocks that only close a span.

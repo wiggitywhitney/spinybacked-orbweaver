@@ -148,8 +148,9 @@ function escapeRegExp(s: string): string {
 
 /**
  * Whether a `try_statement` is an OTel instrumentation wrapper: no `except`
- * clause, and a `finally` block whose statements are all OTel-added lines
- * (the raw `start_span()` + `try`/`finally` closing idiom — see `cdq001.ts`).
+ * clause, and a `finally` block whose statements are all OTel-added lines and
+ * include a span-closing `.end()` call (the raw `start_span()` + `try`/`finally`
+ * closing idiom — see `cdq001.ts`).
  * These are new blocks added by instrumentation, not modifications of
  * existing error handling, so they must not be matched against original
  * blocks. Mirrors JS's own `isOtelTryFinally()`.
@@ -161,7 +162,11 @@ function isOtelTryFinally(tryStmt: Node): boolean {
   if (finallyClause === undefined) return false;
   const finallyBlock = clauseBlock(finallyClause);
   const statements = finallyBlock?.namedChildren.filter((c): c is Node => c !== null) ?? [];
-  return statements.length > 0 && statements.every(stmt => isOtelLine(stmt.text));
+  // Every statement must be telemetry, and at least one must close the span: a `finally`
+  // that only sets attributes is the developer's own error handling, not a span wrapper.
+  return statements.length > 0
+    && statements.every(stmt => isOtelLine(stmt.text))
+    && statements.some(stmt => /\.end\s*\(/.test(stmt.text));
 }
 
 /** Build a `TryBlockFingerprint` for a `try_statement` node. */
