@@ -79,7 +79,7 @@ function normalizeDecoratorText(text: string): string {
 function extractFunctionFromInstrumentedCode(
   instrumentedCode: string,
   functionName: string,
-): { text: string; baseIndent: string; decoratorTexts: string[] } | null {
+): { text: string; baseIndent: string; decoratorTexts: string[]; hasParseError: boolean } | null {
   const tree = parsePython(instrumentedCode);
   const lines = instrumentedCode.split('\n');
 
@@ -117,16 +117,10 @@ function extractFunctionFromInstrumentedCode(
   let startRow: number;
   let endRow: number;
   let decoratorTexts: string[];
+  let hasParseError: boolean;
   try {
     const found = walk(tree.rootNode);
 
-    // TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
-    // milestone that surfaced it) that `found` is accepted here even when
-    // `found.boundary.hasError` is true — a malformed LLM output could still
-    // parse (via tree-sitter's error recovery) and match `functionName`, extracting
-    // text from a syntactically broken node instead of being rejected outright.
-    // Needs verification against real malformed-output fixtures before fixing,
-    // given this function's existing hardening (9+ prior CodeRabbit rounds).
     if (found === null) return null;
     const { boundary } = found;
     defRow = found.defRow;
@@ -134,6 +128,7 @@ function extractFunctionFromInstrumentedCode(
     startRow = boundary.startPosition.row;
     endRow = boundary.endPosition.row;
     decoratorTexts = getDecoratorTexts(boundary);
+    hasParseError = tree.rootNode.hasError;
   } finally {
     tree.delete();
   }
@@ -144,7 +139,7 @@ function extractFunctionFromInstrumentedCode(
   // otherwise get a baseIndent that never actually matches any line's real
   // prefix, silently defeating reindent()'s startsWith(fromIndent) check.
   const baseIndent = lines[defRow].slice(0, defColumn);
-  return { text, baseIndent, decoratorTexts };
+  return { text, baseIndent, decoratorTexts, hasParseError };
 }
 
 /**
@@ -337,6 +332,17 @@ export function reassemblePythonFunctions(
 
     const found = extractFunctionFromInstrumentedCode(result.instrumentedCode, fn.name);
     if (!found) continue;
+
+    // Reject the replacement when the model's output has a parse error anywhere,
+    // not only inside the matched function. Tree-sitter's error recovery can still
+    // produce a function node that matches `fn.name` from malformed output, and a
+    // stray line at column 0 inside the body can end that node early with no error
+    // of its own, leaving the rest of the body in a separate ERROR node; splicing
+    // it would drop the tail of the function while still compiling. Treat any parse
+    // error the same as a failed result for this function and leave the original
+    // code unchanged. Tier 1 validation runs `compile()` on the same output, so no
+    // output the pipeline accepts is rejected here (Decision D-D3e-3).
+    if (found.hasParseError) continue;
 
     // Parse the original function once (rather than re-deriving its decorators
     // and indentation through two separate mechanisms) so both checks below

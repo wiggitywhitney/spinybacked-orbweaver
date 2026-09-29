@@ -767,3 +767,161 @@ describe('reassemblePythonFunctions', () => {
     expect(reassembled).toBe(original);
   });
 });
+
+describe('reassemblePythonFunctions — malformed model output', () => {
+  // Two functions, each with three body statements so extraction does not skip
+  // them. `handler_one` receives the malformed output; `handler_two` receives
+  // valid output and must still be spliced, proving the file was reassembled at
+  // all rather than the malformed case passing because nothing was spliced.
+  const original = [
+    'def handler_one(req):',
+    '    a = 1',
+    '    b = 2',
+    '    return a + b',
+    '',
+    'def handler_two(req):',
+    '    c = 1',
+    '    d = 2',
+    '    return c + d',
+    '',
+  ].join('\n');
+
+  const validTwo = [
+    'def handler_two(req):',
+    '    with tracer.start_as_current_span("handler_two") as span:',
+    '        c = 1',
+    '        d = 2',
+    '        return c + d',
+  ].join('\n');
+
+  function reassembleWithMalformedOne(malformedOne: string): string {
+    const extracted = extractPythonFunctions(original);
+    expect(extracted.map(f => f.name)).toEqual(['handler_one', 'handler_two']);
+    return reassemblePythonFunctions(original, extracted, [
+      result({ name: 'handler_one', instrumentedCode: malformedOne }),
+      result({ name: 'handler_two', instrumentedCode: validTwo }),
+    ]);
+  }
+
+  function expectOnlyTwoSpliced(reassembled: string): void {
+    expect(reassembled).toContain('with tracer.start_as_current_span("handler_two") as span:');
+    expect(reassembled).toContain(['def handler_one(req):', '    a = 1', '    b = 2', '    return a + b'].join('\n'));
+    expect(reassembled).not.toContain('start_as_current_span("handler_one")');
+  }
+
+  it('rejects a truncated function', () => {
+    const reassembled = reassembleWithMalformedOne([
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      '        b = (2 +',
+    ].join('\n'));
+    expectOnlyTwoSpliced(reassembled);
+  });
+
+  it('rejects a function with unbalanced parentheses', () => {
+    const reassembled = reassembleWithMalformedOne([
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one" as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n'));
+    expectOnlyTwoSpliced(reassembled);
+  });
+
+  it('rejects a function with a stray fragment after its body', () => {
+    const reassembled = reassembleWithMalformedOne([
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+      '    ) }',
+    ].join('\n'));
+    expectOnlyTwoSpliced(reassembled);
+  });
+
+  it('rejects a function with a dangling operator inside its body', () => {
+    const reassembled = reassembleWithMalformedOne([
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1 +',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n'));
+    expectOnlyTwoSpliced(reassembled);
+  });
+
+  it('rejects a function that a column-0 stray line cuts short, even though the function node itself parses cleanly', () => {
+    // Tree-sitter ends `handler_one` at `a = 1` and puts the rest of the body in a
+    // separate ERROR node, so the matched function node has no error of its own.
+    // Splicing it would silently drop `b = 2` and `return a + b`.
+    const reassembled = reassembleWithMalformedOne([
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      ') }',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n'));
+    expectOnlyTwoSpliced(reassembled);
+  });
+
+  it('rejects output whose parse error lies outside the matched function', () => {
+    const reassembled = reassembleWithMalformedOne([
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+      ') }',
+    ].join('\n'));
+    expectOnlyTwoSpliced(reassembled);
+  });
+
+  it.each([
+    ['a decorated async def with async with, comprehensions, and unpacking', [
+      '@app.get("/x")',
+      'async def handler_one(req):',
+      '    async with tracer.start_as_current_span("handler_one") as span:',
+      '        a = await fetch()',
+      '        b = [i for i in a if i]',
+      '        return {"a": b, **a}',
+    ]],
+    ['walrus, match, f-string format specs, and lambdas', [
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        if (n := len(req)) > 1:',
+      '            pass',
+      '        match n:',
+      '            case 1:',
+      '                return f"{n!r:>4}"',
+      '            case _:',
+      '                return lambda *a, **k: None',
+    ]],
+    ['a sibling helper function echoed alongside the target', [
+      'from opentelemetry import trace',
+      '',
+      'def helper():',
+      '    return 1',
+      '',
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ]],
+  ])('still splices well-formed output: %s', (_label, lines) => {
+    const decorated = lines[0].startsWith('@');
+    const originalForCase = decorated ? `@app.get("/x")\n${original.replace('def handler_one', 'async def handler_one')}` : original;
+    const extracted = extractPythonFunctions(originalForCase);
+    expect(extracted.map(f => f.name)).toEqual(['handler_one', 'handler_two']);
+    const reassembled = reassemblePythonFunctions(originalForCase, extracted, [
+      result({ name: 'handler_one', instrumentedCode: lines.join('\n') }),
+      result({ name: 'handler_two', instrumentedCode: validTwo }),
+    ]);
+    expect(reassembled).toContain('start_as_current_span("handler_one")');
+    expect(reassembled).toContain('start_as_current_span("handler_two")');
+  });
+});
