@@ -66,8 +66,11 @@ export function checkPythonStartActiveSpanPreferred(code: string, filePath: stri
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (findings.length === 0) {
     return [{

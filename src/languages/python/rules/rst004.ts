@@ -159,10 +159,13 @@ export function checkPythonInternalDetailSpans(code: string, filePath: string): 
     }
   }
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt !== null) collect(stmt, false);
+  try {
+    for (const stmt of tree.rootNode.namedChildren) {
+      if (stmt !== null) collect(stmt, false);
+    }
+  } finally {
+    tree.delete();
   }
-  tree.delete();
 
   if (flagged.length === 0) {
     return [{
