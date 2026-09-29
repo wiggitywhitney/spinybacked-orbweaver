@@ -244,26 +244,30 @@ function matchOutboundPattern(callNode: Node, importSources: Set<string>, module
  */
 export function checkPythonOutboundCallSpans(code: string, filePath: string): CheckResult[] {
   const tree = parsePython(code);
-  const imports = findPythonImports(code);
-  const importSources = new Set(imports.map(imp => imp.moduleSpecifier));
-  const moduleAliases = buildModuleAliasMap(imports);
-  const directImports = buildDirectImportMap(tree.rootNode);
   const unspannedCalls: Array<{ line: number; callText: string }> = [];
 
-  function walk(node: Node): void {
-    if (node.type === 'call') {
-      const match = matchOutboundPattern(node, importSources, moduleAliases) ?? matchDirectImportCall(node, directImports);
-      if (match !== null && !isInsideSpanScope(node)) {
-        unspannedCalls.push({ line: toLine(node), callText: match });
+  try {
+    const imports = findPythonImports(code);
+    const importSources = new Set(imports.map(imp => imp.moduleSpecifier));
+    const moduleAliases = buildModuleAliasMap(imports);
+    const directImports = buildDirectImportMap(tree.rootNode);
+
+    function walk(node: Node): void {
+      if (node.type === 'call') {
+        const match = matchOutboundPattern(node, importSources, moduleAliases) ?? matchDirectImportCall(node, directImports);
+        if (match !== null && !isInsideSpanScope(node)) {
+          unspannedCalls.push({ line: toLine(node), callText: match });
+        }
+      }
+      for (const child of node.namedChildren) {
+        if (child !== null) walk(child);
       }
     }
-    for (const child of node.namedChildren) {
-      if (child !== null) walk(child);
-    }
-  }
 
-  walk(tree.rootNode);
-  tree.delete();
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (unspannedCalls.length === 0) {
     return [{
