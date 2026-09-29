@@ -48,6 +48,40 @@ describe('checkPythonCanonicalTracerName (CDQ-011)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('flags a mismatched name that contains the opposite quote character', () => {
+      const code = 'tracer = trace.get_tracer("my\'tracer")\n';
+
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain("my'tracer");
+    });
+
+    it('flags a single-quoted mismatched name that contains a double quote', () => {
+      const code = "tracer = trace.get_tracer('my\"tracer')\n";
+
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain(JSON.stringify('my"tracer'));
+    });
+
+    it('passes when the canonical name itself contains the opposite quote character', () => {
+      const code = 'tracer = trace.get_tracer("it\'s")\n';
+
+      const results = checkPythonCanonicalTracerName(code, filePath, "it's");
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not match a string literal that spans a newline', () => {
+      const code = 'tracer = trace.get_tracer("abc\nfoo")\n';
+
+      const results = checkPythonCanonicalTracerName(code, filePath, 'my-service');
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('reports one finding per mismatched call', () => {
       const code = [
         'tracer = trace.get_tracer("wrong-one")',

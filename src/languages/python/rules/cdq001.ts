@@ -286,8 +286,11 @@ export function checkPythonSpansClosed(code: string, filePath: string): CheckRes
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (unclosed.length === 0) {
     return [{

@@ -33,7 +33,9 @@ export function checkPythonCanonicalTracerName(
   // is excluded from this pattern's quote-prefix handling — its content is
   // treated as variable-based (graceful pass, not fail), matching JS's own
   // exclusion of interpolated template literals.
-  const pattern = /\btrace\s*\.\s*get_tracer\s*\(\s*(["'])([^"'\n]*)\1/g;
+  // The literal ends only at the quote character that opened it, so the
+  // opposite quote may appear inside the name, and it cannot span a newline.
+  const pattern = /\btrace\s*\.\s*get_tracer\s*\(\s*(["'])((?:(?!\1)[^\n])*)\1/g;
 
   let match;
   while ((match = pattern.exec(code)) !== null) {

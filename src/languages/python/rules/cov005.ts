@@ -259,8 +259,11 @@ export function checkPythonDomainAttributes(
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (gaps.length === 0) {
     return [{
