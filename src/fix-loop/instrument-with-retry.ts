@@ -1544,6 +1544,13 @@ async function functionLevelFallback(
       await writeFile(filePath, originalCode, 'utf-8');
       return null;
     }
+
+    // Removing the culprits can leave no function with spans.
+    const afterCulpritRemoval = await checkNothingToAssemble();
+    if (afterCulpritRemoval !== undefined) {
+      await writeFile(filePath, originalCode, 'utf-8');
+      return afterCulpritRemoval;
+    }
   }
 
   // Recompute successful after syntax check may have marked additional functions as failed
