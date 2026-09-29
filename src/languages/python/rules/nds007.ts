@@ -78,10 +78,12 @@ function toLine(node: Node): number {
  *
  * An expected-condition except block handles a graceful failure — it swallows
  * the exception without re-raising. Recording these as span errors creates
- * false alerts (the caller sees success). Reuses `cov003.ts`'s existing
- * `containsReraise()` (per OD-4's correction) rather than re-deriving an
- * "expected condition" heuristic from scratch, so this check and COV-003
- * agree on what counts as expected-condition handling.
+ * false alerts (the caller sees success). Reuses `cov003.ts`'s
+ * `containsReraise()` rather than re-deriving an "expected condition"
+ * heuristic from scratch, so this check and COV-003 agree: COV-003 never asks
+ * for recording on an except block this check treats as expected-condition
+ * handling, and only asks for it where a re-raise passes a span that nothing
+ * records automatically.
  *
  * For each instrumented try's except clauses that now contain error
  * recording:

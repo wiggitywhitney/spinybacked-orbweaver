@@ -1,8 +1,19 @@
 // ABOUTME: Tests for the COV-003 Tier 2 check — Python failable operations have error visibility.
-// ABOUTME: Verifies re-raise vs. swallow classification and manual error-recording detection.
+// ABOUTME: Verifies that only a re-raise past a manually ended span needs manual error recording.
 
 import { describe, it, expect } from 'vitest';
 import { checkPythonErrorVisibility } from '../../../../src/languages/python/rules/cov003.ts';
+
+const HEADER = [
+  'from opentelemetry import trace',
+  'tracer = trace.get_tracer("svc")',
+  '',
+];
+
+/** Build Python source from the shared header plus the given lines. */
+function py(...lines: string[]): string {
+  return [...HEADER, ...lines, ''].join('\n');
+}
 
 describe('checkPythonErrorVisibility (COV-003)', () => {
   const filePath = '/tmp/test-file.py';
@@ -26,7 +37,7 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
   });
 
   describe('except block outside any span', () => {
-    it('passes — no span exists to record errors on', () => {
+    it('passes because no span exists to record errors on', () => {
       const code = [
         'def fetch_user(user_id):',
         '    try:',
@@ -42,20 +53,16 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
     });
   });
 
-  describe('re-raising except block inside a span', () => {
-    it('passes when the except block bare re-raises', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
+  describe('re-raising except block inside a context-managed span', () => {
+    it('passes when the except block bare re-raises inside start_as_current_span', () => {
+      const code = py(
         'def fetch_user(user_id):',
         '    with tracer.start_as_current_span("fetch_user") as span:',
         '        try:',
         '            return requests.get(f"https://api.example.com/users/{user_id}")',
         '        except requests.RequestException:',
         '            raise',
-        '',
-      ].join('\n');
+      );
 
       const results = checkPythonErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
@@ -63,18 +70,47 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
     });
 
     it('passes when the except block raises a new exception with `from e`', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
+      const code = py(
         'def fetch_user(user_id):',
         '    with tracer.start_as_current_span("fetch_user") as span:',
         '        try:',
         '            return requests.get(f"https://api.example.com/users/{user_id}")',
         '        except requests.RequestException as e:',
         '            raise UserFetchError("failed") from e',
-        '',
-      ].join('\n');
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when the span is used as a context manager: with tracer.start_span(...) as span', () => {
+      // Span.__exit__ records the exception and sets ERROR status by default.
+      const code = py(
+        'def fetch_user(user_id):',
+        '    with tracer.start_span("fetch_user") as span:',
+        '        try:',
+        '            return db.find(user_id)',
+        '        except LookupError:',
+        '            raise',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when a manually created span is activated with trace.use_span(...)', () => {
+      // use_span() defaults to record_exception=True and set_status_on_exception=True.
+      const code = py(
+        'def fetch_user(user_id):',
+        '    span = tracer.start_span("fetch_user")',
+        '    with trace.use_span(span, end_on_exit=True):',
+        '        try:',
+        '            return db.find(user_id)',
+        '        except LookupError:',
+        '            raise',
+      );
 
       const results = checkPythonErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
@@ -82,200 +118,238 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
     });
   });
 
-  describe('swallowed except block inside a span', () => {
-    it('flags an except block that returns a fallback with no error recording', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
-        'def fetch_user(user_id):',
-        '    with tracer.start_as_current_span("fetch_user") as span:',
+  describe('swallowing except block', () => {
+    it('passes for a graceful fallback inside a context-managed span with no recording', () => {
+      // A handled error should not be recorded on the span, so this must not be required.
+      const code = py(
+        'def load(path):',
+        '    with tracer.start_as_current_span("load") as span:',
         '        try:',
-        '            return requests.get(f"https://api.example.com/users/{user_id}")',
-        '        except requests.RequestException as e:',
+        '            return read(path)',
+        '        except FileNotFoundError:',
         '            return None',
-        '',
-      ].join('\n');
+      );
 
       const results = checkPythonErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
-      expect(results[0].ruleId).toBe('COV-003');
-      expect(results[0].message).toContain('COV-003');
+      expect(results[0].passed).toBe(true);
     });
 
-    it('flags an except block that logs and continues with no error recording', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
+    it('passes when a swallowing except block logs and continues with no recording', () => {
+      const code = py(
         'def process(item):',
         '    with tracer.start_as_current_span("process") as span:',
         '        try:',
         '            do_work(item)',
         '        except ValueError as e:',
         '            log.warning("skipping item: %s", e)',
-        '',
-      ].join('\n');
-
-      const results = checkPythonErrorVisibility(code, filePath);
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
-    });
-
-    it('passes when a swallowed except block calls span.record_exception() and span.set_status()', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'from opentelemetry.trace import Status, StatusCode',
-        'tracer = trace.get_tracer("svc")',
-        '',
-        'def fetch_user(user_id):',
-        '    with tracer.start_as_current_span("fetch_user") as span:',
-        '        try:',
-        '            return requests.get(f"https://api.example.com/users/{user_id}")',
-        '        except requests.RequestException as e:',
-        '            span.record_exception(e)',
-        '            span.set_status(Status(StatusCode.ERROR, str(e)))',
-        '            return None',
-        '',
-      ].join('\n');
+      );
 
       const results = checkPythonErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(true);
     });
 
-    it('passes when a swallowed except block calls only span.record_exception()', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
-        'def fetch_user(user_id):',
-        '    with tracer.start_as_current_span("fetch_user") as span:',
-        '        try:',
-        '            return requests.get(f"https://api.example.com/users/{user_id}")',
-        '        except requests.RequestException as e:',
-        '            span.record_exception(e)',
-        '            return None',
-        '',
-      ].join('\n');
-
-      const results = checkPythonErrorVisibility(code, filePath);
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(true);
-    });
-
-    it('flags a swallowed except block whose record_exception() call is on an unrelated receiver, not the bound span variable', () => {
-      // `audit.record_exception(e)` is not the span bound by `as span` —
-      // calling it does not record anything on the actual span, so this
-      // must still be flagged rather than treated as satisfying COV-003.
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
-        'def fetch_user(user_id):',
-        '    with tracer.start_as_current_span("fetch_user") as span:',
-        '        try:',
-        '            return requests.get(f"https://api.example.com/users/{user_id}")',
-        '        except requests.RequestException as e:',
-        '            audit.record_exception(e)',
-        '            return None',
-        '',
-      ].join('\n');
-
-      const results = checkPythonErrorVisibility(code, filePath);
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
-    });
-  });
-
-  describe('nested function scope boundary', () => {
-    it('does not treat a nested function\'s record_exception() call as covering the outer except block', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
-        'def process(item):',
-        '    with tracer.start_as_current_span("process") as span:',
-        '        try:',
-        '            do_work(item)',
-        '        except ValueError as e:',
-        '            def log_it():',
-        '                span.record_exception(e)',
-        '            return None',
-        '',
-      ].join('\n');
-
-      const results = checkPythonErrorVisibility(code, filePath);
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
-    });
-
-    it('does not treat a nested function\'s raise as re-raising the outer except block', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
-        'def process(item):',
-        '    with tracer.start_as_current_span("process") as span:',
-        '        try:',
-        '            do_work(item)',
-        '        except ValueError as e:',
-        '            def helper():',
-        '                raise RuntimeError("unrelated")',
-        '            return None',
-        '',
-      ].join('\n');
-
-      const results = checkPythonErrorVisibility(code, filePath);
-      expect(results).toHaveLength(1);
-      expect(results[0].passed).toBe(false);
-    });
-  });
-
-  describe('with-scope without `as` binding', () => {
-    it('flags a swallowed except block inside a span opened without an `as` clause', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
+    it('passes when a span opened without an `as` clause wraps a swallowing except block', () => {
+      const code = py(
         'def process(item):',
         '    with tracer.start_as_current_span("process"):',
         '        try:',
         '            do_work(item)',
         '        except ValueError:',
         '            return None',
-        '',
-      ].join('\n');
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not require recording, but does not reject it either', () => {
+      // Forbidding it is NDS-007's job, not COV-003's.
+      const code = py(
+        'def load(path):',
+        '    with tracer.start_as_current_span("load") as span:',
+        '        try:',
+        '            return read(path)',
+        '        except FileNotFoundError as e:',
+        '            span.record_exception(e)',
+        '            return None',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes for a swallowing except block inside a manually ended span', () => {
+      const code = py(
+        'def load(path):',
+        '    span = tracer.start_span("load")',
+        '    try:',
+        '        try:',
+        '            return read(path)',
+        '        except FileNotFoundError:',
+        '            return None',
+        '    finally:',
+        '        span.end()',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('re-raising except block past a manually ended span', () => {
+    const manualSpan = (...exceptBody: string[]): string => py(
+      'def fetch(path):',
+      '    span = tracer.start_span("fetch")',
+      '    try:',
+      '        return read(path)',
+      '    except IOError as e:',
+      ...exceptBody.map(line => `        ${line}`),
+      '    finally:',
+      '        span.end()',
+    );
+
+    it('flags an except block that re-raises with no recording on the span variable', () => {
+      const code = manualSpan('raise');
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-003');
+      expect(results[0].message).toContain('COV-003');
+      expect(results[0].lineNumber).toBe(8);
+    });
+
+    it('passes when the except block calls span.record_exception() before re-raising', () => {
+      const code = manualSpan('span.record_exception(e)', 'raise');
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when the except block calls only span.set_status() before re-raising', () => {
+      // Either call satisfies the check.
+      const code = manualSpan('span.set_status(Status(StatusCode.ERROR, str(e)))', 'raise');
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('flags a re-raise whose record_exception() call is on an unrelated receiver', () => {
+      const code = manualSpan('audit.record_exception(e)', 'raise');
 
       const results = checkPythonErrorVisibility(code, filePath);
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it('does not flag a re-raise after the manual span has already ended', () => {
+      const code = py(
+        'def fetch(path):',
+        '    span = tracer.start_span("fetch")',
+        '    span.end()',
+        '    try:',
+        '        return read(path)',
+        '    except IOError:',
+        '        raise',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
+  describe('nested function scope boundary', () => {
+    it("does not treat a nested function's record_exception() call as covering the outer except block", () => {
+      const code = py(
+        'def process(item):',
+        '    span = tracer.start_span("process")',
+        '    try:',
+        '        do_work(item)',
+        '    except ValueError as e:',
+        '        def log_it():',
+        '            span.record_exception(e)',
+        '        raise',
+        '    finally:',
+        '        span.end()',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it("does not treat a nested function's raise as re-raising the outer except block", () => {
+      // The outer except swallows, so nothing needs recording; if the nested
+      // raise were counted as a re-raise, this manual-span case would be flagged.
+      const code = py(
+        'def process(item):',
+        '    span = tracer.start_span("process")',
+        '    try:',
+        '        do_work(item)',
+        '    except ValueError:',
+        '        def helper():',
+        '            raise RuntimeError("unrelated")',
+        '        return None',
+        '    finally:',
+        '        span.end()',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not carry a manual span from an outer function into a nested function', () => {
+      const code = py(
+        'def outer():',
+        '    span = tracer.start_span("outer")',
+        '    def inner():',
+        '        try:',
+        '            do_work()',
+        '        except ValueError:',
+        '            raise',
+        '    try:',
+        '        inner()',
+        '    finally:',
+        '        span.end()',
+      );
+
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
   });
 
   describe('multiple except clauses', () => {
-    it('reports one finding per swallowed except clause, ignoring re-raising ones', () => {
-      const code = [
-        'from opentelemetry import trace',
-        'tracer = trace.get_tracer("svc")',
-        '',
+    it('reports one finding per re-raising clause that lacks recording, ignoring the rest', () => {
+      const code = py(
         'def process(item):',
-        '    with tracer.start_as_current_span("process") as span:',
-        '        try:',
-        '            do_work(item)',
-        '        except ValueError:',
-        '            raise',
-        '        except KeyError:',
-        '            return None',
-        '        except TypeError:',
-        '            log.warning("bad type")',
-        '',
-      ].join('\n');
+        '    span = tracer.start_span("process")',
+        '    try:',
+        '        do_work(item)',
+        '    except ValueError:',
+        '        raise',
+        '    except KeyError:',
+        '        return None',
+        '    except TypeError as e:',
+        '        span.record_exception(e)',
+        '        raise',
+        '    finally:',
+        '        span.end()',
+      );
 
       const results = checkPythonErrorVisibility(code, filePath);
-      expect(results).toHaveLength(2);
-      expect(results.every(r => r.passed === false)).toBe(true);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(8);
     });
   });
 });

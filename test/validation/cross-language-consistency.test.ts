@@ -367,21 +367,54 @@ describe('COV-003: Failable operations have error visibility', () => {
     expect(results.every(r => r.passed)).toBe(true);
   });
 
-  it('catches a swallowed exception in a Python except block with no error recording', () => {
-    // Per OD-4's 2026-09-18 correction, Python's checker only flags a
-    // *swallowed* exception (no re-raise) — a re-raising except block is
-    // already covered by start_as_current_span()'s automatic recording,
-    // unlike JavaScript's startActiveSpan(), which has no such default.
+  it('passes a graceful swallow with no error recording in both languages', () => {
+    // A handled error should not be recorded on the span, so neither language
+    // requires recording for a catch that returns a fallback.
+    const jsCode = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'tracer.startActiveSpan("loadConfig", (span) => {',
+      '  try {',
+      '    return JSON.parse(raw);',
+      '  } catch (err) {',
+      '    return null;',
+      '  } finally {',
+      '    span.end();',
+      '  }',
+      '});',
+    ].join('\n');
+    const pyCode = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def load_config(raw):',
+      '    with tracer.start_as_current_span("load_config") as span:',
+      '        try:',
+      '            return json.loads(raw)',
+      '        except ValueError:',
+      '            return None',
+      '',
+    ].join('\n');
+
+    expect(checkErrorVisibility(jsCode, '/services/config.js').every(r => r.passed)).toBe(true);
+    expect(checkPythonErrorVisibility(pyCode, '/services/config.py').every(r => r.passed)).toBe(true);
+  });
+
+  it('catches an unrecorded re-raise past a manually ended Python span, as JS catches an unrecorded rethrow', () => {
+    // A span from start_span() that is ended by hand has no automatic recording,
+    // which is the Python case that mirrors JavaScript's rethrow-needs-recording rule.
     const code = [
       'from opentelemetry import trace',
       'tracer = trace.get_tracer("svc")',
       '',
       'def fetch_user(user_id):',
-      '    with tracer.start_as_current_span("fetch_user") as span:',
-      '        try:',
-      '            return db.find(user_id)',
-      '        except LookupError as e:',
-      '            return None',
+      '    span = tracer.start_span("fetch_user")',
+      '    try:',
+      '        return db.find(user_id)',
+      '    except LookupError:',
+      '        raise',
+      '    finally:',
+      '        span.end()',
       '',
     ].join('\n');
 
@@ -394,8 +427,45 @@ describe('COV-003: Failable operations have error visibility', () => {
     expect(failures[0].blocking).toBe(true);
   });
 
-  it('passes when a swallowed Python except block records the error on the span', () => {
+  it('passes when a Python re-raise past a manually ended span records the error on it', () => {
     const code = [
+      'from opentelemetry import trace',
+      'tracer = trace.get_tracer("svc")',
+      '',
+      'def fetch_user(user_id):',
+      '    span = tracer.start_span("fetch_user")',
+      '    try:',
+      '        return db.find(user_id)',
+      '    except LookupError as e:',
+      '        span.record_exception(e)',
+      '        raise',
+      '    finally:',
+      '        span.end()',
+      '',
+    ].join('\n');
+
+    const results = checkPythonErrorVisibility(code, '/services/user.py');
+    expect(results.every(r => r.passed)).toBe(true);
+  });
+
+  it('differs by design: an unrecorded re-raise passes in Python when the span is context-managed', () => {
+    // Python's start_as_current_span() records any exception that leaves its
+    // with block, while JavaScript's startActiveSpan() records nothing
+    // automatically, so the same unrecorded rethrow fails only in JavaScript.
+    const jsCode = [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'tracer.startActiveSpan("fetchUser", (span) => {',
+      '  try {',
+      '    return db.find(userId);',
+      '  } catch (err) {',
+      '    throw err;',
+      '  } finally {',
+      '    span.end();',
+      '  }',
+      '});',
+    ].join('\n');
+    const pyCode = [
       'from opentelemetry import trace',
       'tracer = trace.get_tracer("svc")',
       '',
@@ -403,15 +473,13 @@ describe('COV-003: Failable operations have error visibility', () => {
       '    with tracer.start_as_current_span("fetch_user") as span:',
       '        try:',
       '            return db.find(user_id)',
-      '        except LookupError as e:',
-      '            span.record_exception(e)',
-      '            span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))',
-      '            return None',
+      '        except LookupError:',
+      '            raise',
       '',
     ].join('\n');
 
-    const results = checkPythonErrorVisibility(code, '/services/user.py');
-    expect(results.every(r => r.passed)).toBe(true);
+    expect(checkErrorVisibility(jsCode, '/services/user.js').some(r => !r.passed)).toBe(true);
+    expect(checkPythonErrorVisibility(pyCode, '/services/user.py').every(r => r.passed)).toBe(true);
   });
 
   // Go cases added when that provider merges (PRD #374)

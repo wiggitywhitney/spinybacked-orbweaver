@@ -318,6 +318,24 @@ describe('PythonProvider', () => {
       expect(sections.errorHandling).toMatch(/duplicate exception event/i);
       expect(sections.spanCreation).toMatch(/duplicate exception event/i);
     });
+
+    it('errorHandling forbids manual recording on an except block that swallows the exception', () => {
+      // A handled error should not be recorded on the span; NDS-007 rejects it when the agent adds it.
+      const sections = provider.getSystemPromptSections();
+      expect(sections.errorHandling).toMatch(/do not add manual[^.]*block that swallows/i);
+      expect(sections.errorHandling).not.toMatch(/\bDO add manual\b/);
+    });
+
+    it('errorHandling limits manual recording to a start_span() span that is ended by hand', () => {
+      const sections = provider.getSystemPromptSections();
+      expect(sections.errorHandling).toMatch(/start_span\(\)/);
+      expect(sections.errorHandling).toMatch(/ended by hand/i);
+    });
+
+    it('spanCreation no longer sends the agent to record a swallowed error manually', () => {
+      const sections = provider.getSystemPromptSections();
+      expect(sections.spanCreation).not.toMatch(/only belongs in an `except` block that swallows/i);
+    });
   });
 
   describe('getInstrumentationExamples', () => {
@@ -347,11 +365,18 @@ describe('PythonProvider', () => {
       }
     });
 
-    it('only the swallowed-exception example manually calls record_exception', () => {
+    it('no example manually calls record_exception, because every example uses a context-managed span', () => {
       const examples = provider.getInstrumentationExamples();
       const withManualRecording = examples.filter(ex => /record_exception/.test(ex.after));
-      expect(withManualRecording).toHaveLength(1);
-      expect(withManualRecording[0]?.description).toMatch(/swallows a real error/i);
+      expect(withManualRecording).toHaveLength(0);
+    });
+
+    it('includes an example where an except block handles an error gracefully without recording it', () => {
+      const examples = provider.getInstrumentationExamples();
+      const graceful = examples.find(ex => /gracefully/i.test(ex.description));
+      expect(graceful).toBeDefined();
+      expect(graceful?.after).toMatch(/except\b/);
+      expect(graceful?.after).not.toMatch(/record_exception|set_status/);
     });
 
     it('includes a Flask example and a FastAPI example', () => {

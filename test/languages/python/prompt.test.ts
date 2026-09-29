@@ -5,13 +5,11 @@ import { describe, it, expect } from 'vitest';
 import { getSystemPromptSections, getInstrumentationExamples } from '../../../src/languages/python/prompt.ts';
 
 describe('Python instrumentation prompt constraints', () => {
-  it('permits importing Status/StatusCode from opentelemetry.trace, matching the error-handling examples', () => {
+  it('permits importing Status/StatusCode from opentelemetry.trace, matching the error-handling guidance', () => {
     const sections = getSystemPromptSections();
-    const examples = getInstrumentationExamples();
 
-    // The constraint text must not contradict an import the examples actually use.
-    const usesStatusImport = examples.some(ex => ex.after.includes('from opentelemetry.trace import Status, StatusCode'));
-    expect(usesStatusImport).toBe(true);
+    // The constraint text must not contradict an import the error-handling guidance tells the agent to use.
+    expect(sections.errorHandling).toContain('from opentelemetry.trace import Status, StatusCode');
     expect(sections.constraints).toContain('from opentelemetry.trace import Status, StatusCode');
   });
 

@@ -57,16 +57,14 @@ async def fetch_data(url):
         return await client.get(url)
 \`\`\`
 
-For functions with an existing \`try/except\` block that re-raises (a bare \`raise\`, or \`raise NewError(...) from e\`), preserve it exactly as written and do not add error-recording calls to it — the exception still propagates out of the \`with\` block, so the automatic recording above already covers it. Manual error recording only belongs in an \`except\` block that swallows a real error instead of re-raising — see Error Handling below. Never add an explicit \`span.end()\` — the \`with\` block closes the span when it exits, including when an exception propagates out.`,
+For functions with an existing \`try/except\` block that re-raises (a bare \`raise\`, or \`raise NewError(...) from e\`), preserve it exactly as written and do not add error-recording calls to it — the exception still propagates out of the \`with\` block, so the automatic recording above already covers it. Manual error recording is not needed inside a \`with\` block — see Error Handling below for the one case that needs it, a span the original code ends by hand. Never add an explicit \`span.end()\` — the \`with\` block closes the span when it exits, including when an exception propagates out.`,
 
     errorHandling: `\`start_as_current_span()\` automatically calls \`span.record_exception(e)\` and sets the span status to \`ERROR\` for any exception that propagates out of the \`with\` block — this is the OTel Python SDK's default (\`record_exception=True\`, \`set_status_on_exception=True\`). This changes where manual error recording belongs:
 
 - **Do NOT add manual \`record_exception\`/\`set_status\` calls to an \`except\` block that re-raises** (bare \`raise\`, or \`raise NewError(...) from e\`). The exception still propagates out of the \`with\` block, so it is already recorded automatically — a manual call there produces a second, duplicate exception event on the same span.
-- **DO add manual \`span.record_exception(e)\` AND \`span.set_status(Status(StatusCode.ERROR, str(e)))\` to an \`except\` block that swallows a real error** — returns a fallback value, logs and continues, etc., without re-raising or otherwise letting the exception propagate. The automatic recording above only fires for exceptions that leave the \`with\` block; a swallowed exception never reaches it and would otherwise go unrecorded entirely.
+- **Do NOT add manual \`record_exception\`/\`set_status\` calls to an \`except\` block that swallows the exception** — returns a fallback value, logs and continues, ignores a missing resource, etc. A swallowed exception was handled and the operation completed, so OpenTelemetry says it should not be recorded on the span. This holds even when the swallowed exception is a real failure such as \`json.JSONDecodeError\`: log it if it matters, but leave the span alone. \`set_status\` is a one-way latch — once set to \`ERROR\`, it cannot be changed back — and marking a handled error pollutes error metrics and triggers false alerts.
 
-Both manual calls require \`from opentelemetry.trace import Status, StatusCode\` at module scope.
-
-**Exception — expected-condition catches (control flow):** If the original \`except\` block is empty (\`except Exception: pass\`) or handles a condition the code expects to happen in normal operation — not a real failure — (e.g. \`except FileNotFoundError:\` for an optional config file, \`except ImportError:\` for an optional dependency), do NOT add \`record_exception\` or \`set_status\` even though it swallows the exception. These catches represent normal control flow, not errors. This exception is about *what the exception means*, not about whether the \`except\` block happens to return a fallback value — an \`except\` block that swallows a real, unexpected failure (e.g. \`except json.JSONDecodeError:\`) still needs manual recording per the rule above, even when it also returns a fallback instead of re-raising; returning a fallback does not by itself make an error "expected." \`set_status\` is a one-way latch — once set to \`ERROR\`, it cannot be changed back. Marking expected conditions as errors pollutes error metrics and triggers false alerts.`,
+Manual recording applies to exactly one case: a span opened with \`start_span()\` and ended by hand (assigned to a variable, with \`span.end()\` in a \`finally\`), where an \`except\` block re-raises. Nothing records that exception automatically, because the span is not a context manager. Call \`span.record_exception(e)\` and \`span.set_status(Status(StatusCode.ERROR, str(e)))\` before the \`raise\`, which needs \`from opentelemetry.trace import Status, StatusCode\` at module scope. This case arises only when the original code already opens a span this way — never create one yourself: always use \`with tracer.start_as_current_span(...)\`, and never call \`span.end()\`.`,
 
     otelPatterns: `### What to Instrument (Priority Order)
 
@@ -150,7 +148,7 @@ async def get_order(order_id: str):
       notes: '`async def` is preserved — the with-statement span context manager works identically for sync and async functions since start_as_current_span is not itself awaited. `order_id` is not captured directly (high-cardinality); `order.lookup.found` captures the bounded fact instead. No manual except block is added — an exception from `order_service.fetch` is recorded automatically by start_as_current_span\'s default behavior.',
     },
     {
-      description: 'Function with try/except that swallows a real error (manual recording needed)',
+      description: 'Function with try/except that handles an error gracefully (no error recording)',
       before: `def load_config(path):
     try:
         with open(path) as f:
@@ -159,7 +157,6 @@ async def get_order(order_id: str):
         logger.error(f"Invalid config at {path}: {e}")
         return {}`,
       after: `from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
 
 tracer = trace.get_tracer("my-service")
 
@@ -170,11 +167,9 @@ def load_config(path):
             with open(path) as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            span.record_exception(e)
-            span.set_status(Status(StatusCode.ERROR, str(e)))
             logger.error(f"Invalid config at {path}: {e}")
             return {}`,
-      notes: 'The except block swallows the JSONDecodeError — it returns a fallback value instead of re-raising, so the exception never propagates out of the with block and start_as_current_span\'s automatic recording never fires for it. This is the one case where adding manual record_exception/set_status is correct, not redundant: without it, this real error would go completely unrecorded on the span.',
+      notes: 'The except block handles the JSONDecodeError gracefully — it logs the problem and returns a fallback value, so the operation completes. A handled error should not be recorded on the span, so the except block is left exactly as written: no record_exception or set_status is added. An exception that propagated out of the with block would be recorded automatically.',
     },
     {
       description: 'Function with outbound HTTP call',
