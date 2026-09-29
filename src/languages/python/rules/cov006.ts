@@ -2,7 +2,7 @@
 // ABOUTME: Flags manual `with`-scoped spans wrapping requests/httpx calls (Decision D-D3-2) and
 // ABOUTME: manual spans duplicating Flask/FastAPI route auto-instrumentation (Decision D-D3b-1).
 
-import { type Node } from 'web-tree-sitter';
+import { type Node, type Tree } from 'web-tree-sitter';
 import { parsePython, findPythonImports } from '../ast.ts';
 import { buildDirectImportMap, matchDirectImportCall } from './cov002.ts';
 import { decoratorMethodName, hasEntryPointDecorator } from './cov001.ts';
@@ -262,6 +262,15 @@ function findEntryPointDuplicates(root: Node): Array<{ line: number; spanName: s
  */
 export function checkPythonAutoInstrumentationPreference(code: string, filePath: string): CheckResult[] {
   const tree = parsePython(code);
+  try {
+    return findAutoInstrumentationIssues(tree, code, filePath);
+  } finally {
+    tree.delete();
+  }
+}
+
+/** The COV-006 analysis over an already-parsed tree; the caller owns and deletes `tree`. */
+function findAutoInstrumentationIssues(tree: Tree, code: string, filePath: string): CheckResult[] {
   const imports = findPythonImports(code);
   const importSources = new Set(imports.map(imp => imp.moduleSpecifier));
   const moduleAliases = buildModuleAliasMap(imports);
@@ -306,7 +315,6 @@ export function checkPythonAutoInstrumentationPreference(code: string, filePath:
 
   walk(tree.rootNode);
   const entryPointFlagged = findEntryPointDuplicates(tree.rootNode);
-  tree.delete();
 
   if (flagged.length === 0 && entryPointFlagged.length === 0) {
     return [{
