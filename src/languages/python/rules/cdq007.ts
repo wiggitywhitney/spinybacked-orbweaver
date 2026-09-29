@@ -111,8 +111,11 @@ export function checkPythonAttributeDataQuality(code: string, filePath: string):
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   if (findings.length === 0) {
     return [{
