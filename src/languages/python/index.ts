@@ -72,6 +72,8 @@ function readNameField(table: unknown): string | undefined {
  * unrelated tool's own `name` field, or Poetry's `[[tool.poetry.source]]` array-of-tables
  * entries (each names a package source, not the project). A document containing a
  * `__proto__`-style key is rejected rather than read, since the file is untrusted input.
+ * Invalid TOML is likewise an explicit failure, not an absent name: returning undefined
+ * would report a broken manifest the same way as a project that declares no name.
  *
  * @throws Error naming `pyproject.toml` when the content is not valid TOML
  */
