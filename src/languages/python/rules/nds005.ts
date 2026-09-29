@@ -189,26 +189,16 @@ function fingerprint(tryStmt: Node): TryBlockFingerprint {
   };
 }
 
-/** Collect fingerprints for every `try_statement` in the tree (recursing into all scopes). */
+/**
+ * Collect fingerprints for every `try_statement` in the tree (recursing into all scopes),
+ * excluding try/finally wrappers that only close a span. Applied to both the original and
+ * the instrumented code: such a wrapper is instrumentation whichever side wrote it, so an
+ * unchanged one must not look like a removed block.
+ */
 function extractTryBlocks(rootNode: Node): TryBlockFingerprint[] {
   const fingerprints: TryBlockFingerprint[] = [];
   function walk(node: Node): void {
-    if (node.type === 'try_statement') fingerprints.push(fingerprint(node));
-    for (const child of node.namedChildren) {
-      if (child !== null) walk(child);
-    }
-  }
-  walk(rootNode);
-  return fingerprints;
-}
-
-/** Collect fingerprints from instrumented code, excluding OTel-added try/finally wrappers. */
-function extractInstrumentedTryBlocks(rootNode: Node): TryBlockFingerprint[] {
-  const fingerprints: TryBlockFingerprint[] = [];
-  function walk(node: Node): void {
-    if (node.type === 'try_statement') {
-      if (!isOtelTryFinally(node)) fingerprints.push(fingerprint(node));
-    }
+    if (node.type === 'try_statement' && !isOtelTryFinally(node)) fingerprints.push(fingerprint(node));
     for (const child of node.namedChildren) {
       if (child !== null) walk(child);
     }
@@ -309,9 +299,9 @@ export function checkPythonControlFlowPreservation(
   }
 
   const instrumentedTree = parsePython(instrumentedCode);
-  let instrumentedBlocks: ReturnType<typeof extractInstrumentedTryBlocks>;
+  let instrumentedBlocks: ReturnType<typeof extractTryBlocks>;
   try {
-    instrumentedBlocks = extractInstrumentedTryBlocks(instrumentedTree.rootNode);
+    instrumentedBlocks = extractTryBlocks(instrumentedTree.rootNode);
   } finally {
     instrumentedTree.delete();
   }

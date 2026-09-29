@@ -134,10 +134,12 @@ interface UtilityCandidate {
 
 /**
  * Whether a function's line count (with the span wrapper's own overhead
- * subtracted, if present) fits within the utility-function threshold.
+ * subtracted, if present) fits within the utility-function threshold. Takes the
+ * `function_definition` node itself, so stacked decorator lines above it do not
+ * count toward its length.
  */
-function isShortEnough(boundaryNode: Node, hasWithWrapper: boolean): boolean {
-  const totalLines = boundaryNode.endPosition.row - boundaryNode.startPosition.row + 1;
+function isShortEnough(fnNode: Node, hasWithWrapper: boolean): boolean {
+  const totalLines = fnNode.endPosition.row - fnNode.startPosition.row + 1;
   const estimatedOriginalLines = hasWithWrapper ? totalLines - SPAN_WRAPPER_OVERHEAD_LINES : totalLines;
   return estimatedOriginalLines <= MAX_UTILITY_LINES;
 }
@@ -170,7 +172,7 @@ function isUtilityWithSpan(candidate: UtilityCandidate): boolean {
   const hasWithWrapper = bodyStatements.length === 1 && bodyStatements[0].type === 'with_statement'
     && isSpanWith(bodyStatements[0]);
 
-  return isShortEnough(boundaryNode, hasWithWrapper);
+  return isShortEnough(node, hasWithWrapper);
 }
 
 /**

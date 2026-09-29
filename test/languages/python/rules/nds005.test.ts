@@ -21,6 +21,26 @@ describe('checkPythonControlFlowPreservation (NDS-005)', () => {
     });
   });
 
+  describe('an existing manual-span try/finally', () => {
+    it('passes when the developer\'s own start_span try/finally is left unchanged', () => {
+      // The original already closes its span with a try/finally. Leaving it alone is
+      // preserved structure, not a removed block, so both sides must treat it the same way.
+      const code = [
+        'def handler(x):',
+        '    span = tracer.start_span("handler")',
+        '    try:',
+        '        work(x)',
+        '    finally:',
+        '        span.end()',
+        '',
+      ].join('\n');
+
+      const results = checkPythonControlFlowPreservation(code, code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('preserved structure', () => {
     it('passes when a try/except/finally block is preserved, wrapped in a with-span', () => {
       const original = [

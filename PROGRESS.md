@@ -52,6 +52,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-09-29) Fixed Python's canonical tracer name check in two ways: it silently accepted a tracer name containing the opposite quote character, for example `trace.get_tracer("it's")`, because its pattern refused to match any name containing either quote; and it reported a name built from a larger expression, such as `"prefix-" + service_name`, as a wrong fixed name instead of treating it as computed.
 
+- (2026-09-29) Fixed Python's utility-function span check counting decorator lines toward a function's length, so a short helper with several decorators stacked above it was never reported. Only the function's own lines are counted now.
+
+- (2026-09-29) Fixed Python's control-flow preservation check reporting a developer's own manual-span `try`/`finally` as removed when the agent left it unchanged: the original file's copy was counted while the instrumented file's identical copy was excluded. Both sides now skip try/finally blocks that only close a span.
+
 - (2026-09-29) Fixed Python's control-flow preservation check ignoring the `from` clause on a re-raised exception, so dropping or adding it, which changes how the original error is chained, went unnoticed. A raise is now compared together with its `from` clause.
 
 - (2026-09-29) Fixed a memory leak in twelve more Python checks (attribute data quality, outbound-call spans, span closing, required span attributes, async-function spans, internal-detail spans, span-creation style, auto-instrumentation preference, utility-function spans, trivial-accessor spans, thin-wrapper spans, and spans on functions that exit the process): each released its parsed copy of the file only when the check finished cleanly, so an error partway through left that memory allocated. The same fix was already applied to three other Python checks.

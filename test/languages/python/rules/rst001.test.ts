@@ -24,6 +24,28 @@ describe('checkPythonUtilityFunctionSpans (RST-001)', () => {
     });
   });
 
+  describe('decorated utility functions', () => {
+    it('does not count stacked decorator lines toward the function length', () => {
+      // The function itself is three lines; the four decorators above it are not part of its length.
+      const code = [
+        'class Helpers:',
+        '    @staticmethod',
+        '    @cache',
+        '    @log_calls',
+        '    @validated',
+        '    def _add(x, y):',
+        '        with tracer.start_as_current_span("_add"):',
+        '            return x + y',
+        '',
+      ].join('\n');
+
+      const results = checkPythonUtilityFunctionSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('_add');
+    });
+  });
+
   describe('utility functions with spans', () => {
     it('flags a short, unexported, sync function wrapped in a with-span', () => {
       const code = [
