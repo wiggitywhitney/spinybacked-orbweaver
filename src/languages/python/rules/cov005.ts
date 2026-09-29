@@ -53,7 +53,8 @@ function extractSetAttributeName(callNode: Node, knownSpanVarNames: Set<string>)
   if (receiver === null) return undefined;
   const receiverText = receiver.text;
   const isBareIdentifier = receiver.type === 'identifier';
-  const isKnownSpanVar = isBareIdentifier && knownSpanVarNames.has(receiverText);
+  // A known span variable may be a bare name (`span`) or an attribute target (`self.op`).
+  const isKnownSpanVar = knownSpanVarNames.has(receiverText);
   const receiverForRegex = isBareIdentifier ? receiverText : (receiverText.split('.').at(-1) ?? receiverText);
   if (!isKnownSpanVar && !/span|active_span|parent_span|root_span|child_span/i.test(receiverForRegex)) {
     return undefined;
@@ -120,7 +121,10 @@ function collectFromRawStartSpan(spanCall: Node): Set<string> {
     ? assignment.childForFieldName('left')
     : null;
   const knownSpanVarNames = new Set<string>();
-  if (spanVarName?.type === 'identifier') knownSpanVarNames.add(spanVarName.text);
+  // The span may be stored on a bare name (`span = ...`) or an attribute (`self.op = ...`).
+  if (spanVarName?.type === 'identifier' || spanVarName?.type === 'attribute') {
+    knownSpanVarNames.add(spanVarName.text);
+  }
 
   let stmt: Node | null = spanCall;
   let block: Node | null = null;
@@ -153,7 +157,7 @@ function collectFromRawStartSpan(spanCall: Node): Set<string> {
           const fn = node.childForFieldName('function');
           if (fn?.type === 'attribute' && fn.childForFieldName('attribute')?.text === 'end') {
             const receiver = fn.childForFieldName('object');
-            if (receiver?.type === 'identifier' && knownSpanVarNames.has(receiver.text)) {
+            if (receiver !== null && knownSpanVarNames.has(receiver.text)) {
               containsSpanEnd = true;
               return;
             }

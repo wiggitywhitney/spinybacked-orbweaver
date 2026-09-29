@@ -27,6 +27,44 @@ describe('checkPythonDomainAttributes (COV-005)', () => {
     });
   });
 
+  describe('raw start_span() stored on an attribute', () => {
+    it('recognizes attributes set through the attribute target, whatever it is named', () => {
+      // `self.op` does not look like a span name, so it can only be recognized as
+      // the span assigned from start_span().
+      const code = [
+        'class Orders:',
+        '    def create_order(self, order_id):',
+        '        self.op = tracer.start_span("create_order")',
+        '        self.op.set_attribute("order.id", order_id)',
+        '        self.op.set_attribute("order.total", 5)',
+        '        self.op.end()',
+        '',
+      ].join('\n');
+
+      const results = checkPythonDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('stops collecting attributes once the attribute target has been ended', () => {
+      const code = [
+        'class Orders:',
+        '    def create_order(self, order_id):',
+        '        self.op = tracer.start_span("create_order")',
+        '        self.op.set_attribute("order.id", order_id)',
+        '        self.op.end()',
+        '        self.op.set_attribute("order.total", 5)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonDomainAttributes(code, filePath, registry);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('order.total');
+      expect(results[0].message).not.toContain('Required (must add): order.id');
+    });
+  });
+
   describe('with-scoped span', () => {
     it('flags a with-scoped span missing required and recommended attributes', () => {
       const code = [
