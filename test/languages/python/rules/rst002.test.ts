@@ -7,6 +7,57 @@ import { checkPythonTrivialAccessorSpans } from '../../../../src/languages/pytho
 describe('checkPythonTrivialAccessorSpans (RST-002)', () => {
   const filePath = '/tmp/test-file.py';
 
+  describe('accessor whose span body also sets attributes', () => {
+    it('still flags a trivial getter when the wrapped body also has span.set_attribute() calls', () => {
+      const code = [
+        'class Box:',
+        '    @property',
+        '    def value(self):',
+        '        with tracer.start_as_current_span("value") as span:',
+        '            span.set_attribute("value.size", 1)',
+        '            return self._value',
+        '',
+      ].join('\n');
+
+      const results = checkPythonTrivialAccessorSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('value');
+    });
+
+    it('does not flag a getter that computes something, even with span.set_attribute() calls', () => {
+      const code = [
+        'class Box:',
+        '    @property',
+        '    def value(self):',
+        '        with tracer.start_as_current_span("value") as span:',
+        '            span.set_attribute("value.size", 1)',
+        '            return self._value + 1',
+        '',
+      ].join('\n');
+
+      const results = checkPythonTrivialAccessorSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not treat a set_attribute() call on a non-span object as instrumentation', () => {
+      const code = [
+        'class Box:',
+        '    @property',
+        '    def value(self):',
+        '        with tracer.start_as_current_span("value") as span:',
+        '            self.node.set_attribute("dirty", True)',
+        '            return self._value',
+        '',
+      ].join('\n');
+
+      const results = checkPythonTrivialAccessorSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('no accessors', () => {
     it('passes when no @property/@x.setter methods exist', () => {
       const code = [

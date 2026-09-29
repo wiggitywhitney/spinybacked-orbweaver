@@ -5,6 +5,20 @@ import { describe, it, expect } from 'vitest';
 import { getSystemPromptSections, getInstrumentationExamples } from '../../../src/languages/python/prompt.ts';
 
 describe('Python instrumentation prompt constraints', () => {
+  it('does not teach recording a raw URL as a span attribute', () => {
+    // A URL can carry credentials, tokens, and other sensitive query values, and `http.url`
+    // is a deprecated attribute name; neither the prose sections nor any example may do this.
+    const rawUrlAttribute = /set_attribute\(\s*["'][^"']*url[^"']*["']\s*,\s*[A-Za-z_]*url[A-Za-z_]*\s*\)/i;
+    const sections = getSystemPromptSections();
+    const texts = [
+      ...Object.values(sections),
+      ...getInstrumentationExamples().map(ex => ex.after),
+    ];
+    for (const text of texts) {
+      expect(text).not.toMatch(rawUrlAttribute);
+    }
+  });
+
   it('permits importing Status/StatusCode from opentelemetry.trace, matching the error-handling guidance', () => {
     const sections = getSystemPromptSections();
 

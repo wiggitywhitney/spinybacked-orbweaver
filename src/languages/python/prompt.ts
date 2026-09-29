@@ -53,7 +53,7 @@ For \`async def\` functions, use \`with\` the same way — \`start_as_current_sp
 \`\`\`python
 async def fetch_data(url):
     with tracer.start_as_current_span("my_service.fetch_data") as span:
-        span.set_attribute("http.url", url)
+        span.set_attribute("http.request.method", "GET")
         return await client.get(url)
 \`\`\`
 

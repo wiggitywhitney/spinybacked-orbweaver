@@ -74,6 +74,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-09-29) Fixed Python's control-flow preservation check ignoring the `from` clause on a re-raised exception, so dropping or adding it, which changes how the original error is chained, went unnoticed. A raise is now compared together with its `from` clause.
 
+- (2026-09-29) Fixed a worked example in the Python instructions given to the model that adds the telemetry: it recorded a raw URL as a span attribute under a deprecated name. URLs can carry credentials and tokens, so the example now records the request method instead, and a test keeps any example from recording a raw URL again.
+
+- (2026-09-29) Fixed Python's trivial-accessor span check missing a simple getter whose span body also set span attributes: those instrumentation lines made the getter look like it did real work. Span-attribute and similar calls on a span are now ignored when judging whether an accessor is trivial.
+
 - (2026-09-29) Fixed Python's required-span-attributes check crediting a span that was created but never assigned to a variable with attributes set on any unrelated object whose name looked like a span. A span with no variable to set attributes on is now treated as having none.
 
 - (2026-09-29) Fixed the last memory leaks in Python parsing: the shared function, import and export finders, the instrumentation detector, the helpers that splice instrumented functions back into a file, and the signature-preservation check now release their parsed copy of a file even when an error interrupts them. Every Python code path that parses a file does this now.

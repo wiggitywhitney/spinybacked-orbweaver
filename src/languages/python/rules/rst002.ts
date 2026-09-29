@@ -131,20 +131,37 @@ function isTrivialAccessorBody(statements: Node[], selfName: string): boolean {
   return isTrivialReturn(stmt, selfName) || isTrivialAssignment(stmt, selfName);
 }
 
+/** Span methods whose statements are instrumentation, not accessor logic. */
+const SPAN_INSTRUMENTATION_METHODS = new Set(['set_attribute', 'set_attributes', 'add_event', 'set_status', 'record_exception', 'update_name']);
+
+/** Whether a statement is a call to a span method on a span-named receiver, such as `span.set_attribute(...)`. */
+function isSpanInstrumentationStatement(stmt: Node): boolean {
+  if (stmt.type !== 'expression_statement') return false;
+  const call = stmt.namedChild(0);
+  if (call?.type !== 'call') return false;
+  const fn = call.childForFieldName('function');
+  if (fn?.type !== 'attribute') return false;
+  const method = fn.childForFieldName('attribute')?.text;
+  const receiver = fn.childForFieldName('object')?.text ?? '';
+  return method !== undefined && SPAN_INSTRUMENTATION_METHODS.has(method) && /span/i.test(receiver);
+}
+
 /**
  * The accessor's real body statements, unwrapping a single top-level
  * span-creating `with` block if present (matching the shape the agent's own
- * instrumentation would produce) — the `with` line itself isn't part of the
- * original accessor logic being evaluated for triviality.
+ * instrumentation would produce) and dropping span-instrumentation statements
+ * such as `span.set_attribute(...)` — neither the `with` line nor those calls
+ * are part of the original accessor logic being evaluated for triviality.
  */
 function effectiveBodyStatements(body: Node): Node[] {
   const statements = body.namedChildren.filter((c): c is Node => c !== null);
-  if (statements.length !== 1 || statements[0].type !== 'with_statement') return statements;
+  const withoutInstrumentation = (nodes: Node[]): Node[] => nodes.filter(n => !isSpanInstrumentationStatement(n));
+  if (statements.length !== 1 || statements[0].type !== 'with_statement') return withoutInstrumentation(statements);
   const withStmt = statements[0];
   const clause = withStmt.namedChildren.find((c): c is Node => c !== null && c.type === 'with_clause');
   const withBody = withStmt.childForFieldName('body');
-  if (clause === undefined || withBody === null || !withClauseHasSpanCall(clause)) return statements;
-  return withBody.namedChildren.filter((c): c is Node => c !== null);
+  if (clause === undefined || withBody === null || !withClauseHasSpanCall(clause)) return withoutInstrumentation(statements);
+  return withoutInstrumentation(withBody.namedChildren.filter((c): c is Node => c !== null));
 }
 
 /**
