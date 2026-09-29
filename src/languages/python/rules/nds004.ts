@@ -1,7 +1,7 @@
 // ABOUTME: NDS-004 Python Tier 2 check — exported function/method signature preservation.
 // ABOUTME: Detects when instrumented code adds, removes, or renames parameters on exported functions.
 
-import { type Node, type Tree } from 'web-tree-sitter';
+import { type Node } from 'web-tree-sitter';
 import { parsePython } from '../ast.ts';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
@@ -90,7 +90,7 @@ function extractParams(fnNode: Node): string[] {
  * a method, and left as the bare name for a top-level function; `_`-prefix export
  * detection still checks the bare method name, per OD-1's naming convention.
  */
-function extractExportedSignatures(code: string): { tree: Tree; signatures: ExportedSignature[] } {
+function extractExportedSignatures(code: string): ExportedSignature[] {
   const tree = parsePython(code);
   const signatures: ExportedSignature[] = [];
   const seen = new Set<string>();
@@ -141,11 +141,15 @@ function extractExportedSignatures(code: string): { tree: Tree; signatures: Expo
     }
   }
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt !== null) collect(stmt, undefined);
+  try {
+    for (const stmt of tree.rootNode.namedChildren) {
+      if (stmt !== null) collect(stmt, undefined);
+    }
+  } finally {
+    tree.delete();
   }
 
-  return { tree, signatures };
+  return signatures;
 }
 
 /**
@@ -173,11 +177,8 @@ export function checkPythonSignaturePreservation(
   instrumentedCode: string,
   filePath: string,
 ): CheckResult[] {
-  const { tree: originalTree, signatures: originalSigs } = extractExportedSignatures(originalCode);
-  originalTree.delete();
-
-  const { tree: instrumentedTree, signatures: instrumentedSigs } = extractExportedSignatures(instrumentedCode);
-  instrumentedTree.delete();
+  const originalSigs = extractExportedSignatures(originalCode);
+  const instrumentedSigs = extractExportedSignatures(instrumentedCode);
 
   // No exported functions/methods in original — nothing to violate.
   if (originalSigs.length === 0) {

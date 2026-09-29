@@ -117,11 +117,13 @@ export function findPythonFunctions(source: string): FunctionInfo[] {
     }
   }
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt !== null) collect(stmt, false);
+  try {
+    for (const stmt of tree.rootNode.namedChildren) {
+      if (stmt !== null) collect(stmt, false);
+    }
+  } finally {
+    tree.delete();
   }
-
-  tree.delete();
   return functions;
 }
 
@@ -227,8 +229,11 @@ export function findPythonImports(source: string): ImportInfo[] {
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
   return imports;
 }
 
@@ -273,11 +278,13 @@ export function findPythonExports(source: string): ExportInfo[] {
     }
   }
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt !== null) collect(stmt);
+  try {
+    for (const stmt of tree.rootNode.namedChildren) {
+      if (stmt !== null) collect(stmt);
+    }
+  } finally {
+    tree.delete();
   }
-
-  tree.delete();
   return exports;
 }
 
@@ -352,8 +359,11 @@ export function detectPythonOTelInstrumentation(source: string): Instrumentation
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
 
   return {
     hasExistingInstrumentation: spanPatterns.length > 0,

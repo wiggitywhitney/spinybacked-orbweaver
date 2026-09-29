@@ -108,27 +108,35 @@ function extractFunctionFromInstrumentedCode(
     return null;
   }
 
-  const found = walk(tree.rootNode);
-
-  // TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
-  // milestone that surfaced it) that `found` is accepted here even when
-  // `found.boundary.hasError` is true — a malformed LLM output could still
-  // parse (via tree-sitter's error recovery) and match `functionName`, extracting
-  // text from a syntactically broken node instead of being rejected outright.
-  // Needs verification against real malformed-output fixtures before fixing,
-  // given this function's existing hardening (9+ prior CodeRabbit rounds).
-  if (found === null) {
-    tree.delete();
-    return null;
-  }
-  // Read every position off `boundary` before deleting the tree — the WASM-backed
+  // Read every position off `boundary` before the tree is deleted — the WASM-backed
   // Node object is invalidated once its tree is deleted, and reading positions
-  // afterward silently returns stale/zeroed data instead of throwing.
-  const { boundary, defRow, defColumn } = found;
-  const startRow = boundary.startPosition.row;
-  const endRow = boundary.endPosition.row;
-  const decoratorTexts = getDecoratorTexts(boundary);
-  tree.delete();
+  // afterward silently returns stale/zeroed data instead of throwing. The tree is
+  // released in the `finally`, so it is freed on every path, including a throw.
+  let defRow: number;
+  let defColumn: number;
+  let startRow: number;
+  let endRow: number;
+  let decoratorTexts: string[];
+  try {
+    const found = walk(tree.rootNode);
+
+    // TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
+    // milestone that surfaced it) that `found` is accepted here even when
+    // `found.boundary.hasError` is true — a malformed LLM output could still
+    // parse (via tree-sitter's error recovery) and match `functionName`, extracting
+    // text from a syntactically broken node instead of being rejected outright.
+    // Needs verification against real malformed-output fixtures before fixing,
+    // given this function's existing hardening (9+ prior CodeRabbit rounds).
+    if (found === null) return null;
+    const { boundary } = found;
+    defRow = found.defRow;
+    defColumn = found.defColumn;
+    startRow = boundary.startPosition.row;
+    endRow = boundary.endPosition.row;
+    decoratorTexts = getDecoratorTexts(boundary);
+  } finally {
+    tree.delete();
+  }
 
   const text = lines.slice(startRow, endRow + 1).join('\n');
   // Slice the definition line's own leading characters rather than reconstructing
@@ -161,8 +169,11 @@ function findMultilineStringProtectedRows(text: string): Set<number> {
     }
   }
 
-  walk(tree.rootNode);
-  tree.delete();
+  try {
+    walk(tree.rootNode);
+  } finally {
+    tree.delete();
+  }
   return protectedRows;
 }
 
@@ -200,17 +211,19 @@ function findModuleLevelImportRanges(code: string): Array<{ text: string; endRow
   const lines = code.split('\n');
   const ranges: Array<{ text: string; endRow: number }> = [];
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt === null) continue;
-    if (stmt.type === 'import_statement' || stmt.type === 'import_from_statement') {
-      ranges.push({
-        text: lines.slice(stmt.startPosition.row, stmt.endPosition.row + 1).join('\n'),
-        endRow: stmt.endPosition.row,
-      });
+  try {
+    for (const stmt of tree.rootNode.namedChildren) {
+      if (stmt === null) continue;
+      if (stmt.type === 'import_statement' || stmt.type === 'import_from_statement') {
+        ranges.push({
+          text: lines.slice(stmt.startPosition.row, stmt.endPosition.row + 1).join('\n'),
+          endRow: stmt.endPosition.row,
+        });
+      }
     }
+  } finally {
+    tree.delete();
   }
-
-  tree.delete();
   return ranges;
 }
 
@@ -225,13 +238,15 @@ function findModuleLevelTracerInitLines(code: string): string[] {
   const lines = code.split('\n');
   const results: string[] = [];
 
-  for (const stmt of tree.rootNode.namedChildren) {
-    if (stmt === null) continue;
-    const text = lines.slice(stmt.startPosition.row, stmt.endPosition.row + 1).join('\n');
-    if (TRACER_INIT_PATTERN.test(text)) results.push(text);
+  try {
+    for (const stmt of tree.rootNode.namedChildren) {
+      if (stmt === null) continue;
+      const text = lines.slice(stmt.startPosition.row, stmt.endPosition.row + 1).join('\n');
+      if (TRACER_INIT_PATTERN.test(text)) results.push(text);
+    }
+  } finally {
+    tree.delete();
   }
-
-  tree.delete();
   return results;
 }
 
@@ -255,25 +270,27 @@ function findImportInsertPosition(lines: string[]): number {
   let idx = 0;
   let sawImport = false;
 
-  for (const child of tree.rootNode.namedChildren) {
-    if (child === null) break;
-    if (child.type === 'comment') {
-      idx = child.endPosition.row + 1;
-      continue;
+  try {
+    for (const child of tree.rootNode.namedChildren) {
+      if (child === null) break;
+      if (child.type === 'comment') {
+        idx = child.endPosition.row + 1;
+        continue;
+      }
+      if (!sawImport && child.type === 'expression_statement' && child.namedChild(0)?.type === 'string') {
+        idx = child.endPosition.row + 1;
+        continue;
+      }
+      if (child.type === 'import_statement' || child.type === 'import_from_statement') {
+        idx = child.endPosition.row + 1;
+        sawImport = true;
+        continue;
+      }
+      break;
     }
-    if (!sawImport && child.type === 'expression_statement' && child.namedChild(0)?.type === 'string') {
-      idx = child.endPosition.row + 1;
-      continue;
-    }
-    if (child.type === 'import_statement' || child.type === 'import_from_statement') {
-      idx = child.endPosition.row + 1;
-      sawImport = true;
-      continue;
-    }
-    break;
+  } finally {
+    tree.delete();
   }
-
-  tree.delete();
   return idx;
 }
 
