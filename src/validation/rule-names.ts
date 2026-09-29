@@ -30,6 +30,7 @@ const RULE_NAMES: Record<string, string> = {
   'CDQ-009': 'Null-Safe Guard',
   'CDQ-010': 'String Method Type Safety',
   'CDQ-011': 'Canonical Tracer Name',
+  'CDQ-012': 'Tracer Bound',
 
   // Tier 2 — Restraint
   'RST-001': 'No Utility Spans',
@@ -279,6 +280,11 @@ const RULE_HUMAN_DESCRIPTIONS: Partial<Record<string, string>> = {
     'Inconsistent tracer names split your service\'s traces into disconnected service entries ' +
     'in your observability backend. Use exactly the specified tracer name in all ' +
     'trace.getTracer() calls throughout this file.',
+
+  'CDQ-012': 'Fired because the file uses tracer or trace without ' +
+    'importing or assigning it. The file compiles and passes lint, then raises NameError the ' +
+    'first time the instrumented code runs. Add `from opentelemetry import trace` and a ' +
+    'module-level `tracer = trace.get_tracer(\'service-name\')` ahead of the code that uses them.',
 
   'CDQ-003': 'Fired because the error recording pattern in ' +
     'a catch block is incorrect. The correct pattern is span.recordException(error) followed by ' +

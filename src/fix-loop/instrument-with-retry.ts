@@ -229,6 +229,7 @@ function buildValidationConfig(
       'RST-005': { enabled: true, blocking: false },
       'RST-006': { enabled: true, blocking: false },
       'CDQ-011': { enabled: true, blocking: true },
+      'CDQ-012': { enabled: true, blocking: true },
     },
   };
 }

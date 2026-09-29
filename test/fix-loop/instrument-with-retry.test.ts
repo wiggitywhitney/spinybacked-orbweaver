@@ -241,9 +241,10 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(checks['RST-006']).toEqual({ enabled: true, blocking: false });
 
     expect(checks['CDQ-011']).toEqual({ enabled: true, blocking: true });
+    expect(checks['CDQ-012']).toEqual({ enabled: true, blocking: true });
 
-    // Total: 30 checks (API-003 and SCH-004 deleted; RST-006 added; CDQ-005/CDQ-011 added)
-    expect(Object.keys(checks)).toHaveLength(30);
+    // Total: 31 checks (API-003 and SCH-004 deleted; RST-006 added; CDQ-005/CDQ-011/CDQ-012 added)
+    expect(Object.keys(checks)).toHaveLength(31);
 
     // projectRoot is undefined when not provided
     expect(capturedConfig!.projectRoot).toBeUndefined();

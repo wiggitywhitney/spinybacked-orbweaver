@@ -49,11 +49,12 @@ import { cdq005PythonRule } from './rules/cdq005.ts';
 import { cdq006PythonRule } from './rules/cdq006.ts';
 import { cdq007PythonRule } from './rules/cdq007.ts';
 import { cdq011PythonRule } from './rules/cdq011.ts';
+import { cdq012PythonRule } from './rules/cdq012.ts';
 import { api001PythonRule, api004PythonRule } from './rules/api001.ts';
 import { cov005PythonRule } from './rules/cov005.ts';
 
 /** Python-specific ValidationRules, registered on provider construction. Milestones D3/D3c populate this incrementally. */
-const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule, cdq001PythonRule, nds004PythonRule, rst001PythonRule, rst002PythonRule, rst003PythonRule, rst004PythonRule, rst005PythonRule, rst006PythonRule, nds005PythonRule, nds007PythonRule, cdq005PythonRule, cdq006PythonRule, cdq007PythonRule, cdq011PythonRule, api001PythonRule, api004PythonRule, cov005PythonRule] as const;
+const PYTHON_RULES = [cov001PythonRule, cov002PythonRule, cov003PythonRule, cov004PythonRule, cov006PythonRule, cdq001PythonRule, nds004PythonRule, rst001PythonRule, rst002PythonRule, rst003PythonRule, rst004PythonRule, rst005PythonRule, rst006PythonRule, nds005PythonRule, nds007PythonRule, cdq005PythonRule, cdq006PythonRule, cdq007PythonRule, cdq011PythonRule, cdq012PythonRule, api001PythonRule, api004PythonRule, cov005PythonRule] as const;
 
 /** A non-empty string `name` field of a parsed TOML table, or undefined when the value is not such a table. */
 function readNameField(table: unknown): string | undefined {

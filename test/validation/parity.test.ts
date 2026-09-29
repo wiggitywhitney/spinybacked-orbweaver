@@ -164,7 +164,7 @@ describe('feature parity matrix', () => {
       'COV-001', 'COV-002', 'COV-003', 'COV-004', 'COV-005', 'COV-006',
       'RST-001', 'RST-002', 'RST-003', 'RST-004', 'RST-005', 'RST-006',
       'NDS-003', 'NDS-004', 'NDS-005', 'NDS-006', 'NDS-007',
-      'CDQ-001', 'CDQ-005', 'CDQ-006', 'CDQ-007', 'CDQ-009', 'CDQ-010', 'CDQ-011',
+      'CDQ-001', 'CDQ-005', 'CDQ-006', 'CDQ-007', 'CDQ-009', 'CDQ-010', 'CDQ-011', 'CDQ-012',
       'API-001', 'API-002', 'API-004',
       'SCH-001', 'SCH-002', 'SCH-003',
     ];

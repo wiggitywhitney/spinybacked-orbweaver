@@ -35,7 +35,9 @@ export function getSystemPromptSections(): LanguagePromptSections {
       span.set_attribute("result.count", len(result))
   \`\`\``,
 
-    tracerAcquisition: `Add \`tracer = trace.get_tracer('service-name')\` at module scope if not already present, replacing \`'service-name'\` with a stable identifier for this service. Use exactly this tracer name in every file — do not vary it. If a module-level \`tracer\` variable is already declared, reuse it rather than redeclaring it.`,
+    tracerAcquisition: `Add \`tracer = trace.get_tracer('service-name')\` at module scope if not already present, replacing \`'service-name'\` with a stable identifier for this service. Use exactly this tracer name in every file — do not vary it. If a module-level \`tracer\` variable is already declared, reuse it rather than redeclaring it.
+
+**CDQ-012 (Tracer Bound)**: before you return code that uses \`tracer\` or \`trace\`, check that each name is imported or assigned in the code you return. If the code you were given lacks \`from opentelemetry import trace\` or a module-level \`tracer = trace.get_tracer('service-name')\`, add whichever is missing ahead of the first use, with the tracer name above. This applies when you return a single function as well as a whole file. A missing definition compiles cleanly and raises NameError when the function runs, so validation blocks it.`,
 
     spanCreation: `Wrap function bodies with \`tracer.start_as_current_span()\` as a context manager:
 

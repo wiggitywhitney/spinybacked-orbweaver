@@ -296,6 +296,13 @@ describe('PythonProvider', () => {
       expect(sections.otelPatterns.length).toBeGreaterThan(0);
     });
 
+    it('tells the agent that tracer and trace must be bound in the code it returns (CDQ-012)', () => {
+      const { tracerAcquisition } = provider.getSystemPromptSections();
+      expect(tracerAcquisition).toContain('CDQ-012 (Tracer Bound)');
+      expect(tracerAcquisition).toContain('from opentelemetry import trace');
+      expect(tracerAcquisition).toContain('single function');
+    });
+
     it('constraints include the hard span.end() prohibition', () => {
       const sections = provider.getSystemPromptSections();
       expect(sections.constraints).toMatch(/do not call.*span\.end\(\)/i);
