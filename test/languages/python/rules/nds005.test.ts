@@ -41,6 +41,68 @@ describe('checkPythonControlFlowPreservation (NDS-005)', () => {
     });
   });
 
+  describe('except clause exception types', () => {
+    const wrap = (exceptClauses: string[]): string => [
+      'def handler(x):',
+      '    with tracer.start_as_current_span("handler"):',
+      '        try:',
+      '            risky(x)',
+      ...exceptClauses.flatMap(clause => [`        ${clause}`, '            handle()']),
+      '',
+    ].join('\n');
+    const plain = (exceptClauses: string[]): string => [
+      'def handler(x):',
+      '    try:',
+      '        risky(x)',
+      ...exceptClauses.flatMap(clause => [`    ${clause}`, '        handle()']),
+      '',
+    ].join('\n');
+    const changed = (results: Array<{ passed: boolean; message: string }>): boolean =>
+      results.some(r => !r.passed && r.message.includes('Except clause changed'));
+
+    it('flags a block that lost one of its two except clauses', () => {
+      const results = checkPythonControlFlowPreservation(
+        plain(['except ValueError:', 'except KeyError:']),
+        wrap(['except ValueError:']),
+        filePath,
+      );
+      expect(changed(results)).toBe(true);
+    });
+
+    it('flags a specific exception type broadened to Exception', () => {
+      const results = checkPythonControlFlowPreservation(
+        plain(['except ValueError:']),
+        wrap(['except Exception:']),
+        filePath,
+      );
+      expect(changed(results)).toBe(true);
+    });
+
+    it('flags a bare except changed to a typed one', () => {
+      const results = checkPythonControlFlowPreservation(plain(['except:']), wrap(['except Exception:']), filePath);
+      expect(changed(results)).toBe(true);
+    });
+
+    it('flags reordered except clauses, since the first matching clause wins', () => {
+      const results = checkPythonControlFlowPreservation(
+        plain(['except ValueError:', 'except Exception:']),
+        wrap(['except Exception:', 'except ValueError:']),
+        filePath,
+      );
+      expect(changed(results)).toBe(true);
+    });
+
+    it('passes when the clause types are unchanged, ignoring spacing and the bound name', () => {
+      const results = checkPythonControlFlowPreservation(
+        plain(['except (KeyError, ValueError) as e:', 'except OSError:']),
+        wrap(['except (KeyError,ValueError) as err:', 'except OSError:']),
+        filePath,
+      );
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('catch variable with a non-ASCII name', () => {
     it('treats a renamed catch variable as the same raise, even when the original name is non-ASCII', () => {
       // The catch variable's name is normalized to a placeholder so that renaming it is not a

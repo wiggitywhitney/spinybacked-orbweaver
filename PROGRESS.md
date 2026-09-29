@@ -52,6 +52,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - (2026-09-29) Fixed Python's canonical tracer name check in two ways: it silently accepted a tracer name containing the opposite quote character, for example `trace.get_tracer("it's")`, because its pattern refused to match any name containing either quote; and it reported a name built from a larger expression, such as `"prefix-" + service_name`, as a wrong fixed name instead of treating it as computed. It also skipped a name written with an `r` or `u` string prefix, such as `get_tracer(u"name")`, and now checks those too.
 
+- (2026-09-29) Fixed Python's control-flow preservation check only confirming that a `try` block still had some `except` clause, so it missed an `except` clause being removed, reordered, or broadened (for example `except ValueError` becoming `except Exception`), all of which change which errors the code handles. It now compares each clause's exception type in order, ignoring spacing and the name the error is bound to.
+
 - (2026-09-29) Fixed Python's control-flow preservation check failing to recognize a catch variable whose name contains non-ASCII letters, such as `erré`, when it compares a re-raised exception before and after instrumentation, so renaming it was reported as a change. It now treats letters and digits from any script as part of an identifier.
 
 - (2026-09-29) Fixed Python's required-span-attributes check not recognizing a manually ended span stored on an object attribute, such as `self.op = tracer.start_span(...)`: attributes set through it were missed unless the attribute happened to be named like a span, and a later `self.op.end()` did not stop the scan, so attributes set after the span had ended were counted.

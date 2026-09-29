@@ -17,6 +17,8 @@ import type { ValidationRule, RuleInput } from '../../types.ts';
  */
 interface TryBlockFingerprint {
   hasCatch: boolean;
+  /** Each `except` clause's exception-type text in source order, whitespace removed; `''` for a bare `except:`. */
+  exceptTypes: string[];
   hasFinally: boolean;
   catchParamName: string | undefined;
   bodyAnchor: string;
@@ -101,6 +103,18 @@ function exceptBoundName(exceptClause: Node): string | undefined {
   const target = typeNode.namedChild(1);
   const identifier = target?.namedChild(0);
   return identifier?.type === 'identifier' ? identifier.text : undefined;
+}
+
+/**
+ * The exception-type expression of an `except_clause` with whitespace removed, without its
+ * `as` binding, or `''` for a bare `except:`. Which clause handles an exception depends on
+ * these types and their order, so they are part of a try block's fingerprint.
+ */
+function exceptTypeText(exceptClause: Node): string {
+  const typeNode = exceptClause.namedChildren.find((c): c is Node => c !== null && c.type !== 'block');
+  if (typeNode === undefined) return '';
+  const typeExpr = typeNode.type === 'as_pattern' ? typeNode.namedChild(0) : typeNode;
+  return (typeExpr?.text ?? '').replace(/\s+/g, '');
 }
 
 /**
@@ -192,6 +206,7 @@ function fingerprint(tryStmt: Node): TryBlockFingerprint {
 
   return {
     hasCatch: exceptClauses.length > 0,
+    exceptTypes: exceptClauses.map(exceptTypeText),
     hasFinally: finallyClause !== undefined,
     catchParamName,
     bodyAnchor: extractBodyAnchor(tryStmt),
@@ -369,6 +384,27 @@ export function checkPythonControlFlowPreservation(
     }
 
     if (origBlock.hasCatch && instrBlock.hasCatch) {
+      const origTypes = origBlock.exceptTypes;
+      const instrTypes = instrBlock.exceptTypes;
+      const sameTypes = origTypes.length === instrTypes.length && origTypes.every((t, idx) => t === instrTypes[idx]);
+      if (!sameTypes) {
+        const describeClauses = (types: string[]): string =>
+          types.map(t => (t === '' ? 'except' : `except ${t}`)).join(', ');
+        violations.push({
+          ruleId: 'NDS-005',
+          passed: false,
+          filePath,
+          lineNumber: instrBlock.lineNumber,
+          message:
+            `NDS-005: Except clause changed in try/except block at line ${origBlock.lineNumber}. ` +
+            `Original handled [${describeClauses(origTypes)}] but instrumented code handles ` +
+            `[${describeClauses(instrTypes)}]. Instrumentation must not remove, add, reorder, or ` +
+            `change the exception type of existing except clauses.`,
+          tier: 2,
+          blocking: true,
+        });
+      }
+
       const origThrows = origBlock.catchThrows;
       const instrThrows = instrBlock.catchThrows;
 
