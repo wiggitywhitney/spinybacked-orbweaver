@@ -41,6 +41,58 @@ describe('checkPythonControlFlowPreservation (NDS-005)', () => {
     });
   });
 
+  describe('catch variable with a non-ASCII name', () => {
+    it('treats a renamed catch variable as the same raise, even when the original name is non-ASCII', () => {
+      // The catch variable's name is normalized to a placeholder so that renaming it is not a
+      // change; Python identifiers may contain non-ASCII letters, which an ASCII `\b` misses.
+      const original = [
+        'def handler(x):',
+        '    try:',
+        '        risky(x)',
+        '    except ValueError as erré:',
+        '        raise RuntimeError(erré)',
+        '',
+      ].join('\n');
+      const instrumented = [
+        'def handler(x):',
+        '    with tracer.start_as_current_span("handler"):',
+        '        try:',
+        '            risky(x)',
+        '        except ValueError as err:',
+        '            raise RuntimeError(err)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not replace the catch variable inside a longer identifier that contains it', () => {
+      const original = [
+        'def handler(x):',
+        '    try:',
+        '        risky(x)',
+        '    except ValueError as e:',
+        '        raise RuntimeError(épée)',
+        '',
+      ].join('\n');
+      const instrumented = [
+        'def handler(x):',
+        '    with tracer.start_as_current_span("handler"):',
+        '        try:',
+        '            risky(x)',
+        '        except ValueError as e:',
+        '            raise RuntimeError(épée)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonControlFlowPreservation(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('a try/finally whose finally only touches the span without closing it', () => {
     it('still counts it as a real block, so removing it is flagged', () => {
       // `finally: span.set_attribute(...)` is telemetry, but it does not close the span,

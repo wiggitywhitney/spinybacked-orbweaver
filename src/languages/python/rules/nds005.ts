@@ -126,7 +126,13 @@ function extractExceptRaises(exceptClause: Node, boundName: string | undefined):
         const cause = node.childForFieldName('cause')?.text.trim();
         let expr = cause === undefined ? raised : `${raised} from ${cause}`;
         if (boundName !== undefined) {
-          expr = expr.replace(new RegExp(`\\b${escapeRegExp(boundName)}\\b`, 'g'), '<CATCH_VAR>');
+          // Unicode-aware boundaries, not `\b`: Python identifiers may contain non-ASCII letters
+          // and digits, which an ASCII word boundary treats as separators.
+          const identifierChar = '[\\p{L}\\p{N}_]';
+          expr = expr.replace(
+            new RegExp(`(?<!${identifierChar})${escapeRegExp(boundName)}(?!${identifierChar})`, 'gu'),
+            '<CATCH_VAR>',
+          );
         }
         raises.push(expr);
       }
