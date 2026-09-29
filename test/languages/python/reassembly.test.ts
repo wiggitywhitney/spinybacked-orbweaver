@@ -881,6 +881,41 @@ describe('reassemblePythonFunctions — malformed model output', () => {
   });
 
   it.each([
+    ['a parse error', [
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one" as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n'), 'parse error'],
+    ['a decorator mismatch', [
+      '@app.route("/foo")',
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n'), 'decorators'],
+    ['a missing function', [
+      'def some_other_name(req):',
+      '    with tracer.start_as_current_span("x") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n'), 'not found'],
+  ])('marks a result skipped for %s as failed so it is not counted as instrumented', (_label, instrumentedOne, reason) => {
+    const extracted = extractPythonFunctions(original);
+    const one = result({ name: 'handler_one', instrumentedCode: instrumentedOne });
+    const two = result({ name: 'handler_two', instrumentedCode: validTwo });
+    const reassembled = reassemblePythonFunctions(original, extracted, [one, two]);
+    expectOnlyTwoSpliced(reassembled);
+    expect(one.success).toBe(false);
+    expect(one.error).toContain(reason);
+    expect(two.success).toBe(true);
+    expect(two.error).toBeUndefined();
+  });
+
+  it.each([
     ['a decorated async def with async with, comprehensions, and unpacking', [
       '@app.get("/x")',
       'async def handler_one(req):',

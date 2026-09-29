@@ -290,11 +290,25 @@ function findImportInsertPosition(lines: string[]): number {
 }
 
 /**
+ * Mark a result whose replacement was not spliced as failed, so the fix loop does
+ * not count its spans or report the function as instrumented when its original
+ * code is what remains in the file.
+ */
+function markSkipped(result: FunctionResult, reason: string): void {
+  result.success = false;
+  result.error = `Reassembly skipped: ${reason}`;
+}
+
+/**
  * Reassemble individually instrumented Python functions back into the original file.
  *
  * `extracted` and `results` are positionally paired (per the `LanguageProvider`
  * interface contract: "results — one per extracted function") rather than matched
  * by name, since two functions in different classes can share the same name.
+ *
+ * A successful result whose replacement is not spliced (its output has a parse
+ * error, its decorators differ from the original's, or the function is missing
+ * from the output) is marked failed in place, with the reason in `error`.
  *
  * For each successful `FunctionResult`: extracts the instrumented function (with
  * its full decorator range) from the LLM output, reconciles its indentation against
@@ -331,7 +345,10 @@ export function reassemblePythonFunctions(
     if (!result?.success || !result.instrumentedCode) continue;
 
     const found = extractFunctionFromInstrumentedCode(result.instrumentedCode, fn.name);
-    if (!found) continue;
+    if (!found) {
+      markSkipped(result, `function "${fn.name}" not found in the instrumented output`);
+      continue;
+    }
 
     // Reject the replacement when the model's output has a parse error anywhere,
     // not only inside the matched function. Tree-sitter's error recovery can still
@@ -342,13 +359,19 @@ export function reassemblePythonFunctions(
     // error the same as a failed result for this function and leave the original
     // code unchanged. Tier 1 validation runs `compile()` on the same output, so no
     // output the pipeline accepts is rejected here (Decision D-D3e-3).
-    if (found.hasParseError) continue;
+    if (found.hasParseError) {
+      markSkipped(result, 'the instrumented output has a parse error');
+      continue;
+    }
 
     // Parse the original function once (rather than re-deriving its decorators
     // and indentation through two separate mechanisms) so both checks below
     // are consistent with how the instrumented side is analyzed.
     const originalFound = extractFunctionFromInstrumentedCode(fn.sourceText, fn.name);
-    if (!originalFound) continue;
+    if (!originalFound) {
+      markSkipped(result, `function "${fn.name}" not found in its original source`);
+      continue;
+    }
 
     // If the LLM's returned function is missing any of the original's decorators —
     // not just "has no decorator at all", but a different set or a different order —
@@ -363,7 +386,10 @@ export function reassemblePythonFunctions(
       && originalDecorators.every((d, idx) => d === foundDecorators[idx]);
     // Reject any mismatch unconditionally — including the LLM adding a decorator
     // where the original had none at all, not just dropping or changing one.
-    if (!decoratorsMatch) continue;
+    if (!decoratorsMatch) {
+      markSkipped(result, 'the instrumented function\'s decorators differ from the original\'s');
+      continue;
+    }
 
     const reconciledText = reindent(found.text, found.baseIndent, originalFound.baseIndent);
 

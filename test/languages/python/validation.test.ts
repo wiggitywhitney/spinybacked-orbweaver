@@ -289,6 +289,18 @@ describe('lintCheck', () => {
     expect(result.ruleId).toBe('LINT');
   });
 
+  it('reports Ruff\'s diagnostic, not Black\'s, when both formatters are installed and both reject the output', async () => {
+    const original = 'def foo(x):\n    return x + 1\n';
+    const instrumented = 'def foo(x:\n    return x + 1\n';
+
+    const result = await lintCheck(original, instrumented, join(process.cwd(), 'file.py'));
+
+    expect(result.passed).toBe(false);
+    // Ruff reports "Failed to parse"; Black reports "cannot format ... Cannot parse".
+    expect(result.message).toContain('Failed to parse');
+    expect(result.message).not.toContain('cannot format');
+  });
+
   it('fails on an instrumented parse error even when the original was already non-compliant', async () => {
     // The original's own non-compliance must not let a parse failure on the
     // instrumented output fall through to the "not a new error" pass branch.

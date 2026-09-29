@@ -1482,11 +1482,17 @@ async function functionLevelFallback(
   }
 
   if (!syntaxPassed) {
-    // Identify which function's instrumentation broke syntax by testing each one individually
-    for (const fn of extractedFunctions) {
-      const result = fnResults.find(r => r.name === fn.name);
+    // Identify which function's instrumentation broke syntax by testing each one individually.
+    // `fnResults` holds one result per extracted function, in extraction order. Pass a
+    // full-length array with every other result neutralized rather than `[result]`: a
+    // provider that pairs results with functions by position (Python) would otherwise
+    // pair a lone result with the first function and never splice it. Index rather than
+    // look up by name, since two methods in different classes can share a name.
+    for (let i = 0; i < extractedFunctions.length; i++) {
+      const result = fnResults[i];
       if (!result?.success) continue;
-      const singleReassembled = fnProvider.reassembleFunctions(originalCode, extractedFunctions, [result]);
+      const singleResults = fnResults.map(r => (r === result ? r : { ...r, success: false, instrumentedCode: undefined }));
+      const singleReassembled = fnProvider.reassembleFunctions(originalCode, extractedFunctions, singleResults);
       await writeFile(filePath, singleReassembled, 'utf-8');
       try {
         const singleCheck = await fnProvider.checkSyntax(filePath);

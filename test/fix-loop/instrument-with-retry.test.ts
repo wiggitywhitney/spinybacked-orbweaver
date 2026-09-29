@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { instrumentWithRetry, isRetryableInstrumentError, isEarlyAbortError, normalizeSchemaExtension, detectMalformedExtensions, detectRepeatNds003Lines, RETRYABLE_NULL_OUTPUT, RETRYABLE_ELISION, RETRYABLE_PARSE_ERROR, EARLY_ABORT_MAX_TOKENS } from '../../src/fix-loop/instrument-with-retry.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
+import { PythonProvider } from '../../src/languages/python/index.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
 import type { InstrumentationOutput, TokenUsage } from '../../src/agent/schema.ts';
 import type { ValidationResult, CheckResult, ValidateFileInput } from '../../src/validation/types.ts';
@@ -3201,6 +3202,58 @@ describe('instrumentWithRetry — function-level fallback (Milestone 7)', () => 
     // The file on disk should NOT contain the corrupted import
     const finalContent = readFileSync(filePath, 'utf-8');
     expect(finalContent).not.toContain('imimport');
+  });
+
+  it('isolates a Python culprit that is not the first extracted function when assembly breaks whole-file syntax', async () => {
+    // Python reassembly pairs results with extracted functions by position, so the
+    // culprit search must pass a full-length results array. `nonlocal` with no
+    // enclosing binding parses cleanly in tree-sitter but fails `compile()`, so the
+    // breakage surfaces only at the whole-file syntax check. The functions are
+    // `async def` because the fallback skips sync functions without a model call.
+    const pyFixture = [
+      'async def alpha(x):',
+      '    a = x + 1',
+      '    b = a * 2',
+      '    return b',
+      '',
+      'async def beta(y):',
+      '    c = y + 1',
+      '    d = c * 2',
+      '    return d',
+      '',
+    ].join('\n');
+    const pyPath = join(tmpDir, 'module.py');
+    writeFileSync(pyPath, pyFixture, 'utf-8');
+
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (_path, code) => {
+        if (code.includes('def alpha') && code.includes('def beta')) {
+          return { success: false, error: 'LLM failure', tokenUsage: sampleTokens };
+        }
+        const instrumentedCode = code.includes('def alpha')
+          ? ['async def alpha(x):', '    with tracer.start_as_current_span("alpha"):', '        a = x + 1', '        b = a * 2', '        return b'].join('\n')
+          : ['async def beta(y):', '    nonlocal zz', '    with tracer.start_as_current_span("beta"):', '        c = y + 1', '        d = c * 2', '        return d'].join('\n');
+        return {
+          success: true,
+          output: makeInstrumentationOutput({
+            instrumentedCode,
+            spanCategories: { externalCalls: 1, schemaDefined: 0, serviceEntryPoints: 0, totalFunctionsInFile: 1 },
+          }),
+        };
+      },
+      validateFile: async (input) => makePassingValidation(input.filePath),
+    };
+
+    const result = await instrumentWithRetry(pyPath, pyFixture, {}, makeConfig(), { deps, provider: new PythonProvider() });
+
+    expect(result.status).toBe('partial');
+    expect(result.functionsInstrumented).toBe(1);
+    const beta = result.functionResults!.find(r => r.name === 'beta');
+    expect(beta?.success).toBe(false);
+    expect(beta?.error).toContain('Whole-file syntax error after assembly');
+    const finalContent = readFileSync(pyPath, 'utf-8');
+    expect(finalContent).toContain('start_as_current_span("alpha")');
+    expect(finalContent).not.toContain('nonlocal zz');
   });
 
   it('returns whole-file failure when all per-function calls fail', async () => {

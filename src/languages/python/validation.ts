@@ -212,8 +212,10 @@ function runFormatter(source: string, configDir: string, filename = '_spiny_orb_
   const black = tryFormatterBinary('black', ['--stdin-filename', stdinFilename, '-q', '-'], source, configDir);
   if (black.output !== null) return { code: black.output, formatterAvailable: true, executionFailed: false, executionError: '' };
 
-  if (black.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: black.error };
+  // Ruff is the primary formatter, so when both are installed and both fail, its
+  // diagnostic is the one reported.
   if (ruff.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: ruff.error };
+  if (black.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: black.error };
 
   return { code: source, formatterAvailable: false, executionFailed: false, executionError: '' };
 }
