@@ -1,7 +1,7 @@
 # Research: OpenTelemetry Error Recording for Swallowed Exceptions (COV-003)
 
 **Project:** spinybacked-orbweaver
-**Last Updated:** 2026-09-29
+**Last Updated:** 2026-09-30
 
 ## Update Log
 
@@ -9,6 +9,7 @@
 |------|---------|
 | 2026-09-29 | Initial research (PRD #373 follow-up to the CodeRabbit finding on Python COV-003; Decision D-COV003-1) |
 | 2026-09-29 | Clarified recommendation 2 after reading JavaScript's `isExpectedConditionCatch`: the Python equivalent exempts every swallowing `except`, leaving COV-003 with only the raw `start_span()` re-raise case |
+| 2026-09-30 | Re-fetched all four OTel pages to validate a CodeRabbit finding on the CDQ-003 (standard error-recording sequence) row of `docs/rules-reference.md`. Nothing removed: Findings 1 to 4 still match the current pages. Added Finding 9 (CDQ-003 validation), which records that the Stable trace exceptions spec still gives the exception event a conditional SHOULD for an exception that escapes the span, and that the Development-status recording-errors page names only logs for exceptions and says not to record one exception more than once |
 
 ## Findings
 
@@ -59,6 +60,14 @@ No variant passes both. NDS-007 treats any except without a re-raise as an expec
 **8. Backends: status is the error signal, and an exception event is optional** 🟡 medium
 **Source says:** Datadog's OpenTelemetry API support page shows `span.setStatus(ERROR, "Some error details...")` under "To set an error on a span" and `recordException` as a separate API. It does not say a `recordException` call is required for an error to appear or for stack traces to be captured. ([Datadog: OpenTelemetry API support](https://docs.datadoghq.com/opentelemetry/instrument/dd_sdks/api_support/))
 **Interpretation:** Status-only marks the span as an error in Datadog. The exception event adds type, message and stack detail. Search results (not fetched) said Datadog Error Tracking needs `error.stack`, `error.message`, and `error.type`, and that another backend counts only ERROR-status spans as errors; neither was verified from the source, so the richness argument for keeping the exception event stays medium confidence.
+
+**9. CDQ-003's "both calls are required" claim overstates the spec** 🟢 high (re-verified 2026-09-30)
+The CDQ-003 row of `docs/rules-reference.md` says "both `recordException` and `setStatus(ERROR)` are required to fully capture an error on a span." No page says either call is required.
+**Source says:** For a failed operation, instrumentation "SHOULD set the span status code to `Error`" and "SHOULD set the `error.type` attribute"; the only MUST on the page is that status "MUST be left unset if the instrumented operation has ended without any errors." For exceptions it names only logs ("SHOULD record this exception as a log record") and adds "It's NOT RECOMMENDED to record the same exception more than once." The page is "**Status**: Development." ([OTel: Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/))
+**Source says:** "An exception SHOULD be recorded as an `Event` on the span during which it occurred if and only if it remains unhandled when the span ends and causes the span status to be set to ERROR." The page is "**Status**: Stable, Unless otherwise specified" and has no deprecation marker. Its non-normative example calls `span.recordException(e)` then `span.setStatus(StatusCode.ERROR, e.getMessage())`. ([OTel: Exceptions](https://opentelemetry.io/docs/specs/otel/trace/exceptions/))
+**Source says:** The trace API's Record Exception and Set Status sections do not reference each other; RecordException "MUST record an exception as an `Event`" and is "a specialized variant of `AddEvent`." ([OTel: Trace API](https://opentelemetry.io/docs/specs/otel/trace/api/))
+**Source says:** The semconv exceptions-on-spans page is "Deprecated" with "Use Semantic conventions for exceptions in logs instead," and lets existing instrumentation keep emitting span events by default behind `OTEL_SEMCONV_EXCEPTION_SIGNAL_OPT_IN`. ([OTel: Exceptions on spans](https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/))
+**Interpretation:** For an exception that escapes the span, the Stable spec recommends (SHOULD) both the exception event and ERROR status, and its example shows the two-call sequence CDQ-003 describes. So CDQ-003's sequence is aligned with SHOULD-level guidance, not with a requirement. "Required" is wrong, and so is calling the exception event plainly "optional": it is a conditional SHOULD on the Stable trace page while the newer semconv guidance moves exceptions to logs. For a handled exception, both pages say not to record it on the span at all, which CDQ-003's row does not mention.
 
 ### Conflicting Findings
 - **Source A says:** Spans "SHOULD NOT" carry records of handled errors ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)).
