@@ -10,13 +10,12 @@ import type { ValidationRule, RuleInput } from '../../types.ts';
 /**
  * Error recording patterns that satisfy COV-003.
  * Any of these in a catch block (or within the span callback) indicates
- * error visibility is present.
+ * error visibility is present. An `error` attribute does not count: the
+ * agent is taught to use the standard OTel error recording API instead.
  */
 const ERROR_RECORDING_PATTERNS = [
   '.recordException(',
   '.setStatus(',
-  'setAttribute("error"',
-  "setAttribute('error'",
 ];
 
 /**
@@ -24,7 +23,7 @@ const ERROR_RECORDING_PATTERNS = [
  *
  * For each span (startActiveSpan/startSpan), checks that:
  * 1. If the span callback has a try/catch, the catch block records the error
- *    on the span (recordException, setStatus, or error-related setAttribute)
+ *    on the span (recordException or setStatus)
  * 2. If the span wraps failable operations (async calls, I/O), there IS a
  *    catch block with error recording
  *

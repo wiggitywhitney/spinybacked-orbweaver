@@ -112,6 +112,31 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
       const results = checkErrorVisibilityTs(code, filePath);
       expect(results.some(r => !r.passed)).toBe(true);
     });
+
+    it.each([
+      ['double quotes', 'span.setAttribute("error", true);'],
+      ['single quotes', "span.setAttribute('error', true);"],
+    ])('flags a rethrow whose only recording is an error attribute (%s)', (_label, attributeLine) => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export async function getUser(): Promise<string> {',
+        '  return tracer.startActiveSpan("getUser", async (span) => {',
+        '    try {',
+        '      return "user";',
+        '    } catch (err) {',
+        `      ${attributeLine}`,
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results.some(r => !r.passed)).toBe(true);
+    });
   });
 
   describe('return Promise.reject(err) as rethrow pattern', () => {

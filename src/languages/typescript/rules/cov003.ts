@@ -6,13 +6,12 @@ import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule, RuleInput } from '../../types.ts';
 
 /**
- * Error recording patterns that satisfy COV-003.
+ * Error recording patterns that satisfy COV-003. An `error` attribute does
+ * not count: the agent is taught to use the standard OTel error recording API instead.
  */
 const ERROR_RECORDING_PATTERNS = [
   '.recordException(',
   '.setStatus(',
-  'setAttribute("error"',
-  "setAttribute('error'",
 ];
 
 /**

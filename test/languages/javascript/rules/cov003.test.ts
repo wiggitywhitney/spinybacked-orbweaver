@@ -95,6 +95,33 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].message).toContain('error');
     });
 
+    it.each([
+      ['double quotes', 'span.setAttribute("error", true);'],
+      ['single quotes', "span.setAttribute('error', true);"],
+    ])('flags a rethrow whose only recording is an error attribute (%s)', (_label, attributeLine) => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function processOrder(order) {',
+        '  return tracer.startActiveSpan("processOrder", (span) => {',
+        '    try {',
+        '      return submitOrder(order);',
+        '    } catch (error) {',
+        `      ${attributeLine}`,
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].ruleId).toBe('COV-003');
+    });
+
     it('passes when span lifecycle try/finally has span.end() but no catch (errors propagate)', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',

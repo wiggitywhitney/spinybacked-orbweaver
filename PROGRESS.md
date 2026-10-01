@@ -151,6 +151,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- (2026-10-01) Removed two dead patterns from the JavaScript and TypeScript COV-003 check (error recording on spans). The comments said a `span.setAttribute("error", ...)` call counts as recording an error, but a missing leading dot meant those patterns could never match. Behavior doesn't change: only `recordException` or `setStatus` satisfies the check, as before. The patterns were deleted rather than fixed because the agent's prompt already says an `error` attribute is the wrong way to record an error, and accepting one would loosen a blocking rule.
 - (2026-09-25) Removed issue #1069 from `docs/ROADMAP.md`'s Short-term section — closed, and ROADMAP is forward-looking (completed work lives in this changelog, not there). Caught by CodeRabbit during an unrelated PRD #373 review.
 - (2026-08-31) Removed issues #1048 and #1052 from `docs/ROADMAP.md`'s Short-term section — both closed, and ROADMAP is forward-looking (completed work lives in this changelog, not there).
 
