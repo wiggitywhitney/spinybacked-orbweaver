@@ -17,10 +17,9 @@ const TRACER_INIT_PATTERN = /^tracer\s*=\s*trace\.get_tracer\s*\(/;
  * its own unrelated reasons (or hallucinated) would get spliced in too.
  */
 /**
- * Matches `import opentelemetry...` or `from opentelemetry... import ...`, requiring
- * the module path to be exactly `opentelemetry` or a dotted submodule of it (a `\b`
- * after the name rejects an unrelated module that merely starts with the same
- * letters, e.g. `opentelemetry_stubs` or `myopentelemetrywrapper`).
+ * True when a module path is exactly `opentelemetry` or a dotted submodule of it,
+ * so an unrelated module that merely starts with the same letters (e.g.
+ * `opentelemetry_stubs` or `myopentelemetrywrapper`) is not mistaken for OTel.
  *
  * Unlike the JavaScript provider's own `OTEL_IMPORT_PREFIXES`/`isOtelImport()` (which
  * this convention is modeled on), a plain substring check is not safe here: JS's
@@ -28,18 +27,36 @@ const TRACER_INIT_PATTERN = /^tracer\s*=\s*trace\.get_tracer\s*\(/;
  * make an accidental substring collision with an unrelated package effectively
  * impossible. Python's bare `opentelemetry` has no such delimiter.
  */
-// TODO(PRD #373): CodeRabbit flagged (2026-09-19, out of scope for the COV-002
-// milestone that surfaced it) that this pattern only anchors at the start of
-// the statement, so a compound import mixing an OTel module with an unrelated
-// one on the same line (e.g. `import opentelemetry, os`) would match and get
-// the whole statement — including the unrelated module — spliced in verbatim.
-// Needs a fix that validates every module named in the statement, not just
-// the first, before accepting it as OTel-only.
-const OTEL_IMPORT_PATTERN = /^(?:from|import)\s+opentelemetry\b(?:\.[A-Za-z_][A-Za-z0-9_]*)*/;
-
-function isOtelImport(importText: string): boolean {
-  return OTEL_IMPORT_PATTERN.test(importText);
+function isOtelModulePath(modulePath: string): boolean {
+  const normalized = modulePath.replace(/\s+/g, '');
+  return normalized === 'opentelemetry' || normalized.startsWith('opentelemetry.');
 }
+
+/**
+ * Every module path an import statement names: the `module_name` of a
+ * `from ... import`, or each module of an `import a, b as c` (unwrapping an
+ * `aliased_import` to its module). A relative import's module is never OTel.
+ */
+function importedModulePaths(stmt: Node): string[] {
+  if (stmt.type === 'import_from_statement') {
+    const moduleName = stmt.childForFieldName('module_name');
+    return moduleName === null ? [] : [moduleName.type === 'dotted_name' ? moduleName.text : ''];
+  }
+  return stmt.childrenForFieldName('name')
+    .filter((n): n is Node => n !== null)
+    .map(n => (n.type === 'aliased_import' ? n.childForFieldName('name')?.text ?? '' : n.text));
+}
+
+/**
+ * How an import statement relates to OpenTelemetry: `otel` when every module it
+ * names is OTel and no other statement shares its lines, `mixed` when it names an
+ * OTel module alongside an unrelated one (`import opentelemetry, os`) or shares a
+ * line with another statement while either is an OTel import (`from opentelemetry
+ * import trace; import os`), and `none` otherwise. A `mixed` statement cannot be
+ * spliced on its own without also splicing the unrelated code, because statements
+ * are spliced as whole source lines.
+ */
+type OtelImportKind = 'otel' | 'mixed' | 'none';
 
 /**
  * Extract a named function (including its full decorator range, however many
@@ -201,18 +218,34 @@ function reindent(text: string, fromIndent: string, targetIndent: string): strin
  * is never mistaken for a module-level import, and a multi-line import's
  * continuation lines are never mistaken for a second, separate import.
  */
-function findModuleLevelImportRanges(code: string): Array<{ text: string; endRow: number }> {
+function findModuleLevelImportRanges(code: string): Array<{ text: string; endRow: number; otelKind: OtelImportKind }> {
   const tree = parsePython(code);
   const lines = code.split('\n');
-  const ranges: Array<{ text: string; endRow: number }> = [];
+  const ranges: Array<{ text: string; endRow: number; otelKind: OtelImportKind }> = [];
 
   try {
-    for (const stmt of tree.rootNode.namedChildren) {
-      if (stmt === null) continue;
+    // Comments are root children too, but a trailing comment on an import's line
+    // is spliced harmlessly with it, so only real statements count as sharing a line.
+    const statements = tree.rootNode.namedChildren.filter((s): s is Node => s !== null && s.type !== 'comment');
+    const isOtelImportStatement = (s: Node): boolean =>
+      (s.type === 'import_statement' || s.type === 'import_from_statement') && importedModulePaths(s).some(isOtelModulePath);
+    const sharesLines = (a: Node, b: Node): boolean =>
+      a.startIndex !== b.startIndex && a.startPosition.row <= b.endPosition.row && b.startPosition.row <= a.endPosition.row;
+
+    for (const stmt of statements) {
       if (stmt.type === 'import_statement' || stmt.type === 'import_from_statement') {
+        const modules = importedModulePaths(stmt);
+        const linesShared = statements.filter(other => sharesLines(stmt, other));
+        let otelKind: OtelImportKind = 'none';
+        if (modules.some(isOtelModulePath)) {
+          otelKind = modules.every(isOtelModulePath) && linesShared.length === 0 ? 'otel' : 'mixed';
+        } else if (linesShared.some(isOtelImportStatement)) {
+          otelKind = 'mixed';
+        }
         ranges.push({
           text: lines.slice(stmt.startPosition.row, stmt.endPosition.row + 1).join('\n'),
           endRow: stmt.endPosition.row,
+          otelKind,
         });
       }
     }
@@ -307,8 +340,9 @@ function markSkipped(result: FunctionResult, reason: string): void {
  * by name, since two functions in different classes can share the same name.
  *
  * A successful result whose replacement is not spliced (its output has a parse
- * error, its decorators differ from the original's, or the function is missing
- * from the output) is marked failed in place, with the reason in `error`.
+ * error, its decorators differ from the original's, an import statement mixes
+ * OTel with other code, or the function is missing from the output) is marked
+ * failed in place, with the reason in `error`.
  *
  * For each successful `FunctionResult`: extracts the instrumented function (with
  * its full decorator range) from the LLM output, reconciles its indentation against
@@ -391,12 +425,24 @@ export function reassemblePythonFunctions(
       continue;
     }
 
+    // Reject the whole function, rather than splicing it without the statement or
+    // rewriting the statement, when an import mixes OTel with unrelated code.
+    // Splicing the statement would bring in the unrelated module verbatim; dropping
+    // it would leave any name it imported unbound, and CDQ-012 (Tracer Bound) only
+    // catches `tracer` and `trace`, so another name such as `os` would pass every
+    // check and raise `NameError` at runtime (Decision D-D3e-5).
+    const importRanges = findModuleLevelImportRanges(result.instrumentedCode);
+    if (importRanges.some(range => range.otelKind === 'mixed')) {
+      markSkipped(result, 'the instrumented output has an import statement that mixes OpenTelemetry with other code');
+      continue;
+    }
+
     const reconciledText = reindent(found.text, found.baseIndent, originalFound.baseIndent);
 
     replacements.push({ startLine: fn.startLine, endLine: fn.endLine, newLines: reconciledText.split('\n') });
 
-    for (const range of findModuleLevelImportRanges(result.instrumentedCode)) {
-      if (isOtelImport(range.text) && !originalImportLines.has(range.text) && !newImports.includes(range.text)) newImports.push(range.text);
+    for (const range of importRanges) {
+      if (range.otelKind === 'otel' && !originalImportLines.has(range.text) && !newImports.includes(range.text)) newImports.push(range.text);
     }
     // A module needs at most one tracer init. Different functions instrumented in
     // the same pass may each generate their own (typically identical, but not

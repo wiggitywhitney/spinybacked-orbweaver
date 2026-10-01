@@ -960,3 +960,86 @@ describe('reassemblePythonFunctions — malformed model output', () => {
     expect(reassembled).toContain('start_as_current_span("handler_two")');
   });
 });
+
+describe('reassemblePythonFunctions — compound OTel imports', () => {
+  // Same two-function shape as the malformed-output suite: `handler_one` receives
+  // the output under test and `handler_two` receives valid output that must still
+  // be spliced, so a rejection test cannot pass because nothing was spliced.
+  const original = [
+    'def handler_one(req):',
+    '    a = 1',
+    '    b = 2',
+    '    return a + b',
+    '',
+    'def handler_two(req):',
+    '    c = 1',
+    '    d = 2',
+    '    return c + d',
+    '',
+  ].join('\n');
+
+  const validTwo = [
+    'def handler_two(req):',
+    '    with tracer.start_as_current_span("handler_two") as span:',
+    '        c = 1',
+    '        d = 2',
+    '        return c + d',
+  ].join('\n');
+
+  function instrumentedOne(importLine: string): string {
+    return [
+      importLine,
+      '',
+      'def handler_one(req):',
+      '    with tracer.start_as_current_span("handler_one") as span:',
+      '        a = 1',
+      '        b = 2',
+      '        return a + b',
+    ].join('\n');
+  }
+
+  function reassembleOne(importLine: string): { reassembled: string; one: FunctionResult } {
+    const extracted = extractPythonFunctions(original);
+    expect(extracted.map(f => f.name)).toEqual(['handler_one', 'handler_two']);
+    const one = result({ name: 'handler_one', instrumentedCode: instrumentedOne(importLine) });
+    const reassembled = reassemblePythonFunctions(original, extracted, [
+      one,
+      result({ name: 'handler_two', instrumentedCode: validTwo }),
+    ]);
+    return { reassembled, one };
+  }
+
+  it.each([
+    ['an OTel module and an unrelated one in one import', 'import opentelemetry, os'],
+    ['an OTel submodule and an unrelated one in one import', 'import opentelemetry.trace, os'],
+    ['an aliased OTel submodule and an unrelated one in one import', 'import opentelemetry.trace as ot, os'],
+    ['an unrelated module listed before an OTel one', 'import os, opentelemetry.trace'],
+    ['an OTel import joined to an unrelated one with a semicolon', 'from opentelemetry import trace; import os'],
+    ['an unrelated import joined to an OTel one with a semicolon', 'import os; from opentelemetry import trace'],
+    ['an OTel import joined to a non-import statement with a semicolon', 'from opentelemetry import trace; x = 1'],
+  ])('rejects %s and marks the function failed', (_label, importLine) => {
+    const { reassembled, one } = reassembleOne(importLine);
+    expect(reassembled).toContain('start_as_current_span("handler_two")');
+    expect(reassembled).not.toContain('start_as_current_span("handler_one")');
+    expect(reassembled).toContain(['def handler_one(req):', '    a = 1', '    b = 2', '    return a + b'].join('\n'));
+    expect(reassembled).not.toContain('os');
+    expect(reassembled).not.toContain('x = 1');
+    expect(reassembled).not.toContain('import opentelemetry');
+    expect(reassembled).not.toContain('from opentelemetry');
+    expect(one.success).toBe(false);
+    expect(one.error).toBe('Reassembly skipped: the instrumented output has an import statement that mixes OpenTelemetry with other code');
+  });
+
+  it.each([
+    ['several OTel modules in one import', 'import opentelemetry.trace, opentelemetry.context'],
+    ['several names from one OTel module', 'from opentelemetry import trace, context'],
+    ['an aliased OTel import', 'import opentelemetry.trace as ot'],
+    ['an OTel import with a trailing comment', 'from opentelemetry import trace  # tracing'],
+  ])('still splices %s', (_label, importLine) => {
+    const { reassembled, one } = reassembleOne(importLine);
+    expect(reassembled).toContain('start_as_current_span("handler_one")');
+    expect(reassembled).toContain('start_as_current_span("handler_two")');
+    expect(reassembled).toContain(importLine);
+    expect(one.success).toBe(true);
+  });
+});
