@@ -333,10 +333,13 @@ describe('PythonProvider', () => {
       expect(sections.errorHandling).not.toMatch(/\bDO add manual\b/);
     });
 
-    it('errorHandling limits manual recording to a start_span() span that is ended by hand', () => {
+    it('errorHandling limits manual recording to a hand-ended start_span() span and a with span that turns automatic recording off', () => {
       const sections = provider.getSystemPromptSections();
       expect(sections.errorHandling).toMatch(/start_span\(\)/);
       expect(sections.errorHandling).toMatch(/ended by hand/i);
+      expect(sections.errorHandling).toMatch(/exactly two cases/i);
+      expect(sections.errorHandling).toMatch(/record_exception=False[^.]*set_status_on_exception=False/);
+      expect(sections.errorHandling).toMatch(/If only one of the two is \\?`?False/);
     });
 
     it('spanCreation no longer sends the agent to record a swallowed error manually', () => {

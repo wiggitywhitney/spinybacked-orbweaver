@@ -118,6 +118,76 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
     });
   });
 
+  describe('context-managed span with automatic recording disabled', () => {
+    /** A `with` span whose call passes the given keyword arguments, re-raising with the given except body. */
+    function disabled(call: string, ...exceptBody: string[]): string {
+      return py(
+        'def fetch_user(user_id):',
+        `    with ${call} as span:`,
+        '        try:',
+        '            return requests.get(f"https://api.example.com/users/{user_id}")',
+        '        except requests.RequestException as exc:',
+        ...exceptBody.map(l => `            ${l}`),
+      );
+    }
+
+    it.each([
+      ['start_as_current_span', 'tracer.start_as_current_span("fetch_user", record_exception=False, set_status_on_exception=False)'],
+      ['start_span', 'tracer.start_span("fetch_user", record_exception=False, set_status_on_exception=False)'],
+      ['use_span', 'trace.use_span(existing, record_exception=False, set_status_on_exception=False)'],
+    ])('flags a re-raise with no recording when %s disables both kinds of automatic recording', (_label, call) => {
+      const results = checkPythonErrorVisibility(disabled(call, 'raise'), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(8);
+    });
+
+    it('passes when the except block records on the span before re-raising', () => {
+      const code = disabled(
+        'tracer.start_as_current_span("fetch_user", record_exception=False, set_status_on_exception=False)',
+        'span.record_exception(exc)',
+        'raise',
+      );
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it.each([
+      ['only record_exception is disabled', 'tracer.start_as_current_span("fetch_user", record_exception=False)'],
+      ['only set_status_on_exception is disabled', 'tracer.start_as_current_span("fetch_user", set_status_on_exception=False)'],
+      ['the flags are not literal False', 'tracer.start_as_current_span("fetch_user", record_exception=flag, set_status_on_exception=flag)'],
+    ])('stays exempt when %s, because the SDK can still record the error', (_label, call) => {
+      const results = checkPythonErrorVisibility(disabled(call, 'raise'), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('stays exempt when the disabled span has no `as` name, since nothing could satisfy the check without changing the original with line', () => {
+      const code = py(
+        'def fetch_user(user_id):',
+        '    with tracer.start_as_current_span("fetch_user", record_exception=False, set_status_on_exception=False):',
+        '        try:',
+        '            return requests.get(f"https://api.example.com/users/{user_id}")',
+        '        except requests.RequestException:',
+        '            raise',
+      );
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes for a swallowing except block even when both kinds of recording are disabled', () => {
+      const code = disabled(
+        'tracer.start_as_current_span("fetch_user", record_exception=False, set_status_on_exception=False)',
+        'return None',
+      );
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('swallowing except block', () => {
     it('passes for a graceful fallback inside a context-managed span with no recording', () => {
       // A handled error should not be recorded on the span, so this must not be required.

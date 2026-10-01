@@ -1,5 +1,5 @@
 // ABOUTME: COV-003 Python Tier 2 check — failable operations have error visibility.
-// ABOUTME: Flags a re-raising except block past a manually ended span that never records the error on it.
+// ABOUTME: Flags a re-raising except block past a span nothing records automatically, unless the error is recorded on it.
 
 import { type Node } from 'web-tree-sitter';
 import { parsePython } from '../ast.ts';
@@ -74,6 +74,28 @@ function findSpanWithItem(withClause: Node): Node | undefined {
 }
 
 /**
+ * Whether a span-opening `with_item`'s call passes both `record_exception=False`
+ * and `set_status_on_exception=False`. With both disabled, the SDK records nothing
+ * when an exception leaves the block, so the span is covered no better than one
+ * ended by hand. Disabling only one still leaves the SDK recording the exception
+ * event or the ERROR status, and either satisfies this check. Only a literal
+ * `False` counts, since a variable's value cannot be known statically.
+ */
+function disablesAutomaticRecording(withItem: Node): boolean {
+  const expr = withItem.namedChild(0);
+  const call = expr?.type === 'as_pattern' ? expr.namedChild(0) : expr;
+  const args = call?.childForFieldName('arguments');
+  if (args === null || args === undefined) return false;
+  const disabled = new Set<string>();
+  for (const arg of args.namedChildren) {
+    if (arg?.type !== 'keyword_argument') continue;
+    const name = arg.childForFieldName('name')?.text;
+    if (name !== undefined && arg.childForFieldName('value')?.type === 'false') disabled.add(name);
+  }
+  return disabled.has('record_exception') && disabled.has('set_status_on_exception');
+}
+
+/**
  * The identifier bound by a span-creating `with_item`'s `as` clause (e.g. the
  * `span` in `with tracer.start_as_current_span(...) as span:`), or `null` if
  * the `with` has no `as` binding at all (`with tracer.start_as_current_span(...):`).
@@ -145,7 +167,8 @@ function manualSpanVariableBefore(statement: Node): string | null {
 interface SpanScope {
   /**
    * `managed`: a `with` block opens or activates the span, so the SDK records an exception leaving the block.
-   * `manual`: the span came from `start_span()` and is ended by hand, so nothing records it automatically.
+   * `manual`: nothing records an exception on the span automatically, because it came from `start_span()`
+   *   and is ended by hand, or because its `with` call disables both kinds of automatic recording.
    * `none`: no enclosing span.
    */
   readonly kind: 'managed' | 'manual' | 'none';
@@ -172,7 +195,12 @@ function findEnclosingSpanScope(node: Node): SpanScope {
       if (clause !== undefined) {
         const spanItem = findSpanWithItem(clause);
         if (spanItem !== undefined) {
-          return { kind: 'managed', spanVarName: spanVarNameFromWithItem(spanItem) };
+          const spanVarName = spanVarNameFromWithItem(spanItem);
+          // A disabled-recording span with no `as` name stays exempt: nothing could
+          // record on it without changing the original `with` line, so a finding
+          // there would block the file with no valid fix.
+          const kind = spanVarName !== null && disablesAutomaticRecording(spanItem) ? 'manual' : 'managed';
+          return { kind, spanVarName };
         }
       }
     }
@@ -247,7 +275,10 @@ function containsErrorRecordingCall(node: Node, isRoot: boolean, spanVarName: st
  * that propagates out of their block is already recorded. Only a span from
  * `start_span()` that is assigned to a variable and ended by hand has no such
  * coverage, so a re-raising `except` block inside one needs a manual
- * `span.record_exception()`/`span.set_status()` call.
+ * `span.record_exception()`/`span.set_status()` call. So does one inside a `with`
+ * span whose call passes both `record_exception=False` and
+ * `set_status_on_exception=False`, which turns that automatic recording off, when
+ * the `with` binds the span to a name with `as`.
  *
  * An `except` block that swallows its exception (no `raise`) is never flagged:
  * the error was handled, and OpenTelemetry says handled errors should not be
@@ -288,7 +319,7 @@ export function checkPythonErrorVisibility(code: string, filePath: string): Chec
       passed: true,
       filePath,
       lineNumber: null,
-      message: 'No except block re-raises past a manually ended span without recording the error on it.',
+      message: 'No except block re-raises past a span that nothing records automatically without recording the error on it.',
       tier: 2,
       blocking: true,
     }];
@@ -300,8 +331,9 @@ export function checkPythonErrorVisibility(code: string, filePath: string): Chec
     filePath,
     lineNumber: u.line,
     message:
-      `COV-003 check failed: except block at line ${u.line} re-raises past a span opened with \`start_span()\` and ended by hand, ` +
-      `so nothing records the exception on it automatically. Call \`span.record_exception(e)\` and ` +
+      `COV-003 check failed: except block at line ${u.line} re-raises past a span that nothing records exceptions on automatically ` +
+      `(opened with \`start_span()\` and ended by hand, or a \`with\` span that passes both \`record_exception=False\` and ` +
+      `\`set_status_on_exception=False\`). Call \`span.record_exception(e)\` and ` +
       `\`span.set_status(Status(StatusCode.ERROR, str(e)))\` before the \`raise\`, or open the span with ` +
       `\`with tracer.start_as_current_span(...)\`, which records it for you.`,
     tier: 2 as const,
