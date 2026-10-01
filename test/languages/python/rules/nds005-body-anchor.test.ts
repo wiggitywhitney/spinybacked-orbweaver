@@ -91,6 +91,23 @@ describe('extractBodyAnchor (Python NDS-005)', () => {
     expect(anchorOfFirstTry(source)).toBe('result = read(path)');
   });
 
+  it("does not recurse into the developer's own nested try, so the outer and inner anchors differ", () => {
+    const source = [
+      'def load(path):',
+      '    try:',
+      '        try:',
+      '            result = read(path)',
+      '        except ValueError:',
+      '            return None',
+      '        process(result)',
+      '    except OSError:',
+      '        raise',
+      '',
+    ].join('\n');
+
+    expect(anchorOfFirstTry(source)).toBe('try:');
+  });
+
   it('returns an empty anchor when the try body holds only OTel statements', () => {
     const source = [
       'def load(path):',

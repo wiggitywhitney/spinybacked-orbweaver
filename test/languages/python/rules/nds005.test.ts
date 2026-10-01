@@ -255,6 +255,45 @@ describe('checkPythonControlFlowPreservation (NDS-005)', () => {
     });
   });
 
+  describe("a try nested first inside the developer's own try", () => {
+    const original = [
+      'def load():',
+      '    try:',
+      '        try:',
+      '            read()',
+      '        except ValueError:',
+      '            return None',
+      '        process()',
+      '    except OSError:',
+      '        raise',
+      '',
+    ].join('\n');
+    const wrap = (innerExcept: string): string => [
+      'def load():',
+      '    with tracer.start_as_current_span("load"):',
+      '        try:',
+      '            try:',
+      '                read()',
+      `            ${innerExcept}`,
+      '                return None',
+      '            process()',
+      '        except OSError:',
+      '            raise',
+      '',
+    ].join('\n');
+
+    it('passes when both blocks are preserved inside a with-span', () => {
+      const results = checkPythonControlFlowPreservation(original, wrap('except ValueError:'), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it("flags the inner block's except type changing", () => {
+      const results = checkPythonControlFlowPreservation(original, wrap('except KeyError:'), filePath);
+      expect(results.some(r => !r.passed)).toBe(true);
+    });
+  });
+
   describe('removed structure', () => {
     it('flags a try/except block entirely removed from the instrumented output', () => {
       const original = [

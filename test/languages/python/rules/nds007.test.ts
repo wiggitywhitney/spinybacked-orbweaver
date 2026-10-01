@@ -73,6 +73,40 @@ describe('checkPythonNoErrorRecordingInExpectedConditionExcepts (NDS-007)', () =
       expect(results).toHaveLength(1);
       expect(results[0].passed).toBe(false);
     });
+
+    it("flags record_exception() added to a swallowing except in a try nested first inside the developer's own try", () => {
+      const original = [
+        'def load():',
+        '    try:',
+        '        try:',
+        '            read()',
+        '        except ValueError:',
+        '            return None',
+        '        process()',
+        '    except OSError:',
+        '        raise',
+        '',
+      ].join('\n');
+      const instrumented = [
+        'def load():',
+        '    with tracer.start_as_current_span("load") as span:',
+        '        try:',
+        '            try:',
+        '                read()',
+        '            except ValueError as exc:',
+        '                span.record_exception(exc)',
+        '                return None',
+        '            process()',
+        '        except OSError:',
+        '            raise',
+        '',
+      ].join('\n');
+
+      const results = checkPythonNoErrorRecordingInExpectedConditionExcepts(original, instrumented, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(6);
+    });
   });
 
   describe('not a violation', () => {

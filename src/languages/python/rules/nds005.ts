@@ -58,8 +58,8 @@ function clauseBlock(clause: Node): Node | undefined {
  * Extract a normalized body anchor from the try clause's first meaningful
  * statement — mirrors JS's own `extractBodyAnchor()`. Skips OTel-only
  * expression statements, looks inside a span-opening `with` block, and
- * recurses into a nested try (instrumentation may wrap the body in one, e.g.
- * a raw `start_span()` + `try`/`finally` pattern).
+ * recurses into a nested try only when it is an instrumentation span wrapper
+ * (`isOtelTryFinally()`, e.g. a raw `start_span()` + `try`/`finally` pattern).
  */
 export function extractBodyAnchor(tryStmt: Node): string {
   const tryBlock = tryStmt.childForFieldName('body');
@@ -84,7 +84,10 @@ function firstMeaningfulAnchor(statements: Node[]): string {
       if (innerAnchor) return innerAnchor;
       continue;
     }
-    if (stmt.type === 'try_statement') {
+    // Only an instrumentation span wrapper is looked through. The developer's own nested
+    // try is real code: recursing into it would give the outer and inner blocks the same
+    // anchor, and NDS-007 skips an anchor shared by two blocks as ambiguous.
+    if (stmt.type === 'try_statement' && isOtelTryFinally(stmt)) {
       const nestedAnchor = extractBodyAnchor(stmt);
       if (nestedAnchor) return nestedAnchor;
       continue;
