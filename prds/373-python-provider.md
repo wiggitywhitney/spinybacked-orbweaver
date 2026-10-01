@@ -459,7 +459,7 @@ This check is **advisory**, not blocking — matching JavaScript API-002's dispo
 
 ### Milestone D5: Golden file tests
 
-**Prerequisite (Updated per Decision D-D3e-1):** Milestone D3e must be complete first, because the golden fixtures run the whole pipeline, including function reassembly, and D3e closes the known reassembly gaps.
+**Prerequisite (Updated per Decision D-D3e-1):** Milestone D3e must be complete first, because the golden fixtures run the whole pipeline, including function reassembly, and D3e closes the known reassembly gaps. (Updated per Decision D-D3e-5: D3e is complete, but one reassembly gap moved to Milestone D3f Task 6, where a non-OTel import the model adds on its own line is dropped while its function still splices. If a golden fixture's model output adds such an import, finish D3f Task 6 first, because that task decides whether the function is rejected and so changes the expected output.)
 
 Following Part 8 checklist, Step 4:
 
