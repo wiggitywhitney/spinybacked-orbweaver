@@ -50,9 +50,11 @@ export function extractBodyAnchor(tryStmt: TryStatement): string {
     const text = stmt.getText().trim();
     // Skip OTel-only statements
     if (isOtelLine(text)) continue;
-    // Skip nested try statements (instrumentation may wrap in try/finally)
-    if (Node.isTryStatement(stmt)) {
-      // Recurse into nested try to find the real anchor
+    // Look through a nested try only when it is an instrumentation try/finally wrapper.
+    // The developer's own nested try is real code: recursing into it would give the
+    // outer and inner blocks the same anchor, and NDS-007 skips a shared anchor as ambiguous.
+    if (Node.isTryStatement(stmt) && isOtelTryFinally(stmt)) {
+      // Recurse into the wrapper to find the real anchor
       const nestedAnchor = extractBodyAnchor(stmt);
       if (nestedAnchor) return nestedAnchor;
       continue;

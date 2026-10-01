@@ -2,7 +2,8 @@
 // ABOUTME: Verifies that instrumentation does not restructure existing try/catch/finally blocks.
 
 import { describe, it, expect } from 'vitest';
-import { checkControlFlowPreservation } from '../../../../src/languages/javascript/rules/nds005.ts';
+import { Project, SyntaxKind } from 'ts-morph';
+import { checkControlFlowPreservation, extractBodyAnchor } from '../../../../src/languages/javascript/rules/nds005.ts';
 
 describe('checkControlFlowPreservation (NDS-005)', () => {
   const filePath = '/test/example.js';
@@ -804,6 +805,61 @@ describe('checkControlFlowPreservation (NDS-005)', () => {
       ].join('\n');
 
       const results = checkControlFlowPreservation(original, instrumented, filePath);
+      expect(results.some(r => !r.passed)).toBe(true);
+    });
+  });
+
+  describe("a try nested first inside the developer's own try", () => {
+    const original = [
+      'function load() {',
+      '  try {',
+      '    try {',
+      '      read();',
+      '    } catch (e) {',
+      '      return null;',
+      '    }',
+      '    process();',
+      '  } catch (err) {',
+      '    throw err;',
+      '  }',
+      '}',
+    ].join('\n');
+    const wrap = (outerCatchBody: string): string => [
+      'function load() {',
+      '  return tracer.startActiveSpan("load", (span) => {',
+      '    try {',
+      '      try {',
+      '        try {',
+      '          read();',
+      '        } catch (e) {',
+      '          return null;',
+      '        }',
+      '        process();',
+      '      } catch (err) {',
+      `        ${outerCatchBody}`,
+      '      }',
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    it("anchors the outer block on its nested try, not on the inner block's first statement", () => {
+      const project = new Project({ useInMemoryFileSystem: true });
+      const source = project.createSourceFile('anchor.js', original);
+      const outerTry = source.getDescendantsOfKind(SyntaxKind.TryStatement)[0];
+      expect(extractBodyAnchor(outerTry)).toBe('try {');
+    });
+
+    it('passes when both blocks are preserved inside a span wrapper', () => {
+      const results = checkControlFlowPreservation(original, wrap('throw err;'), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it("flags the outer block's rethrow being removed", () => {
+      const results = checkControlFlowPreservation(original, wrap('console.error(err);'), filePath);
       expect(results.some(r => !r.passed)).toBe(true);
     });
   });
