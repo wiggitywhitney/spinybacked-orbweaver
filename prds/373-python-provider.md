@@ -381,7 +381,7 @@ Scope limits: change Python only. Do NOT change JavaScript COV-003 behavior. Do 
 
 ### Milestone D3e: Harden Python function reassembly
 
-**Step 0:** Read `src/languages/python/reassembly.ts` and `test/languages/python/reassembly.test.ts` in full, then Decisions D-D1-5, D-D3e-1 and D-D3e-2 in this PRD. D-D3e-2 closed the tracer-binding gap with the CDQ-012 (Tracer Bound) rule in `src/languages/python/rules/cdq012.ts`. Reassembly stays a pure splice, so tasks 2 and 3 must not add tracer checks to it. Context is cleared between milestones, so do not rely on memory of this file's prior hardening.
+**Step 0:** Read `src/languages/python/reassembly.ts` and `test/languages/python/reassembly.test.ts` in full, then Decisions D-D1-5, D-D3e-1, D-D3e-2, D-D3e-3 and D-D3e-4 in this PRD. D-D3e-3 made reassembly reject a function whose output has any parse error; D-D3e-4 made it mark every skipped result failed through `markSkipped()`, which Task 3 must decide whether to use. D-D3e-2 closed the tracer-binding gap with the CDQ-012 (Tracer Bound) rule in `src/languages/python/rules/cdq012.ts`. Reassembly stays a pure splice, so tasks 2 and 3 must not add tracer checks to it. Context is cleared between milestones, so do not rely on memory of this file's prior hardening.
 
 Created by Decision D-D3e-1; must finish before Milestone D5 and is independent of Milestones D4 and D3f. Reassembly splices each individually instrumented function back into the original file on the per-function fallback path. It is a pure splice, and three known gaps let a broken or unrelated fragment reach the output file. Each is recorded in the code as a `TODO(PRD #373)` comment or in Decision D-D1-5; this milestone closes all three.
 

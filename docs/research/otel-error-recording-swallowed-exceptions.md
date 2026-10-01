@@ -9,6 +9,7 @@
 |------|---------|
 | 2026-09-29 | Initial research (PRD #373 follow-up to the CodeRabbit finding on Python COV-003; Decision D-COV003-1) |
 | 2026-09-29 | Clarified recommendation 2 after reading JavaScript's `isExpectedConditionCatch`: the Python equivalent exempts every swallowing `except`, leaving COV-003 with only the raw `start_span()` re-raise case |
+| 2026-09-30 | Replaced the caveat that JavaScript's lack of automatic recording in `startActiveSpan` was unverified: confirmed against the installed SDK 2.6.0 source |
 | 2026-09-30 | Re-fetched all four OTel pages to validate a CodeRabbit finding on the CDQ-003 (standard error-recording sequence) row of `docs/rules-reference.md`. Nothing removed: Findings 1 to 4 still match the current pages. Added Finding 9 (CDQ-003 validation), which records that the Stable trace exceptions spec still gives the exception event a conditional SHOULD for an exception that escapes the span, and that the Development-status recording-errors page names only logs for exceptions and says not to record one exception more than once |
 
 ## Findings
@@ -81,7 +82,7 @@ The CDQ-003 row of `docs/rules-reference.md` says "both `recordException` and `s
 
 ### Caveats
 - Exempting every swallowing `except` also exempts one that hides a genuine failure, because static analysis cannot tell that from graceful degradation. JavaScript's `isExpectedConditionCatch` has the same limit and accepts it. It is a known false negative, accepted for the same reason the project prioritizes avoiding false positives (Decision D-COV003-2).
-- JavaScript's "no automatic recording in `startActiveSpan`" was not re-verified: the SDK source URL returned 404 and the JS docs fetch truncated before the section. It rests on the project's earlier rule file and on JS COV-003's own design.
+- JavaScript's "no automatic recording in `startActiveSpan`" was verified on 2026-09-30 against the installed `@opentelemetry/sdk-trace-base` 2.6.0 (`build/src/Tracer.js`): `startActiveSpan` starts the span and runs the callback with `api.context.with(...)`, with no try/catch and no `recordException` or `setStatus` call.
 - The exceptions-on-spans page is deprecated and the recording-errors guidance is marked Development in places, so wording may change.
 - Only one instrumentation library was examined. The Datadog error-tracking requirements come from an unfetched search summary.
 - The COV-003 and NDS-007 probe used one example. Other exception shapes (logging then swallowing, nested handlers) were not tried.
