@@ -44,6 +44,29 @@ describe('checkErrorVisibility (COV-003)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when span has only recordException in catch (either call satisfies the check)', () => {
+      const code = [
+        'const { trace } = require("@opentelemetry/api");',
+        'const tracer = trace.getTracer("svc");',
+        'function processOrder(order) {',
+        '  return tracer.startActiveSpan("processOrder", (span) => {',
+        '    try {',
+        '      return submitOrder(order);',
+        '    } catch (error) {',
+        '      span.recordException(error);',
+        '      throw error;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('passes when span has setStatus for error', () => {
       const code = [
         'const { trace } = require("@opentelemetry/api");',

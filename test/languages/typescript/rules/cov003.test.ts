@@ -44,6 +44,52 @@ describe('checkErrorVisibilityTs (COV-003 TypeScript)', () => {
       expect(results[0].passed).toBe(true);
     });
 
+    it('passes when catch has only recordException (either call satisfies the check)', () => {
+      const code = [
+        "import { trace } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export async function getUser(): Promise<string> {',
+        '  return tracer.startActiveSpan("getUser", async (span) => {',
+        '    try {',
+        '      return "user";',
+        '    } catch (err: unknown) {',
+        '      span.recordException(err instanceof Error ? err : new Error(String(err)));',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('passes when catch has only setStatus (either call satisfies the check)', () => {
+      const code = [
+        "import { trace, SpanStatusCode } from '@opentelemetry/api';",
+        'const tracer = trace.getTracer("svc");',
+        'export async function getUser(): Promise<string> {',
+        '  return tracer.startActiveSpan("getUser", async (span) => {',
+        '    try {',
+        '      return "user";',
+        '    } catch (err: unknown) {',
+        '      span.setStatus({ code: SpanStatusCode.ERROR });',
+        '      throw err;',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = checkErrorVisibilityTs(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
     it('flags when catch (err: unknown) has no error recording', () => {
       const code = [
         "import { trace } from '@opentelemetry/api';",

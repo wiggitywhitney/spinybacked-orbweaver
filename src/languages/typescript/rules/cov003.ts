@@ -143,6 +143,9 @@ export function checkErrorVisibilityTs(code: string, filePath: string): CheckRes
     passed: false as const,
     filePath,
     lineNumber: i.line,
+    // The message asks for both calls as the project convention (see the CDQ-003
+    // row of docs/rules-reference.md), not an OTel requirement. Either call on
+    // the span satisfies this check.
     message:
       `COV-003 check failed: ${i.description}. ` +
       `Add span.recordException(error) and span.setStatus({ code: SpanStatusCode.ERROR }) ` +
