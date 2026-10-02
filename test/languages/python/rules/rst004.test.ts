@@ -114,6 +114,21 @@ describe('checkPythonInternalDetailSpans (RST-004)', () => {
       expect(results[0].passed).toBe(false);
     });
 
+    it('flags an unexported function whose only call merely contains an I/O pattern inside a longer name', () => {
+      const code = [
+        'def _report(x):',
+        '    with tracer.start_as_current_span("_report"):',
+        '        _publish_metrics(x)',
+        '        reopen(x)',
+        '        return _consume_tokens(x)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
     it('flags an unexported function whose only I/O call is inside a nested definition', () => {
       const code = [
         'def _helper(x):',
@@ -207,6 +222,20 @@ describe('checkPythonInternalDetailSpans (RST-004)', () => {
         '    with tracer.start_as_current_span("_load"):',
         '        with open(path) as f:',
         '            return f.read()',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag an unexported function whose I/O pattern is a whole name in the callee', () => {
+      const code = [
+        'def _emit(self, msg):',
+        '    with tracer.start_as_current_span("_emit"):',
+        '        self.bus.publish(msg)',
+        '        boto3.client("s3")',
         '',
       ].join('\n');
 

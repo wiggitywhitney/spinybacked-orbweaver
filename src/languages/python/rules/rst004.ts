@@ -23,6 +23,21 @@ const IO_PATTERNS = [
   'publish', 'send_to_queue', 'consume',
 ];
 
+/**
+ * Each `IO_PATTERNS` entry as a regex that matches only at identifier
+ * boundaries: a pattern that starts with an identifier character must not
+ * follow one, and a pattern that ends with one must not precede one. So
+ * `publish` matches `bus.publish(` but not `_publish_metrics(`, and `open(`
+ * matches `open(` but not `reopen(`. A pattern starting with `.` already
+ * begins at a boundary, so `.write(` still matches `f.write(`.
+ */
+const IO_PATTERN_REGEXES = IO_PATTERNS.map((pattern) => {
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const before = /^\w/.test(pattern) ? '(?<!\\w)' : '';
+  const after = /\w$/.test(pattern) ? '(?!\\w)' : '';
+  return new RegExp(`${before}${escaped}${after}`);
+});
+
 function toLine(node: Node): number {
   return node.startPosition.row + 1;
 }
@@ -66,9 +81,10 @@ function hasSpanCreationCall(node: Node, isRoot: boolean): boolean {
 /**
  * Whether a function body (not descending into nested scopes) makes a call
  * matching a known I/O pattern. Each pattern is matched against the callee
- * text followed by `(`, so `open(` matches `open(path)` and `.write(` matches
- * `f.write(data)`, while comments, strings, and calls inside a nested `def`,
- * `class`, or `lambda` do not count.
+ * text followed by `(`, at identifier boundaries (`IO_PATTERN_REGEXES`), so
+ * `open(` matches `open(path)` and `.write(` matches `f.write(data)`, while
+ * comments, strings, and calls inside a nested `def`, `class`, or `lambda` do
+ * not count.
  */
 function hasIOCalls(node: Node, isRoot: boolean): boolean {
   if (!isRoot && (node.type === 'function_definition' || node.type === 'class_definition'
@@ -79,7 +95,7 @@ function hasIOCalls(node: Node, isRoot: boolean): boolean {
     const fn = node.childForFieldName('function');
     if (fn !== null) {
       const callText = `${fn.text}(`;
-      if (IO_PATTERNS.some((pattern) => callText.includes(pattern))) return true;
+      if (IO_PATTERN_REGEXES.some((regex) => regex.test(callText))) return true;
     }
   }
   for (const child of node.namedChildren) {
