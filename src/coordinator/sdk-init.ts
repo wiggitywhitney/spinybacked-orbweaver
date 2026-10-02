@@ -281,7 +281,7 @@ const LANGCHAIN_PACKAGE = '@traceloop/instrumentation-langchain';
  * Build the fallback file's comment on activating @traceloop/* libraries.
  * Every library is constructed in the exported instrumentations array, so a
  * @traceloop/* library there is always active; gating one behind a flag means
- * removing its import and array entry. LangChain's manuallyInstrument() destructures its
+ * copying the array into the user's own setup without its import and entry. LangChain's manuallyInstrument() destructures its
  * argument and throws when called bare, so it gets an explicit line passing
  * LangChain's callback manager module.
  */
@@ -289,8 +289,9 @@ function traceloopActivationComment(libraries: LibraryRequirement[], esm: boolea
   const load = (specifier: string): string =>
     esm ? `await import('${specifier}')` : `require('${specifier}')`;
 
-  const generic = (scope: string): string => `// If any ${scope} below is a @traceloop/* library, it is always active in the array.
-// To gate it behind a flag instead, remove its import and its array entry below, then activate it conditionally:
+  const generic = (scope: string): string => `// If any ${scope} below is a @traceloop/* library, importing this array always activates it.
+// To gate it behind a flag instead, copy the array into your own setup file without its
+// import and entry, then activate it conditionally:
 //
 //   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {
 //     const { SomeInstrumentation } = ${load('@traceloop/...')};
@@ -301,9 +302,10 @@ function traceloopActivationComment(libraries: LibraryRequirement[], esm: boolea
     return generic('package');
   }
 
-  const langchain = `// ${LANGCHAIN_PACKAGE} is always active in the array below.
-// To gate it behind a flag instead, remove its import and \`new LangChainInstrumentation()\` below,
-// then activate it conditionally, passing LangChain's callback manager module:
+  const langchain = `// ${LANGCHAIN_PACKAGE} is always active when you import this array.
+// To gate it behind a flag instead, copy the array into your own setup file without its
+// import and \`new LangChainInstrumentation()\`, then activate it conditionally, passing
+// LangChain's callback manager module:
 //
 //   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {
 //     const { LangChainInstrumentation } = ${load(LANGCHAIN_PACKAGE)};

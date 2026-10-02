@@ -307,8 +307,9 @@ startTelemetry();
     /** Generic @traceloop/* block; `scope` is 'package' or 'other package'. */
     function generic(scope: string, load: (spec: string) => string): string {
       return [
-        `// If any ${scope} below is a @traceloop/* library, it is always active in the array.`,
-        '// To gate it behind a flag instead, remove its import and its array entry below, then activate it conditionally:',
+        `// If any ${scope} below is a @traceloop/* library, importing this array always activates it.`,
+        '// To gate it behind a flag instead, copy the array into your own setup file without its',
+        '// import and entry, then activate it conditionally:',
         '//',
         "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
         `//     const { SomeInstrumentation } = ${load('@traceloop/...')};`,
@@ -318,9 +319,10 @@ startTelemetry();
     }
     function langchainBlock(load: (spec: string) => string): string {
       return [
-        '// @traceloop/instrumentation-langchain is always active in the array below.',
-        '// To gate it behind a flag instead, remove its import and `new LangChainInstrumentation()` below,',
-        "// then activate it conditionally, passing LangChain's callback manager module:",
+        '// @traceloop/instrumentation-langchain is always active when you import this array.',
+        '// To gate it behind a flag instead, copy the array into your own setup file without its',
+        '// import and `new LangChainInstrumentation()`, then activate it conditionally, passing',
+        "// LangChain's callback manager module:",
         '//',
         "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
         `//     const { LangChainInstrumentation } = ${load('@traceloop/instrumentation-langchain')};`,
