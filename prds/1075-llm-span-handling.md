@@ -93,7 +93,7 @@ Run research spikes first on the October 2026 state of the GenAI semantic conven
 
 - [ ] **M7 — Confirm recommended libraries activate and emit spans (finding 4).**
   **Step 0:** Read M4's Decision Log row for decision 5. It must exist before this milestone begins — M4 gates this milestone.
-  Implement the check M4 chose, with failing tests first. Do not add an eval run as a step; if M4 chose an eval-side check, write it up under `## Eval cadence` in `docs/ROADMAP.md` instead. If M4 chose only the activation (no-throw) check, rename this milestone to "Confirm recommended libraries activate" and add a Decision Log row stating that span emission remains unverified, so the gap stays visible.
+  For a deterministic spiny-orb check (the in-memory exporter test or the activation check), implement it with failing tests first. For an eval-side check, write it up under `## Eval cadence` in `docs/ROADMAP.md` for the eval team; there is no test to write, and an eval run is never a step of this milestone. If M4 chose both kinds, do both. If M4 chose only the activation (no-throw) check, rename this milestone to "Confirm recommended libraries activate" and add a Decision Log row stating that span emission remains unverified, so the gap stays visible.
 
 - [ ] **M8 — Documentation and close-out.**
   Update user-facing docs on activating LLM auto-instrumentation (README and any guide that shows the Traceloop activation pattern) via `/write-docs`, using the activation calls M5 shipped, and state the content-capture recommendation from M4 decision 6, including how to turn capture on or off. If M6 or M7 changed a rule, confirm `docs/rules-reference.md` was updated. Add a `PROGRESS.md` entry. `npm run typecheck` and `npm test` pass.
