@@ -317,6 +317,7 @@ startTelemetry();
         '//   }',
       ].join('\n');
     }
+    /** LangChain block, passing the callback manager module to manuallyInstrument. */
     function langchainBlock(load: (spec: string) => string): string {
       return [
         '// @traceloop/instrumentation-langchain is always active when you import this array.',

@@ -281,9 +281,10 @@ const LANGCHAIN_PACKAGE = '@traceloop/instrumentation-langchain';
  * Build the fallback file's comment on activating @traceloop/* libraries.
  * Every library is constructed in the exported instrumentations array, so a
  * @traceloop/* library there is always active; gating one behind a flag means
- * copying the array into the user's own setup without its import and entry. LangChain's manuallyInstrument() destructures its
- * argument and throws when called bare, so it gets an explicit line passing
- * LangChain's callback manager module.
+ * copying the array into the user's own setup without its import and entry.
+ * LangChain's manuallyInstrument() destructures its argument and throws when
+ * called bare, so it gets an explicit line passing LangChain's callback manager
+ * module.
  */
 function traceloopActivationComment(libraries: LibraryRequirement[], esm: boolean): string {
   const load = (specifier: string): string =>
