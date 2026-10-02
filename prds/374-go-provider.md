@@ -278,7 +278,7 @@ Following Part 8 checklist, Step 1:
   - `isAsync`: **always `false`** — per OD-6 decision, Go has no async keyword; goroutines are deferred
   - `startLine`, `endLine`, `lineCount` — standard
 - [ ] `findImports()` handles Go import syntax: single import `import "pkg"`, import block, aliased import `import alias "pkg"`, blank import `import _ "pkg"` (for side effects, common in OTel setup)
-- [ ] `classifyFunction()` handles Go-specific entry point patterns: `http.HandleFunc`, `http.Handler` interface implementations, gRPC service methods, Gin/Echo/Fiber route handlers
+- [ ] `classifyFunction()` returns the `'unknown'` stub, matching the other three providers (Updated per PRD #373 Decision D-D3-1 and the cross-reference above: detecting `http.HandleFunc`, `http.Handler` interface implementations, gRPC service methods, and Gin/Echo/Fiber route handlers belongs in Milestone E3's `cov001.ts`, not here)
 - [ ] `detectExistingInstrumentation()` detects `go.opentelemetry.io/otel` imports and `tracer.Start()` calls
 - [ ] `extractFunctions()` respects Go's brace-delimited function bodies; correctly handles method sets on types
 - [ ] `reassembleFunctions()` preserves Go's formatting conventions; output will be run through `gofmt`
@@ -318,7 +318,7 @@ Following Part 8 checklist, Step 3:
 
 - [ ] Create `src/languages/go/rules/` directory
 - [ ] For each shared-concept rule, implement Go-specific version:
-  - `cov001.ts` — entry points: `http.HandleFunc`, `http.Handler` implementations, Gin/Echo route handlers, gRPC service methods
+  - `cov001.ts` — entry points: `http.HandleFunc`, `http.Handler` implementations, Gin/Echo/Fiber route handlers, gRPC service methods
   - `cov002.ts` — outbound calls: `http.Client.Get/Post/Do`, gRPC client calls, database calls
   - `cov003.ts` — error recording: `if err != nil` blocks that **return the error to the caller** without `span.RecordError(err)`. **Do NOT flag `if err != nil` blocks that swallow the error and return a default/zero value** — this is Go's equivalent of graceful degradation. Per the OTel spec (verified 2026-04-18 during PRD #483 audit, Decision 5): "Errors that were retried or handled (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans." ([Recording errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)). **Implementing agent: verify this spec clause still holds when you begin — spec language may have been refined.** The distinction matters: `if err != nil { return nil, err }` must be flagged (error propagates to caller); `if err != nil { return defaultResult, nil }` must NOT be flagged (error swallowed, caller sees success).
   - `cov004.ts` — async operations: per OD-6 (resolved in pre-implementation gate), `applicableTo('go') = false` for goroutines in the initial implementation; `isAsync` is always `false` for Go functions
@@ -350,9 +350,9 @@ This check is **advisory**, not blocking — matching JavaScript API-002's dispo
 
 **Implementation:**
 - [ ] Create the Go package-hygiene rule file at `src/languages/go/rules/api002.ts` (Updated per PRD #373 Decision D-D4-4: Python reuses the API-002 (dependency placement) rule ID, and Go follows)
-- [ ] Parse `go.mod` to extract declared dependencies from `require` blocks only — `replace` directives are resolution overrides, not dependency declarations; do not count them as requiring OTel packages
+- [ ] Parse `go.mod` to extract declared dependencies from `require` directives only, in both forms: a `require (...)` block and a single-line `require module/path v1.2.3`. `replace` directives are resolution overrides, not dependency declarations; do not count them as requiring OTel packages
 - [ ] Library vs. app classification per OD-9b — scan the module's Go files for any `package main` declaration; if absent, the module is a library
-- [ ] For libraries: verify `go.opentelemetry.io/otel` is in the `require` block (the API is always acceptable in libraries) and that no `go.opentelemetry.io/otel/sdk`, `go.opentelemetry.io/otel/exporters/*`, or `go.opentelemetry.io/contrib/instrumentation/*` package appears in `require` (those are deployer concerns)
+- [ ] For libraries: verify `go.opentelemetry.io/otel` is in the `require` block (the API is always acceptable in libraries) and that no `go.opentelemetry.io/otel/sdk` module or SDK submodule (any path starting with `go.opentelemetry.io/otel/sdk/`, such as `go.opentelemetry.io/otel/sdk/metric`, which is a separate Go module), `go.opentelemetry.io/otel/exporters/*`, or `go.opentelemetry.io/contrib/instrumentation/*` package appears in `require` (those are deployer concerns). Match the SDK as the exact root path or that prefix, so a module such as `go.opentelemetry.io/otel/sdkfoo` does not match
 - [ ] For apps: the rule passes trivially — apps can depend on anything they need
 - [ ] Workspace handling per OD-7: when `go.work` is present, apply the rule to each member `go.mod` independently; a library member must pass regardless of the workspace root's configuration
 - [ ] Message references the OTel Libraries guidance URL (same style as JavaScript API-002 after PRD #483 audit)
@@ -360,7 +360,7 @@ This check is **advisory**, not blocking — matching JavaScript API-002's dispo
 - [ ] Register the rule in the Go provider's rule registry and `hasImplementation()` returns `true` for it
 
 **Tests:**
-- [ ] Unit tests cover: library module correctly declares `go.opentelemetry.io/otel` (passes); library module pins `go.opentelemetry.io/otel/sdk` (fails); library module pins an exporter package (fails); library module pins a contrib instrumentation package (fails); app module pins the SDK (passes — apps are exempt); library module with no OTel API dependency (fails — library must declare go.opentelemetry.io/otel); app module with no OTel dependency at all (passes — apps are not required to declare the API; **reconcile before implementing:** PRD #373 Decision D-D4-6 made Python fail an application that does not declare `opentelemetry-api`, matching JavaScript API-002, because instrumented code imports the API directly — decide whether Go follows and record the outcome in this PRD's Decision Log); workspace with one library member pinning the SDK and one app member pinning the SDK (library fails; app passes)
+- [ ] Unit tests cover: library module correctly declares `go.opentelemetry.io/otel` (passes); library module pins `go.opentelemetry.io/otel/sdk` (fails); library module pins the SDK submodule `go.opentelemetry.io/otel/sdk/metric` (fails); library module pins `go.opentelemetry.io/otel/sdk` only in a single-line `require go.opentelemetry.io/otel/sdk v1.x.y` directive, with no `require (...)` block (fails, the same as the block form); library module pins an exporter package (fails); library module pins a contrib instrumentation package (fails); app module pins the SDK (passes — apps are exempt); library module with no OTel API dependency (fails — library must declare go.opentelemetry.io/otel); app module with no OTel dependency at all (passes — apps are not required to declare the API; **reconcile before implementing:** PRD #373 Decision D-D4-6 made Python fail an application that does not declare `opentelemetry-api`, matching JavaScript API-002, because instrumented code imports the API directly — decide whether Go follows and record the outcome in this PRD's Decision Log); workspace with one library member pinning the SDK and one app member pinning the SDK (library fails; app passes)
 - [ ] Integration test verifies the rule fires end-to-end through the coordinator/fix-loop pipeline for Go files
 - [ ] `npm test` passes; `npm run typecheck` passes
 
