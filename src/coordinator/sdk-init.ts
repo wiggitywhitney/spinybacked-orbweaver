@@ -275,6 +275,43 @@ function findLastImportPosition(text: string, esm: boolean): number {
   return pos;
 }
 
+const LANGCHAIN_PACKAGE = '@traceloop/instrumentation-langchain';
+
+/**
+ * Build the fallback file's comment on activating @traceloop/* libraries.
+ * LangChain's manuallyInstrument() destructures its argument and throws when
+ * called bare, so it gets an explicit line passing LangChain's callback
+ * manager module.
+ */
+function traceloopActivationComment(libraries: LibraryRequirement[], esm: boolean): string {
+  const load = (specifier: string): string =>
+    esm ? `await import('${specifier}')` : `require('${specifier}')`;
+
+  const generic = (scope: string): string => `// If any ${scope} is a @traceloop/* library, activate it conditionally:
+//
+//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {
+//     const { SomeInstrumentation } = ${load('@traceloop/...')};
+//     new SomeInstrumentation().manuallyInstrument();
+//   }`;
+
+  if (!libraries.some(lib => lib.package === LANGCHAIN_PACKAGE)) {
+    return generic('package');
+  }
+
+  const langchain = `// Activate ${LANGCHAIN_PACKAGE} conditionally, passing LangChain's callback manager module:
+//
+//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {
+//     const { LangChainInstrumentation } = ${load(LANGCHAIN_PACKAGE)};
+//     const callbackManagerModule = ${load('@langchain/core/callbacks/manager')};
+//     new LangChainInstrumentation().manuallyInstrument({ callbackManagerModule });
+//   }`;
+
+  const hasOtherTraceloop = libraries.some(
+    lib => lib.package.startsWith('@traceloop/') && lib.package !== LANGCHAIN_PACKAGE,
+  );
+  return hasOtherTraceloop ? `${langchain}\n//\n${generic('other package')}` : langchain;
+}
+
 /**
  * Generate fallback file content with instrumentation exports.
  * Respects the source file's module system (ESM vs CJS).
@@ -283,6 +320,7 @@ function generateFallbackFile(libraries: LibraryRequirement[], esm: boolean): st
   const instances = libraries.map(
     lib => `  new ${lib.importName}(),`,
   ).join('\n');
+  const activation = traceloopActivationComment(libraries, esm);
 
   if (esm) {
     const imports = libraries.map(
@@ -299,12 +337,7 @@ function generateFallbackFile(libraries: LibraryRequirement[], esm: boolean): st
 //   const sdk = new NodeSDK({ instrumentations, ... });
 //   sdk.start();
 //
-// If any package is a @traceloop/* library, activate it conditionally:
-//
-//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {
-//     const { SomeInstrumentation } = await import('@traceloop/...');
-//     new SomeInstrumentation().manuallyInstrument();
-//   }
+${activation}
 
 ${imports}
 
@@ -328,12 +361,7 @@ ${instances}
 //   const sdk = new NodeSDK({ instrumentations, ... });
 //   sdk.start();
 //
-// If any package is a @traceloop/* library, activate it conditionally:
-//
-//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {
-//     const { SomeInstrumentation } = require('@traceloop/...');
-//     new SomeInstrumentation().manuallyInstrument();
-//   }
+${activation}
 
 ${imports}
 
