@@ -471,4 +471,81 @@ describe('checkPythonErrorVisibility (COV-003)', () => {
       expect(results[0].lineNumber).toBe(8);
     });
   });
+
+  // `trace.get_current_span()` returns whichever span is active, which is not
+  // always the span the except block belongs to (verified against
+  // opentelemetry-sdk 1.35.0). Recording through it is never accepted: where it
+  // reaches the right span, recording on the named span variable also passes.
+  describe('recording through trace.get_current_span()', () => {
+    const viaCurrentSpan = ['trace.get_current_span().record_exception(e)', 'raise'];
+
+    it('flags a manual span that is not activated, because the current span is a different one', () => {
+      const code = py(
+        'def fetch(path):',
+        '    span = tracer.start_span("fetch")',
+        '    try:',
+        '        return read(path)',
+        '    except IOError as e:',
+        ...viaCurrentSpan.map(l => `        ${l}`),
+        '    finally:',
+        '        span.end()',
+      );
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(8);
+    });
+
+    it('flags a manual span made current with context.attach(), which recording on the span variable would satisfy', () => {
+      const code = py(
+        'def fetch(path):',
+        '    span = tracer.start_span("fetch")',
+        '    token = context.attach(trace.set_span_in_context(span))',
+        '    try:',
+        '        return read(path)',
+        '    except IOError as e:',
+        ...viaCurrentSpan.map(l => `        ${l}`),
+        '    finally:',
+        '        context.detach(token)',
+        '        span.end()',
+      );
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(9);
+    });
+
+    it.each([
+      ['start_as_current_span, which makes the span current', 'tracer.start_as_current_span("fetch", record_exception=False, set_status_on_exception=False)'],
+      ['use_span, which makes the span current', 'trace.use_span(existing, record_exception=False, set_status_on_exception=False)'],
+      ['start_span, which does not make the span current', 'tracer.start_span("fetch", record_exception=False, set_status_on_exception=False)'],
+    ])('flags a disabled-recording `with` span opened by %s', (_label, call) => {
+      const code = py(
+        'def fetch(path):',
+        `    with ${call} as span:`,
+        '        try:',
+        '            return read(path)',
+        '        except IOError as e:',
+        ...viaCurrentSpan.map(l => `            ${l}`),
+      );
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].lineNumber).toBe(8);
+    });
+
+    it('keeps the no-`as` exemption for a disabled-recording `with` span', () => {
+      const code = py(
+        'def fetch(path):',
+        '    with tracer.start_as_current_span("fetch", record_exception=False, set_status_on_exception=False):',
+        '        try:',
+        '            return read(path)',
+        '        except IOError:',
+        '            raise',
+      );
+      const results = checkPythonErrorVisibility(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
 });

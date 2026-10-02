@@ -237,13 +237,11 @@ export function containsReraise(node: Node, isRoot: boolean): boolean {
  * no call can satisfy this (matches JS COV-003's `spanParam` requirement, which
  * is likewise required for `hasErrorRecording()` to match anything).
  *
- * TODO(out of scope, flagged by a CodeRabbit review during PRD #373
- * Milestone D3c's review, 2026-09-28): this misses error recording on
- * `trace.get_current_span()` — Python's own way to reach the active span
- * without an `as` binding at all — even when `spanVarName` is non-null. If
- * this gap is found to matter in practice, add a second match branch for a
- * receiver that is itself a `trace.get_current_span()` call, independent of
- * the `spanVarName` check above.
+ * A `trace.get_current_span()` receiver is deliberately not accepted. It
+ * returns whichever span is active, which for a span from `start_span()` that
+ * is never activated, or a `with tracer.start_span(...)` span, is a different
+ * span. Where it does reach the right span, recording on `spanVarName` passes
+ * too.
  */
 function containsErrorRecordingCall(node: Node, isRoot: boolean, spanVarName: string | null): boolean {
   if (spanVarName === null) return false;
