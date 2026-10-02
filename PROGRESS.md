@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- (2026-10-02) Added a plan for how spiny-orb handles LLM calls, after Datadog LLM Observability flagged three gaps on a commit-story-v2 run. The agent put GenAI attributes (`gen_ai.*`, the OpenTelemetry semantic conventions for LLM calls) on an application span that wraps a library-instrumented LLM call, so Datadog treated the wrapper as the LLM call and showed its model and provider as unknown. The Traceloop activation example in the generated instrumentation file crashes for LangChain. And nothing surfaced that the recommended LangChain instrumentation had produced no spans. The plan starts with research on current practice, because both the GenAI conventions and OpenLLMetry (Traceloop's open-source instrumentation libraries) have changed since spiny-orb's LLM handling was designed. A separate quick fix for the LangChain activation example comes first so users stop getting advice that crashes. The related gap where registry-required attributes go unenforced stays with the existing required-attribute gate plan, which now records that it depends on this plan's decision about which span carries GenAI attributes.
+
 ### Fixed
 
 - (2026-09-17) Fixed the fix-loop reporting an abandoned instrumentation attempt identically to a genuine correct skip (issue #1062): when an attempt failed a blocking validator check and the next attempt gave up by leaving the file byte-for-byte unmodified, the trivial NDS-003 (Code Preserved) pass on an unchanged file led to `status: "success"` with 0 spans added — indistinguishable from a file that legitimately needed no instrumentation. Added an `abandonedAfterFailure` flag to `FileResult`, set in `src/fix-loop/instrument-with-retry.ts` when a file's final zero-span success followed an earlier blocking validation failure in the same retry loop. `src/deliverables/pr-summary.ts` now reports these files separately from the "No changes needed" summary line, with their own per-file row labeled "abandoned after failure (needs review)" instead of silently folding them into the correct-skip count.
