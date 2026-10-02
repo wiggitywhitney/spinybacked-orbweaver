@@ -361,7 +361,7 @@ startTelemetry();
         expect(content).not.toContain('manuallyInstrument()');
       });
 
-      it(`shows the generic always-active and remove-from-array advice when LangChain is not needed (${format})`, async () => {
+      it(`shows the generic always-active and copy-without-import-and-entry advice when LangChain is not needed (${format})`, async () => {
         const content = await fallbackFor(source, [http, openai]);
 
         expect(content).toContain(generic('package', load));
