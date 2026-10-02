@@ -304,36 +304,37 @@ const { startTelemetry } = require('./telemetry');
 startTelemetry();
 `;
 
-    const GENERIC_ESM = [
-      '// If any package is a @traceloop/* library, activate it conditionally:',
-      '//',
-      "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
-      "//     const { SomeInstrumentation } = await import('@traceloop/...');",
-      '//     new SomeInstrumentation().manuallyInstrument();',
-      '//   }',
-    ].join('\n');
-    const GENERIC_CJS = [
-      '// If any package is a @traceloop/* library, activate it conditionally:',
-      '//',
-      "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
-      "//     const { SomeInstrumentation } = require('@traceloop/...');",
-      '//     new SomeInstrumentation().manuallyInstrument();',
-      '//   }',
-    ].join('\n');
+    /** Generic @traceloop/* block; `scope` is 'package' or 'other package'. */
+    function generic(scope: string, load: (spec: string) => string): string {
+      return [
+        `// If any ${scope} below is a @traceloop/* library, it is always active in the array.`,
+        '// To gate it behind a flag instead, remove its import and its array entry below, then activate it conditionally:',
+        '//',
+        "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
+        `//     const { SomeInstrumentation } = ${load('@traceloop/...')};`,
+        '//     new SomeInstrumentation().manuallyInstrument();',
+        '//   }',
+      ].join('\n');
+    }
+    function langchainBlock(load: (spec: string) => string): string {
+      return [
+        '// @traceloop/instrumentation-langchain is always active in the array below.',
+        '// To gate it behind a flag instead, remove its import and `new LangChainInstrumentation()` below,',
+        "// then activate it conditionally, passing LangChain's callback manager module:",
+        '//',
+        "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
+        `//     const { LangChainInstrumentation } = ${load('@traceloop/instrumentation-langchain')};`,
+        `//     const callbackManagerModule = ${load('@langchain/core/callbacks/manager')};`,
+        '//     new LangChainInstrumentation().manuallyInstrument({ callbackManagerModule });',
+        '//   }',
+      ].join('\n');
+    }
+    const esmLoad = (spec: string): string => `await import('${spec}')`;
+    const cjsLoad = (spec: string): string => `require('${spec}')`;
 
-    const LANGCHAIN_ESM = [
-      "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
-      "//     const { LangChainInstrumentation } = await import('@traceloop/instrumentation-langchain');",
-      "//     const callbackManagerModule = await import('@langchain/core/callbacks/manager');",
-      '//     new LangChainInstrumentation().manuallyInstrument({ callbackManagerModule });',
-      '//   }',
-    ].join('\n');
-    const LANGCHAIN_CJS = [
-      "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
-      "//     const { LangChainInstrumentation } = require('@traceloop/instrumentation-langchain');",
-      "//     const callbackManagerModule = require('@langchain/core/callbacks/manager');",
-      '//     new LangChainInstrumentation().manuallyInstrument({ callbackManagerModule });',
-      '//   }',
+    const REGENERATED_NOTE = [
+      '// spiny-orb overwrites this file each time it writes this fallback,',
+      '// so make your changes in your own telemetry setup file, not here.',
     ].join('\n');
 
     const langchain = makeLibrary('@traceloop/instrumentation-langchain', 'LangChainInstrumentation');
@@ -347,47 +348,36 @@ startTelemetry();
       return readFile(result.fallbackPath!, 'utf-8');
     }
 
-    it('shows LangChain activation with callbackManagerModule in the ESM fallback', async () => {
-      const content = await fallbackFor(NO_NODESDK_ESM, [langchain]);
+    for (const [format, source, load] of [
+      ['ESM', NO_NODESDK_ESM, esmLoad],
+      ['CommonJS', NO_NODESDK_CJS, cjsLoad],
+    ] as const) {
+      it(`shows LangChain activation with callbackManagerModule in the ${format} fallback`, async () => {
+        const content = await fallbackFor(source, [langchain]);
 
-      expect(content).toContain(LANGCHAIN_ESM);
-      expect(content).not.toContain('manuallyInstrument()');
-    });
+        expect(content).toContain(langchainBlock(load));
+        expect(content).not.toContain('manuallyInstrument()');
+      });
 
-    it('shows LangChain activation with callbackManagerModule in the CommonJS fallback', async () => {
-      const content = await fallbackFor(NO_NODESDK_CJS, [langchain]);
+      it(`shows the generic always-active and remove-from-array advice when LangChain is not needed (${format})`, async () => {
+        const content = await fallbackFor(source, [http, openai]);
 
-      expect(content).toContain(LANGCHAIN_CJS);
-      expect(content).not.toContain('manuallyInstrument()');
-    });
+        expect(content).toContain(generic('package', load));
+        expect(content).not.toContain('callbackManagerModule');
+      });
 
-    it('keeps the generic comment unchanged when LangChain is not needed (ESM)', async () => {
-      const content = await fallbackFor(NO_NODESDK_ESM, [http, openai]);
+      it(`shows both the LangChain block and the generic block when another @traceloop/* package is needed (${format})`, async () => {
+        const content = await fallbackFor(source, [langchain, openai]);
 
-      expect(content).toContain(GENERIC_ESM);
-      expect(content).not.toContain('callbackManagerModule');
-    });
+        expect(content).toContain(`${langchainBlock(load)}\n//\n${generic('other package', load)}`);
+      });
 
-    it('keeps the generic comment unchanged when LangChain is not needed (CommonJS)', async () => {
-      const content = await fallbackFor(NO_NODESDK_CJS, [http, openai]);
+      it(`notes in the header that the file is regenerated (${format})`, async () => {
+        const content = await fallbackFor(source, [http]);
 
-      expect(content).toContain(GENERIC_CJS);
-      expect(content).not.toContain('callbackManagerModule');
-    });
-
-    it('shows both the LangChain line and the generic comment when another @traceloop/* package is needed (ESM)', async () => {
-      const content = await fallbackFor(NO_NODESDK_ESM, [langchain, openai]);
-
-      expect(content).toContain(LANGCHAIN_ESM);
-      expect(content).toContain(GENERIC_ESM.replace('any package', 'any other package'));
-    });
-
-    it('shows both the LangChain line and the generic comment when another @traceloop/* package is needed (CommonJS)', async () => {
-      const content = await fallbackFor(NO_NODESDK_CJS, [langchain, openai]);
-
-      expect(content).toContain(LANGCHAIN_CJS);
-      expect(content).toContain(GENERIC_CJS.replace('any package', 'any other package'));
-    });
+        expect(content).toContain(REGENERATED_NOTE);
+      });
+    }
   });
 
   describe('package.json type detection', () => {
