@@ -63,9 +63,40 @@ function hasSpanCreationCall(node: Node, isRoot: boolean): boolean {
   return false;
 }
 
-/** Whether a function body contains a known I/O call pattern anywhere in its text. */
-function hasIOCalls(bodyNode: Node): boolean {
-  return IO_PATTERNS.some((pattern) => bodyNode.text.includes(pattern));
+/**
+ * Whether a function body (not descending into nested scopes) makes a call
+ * matching a known I/O pattern. Each pattern is matched against the callee
+ * text followed by `(`, so `open(` matches `open(path)` and `.write(` matches
+ * `f.write(data)`, while comments, strings, and calls inside a nested `def`,
+ * `class`, or `lambda` do not count.
+ */
+function hasIOCalls(node: Node, isRoot: boolean): boolean {
+  if (!isRoot && (node.type === 'function_definition' || node.type === 'class_definition'
+    || node.type === 'decorated_definition' || node.type === 'lambda')) {
+    return false;
+  }
+  if (node.type === 'call') {
+    const fn = node.childForFieldName('function');
+    if (fn !== null) {
+      const callText = `${fn.text}(`;
+      if (IO_PATTERNS.some((pattern) => callText.includes(pattern))) return true;
+    }
+  }
+  for (const child of node.namedChildren) {
+    if (child !== null && hasIOCalls(child, false)) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a function or method name is private by Python's naming convention:
+ * a leading underscore, excluding dunder names (`__init__`, `__call__`), which
+ * are special methods the language calls, not internal details. A name-mangled
+ * `__helper` (leading double underscore, no trailing one) is still private.
+ */
+function isPrivateName(name: string): boolean {
+  if (name.length > 4 && name.startsWith('__') && name.endsWith('__')) return false;
+  return name.startsWith('_');
 }
 
 /** Whether a `function_definition` has a leading `async` keyword child. */
@@ -107,7 +138,7 @@ export function checkPythonInternalDetailSpans(code: string, filePath: string): 
 
   function checkCandidate({ node, boundaryNode, kind }: Candidate): void {
     const nameNode = node.childForFieldName('name');
-    if (nameNode === null || !nameNode.text.startsWith('_')) return;
+    if (nameNode === null || !isPrivateName(nameNode.text)) return;
 
     if (isAsyncFunctionDefinition(node)) return;
 
@@ -117,7 +148,7 @@ export function checkPythonInternalDetailSpans(code: string, filePath: string): 
       || (decoratedDef !== undefined && hasSpanDecorator(decoratedDef));
     if (body === null || !spanned) return;
 
-    if (hasIOCalls(body)) return;
+    if (hasIOCalls(body, true)) return;
 
     flagged.push({
       name: nameNode.text,

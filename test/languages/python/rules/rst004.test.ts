@@ -70,6 +70,64 @@ describe('checkPythonInternalDetailSpans (RST-004)', () => {
       expect(results[0].passed).toBe(false);
       expect(results[0].message).toContain('private method');
     });
+
+    it('flags a name-mangled method (leading double underscore, no trailing one)', () => {
+      const code = [
+        'class Widget:',
+        '    def __helper(self, x):',
+        '        with tracer.start_as_current_span("__helper"):',
+        '            return x + 1',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('__helper');
+    });
+
+    it('flags an unexported function whose only I/O pattern is in a comment', () => {
+      const code = [
+        'def _helper(x):',
+        '    with tracer.start_as_current_span("_helper"):',
+        '        # was: requests.get(x)',
+        '        return x + 1',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags an unexported function whose only I/O pattern is in a string', () => {
+      const code = [
+        'def _helper(x):',
+        '    with tracer.start_as_current_span("_helper"):',
+        '        label = "requests.get"',
+        '        return label + x',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
+
+    it('flags an unexported function whose only I/O call is inside a nested definition', () => {
+      const code = [
+        'def _helper(x):',
+        '    with tracer.start_as_current_span("_helper"):',
+        '        def fetch():',
+        '            return requests.get(x)',
+        '        return fetch',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+    });
   });
 
   describe('exemptions', () => {
@@ -104,6 +162,51 @@ describe('checkPythonInternalDetailSpans (RST-004)', () => {
         'async def _helper(x):',
         '    with tracer.start_as_current_span("_helper"):',
         '        return x + 1',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag a dunder method such as __init__ or __call__ (special methods are not private)', () => {
+      const code = [
+        'class Widget:',
+        '    def __init__(self, x):',
+        '        with tracer.start_as_current_span("Widget.__init__"):',
+        '            self.x = x',
+        '',
+        '    def __call__(self, y):',
+        '        with tracer.start_as_current_span("Widget.__call__"):',
+        '            return self.x + y',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag an unexported function performing I/O through a method call', () => {
+      const code = [
+        'def _save(f, data):',
+        '    with tracer.start_as_current_span("_save"):',
+        '        f.write(data)',
+        '',
+      ].join('\n');
+
+      const results = checkPythonInternalDetailSpans(code, filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not flag an unexported function performing I/O with a bare builtin call', () => {
+      const code = [
+        'def _load(path):',
+        '    with tracer.start_as_current_span("_load"):',
+        '        with open(path) as f:',
+        '            return f.read()',
         '',
       ].join('\n');
 
