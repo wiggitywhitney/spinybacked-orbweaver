@@ -148,7 +148,11 @@ interface FormatAttempt {
   executionFailed: boolean;
   /** Trimmed stderr from the failing invocation, when `executionFailed` is true. Empty otherwise. */
   executionError: string;
+  /** The formatter that produced `code`, or null when no formatter succeeded. */
+  formatter: PythonFormatter | null;
 }
+
+type PythonFormatter = 'ruff' | 'black';
 
 /**
  * Try a single formatter binary in stdin→stdout mode.
@@ -198,26 +202,42 @@ function tryFormatterBinary(binary: string, args: string[], source: string, conf
  * @param source - Source code to format
  * @param configDir - Directory to resolve formatter config from
  * @param filename - Real filename to report to Ruff/Black via `--stdin-filename`
+ * @param only - Run just this formatter, so a second input is judged by the
+ *   same formatter as the first (see `lintCheck()`)
  */
-function runFormatter(source: string, configDir: string, filename = '_spiny_orb_format_target.py'): FormatAttempt {
+function runFormatter(
+  source: string,
+  configDir: string,
+  filename = '_spiny_orb_format_target.py',
+  only?: PythonFormatter,
+): FormatAttempt {
   const stdinFilename = join(configDir, filename);
 
   // A Ruff execution failure (installed but rejects this specific input) falls
   // through to Black rather than returning immediately — Black may still
   // successfully format input Ruff can't handle. Only report a failure once
   // both formatters have had a chance to run.
-  const ruff = tryFormatterBinary('ruff', ['format', '--stdin-filename', stdinFilename, '-'], source, configDir);
-  if (ruff.output !== null) return { code: ruff.output, formatterAvailable: true, executionFailed: false, executionError: '' };
+  const notRun = { output: null, found: false, error: '' };
+  const ruff = only === 'black'
+    ? notRun
+    : tryFormatterBinary('ruff', ['format', '--stdin-filename', stdinFilename, '-'], source, configDir);
+  if (ruff.output !== null) {
+    return { code: ruff.output, formatterAvailable: true, executionFailed: false, executionError: '', formatter: 'ruff' };
+  }
 
-  const black = tryFormatterBinary('black', ['--stdin-filename', stdinFilename, '-q', '-'], source, configDir);
-  if (black.output !== null) return { code: black.output, formatterAvailable: true, executionFailed: false, executionError: '' };
+  const black = only === 'ruff'
+    ? notRun
+    : tryFormatterBinary('black', ['--stdin-filename', stdinFilename, '-q', '-'], source, configDir);
+  if (black.output !== null) {
+    return { code: black.output, formatterAvailable: true, executionFailed: false, executionError: '', formatter: 'black' };
+  }
 
   // Ruff is the primary formatter, so when both are installed and both fail, its
   // diagnostic is the one reported.
-  if (ruff.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: ruff.error };
-  if (black.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: black.error };
+  if (ruff.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: ruff.error, formatter: null };
+  if (black.found) return { code: source, formatterAvailable: true, executionFailed: true, executionError: black.error, formatter: null };
 
-  return { code: source, formatterAvailable: false, executionFailed: false, executionError: '' };
+  return { code: source, formatterAvailable: false, executionFailed: false, executionError: '', formatter: null };
 }
 
 /**
@@ -282,7 +302,12 @@ export async function lintCheck(original: string, instrumented: string, filePath
     };
   }
 
-  const instrumentedAttempt = runFormatter(instrumented, projectDir, filename);
+  // Judge the instrumented code with the formatter that judged the original.
+  // Ruff and Black format some code differently, so letting each input fall
+  // back on its own could compare one formatter's verdict against the other's.
+  const instrumentedAttempt = runFormatter(
+    instrumented, projectDir, filename, originalAttempt.formatter ?? undefined,
+  );
 
   // If the *original*, uninstrumented file also failed to format, the
   // failure can't be blamed on the agent's output — it's an environment or

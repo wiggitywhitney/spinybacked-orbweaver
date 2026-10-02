@@ -354,6 +354,42 @@ describe('lintCheck', () => {
     });
   });
 
+  describe('Ruff rejects only the original', () => {
+    let originalPath: string | undefined;
+    let fakeBinDir: string;
+
+    beforeEach(() => {
+      // A fake `ruff` that rejects any input containing a marker comment and
+      // echoes every other input unchanged (so it calls everything compliant).
+      // The original carries the marker and falls back to the real Black; the
+      // instrumented code does not, so without pinning the formatter it would
+      // be judged by this permissive Ruff instead of the Black that judged the
+      // original.
+      fakeBinDir = mkdtempSync(join(tmpdir(), 'spiny-orb-fake-ruff-selective-'));
+      writeFileSync(
+        join(fakeBinDir, 'ruff'),
+        '#!/bin/sh\ninput=$(cat)\ncase "$input" in\n  *ruff-rejects*) echo "simulated ruff failure" >&2; exit 2 ;;\nesac\nprintf "%s\\n" "$input"\n',
+        'utf-8',
+      );
+      chmodSync(join(fakeBinDir, 'ruff'), 0o755);
+      originalPath = process.env.PATH;
+      process.env.PATH = `${fakeBinDir}:${originalPath}`;
+    });
+
+    afterEach(() => {
+      process.env.PATH = originalPath;
+      rmSync(fakeBinDir, { recursive: true, force: true });
+    });
+
+    it('judges the instrumented code with the same formatter that judged the original', async () => {
+      const original = '# ruff-rejects\nx = 1\n';
+      const instrumented = 'x=1\n';
+      const result = await lintCheck(original, instrumented, join(tmpdir(), 'target.py'));
+
+      expect(result.passed).toBe(false);
+    });
+  });
+
   describe('passes the real filename to Ruff', () => {
     let originalPath: string | undefined;
     let fakeBinDir: string;
