@@ -18,6 +18,7 @@ import {
   checkErrorRecording,
   checkAsyncContext,
   checkAttributeSafety,
+  checkNoDuplicateOfRegisteredAttributes,
 } from './helpers/rubric-checks.ts';
 
 const FIXTURES_DIR = join(import.meta.dirname, 'fixtures', 'project');
@@ -219,14 +220,38 @@ module.exports = { fetchProduct };
         new JavaScriptProvider(),
       );
 
+      // Write debug artifact so CI failures are diagnosable via gh run download.
+      // instrumentFile() bypasses the fix-loop's dumpDiagnostics path, so we write
+      // the relevant fields manually. The artifact upload step in acceptance-gate.yml
+      // picks this file up on failure.
+      try {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync('/tmp/spiny-orb-debug-test-a.js', JSON.stringify({
+          testA: true,
+          success: result.success,
+          notes: result.success ? result.output.notes : null,
+          schemaExtensions: result.success ? result.output.schemaExtensions : null,
+          instrumentedCode: result.success ? result.output.instrumentedCode : null,
+          thinkingBlocks: result.success ? (result.output.thinkingBlocks ?? null) : null,
+          error: result.success ? null : (result as { success: false; error: string }).error,
+        }, null, 2));
+      } catch { /* best-effort — never block the test */ }
+
       expect(result.success).toBe(true);
       if (!result.success) throw new Error(`instrumentFile failed: ${result.error}`);
 
       const output = result.output;
-      // Span extensions are expected (agent used the registered span definition); only
-      // attribute extensions must be empty — the agent should use dd.http.request.method.
-      const attributeExtensionsA = output.schemaExtensions.filter(e => !e.startsWith('span.'));
-      expect(attributeExtensionsA).toEqual([]);
+      // The agent must record the method and status with the registered keys, and no
+      // unregistered key may record that same data under another name. Extensions for
+      // data the registry does not cover (such as the product ID) are allowed: the spec
+      // calls for registering business attributes that have no registered key.
+      const duplicateCheck = checkNoDuplicateOfRegisteredAttributes(
+        output.instrumentedCode,
+        ['dd.http.request.method', 'dd.http.response.status_code'],
+        ['method', 'status', 'statusCode'],
+      );
+      expect(duplicateCheck.details).toBeUndefined();
+      expect(duplicateCheck.passed).toBe(true);
       // Accept both single and double quotes around the attribute key
       expect(output.instrumentedCode).toMatch(/setAttribute\(['"]dd\.http\.request\.method['"]/)
     });

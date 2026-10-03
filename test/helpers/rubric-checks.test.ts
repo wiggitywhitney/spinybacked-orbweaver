@@ -14,6 +14,7 @@ import {
   checkAsyncContext,
   checkAttributeSafety,
   checkNds005bNotViolated,
+  checkNoDuplicateOfRegisteredAttributes,
 } from './rubric-checks.ts';
 
 describe('NDS-001: checkSyntaxValid', () => {
@@ -424,5 +425,75 @@ async function loadFile(path) {
   it('passes when no try/catch blocks exist', () => {
     const result = checkNds005bNotViolated('function foo() { return 1; }');
     expect(result.passed).toBe(true);
+  });
+});
+
+describe('checkNoDuplicateOfRegisteredAttributes', () => {
+  const registered = ['dd.http.request.method', 'dd.http.response.status_code'];
+  const covered = ['method', 'status', 'statusCode'];
+  const wrap = (body: string) => `
+async function fetchProduct(productId, method) {
+  return tracer.startActiveSpan('dd.http.client', async (span) => {
+    ${body}
+    const response = await fetch(url, { method: method || 'GET' });
+    const statusCode = response.status;
+    span.end();
+  });
+}`;
+
+  it('passes when only registered keys record the covered data and an extension records other data', () => {
+    const code = wrap(`span.setAttribute('dd.http.request.method', method || 'GET');
+    span.setAttribute('dd.store.product_id', String(productId));
+    span.setAttribute('dd.http.response.status_code', statusCode);`);
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result).toEqual({ passed: true });
+  });
+
+  it('fails when an oddly named unregistered key records the method', () => {
+    const code = wrap(`span.setAttribute('dd.verb', method || 'GET');`);
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain("'dd.verb'");
+    expect(result.details).toContain('method');
+  });
+
+  it('fails when an unregistered key records the status through a property access', () => {
+    const code = wrap(`span.setAttribute('dd.outcome', response.status);`);
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain("'dd.outcome'");
+  });
+
+  it('fails when an unregistered key records covered data through an added local variable', () => {
+    const code = wrap(`const verb = method || 'GET';
+    span.setAttribute('dd.verb', verb);`);
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain("'dd.verb'");
+  });
+
+  it('fails when attributes are written with setAttributes, which the check cannot read', () => {
+    const code = wrap(`span.setAttributes({ 'dd.verb': method });`);
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('setAttributes');
+  });
+
+  it('fails when attributes are passed in span options, which the check cannot read', () => {
+    const code = `
+async function f(method) {
+  return tracer.startActiveSpan('x', { attributes: { 'dd.verb': method } }, async (span) => { span.end(); });
+}`;
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('attributes');
+  });
+
+  it('fails when a setAttribute key is not a string literal, which the check cannot read', () => {
+    const code = wrap(`const key = 'dd.verb';
+    span.setAttribute(key, method);`);
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('string literal');
   });
 });
