@@ -984,6 +984,17 @@ export async function getUsers(req, res) {
       expect(call.output_config.effort).toBe('medium');
     });
 
+    // Pre-4.6 models do not accept adaptive thinking. They are not in PRICING,
+    // but a user can still set them as agentModel.
+    for (const model of ['claude-sonnet-4-5', 'claude-opus-4-5', 'claude-haiku-4-5-20251001']) {
+      it(`uses enabled thinking with budget_tokens for ${model}`, async () => {
+        const maxTokens = 65536;
+        const call = await callWith(model, { maxOutputTokens: maxTokens });
+
+        expect(call.thinking).toEqual({ type: 'enabled', budget_tokens: Math.floor(maxTokens * 0.65) });
+      });
+    }
+
     it('uses per-function budget formula for Haiku 4.5 when isPerFunctionCall is true', async () => {
       const maxTokens = 24576;
       const call = await callWith('claude-haiku-4-5', { maxOutputTokens: maxTokens, isPerFunctionCall: true });

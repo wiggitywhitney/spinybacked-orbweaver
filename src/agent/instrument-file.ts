@@ -24,11 +24,12 @@ export const MAX_OUTPUT_TOKENS_PER_CALL = 32_000;
 
 /**
  * Models that do not accept adaptive thinking and still need a fixed
- * `budget_tokens`. Matched by prefix so dated IDs (e.g. claude-haiku-4-5-20251001)
- * are covered. Every other model gets adaptive thinking — Opus 5.5 and Sonnet 5.5
- * reject `budget_tokens` with a 400, and it is deprecated on the 4.6 models.
+ * `budget_tokens`: Haiku 4.5 and the pre-4.6 Sonnet and Opus models. Matched by
+ * prefix so dated IDs (e.g. claude-haiku-4-5-20251001) are covered. Every other
+ * model gets adaptive thinking — Opus 5.5 and Sonnet 5.5 reject `budget_tokens`
+ * with a 400, and it is deprecated on the 4.6 models.
  */
-const BUDGET_TOKENS_MODEL_PREFIXES = ['claude-haiku-4-5'];
+const BUDGET_TOKENS_MODEL_PREFIXES = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5'];
 
 /**
  * Conversation context captured from an API call for multi-turn threading.
