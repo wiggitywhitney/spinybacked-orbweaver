@@ -519,6 +519,53 @@ async function f(method) {
     expect(result.details).toContain('attributes');
   });
 
+  it('fails when span options with attributes are reached through a chain of variables', () => {
+    const code = `
+async function f(method) {
+  const baseOptions = { attributes: { 'dd.verb': method } };
+  const options = baseOptions;
+  const span = tracer.startSpan('x', options);
+  span.end();
+}`;
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('attributes');
+  });
+
+  it('fails when span options are built with a spread, which the check cannot read', () => {
+    const code = `
+async function f(method, base) {
+  const span = tracer.startSpan('x', { ...base });
+  span.end();
+}`;
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('cannot be checked');
+  });
+
+  it('fails when span options come from something other than an object literal', () => {
+    const code = `
+async function f(method) {
+  const span = tracer.startSpan('x', makeOptions(method));
+  span.end();
+}`;
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('cannot be checked');
+  });
+
+  it('passes when span options are an object literal without attributes', () => {
+    const code = `
+async function f(method) {
+  return tracer.startActiveSpan('x', { kind: 2 }, async (span) => {
+    span.setAttribute('dd.http.request.method', method);
+    span.end();
+  });
+}`;
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result).toEqual({ passed: true });
+  });
+
   it('fails when a setAttribute key is not a string literal, which the check cannot read', () => {
     const code = wrap(`const key = 'dd.verb';
     span.setAttribute(key, method);`);

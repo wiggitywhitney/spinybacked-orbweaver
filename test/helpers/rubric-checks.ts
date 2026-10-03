@@ -568,15 +568,29 @@ export function checkNoDuplicateOfRegisteredAttributes(
   }
 
   // Only the options argument of a span-starting call can carry span attributes;
-  // an `attributes` property elsewhere in business code is unrelated.
+  // an `attributes` property elsewhere in business code is unrelated. Options are
+  // followed through local variables to an object literal; anything else (a call,
+  // a parameter, a spread) cannot be read, so it fails rather than passing unchecked.
   for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const callee = call.getExpression();
     if (!Node.isPropertyAccessExpression(callee) || !['startActiveSpan', 'startSpan'].includes(callee.getName())) continue;
-    let options: Node | undefined = call.getArguments()[1];
-    if (options && Node.isIdentifier(options)) options = initializers.get(options.getText());
-    if (!options || !Node.isObjectLiteralExpression(options)) continue;
+    const optionsArg = call.getArguments()[1];
+    // startActiveSpan(name, fn) passes the callback second; there are no options.
+    if (!optionsArg || Node.isArrowFunction(optionsArg) || Node.isFunctionExpression(optionsArg)) continue;
+    let options: Node | undefined = optionsArg;
+    const seen = new Set<string>();
+    while (options && Node.isIdentifier(options) && !seen.has(options.getText())) {
+      seen.add(options.getText());
+      options = initializers.get(options.getText());
+    }
+    if (!options || !Node.isObjectLiteralExpression(options)) {
+      issues.push(`span options cannot be checked: ${optionsArg.getText()}`);
+      continue;
+    }
     for (const prop of options.getProperties()) {
-      if ((Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) && prop.getName() === 'attributes') {
+      if (Node.isSpreadAssignment(prop)) {
+        issues.push(`span options spread cannot be checked: ${prop.getText()}`);
+      } else if ((Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) && prop.getName() === 'attributes') {
         issues.push(`attributes span option cannot be checked: ${prop.getText()}`);
       }
     }
