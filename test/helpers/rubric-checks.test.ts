@@ -489,6 +489,36 @@ async function f(method) {
     expect(result.details).toContain('attributes');
   });
 
+  it('passes when an unrelated object in business code has an attributes property', () => {
+    const code = wrap(`const record = { attributes: { color: 'red' } };
+    span.setAttribute('dd.http.request.method', method || 'GET');`);
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result).toEqual({ passed: true });
+  });
+
+  it('fails when span options pass attributes as a shorthand property', () => {
+    const code = `
+async function f(method) {
+  const attributes = { 'dd.verb': method };
+  return tracer.startActiveSpan('x', { attributes }, async (span) => { span.end(); });
+}`;
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('attributes');
+  });
+
+  it('fails when span options with attributes are passed through a variable', () => {
+    const code = `
+async function f(method) {
+  const options = { attributes: { 'dd.verb': method } };
+  const span = tracer.startSpan('x', options);
+  span.end();
+}`;
+    const result = checkNoDuplicateOfRegisteredAttributes(code, registered, covered);
+    expect(result.passed).toBe(false);
+    expect(result.details).toContain('attributes');
+  });
+
   it('fails when a setAttribute key is not a string literal, which the check cannot read', () => {
     const code = wrap(`const key = 'dd.verb';
     span.setAttribute(key, method);`);

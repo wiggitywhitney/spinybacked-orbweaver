@@ -567,9 +567,18 @@ export function checkNoDuplicateOfRegisteredAttributes(
     }
   }
 
-  for (const prop of sf.getDescendantsOfKind(SyntaxKind.PropertyAssignment)) {
-    if (prop.getName() === 'attributes') {
-      issues.push(`attributes span option cannot be checked: ${prop.getText()}`);
+  // Only the options argument of a span-starting call can carry span attributes;
+  // an `attributes` property elsewhere in business code is unrelated.
+  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = call.getExpression();
+    if (!Node.isPropertyAccessExpression(callee) || !['startActiveSpan', 'startSpan'].includes(callee.getName())) continue;
+    let options: Node | undefined = call.getArguments()[1];
+    if (options && Node.isIdentifier(options)) options = initializers.get(options.getText());
+    if (!options || !Node.isObjectLiteralExpression(options)) continue;
+    for (const prop of options.getProperties()) {
+      if ((Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) && prop.getName() === 'attributes') {
+        issues.push(`attributes span option cannot be checked: ${prop.getText()}`);
+      }
     }
   }
 
