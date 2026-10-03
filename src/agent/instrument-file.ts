@@ -32,6 +32,12 @@ export const MAX_OUTPUT_TOKENS_PER_CALL = 32_000;
 const BUDGET_TOKENS_MODEL_PREFIXES = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5'];
 
 /**
+ * Models that reject `output_config.effort`. Requests to them omit effort and
+ * keep only the structured output format. Matched by prefix, as above.
+ */
+const NO_EFFORT_MODEL_PREFIXES = ['claude-haiku-4-5', 'claude-sonnet-4-5'];
+
+/**
  * Conversation context captured from an API call for multi-turn threading.
  * The fix loop stores this from attempt N and passes it to attempt N+1
  * so the LLM sees the full conversation history.
@@ -303,12 +309,13 @@ export async function instrumentFile(
           : Math.max(Math.floor(maxTokens * 0.65), 1),
       }
       : { type: 'adaptive' as const, display: 'summarized' as const };
+    const supportsEffort = !NO_EFFORT_MODEL_PREFIXES.some(prefix => config.agentModel.startsWith(prefix));
     const stream = client.messages.stream({
       model: config.agentModel,
       max_tokens: maxTokens,
       thinking,
       output_config: {
-        effort: options?.effortOverride ?? config.agentEffort,
+        ...(supportsEffort ? { effort: options?.effortOverride ?? config.agentEffort } : {}),
         format: zodOutputFormat(LlmOutputSchema),
       },
       system: [

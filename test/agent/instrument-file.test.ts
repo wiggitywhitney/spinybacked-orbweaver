@@ -981,6 +981,21 @@ export async function getUsers(req, res) {
       const call = await callWith('claude-haiku-4-5', { maxOutputTokens: maxTokens });
 
       expect(call.thinking).toEqual({ type: 'enabled', budget_tokens: Math.floor(maxTokens * 0.65) });
+    });
+
+    // The effort parameter errors on Haiku 4.5 and Sonnet 4.5; Opus 4.5 accepts it.
+    for (const model of ['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-sonnet-4-5']) {
+      it(`omits output_config.effort for ${model} and keeps the output format`, async () => {
+        const call = await callWith(model, { maxOutputTokens: 65536 });
+
+        expect(call.output_config).not.toHaveProperty('effort');
+        expect(call.output_config.format).toBeDefined();
+      });
+    }
+
+    it('sends output_config.effort for claude-opus-4-5', async () => {
+      const call = await callWith('claude-opus-4-5', { maxOutputTokens: 65536 });
+
       expect(call.output_config.effort).toBe('medium');
     });
 
