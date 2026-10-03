@@ -4,6 +4,7 @@
 **Last Updated:** 2026-10-03
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-10-03 | Initial research: thinking, effort, output-budget guarantees, task budgets, refusals and fallbacks, tokenizer, pricing, and thinking-block replay for `claude-opus-5-5`, plus what `@anthropic-ai/sdk` 0.90.0 types |

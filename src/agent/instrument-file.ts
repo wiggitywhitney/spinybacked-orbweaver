@@ -27,7 +27,9 @@ export const MAX_OUTPUT_TOKENS_PER_CALL = 32_000;
  * `budget_tokens`: Haiku 4.5 and the pre-4.6 Sonnet and Opus models. Matched by
  * prefix so dated IDs (e.g. claude-haiku-4-5-20251001) are covered. Every other
  * model gets adaptive thinking — Opus 5.5 and Sonnet 5.5 reject `budget_tokens`
- * with a 400, and it is deprecated on the 4.6 models.
+ * with a 400, and it is deprecated on the 4.6 models. Sonnet 4, Opus 4, and
+ * Opus 4.1 are not listed because they are retired on the Anthropic API, which
+ * is the only API spiny-orb calls; requests to them fail regardless of thinking.
  */
 const BUDGET_TOKENS_MODEL_PREFIXES = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5'];
 
