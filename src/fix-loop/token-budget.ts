@@ -82,10 +82,12 @@ export const MAX_OUTPUT_BUDGET = 65_536;
  * Replaces the hardcoded MAX_OUTPUT_TOKENS_PER_CALL with a file-size-based estimate.
  *
  * Formula: max(MIN_OUTPUT_BUDGET, fileLines * TOKENS_PER_LINE + THINKING_OVERHEAD),
- * capped at MAX_OUTPUT_BUDGET (65K = Sonnet 4.6 capacity).
+ * capped at MAX_OUTPUT_BUDGET (65K, originally sized to Sonnet 4.6's output capacity;
+ * models with larger output limits accept it unchanged).
  *
- * The budget covers enabled thinking tokens and JSON output — these share
- * the same ceiling in the Messages API. THINKING_OVERHEAD reserves space for
+ * The budget covers thinking tokens and JSON output — these share the same
+ * ceiling in the Messages API. For adaptive-thinking models, max_tokens is the
+ * only hard cap on thinking. THINKING_OVERHEAD reserves space for
  * the model's reasoning, and TOKENS_PER_LINE accounts for output that scales
  * with file size. MIN_OUTPUT_BUDGET raised from 16,384 to 24,576 after run-16
  * showed token exhaustion on complex-catch-pattern files hitting the minimum.

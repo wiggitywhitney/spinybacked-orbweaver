@@ -1,5 +1,5 @@
 // ABOUTME: Core instrumentFile function — calls the Anthropic API to instrument a single JS file.
-// ABOUTME: Uses structured output (zodOutputFormat), enabled thinking with budget cap, and prompt caching.
+// ABOUTME: Uses structured output (zodOutputFormat), adaptive thinking (budget cap on older models), and prompt caching.
 
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
