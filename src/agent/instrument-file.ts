@@ -23,6 +23,14 @@ import { detectElision } from './elision.ts';
 export const MAX_OUTPUT_TOKENS_PER_CALL = 32_000;
 
 /**
+ * Models that do not accept adaptive thinking and still need a fixed
+ * `budget_tokens`. Matched by prefix so dated IDs (e.g. claude-haiku-4-5-20251001)
+ * are covered. Every other model gets adaptive thinking — Opus 5.5 and Sonnet 5.5
+ * reject `budget_tokens` with a 400, and it is deprecated on the 4.6 models.
+ */
+const BUDGET_TOKENS_MODEL_PREFIXES = ['claude-haiku-4-5'];
+
+/**
  * Conversation context captured from an API call for multi-turn threading.
  * The fix loop stores this from attempt N and passes it to attempt N+1
  * so the LLM sees the full conversation history.
@@ -271,19 +279,33 @@ export async function instrumentFile(
     const maxTokens = Number.isFinite(requestedMaxTokens) && requestedMaxTokens > 0
       ? Math.floor(requestedMaxTokens)
       : MAX_OUTPUT_TOKENS_PER_CALL;
-    // Use enabled thinking with a hard cap to guarantee output budget.
     // Adaptive thinking has no cap — on complex files (e.g. MCP handlers with
     // inner graceful catches) the model can exhaust the entire budget on reasoning
-    // before producing structured output. The cap formula differs by call type:
+    // before producing structured output. Models that accept only adaptive thinking
+    // have no way to reserve output tokens, so output keeps room through two controls:
+    // max_tokens (a hard cap on thinking plus output, sized per file by the retry loop
+    // and escalated to MAX_OUTPUT_BUDGET after a stop_reason: max_tokens) and
+    // output_config.effort (soft guidance on how much of that cap goes to thinking).
+    // display: 'summarized' keeps thinking text visible for diagnostics; without it,
+    // Opus 5.5 returns thinking blocks with empty text. Billing is the same either way.
+    //
+    // Models in BUDGET_TOKENS_MODEL_PREFIXES keep enabled thinking with a hard cap
+    // to guarantee output budget. The cap formula differs by call type:
     //   file-level: reserve 35% for output (handles ~14-16K token instrumented files)
     //   per-function: reserve 4096 tokens (single function output is 1-2K tokens)
-    const thinkingBudget = options?.isPerFunctionCall
-      ? Math.max(maxTokens - 4096, 1)
-      : Math.max(Math.floor(maxTokens * 0.65), 1);
+    const usesBudgetTokens = BUDGET_TOKENS_MODEL_PREFIXES.some(prefix => config.agentModel.startsWith(prefix));
+    const thinking = usesBudgetTokens
+      ? {
+        type: 'enabled' as const,
+        budget_tokens: options?.isPerFunctionCall
+          ? Math.max(maxTokens - 4096, 1)
+          : Math.max(Math.floor(maxTokens * 0.65), 1),
+      }
+      : { type: 'adaptive' as const, display: 'summarized' as const };
     const stream = client.messages.stream({
       model: config.agentModel,
       max_tokens: maxTokens,
-      thinking: { type: 'enabled', budget_tokens: thinkingBudget },
+      thinking,
       output_config: {
         effort: options?.effortOverride ?? config.agentEffort,
         format: zodOutputFormat(LlmOutputSchema),
@@ -318,12 +340,21 @@ export async function instrumentFile(
         .map(b => ('text' in b ? (b as { text: string }).text : ''))
         .join('')
         .slice(0, 500) || '<no text content>';
+      // A safety-classifier decline arrives as stop_reason: refusal; stop_details
+      // names the policy category. Both stop_details fields can be null.
+      const refusalLines = stopReason === 'refusal'
+        ? [
+          `refusal_category: ${response.stop_details?.category ?? 'none'}`,
+          `refusal_explanation: ${response.stop_details?.explanation ?? 'none'}`,
+        ]
+        : [];
 
       return {
         success: false,
         error: [
           'LLM response had null parsed_output — no structured output was returned.',
           `stop_reason: ${stopReason}`,
+          ...refusalLines,
           `output_tokens: ${outputTokens}`,
           `raw_preview: ${rawPreview}`,
         ].join('\n'),

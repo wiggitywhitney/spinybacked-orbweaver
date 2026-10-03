@@ -537,7 +537,7 @@ $ spiny-orb instrument src/ --debug --yes
 Config: {
   "schemaPath": "semconv",
   "sdkInitFile": "src/instrumentation.js",
-  "agentModel": "claude-sonnet-4-6",
+  "agentModel": "claude-opus-5-5",
   "agentEffort": "medium",
   ...
 }
@@ -690,7 +690,7 @@ Only `schemaPath` and `sdkInitFile` are required — everything else has default
 |-------|------|---------|-------------|
 | `schemaPath` | string | *(required)* | Relative path to your Weaver registry directory |
 | `sdkInitFile` | string | *(required)* | Relative path to your OTel SDK init file |
-| `agentModel` | string | `claude-sonnet-4-6` | Claude model to use for code generation |
+| `agentModel` | string | `claude-opus-5-5` | Claude model to use for code generation |
 | `agentEffort` | `low` \| `medium` \| `high` | `medium` | Thinking depth — higher means more thorough but slower |
 | `testCommand` | string | `npm test` | Command to run checkpoint and end-of-run test validation. Supports any test runner and inline env vars — e.g., `GIT_CONFIG_GLOBAL=/tmp/test.gitconfig npm test` for repos where global git config conflicts with the test suite |
 | `targetType` | `long-lived` \| `short-lived` | `long-lived` | Process lifecycle. `long-lived` (web servers, workers, daemons) uses `BatchSpanProcessor` — no extra setup. `short-lived` (CLIs, scripts, Lambda, batch jobs) needs `SimpleSpanProcessor` and `process.exit()` interception, otherwise `BatchSpanProcessor` drops all spans before the 5-second flush timer fires. Set during `spiny-orb init` or add manually. |

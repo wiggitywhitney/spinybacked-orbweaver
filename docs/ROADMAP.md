@@ -27,6 +27,12 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 
 **Run-27 complete** (2026-08-31): 13 committed, 1 partial (`summary-manager.js` — regression from run-26's clean sweep, same COV-003 catch-shape gap as run-25, recurring on a different function pair), 0 failures, 18 correct skips. New findings: COV-003 catch-shape detection gap (#1055), SCH-002 same-pass schema-key-meaning inconsistency (#1056), CDQ-007 raw-path pattern widened from 1 file to 7 (#1035, updated), SCH-003 String()-wrapped numeric recurrence (#1037, updated), PR-summary omission and severity-miscalibration findings (#1036, updated). IS 100/100 (third consecutive run). Total spans 48 (ties run-24's record). Cost $9.40 (down from run-26's $11.15).
 
+**Eval requested — default model moved to Claude Opus 5.5** (#1074): the default `agentModel` changed from `claude-sonnet-4-6` to `claude-opus-5-5`, and the agent call now uses adaptive thinking (Opus 5.5 rejects a fixed thinking budget). Run a commit-story-v2 eval and compare it against the saved costs and results of past runs:
+- Cost per file and total run cost.
+- Quality: Q×F, IS score, failures, partials, and span count.
+- Retry behavior: how many files need a second or third attempt, and the share of files that stop because they reached the per-file token budget (`maxTokensPerFile`, 100,000). Opus 5.5's tokenizer produces about 30% more tokens for the same text, so a file reaches the budget sooner. A rise in that share is the signal to revisit the budget.
+- Any `stop_reason: max_tokens` (thinking used up the output budget, the failure PR #547 fixed) or `stop_reason: refusal` errors. Refusal errors name their `refusal_category`.
+
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Path to Python

@@ -3,6 +3,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { instrumentFile, MAX_OUTPUT_TOKENS_PER_CALL } from '../../src/agent/instrument-file.ts';
+import { PRICING } from '../../src/deliverables/cost-formatting.ts';
 import type { AgentConfig } from '../../src/config/schema.ts';
 import type { LlmOutput } from '../../src/agent/schema.ts';
 import { JavaScriptProvider } from '../../src/languages/javascript/index.ts';
@@ -173,7 +174,7 @@ describe('instrumentFile', () => {
 
       const call = client.messages.stream.mock.calls[0][0];
       expect(call.model).toBe('claude-sonnet-4-6');
-      expect(call.thinking.type).toBe('enabled');
+      expect(call.thinking.type).toBe('adaptive');
       expect(call.output_config.effort).toBe('high');
       // System is an array of cache-controlled blocks
       expect(call.system[0].text).toContain('instrumentation engineer');
@@ -337,6 +338,89 @@ describe('instrumentFile', () => {
       if (result.success) return;
 
       expect(result.error).toContain('parsed_output');
+    });
+
+    function makeRefusalClient(stopDetails: { type: 'refusal'; category: string | null; explanation: string | null } | null) {
+      const response = {
+        id: 'msg_test_refusal',
+        type: 'message' as const,
+        role: 'assistant' as const,
+        model: 'claude-opus-5-5',
+        content: [],
+        stop_reason: 'refusal' as const,
+        stop_details: stopDetails,
+        stop_sequence: null,
+        usage: {
+          input_tokens: 5000,
+          output_tokens: 0,
+          cache_creation_input_tokens: null,
+          cache_read_input_tokens: null,
+          cache_creation: null,
+          inference_geo: null,
+        },
+        parsed_output: null,
+      };
+      return {
+        messages: {
+          stream: vi.fn().mockReturnValue({
+            finalMessage: vi.fn().mockResolvedValue(response),
+          }),
+        },
+      };
+    }
+
+    it('reports the refusal category and explanation when the model refuses', async () => {
+      const client = makeRefusalClient({
+        type: 'refusal',
+        category: 'cyber',
+        explanation: 'The request could enable cyber harm.',
+      });
+
+      const result = await instrumentFile(
+        '/project/src/handler.js', SAMPLE_JS, SAMPLE_SCHEMA,
+        makeConfig({ agentModel: 'claude-opus-5-5' }), jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error).toContain('stop_reason: refusal');
+      expect(result.error).toContain('refusal_category: cyber');
+      expect(result.error).toContain('refusal_explanation: The request could enable cyber harm.');
+    });
+
+    it('reports a refusal whose category and explanation are null', async () => {
+      const client = makeRefusalClient({ type: 'refusal', category: null, explanation: null });
+
+      const result = await instrumentFile(
+        '/project/src/handler.js', SAMPLE_JS, SAMPLE_SCHEMA,
+        makeConfig({ agentModel: 'claude-opus-5-5' }), jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error).toContain('stop_reason: refusal');
+      expect(result.error).toContain('refusal_category: none');
+      expect(result.error).toContain('refusal_explanation: none');
+    });
+
+    it('omits refusal fields when the stop reason is not a refusal', async () => {
+      const client = makeRefusalClient(null);
+      const response = await client.messages.stream().finalMessage();
+      response.stop_reason = 'max_tokens' as any;
+      client.messages.stream.mockClear();
+
+      const result = await instrumentFile(
+        '/project/src/handler.js', SAMPLE_JS, SAMPLE_SCHEMA,
+        makeConfig({ agentModel: 'claude-opus-5-5' }), jsProvider,
+        { client: client as any },
+      );
+
+      expect(result.success).toBe(false);
+      if (result.success) return;
+      expect(result.error).toContain('stop_reason: max_tokens');
+      expect(result.error).not.toContain('refusal_category');
     });
 
     it('includes token usage in error results when available', async () => {
@@ -850,41 +934,97 @@ export async function getUsers(req, res) {
     });
   });
 
-  describe('thinking budget configuration', () => {
-    it('uses enabled thinking with file-level budget formula for regular calls', async () => {
-      const client = makeMockClient(makeValidLlmOutput());
-      const maxTokens = 65536;
+  describe('thinking configuration', () => {
+    // Models that reject `budget_tokens` (or have deprecated it) get adaptive thinking.
+    // `display: 'summarized'` keeps thinking text visible for diagnostics — Opus 5.5
+    // returns empty thinking text by default.
+    const ADAPTIVE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-opus-4-6', 'claude-sonnet-4-6'];
 
+    async function callWith(model: string, options: { maxOutputTokens: number; isPerFunctionCall?: boolean }) {
+      const client = makeMockClient(makeValidLlmOutput());
       await instrumentFile(
         '/project/src/handler.js',
         SAMPLE_JS,
         SAMPLE_SCHEMA,
-        makeConfig(),
+        makeConfig({ agentModel: model, agentEffort: 'medium' }),
         jsProvider,
-        { client: client as any, maxOutputTokens: maxTokens },
+        { client: client as any, ...options },
       );
+      return client.messages.stream.mock.calls[0][0];
+    }
 
-      const call = client.messages.stream.mock.calls[0][0];
-      expect(call.thinking.type).toBe('enabled');
-      expect(call.thinking.budget_tokens).toBe(Math.floor(maxTokens * 0.65));
+    it('covers every model in the pricing table', () => {
+      expect([...ADAPTIVE_MODELS, 'claude-haiku-4-5'].sort()).toEqual(Object.keys(PRICING).sort());
     });
 
-    it('uses per-function budget formula when isPerFunctionCall is true', async () => {
-      const client = makeMockClient(makeValidLlmOutput());
+    for (const model of ADAPTIVE_MODELS) {
+      it(`sends adaptive thinking with summarized display and no budget_tokens to ${model}`, async () => {
+        const call = await callWith(model, { maxOutputTokens: 65536 });
+
+        expect(call.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+        expect(call.max_tokens).toBe(65536);
+        expect(call.output_config.effort).toBe('medium');
+        expect(call.output_config.format).toBeDefined();
+        expect(Object.keys(call.output_config).sort()).toEqual(['effort', 'format']);
+      });
+
+      it(`sends adaptive thinking to ${model} on per-function calls`, async () => {
+        const call = await callWith(model, { maxOutputTokens: 24576, isPerFunctionCall: true });
+
+        expect(call.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+        expect(call.max_tokens).toBe(24576);
+      });
+    }
+
+    it('uses enabled thinking with file-level budget formula for Haiku 4.5', async () => {
+      const maxTokens = 65536;
+      const call = await callWith('claude-haiku-4-5', { maxOutputTokens: maxTokens });
+
+      expect(call.thinking).toEqual({ type: 'enabled', budget_tokens: Math.floor(maxTokens * 0.65) });
+      expect(call.output_config.effort).toBe('medium');
+    });
+
+    it('uses per-function budget formula for Haiku 4.5 when isPerFunctionCall is true', async () => {
       const maxTokens = 24576;
+      const call = await callWith('claude-haiku-4-5', { maxOutputTokens: maxTokens, isPerFunctionCall: true });
+
+      expect(call.thinking).toEqual({ type: 'enabled', budget_tokens: maxTokens - 4096 });
+    });
+  });
+
+  describe('multi-turn replay', () => {
+    it('replays the first turn with a byte-identical system prompt and unchanged blocks', async () => {
+      // Opus 5.5 binds each thinking block to the system prompt and earlier messages
+      // that produced it; any change invalidates the replayed blocks.
+      const client = makeMockClient(makeValidLlmOutput(), undefined, ['First-attempt reasoning.']);
+      const config = makeConfig({ agentModel: 'claude-opus-5-5' });
+
+      const first = await instrumentFile(
+        '/project/src/handler.js', SAMPLE_JS, SAMPLE_SCHEMA, config, jsProvider,
+        { client: client as any, canonicalTracerName: 'test-service' },
+      );
+      expect(first.success).toBe(true);
+      if (!first.success) return;
 
       await instrumentFile(
-        '/project/src/handler.js',
-        SAMPLE_JS,
-        SAMPLE_SCHEMA,
-        makeConfig(),
-        jsProvider,
-        { client: client as any, maxOutputTokens: maxTokens, isPerFunctionCall: true },
+        '/project/src/handler.js', SAMPLE_JS, SAMPLE_SCHEMA, config, jsProvider,
+        {
+          client: client as any,
+          canonicalTracerName: 'test-service',
+          conversationContext: first.conversationContext,
+          feedbackMessage: 'Fix the validation errors.',
+          effortOverride: 'low',
+        },
       );
 
-      const call = client.messages.stream.mock.calls[0][0];
-      expect(call.thinking.type).toBe('enabled');
-      expect(call.thinking.budget_tokens).toBe(maxTokens - 4096);
+      const firstCall = client.messages.stream.mock.calls[0][0];
+      const secondCall = client.messages.stream.mock.calls[1][0];
+      expect(JSON.stringify(secondCall.system)).toBe(JSON.stringify(firstCall.system));
+      expect(secondCall.messages[0]).toEqual(firstCall.messages[0]);
+      const firstResponse = await client.messages.stream.mock.results[0].value.finalMessage();
+      expect(secondCall.messages[1]).toEqual({ role: 'assistant', content: firstResponse.content });
+      expect(secondCall.messages[2]).toEqual({ role: 'user', content: 'Fix the validation errors.' });
+      expect(secondCall.output_config.effort).toBe('low');
     });
   });
 });

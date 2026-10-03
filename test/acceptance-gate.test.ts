@@ -39,7 +39,7 @@ function makeConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
     schemaPath: './telemetry/registry',
     sdkInitFile: './src/telemetry.ts',
-    agentModel: 'claude-sonnet-4-6',
+    agentModel: 'claude-opus-5-5',
     agentEffort: 'medium',
     testCommand: 'npm test',
     dependencyStrategy: 'dependencies',

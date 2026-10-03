@@ -16,6 +16,24 @@ describe('PRICING table', () => {
     expect(PRICING['claude-sonnet-4-6']).toBeDefined();
     expect(PRICING['claude-haiku-4-5']).toBeDefined();
     expect(PRICING['claude-opus-4-6']).toBeDefined();
+    expect(PRICING['claude-opus-5-5']).toBeDefined();
+    expect(PRICING['claude-sonnet-5-5']).toBeDefined();
+  });
+
+  it('matches the published rates for Opus 5.5 and Sonnet 5.5', () => {
+    // Anthropic pricing page, 2026-10-03. Cache writes use the 5-minute TTL rate.
+    expect(PRICING['claude-opus-5-5']).toEqual({
+      inputPerMTok: 4,
+      outputPerMTok: 20,
+      cacheReadPerMTok: 0.20,
+      cacheWritePerMTok: 5,
+    });
+    expect(PRICING['claude-sonnet-5-5']).toEqual({
+      inputPerMTok: 2,
+      outputPerMTok: 10,
+      cacheReadPerMTok: 0.20,
+      cacheWritePerMTok: 2.50,
+    });
   });
 
   it('has positive pricing values for all models', () => {
@@ -110,6 +128,23 @@ describe('tokensToDollars', () => {
     // Total = $0.06
     const result = tokensToDollars(usage, 'claude-sonnet-4-6');
     expect(result).toBeCloseTo(0.06, 4);
+  });
+
+  it('calculates correct cost for Opus 5.5 including its 0.05x cache read rate', () => {
+    const usage: TokenUsage = {
+      inputTokens: 10_000,
+      outputTokens: 5_000,
+      cacheCreationInputTokens: 20_000,
+      cacheReadInputTokens: 100_000,
+    };
+    // Opus 5.5: input $4, output $20, cache write $5, cache read $0.20 per MTok
+    // 10k input = 0.04
+    // 5k output = 0.10
+    // 20k cache write = 0.10
+    // 100k cache read = 0.02
+    // Total = $0.26
+    const result = tokensToDollars(usage, 'claude-opus-5-5');
+    expect(result).toBeCloseTo(0.26, 4);
   });
 
   it('returns zero for zero tokens', () => {
