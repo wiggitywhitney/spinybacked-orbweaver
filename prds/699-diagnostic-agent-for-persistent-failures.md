@@ -108,8 +108,7 @@ Document the decision matrix — including the live-check evidence role — in `
 Success criterion: Both research files exist and contain enough specificity to drive M2 implementation without further research.
 
 ### M2: Implement diagnostic agent
-
-**Step 0**: Read both research files from M1 before writing any code.
+**Step 0**: Read both research files from M1 before writing any code. Also read [Research: Anthropic Messages API request parameters for Claude Opus 5.5](../docs/research/anthropic-opus-5-5-request-parameters.md) before writing the agent's model call. It records which `thinking`, `output_config.effort`, and `max_tokens` settings the current default model accepts. For example, `budget_tokens` returns a 400 on Opus 5.5.
 
 Implement a diagnostic agent module at `src/coordinator/diagnostic-agent.ts`.
 

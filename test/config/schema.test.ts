@@ -61,7 +61,7 @@ describe('AgentConfigSchema', () => {
       if (!result.success) return;
 
       const config = result.data;
-      expect(config.agentModel).toBe('claude-sonnet-4-6');
+      expect(config.agentModel).toBe('claude-opus-5-5');
       expect(config.agentEffort).toBe('medium');
       expect(config.testCommand).toBe('npm test');
       expect(config.dependencyStrategy).toBe('dependencies');

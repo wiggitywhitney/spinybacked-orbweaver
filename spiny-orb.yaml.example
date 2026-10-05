@@ -28,7 +28,7 @@ sdkInitFile: src/instrumentation.js
 # ── Agent behavior ─────────────────────────────────────────────────────────────
 
 # Claude model used for code generation.
-# agentModel: claude-sonnet-4-6
+# agentModel: claude-opus-5-5
 
 # Thinking depth: low (fast), medium (default, balanced), high (thorough, slower).
 # agentEffort: medium

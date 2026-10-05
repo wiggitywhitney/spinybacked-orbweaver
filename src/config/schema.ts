@@ -43,7 +43,7 @@ export const AgentConfigSchema = z.strictObject({
   sdkInitFile: z.string().min(1),
 
   // Agent API configuration
-  agentModel: z.string().default('claude-sonnet-4-6'),
+  agentModel: z.string().default('claude-opus-5-5'),
   agentEffort: AgentEffort.default('medium'),
 
   // Agent behavior

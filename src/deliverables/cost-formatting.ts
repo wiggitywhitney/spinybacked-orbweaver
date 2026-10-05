@@ -8,8 +8,8 @@ import type { CostCeiling } from '../coordinator/types.ts';
  * Per-model pricing in dollars per million tokens.
  * Source: Anthropic pricing page. Update when pricing changes.
  *
- * Cache read tokens get a 90% discount on input price.
- * Cache write (creation) tokens cost 25% more than input price.
+ * Cache read tokens get a 90% discount on input price (95% on Opus 5.5).
+ * Cache write (creation) tokens cost 25% more than input price (5-minute TTL rate).
  */
 export const PRICING: Record<string, {
   inputPerMTok: number;
@@ -34,6 +34,18 @@ export const PRICING: Record<string, {
     outputPerMTok: 25,
     cacheReadPerMTok: 0.50,
     cacheWritePerMTok: 6.25,
+  },
+  'claude-opus-5-5': {
+    inputPerMTok: 4,
+    outputPerMTok: 20,
+    cacheReadPerMTok: 0.20,
+    cacheWritePerMTok: 5,
+  },
+  'claude-sonnet-5-5': {
+    inputPerMTok: 2,
+    outputPerMTok: 10,
+    cacheReadPerMTok: 0.20,
+    cacheWritePerMTok: 2.50,
   },
 };
 

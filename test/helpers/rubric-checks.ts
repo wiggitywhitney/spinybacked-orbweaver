@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Project, Node } from 'ts-morph';
+import { Project, Node, SyntaxKind } from 'ts-morph';
 import type { SourceFile, SyntaxKind as SyntaxKindType, TryStatement } from 'ts-morph';
 
 /** Result of a rubric check. */
@@ -501,4 +501,103 @@ function isOTelLine(line: string): boolean {
     trimmed.startsWith('const tracer') ||
     trimmed.startsWith('const otelTracer')
   );
+}
+
+/**
+ * Registry-first: no unregistered attribute duplicates data a registered key covers.
+ * Judges each `setAttribute(key, value)` by what the value reads, not by the key's
+ * name, so a duplicate with an unexpected name is still caught. `coveredIdentifiers`
+ * lists the identifiers (variables and property names) holding the data that the
+ * registered keys describe. A value that reads one of them under an unregistered
+ * key fails, including through a local variable the agent added. Attribute writes
+ * this check cannot read (`setAttributes`, an `attributes` span option, or a
+ * non-literal key) fail explicitly rather than passing unchecked.
+ */
+export function checkNoDuplicateOfRegisteredAttributes(
+  code: string,
+  registeredKeys: string[],
+  coveredIdentifiers: string[],
+): RubricCheckResult {
+  const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+  const sf = project.createSourceFile('registry-duplicate-check.js', code);
+  const issues: string[] = [];
+  const registered = new Set(registeredKeys);
+  const covered = new Set(coveredIdentifiers);
+
+  const initializers = new Map<string, Node>();
+  for (const decl of sf.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const init = decl.getInitializer();
+    if (init && Node.isIdentifier(decl.getNameNode())) initializers.set(decl.getName(), init);
+  }
+
+  const readsCovered = (node: Node, seen: Set<string>): string | undefined => {
+    const identifiers = Node.isIdentifier(node) ? [node] : node.getDescendantsOfKind(SyntaxKind.Identifier);
+    for (const id of identifiers) {
+      const name = id.getText();
+      if (covered.has(name)) return name;
+      const init = initializers.get(name);
+      if (init && !seen.has(name)) {
+        seen.add(name);
+        const found = readsCovered(init, seen);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
+
+  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = call.getExpression();
+    if (!Node.isPropertyAccessExpression(callee)) continue;
+    const method = callee.getName();
+    if (method === 'setAttributes') {
+      issues.push(`setAttributes call cannot be checked: ${call.getText()}`);
+      continue;
+    }
+    if (method !== 'setAttribute') continue;
+    const [keyArg, valueArg] = call.getArguments();
+    if (!keyArg || !Node.isStringLiteral(keyArg)) {
+      issues.push(`setAttribute key is not a string literal, so it cannot be checked: ${call.getText()}`);
+      continue;
+    }
+    const key = keyArg.getLiteralValue();
+    if (registered.has(key) || !valueArg) continue;
+    const found = readsCovered(valueArg, new Set());
+    if (found) {
+      issues.push(`unregistered key '${key}' records '${found}', which a registered key already covers`);
+    }
+  }
+
+  // Only the options argument of a span-starting call can carry span attributes;
+  // an `attributes` property elsewhere in business code is unrelated. Options are
+  // followed through local variables to an object literal; anything else (a call,
+  // a parameter, a spread) cannot be read, so it fails rather than passing unchecked.
+  for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = call.getExpression();
+    if (!Node.isPropertyAccessExpression(callee) || !['startActiveSpan', 'startSpan'].includes(callee.getName())) continue;
+    const optionsArg = call.getArguments()[1];
+    // startActiveSpan(name, fn) passes the callback second; there are no options.
+    if (!optionsArg || Node.isArrowFunction(optionsArg) || Node.isFunctionExpression(optionsArg)) continue;
+    let options: Node | undefined = optionsArg;
+    const seen = new Set<string>();
+    while (options && Node.isIdentifier(options) && !seen.has(options.getText())) {
+      seen.add(options.getText());
+      options = initializers.get(options.getText());
+    }
+    if (!options || !Node.isObjectLiteralExpression(options)) {
+      issues.push(`span options cannot be checked: ${optionsArg.getText()}`);
+      continue;
+    }
+    for (const prop of options.getProperties()) {
+      if (Node.isSpreadAssignment(prop)) {
+        issues.push(`span options spread cannot be checked: ${prop.getText()}`);
+      } else if ((Node.isPropertyAssignment(prop) || Node.isShorthandPropertyAssignment(prop)) && prop.getName() === 'attributes') {
+        issues.push(`attributes span option cannot be checked: ${prop.getText()}`);
+      }
+    }
+  }
+
+  if (issues.length === 0) {
+    return { passed: true };
+  }
+  return { passed: false, details: issues.join('\n') };
 }
