@@ -35,7 +35,7 @@ sdkInitFile: ./src/telemetry/setup.js
     if (result.success) {
       expect(result.config.schemaPath).toBe('./telemetry/registry');
       expect(result.config.sdkInitFile).toBe('./src/telemetry/setup.js');
-      expect(result.config.agentModel).toBe('claude-sonnet-4-6');
+      expect(result.config.agentModel).toBe('claude-opus-5-5');
     }
   });
 
