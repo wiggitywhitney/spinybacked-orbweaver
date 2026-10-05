@@ -146,7 +146,7 @@ Attribute keys and requirement levels, extracted from the tables:
 ## Recommendation (input to M4; the decisions belong to Whitney)
 
 1. When a library emits the inference span, treat the model-call-level `gen_ai.*` attributes (`operation.name` = chat/text_completion/generate_content, `provider.name`, `request.*`, `response.*`, `usage.*`) as belonging only to that span. Do not copy them onto application wrapper spans.
-2. When no library covers the call, the span that directly wraps the SDK call should carry the inference attributes, with `provider.name` and `request.model` set at span creation.
+2. When no library covers the call, the span that directly wraps the SDK call should carry the inference attributes, with `provider.name` set at span creation, and `request.model` set at span creation when it is available (the spec makes it Conditionally Required, "If available").
 3. A wrapper around a graph run may legitimately be an `invoke_workflow` span, but it then carries only workflow attributes. M4 should decide whether spiny-orb ever suggests this, given that libraries such as Traceloop LangChain may already emit workflow or agent spans (M2 checks).
 4. Content capture: the spec default is off. That gives M4 decision 6 a spec-backed default of opt-in.
 
