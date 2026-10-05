@@ -6,7 +6,7 @@
 ## Update Log
 | Date | Summary |
 |------|---------|
-| 2026-10-05 | Initial research for PRD #1075 Milestone 1. Primary sources read at `open-telemetry/semantic-conventions-genai` commit `cb10b70c15c0` (2026-10-05) and `open-telemetry/semantic-conventions` tag `v1.44.0`. |
+| 2026-10-05 | Initial research for PRD #1075 Milestone 1. All `semantic-conventions-genai` links are pinned to the reviewed commit. Primary sources read at `open-telemetry/semantic-conventions-genai` commit `cb10b70c15c0` (2026-10-05) and `open-telemetry/semantic-conventions` tag `v1.44.0`. |
 
 ## Summary
 
@@ -29,29 +29,32 @@ The GenAI semantic conventions are still **Development** status everywhere. Sinc
 
 🟢 **High.** Every GenAI document and attribute is Development.
 
-**Source says:** "# Semantic conventions for generative AI systems **Status**: [Development]" ([semantic-conventions-genai README](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md))
+**Source says:** "# Semantic conventions for generative AI systems **Status**: [Development]" ([semantic-conventions-genai README](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/README.md))
 **Source says:** "as of July 17, 2026, no GenAI-specific span, event, metric, or attribute in the dedicated repository is marked Stable … the GenAI conventions remain Development." ([John Hodge, July 2026](https://john-hodge.com/blog/opentelemetry-genai-semantic-conventions/))
 **Source says (core v1.42.0 changelog):** "Move Generative AI semantic conventions to a dedicated repository. … All `gen_ai.*` attributes, metrics, events, and spans previously defined under `model/gen-ai/`, `model/openai/`, and `model/mcp/` (and documented under `docs/gen-ai/`) are deprecated in this repository and have moved to the OpenTelemetry GenAI semantic conventions repository." ([core CHANGELOG v1.42.0](https://github.com/open-telemetry/semantic-conventions/blob/v1.44.0/CHANGELOG.md))
 **Verified locally:** `gh release list --repo open-telemetry/semantic-conventions-genai` returns nothing. The repository was created 2026-05-05, and its `CHANGELOG.md` has only `## Unreleased`.
 
-🟢 **High.** Span types defined at `cb10b70c15c0` (from [gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md) and [gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md)):
+🟢 **High.** Span types defined at `cb10b70c15c0` (from [gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md) and [gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-agent-spans.md)):
 
 | Span | Registry id | Kind | Name format |
 |---|---|---|---|
 | Inference (chat, text_completion, generate_content) | `gen_ai.inference.client` | CLIENT (INTERNAL for in-process models) | `{gen_ai.operation.name} {gen_ai.request.model}` |
 | Embeddings | | CLIENT | `embeddings {model}` |
 | Retrieval | | CLIENT | `retrieval {gen_ai.data_source.id}` |
-| Fetch response | | | |
-| Memory operations | | | |
-| Execute tool | | | |
+| Fetch response | | CLIENT | `fetch_response` |
+| Memory operations (`create_memory_store`, `search_memory`, `create_memory`, …) | | CLIENT (INTERNAL for in-process stores) | `{gen_ai.operation.name}` |
+| Execute tool | | INTERNAL | `execute_tool {gen_ai.tool.name}` |
 | Create agent | `gen_ai.create_agent.client` | CLIENT | `create_agent {gen_ai.agent.name}` |
-| Invoke agent (client: remote agent service) | | CLIENT | |
-| Invoke agent (internal: in-process agent) | | INTERNAL | `invoke_agent {gen_ai.agent.name}` |
+| Invoke agent (client: remote agent service) | | CLIENT | `invoke_agent {gen_ai.agent.name}` |
+| Invoke agent (internal: in-process agent) | | INTERNAL | `invoke_agent {gen_ai.agent.name}` (or `invoke_agent`) |
 | Invoke workflow | | INTERNAL | `invoke_workflow {gen_ai.workflow.name}` |
-| Plan | | | |
-| Agent skills: load skill, read skill resource, command execution | | | |
+| Plan | | INTERNAL | `plan {gen_ai.agent.name}` (or `plan`) |
+| Agent skills: load skill, read skill resource | | INTERNAL | `execute_tool {gen_ai.tool.name} {gen_ai.skill.name}` (read resource adds `{gen_ai.skill.resource.name}`) |
+| Agent skills: command execution | | INTERNAL | a refinement of execute tool for tools that run commands or skill scripts (examples: Anthropic client `bash`, OpenAI Agents `exec_command`) |
 
-Well-known `gen_ai.operation.name` values: `chat`, `create_agent`, `create_memory`, `create_memory_store`, `delete_memory`, `delete_memory_store`, `embeddings`, `execute_tool`, `fetch_response`, `generate_content`, `invoke_agent`, `invoke_workflow`, `plan`, `retrieval`, `search_memory`, `text_completion`, `update_memory`, `upsert_memory`. ([gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md))
+Execute tool span attributes: `gen_ai.operation.name` (`execute_tool`) and `gen_ai.tool.name` are Required. `error.type`, `gen_ai.agent.name` and `gen_ai.conversation.id` are Conditionally Required. `gen_ai.tool.call.id`, `gen_ai.tool.description` and `gen_ai.tool.type` are Recommended. `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result` are Opt-In. The span defines no model, provider or usage attributes. **Source says:** "Tools are often executed directly by application code. Application developers are encouraged to follow this semantic convention for tools invoked by their own code and to manually instrument any tool calls that automatic instrumentations do not cover." ([gen-ai-spans.md, Execute tool span](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md#execute-tool-span)) **Interpretation:** this is the only GenAI span type the spec explicitly invites application code to create by hand.
+
+Well-known `gen_ai.operation.name` values: `chat`, `create_agent`, `create_memory`, `create_memory_store`, `delete_memory`, `delete_memory_store`, `embeddings`, `execute_tool`, `fetch_response`, `generate_content`, `invoke_agent`, `invoke_workflow`, `plan`, `retrieval`, `search_memory`, `text_completion`, `update_memory`, `upsert_memory`. ([gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md))
 
 ### Q2. `gen_ai.system` → `gen_ai.provider.name`, and other renames
 
@@ -77,7 +80,7 @@ Other renames and removals relevant to LLM calls:
 | `gen_ai.client.token.usage` histogram + `gen_ai.token.type` | per-direction, per-operation token histograms | genai repo, unreleased (374.breaking) | 🟢 |
 | `gen_ai.request.top_k` (double) | int, decoding only; retrieval uses `gen_ai.retrieval.top_k` | genai repo, unreleased (217.breaking) | 🟢 |
 
-The unreleased rows come from [changelog.d fragments](https://github.com/open-telemetry/semantic-conventions-genai/tree/main/changelog.d), read 2026-10-05.
+The unreleased rows come from [changelog.d fragments](https://github.com/open-telemetry/semantic-conventions-genai/tree/cb10b70c15c099ccab144e8316d934c9699da0fd/changelog.d), read 2026-10-05.
 
 🟢 **High.** Transition default (core, v1.37.0 through v1.41.x):
 **Source says:** "Existing GenAI instrumentations that are using v1.36.0 of this document (or prior): SHOULD NOT change the version of the GenAI conventions that they emit by default. … SHOULD introduce an environment variable `OTEL_SEMCONV_STABILITY_OPT_IN` … `gen_ai_latest_experimental` - emit the latest experimental version of GenAI conventions … and do not emit the old one (v1.36.0 or prior)." ([core docs/gen-ai/README.md @ v1.41.0](https://github.com/open-telemetry/semantic-conventions/blob/v1.41.0/docs/gen-ai/README.md))
@@ -87,7 +90,7 @@ The unreleased rows come from [changelog.d fragments](https://github.com/open-te
 
 🟢 **High: the model-call (inference) span carries the full set.**
 
-**Source says:** "This span represents a client call to Generative AI model or service that generates a response or requests a tool call based on the input prompt." On that span, `gen_ai.operation.name` and `gen_ai.provider.name` are `Required`, `gen_ai.request.model` is `Conditionally Required` "If available", and `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` are `Recommended`. ([gen-ai-spans.md, Inference](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md))
+**Source says:** "This span represents a client call to Generative AI model or service that generates a response or requests a tool call based on the input prompt." On that span, `gen_ai.operation.name` and `gen_ai.provider.name` are `Required`, `gen_ai.request.model` is `Conditionally Required` "If available", and `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` are `Recommended`. ([gen-ai-spans.md, Inference](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md))
 **Source says:** "The following attributes can be important for making sampling decisions and SHOULD be provided **at span creation time** (if provided at all): `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `server.address`, `server.port`." (same page)
 **Source says:** "GenAI spans represent logical operations as observed by the caller. They SHOULD cover the duration of the operation … If a transient issue happened and the request was retried automatically, the corresponding span SHOULD cover the duration of the logical operation with all retries." (same page)
 
@@ -106,9 +109,9 @@ Attribute keys and requirement levels, extracted from the tables:
 | `gen_ai.agent.name` / `gen_ai.workflow.name` | | Cond. Required | `gen_ai.workflow.name` Cond. Required |
 | `gen_ai.input.messages` / `output.messages` | Opt-In | Opt-In | Opt-In |
 
-**Source says (invoke_agent internal, `gen_ai.request.model` note):** "This attribute SHOULD be populated if and only if the instrumented library allows to set only a single model per agent. It SHOULD NOT be populated for agents that support multiple models or dynamic selection." ([gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md))
-**Source says (changelog fragments):** "Remove `gen_ai.provider.name` required attribute from the `invoke_agent` internal span." (289.breaking); "Remove `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_write.input_tokens` from the internal `invoke_agent` span. Cache breakdowns on that span aggregate across models and inference calls, which makes them misleading; consumers should aggregate them from `gen_ai.inference.client` spans instead." (469.breaking) ([changelog.d](https://github.com/open-telemetry/semantic-conventions-genai/tree/main/changelog.d))
-**Source says (invoke_workflow):** "Represents an operation that executes a coordinated process composed of multiple agents or other operations involving generative AI. … The workflow span SHOULD be reported for operations that trigger the execution of composable processes (e.g., graphs, orchestrators) coordinating multiple agents or GenAI calls. It SHOULD NOT be reported for standalone agent invocations. … Workflows defined by the application SHOULD be reported even when nested, for example a sub-graph invoked as a node of another graph." Examples include "**LangChain / LangGraph**: `*Graph*.invoke(...)`". ([gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md))
+**Source says (invoke_agent internal, `gen_ai.request.model` note):** "This attribute SHOULD be populated if and only if the instrumented library allows to set only a single model per agent. It SHOULD NOT be populated for agents that support multiple models or dynamic selection." ([gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-agent-spans.md))
+**Source says (changelog fragments):** "Remove `gen_ai.provider.name` required attribute from the `invoke_agent` internal span." (289.breaking); "Remove `gen_ai.usage.cache_read.input_tokens` and `gen_ai.usage.cache_write.input_tokens` from the internal `invoke_agent` span. Cache breakdowns on that span aggregate across models and inference calls, which makes them misleading; consumers should aggregate them from `gen_ai.inference.client` spans instead." (469.breaking) ([changelog.d](https://github.com/open-telemetry/semantic-conventions-genai/tree/cb10b70c15c099ccab144e8316d934c9699da0fd/changelog.d))
+**Source says (invoke_workflow):** "Represents an operation that executes a coordinated process composed of multiple agents or other operations involving generative AI. … The workflow span SHOULD be reported for operations that trigger the execution of composable processes (e.g., graphs, orchestrators) coordinating multiple agents or GenAI calls. It SHOULD NOT be reported for standalone agent invocations. … Workflows defined by the application SHOULD be reported even when nested, for example a sub-graph invoked as a node of another graph." Examples include "**LangChain / LangGraph**: `*Graph*.invoke(...)`". ([gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-agent-spans.md))
 
 🟡 **Medium: the conventions are silent on non-GenAI application spans.** Neither spans document defines or mentions an application-defined span (for example a function span named after business logic) that wraps a model call. The only parent/child guidance is the plan span ("tool or task spans … SHOULD be a child of the plan span") and the workflow nesting rule above. The second source (John Hodge) does not address placement either, so this rests on the primary spec alone.
 
@@ -122,22 +125,22 @@ Attribute keys and requirement levels, extracted from the tables:
 
 🟢 **High: off by default, and opt-in.**
 
-**Source says:** "Model instructions, user messages, and model outputs are considered sensitive and are often large in size. … OpenTelemetry instrumentations SHOULD NOT capture them by default, but SHOULD provide an option for users to opt in." The usage patterns it lists: "1. [Default] Don't record instructions, inputs, or outputs. 2. Record instructions, inputs, and outputs on the GenAI spans using corresponding attributes (`gen_ai.system_instructions`, `gen_ai.input.messages`, `gen_ai.output.messages`). … best suited for … pre-production environments. 3. Store content externally and record references on the spans. This pattern is recommended in production environments …" ([gen-ai-spans.md, Capturing instructions, inputs, and outputs](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md))
+**Source says:** "Model instructions, user messages, and model outputs are considered sensitive and are often large in size. … OpenTelemetry instrumentations SHOULD NOT capture them by default, but SHOULD provide an option for users to opt in." The usage patterns it lists: "1. [Default] Don't record instructions, inputs, or outputs. 2. Record instructions, inputs, and outputs on the GenAI spans using corresponding attributes (`gen_ai.system_instructions`, `gen_ai.input.messages`, `gen_ai.output.messages`). … best suited for … pre-production environments. 3. Store content externally and record references on the spans. This pattern is recommended in production environments …" ([gen-ai-spans.md, Capturing instructions, inputs, and outputs](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md))
 **Source says (core v1.37.0):** "Instead of per-message events, we now have `gen_ai.system_instructions`, `gen_ai.input.messages`, and `gen_ai.output.messages` attributes that can appear on GenAI spans or the new `gen_ai.client.inference.operation.details` event. New attributes are not recorded by default when content capturing is disabled." ([core CHANGELOG](https://github.com/open-telemetry/semantic-conventions/blob/v1.44.0/CHANGELOG.md))
 **Corroborated by:** "per-message events replaced by `gen_ai.input.messages`, `output.messages`, `system_instructions` attributes" ([John Hodge](https://john-hodge.com/blog/opentelemetry-genai-semantic-conventions/))
 
 🟢 **High: format.**
 - `gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`, `gen_ai.tool.definitions` and `gen_ai.prompt.variable.<key>` are all `Opt-In` on the inference span, and the messages attributes are also Opt-In on the agent and workflow spans.
 - Each MUST follow its JSON schema (`gen-ai-input-messages.json` and the others). Messages use a `parts` array: `{"role":"user","parts":[{"type":"text","content":"…"}]}`.
-- **Source says:** "When the attribute is recorded on events, it MUST be recorded in structured form. When recorded on spans, it MAY be recorded as a JSON string if structured format is not supported and SHOULD be recorded in structured form otherwise." ([gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md))
+- **Source says:** "When the attribute is recorded on events, it MUST be recorded in structured form. When recorded on spans, it MAY be recorded as a JSON string if structured format is not supported and SHOULD be recorded in structured form otherwise." ([gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md))
 - `gen_ai.system_instructions` part types are limited to text (257.breaking).
-- The event `gen_ai.client.inference.operation.details` has requirement level **Opt-In** ([gen-ai-events.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-events.md)).
+- The event `gen_ai.client.inference.operation.details` has requirement level **Opt-In** ([gen-ai-events.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-events.md)).
 - The spec defines **no** standard environment variable for content capture. The variable names in use (for example `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, and Traceloop's own setting) belong to each instrumentation, which is why M2 has to read them from the installed packages. 🟡 Medium: this is inferred from the variable's absence in the spec documents read.
 
 ## Conflicting Findings
 
 - **A secondary blog says** some posts claim GenAI "went stable" in "OTel 1.30" (reported in [John Hodge](https://john-hodge.com/blog/opentelemetry-genai-semantic-conventions/) as a claim the author refutes).
-- **The primary source says** "Status: Development" throughout ([genai README](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md)).
+- **The primary source says** "Status: Development" throughout ([genai README](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/README.md)).
 - **Interpretation:** the primary source wins. Nothing is stable.
 
 ## Recommendation (input to M4; the decisions belong to Whitney)
@@ -155,12 +158,12 @@ Attribute keys and requirement levels, extracted from the tables:
 
 ## Sources
 
-- [semantic-conventions-genai README](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md): Development status, document list
-- [gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md): inference, embeddings and retrieval span attributes; sampling-time attributes; operation names; content-capture section
-- [gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md): create_agent, invoke_agent client/internal, invoke_workflow (LangGraph example), plan, and skill spans
-- [gen-ai-events.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-events.md): `gen_ai.client.inference.operation.details` is Opt-In
-- [anthropic.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/anthropic.md): `provider.name = "anthropic"`; input_tokens includes cache read and write
-- [semantic-conventions-genai changelog.d](https://github.com/open-telemetry/semantic-conventions-genai/tree/main/changelog.d): unreleased breaking changes 217, 242, 257, 289, 322, 363, 374, 440, 469
+- [semantic-conventions-genai README](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/README.md): Development status, document list
+- [gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md): inference, embeddings and retrieval span attributes; sampling-time attributes; operation names; content-capture section
+- [gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-agent-spans.md): create_agent, invoke_agent client/internal, invoke_workflow (LangGraph example), plan, and skill spans
+- [gen-ai-events.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-events.md): `gen_ai.client.inference.operation.details` is Opt-In
+- [anthropic.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/anthropic.md): `provider.name = "anthropic"`; input_tokens includes cache read and write
+- [semantic-conventions-genai changelog.d](https://github.com/open-telemetry/semantic-conventions-genai/tree/cb10b70c15c099ccab144e8316d934c9699da0fd/changelog.d): unreleased breaking changes 217, 242, 257, 289, 322, 363, 374, 440, 469
 - [Core semantic-conventions CHANGELOG @ v1.44.0](https://github.com/open-telemetry/semantic-conventions/blob/v1.44.0/CHANGELOG.md): v1.28.0, v1.37.0 and v1.42.0 entries
 - [Core registry-deprecated.yaml @ v1.41.0](https://github.com/open-telemetry/semantic-conventions/blob/v1.41.0/model/gen-ai/deprecated/registry-deprecated.yaml): renamed_to mappings
 - [Core docs/gen-ai/README.md @ v1.41.0](https://github.com/open-telemetry/semantic-conventions/blob/v1.41.0/docs/gen-ai/README.md): `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` transition plan
