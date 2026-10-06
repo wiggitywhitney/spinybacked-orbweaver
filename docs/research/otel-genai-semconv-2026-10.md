@@ -7,6 +7,7 @@
 | Date | Summary |
 |------|---------|
 | 2026-10-05 | Initial research for PRD #1075 Milestone 1. All `semantic-conventions-genai` links are pinned to the reviewed commit. Primary sources read at `open-telemetry/semantic-conventions-genai` commit `cb10b70c15c0` (2026-10-05) and `open-telemetry/semantic-conventions` tag `v1.44.0`. |
+| 2026-10-05 | Filled in the span table's "Registry id" column. It had IDs only for Inference and Create agent. The rest were read from `model/gen-ai/spans.yaml` at `cb10b70c15c0`: nine span types from `type:` groups, and the three skill spans from `id:` entries. Nothing removed. This whole document is scheduled to be redone question by question (PRD #1075 M1b), so treat its contents as unconfirmed until that redo's Update Log row appears. |
 
 ## Summary
 
@@ -39,18 +40,18 @@ The GenAI semantic conventions are still **Development** status everywhere. Sinc
 | Span | Registry id | Kind | Name format |
 |---|---|---|---|
 | Inference (chat, text_completion, generate_content) | `gen_ai.inference.client` | CLIENT (INTERNAL for in-process models) | `{gen_ai.operation.name} {gen_ai.request.model}` |
-| Embeddings | | CLIENT | `embeddings {model}` |
-| Retrieval | | CLIENT | `retrieval {gen_ai.data_source.id}` |
-| Fetch response | | CLIENT | `fetch_response` |
-| Memory operations (`create_memory_store`, `search_memory`, `create_memory`, …) | | CLIENT (INTERNAL for in-process stores) | `{gen_ai.operation.name}` |
-| Execute tool | | INTERNAL | `execute_tool {gen_ai.tool.name}` |
+| Embeddings | `gen_ai.embeddings.client` | CLIENT | `embeddings {model}` |
+| Retrieval | `gen_ai.retrieval.client` | CLIENT | `retrieval {gen_ai.data_source.id}` |
+| Fetch response | `gen_ai.fetch_response.client` | CLIENT | `fetch_response` |
+| Memory operations (`create_memory_store`, `search_memory`, `create_memory`, …) | `gen_ai.memory.client` | CLIENT (INTERNAL for in-process stores) | `{gen_ai.operation.name}` |
+| Execute tool | `gen_ai.execute_tool.internal` | INTERNAL | `execute_tool {gen_ai.tool.name}` |
 | Create agent | `gen_ai.create_agent.client` | CLIENT | `create_agent {gen_ai.agent.name}` |
-| Invoke agent (client: remote agent service) | | CLIENT | `invoke_agent {gen_ai.agent.name}` |
-| Invoke agent (internal: in-process agent) | | INTERNAL | `invoke_agent {gen_ai.agent.name}` (or `invoke_agent`) |
-| Invoke workflow | | INTERNAL | `invoke_workflow {gen_ai.workflow.name}` |
-| Plan | | INTERNAL | `plan {gen_ai.agent.name}` (or `plan`) |
-| Agent skills: load skill, read skill resource | | INTERNAL | `execute_tool {gen_ai.tool.name} {gen_ai.skill.name}` (read resource adds `{gen_ai.skill.resource.name}`) |
-| Agent skills: command execution | | INTERNAL | a refinement of execute tool for tools that run commands or skill scripts (examples: Anthropic client `bash`, OpenAI Agents `exec_command`) |
+| Invoke agent (client: remote agent service) | `gen_ai.invoke_agent.client` | CLIENT | `invoke_agent {gen_ai.agent.name}` |
+| Invoke agent (internal: in-process agent) | `gen_ai.invoke_agent.internal` | INTERNAL | `invoke_agent {gen_ai.agent.name}` (or `invoke_agent`) |
+| Invoke workflow | `gen_ai.invoke_workflow.internal` | INTERNAL | `invoke_workflow {gen_ai.workflow.name}` |
+| Plan | `gen_ai.plan.internal` | INTERNAL | `plan {gen_ai.agent.name}` (or `plan`) |
+| Agent skills: load skill, read skill resource | `gen_ai.execute_tool.load_skill.internal`, `gen_ai.execute_tool.read_skill_resource.internal` | INTERNAL | `execute_tool {gen_ai.tool.name} {gen_ai.skill.name}` (read resource adds `{gen_ai.skill.resource.name}`) |
+| Agent skills: command execution | `gen_ai.execute_tool.command.internal` | INTERNAL | a refinement of execute tool for tools that run commands or skill scripts (examples: Anthropic client `bash`, OpenAI Agents `exec_command`) |
 
 Execute tool span attributes: `gen_ai.operation.name` (`execute_tool`) and `gen_ai.tool.name` are Required. `error.type`, `gen_ai.agent.name` and `gen_ai.conversation.id` are Conditionally Required. `gen_ai.tool.call.id`, `gen_ai.tool.description` and `gen_ai.tool.type` are Recommended. `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result` are Opt-In. The span defines no model, provider or usage attributes. **Source says:** "Tools are often executed directly by application code. Application developers are encouraged to follow this semantic convention for tools invoked by their own code and to manually instrument any tool calls that automatic instrumentations do not cover." ([gen-ai-spans.md, Execute tool span](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md#execute-tool-span)) **Interpretation:** this is the only GenAI span type the spec explicitly invites application code to create by hand.
 
