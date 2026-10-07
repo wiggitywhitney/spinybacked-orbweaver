@@ -1,6 +1,6 @@
 # PRD #1075: LLM Span Handling — GenAI Attribute Placement, Traceloop Activation, and Library Span Verification
 
-**Status**: In progress (M1, M1b and M2 complete; M2b implemented, waiting on its commit-story-v2 PR to merge; M3's research part can start now)
+**Status**: In progress (M1, M1b, M2 and M2b complete; next is M3)
 **Priority**: High
 **GitHub Issue**: [#1075](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1075)
 
@@ -97,7 +97,7 @@ Run research spikes first on the October 2026 state of the GenAI semantic conven
   For (b), also record every instrumentation class name each package exports. `ast.ts` and the prompt tables use `MCPInstrumentation`, and commit-story-v2's `src/traceloop-init.js` imports `McpInstrumentation`. Compare both against what the package exports.
   Tool notes: the `gh api search/issues` endpoint needs `-X GET` with `-f q=...`. In this zsh setup, `echo =====` fails with "= not found", so use a separator that doesn't start with `=`. Quote any `gh api` path that contains `?ref=`, as in `gh api "repos/<owner>/<repo>/contents/<path>?ref=<sha>"`. Unquoted, zsh treats `?` as a glob and fails with "no matches found".
 
-- [ ] **M2b — Fix commit-story-v2's Traceloop setup (finding 4).** (Added per the 2026-10-02 Decision Log row on commit-story-v2 scope.)
+- [x] **M2b — Fix commit-story-v2's Traceloop setup (finding 4).** (Added per the 2026-10-02 Decision Log row on commit-story-v2 scope.)
   **Step 0:** Read related research before starting: [Research: OpenLLMetry and Traceloop JavaScript Instrumentation Status, October 2026](../docs/research/openllmetry-traceloop-status-2026-10.md)
   **Step 0:** Read M2's Decision Log row with each package's activation signature, and issue #1077's closing comment with the LangChain argument. Both must exist before this milestone begins — M2 and issue #1077 gate this milestone.
   This work happens in the commit-story-v2 repository (`~/Documents/Repositories/commit-story-v2`), on its own branch from that repository's `main` and its own PR there. It cannot ride along with this PRD's spiny-orb PR.
@@ -185,7 +185,9 @@ Run research spikes first on the October 2026 state of the GenAI semantic conven
 
 _Populate as milestones complete._
 
-- **2026-10-07 — M2b implemented; its commit-story-v2 PR is not yet merged.** All five steps are done on commit-story-v2 branch `fix/traceloop-activation-args` (commits `38d2d66` and `15c9dd1`), in [commit-story-v2 PR #97](https://github.com/wiggitywhitney/commit-story-v2/pull/97). M2b stays unchecked until that PR merges. CodeRabbit's first review of PR #97 found that the hook tests inherited `COMMIT_STORY_TRACELOOP` from the runner's environment, so they failed whenever it was set there. `15c9dd1` strips the variable before the tests run.
+- **2026-10-07 — M2b complete.** commit-story-v2 PR #97 merged to `main` as `2e1d0c1`, with a `--merge` merge, not a squash. CodeRabbit had reviewed the final head (`d6699cb`) with no actionable comments, and CI passed on Node 20 and 22. The PR also carries the journal files the post-commit hook wrote during this work. The hook's further append to `journal/entries/2026-10/2026-10-07.md` is left uncommitted on commit-story-v2 `main` for Whitney's normal journal flow, because every commit triggers another append. **Next:** M3. Its research part has no gate. Its live check can also run now, after Whitney approves the commit it requires.
+
+- **2026-10-07 — M2b implemented (merged later the same day; see the entry above).** All five steps are done on commit-story-v2 branch `fix/traceloop-activation-args` (commits `38d2d66` and `15c9dd1`), in [commit-story-v2 PR #97](https://github.com/wiggitywhitney/commit-story-v2/pull/97). M2b stays unchecked until that PR merges. CodeRabbit's first review of PR #97 found that the hook tests inherited `COMMIT_STORY_TRACELOOP` from the runner's environment, so they failed whenever it was set there. `15c9dd1` strips the variable before the tests run.
   - **Step 1:** `src/traceloop-init.js` now calls `new LangChainInstrumentation().manuallyInstrument({ callbackManagerModule })`, importing `@langchain/core/callbacks/manager` inside the `COMMIT_STORY_TRACELOOP` gate. The MCP import and call are removed, per the 2026-10-07 M2b MCP row. commit-story-v2's installed 0.22.6 `dist` was read first, and both signatures match M2's 0.27.0 findings.
   - **Test change:** `tests/traceloop-init.test.js` used `vi.mock` on both instrumentation classes. Their mock `manuallyInstrument()` took no argument, which is why the crash never showed up in tests. The test now uses `vi.spyOn` on the real classes' prototypes. It asserts that the argument's `CallbackManager` is the real one, and that MCP is never activated. Before the fix it failed with finding 3's exact `TypeError`.
   - **Step 2:** the fake package in `tests/scripts/install-hook.test.js` now also writes `COMMIT_STORY_TRACELOOP` to its marker file, and a new test, "passes COMMIT_STORY_TRACELOOP from the caller through to node", checks it. With `-i` removed from `scripts/install-hook.sh` (a backup was restored afterwards), the test failed with `path-lost|traceloop-unset`. Against the real script it passes. Full suite: 634 passed and 1 skipped (the acceptance gate test, which skips without `ANTHROPIC_API_KEY`).
