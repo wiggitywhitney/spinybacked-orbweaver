@@ -33,6 +33,8 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 - Retry behavior: how many files need a second or third attempt, and the share of files that stop because they reached the per-file token budget (`maxTokensPerFile`, 100,000). Opus 5.5's tokenizer produces about 30% more tokens for the same text, so a file reaches the budget sooner. A rise in that share is the signal to revisit the budget.
 - Any `stop_reason: max_tokens` or `stop_reason: refusal` errors. `max_tokens` means the combined thinking-and-response cap was reached; check the attempt's thinking to see whether thinking left too little room for the structured response, the failure PR #547 fixed. Refusal errors name their `refusal_category`.
 
+**Eval input changed: commit-story-v2's `src/traceloop-init.js`** ([PRD #1075](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1075)): the file now calls `manuallyInstrument({ callbackManagerModule })` for LangChain and no longer imports `@traceloop/instrumentation-mcp`. spiny-orb instruments commit-story-v2's source, so the next eval sees a different input file. Do not count a difference in that file's output as a spiny-orb regression. Runs without `COMMIT_STORY_TRACELOOP=true` behave as before.
+
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Path to Python
