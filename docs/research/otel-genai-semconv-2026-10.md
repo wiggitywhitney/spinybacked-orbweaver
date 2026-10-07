@@ -1,7 +1,7 @@
 # Research: OpenTelemetry GenAI Semantic Conventions, October 2026
 
 **Project:** spinybacked-orbweaver
-**Last Updated:** 2026-10-06
+**Last Updated:** 2026-10-07
 
 ## Update Log
 | Date | Summary |
@@ -16,6 +16,7 @@
 | 2026-10-06 | **M1b close-out.** Re-verified the Anthropic cached-token gotcha, which none of the four questions covered, against `anthropic.md` line 188, with pipecat issue #5993 as a second source. Nothing removed. M1b's four question-by-question invocations are complete; the document's contents are no longer "unconfirmed" as the second 2026-10-05 row warned. |
 | 2026-10-06 | Aligned three summaries of the JS OpenAI package's capture behavior (Surprises & Gotchas, the Q4 per-package table, and the Q4 conflicting-findings note) with Q4's documented exception: message content goes only to log records, but the Responses API path also writes `gen_ai.system_instructions` to the span without checking the opt-in. Nothing removed. Raised by a CodeRabbit CLI review. |
 | 2026-10-06 | Marked the Q4 reconciliation with the global `otel-semconv-gotchas.md` rule as resolved: claude-config PR #133 corrected the rule. Nothing removed. |
+| 2026-10-07 | Completed the Q4 "Opt-In on every span type that carries content" inventory after a CodeRabbit finding. Added the Opt-In content attributes defined directly on the create agent, fetch response, retrieval and memory spans, read from `spans.yaml` at `cb10b70c15c0`. Nothing removed. The inventory was incomplete, not wrong. |
 
 ## Summary
 
@@ -243,7 +244,15 @@ Apart from those two passages, the normative text defines no rule for model, pro
 **Corroborated by:** "per-message events replaced by `gen_ai.input.messages`, `output.messages`, `system_instructions` attributes" ([John Hodge](https://john-hodge.com/blog/opentelemetry-genai-semantic-conventions/))
 
 🟢 **High: where content goes, and in what format.**
-- **Opt-In on every span type that carries content.** `gen_ai.system_instructions`, `gen_ai.input.messages`, `gen_ai.output.messages` and `gen_ai.tool.definitions` are `opt_in` on the inference span and on both `invoke_agent` spans, through the `attributes.gen_ai.content` group ([spans.yaml L83–L93](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/model/gen-ai/spans.yaml#L83-L93)). The workflow span has input and output messages as Opt-In, and execute tool has `gen_ai.tool.call.arguments`/`result` as Opt-In. *Corrected 2026-10-06: the 2026-10-05 text said only the messages attributes were also Opt-In on agent spans. The whole content group is.* Konishi corroborates the agent-span part: `gen_ai.system_instructions` appears on "Inference, agent, and create-agent spans."
+- **Opt-In on every span type that carries content.** `gen_ai.system_instructions`, `gen_ai.input.messages`, `gen_ai.output.messages` and `gen_ai.tool.definitions` are `opt_in` on the inference span and on both `invoke_agent` spans, through the `attributes.gen_ai.content` group ([spans.yaml L83–L93](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/model/gen-ai/spans.yaml#L83-L93)). Other span types define their own Opt-In content attributes directly rather than through that group ([spans.yaml](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/model/gen-ai/spans.yaml)):
+  - the workflow span: `gen_ai.input.messages` and `gen_ai.output.messages` (L678–L680)
+  - execute tool: `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result`
+  - create agent: `gen_ai.system_instructions` (L501)
+  - fetch response: `gen_ai.system_instructions`, `gen_ai.output.messages` and `gen_ai.tool.definitions` (L378–L386)
+  - retrieval: `gen_ai.retrieval.query.text` and `gen_ai.retrieval.documents` (L327–L331)
+  - memory: `gen_ai.memory.query.text` and `gen_ai.memory.records` (L451–L453)
+
+  *Added 2026-10-07 from a CodeRabbit finding: the earlier text listed only the workflow and execute tool spans beyond the content group.* *Corrected 2026-10-06: the 2026-10-05 text said only the messages attributes were also Opt-In on agent spans. The whole content group is.* Konishi corroborates the agent-span part: `gen_ai.system_instructions` appears on "Inference, agent, and create-agent spans."
 - **The event is also Opt-In.** `gen_ai.client.inference.operation.details` has "**Requirement level:** Opt-In" ([gen-ai-events.md line 37](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-events.md?plain=1#L21-L37)). 🟡 The event's requirement level is spec-only. OpenObserve describes content as "structured log-based events, correlated back to the originating span via trace_id and span_id" but does not name the level.
 - **JSON schemas and the `parts` array.** Messages follow the inputs and outputs JSON schemas (`gen-ai-input-messages.json`, `gen-ai-output-messages.json`) and use a `parts` array. The events doc's example is `{"role": "user", "parts": [{"type": "text", "content": "Weather in Paris?"}]}`. 🟡 The `parts` format is spec-only in this document, and the global gotcha rule `otel-semconv-gotchas.md` states the same thing.
 - **Structured form versus JSON string.** **Source says:** "When the attribute is recorded on events, it MUST be recorded in structured form. When recorded on spans, it MAY be recorded as a JSON string if structured format is not supported and SHOULD be recorded in structured form otherwise." Also: "Recording structured attributes is supported on events (or logs) and may not yet be supported on spans. … If structured attributes are not yet supported on spans in a given language, the corresponding attribute value SHOULD be serialized to JSON string on spans and recorded in its structured form on events." ([gen-ai-spans.md lines 1342–1352](https://github.com/open-telemetry/semantic-conventions-genai/blob/cb10b70c15c099ccab144e8316d934c9699da0fd/docs/gen-ai/gen-ai-spans.md?plain=1#L1342-L1352)) 🟡 spec-only. **Interpretation:** in JavaScript, where span attributes cannot hold nested objects, content on spans is a JSON string.
