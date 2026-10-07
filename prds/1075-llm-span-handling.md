@@ -1,6 +1,6 @@
 # PRD #1075: LLM Span Handling — GenAI Attribute Placement, Traceloop Activation, and Library Span Verification
 
-**Status**: In progress (M1 and M1b complete; M2 partly done: main call and questions 1–2 researched, question 3 and the installed-package check remain)
+**Status**: In progress (M1 and M1b complete; M2 partly done: main call and questions 1–3 researched; the installed-package check and M2's Decision Log row remain)
 **Priority**: High
 **GitHub Issue**: [#1075](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1075)
 
@@ -74,8 +74,19 @@ Run research spikes first on the October 2026 state of the GenAI semantic conven
   3. Which GenAI attribute names current `@traceloop/*` packages emit (`gen_ai.provider.name` or `gen_ai.system`, and others from M1). (Updated per the 2026-10-05 M1 Decision Log row: also record whether each package honors `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` and which names it emits with and without it, and which GenAI span types it emits, all read from the installed code. For `@traceloop/instrumentation-langchain`, record specifically whether it emits only inference spans or also `invoke_workflow`/`invoke_agent` spans for graph and agent runs.)
   Then check the activation signature of every package spiny-orb recommends, using real installed packages rather than docs: for each `@traceloop/*` entry in `src/languages/javascript/ast.ts` (and anything M2's research recommends instead), get the current version with `npm view <package> version`, install it with `npm install --prefix /tmp/llm-instr-check <package>@<version>` (never into this repo's `package.json`), read its `manuallyInstrument` (or equivalent) signature from the installed `dist` code, and record whether it can be called with no argument and what argument it expects. From the same installed code, record whether each package captures prompt and completion content by default, and which setting or environment variable turns that off (for example a `traceContent` option or `TRACELOOP_TRACE_CONTENT`; confirm the real names in the code rather than relying on these). Record the package version you inspected.
   Write the output to `docs/research/openllmetry-traceloop-status-2026-10.md`, with every source link and confidence score. Add a Decision Log row listing each package, its version, and its activation signature.
-  **Resume point (updated 2026-10-06).** M1b is complete, so question 3 can now compare names against `docs/research/otel-genai-semconv-2026-10.md` as M1b rewrote it. Use the 2026-10-06 M1b Decision Log row where it differs from the 2026-10-05 M1 row. The main `/research` call and questions 1 and 2 are done and saved in `docs/research/openllmetry-traceloop-status-2026-10.md`. Read that whole file first. Still to do:
-  (a) Run question 3 as its own `/research` invocation, extending the same file.
+  **Resume point (updated 2026-10-07).** The main `/research` call and questions 1–3 are done and saved in `docs/research/openllmetry-traceloop-status-2026-10.md`. Read that whole file first, especially "Emitted attribute names (M2 question 3)" and the Surprises entries. Question 3 was answered from source at tag 0.27.0 (`8b37d7e85ec2`), not from installed code, so part (b) must confirm each of these against the installed `dist`:
+  - The attribute-name split: anthropic, openai, bedrock, langchain, llamaindex and google-generativeai emit the 1.40 names (`gen_ai.provider.name` and others), and cohere, together and vertexai emit `gen_ai.system` and `gen_ai.usage.prompt_tokens`.
+  - No package reads `OTEL_SEMCONV_STABILITY_OPT_IN`.
+  - LangChain's `workflow`/`invoke_agent`/`execute_tool` span shapes.
+  - `@traceloop/instrumentation-chromadb` is a no-op (empty `manuallyInstrument`, `wrap` returns the module unchanged).
+  - Standalone instrumentations default `traceContent` to `true` and ignore `TRACELOOP_TRACE_CONTENT`, which only `@traceloop/node-server-sdk` reads.
+  How to search the installed code:
+  - **Attribute keys** are imported constants, so the literal string `gen_ai.system` does not appear in a package's own `dist`. Search for the constant names (for example `ATTR_GEN_AI_SYSTEM`, `ATTR_GEN_AI_PROVIDER_NAME`). Then read each constant's value from the `@opentelemetry/semantic-conventions` copy installed under the same `--prefix`, because that copy is what runs.
+  - **Environment variables** are literal strings, so search for `OTEL_SEMCONV_STABILITY_OPT_IN` and `TRACELOOP_TRACE_CONTENT` directly.
+  - **If `dist` disagrees with the source finding**, the installed code wins. Correct the research doc's "Emitted attribute names (M2 question 3)" section and record the correction in its Update Log.
+  - Traceloop's own docs disagree with the code on content capture and attribute names (see the research doc's Conflicting Findings), so do not use them as a source for (b).
+  Still to do:
+  (a) ~~Run question 3 as its own `/research` invocation.~~ Done (see the 2026-10-07 Progress Log entry).
   (b) Run the installed-package check for all 13 packages in the research doc's "Release line and version" table:
     - the 11 `ast.ts` entries;
     - `@traceloop/instrumentation-langchain`, which is in the prompt tables but has no `ast.ts` entry;
@@ -141,6 +152,7 @@ Run research spikes first on the October 2026 state of the GenAI semantic conven
 
 - [ ] **M6 — Keep `gen_ai.*` attributes on the span M4 names (finding 1).**
   **Step 0:** Read related research before starting: [Research: OTel GenAI semantic conventions, October 2026](../docs/research/otel-genai-semconv-2026-10.md)
+  **Step 0:** Read related research before starting: [Research: OpenLLMetry and Traceloop JavaScript Instrumentation Status, October 2026](../docs/research/openllmetry-traceloop-status-2026-10.md)
   **Step 0:** Read M4's Decision Log rows for decisions 1 and 2. They must exist before this milestone begins — M4 gates this milestone.
   (Updated per the 2026-10-05 M1 Decision Log row: the GenAI conventions are Development and live on the unreleased `semantic-conventions-genai` main branch. Before writing a rule or prompt guidance that names `gen_ai.*` attributes or span types, run `/research "OTel GenAI semantic conventions changes since commit cb10b70c15c0"` (per Design Notes' "How to run research" and the 2026-10-05 research-method row). It must read that repository's `docs/gen-ai/gen-ai-spans.md`, `gen-ai-agent-spans.md` and `changelog.d/` at the current main, compare them against `docs/research/otel-genai-semconv-2026-10.md`, and update that document. Record the commit SHA you read in a Decision Log row.) If M4 chose a validation rule, follow the rules-related conventions in Design Notes, and write failing tests first: a wrapper span around a library-covered LLM call that sets `gen_ai.operation.name` fails (or warns, per M4); the library-owned case and a case with no covering library behave as M4 decided. If M4 chose prompt guidance, add it as a transferable principle with synthetic examples, update the `## Pre-submission verification` section of `src/agent/prompt.ts`, and run `/write-prompt` on the diff. Either way, add an entry under `## Eval cadence` in `docs/ROADMAP.md` asking for a commit-story-v2 eval that checks wrapper spans for `gen_ai.*` attributes.
 
@@ -168,6 +180,21 @@ Run research spikes first on the October 2026 state of the GenAI semantic conven
 ## Progress Log
 
 _Populate as milestones complete._
+
+- **2026-10-07 — M2 question 3 done.** Ran it as its own `/research` invocation and added an "Emitted attribute names (M2 question 3)" section and a Conflicting Findings section to `docs/research/openllmetry-traceloop-status-2026-10.md`.
+  - **Source read:** openllmetry-js at tag 0.27.0 (`8b37d7e85ec2`), compared against `main` (`1faf69deed34`), whose only attribute changes are unreleased cache-token additions. The attribute keys come from `@opentelemetry/semantic-conventions` constants, whose values were checked at semconv JS v1.40.0 and v1.43.0.
+  - **Findings:**
+    - Six packages emit the 1.40 names (`gen_ai.provider.name`, `gen_ai.operation.name`, `input_tokens`/`output_tokens`, JSON messages).
+    - cohere, together and vertexai still emit `gen_ai.system`, `prompt_tokens`/`completion_tokens` and indexed `gen_ai.prompt.{N}.*`, with no operation name.
+    - mcp, pinecone and qdrant emit no `gen_ai.*`.
+    - No package reads `OTEL_SEMCONV_STABILITY_OPT_IN`.
+    - LangChain emits `chat`, `invoke_agent` (class-name match only), `execute_tool`, and a non-spec `workflow` operation with `gen_ai.provider.name: "langchain"` on every other chain, likely including each LangGraph node. It never emits `invoke_workflow`.
+  - **Surprises for M4:**
+    - `@traceloop/instrumentation-chromadb` has been a no-op since 2024-12-16, though `ast.ts` maps it (decisions 3 and 5).
+    - `TRACELOOP_TRACE_CONTENT` is read only by `@traceloop/node-server-sdk`. Standalone instrumentations capture content by default unless constructed with `traceContent: false` (decision 6).
+    - Traceloop's docs contradict both of these points.
+  - **Confidence:** per-package cells are 🟡 (source only). The split itself is 🟢 (source plus CHANGELOGs and migration PRs). The LangChain workflow-type claim is partly corroborated by a Dynatrace reading of the Python sibling.
+  - **Next:** M2 part (b), the installed-package check, which confirms these source findings against `dist` (see M2's resume point), then (c), the Decision Log row.
 
 - **2026-10-06 — M1b complete.** Re-ran M1's four questions as four separate `/research` invocations, each extending `docs/research/otel-genai-semconv-2026-10.md` with its own Update Log row, plus a close-out row.
   - **Spec version:** `semantic-conventions-genai` main was still `cb10b70c15c0`; the compare endpoint returned `identical`, so every pinned link stays valid.
