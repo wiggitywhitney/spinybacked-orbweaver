@@ -4,6 +4,7 @@
 **Last Updated:** 2026-10-08
 
 ## Update Log
+
 | Date | Summary |
 |------|---------|
 | 2026-10-08 | **M3 question 5 (does Datadog map `invoke_workflow` and `invoke_agent`).** Added "`invoke_workflow` and `invoke_agent` mapping (M3 question 5)". The doc page is byte-identical at the pinned SHA and at head `6017c527c5de`. `invoke_agent` (in the conventions since v1.33) maps explicitly to `agent`. `invoke_workflow` (added in v1.41 on 2026-04-28, after Datadog wrote its table on 2026-01-27) is in no row, so it lands as `workflow` only by the default row. A DataDog-org code search finds 0 hits for it and 28 for `invoke_agent`. Second sources: the semconv CHANGELOG and release dates, Greptime, the Strands tracer (which emits `invoke_agent`, plus the non-spec `invoke_graph`, `invoke_swarm` and `execute_event_loop_cycle`, all of which fall through to `workflow`), PR #40105's end-to-end validation of Cloudflare `invoke_agent` spans, and dd-trace-js's GenAI-ancestor parenting. Nothing observed: no `agent` or `workflow` span exists in the org (30 days, with an `llm` positive control). Open: whether `agent` and `workflow` spans draw model or provider warnings. The section names a scratch test that would settle it. Updated the question 1 table note and the question 2 interpretation, which deferred to this question. Nothing was removed. |
