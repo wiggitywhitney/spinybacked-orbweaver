@@ -248,7 +248,7 @@ Sources for the table: each package's `src/instrumentation.ts` at `8b37d7e85ec2`
 | google-generativeai | **`GenAIInstrumentation`** | `(module: typeof genai)` | throws `Invalid value used in weak set` | **the CommonJS module** (`createRequire(import.meta.url)('@google/genai')`). The ESM namespace throws `Cannot redefine property: GoogleGenAI`, because the package replaces the module's `GoogleGenAI` export, and ESM namespaces are read-only | `@google/genai` 1.52.0 |
 
 **Interpretation.**
-- No package accepts a bare call, so the generated template cannot use one generic `SomeInstrumentation().manuallyInstrument()` line. Each package needs its own line with its own import shape: namespace, default export, a `{ Client }` object, a CommonJS `require`, or `{ callbackManagerModule }`.
+- A bare call cannot activate any of the 13 packages: 12 throw, and ChromaDB accepts it but instruments nothing because its body is empty. So the generated template cannot use one generic `SomeInstrumentation().manuallyInstrument()` line. Each package needs its own line with its own import shape: namespace, default export, a `{ Client }` object, a CommonJS `require`, or `{ callbackManagerModule }`.
 - Whether `manuallyInstrument` is needed at all in each setup was not checked here. `InstrumentationNodeModuleDefinition` hooks patch CommonJS `require` automatically, and ESM only with the `@opentelemetry/instrumentation` loader hook. That question belongs to M4 decision 4.
 
 **Emitted names, opt-in and content capture** 🟢 (`dist` constants resolved against installed semconv 1.43.0; the LangChain row was also observed at runtime):
