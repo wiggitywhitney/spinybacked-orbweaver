@@ -97,7 +97,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - Validator feedback pushed the agent to worse code, with outer-catch flags and duplicate exception events ([issue #1089](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1089)) — release-it run-5.
 - CDQ-007 (attribute data quality) accuracy: false-positive advisories, missed nullable sites, unchecked credential values ([issue #1088](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1088)) — release-it run-5 had a 100% advisory contradiction rate.
 - Agent notes and companion files contradict the committed code ([issue #1087](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1087)) — 8 of 9 files in release-it run-5. This is the fix issue for watch issue #927.
-- Schema-type precision: the extension writer's string default and the namespace-token Jaccard check ([issue #1091](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1091)) — release-it run-5. Depends on #1086 and #1087, which edit the same files.
+- Schema-type precision: the extension writer's string default and the namespace-token Jaccard check ([issue #1091](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1091)) — release-it run-5. Depends on #1072 (the coercion-order fix), and on #1086 and #1087, which edit the same files.
 
 ## Long-term
 
