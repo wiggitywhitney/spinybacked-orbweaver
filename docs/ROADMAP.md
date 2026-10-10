@@ -74,6 +74,11 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - Backfill broken and missing journal entries, June 6 – July 7 2026 ([issue #1027](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1027)) — journal generation silently failed for weeks, leaving placeholder text in entries and summaries; manual regeneration using existing commit-story-v2 tooling.
 - PR summary undercounts attributes and omits SCH-003 type-mismatch defects ([issue #1036](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1036)) — run-26 found the PR summary only reflects `attributesCreated`, not total `setAttribute` calls, and has no mechanism to surface SCH-003-type defects; related to #948.
 - SCH-003: String()-wrapped numeric value shipped for int-declared attribute, undetected by validator ([issue #1037](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1037)) — run-26 found a type mismatch matching #948's stated backstop coverage table that didn't get flagged; needs investigation into whether the backstop's AST check has a gap or isn't wired into this code path.
+- Deliverables publish absolute local paths in the live-check report and PR summary ([issue #1092](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1092)) — release-it run-5 published a username and home path about 1,050 times in a public fork.
+- The whole-file path doesn't Prettier-normalize agent output, so LINT and NDS-003 (non-instrumentation lines unchanged) commits depend on attempt luck ([issue #1093](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1093)) — This is the main volume ceiling on release-it. The reassembly paths already normalize.
+- SCH-002 (attribute keys match the registry) meaning check is too strict on identifier names and too loose on registered keys ([issue #1084](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1084)) — It blocked shell.js in release-it run-5. Sequence it before #1086, since both edit `sch002.ts`.
+- Spans end before their returned promise settles ([issue #1083](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1083)) — Seven committed sites in release-it run-5. The NDS-003-accepted capture form is the fix. Sequence it after #1093.
+- Pre-scan misses `export default` entry points and conditional-`process.exit` functions ([issue #1085](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1085)) — release-it's trace has no root span.
 
 ## Medium-term
 
@@ -88,6 +93,11 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - Acceptance gate: agent invented dd.http.product_id instead of reusing registry attribute ([issue #1025](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1025)) — recurred twice (2026-07-05, 2026-07-20) despite PR #1030's prompt fix; next step is assessing whether a validation rule should catch and block registry-attribute duplication rather than relying on prompt wording alone.
 - CDQ-007's three sub-checks collapse into one undifferentiated PR-summary bullet ([issue #1060](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1060)) — a PII finding, a path finding, and a nullable-access finding in the same file all render as the same generic advisory text; split out from issue #1035 as a different fix shape (rendering/grouping, not prompt guidance).
 - Agent reuses one "count" attribute key across daily/weekly/monthly-parallel functions, tripping SCH-002 ([issue #1063](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1063)) — confirmed reproducible across two independent files (`summary-graph.js`'s `entries_count`, `summarize.js`'s `dates_requested`); needs prompt guidance strengthened per this project's Agent Prompt Generality Rule.
+- Semantic-duplicate judge emits contradictory messages, and its namespace scope needs a decision ([issue #1086](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1086)) — release-it runs 4 and 5. Depends on #1084.
+- Validator feedback pushed the agent to worse code, with outer-catch flags and duplicate exception events ([issue #1089](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1089)) — release-it run-5.
+- CDQ-007 (attribute data quality) accuracy: false-positive advisories, missed nullable sites, unchecked credential values ([issue #1088](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1088)) — release-it run-5 had a 100% advisory contradiction rate.
+- Agent notes and companion files contradict the committed code ([issue #1087](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1087)) — 8 of 9 files in release-it run-5. This is the fix issue for watch issue #927.
+- Schema-type precision: the extension writer's string default and the namespace-token Jaccard check ([issue #1091](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1091)) — release-it run-5. Depends on #1086 and #1087, which edit the same files.
 
 ## Long-term
 
@@ -101,6 +111,8 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - SDK bootstrap scaffold generation ([PRD #778](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/778)) — generate an SDK init file when none is detected; defines multi-language `BootstrapGenerator` interface for Python/Go providers to implement.
 - Publish to GitHub Actions Marketplace ([issue #369](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/369)).
 - MCP init experience improvements ([issue #47](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/47)).
+- Live-check and PR-body accuracy: OK status over a partial report, raw counts, oversized rows, and `process.exit()` dropping live-check spans ([issue #1090](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1090)) — release-it run-5. The `process.exit()` item outranks the cosmetic ones. Depends on #1092.
+- Low-priority rule gaps and rubric drift ([issue #1082](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1082)) — release-it run-5 rule-fit items.
 
 ## Strategic — pending decision (no work until decided)
 
