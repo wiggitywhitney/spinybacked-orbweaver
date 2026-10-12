@@ -529,7 +529,7 @@ function renderReviewSensitivity(runResult: RunResult, config: AgentConfig, disp
         const humanDesc = getRuleHumanDescription(ann.ruleId);
         const displayText = humanDesc
           ?? expandRuleCodesInText(ann.message.replace(/^[A-Z]{2,4}-\d{3}[a-z]?:\s*/, ''));
-        const key = `${ann.ruleId} ${displayText}`;
+        const key = `${ann.ruleId}\0${displayText}`;
         const existing = ruleGroups.get(key);
         if (existing) {
           if (ann.lineNumber != null) existing.lineNumbers.push(ann.lineNumber);
