@@ -1251,6 +1251,17 @@ describe('renderPrSummary', () => {
       // The repo-relative forms stay useful to a reviewer.
       expect(md).toContain('lib/foo.js');
       expect(md).toContain('.prettierrc.json');
+
+      // Check the two places the leak appeared separately: the Warnings section
+      // and the failed file's Status cell in the per-file table.
+      const warnings = md.slice(md.indexOf('## Warnings'));
+      expect(warnings).toContain('Prettier config: .prettierrc.json.');
+      expect(warnings).not.toContain(homedir());
+      const perFile = md.slice(md.indexOf('## Per-File Results'), md.indexOf('\n## ', md.indexOf('## Per-File Results') + 1));
+      const failedRow = perFile.split('\n').find(line => line.includes('failed:'));
+      expect(failedRow).toBeDefined();
+      expect(failedRow).toContain('Prettier config: .prettierrc.json.');
+      expect(failedRow).not.toContain(homedir());
     });
 
     it('replaces a home-directory path outside the project with ~', () => {
