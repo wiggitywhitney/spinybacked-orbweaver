@@ -13,15 +13,19 @@ function escapeRegExp(text: string): string {
  * `replacement/...` (or by nothing when `replacement` is empty), and a bare
  * `root` is replaced only when the next character cannot continue a path
  * segment. This keeps a sibling such as `/a/proj-other` intact when `root` is
- * `/a/proj`.
+ * `/a/proj`. A match must also start at a path boundary, so a root embedded
+ * in a longer path is left alone.
  */
 function replaceRoot(text: string, root: string, replacement: string): string {
   if (!root || root === '/') return text;
   const escaped = escapeRegExp(root);
   const withSlash = replacement === '' ? '' : `${replacement}/`;
+  // The lookbehind stops a match that starts partway through a longer path,
+  // such as `/mnt/a/proj/file` when `root` is `/a/proj`.
+  const leftBoundary = '(?<![\\w.\\-/~\\\\])';
   return text
-    .replace(new RegExp(`${escaped}/`, 'g'), withSlash)
-    .replace(new RegExp(`${escaped}(?=[^\\w.\\-/]|$)`, 'g'), replacement === '' ? '.' : replacement);
+    .replace(new RegExp(`${leftBoundary}${escaped}/`, 'g'), withSlash)
+    .replace(new RegExp(`${leftBoundary}${escaped}(?=[^\\w.\\-/]|$)`, 'g'), replacement === '' ? '.' : replacement);
 }
 
 /**
