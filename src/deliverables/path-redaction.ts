@@ -25,7 +25,13 @@ function replaceRoot(text: string, root: string, replacement: string): string {
   const leftBoundary = '(?<![\\w.\\-/~\\\\])';
   return text
     .replace(new RegExp(`${leftBoundary}${escaped}/`, 'g'), withSlash)
-    .replace(new RegExp(`${leftBoundary}${escaped}(?=[^\\w.\\-/]|$)`, 'g'), replacement === '' ? '.' : replacement);
+    // A bare root ends at a non-path character or the end of the text. A period
+    // also ends it when no name character follows, as in "Home: /home/dev."; a
+    // name such as `/home/dev.project` is left alone.
+    .replace(
+      new RegExp(`${leftBoundary}${escaped}(?=[^\\w.\\-/]|\\.(?![\\w\\-])|$)`, 'g'),
+      replacement === '' ? '.' : replacement,
+    );
 }
 
 /**
