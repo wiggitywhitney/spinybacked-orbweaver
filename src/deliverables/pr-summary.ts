@@ -6,6 +6,7 @@ import type { FileResult } from '../fix-loop/types.ts';
 import type { AgentConfig } from '../config/schema.ts';
 import type { CheckResult } from '../validation/types.ts';
 import { tokensToDollars, ceilingToDollars, formatDollars } from './cost-formatting.ts';
+import { relativizePaths } from './path-redaction.ts';
 import { writeFile } from 'node:fs/promises';
 import { relative, basename, join } from 'node:path';
 import { formatRuleId, expandRuleCodesInText, getRuleHumanDescription } from '../validation/rule-names.ts';
@@ -45,7 +46,9 @@ export function renderPrSummary(runResult: RunResult, config: AgentConfig, proje
   sections.push(renderAgentVersion(runResult));
   sections.push(renderWarnings(runResult));
 
-  return sections.filter(Boolean).join('\n\n');
+  // Free-text sections (warnings, failure reasons, the Prettier config note) carry
+  // absolute paths that display() never sees, so redact the assembled body as a whole.
+  return relativizePaths(sections.filter(Boolean).join('\n\n'), projectDir);
 }
 
 /**
@@ -992,6 +995,6 @@ export const LIVE_CHECK_ARTIFACT_FILENAME = 'spiny-orb-live-check-report.json';
  */
 export async function writeLiveCheckArtifact(projectDir: string, report: string): Promise<string> {
   const filePath = join(projectDir, LIVE_CHECK_ARTIFACT_FILENAME);
-  await writeFile(filePath, report, 'utf-8');
+  await writeFile(filePath, relativizePaths(report, projectDir), 'utf-8');
   return filePath;
 }
