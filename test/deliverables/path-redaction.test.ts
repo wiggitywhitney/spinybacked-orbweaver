@@ -35,4 +35,10 @@ describe('relativizePaths', () => {
     expect(relativizePaths(`Root is ${PROJECT}. Done`, PROJECT, HOME)).toBe('Root is .. Done');
     expect(relativizePaths(`${HOME}.project/x`, undefined, HOME)).toBe(`${HOME}.project/x`);
   });
+
+  it('redacts roots inside file:// URIs', () => {
+    expect(relativizePaths(`see file://${PROJECT}/a.ts`, PROJECT, HOME)).toBe('see file://a.ts');
+    expect(relativizePaths(`file://${HOME}/.npmrc`, undefined, HOME)).toBe('file://~/.npmrc');
+    expect(relativizePaths(`file:///mnt${HOME}/x`, undefined, HOME)).toBe(`file:///mnt${HOME}/x`);
+  });
 });

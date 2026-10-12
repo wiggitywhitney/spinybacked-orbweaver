@@ -21,8 +21,9 @@ function replaceRoot(text: string, root: string, replacement: string): string {
   const escaped = escapeRegExp(root);
   const withSlash = replacement === '' ? '' : `${replacement}/`;
   // The lookbehind stops a match that starts partway through a longer path,
-  // such as `/mnt/a/proj/file` when `root` is `/a/proj`.
-  const leftBoundary = '(?<![\\w.\\-/~\\\\])';
+  // such as `/mnt/a/proj/file` when `root` is `/a/proj`. A root right after
+  // `file://` still matches, so file URIs are redacted too.
+  const leftBoundary = '(?:(?<=file://)|(?<![\\w.\\-/~\\\\]))';
   return text
     .replace(new RegExp(`${leftBoundary}${escaped}/`, 'g'), withSlash)
     // A bare root ends at a non-path character or the end of the text. A period
