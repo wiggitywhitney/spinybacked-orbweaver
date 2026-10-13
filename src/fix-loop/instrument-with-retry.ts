@@ -1549,6 +1549,7 @@ async function functionLevelFallback(
     originalCode,
     instrumentedCode: reassembledCode,
     filePath,
+    configPath: retryOptions.configPath,
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,
@@ -1647,6 +1648,7 @@ async function functionLevelFallback(
     originalCode,
     instrumentedCode: partialCode,
     filePath,
+    configPath: retryOptions.configPath,
     config: fnExtensions.length > 0
       ? { ...validationConfig, declaredSpanExtensions: fnExtensions }
       : validationConfig,

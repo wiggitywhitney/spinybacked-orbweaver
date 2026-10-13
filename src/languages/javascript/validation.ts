@@ -324,10 +324,11 @@ export async function checkLint(
 export async function formatCode(source: string, filePath: string): Promise<string> {
   try {
     const config = await prettier.resolveConfig(filePath);
+    // No explicit parser: Prettier infers it from filePath, exactly as checkLint does,
+    // so formatted output is checked with the parser that produced it.
     return await prettier.format(source, {
       ...config,
       filepath: filePath,
-      parser: 'babel',
     });
   } catch {
     return source;

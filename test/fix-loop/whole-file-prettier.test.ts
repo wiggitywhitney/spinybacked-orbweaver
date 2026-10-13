@@ -277,11 +277,14 @@ describe('function-level fallback formats reassembled output like the whole-file
     reassembled: string | undefined;
     reassembledLint: CheckResult | undefined;
     perFunctionConfigPaths: Array<string | undefined>;
+    reassemblyConfigPaths: Array<string | undefined>;
   }
 
   /** Whole-file attempt fails, so the run falls back to per-function instrumentation. */
-  async function runFallback(filePath: string, originalCode: string): Promise<FallbackOutcome> {
-    const outcome: FallbackOutcome = { reassembled: undefined, reassembledLint: undefined, perFunctionConfigPaths: [] };
+  async function runFallback(filePath: string, originalCode: string, configPath?: string): Promise<FallbackOutcome> {
+    const outcome: FallbackOutcome = {
+      reassembled: undefined, reassembledLint: undefined, perFunctionConfigPaths: [], reassemblyConfigPaths: [],
+    };
     const deps: InstrumentWithRetryDeps = {
       instrumentFile: async (path) => {
         if (isPerFunctionPath(path)) {
@@ -294,13 +297,14 @@ describe('function-level fallback formats reassembled output like the whole-file
           outcome.perFunctionConfigPaths.push(input.configPath);
           return { passed: true, tier1Results: [], tier2Results: [], blockingFailures: [], advisoryFindings: [] };
         }
+        outcome.reassemblyConfigPaths.push(input.configPath);
         const lint = await input.provider.lintCheck(input.originalCode, input.instrumentedCode, input.configPath ?? input.filePath);
         outcome.reassembled ??= readFileSync(filePath, 'utf-8');
         outcome.reassembledLint ??= lint;
         return { passed: true, tier1Results: [lint], tier2Results: [], blockingFailures: [], advisoryFindings: [] };
       },
     };
-    await instrumentWithRetry(filePath, originalCode, {}, makeConfig(), { deps, provider: jsProvider });
+    await instrumentWithRetry(filePath, originalCode, {}, makeConfig(), { deps, provider: jsProvider, configPath });
     return outcome;
   }
 
@@ -334,6 +338,18 @@ describe('function-level fallback formats reassembled output like the whole-file
     const outcome = await runFallback(filePath, originalCode);
 
     expect(outcome.reassembled).toContain(untouchedLine);
+  });
+
+  it('validates reassembled output with the same config path it was formatted with', async () => {
+    const originalCode = ['export async function loadWidget(store, id) {', '  return store.get(id);', '}', ''].join('\n');
+    const filePath = join(testDir, 'widget-store.js');
+    const configPath = join(testDir, 'pkg', 'widget-store.js');
+    writeFileSync(filePath, originalCode, 'utf-8');
+
+    const outcome = await runFallback(filePath, originalCode, configPath);
+
+    expect(outcome.reassemblyConfigPaths.length).toBeGreaterThan(0);
+    for (const p of outcome.reassemblyConfigPaths) expect(p).toBe(configPath);
   });
 
   it('resolves per-function config from the target file, not the temp copy', async () => {
