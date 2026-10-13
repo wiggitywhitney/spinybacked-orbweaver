@@ -3249,6 +3249,39 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(results.filter((r) => !r.passed).length).toBeGreaterThan(0);
     });
 
+    it('still rejects a split return-value capture whose string argument changed inside the quotes', async () => {
+      const original = [
+        'class Repo {',
+        '  async readLog() {',
+        "    return await this.exec(['git', 'log', '--format=%h ]'], { cwd: this.root });",
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'class Repo {',
+        '  async readLog() {',
+        "    return tracer.startActiveSpan('repo.read_log', async (span) => {",
+        '      try {',
+        "        const result = await this.exec(['git', 'log', '--format=%h]'], {",
+        '          cwd: this.root,',
+        '        });',
+        "        span.setAttribute('repo.log.exit_code', result.code);",
+        '        return result;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      expect(results.filter((r) => !r.passed).length).toBeGreaterThan(0);
+    });
+
     it('still detects real code modifications after stripping', async () => {
       // The agent changed `options` → `{ extra: true }`. After stripping OTel, this
       // difference is still visible in the comparison. NDS-003 must still fire.

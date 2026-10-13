@@ -301,19 +301,27 @@ function bracketDepthDelta(line: string): number {
 
 /**
  * Canonical form of an expression for comparing a single-line form with a form
- * the formatter split across lines: whitespace runs collapse to one space, spaces
- * inside bracket boundaries are dropped, and trailing commas before a closer are
- * dropped. Any change to tokens survives, with one exception: whitespace runs
- * inside string literals are collapsed too, so a change to only the spacing
- * within a string is not detected.
+ * the formatter split across lines: outside string literals, whitespace runs
+ * collapse to one space, spaces inside bracket boundaries are dropped, and
+ * trailing commas before a closer are dropped. String and template literals are
+ * kept exactly as written — the formatter never changes their contents — so any
+ * change inside a string survives.
  */
 function canonicalizeExpressionLayout(expr: string): string {
-  return expr
+  // Swap each string literal for a placeholder that contains no whitespace,
+  // brackets or commas, normalize the layout, then restore the literals.
+  const literals: string[] = [];
+  const withPlaceholders = expr.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (literal) => {
+    literals.push(literal);
+    return `\u0000${literals.length - 1}\u0000`;
+  });
+  return withPlaceholders
     .replace(/\s+/g, ' ')
     .replace(/,\s*([)\]}])/g, '$1')
     .replace(/([([{])\s+/g, '$1')
     .replace(/\s+([)\]}])/g, '$1')
-    .trim();
+    .trim()
+    .replace(/\u0000(\d+)\u0000/g, (_match, index: string) => literals[Number(index)]);
 }
 
 /**
