@@ -1043,6 +1043,10 @@ async function executeRetryLoop(
           advisoryCode = provider.fixUntypedStringMethods(advisoryCode);
           advisoryCode = provider.fixNotNullSafeGuards(advisoryCode);
           advisoryCode = provider.fixDelimiterVariants(advisoryCode, advisoryOutput.schemaExtensions, []);
+          // Same formatting pass as the main attempt output — see the comment there.
+          if (originalIsFormatted) {
+            advisoryCode = await provider.formatCode(advisoryCode, formatterConfigDir);
+          }
           await writeFile(filePath, advisoryCode, 'utf-8');
 
           const advisoryValidation = await validateFileFn({
@@ -1148,7 +1152,15 @@ async function executeRetryLoop(
 
   // All attempts exhausted (or budget exceeded after a failed validation)
   const failedRuleIds = lastValidation!.blockingFailures.map(f => f.ruleId).join(', ');
-  const reason = `Validation failed: ${failedRuleIds} — ${lastValidation!.blockingFailures[0]?.message ?? 'unknown error'}`;
+  // The first failure's full message, then the first line of every other failure, so
+  // a rule that fires several times (NDS-003 reports one result per changed line)
+  // names every violation rather than only the first.
+  const [firstFailure, ...otherFailures] = lastValidation!.blockingFailures;
+  const otherFailureLines = otherFailures.map(f => {
+    const firstLine = f.message.split('\n')[0];
+    return `\n${firstLine.startsWith(f.ruleId) ? firstLine : `${f.ruleId}: ${firstLine}`}`;
+  }).join('');
+  const reason = `Validation failed: ${failedRuleIds} — ${firstFailure?.message ?? 'unknown error'}${otherFailureLines}`;
   const lastError = lastValidation!.blockingFailures
     .map(f => `${f.ruleId}: ${f.message}`)
     .join('\n');

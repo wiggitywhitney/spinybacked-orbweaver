@@ -3159,6 +3159,96 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(results.filter((r) => !r.passed).length).toBeGreaterThan(0);
     });
 
+    it('accepts a literal-comparison guard and a null guard around attribute calls alike', async () => {
+      const original = [
+        'async function loadConfig(file, expanded) {',
+        '  const config = await readConfig(file);',
+        '  return merge(config, expanded);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'async function loadConfig(file, expanded) {',
+        "  return tracer.startActiveSpan('config.load', async (span) => {",
+        '    try {',
+        '      if (file !== false) {',
+        "        span.setAttribute('my_service.config.file', file);",
+        '      }',
+        '      if (expanded.version != null && expanded.name != null) {',
+        "        span.setAttribute('my_service.config.version', expanded.version);",
+        '      }',
+        '      const config = await readConfig(file);',
+        '      return merge(config, expanded);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      expect(results.filter((r) => !r.passed)).toEqual([]);
+    });
+
+    it('still rejects an added literal-comparison guard wrapped around original code', async () => {
+      const original = [
+        'async function loadConfig(file, options) {',
+        '  await writeCache(file);',
+        '  return readConfig(file);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'async function loadConfig(file, options) {',
+        "  return tracer.startActiveSpan('config.load', async (span) => {",
+        '    try {',
+        "      if (options.mode === 'dry') {",
+        '        await writeCache(file);',
+        '      }',
+        '      return readConfig(file);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      expect(results.filter((r) => !r.passed).length).toBeGreaterThan(0);
+    });
+
+    it('still rejects an added literal-comparison guard whose condition has a side effect', async () => {
+      const original = [
+        'async function loadConfig(file) {',
+        '  return readConfig(file);',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'async function loadConfig(file) {',
+        "  return tracer.startActiveSpan('config.load', async (span) => {",
+        '    try {',
+        '      if (resolveFile(file) !== false) {',
+        "        span.setAttribute('my_service.config.file', file);",
+        '      }',
+        '      return readConfig(file);',
+        '    } finally {',
+        '      span.end();',
+        '    }',
+        '  });',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      expect(results.filter((r) => !r.passed).length).toBeGreaterThan(0);
+    });
+
     it('still detects real code modifications after stripping', async () => {
       // The agent changed `options` → `{ extra: true }`. After stripping OTel, this
       // difference is still visible in the comparison. NDS-003 must still fire.

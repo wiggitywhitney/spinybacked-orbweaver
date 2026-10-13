@@ -183,6 +183,47 @@ describe('whole-file path formats agent output before validation', () => {
     expect(await prettier.check(outcome.written, { singleQuote: true, printWidth: 120, filepath: filePath })).toBe(true);
   });
 
+  it('formats the advisory-pass output before revalidating it', async () => {
+    writeFileSync(join(testDir, '.prettierrc'), JSON.stringify({ singleQuote: true }), 'utf-8');
+    const callLine = 'return store.fetchWidgetRecord(widgetId, { includeArchived: true, depth: 3 });';
+    const header = 'export async function loadWidget(store, widgetId) {';
+    const originalCode = [header, `  ${callLine}`, '}', ''].join('\n');
+    const unformatted = [...OTEL_PREAMBLE, ...wrapInSpan(header, [`  ${callLine}`], 'widget.load'), ''].join('\n');
+    const filePath = join(testDir, 'widget-store.js');
+    writeFileSync(filePath, originalCode, 'utf-8');
+
+    let instrumentCalls = 0;
+    let validateCalls = 0;
+    let advisoryLint: CheckResult | undefined;
+    const advisoryFinding: CheckResult = {
+      ruleId: 'CDQ-006', passed: false, filePath, lineNumber: 7, message: 'CDQ-006: advisory', tier: 2, blocking: false,
+    };
+    const deps: InstrumentWithRetryDeps = {
+      // Both the first attempt and the advisory pass return the long, unformatted line.
+      instrumentFile: async () => {
+        instrumentCalls++;
+        return { success: true, output: makeOutput(unformatted) } as InstrumentFileResult;
+      },
+      validateFile: async (input: ValidateFileInput): Promise<ValidationResult> => {
+        validateCalls++;
+        const lint = await input.provider.lintCheck(input.originalCode, input.instrumentedCode);
+        if (validateCalls === 2) advisoryLint = lint;
+        const blockingFailures = lint.passed ? [] : [lint];
+        return {
+          passed: blockingFailures.length === 0,
+          tier1Results: [lint],
+          tier2Results: validateCalls === 1 ? [advisoryFinding] : [],
+          blockingFailures,
+          advisoryFindings: validateCalls === 1 ? [advisoryFinding] : [],
+        };
+      },
+    };
+    await instrumentWithRetry(filePath, originalCode, {}, makeConfig(), { deps, provider: jsProvider });
+
+    expect(instrumentCalls).toBe(2);
+    expect(advisoryLint?.passed).toBe(true);
+  });
+
   it('leaves the agent output unformatted when the original file is not Prettier-compliant', async () => {
     writeFileSync(join(testDir, '.prettierrc'), JSON.stringify({ singleQuote: true }), 'utf-8');
     // The double-quoted string and the unspaced object literal are not Prettier-compliant.

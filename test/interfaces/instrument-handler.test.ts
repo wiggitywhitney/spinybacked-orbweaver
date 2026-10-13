@@ -279,6 +279,22 @@ describe('handleInstrument', () => {
       expect(parsed.filesSucceeded).toBe(2);
     });
 
+    it('keeps lastErrorByAttempt in JSON output and still strips large debug fields', async () => {
+      const fileResult = makeFileResult({
+        status: 'failed',
+        lastErrorByAttempt: ['LINT: attempt one', 'NDS-003: attempt two'],
+        lastInstrumentedCode: 'const x = 1;',
+        thinkingBlocksByAttempt: [['thinking']],
+      });
+      const runResult = makeRunResult({ filesProcessed: 1, filesFailed: 1, fileResults: [fileResult] });
+      const deps = makeDeps({ coordinate: vi.fn().mockResolvedValue(runResult) });
+      await handleInstrument(makeOptions({ output: 'json' }), deps);
+      const parsed = JSON.parse((deps.stdout as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+      expect(parsed.fileResults[0].lastErrorByAttempt).toEqual(['LINT: attempt one', 'NDS-003: attempt two']);
+      expect(parsed.fileResults[0].lastInstrumentedCode).toBeUndefined();
+      expect(parsed.fileResults[0].thinkingBlocksByAttempt).toBeUndefined();
+    });
+
     it('does not write JSON to stdout in text mode', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions({ output: 'text' }), deps);
@@ -1120,7 +1136,7 @@ describe('handleInstrument', () => {
       expect(allOutput).toContain('Agent thinking');
     });
 
-    it('shows human-readable rule descriptions for validation failures, not raw error detail', async () => {
+    it("shows each rule's human-readable description alongside the specific violation", async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions({ verbose: true }), deps);
       const callbacks = getCallbacks(deps);
@@ -1138,19 +1154,81 @@ describe('handleInstrument', () => {
       });
       callbacks.onFileComplete!(result, 0, 1);
 
-      const stderrCalls = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      const allOutput = stderrCalls.join('\n');
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
 
-      // Must have a section header for validation failures
       expect(allOutput).toContain('Validation failures');
-
-      // Must show formatted rule IDs with human-readable descriptions
       expect(allOutput).toContain('NDS-001 (Syntax Valid)');
       expect(allOutput).toContain('NDS-003 (Code Preserved)');
+      expect(allOutput).toContain('Unexpected token at line 5');
+      expect(allOutput).toContain('New variable introduced at line 10');
+    });
 
-      // Must NOT show raw error detail (line numbers, code snippets)
-      expect(allOutput).not.toContain('Unexpected token at line 5');
-      expect(allOutput).not.toContain('New variable introduced at line 10');
+    it('prints every attempt\'s validator messages, labelled by attempt number', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        lastError: 'NDS-003: NDS-003: original line 73 missing/modified: await runTask();\nThe agent must preserve all original business logic.',
+        lastErrorByAttempt: [
+          'LINT: LINT check failed: the original file was Prettier-compliant but the instrumented output is not.\n\n```diff\n-x\n+y\n```',
+          'NDS-003: NDS-003: original line 73 missing/modified: await runTask();\nThe agent must preserve all original business logic.',
+        ],
+        validationAttempts: 2,
+        validationStrategyUsed: 'multi-turn-fix',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const lines = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => String(c[0]));
+      const fullOutput = lines.join('\n');
+      const allOutput = fullOutput.slice(fullOutput.indexOf('Validation failures by attempt'));
+      const attempt1 = allOutput.indexOf('Attempt 1');
+      const attempt2 = allOutput.indexOf('Attempt 2');
+      expect(attempt1).toBeGreaterThan(-1);
+      expect(attempt2).toBeGreaterThan(attempt1);
+      const lintAt = allOutput.indexOf('LINT check failed: the original file was Prettier-compliant');
+      const ndsAt = allOutput.indexOf('original line 73 missing/modified: await runTask();');
+      expect(lintAt).toBeGreaterThan(attempt1);
+      expect(lintAt).toBeLessThan(attempt2);
+      expect(ndsAt).toBeGreaterThan(attempt2);
+      // The repeated rule-ID prefix is printed once, not twice.
+      expect(allOutput).not.toContain('NDS-003: NDS-003:');
+    });
+
+    it('names every NDS-003 violation in the validation failures section', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const violations = [
+        'NDS-003: NDS-003: original line 73 missing/modified: await install();',
+        'NDS-003: NDS-003: original line 81 missing/modified: return publish(tag);',
+        'NDS-003: NDS-003: non-instrumentation line added at instrumented line 95: const out = await publish(tag);',
+        'NDS-003: NDS-003: non-instrumentation line added at instrumented line 99: return out;',
+      ].map(v => `${v}\nThe agent must preserve all original business logic.`).join('\n');
+      const result = makeFileResult({
+        status: 'failed',
+        spansAdded: 0,
+        reason: 'Validation failed: NDS-003, NDS-003, NDS-003, NDS-003 — NDS-003: original line 73 missing/modified: await install();',
+        lastError: violations,
+        lastErrorByAttempt: [violations],
+        validationAttempts: 1,
+        validationStrategyUsed: 'initial-generation',
+      });
+      callbacks.onFileComplete!(result, 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      const section = allOutput.slice(allOutput.indexOf('Validation failures'));
+      expect(section).toContain('original line 73 missing/modified: await install();');
+      expect(section).toContain('original line 81 missing/modified: return publish(tag);');
+      expect(section).toContain('instrumented line 95: const out = await publish(tag);');
+      expect(section).toContain('instrumented line 99: return out;');
     });
   });
 

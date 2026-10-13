@@ -241,6 +241,7 @@ function isSpanMethodCallStatement(
  * Remove OTel guard IfStatements (P14-P17) whose body contains only span.* calls.
  *
  * P14: if (x != null) { span.setAttribute(...) }
+ * P14b: if (x !== false) { span.setAttribute(...) } — path compared with a literal
  * P15: if (a != null && b.c !== undefined) { span.setAttribute(...) }
  * P16: if (span.isRecording()) { span.setAttribute(...) }
  * P17: if (err instanceof Error) { span.recordException(err) }
@@ -256,6 +257,11 @@ const OTEL_GUARD_CONDITION_PATTERNS = [
   /^(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])$/,
   // P15: compound AND null check — two conditions joined by &&
   /^(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])\s*&&\s*(?:typeof\s+)?\w+(?:\.\w+)*\s*!==?\s*(?:undefined|null|['"]undefined['"])$/,
+  // P14b: identifier or dotted path compared with a literal — if (file !== false),
+  // if (opts.mode === 'yaml'), if (opts.depth != -1). The literal must be true, false,
+  // null, undefined, a number, or a quoted string without escapes or nested quotes.
+  // A call or any other expression on either side does not match.
+  /^\w+(?:\.\w+)*\s*[!=]==?\s*(?:true|false|null|undefined|-?\d+(?:\.\d+)?|'[^'\\]*'|"[^"\\]*")$/,
   // P16: truthy property-access guard — requires at least one dot dereference (no bare identifiers)
   /^\w+(?:(?:\??\.)\w+)+$/,
   // P17/isRecording: if (span.isRecording())

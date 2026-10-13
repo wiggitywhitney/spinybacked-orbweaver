@@ -308,6 +308,36 @@ describe('instrumentWithRetry — single-attempt pass-through', () => {
     expect(capturedConfig!.anthropicClient).toBe(mockClient);
   });
 
+  it('names every blocking failure in the failure reason, not only the first', async () => {
+    const output = makeInstrumentationOutput();
+    const tail = '\nThe agent must preserve all original business logic.';
+    const nds = (lineNumber: number, text: string): CheckResult => ({
+      ruleId: 'NDS-003', passed: false, filePath: testFilePath, lineNumber, message: `${text}${tail}`, tier: 2, blocking: true,
+    });
+    const failures = [
+      nds(73, 'NDS-003: original line 73 missing/modified: await install();'),
+      nds(81, 'NDS-003: original line 81 missing/modified: return publish(tag);'),
+      nds(95, 'NDS-003: non-instrumentation line added at instrumented line 95: const out = await publish(tag);'),
+      nds(99, 'NDS-003: non-instrumentation line added at instrumented line 99: return out;'),
+    ];
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async () => ({ success: true, output }) as InstrumentFileResult,
+      validateFile: async () => ({
+        passed: false, tier1Results: [], tier2Results: failures, blockingFailures: failures, advisoryFindings: [],
+      }),
+    };
+
+    const result = await instrumentWithRetry(
+      testFilePath, originalContent, {}, makeConfig(), { deps, provider: jsProvider },
+    );
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toContain('original line 73 missing/modified: await install();');
+    expect(result.reason).toContain('original line 81 missing/modified: return publish(tag);');
+    expect(result.reason).toContain('instrumented line 95: const out = await publish(tag);');
+    expect(result.reason).toContain('instrumented line 99: return out;');
+  });
+
   it('returns failed FileResult and reverts file when validation fails', async () => {
     const output = makeInstrumentationOutput();
     const deps: InstrumentWithRetryDeps = {

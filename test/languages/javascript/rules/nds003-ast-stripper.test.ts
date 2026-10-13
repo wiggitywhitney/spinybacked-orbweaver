@@ -571,6 +571,55 @@ describe('P14: single-condition null guard wrapping setAttribute', () => {
   });
 });
 
+// ─── P14b: literal-comparison guard wrapping setAttribute ────────────────────
+
+describe('P14b: literal-comparison guard wrapping setAttribute', () => {
+  const filePath = '/tmp/test.js';
+
+  const wrap = (condition: string, body = "      span.setAttribute('my_service.config.file', file);"): string => [
+    'async function loadConfig(file, options) {',
+    "  return tracer.startActiveSpan('config.load', async (span) => {",
+    `    if (${condition}) {`,
+    body,
+    '    }',
+    '    const result = await readConfig(file, options);',
+    '    span.end();',
+    '    return result;',
+    '  });',
+    '}',
+  ].join('\n');
+
+  it.each([
+    'file !== false',
+    'options.mode === true',
+    'options.retries != 0',
+    "options.format == 'yaml'",
+    'options.depth !== -1',
+    'options.cache === null',
+  ])('removes a guard comparing a path with a literal: if (%s)', (condition) => {
+    const result = stripOtelNodes(wrap(condition), filePath);
+    expect(result).not.toContain(condition);
+    expect(result).not.toContain('span.');
+    expect(result).toContain('const result = await readConfig(file, options)');
+  });
+
+  it('keeps a literal-comparison guard whose condition calls a function', () => {
+    const result = stripOtelNodes(wrap('readFlag(file) !== false'), filePath);
+    expect(result).toContain('readFlag(file) !== false');
+  });
+
+  it('keeps a literal-comparison guard whose body is not only span calls', () => {
+    const result = stripOtelNodes(wrap('file !== false', '      notify(file);'), filePath);
+    expect(result).toContain('file !== false');
+    expect(result).toContain('notify(file);');
+  });
+
+  it('keeps a guard comparing two paths rather than a path and a literal', () => {
+    const result = stripOtelNodes(wrap('file !== options.file'), filePath);
+    expect(result).toContain('file !== options.file');
+  });
+});
+
 // ─── P15: CDQ-007 compound AND null guard ────────────────────────────────────
 
 describe('P15: compound AND null guard', () => {
