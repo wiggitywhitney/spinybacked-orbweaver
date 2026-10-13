@@ -2,7 +2,6 @@
 // ABOUTME: Merged from src/validation/tier1/syntax.ts and src/validation/tier1/lint.ts.
 
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
 import * as prettier from 'prettier';
 import type { CheckResult } from '../../validation/types.ts';
 
@@ -322,14 +321,12 @@ export async function checkLint(
  * @param configDir - Directory to search for Prettier config files
  * @returns Formatted source, or original source if formatting fails
  */
-export async function formatCode(source: string, configDir: string): Promise<string> {
+export async function formatCode(source: string, filePath: string): Promise<string> {
   try {
-    // resolveConfig searches from the directory containing the path it is given,
-    // so a bare directory path would skip that directory's own .prettierrc.
-    // Anchor on a file inside it — the same name lintCheck resolves from.
-    const config = await prettier.resolveConfig(join(configDir, 'file.js'));
+    const config = await prettier.resolveConfig(filePath);
     return await prettier.format(source, {
       ...config,
+      filepath: filePath,
       parser: 'babel',
     });
   } catch {

@@ -118,6 +118,12 @@ interface InstrumentWithRetryOptions {
    * an Anthropic client (via anthropicClient option) for LLM judge calls.
    */
   registryDir?: string;
+  /**
+   * Path used to resolve formatter and linter config when `filePath` is a temporary
+   * copy outside the project. Set by function-level fallback to the target file's path
+   * so per-function attempts use the project's Prettier config. Defaults to `filePath`.
+   */
+  configPath?: string;
 }
 
 const ZERO_TOKENS: TokenUsage = {
@@ -467,6 +473,7 @@ export async function instrumentWithRetry(
       options.expectedNamespacePrefix,
       !!options._skipFunctionFallback,
       options.registryDir,
+      options.configPath,
     );
   } catch (error) {
     // Unexpected error — restore original content from memory.
@@ -532,6 +539,7 @@ async function executeRetryLoop(
   expectedNamespacePrefix?: string,
   isPerFunctionCall?: boolean,
   registryDir?: string,
+  configPath?: string,
 ): Promise<FileResult> {
   const maxAttempts = 1 + config.maxFixAttempts;
   const validationConfig = buildValidationConfig(config, projectRoot, resolvedSchema, anthropicClient, canonicalTracerName);
@@ -588,14 +596,15 @@ async function executeRetryLoop(
   const now = clock ?? Date.now;
   const startTime = now();
 
-  // The formatter config is resolved from the working directory, the same place
-  // provider.lintCheck resolves it from, so formatted output is what LINT checks against.
-  // An original that the formatter would change is not formatter-compliant; LINT cannot
-  // fail for such a file, and formatting its output would reformat the user's untouched
-  // lines into the committed diff.
-  const formatterConfigDir = process.cwd();
+  // The formatter config is resolved for the target file's path, as provider.lintCheck
+  // resolves it, so formatted output is what LINT checks against. A per-function attempt
+  // runs on a temp copy, so configPath carries the real target's path. An original that
+  // the formatter would change is not formatter-compliant; LINT cannot fail for such a
+  // file, and formatting its output would reformat the user's untouched lines into the
+  // committed diff.
+  const formatterConfigPath = configPath ?? filePath;
   const originalIsFormatted =
-    (await provider.formatCode(originalCode, formatterConfigDir)) === originalCode;
+    (await provider.formatCode(originalCode, formatterConfigPath)) === originalCode;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     completedAttempts = attempt;
@@ -810,7 +819,7 @@ async function executeRetryLoop(
     // When the output does not parse, formatCode returns it unchanged and NDS-001
     // reports the syntax error against the agent's own text.
     if (originalIsFormatted) {
-      output.instrumentedCode = await provider.formatCode(output.instrumentedCode, formatterConfigDir);
+      output.instrumentedCode = await provider.formatCode(output.instrumentedCode, formatterConfigPath);
     }
 
     // Write instrumented code to disk (validation chain needs the file on disk)
@@ -853,6 +862,7 @@ async function executeRetryLoop(
           originalCode,
           instrumentedCode: output.instrumentedCode,
           filePath,
+          configPath,
           config: output.schemaExtensions.length > 0
             ? { ...validationConfigForAttempt, declaredSpanExtensions: output.schemaExtensions }
             : validationConfigForAttempt,
@@ -1045,7 +1055,7 @@ async function executeRetryLoop(
           advisoryCode = provider.fixDelimiterVariants(advisoryCode, advisoryOutput.schemaExtensions, []);
           // Same formatting pass as the main attempt output — see the comment there.
           if (originalIsFormatted) {
-            advisoryCode = await provider.formatCode(advisoryCode, formatterConfigDir);
+            advisoryCode = await provider.formatCode(advisoryCode, formatterConfigPath);
           }
           await writeFile(filePath, advisoryCode, 'utf-8');
 
@@ -1053,6 +1063,7 @@ async function executeRetryLoop(
             originalCode: passingCode,
             instrumentedCode: advisoryCode,
             filePath,
+            configPath,
             config: advisoryOutput.schemaExtensions.length > 0
               ? { ...validationConfigForAttempt, declaredSpanExtensions: advisoryOutput.schemaExtensions }
               : validationConfigForAttempt,
@@ -1308,6 +1319,8 @@ async function functionLevelFallback(
           ...retryOptions,
           _skipFunctionFallback: true,
           existingSpanNames: cumulativeSpanExtensions,
+          // The temp file lives outside the project; resolve Prettier config for the target.
+          configPath: retryOptions.configPath ?? filePath,
         },
       );
 
@@ -1453,17 +1466,18 @@ async function functionLevelFallback(
   // Reassemble: replace instrumented functions in the original file via provider
   let reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
 
-  // Import once — reused by every reassembly path below.
-  // NDS-003 (checkNonInstrumentationDiffNormalized) normalizes the ORIGINAL through
-  // Prettier but compares against the RAW instrumented output. When a module-level
-  // constant exceeds Prettier's printWidth (e.g. 83 chars > 80), Prettier splits the
-  // original into 2 lines — but the reassembled output keeps the original 1-line form.
-  // NDS-003 sees the 2-line form "missing" and the 1-line form as an unexplained
-  // addition, producing a false failure. Normalizing both sides through the same Prettier
-  // pass eliminates this asymmetry. Applied to every reassembly path (initial, syntax-
-  // failure retry, and partial-results) so the fix holds on all exit paths.
-  const { prettierNormalizeForComparison } = await import('../languages/javascript/rules/nds003.ts');
-  reassembledCode = await prettierNormalizeForComparison(reassembledCode, filePath);
+  // Format reassembled output the same way executeRetryLoop formats whole-file output:
+  // with the project's Prettier config as-is, and only when the original is already
+  // formatted, so LINT passes and the user's untouched lines are never reformatted into
+  // the diff. NDS-003 normalizes both sides of its comparison itself, so it does not
+  // depend on this pass. Applied to every reassembly path (initial, syntax-failure retry,
+  // and partial-results) so the behavior holds on all exit paths.
+  const formatterConfigPath = retryOptions.configPath ?? filePath;
+  const originalIsFormatted =
+    (await fnProvider.formatCode(originalCode, formatterConfigPath)) === originalCode;
+  const formatReassembled = async (code: string): Promise<string> =>
+    originalIsFormatted ? fnProvider.formatCode(code, formatterConfigPath) : code;
+  reassembledCode = await formatReassembled(reassembledCode);
 
   // Write reassembled code and check syntax before running full validation
   await writeFile(filePath, reassembledCode, 'utf-8');
@@ -1504,7 +1518,7 @@ async function functionLevelFallback(
     }
 
     reassembledCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, fnResults);
-    reassembledCode = await prettierNormalizeForComparison(reassembledCode, filePath);
+    reassembledCode = await formatReassembled(reassembledCode);
     await writeFile(filePath, reassembledCode, 'utf-8');
     try {
       const retryCheck = await fnProvider.checkSyntax(filePath);
@@ -1626,7 +1640,7 @@ async function functionLevelFallback(
     r.success ? r : { ...r, instrumentedCode: undefined },
   );
   let partialCode = fnProvider.reassembleFunctions(originalCode, extractedFunctions, partialResults);
-  partialCode = await prettierNormalizeForComparison(partialCode, filePath);
+  partialCode = await formatReassembled(partialCode);
 
   await writeFile(filePath, partialCode, 'utf-8');
   const partialValidation = await validateFileFn({

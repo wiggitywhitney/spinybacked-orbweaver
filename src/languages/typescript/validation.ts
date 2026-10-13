@@ -426,14 +426,12 @@ export async function checkLint(
  * @param configDir - Directory to search for Prettier config files
  * @returns Formatted source, or original source if formatting fails
  */
-export async function formatCode(source: string, configDir: string): Promise<string> {
+export async function formatCode(source: string, filePath: string): Promise<string> {
   try {
-    // resolveConfig searches from the directory containing the path it is given,
-    // so a bare directory path would skip that directory's own .prettierrc.
-    // Anchor on a file inside it — the same name lintCheck resolves from.
-    const config = await prettier.resolveConfig(join(configDir, 'file.tsx'));
+    const config = await prettier.resolveConfig(filePath);
     return await prettier.format(source, {
       ...config,
+      filepath: filePath,
       parser: 'typescript',
     });
   } catch {

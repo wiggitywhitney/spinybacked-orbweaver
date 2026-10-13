@@ -650,9 +650,10 @@ let pendingNds003Warning: string | null = null;
 
 /**
  * Normalize source code through Prettier for NDS-003 comparison.
- * Exported so callers (e.g., reassembly validation) can normalize both sides
- * of a comparison to avoid false NDS-003 failures caused by Prettier
- * reformatting long lines (> printWidth) when only one side is normalized.
+ * Exported so tests can apply the same normalization NDS-003 applies to both
+ * sides of its comparison. Its singleQuote and trailingComma overrides exist for
+ * comparison only, so its output is not suitable for writing to disk — code that
+ * writes formatted output uses the provider's formatCode instead.
  */
 export async function prettierNormalizeForComparison(code: string, filePath: string, singleQuoteHint?: boolean): Promise<string> {
   return prettierNormalize(code, filePath, singleQuoteHint);

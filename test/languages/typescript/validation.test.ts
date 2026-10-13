@@ -23,9 +23,9 @@ describe('formatCode', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('applies the .prettierrc found in the given directory', async () => {
+  it('applies the .prettierrc that governs the given file path', async () => {
     await writeFile(join(tempDir, '.prettierrc'), JSON.stringify({ singleQuote: true, semi: false }), 'utf-8');
-    const result = await formatCode('const greeting: string = "hello";\n', tempDir);
+    const result = await formatCode('const greeting: string = "hello";\n', join(tempDir, 'greeting.ts'));
     expect(result).toBe("const greeting: string = 'hello'\n");
   });
 });

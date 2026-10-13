@@ -160,15 +160,25 @@ describe('formatCode', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('applies the .prettierrc found in the given directory', async () => {
+  it('applies the .prettierrc that governs the given file path', async () => {
     writeFileSync(join(tempDir, '.prettierrc'), JSON.stringify({ singleQuote: true, semi: false }), 'utf-8');
-    const result = await formatCode('const greeting = "hello";\n', tempDir);
+    const result = await formatCode('const greeting = "hello";\n', join(tempDir, 'greeting.js'));
     expect(result).toBe("const greeting = 'hello'\n");
+  });
+
+  it('applies Prettier overrides that match the file name', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ semi: true, overrides: [{ files: '*.test.js', options: { semi: false } }] }),
+      'utf-8',
+    );
+    expect(await formatCode('const a = 1\n', join(tempDir, 'app.js'))).toBe('const a = 1;\n');
+    expect(await formatCode('const a = 1;\n', join(tempDir, 'app.test.js'))).toBe('const a = 1\n');
   });
 
   it('returns the source unchanged when it does not parse', async () => {
     const source = 'const = ;\n';
-    expect(await formatCode(source, tempDir)).toBe(source);
+    expect(await formatCode(source, join(tempDir, 'broken.js'))).toBe(source);
   });
 });
 

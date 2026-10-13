@@ -121,6 +121,12 @@ export interface ValidateFileInput {
   instrumentedCode: string;
   /** File path on disk for filesystem-based checks (syntax, lint). */
   filePath: string;
+  /**
+   * Path used to resolve formatter and linter config when `filePath` is a temporary
+   * copy outside the project (function-level fallback instruments each function in a
+   * temp file). Defaults to `filePath`.
+   */
+  configPath?: string;
   /** Which checks to enable and their blocking/advisory classification. */
   config: ValidationConfig;
   /**

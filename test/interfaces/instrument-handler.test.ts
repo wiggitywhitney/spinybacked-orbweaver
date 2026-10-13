@@ -1199,6 +1199,46 @@ describe('handleInstrument', () => {
       expect(allOutput).not.toContain('NDS-003: NDS-003:');
     });
 
+    it('points to --debug-dump-dir when rejected-output lines are cited and no dump was written', async () => {
+      const deps = makeDeps();
+      await handleInstrument(makeOptions({ verbose: true }), deps);
+      const callbacks = getCallbacks(deps);
+      (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+      const violation = 'NDS-003: NDS-003: non-instrumentation line added at instrumented line 12: const out = run();';
+      callbacks.onFileComplete!(makeFileResult({
+        status: 'failed', spansAdded: 0, lastError: violation, lastErrorByAttempt: [violation],
+      }), 0, 1);
+
+      const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+      expect(allOutput).toContain('--debug-dump-dir');
+    });
+
+    it('names the saved dump when rejected-output lines are cited and a dump was written', async () => {
+      const { mkdtempSync, rmSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      const dumpDir = mkdtempSync(join(tmpdir(), 'spiny-orb-dump-'));
+      try {
+        const deps = makeDeps();
+        await handleInstrument(makeOptions({ verbose: true, debugDumpDir: dumpDir }), deps);
+        const callbacks = getCallbacks(deps);
+        (deps.stderr as ReturnType<typeof vi.fn>).mockClear();
+
+        const violation = 'NDS-003: NDS-003: non-instrumentation line added at instrumented line 12: const out = run();';
+        callbacks.onFileComplete!(makeFileResult({
+          status: 'failed', spansAdded: 0, lastError: violation, lastErrorByAttempt: [violation],
+          lastInstrumentedCode: 'const out = run();\n',
+        }), 0, 1);
+
+        const allOutput = (deps.stderr as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]).join('\n');
+        expect(allOutput).toContain(join(dumpDir, 'src/app.js'));
+        expect(allOutput).not.toContain('Run with --debug-dump-dir');
+      } finally {
+        rmSync(dumpDir, { recursive: true, force: true });
+      }
+    });
+
     it('names every NDS-003 violation in the validation failures section', async () => {
       const deps = makeDeps();
       await handleInstrument(makeOptions({ verbose: true }), deps);
@@ -1227,8 +1267,9 @@ describe('handleInstrument', () => {
       const section = allOutput.slice(allOutput.indexOf('Validation failures'));
       expect(section).toContain('original line 73 missing/modified: await install();');
       expect(section).toContain('original line 81 missing/modified: return publish(tag);');
-      expect(section).toContain('instrumented line 95: const out = await publish(tag);');
-      expect(section).toContain('instrumented line 99: return out;');
+      expect(section).toContain("added in the agent's rejected output at line 95: const out = await publish(tag);");
+      expect(section).toContain("added in the agent's rejected output at line 99: return out;");
+      expect(section).not.toContain('at instrumented line');
     });
   });
 

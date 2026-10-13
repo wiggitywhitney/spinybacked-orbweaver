@@ -134,17 +134,15 @@ export class TypeScriptProvider implements LanguageProvider {
 
   // ── Tier 1: Formatting ────────────────────────────────────────────────────
 
-  formatCode(source: string, configDir: string): Promise<string> {
-    return formatCode(source, configDir);
+  formatCode(source: string, filePath: string): Promise<string> {
+    return formatCode(source, filePath);
   }
 
   // ── Tier 1: Linting ───────────────────────────────────────────────────────
 
-  lintCheck(original: string, instrumented: string): Promise<CheckResult> {
-    // Use file.tsx so Prettier resolves config with the TypeScript parser.
-    // The TypeScript parser handles both .ts and .tsx content correctly;
-    // using .tsx ensures JSX syntax is accepted for .tsx source files.
-    return checkLint(original, instrumented, 'file.tsx');
+  lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult> {
+    // Prettier infers the TypeScript parser from the .ts or .tsx extension.
+    return checkLint(original, instrumented, filePath);
   }
 
   // ── AST analysis (synchronous) ────────────────────────────────────────────

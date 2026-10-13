@@ -96,7 +96,7 @@ async function runOneAttempt(filePath: string, originalCode: string, agentOutput
   const deps: InstrumentWithRetryDeps = {
     instrumentFile: async () => ({ success: true, output: makeOutput(agentOutput) }) as InstrumentFileResult,
     validateFile: async (input: ValidateFileInput): Promise<ValidationResult> => {
-      const lint = await input.provider.lintCheck(input.originalCode, input.instrumentedCode);
+      const lint = await input.provider.lintCheck(input.originalCode, input.instrumentedCode, input.filePath);
       const nds003 = (await nds003Rule.check({ ...input, language: 'javascript' })) as CheckResult[];
       captured ??= { lint, nds003, written: readFileSync(filePath, 'utf-8') };
       const blockingFailures = [lint, ...nds003].filter(r => !r.passed);
@@ -116,18 +116,15 @@ async function runOneAttempt(filePath: string, originalCode: string, agentOutput
 
 describe('whole-file path formats agent output before validation', () => {
   let testDir: string;
-  let previousCwd: string;
 
+  // The process runs from the repository root, which has no .prettierrc. Each
+  // fixture's config sits beside its target file, so these tests also verify
+  // that LINT and the formatter resolve config from the target file's path.
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-whole-file-prettier-'));
-    // LINT resolves the Prettier config from the working directory, so the
-    // fixture's .prettierrc must be in the directory the process runs from.
-    previousCwd = process.cwd();
-    process.chdir(testDir);
   });
 
   afterEach(() => {
-    process.chdir(previousCwd);
     rmSync(testDir, { recursive: true, force: true });
   });
 
@@ -206,7 +203,7 @@ describe('whole-file path formats agent output before validation', () => {
       },
       validateFile: async (input: ValidateFileInput): Promise<ValidationResult> => {
         validateCalls++;
-        const lint = await input.provider.lintCheck(input.originalCode, input.instrumentedCode);
+        const lint = await input.provider.lintCheck(input.originalCode, input.instrumentedCode, input.filePath);
         if (validateCalls === 2) advisoryLint = lint;
         const blockingFailures = lint.passed ? [] : [lint];
         return {
@@ -248,3 +245,106 @@ describe('whole-file path formats agent output before validation', () => {
     expect(outcome.lint.passed).toBe(true);
   });
 });
+
+describe('function-level fallback formats reassembled output like the whole-file path', () => {
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = mkdtempSync(join(tmpdir(), 'spiny-orb-reassembly-prettier-'));
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  const isPerFunctionPath = (path: string): boolean => /fn-\w+-\d+\.js$/.test(path);
+
+  const instrumentedLoadWidget = [
+    "import { trace } from '@opentelemetry/api';",
+    'export async function loadWidget(store, id) {',
+    "  return trace.getTracer('svc').startActiveSpan('widget.load', async (span) => {",
+    '    try {',
+    '      return store.get(id);',
+    '    } finally {',
+    '      span.end();',
+    '    }',
+    '  });',
+    '}',
+    '',
+  ].join('\n');
+
+  interface FallbackOutcome {
+    reassembled: string | undefined;
+    reassembledLint: CheckResult | undefined;
+    perFunctionConfigPaths: Array<string | undefined>;
+  }
+
+  /** Whole-file attempt fails, so the run falls back to per-function instrumentation. */
+  async function runFallback(filePath: string, originalCode: string): Promise<FallbackOutcome> {
+    const outcome: FallbackOutcome = { reassembled: undefined, reassembledLint: undefined, perFunctionConfigPaths: [] };
+    const deps: InstrumentWithRetryDeps = {
+      instrumentFile: async (path) => {
+        if (isPerFunctionPath(path)) {
+          return { success: true, output: makeOutput(instrumentedLoadWidget) } as InstrumentFileResult;
+        }
+        return { success: false, error: 'LLM produced null parsed_output', tokenUsage: makeOutput('').tokenUsage } as InstrumentFileResult;
+      },
+      validateFile: async (input: ValidateFileInput): Promise<ValidationResult> => {
+        if (input.filePath !== filePath) {
+          outcome.perFunctionConfigPaths.push(input.configPath);
+          return { passed: true, tier1Results: [], tier2Results: [], blockingFailures: [], advisoryFindings: [] };
+        }
+        const lint = await input.provider.lintCheck(input.originalCode, input.instrumentedCode, input.configPath ?? input.filePath);
+        outcome.reassembled ??= readFileSync(filePath, 'utf-8');
+        outcome.reassembledLint ??= lint;
+        return { passed: true, tier1Results: [lint], tier2Results: [], blockingFailures: [], advisoryFindings: [] };
+      },
+    };
+    await instrumentWithRetry(filePath, originalCode, {}, makeConfig(), { deps, provider: jsProvider });
+    return outcome;
+  }
+
+  it('keeps trailing commas that the project config requires when reassembling', async () => {
+    // No .prettierrc: Prettier's default trailingComma is 'all'.
+    const originalCode = await prettier.format(
+      [
+        "const SUPPORTED_FORMATS = ['application/json', 'application/yaml', 'text/plain', 'text/csv'];",
+        'export async function loadWidget(store, id) {',
+        '  return store.get(id);',
+        '}',
+      ].join('\n'),
+      { filepath: 'widget-store.js' },
+    );
+    expect(originalCode).toContain('"text/csv",\n');
+    const filePath = join(testDir, 'widget-store.js');
+    writeFileSync(filePath, originalCode, 'utf-8');
+
+    const outcome = await runFallback(filePath, originalCode);
+
+    expect(outcome.reassembled).toContain('"text/csv",\n');
+    expect(outcome.reassembledLint?.passed).toBe(true);
+  });
+
+  it('does not reformat untouched lines when the original is not Prettier-compliant', async () => {
+    const untouchedLine = 'const DEFAULTS = {retries:2, label:"widgets"};';
+    const originalCode = [untouchedLine, 'export async function loadWidget(store, id) {', '  return store.get(id);', '}', ''].join('\n');
+    const filePath = join(testDir, 'widget-store.js');
+    writeFileSync(filePath, originalCode, 'utf-8');
+
+    const outcome = await runFallback(filePath, originalCode);
+
+    expect(outcome.reassembled).toContain(untouchedLine);
+  });
+
+  it('resolves per-function config from the target file, not the temp copy', async () => {
+    const originalCode = ['export async function loadWidget(store, id) {', '  return store.get(id);', '}', ''].join('\n');
+    const filePath = join(testDir, 'widget-store.js');
+    writeFileSync(filePath, originalCode, 'utf-8');
+
+    const outcome = await runFallback(filePath, originalCode);
+
+    expect(outcome.perFunctionConfigPaths.length).toBeGreaterThan(0);
+    for (const configPath of outcome.perFunctionConfigPaths) expect(configPath).toBe(filePath);
+  });
+});
+

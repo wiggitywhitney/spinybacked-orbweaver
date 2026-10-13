@@ -522,9 +522,10 @@ export interface LanguageProvider {
    * formatting fails, returns the original source unchanged and logs a warning.
    *
    * @param source - Source code text to format
-   * @param configDir - Directory to search for formatter config files
+   * @param filePath - Path of the file the source belongs to; formatter config
+   *   (including per-file overrides) is resolved for this path
    */
-  formatCode(source: string, configDir: string): Promise<string>;
+  formatCode(source: string, filePath: string): Promise<string>;
 
   // -------------------------------------------------------------------------
   // Tier 1: Linting
@@ -539,8 +540,10 @@ export interface LanguageProvider {
    *
    * @param original - Original source code before instrumentation
    * @param instrumented - Instrumented source code to check
+   * @param filePath - Path of the file being checked; linter config (including
+   *   per-file overrides) is resolved for this path
    */
-  lintCheck(original: string, instrumented: string): Promise<CheckResult>;
+  lintCheck(original: string, instrumented: string, filePath: string): Promise<CheckResult>;
 
   // -------------------------------------------------------------------------
   // AST analysis (synchronous — pure in-memory)

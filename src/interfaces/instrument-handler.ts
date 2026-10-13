@@ -115,6 +115,8 @@ export interface InstrumentResult {
 const VALIDATOR_RULE_PREFIX = /^([A-Z]+-\d+[a-z]?|LINT|ELISION|WEAVER):\s*/;
 /** Longest violation detail printed to the console; full text stays in JSON output. */
 const MAX_VIOLATION_DETAIL_CHARS = 300;
+/** NDS-003 detail that cites a line in the agent's output, which is discarded when the file reverts. */
+const INSTRUMENTED_LINE_DETAIL = /^non-instrumentation line added at instrumented line (\d+):/;
 
 /**
  * Print one attempt's validator messages: each rule's human-readable description
@@ -122,8 +124,13 @@ const MAX_VIOLATION_DETAIL_CHARS = 300;
  * messages repeat their rule ID (`NDS-003: NDS-003: original line ...`), so a
  * repeated prefix is dropped. Continuation lines (agent-facing guidance, diffs)
  * are skipped. When no line carries a rule ID, the first line is printed as-is.
+ * A line number in the agent's output is reworded to say the output was rejected,
+ * since the file the user has is the original.
+ *
+ * @returns Whether any detail cited a line in the agent's rejected output
  */
-function renderValidationFailures(errorText: string, stderr: (line: string) => void, indent: string): void {
+function renderValidationFailures(errorText: string, stderr: (line: string) => void, indent: string): boolean {
+  let citesRejectedOutput = false;
   const violationsByRule = new Map<string, string[]>();
   for (const line of errorText.split('\n')) {
     const trimmed = line.trim();
@@ -132,6 +139,10 @@ function renderValidationFailures(errorText: string, stderr: (line: string) => v
     const ruleId = ruleMatch[1];
     let detail = trimmed.slice(ruleMatch[0].length);
     if (detail.startsWith(`${ruleId}:`)) detail = detail.slice(ruleId.length + 1).trim();
+    if (INSTRUMENTED_LINE_DETAIL.test(detail)) {
+      detail = detail.replace(INSTRUMENTED_LINE_DETAIL, "added in the agent's rejected output at line $1:");
+      citesRejectedOutput = true;
+    }
     if (detail.length > MAX_VIOLATION_DETAIL_CHARS) detail = `${detail.slice(0, MAX_VIOLATION_DETAIL_CHARS)}…`;
     const details = violationsByRule.get(ruleId) ?? [];
     details.push(detail);
@@ -140,13 +151,14 @@ function renderValidationFailures(errorText: string, stderr: (line: string) => v
   if (violationsByRule.size === 0) {
     const firstLine = errorText.split('\n').find(l => l.trim())?.trim();
     if (firstLine) stderr(`${indent}• ${firstLine}`);
-    return;
+    return false;
   }
   for (const [ruleId, details] of violationsByRule) {
     const desc = getRuleHumanDescription(ruleId);
     stderr(`${indent}• ${formatRuleId(ruleId)}${desc ? `: ${desc}` : ''}`);
     for (const detail of details) stderr(`${indent}    - ${detail}`);
   }
+  return citesRejectedOutput;
 }
 
 function exitCodeFromResult(result: RunResult): number {
@@ -233,6 +245,7 @@ export async function handleInstrument(
       // Debug dump: write lastInstrumentedCode to debugDumpDir when set (runs regardless of verbose mode).
       // Preserves relative path within debugDumpDir to avoid basename collisions (e.g., src/a/index.js
       // and src/b/index.js are both named "index.js" but must not overwrite each other).
+      let debugDumpPath: string | undefined;
       if (options.debugDumpDir && result.lastInstrumentedCode) {
         try {
           const rel = relative(options.projectDir, result.path);
@@ -240,6 +253,7 @@ export async function handleInstrument(
           const outPath = join(options.debugDumpDir, safeRel);
           mkdirSync(dirname(outPath), { recursive: true });
           writeFileSync(outPath, result.lastInstrumentedCode, 'utf-8');
+          debugDumpPath = outPath;
         } catch (err) {
           deps.stderr(`Warning: failed to write debug dump for ${toDisplayPath(result.path, options.projectDir)}: ${String(err)}`);
         }
@@ -317,14 +331,20 @@ export async function handleInstrument(
         deps.stderr('');
         deps.stderr(`  ${_dim(failuresByAttempt ? 'Validation failures by attempt' : 'Validation failures (last attempt)')}`);
         deps.stderr(`  ${_dim('─'.repeat(60))}`);
+        let citesRejectedOutput = false;
         if (failuresByAttempt) {
           failuresByAttempt.forEach((errorText, i) => {
             if (!errorText.trim()) return;
             deps.stderr(`  Attempt ${i + 1}`);
-            renderValidationFailures(errorText, deps.stderr, '    ');
+            if (renderValidationFailures(errorText, deps.stderr, '    ')) citesRejectedOutput = true;
           });
         } else if (result.lastError) {
-          renderValidationFailures(result.lastError, deps.stderr, '  ');
+          citesRejectedOutput = renderValidationFailures(result.lastError, deps.stderr, '  ');
+        }
+        if (citesRejectedOutput) {
+          deps.stderr(debugDumpPath
+            ? `  Agent's rejected output (last attempt) saved to ${debugDumpPath}`
+            : `  Run with --debug-dump-dir <dir> to save the agent's rejected output and see these lines in context.`);
         }
       }
 
