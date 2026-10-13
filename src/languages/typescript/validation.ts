@@ -382,6 +382,7 @@ export async function checkLint(
         message:
           `LINT check failed: the original file was Prettier-compliant but the instrumented output is not. ` +
           `The agent introduced formatting violations. ` +
+          `LINT is blocking: this file cannot be committed until the output is Prettier-compliant. ` +
           `Run Prettier on the output to match the project's formatting configuration.`,
         tier: 1,
         blocking: true,
@@ -427,7 +428,10 @@ export async function checkLint(
  */
 export async function formatCode(source: string, configDir: string): Promise<string> {
   try {
-    const config = await prettier.resolveConfig(configDir);
+    // resolveConfig searches from the directory containing the path it is given,
+    // so a bare directory path would skip that directory's own .prettierrc.
+    // Anchor on a file inside it — the same name lintCheck resolves from.
+    const config = await prettier.resolveConfig(join(configDir, 'file.tsx'));
     return await prettier.format(source, {
       ...config,
       parser: 'typescript',

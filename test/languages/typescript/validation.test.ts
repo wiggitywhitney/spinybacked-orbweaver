@@ -6,11 +6,37 @@ import { mkdtemp, writeFile, rm, mkdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
-import { checkSyntax, findTsconfig, getTscMajorVersion, detectInvalidRegexFlag } from '../../../src/languages/typescript/validation.ts';
+import { checkSyntax, findTsconfig, getTscMajorVersion, detectInvalidRegexFlag, formatCode, checkLint } from '../../../src/languages/typescript/validation.ts';
 
 // ---------------------------------------------------------------------------
 // getTscMajorVersion
 // ---------------------------------------------------------------------------
+
+describe('formatCode', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'spiny-orb-ts-format-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('applies the .prettierrc found in the given directory', async () => {
+    await writeFile(join(tempDir, '.prettierrc'), JSON.stringify({ singleQuote: true, semi: false }), 'utf-8');
+    const result = await formatCode('const greeting: string = "hello";\n', tempDir);
+    expect(result).toBe("const greeting: string = 'hello'\n");
+  });
+});
+
+describe('checkLint — blocking wording', () => {
+  it('states that the file cannot commit until the output is Prettier-compliant', async () => {
+    const result = await checkLint('const x = 1;\n', 'const x = 1\nconst    y=2\n', 'file.ts');
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain('LINT is blocking: this file cannot be committed until the output is Prettier-compliant.');
+  });
+});
 
 describe('getTscMajorVersion', () => {
   it('returns 5 for the local tsc 5.x binary', () => {

@@ -588,6 +588,15 @@ async function executeRetryLoop(
   const now = clock ?? Date.now;
   const startTime = now();
 
+  // The formatter config is resolved from the working directory, the same place
+  // provider.lintCheck resolves it from, so formatted output is what LINT checks against.
+  // An original that the formatter would change is not formatter-compliant; LINT cannot
+  // fail for such a file, and formatting its output would reformat the user's untouched
+  // lines into the committed diff.
+  const formatterConfigDir = process.cwd();
+  const originalIsFormatted =
+    (await provider.formatCode(originalCode, formatterConfigDir)) === originalCode;
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     completedAttempts = attempt;
     // Check time budget before each retry attempt (not before the first attempt)
@@ -788,6 +797,21 @@ async function executeRetryLoop(
       output.schemaExtensions,
       lastValidation?.blockingFailures ?? [],
     );
+
+    // Format after every deterministic fixer and immediately before the write that
+    // validation reads. Wrapping a body in a startActiveSpan callback adds indentation,
+    // so a line at or near the print width in the original can need the formatter's
+    // reflow once instrumented. Without this pass the agent must hand-produce
+    // formatter-exact text, and LINT blocks the file whenever it misses. NDS-003 already
+    // normalizes both sides of its comparison, so layout changes here cannot add an
+    // NDS-003 failure. This uses provider.formatCode (the project config as-is, as LINT
+    // uses it) rather than prettierNormalizeForComparison, whose singleQuote and
+    // trailingComma overrides exist for comparison and can produce text that fails LINT.
+    // When the output does not parse, formatCode returns it unchanged and NDS-001
+    // reports the syntax error against the agent's own text.
+    if (originalIsFormatted) {
+      output.instrumentedCode = await provider.formatCode(output.instrumentedCode, formatterConfigDir);
+    }
 
     // Write instrumented code to disk (validation chain needs the file on disk)
     await writeFile(filePath, output.instrumentedCode, 'utf-8');

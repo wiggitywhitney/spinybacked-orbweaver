@@ -3090,6 +3090,75 @@ describe('checkNonInstrumentationDiff (NDS-003)', () => {
       expect(failures).toHaveLength(0);
     });
 
+    it('passes when a return-value capture line is split the way Prettier splits it', async () => {
+      // The original `return await` line fits the print width, but the capture form is
+      // eight characters longer, so Prettier splits it even at the original depth.
+      const original = [
+        'class Repo {',
+        '  async fetchRemote(remoteName) {',
+        "    return await this.exec(['git', 'fetch', remoteName], { cwd: this.root });",
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'class Repo {',
+        '  async fetchRemote(remoteName) {',
+        "    return tracer.startActiveSpan('repo.fetch_remote', async (span) => {",
+        '      try {',
+        "        const result = await this.exec(['git', 'fetch', remoteName], {",
+        '          cwd: this.root,',
+        '        });',
+        "        span.setAttribute('repo.fetch.exit_code', result.code);",
+        '        return result;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      const failures = results.filter((r) => !r.passed);
+      expect(failures).toEqual([]);
+    });
+
+    it('still rejects a split return-value capture whose call arguments changed', async () => {
+      const original = [
+        'class Repo {',
+        '  async fetchRemote(remoteName) {',
+        "    return await this.exec(['git', 'fetch', remoteName], { cwd: this.root });",
+        '  }',
+        '}',
+      ].join('\n');
+
+      const instrumented = [
+        "import { trace } from '@opentelemetry/api';",
+        "const tracer = trace.getTracer('svc');",
+        'class Repo {',
+        '  async fetchRemote(remoteName) {',
+        "    return tracer.startActiveSpan('repo.fetch_remote', async (span) => {",
+        '      try {',
+        "        const result = await this.exec(['git', 'fetch', '--prune', remoteName], {",
+        '          cwd: this.root,',
+        '        });',
+        "        span.setAttribute('repo.fetch.exit_code', result.code);",
+        '        return result;',
+        '      } finally {',
+        '        span.end();',
+        '      }',
+        '    });',
+        '  }',
+        '}',
+      ].join('\n');
+
+      const results = await checkNonInstrumentationDiffNormalized(original, instrumented, '/tmp/test.js');
+      expect(results.filter((r) => !r.passed).length).toBeGreaterThan(0);
+    });
+
     it('still detects real code modifications after stripping', async () => {
       // The agent changed `options` → `{ extra: true }`. After stripping OTel, this
       // difference is still visible in the comparison. NDS-003 must still fire.
