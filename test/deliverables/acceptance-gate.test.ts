@@ -2,7 +2,7 @@
 // ABOUTME: Verifies git push + gh pr create work from the orbweaver subprocess with real GitHub API.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { writeFile, mkdir, rm } from 'node:fs/promises';
+import { writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -29,22 +29,70 @@ function getTargetRepo(): { url: string; slug: string } {
   return cachedTargetRepo;
 }
 
-/**
- * Create a temporary clone of the current repo for isolated push testing.
- * Uses a shallow clone to minimize disk usage.
- */
-async function cloneTestRepo(): Promise<string> {
-  const dir = join(tmpdir(), `spiny-orb-e2e-pr-${randomUUID()}`);
-  await mkdir(dir, { recursive: true });
-  await simpleGit(dir).clone(REPO_ROOT, dir, ['--depth', '1', '--single-branch']);
-  // Apply standard test config (makeTestRepo reinits safely on a cloned repo)
-  const git = await makeTestRepo(dir);
+const SEED_BRANCH = 'main';
 
-  // Point the remote to the target repo for push
-  await git.remote(['set-url', 'origin', getTargetRepo().url]);
+/**
+ * Git environment that authenticates HTTPS fetches with GITHUB_TOKEN through
+ * GIT_CONFIG_* variables, so the token never appears in process arguments or
+ * in the repo's config. pushBranch() handles push authentication on its own.
+ */
+function authenticatedGitEnv(): Record<string, string> {
+  const token = process.env.GITHUB_TOKEN ?? '';
+  const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+  return {
+    ...(process.env as Record<string, string>),
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'http.extraHeader',
+    GIT_CONFIG_VALUE_0: `Authorization: Basic ${basic}`,
+  };
+}
+
+/**
+ * Create a temporary repo whose history comes from the target repo, so pushes
+ * back to it succeed. Cloning this repo instead fails two ways: a shallow clone
+ * pushes a boundary commit the target lacks (rejected), and a full clone pushes
+ * files the token may not be allowed to write, such as workflow files. If the
+ * target has no branches yet (an empty sink), seed a one-commit base branch so
+ * the PR has something to target.
+ */
+async function prepareTargetRepo(): Promise<string> {
+  const dir = join(tmpdir(), `spiny-orb-e2e-pr-${randomUUID()}`);
+  const git = (await makeTestRepo(dir)).env(authenticatedGitEnv());
+  await git.addRemote('origin', getTargetRepo().url);
+
+  // `ls-remote --symref origin HEAD` prints "ref: refs/heads/<branch>\tHEAD"
+  // for a repo with a default branch, and nothing for an empty repo.
+  const symref = await git.raw(['ls-remote', '--symref', 'origin', 'HEAD']);
+  const baseBranch = /^ref: refs\/heads\/(\S+)\s+HEAD$/m.exec(symref)?.[1];
+
+  if (baseBranch) {
+    await git.raw(['fetch', '--depth', '1', 'origin', baseBranch]);
+    await git.checkout(['-B', baseBranch, 'FETCH_HEAD']);
+  } else {
+    await git.checkout(['--orphan', SEED_BRANCH]);
+    await writeFile(
+      join(dir, 'README.md'),
+      '# spinybacked-orbweaver test sink\n\nBase branch for spiny-orb\'s end-to-end PR creation tests.\n',
+    );
+    await git.add('README.md');
+    await git.commit('chore: seed base branch for e2e PR tests');
+    await pushBranch(dir, SEED_BRANCH);
+  }
 
   return dir;
 }
+
+// In CI a missing token means the GH_TOKEN_TEST_SINK secret is blank or unset.
+// Fail loudly there instead of skipping, so the e2e path cannot go silent again.
+// Local runs without a token still skip.
+describe.runIf(!GITHUB_TOKEN_AVAILABLE && !!process.env.CI)('Acceptance Gate — E2E PR Creation token', () => {
+  it('has GITHUB_TOKEN set in CI', () => {
+    throw new Error(
+      'GITHUB_TOKEN is empty in CI. Set the GH_TOKEN_TEST_SINK Actions secret '
+      + '(see the comment beside it in .github/workflows/acceptance-gate.yml).',
+    );
+  });
+});
 
 describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#218)', () => {
   const cleanupBranches: string[] = [];
@@ -94,7 +142,7 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
   });
 
   it('pushes a branch and creates a PR against the real repo', { timeout: 60_000 }, async () => {
-    testDir = await cloneTestRepo();
+    testDir = await prepareTargetRepo();
     const branchName = `test/e2e-pr-${Date.now()}`;
     cleanupBranches.push(branchName);
 
@@ -104,7 +152,7 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
       join(testDir, 'test-e2e-artifact.txt'),
       `E2E test artifact created at ${new Date().toISOString()}\nThis file should be deleted by test cleanup.\n`,
     );
-    const git = simpleGit(testDir);
+    const git = simpleGit(testDir).env(authenticatedGitEnv());
     await git.add('test-e2e-artifact.txt');
     await git.commit('test: e2e PR creation verification');
 
@@ -127,7 +175,7 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
   });
 
   it('creates a draft PR when draft option is true', { timeout: 60_000 }, async () => {
-    testDir = await cloneTestRepo();
+    testDir = await prepareTargetRepo();
     const branchName = `test/e2e-draft-${Date.now()}`;
     cleanupBranches.push(branchName);
 
@@ -136,7 +184,7 @@ describe.skipIf(!GITHUB_TOKEN_AVAILABLE)('Acceptance Gate — E2E PR Creation (#
       join(testDir, 'test-e2e-draft.txt'),
       `Draft PR test at ${new Date().toISOString()}\n`,
     );
-    const git = simpleGit(testDir);
+    const git = simpleGit(testDir).env(authenticatedGitEnv());
     await git.add('test-e2e-draft.txt');
     await git.commit('test: e2e draft PR verification');
 

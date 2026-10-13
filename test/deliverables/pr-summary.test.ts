@@ -2,6 +2,8 @@
 // ABOUTME: Verifies all required PR description sections from a known RunResult.
 
 import { describe, it, expect } from 'vitest';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { renderPrSummary } from '../../src/deliverables/pr-summary.ts';
 import type { RunResult } from '../../src/coordinator/types.ts';
 import type { FileResult } from '../../src/fix-loop/types.ts';
@@ -1228,6 +1230,55 @@ describe('renderPrSummary', () => {
       expect(md).toContain('CDQ-006');
       // Human description replaces agent-facing message for CDQ-006
       expect(md).toContain('isRecording Guard');
+    });
+  });
+
+  describe('local path redaction', () => {
+    const projectDir = join(homedir(), 'work', 'demo-project');
+
+    it('removes the absolute project root and home directory from failed-file rows and warnings', () => {
+      const reason = `LINT failed: output is not Prettier-compliant. Prettier config: ${projectDir}/.prettierrc.json.`;
+      const result = _makeRunResult({
+        fileResults: [
+          _makeFileResult({ path: join(projectDir, 'lib', 'foo.js'), status: 'failed', reason }),
+        ],
+        warnings: [`${join(projectDir, 'lib', 'foo.js')}: ${reason}`],
+      });
+      const md = renderPrSummary(result, _makeConfig(), projectDir);
+
+      expect(md).not.toContain(projectDir);
+      expect(md).not.toContain(homedir());
+      // The repo-relative forms stay useful to a reviewer.
+      expect(md).toContain('lib/foo.js');
+      expect(md).toContain('.prettierrc.json');
+
+      // Check the two places the leak appeared separately: the Warnings section
+      // and the failed file's Status cell in the per-file table.
+      const warnings = md.slice(md.indexOf('## Warnings'));
+      expect(warnings).toContain('Prettier config: .prettierrc.json.');
+      expect(warnings).not.toContain(homedir());
+      const perFile = md.slice(md.indexOf('## Per-File Results'), md.indexOf('\n## ', md.indexOf('## Per-File Results') + 1));
+      const failedRow = perFile.split('\n').find(line => line.includes('failed:'));
+      expect(failedRow).toBeDefined();
+      expect(failedRow).toContain('Prettier config: .prettierrc.json.');
+      expect(failedRow).not.toContain(homedir());
+    });
+
+    it('replaces a home-directory path outside the project with ~', () => {
+      const outside = join(homedir(), '.config', 'tool', 'settings.json');
+      const result = _makeRunResult({ warnings: [`Read ${outside}`] });
+      const md = renderPrSummary(result, _makeConfig(), projectDir);
+
+      expect(md).not.toContain(homedir());
+      expect(md).toContain('~/.config/tool/settings.json');
+    });
+
+    it('does not rewrite a sibling directory that shares the project root as a prefix', () => {
+      const sibling = `${projectDir}-other/file.js`;
+      const result = _makeRunResult({ warnings: [`Saw ${sibling}`] });
+      const md = renderPrSummary(result, _makeConfig(), projectDir);
+
+      expect(md).toContain('~/work/demo-project-other/file.js');
     });
   });
 

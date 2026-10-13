@@ -1,6 +1,6 @@
 # PRD #1075: LLM Span Handling — GenAI Attribute Placement, Traceloop Activation, and Library Span Verification
 
-**Status**: In progress (M1, M1b, M2, M2b and M3 complete. M4's six decisions are recorded in the 2026-10-10 Decision Log rows. PRD #1024 is updated and research issue #1081 is filed. M4 is complete. M1–M4 land on `main` as their own docs-only PR before M5)
+**Status**: In progress (M1, M1b, M2, M2b and M3 complete. M4's six decisions are recorded in the 2026-10-10 Decision Log rows. PRD #1024 is updated and research issue #1081 is filed. M4 is complete. M1–M4 merged to `main` in PR #1094 on 2026-10-12. M5 is next, on a fresh branch from `main`)
 **Priority**: High
 **GitHub Issue**: [#1075](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1075)
 

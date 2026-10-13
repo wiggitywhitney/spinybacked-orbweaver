@@ -100,6 +100,14 @@ jobs:
         run: npx vitest run --config vitest.acceptance.config.ts --reporter=verbose test/deliverables/acceptance-gate.test.ts
         timeout-minutes: 25
         env:
+          # GH_TOKEN_TEST_SINK is a copy of Google Secret Manager's github-token-test-sink:
+          # a fine-grained PAT scoped to spinybacked-orbweaver-test-sink with Contents and
+          # Pull requests read/write. Setting it from a non-interactive shell (for example,
+          # a `!` command in Claude Code) stores a blank value without any error, and the
+          # test then fails with "GITHUB_TOKEN is empty in CI". Copy it with:
+          #   vals exec -f .vals.yaml -- bash -c 'export PATH="/opt/homebrew/bin:$PATH" HOME="<absolute home dir>"; v="$GH_TOKEN_TEST_SINK"; unset GITHUB_TOKEN GH_TOKEN GH_TOKEN_TEST_SINK; printf %s "$v" | gh secret set GH_TOKEN_TEST_SINK --repo wiggitywhitney/spinybacked-orbweaver'
+          # vals strips HOME and injects GITHUB_TOKEN, which is why the command restores
+          # one and unsets the other before gh runs.
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN_TEST_SINK }}
           SPINY_ORB_E2E_TEST_REPO: https://github.com/wiggitywhitney/spinybacked-orbweaver-test-sink.git
 
