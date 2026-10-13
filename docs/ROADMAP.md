@@ -35,6 +35,13 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 
 **Eval input changed: commit-story-v2's `src/traceloop-init.js`** ([PRD #1075](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1075)): the file now calls `manuallyInstrument({ callbackManagerModule })` for LangChain and no longer imports `@traceloop/instrumentation-mcp`. spiny-orb instruments commit-story-v2's source, so the next eval sees a different input file. Do not count a difference in that file's output as a spiny-orb regression. Runs without `COMMIT_STORY_TRACELOOP=true` behave as before.
 
+**Eval check: count attributes typed before SCH-003's auto-fix runs** (the coercion-order fix for #1072 and #1037): spiny-orb no longer wraps a bare-ID `*_count` or `*.count` extension in `String()`, and SCH-003 now checks values against the agent's declared extension types. In commit-story-v2's next run (run-29), confirm:
+- the `_count` attributes that run-28 shipped as `String(x.length)` are emitted as integers, including `commit_story.journal.reflections_count` (or the key that run uses for reflections) and the `summary.*_count` keys in `summarize.js`, `summary-detector.js` and `auto-summarize.js`;
+- `commit_story.git.is_merge` is emitted as a boolean;
+- no boolean literal ships on a `string`-declared key, such as `summary_saved`.
+
+Count keys whose names don't end in `_count` (for example taze's `packages_loaded`) are still expected to be cast. That's #1091.
+
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Path to Python
@@ -64,7 +71,6 @@ These are deferred until after future eval runs surface more data. Do not raise 
 
 Items are listed in priority order — complete from top to bottom. Explicit sequencing constraints are noted inline ("Sequenced after", "Depends on").
 
-- SCH-003/SCH-004: count-cast pattern broadens to 5 files, near-synonym attribute in yarnWorkspaces.ts ([issue #1072](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1072)) — taze run-17; #1012's fix only addressed 2 files and didn't generalize the underlying judgment; 2 of 5 files now show a "disguised" recurrence where the schema was retyped to `string` to match the cast instead of the cast being removed.
 - CDQ-007: unsanitized absolute filesystem paths regress in 6 of 13 taze files ([issue #1073](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1073)) — taze run-17; largest new finding by file count; `resolves.ts` already sanitizes correctly and is the reference pattern for the fix.
 - CDQ-007: `summary-manager.js` applies the path-sanitization fallback at only 4 of 7 sites ([issue #1068](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1068)) — run-28; #1035's fallback works where it is applied, but the agent applies it partially within one file. Same within-file consistency shape as #1067; consider fixing them together.
 - CDQ-006: `isRecording()` guard applied inconsistently within `summary-manager.js` ([issue #1067](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1067)) — run-28; only 3 of ~24 `setAttribute` calls are guarded, with no stated rationale; first CDQ-006 failure across runs 2–28.
@@ -73,7 +79,6 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - Blocking gate for Weaver-required attribute presence ([PRD #1024](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1024)) — COV-005 is never wired to real registry data in production and is advisory even when wired; a run can succeed while a required attribute is silently missing. Sequenced after PRD #1075's M4: M1 needs its ruling on which span carries `gen_ai.*`.
 - Backfill broken and missing journal entries, June 6 – July 7 2026 ([issue #1027](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1027)) — journal generation silently failed for weeks, leaving placeholder text in entries and summaries; manual regeneration using existing commit-story-v2 tooling.
 - PR summary undercounts attributes and omits SCH-003 type-mismatch defects ([issue #1036](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1036)) — run-26 found the PR summary only reflects `attributesCreated`, not total `setAttribute` calls, and has no mechanism to surface SCH-003-type defects; related to #948.
-- SCH-003: String()-wrapped numeric value shipped for int-declared attribute, undetected by validator ([issue #1037](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1037)) — run-26 found a type mismatch matching #948's stated backstop coverage table that didn't get flagged; needs investigation into whether the backstop's AST check has a gap or isn't wired into this code path.
 - The whole-file path doesn't Prettier-normalize agent output, so LINT and NDS-003 (non-instrumentation lines unchanged) commits depend on attempt luck ([issue #1093](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1093)) — This is the main volume ceiling on release-it. The reassembly paths already normalize.
 - SCH-002 (attribute keys match the registry) meaning check is too strict on identifier names and too loose on registered keys ([issue #1084](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1084)) — It blocked shell.js in release-it run-5. Sequence it before #1086, since both edit `sch002.ts`.
 - Spans end before their returned promise settles ([issue #1083](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1083)) — Seven committed sites in release-it run-5. The NDS-003-accepted capture form is the fix. Sequence it after #1093.
@@ -96,7 +101,7 @@ Items are listed in priority order — complete from top to bottom. Explicit seq
 - Validator feedback pushed the agent to worse code, with outer-catch flags and duplicate exception events ([issue #1089](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1089)) — release-it run-5.
 - CDQ-007 (attribute data quality) accuracy: false-positive advisories, missed nullable sites, unchecked credential values ([issue #1088](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1088)) — release-it run-5 had a 100% advisory contradiction rate.
 - Agent notes and companion files contradict the committed code ([issue #1087](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1087)) — 8 of 9 files in release-it run-5. This is the fix issue for watch issue #927.
-- Schema-type precision: the extension writer's string default and the namespace-token Jaccard check ([issue #1091](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1091)) — release-it run-5. Depends on #1072 (the coercion-order fix), and on #1086 and #1087, which edit the same files.
+- Schema-type precision: the extension writer's string default and the namespace-token Jaccard check ([issue #1091](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1091)) — release-it run-5. Depends on #1086 and #1087, which edit the same files.
 
 ## Long-term
 
