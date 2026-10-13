@@ -82,15 +82,26 @@ export function checkSyntax(filePath: string): CheckResult {
 
 // ─── lint (checkLint) ─────────────────────────────────────────────────────────
 
-type DiffOp = { kind: ' ' | '-' | '+'; text: string };
+export type DiffOp = { kind: ' ' | '-' | '+'; text: string };
+
+/**
+ * Edit-count cap for diffLineOps. The search keeps state proportional to the
+ * square of the edit count, so a whole-file reformat of a large file would
+ * otherwise need hundreds of megabytes. 2,000 edits bounds it to a few
+ * million integers, well beyond the 200-line diff the LINT message shows.
+ */
+const MAX_DIFF_EDITS = 2000;
 
 /**
  * Line-aligned edit script from `a` to `b` (Myers' O((N+M)D) algorithm).
  * Lines shared by both sides stay aligned even after one side gains or loses
  * a line, so an inserted or split line produces one hunk rather than offsetting
- * every later line.
+ * every later line. When the changed region needs more than `maxEdits` edits,
+ * the search stops and that region is returned as one block of removals followed
+ * by additions — still a correct edit script, just not a minimal one.
+ * Exported for tests.
  */
-function diffLineOps(a: string[], b: string[]): DiffOp[] {
+export function diffLineOps(a: string[], b: string[], maxEdits = MAX_DIFF_EDITS): DiffOp[] {
   // Trim the common prefix and suffix so the search covers only the changed middle.
   let prefix = 0;
   while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
@@ -109,7 +120,7 @@ function diffLineOps(a: string[], b: string[]): DiffOp[] {
   // trace[d] holds v[-d..d] as it stood before step d, for backtracking.
   const trace: Int32Array[] = [];
   let found = n === 0 && m === 0;
-  for (let d = 0; d <= offset && !found; d++) {
+  for (let d = 0; d <= Math.min(offset, maxEdits) && !found; d++) {
     trace.push(v.slice(offset - d, offset + d + 1));
     for (let k = -d; k <= d; k += 2) {
       let x = k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])
@@ -120,6 +131,17 @@ function diffLineOps(a: string[], b: string[]): DiffOp[] {
       v[offset + k] = x;
       if (x >= n && y >= m) { found = true; break; }
     }
+  }
+
+  const commonPrefix = a.slice(0, prefix).map(text => ({ kind: ' ' as const, text }));
+  const commonSuffix = a.slice(a.length - suffix).map(text => ({ kind: ' ' as const, text }));
+  if (!found) {
+    return [
+      ...commonPrefix,
+      ...midA.map(text => ({ kind: '-' as const, text })),
+      ...midB.map(text => ({ kind: '+' as const, text })),
+      ...commonSuffix,
+    ];
   }
 
   const middle: DiffOp[] = [];
@@ -141,11 +163,7 @@ function diffLineOps(a: string[], b: string[]): DiffOp[] {
   while (x > 0 && y > 0) { middle.push({ kind: ' ', text: midA[x - 1] }); x--; y--; }
   middle.reverse();
 
-  return [
-    ...a.slice(0, prefix).map(text => ({ kind: ' ' as const, text })),
-    ...middle,
-    ...a.slice(a.length - suffix).map(text => ({ kind: ' ' as const, text })),
-  ];
+  return [...commonPrefix, ...middle, ...commonSuffix];
 }
 
 /**

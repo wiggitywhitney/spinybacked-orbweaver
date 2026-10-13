@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkSyntax, checkLint, buildPrettierConstraint, formatCode } from '../../../src/languages/javascript/validation.ts';
+import { checkSyntax, checkLint, buildPrettierConstraint, formatCode, diffLineOps } from '../../../src/languages/javascript/validation.ts';
 
 // ─── checkSyntax ──────────────────────────────────────────────────────────────
 
@@ -179,6 +179,36 @@ describe('formatCode', () => {
   it('returns the source unchanged when it does not parse', async () => {
     const source = 'const = ;\n';
     expect(await formatCode(source, join(tempDir, 'broken.js'))).toBe(source);
+  });
+});
+
+describe('diffLineOps', () => {
+  const sides = (ops: Array<{ kind: string; text: string }>) => ({
+    before: ops.filter(o => o.kind !== '+').map(o => o.text),
+    after: ops.filter(o => o.kind !== '-').map(o => o.text),
+  });
+
+  it('aligns shared lines around an insertion', () => {
+    const ops = diffLineOps(['a', 'b', 'c'], ['a', 'x', 'b', 'c']);
+    expect(ops).toEqual([
+      { kind: ' ', text: 'a' },
+      { kind: '+', text: 'x' },
+      { kind: ' ', text: 'b' },
+      { kind: ' ', text: 'c' },
+    ]);
+  });
+
+  it('stops searching past the edit cap and still returns a complete, correct edit script', () => {
+    const before = ['keep-start', ...Array.from({ length: 50 }, (_, i) => `old${i}`), 'keep-end'];
+    const after = ['keep-start', ...Array.from({ length: 50 }, (_, i) => `new${i}`), 'keep-end'];
+
+    const ops = diffLineOps(before, after, 10);
+
+    expect(sides(ops)).toEqual({ before, after });
+    expect(ops[0]).toEqual({ kind: ' ', text: 'keep-start' });
+    expect(ops[ops.length - 1]).toEqual({ kind: ' ', text: 'keep-end' });
+    expect(ops.filter(o => o.kind === '-')).toHaveLength(50);
+    expect(ops.filter(o => o.kind === '+')).toHaveLength(50);
   });
 });
 
