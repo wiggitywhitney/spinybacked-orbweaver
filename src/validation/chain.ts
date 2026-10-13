@@ -45,7 +45,7 @@ export async function validateFile(input: ValidateFileInput): Promise<Validation
   }
 
   // 3. Lint checking (diff-based) — dispatched through provider
-  const lintResult = await provider.lintCheck(originalCode, instrumentedCode);
+  const lintResult = await provider.lintCheck(originalCode, instrumentedCode, input.configPath ?? filePath);
   tier1Results.push(lintResult);
   if (!lintResult.passed) {
     return buildResult(tier1Results, tier2Results);

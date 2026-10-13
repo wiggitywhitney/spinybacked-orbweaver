@@ -82,46 +82,144 @@ export function checkSyntax(filePath: string): CheckResult {
 
 // ─── lint (checkLint) ─────────────────────────────────────────────────────────
 
+export type DiffOp = { kind: ' ' | '-' | '+'; text: string };
+
+/**
+ * Edit-count cap for diffLineOps. The search keeps state proportional to the
+ * square of the edit count, so a whole-file reformat of a large file would
+ * otherwise need hundreds of megabytes. 2,000 edits bounds it to a few
+ * million integers, well beyond the 200-line diff the LINT message shows.
+ */
+const MAX_DIFF_EDITS = 2000;
+
+/**
+ * Line-aligned edit script from `a` to `b` (Myers' O((N+M)D) algorithm).
+ * Lines shared by both sides stay aligned even after one side gains or loses
+ * a line, so an inserted or split line produces one hunk rather than offsetting
+ * every later line. When the changed region needs more than `maxEdits` edits,
+ * the search stops and that region is returned as one block of removals followed
+ * by additions — still a correct edit script, just not a minimal one.
+ * Exported for tests.
+ */
+export function diffLineOps(a: string[], b: string[], maxEdits = MAX_DIFF_EDITS): DiffOp[] {
+  // Trim the common prefix and suffix so the search covers only the changed middle.
+  let prefix = 0;
+  while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
+  let suffix = 0;
+  while (
+    suffix < a.length - prefix && suffix < b.length - prefix &&
+    a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
+  ) suffix++;
+  const midA = a.slice(prefix, a.length - suffix);
+  const midB = b.slice(prefix, b.length - suffix);
+
+  const n = midA.length;
+  const m = midB.length;
+  const offset = n + m;
+  const v = new Int32Array(2 * offset + 2);
+  // trace[d] holds v[-d..d] as it stood before step d, for backtracking.
+  const trace: Int32Array[] = [];
+  let found = n === 0 && m === 0;
+  for (let d = 0; d <= Math.min(offset, maxEdits) && !found; d++) {
+    trace.push(v.slice(offset - d, offset + d + 1));
+    for (let k = -d; k <= d; k += 2) {
+      let x = k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])
+        ? v[offset + k + 1]
+        : v[offset + k - 1] + 1;
+      let y = x - k;
+      while (x < n && y < m && midA[x] === midB[y]) { x++; y++; }
+      v[offset + k] = x;
+      if (x >= n && y >= m) { found = true; break; }
+    }
+  }
+
+  const commonPrefix = a.slice(0, prefix).map(text => ({ kind: ' ' as const, text }));
+  const commonSuffix = a.slice(a.length - suffix).map(text => ({ kind: ' ' as const, text }));
+  if (!found) {
+    return [
+      ...commonPrefix,
+      ...midA.map(text => ({ kind: '-' as const, text })),
+      ...midB.map(text => ({ kind: '+' as const, text })),
+      ...commonSuffix,
+    ];
+  }
+
+  const middle: DiffOp[] = [];
+  let x = n;
+  let y = m;
+  for (let d = trace.length - 1; d > 0; d--) {
+    const prev = trace[d];
+    const at = (k: number): number => prev[k + d];
+    const k = x - y;
+    const prevK = k === -d || (k !== d && at(k - 1) < at(k + 1)) ? k + 1 : k - 1;
+    const prevX = at(prevK);
+    const prevY = prevX - prevK;
+    while (x > prevX && y > prevY) { middle.push({ kind: ' ', text: midA[x - 1] }); x--; y--; }
+    if (x === prevX) middle.push({ kind: '+', text: midB[y - 1] });
+    else middle.push({ kind: '-', text: midA[x - 1] });
+    x = prevX;
+    y = prevY;
+  }
+  while (x > 0 && y > 0) { middle.push({ kind: ' ', text: midA[x - 1] }); x--; y--; }
+  middle.reverse();
+
+  return [...commonPrefix, ...middle, ...commonSuffix];
+}
+
+/**
+ * Within each run of consecutive changes, pair the i-th removed line with the
+ * i-th added line. A long replacement then shows each line next to its
+ * reformatted version, and a truncated diff still shows the first pair.
+ */
+function interleaveChangeBlocks(ops: DiffOp[]): DiffOp[] {
+  const result: DiffOp[] = [];
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i].kind === ' ') { result.push(ops[i]); i++; continue; }
+    const removed: DiffOp[] = [];
+    const added: DiffOp[] = [];
+    while (i < ops.length && ops[i].kind !== ' ') {
+      (ops[i].kind === '-' ? removed : added).push(ops[i]);
+      i++;
+    }
+    for (let j = 0; j < Math.max(removed.length, added.length); j++) {
+      if (j < removed.length) result.push(removed[j]);
+      if (j < added.length) result.push(added[j]);
+    }
+  }
+  return result;
+}
+
 /**
  * Compute a compact context diff between two strings.
- * Compares lines positionally — best for small, targeted formatting changes
- * where line counts are the same or very similar (e.g., arrowParens, quotes).
+ * Lines are aligned before comparison, so a line Prettier splits in two shows
+ * as one hunk instead of offsetting every following line. Hunks are emitted in
+ * file order, so truncation never drops the first real difference.
  */
 function buildPrettierDiff(before: string, after: string): string {
   const CONTEXT = 2;
   const MAX_DIFF_LINES = 200;
-  const beforeLines = before.split('\n');
-  const afterLines = after.split('\n');
-  const maxLen = Math.max(beforeLines.length, afterLines.length);
-
-  const changed = new Set<number>();
-  for (let i = 0; i < maxLen; i++) {
-    if (beforeLines[i] !== afterLines[i]) changed.add(i);
-  }
-  if (changed.size === 0) return '';
+  const ops = interleaveChangeBlocks(diffLineOps(before.split('\n'), after.split('\n')));
 
   const include = new Set<number>();
-  for (const idx of changed) {
-    for (let c = Math.max(0, idx - CONTEXT); c <= Math.min(maxLen - 1, idx + CONTEXT); c++) {
+  for (let i = 0; i < ops.length; i++) {
+    if (ops[i].kind === ' ') continue;
+    for (let c = Math.max(0, i - CONTEXT); c <= Math.min(ops.length - 1, i + CONTEXT); c++) {
       include.add(c);
     }
   }
+  if (include.size === 0) return '';
 
   const output: string[] = [];
   let lastIdx = -2;
-  for (let i = 0; i < maxLen; i++) {
+  for (let i = 0; i < ops.length; i++) {
     if (!include.has(i)) continue;
     if (output.length >= MAX_DIFF_LINES) {
       output.push('... (diff truncated)');
       break;
     }
     if (lastIdx >= 0 && i > lastIdx + 1) output.push('...');
-    if (changed.has(i)) {
-      if (i < beforeLines.length) output.push(`-${beforeLines[i]}`);
-      if (i < afterLines.length) output.push(`+${afterLines[i]}`);
-    } else {
-      output.push(` ${beforeLines[i] ?? afterLines[i] ?? ''}`);
-    }
+    output.push(`${ops[i].kind}${ops[i].text}`);
     lastIdx = i;
   }
   return output.join('\n');
@@ -196,7 +294,8 @@ export async function checkLint(
         lineNumber: null,
         message:
           `LINT check failed: the original file was Prettier-compliant but the instrumented output is not.${configNote} ` +
-          `The agent introduced formatting violations.` +
+          `The agent introduced formatting violations. ` +
+          `LINT is blocking: this file cannot be committed until the output is Prettier-compliant.` +
           diffSection,
         tier: 1,
         blocking: true,
@@ -240,12 +339,14 @@ export async function checkLint(
  * @param configDir - Directory to search for Prettier config files
  * @returns Formatted source, or original source if formatting fails
  */
-export async function formatCode(source: string, configDir: string): Promise<string> {
+export async function formatCode(source: string, filePath: string): Promise<string> {
   try {
-    const config = await prettier.resolveConfig(configDir);
+    const config = await prettier.resolveConfig(filePath);
+    // No explicit parser: Prettier infers it from filePath, exactly as checkLint does,
+    // so formatted output is checked with the parser that produced it.
     return await prettier.format(source, {
       ...config,
-      parser: 'babel',
+      filepath: filePath,
     });
   } catch {
     return source;

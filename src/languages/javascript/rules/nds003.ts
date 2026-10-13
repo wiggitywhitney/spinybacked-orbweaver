@@ -279,6 +279,137 @@ function reconcileReturnCaptures(
 }
 
 /**
+ * Net bracket depth of a line: opening `(`, `[` and `{` minus their closers.
+ * Characters inside string and template literals are ignored.
+ */
+function bracketDepthDelta(line: string): number {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') quote = ch;
+    else if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+  }
+  return depth;
+}
+
+/**
+ * Canonical form of an expression for comparing a single-line form with a form
+ * the formatter split across lines: outside string literals, whitespace runs
+ * collapse to one space, spaces inside bracket boundaries are dropped, and
+ * trailing commas before a closer are dropped. String and template literals are
+ * kept exactly as written — the formatter never changes their contents — so any
+ * change inside a string survives.
+ */
+function canonicalizeExpressionLayout(expr: string): string {
+  // Swap each string literal for a placeholder that contains no whitespace,
+  // brackets or commas, normalize the layout, then restore the literals.
+  const literals: string[] = [];
+  const withPlaceholders = expr.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (literal) => {
+    literals.push(literal);
+    return `\u0000${literals.length - 1}\u0000`;
+  });
+  return withPlaceholders
+    .replace(/\s+/g, ' ')
+    .replace(/,\s*([)\]}])/g, '$1')
+    .replace(/([([{])\s+/g, '$1')
+    .replace(/\s+([)\]}])/g, '$1')
+    .trim()
+    .replace(/\u0000(\d+)\u0000/g, (_match, index: string) => literals[Number(index)]);
+}
+
+/**
+ * Reconcile return-value captures that the formatter split across lines.
+ *
+ * `const <var> = <expr>` is longer than `return <expr>`, so a return that fits the
+ * print width can need splitting once captured:
+ *   return await client.run(['a', 'b'], { cwd: root });   ← missingLine
+ * becomes
+ *   const result = await client.run(['a', 'b'], {        ← addedLine
+ *     cwd: root                                           ← addedLine
+ *   });                                                   ← filtered as structural
+ *   return result;                                        ← addedLine
+ *
+ * reconcileReturnCaptures only matches a capture written on one line. This joins
+ * the capture statement's lines from the raw instrumented source until its brackets
+ * balance, then compares the joined expression with the original return expression
+ * after erasing layout differences. Token changes (different arguments, callee or
+ * receiver) do not match and are still flagged.
+ */
+function reconcileSplitReturnCaptures(
+  missingLines: Array<{ line: string; originalLineNum: number }>,
+  addedLines: Array<{ line: string; instrumentedLineNum: number }>,
+  rawInstrumentedLines: string[],
+): void {
+  const MAX_CAPTURE_LINES = 50;
+  const missingToRemove = new Set<number>();
+  const addedToRemove = new Set<number>();
+
+  for (let mi = 0; mi < missingLines.length; mi++) {
+    const returnExpr = extractReturnExpr(missingLines[mi].line);
+    if (!returnExpr) continue;
+    // Object-literal returns are never reconciled — see reconcileReturnCaptures.
+    if (returnExpr.trimStart().startsWith('{')) continue;
+    // Only a complete single-line return can be compared against a joined capture.
+    if (bracketDepthDelta(returnExpr) !== 0) continue;
+    const target = canonicalizeExpressionLayout(returnExpr.replace(/;\s*$/, '').replace(/^await\s+/, ''));
+
+    for (let ai = 0; ai < addedLines.length; ai++) {
+      if (addedToRemove.has(ai)) continue;
+      const capture = extractCapture(addedLines[ai].line);
+      // A capture that balances on its own line is reconcileReturnCaptures' case.
+      if (!capture || bracketDepthDelta(capture.expr) <= 0) continue;
+
+      // Join raw lines from the capture line until the statement's brackets balance.
+      const startLine = addedLines[ai].instrumentedLineNum;
+      const parts = [capture.expr];
+      let depth = bracketDepthDelta(capture.expr);
+      let endLine = startLine;
+      while (depth > 0 && endLine < rawInstrumentedLines.length && endLine - startLine < MAX_CAPTURE_LINES) {
+        const next = rawInstrumentedLines[endLine].trim();
+        endLine++;
+        parts.push(next);
+        depth += bracketDepthDelta(next);
+      }
+      if (depth !== 0) continue;
+
+      const joined = canonicalizeExpressionLayout(
+        parts.join(' ').replace(/;\s*$/, '').replace(/^await\s+/, ''),
+      );
+      if (joined !== target) continue;
+
+      const expectedReturn = `return ${capture.varName}`;
+      const bareReturnIdx = addedLines.findIndex(
+        (a, idx) => a.instrumentedLineNum > endLine && !addedToRemove.has(idx) &&
+          a.line.replace(/;\s*$/, '') === expectedReturn,
+      );
+      if (bareReturnIdx < 0) continue;
+
+      missingToRemove.add(mi);
+      addedToRemove.add(bareReturnIdx);
+      for (let k = 0; k < addedLines.length; k++) {
+        const n = addedLines[k].instrumentedLineNum;
+        if (n >= startLine && n <= endLine) addedToRemove.add(k);
+      }
+      break;
+    }
+  }
+
+  for (const idx of [...missingToRemove].sort((a, b) => b - a)) {
+    missingLines.splice(idx, 1);
+  }
+  for (const idx of [...addedToRemove].sort((a, b) => b - a)) {
+    addedLines.splice(idx, 1);
+  }
+}
+
+/**
  * Reconcile multi-line method chain collapse.
  *
  * When the agent collapses a multi-line method chain onto a single line —
@@ -450,6 +581,11 @@ export function checkNonInstrumentationDiff(
   // This is a safe instrumentation-motivated transformation (like catch-variable binding).
   reconcileReturnCaptures(missingLines, addedLines);
 
+  // Reconcile return-value captures the formatter split across lines: the capture
+  // form is longer than the return it replaces, so it can exceed the print width
+  // where the return did not. Safety: tokens must match exactly; only layout differs.
+  reconcileSplitReturnCaptures(missingLines, addedLines, rawInstrumentedLines);
+
   // Reconcile multi-line method chain collapse: when the agent collapses a
   // developer-style method chain (return text\n  .toLowerCase()\n  .replace(...))
   // onto a single line, NDS-003 sees the original lines as missing and the
@@ -522,9 +658,10 @@ let pendingNds003Warning: string | null = null;
 
 /**
  * Normalize source code through Prettier for NDS-003 comparison.
- * Exported so callers (e.g., reassembly validation) can normalize both sides
- * of a comparison to avoid false NDS-003 failures caused by Prettier
- * reformatting long lines (> printWidth) when only one side is normalized.
+ * Exported so tests can apply the same normalization NDS-003 applies to both
+ * sides of its comparison. Its singleQuote and trailingComma overrides exist for
+ * comparison only, so its output is not suitable for writing to disk — code that
+ * writes formatted output uses the provider's formatCode instead.
  */
 export async function prettierNormalizeForComparison(code: string, filePath: string, singleQuoteHint?: boolean): Promise<string> {
   return prettierNormalize(code, filePath, singleQuoteHint);

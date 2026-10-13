@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { checkSyntax, checkLint, buildPrettierConstraint } from '../../../src/languages/javascript/validation.ts';
+import { checkSyntax, checkLint, buildPrettierConstraint, formatCode, diffLineOps } from '../../../src/languages/javascript/validation.ts';
 
 // ─── checkSyntax ──────────────────────────────────────────────────────────────
 
@@ -149,6 +149,69 @@ describe('checkSyntax', () => {
 
 // ─── checkLint ────────────────────────────────────────────────────────────────
 
+describe('formatCode', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'spiny-orb-format-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('applies the .prettierrc that governs the given file path', async () => {
+    writeFileSync(join(tempDir, '.prettierrc'), JSON.stringify({ singleQuote: true, semi: false }), 'utf-8');
+    const result = await formatCode('const greeting = "hello";\n', join(tempDir, 'greeting.js'));
+    expect(result).toBe("const greeting = 'hello'\n");
+  });
+
+  it('applies Prettier overrides that match the file name', async () => {
+    writeFileSync(
+      join(tempDir, '.prettierrc'),
+      JSON.stringify({ semi: true, overrides: [{ files: '*.test.js', options: { semi: false } }] }),
+      'utf-8',
+    );
+    expect(await formatCode('const a = 1\n', join(tempDir, 'app.js'))).toBe('const a = 1;\n');
+    expect(await formatCode('const a = 1;\n', join(tempDir, 'app.test.js'))).toBe('const a = 1\n');
+  });
+
+  it('returns the source unchanged when it does not parse', async () => {
+    const source = 'const = ;\n';
+    expect(await formatCode(source, join(tempDir, 'broken.js'))).toBe(source);
+  });
+});
+
+describe('diffLineOps', () => {
+  const sides = (ops: Array<{ kind: string; text: string }>) => ({
+    before: ops.filter(o => o.kind !== '+').map(o => o.text),
+    after: ops.filter(o => o.kind !== '-').map(o => o.text),
+  });
+
+  it('aligns shared lines around an insertion', () => {
+    const ops = diffLineOps(['a', 'b', 'c'], ['a', 'x', 'b', 'c']);
+    expect(ops).toEqual([
+      { kind: ' ', text: 'a' },
+      { kind: '+', text: 'x' },
+      { kind: ' ', text: 'b' },
+      { kind: ' ', text: 'c' },
+    ]);
+  });
+
+  it('stops searching past the edit cap and still returns a complete, correct edit script', () => {
+    const before = ['keep-start', ...Array.from({ length: 50 }, (_, i) => `old${i}`), 'keep-end'];
+    const after = ['keep-start', ...Array.from({ length: 50 }, (_, i) => `new${i}`), 'keep-end'];
+
+    const ops = diffLineOps(before, after, 10);
+
+    expect(sides(ops)).toEqual({ before, after });
+    expect(ops[0]).toEqual({ kind: ' ', text: 'keep-start' });
+    expect(ops[ops.length - 1]).toEqual({ kind: ' ', text: 'keep-end' });
+    expect(ops.filter(o => o.kind === '-')).toHaveLength(50);
+    expect(ops.filter(o => o.kind === '+')).toHaveLength(50);
+  });
+});
+
 describe('checkLint', () => {
   let tempDir: string;
 
@@ -259,6 +322,49 @@ describe('checkLint', () => {
       // Diff shows the agent's line (before) and Prettier's correction (after)
       expect(result.message).toContain('async (span) => {');
       expect(result.message).toContain('async span => {');
+    });
+
+    it('aligns lines so a split early line does not offset the rest of the diff', async () => {
+      const filePath = join(tempDir, 'split-early.js');
+      const longCall =
+        'const record = await store.fetchWidgetRecord(widgetId, { includeArchived: true, depth: 3 });';
+      const tail = Array.from({ length: 220 }, (_, i) => `const value${i} = ${i};`);
+      const original = ['const widgetId = 1;', ...tail, ''].join('\n');
+      const instrumented = ['const widgetId = 1;', longCall, ...tail, ''].join('\n');
+
+      const result = await checkLint(original, instrumented, filePath);
+
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain(`-${longCall}`);
+      expect(result.message).toContain('+const record = await store.fetchWidgetRecord(widgetId, {');
+      expect(result.message).not.toContain('(diff truncated)');
+      // No line may appear as both removed and added — that is an offset artifact.
+      const diffLines = result.message.split('\n');
+      const removed = new Set(diffLines.filter(l => l.startsWith('-')).map(l => l.slice(1)));
+      const added = diffLines.filter(l => l.startsWith('+')).map(l => l.slice(1));
+      expect(added.filter(l => removed.has(l))).toEqual([]);
+    });
+
+    it('keeps the first real difference when the diff is truncated', async () => {
+      const filePath = join(tempDir, 'many-diffs.js');
+      // Every line is non-compliant (missing spaces), so the diff exceeds the cap.
+      const original = 'const ok = 1;\n';
+      const instrumented = Array.from({ length: 300 }, (_, i) => `const v${i}=${i};`).join('\n') + '\n';
+
+      const result = await checkLint(original, instrumented, filePath);
+
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('-const v0=0;');
+      expect(result.message).toContain('+const v0 = 0;');
+      expect(result.message).toContain('(diff truncated)');
+    });
+
+    it('states that the file cannot commit until the output is Prettier-compliant', async () => {
+      const filePath = join(tempDir, 'blocking-wording.js');
+      const result = await checkLint('const x = 1;\n', 'const x = 1\nconst    y=2\n', filePath);
+
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('LINT is blocking: this file cannot be committed until the output is Prettier-compliant.');
     });
 
     it('includes .prettierrc path in failure message when non-default config is used', async () => {

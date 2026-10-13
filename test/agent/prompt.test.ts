@@ -740,6 +740,19 @@ describe('buildSystemPrompt', () => {
       expect(prompt).toContain('## Pre-submission verification');
     });
 
+    it('LINT: gate rules state LINT blocks the commit and the checklist has a LINT item', () => {
+      const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
+      const gateRules = fullPrompt.slice(
+        fullPrompt.indexOf('### Gate Rules'),
+        fullPrompt.indexOf('### Non-Destructiveness'),
+      );
+      const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));
+
+      expect(gateRules).toContain('a file whose output fails LINT is not committed');
+      expect(gateRules).toContain('Do NOT hand-reflow');
+      expect(checklist).toMatch(/- \*\*LINT\*\*:.*LINT is blocking\./);
+    });
+
     it('SCH item: includes question about schemaExtensions and anti-pattern for wrong registered key', () => {
       const fullPrompt = buildSystemPrompt(schema, undefined, jsProvider);
       const checklist = fullPrompt.slice(fullPrompt.indexOf('## Pre-submission verification'));

@@ -171,7 +171,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Impact** | Gate |
 | **Failure means** | Agent modified business logic |
 | **Classification** | Automatable |
-| **Mechanism** | Diff analysis: filter instrumentation-related additions (import lines, tracer acquisition, `startActiveSpan`/`startSpan` calls, `span.setAttribute`/`recordException`/`setStatus`/`end` calls, try/finally blocks wrapping span lifecycle); remaining diff lines must be empty. |
+| **Mechanism** | Diff analysis: filter instrumentation-related additions, and the remaining diff lines must be empty. The implemented check (`nds003.ts` and `nds003-ast-stripper.ts`) accepts these additions: OTel import lines; tracer acquisition; `startActiveSpan`/`startSpan` wrappers; `span.*` method calls; try/catch/finally blocks wrapping the span lifecycle and the rethrow of a caught error; guards whose body holds only span calls, which covers defined-value guards (`!== undefined`, `!= null`, `typeof … !== 'undefined'`, two of those joined with `&&`, dotted truthy checks), guards comparing an identifier or dotted path with a literal (`true`, `false`, `null`, `undefined`, a number or a string, using `===`, `!==`, `==` or `!=`), `if (span.isRecording())` guards and `if (err instanceof Error)` guards; and return-value captures (`return expr` rewritten as `const v = expr` plus `return v`, including an added `await` and a capture that Prettier splits across lines). The agent prompt limits captures to function calls and awaited expressions that feed directly into `setAttribute`, but the check does not enforce that limit; it refuses only a single-line object-literal return. Enforcement is tracked in issue #1100. Before comparing, the check strips OTel nodes from the instrumented code, normalizes object and array literal layout on both sides, and runs both sides through Prettier. As a result, a reflow that leaves every token unchanged counts as unchanged. The exception is a reformatted method chain (`a.b().c()` split across lines), which is not normalized. Release-it run-4 (2026-05-06) rejected reflows that run-5 accepted because run-4 predates all three normalizers: Prettier comparison (2026-05-07), OTel node stripping (2026-05-25) and literal-layout normalization (2026-05-27). |
 | **Limitation** | The try/finally filter must distinguish "try/finally wrapping span lifecycle" (acceptable instrumentation) from other try/finally changes (not acceptable). This distinction involves the same semantic judgment problem identified in NDS-005. A conservative filter that only allows try/finally blocks containing span.end() in the finally clause reduces false negatives but may still miss cases where the agent restructured existing error handling to accommodate the try/finally wrapper. |
 
 #### API-001: Only `@opentelemetry/api` Imports
@@ -272,7 +272,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Scope** | Per-instance |
 | **Impact** | Normal |
 | **Classification** | Automatable |
-| **Mechanism** | AST: find `async` functions, functions containing `await` expressions, and calls to known I/O libraries (fs, net, stream, database clients); verify each has a span. Edge case: CPU-bound computation that happens to be long-running is not detected by this heuristic. |
+| **Mechanism** | AST: find async functions and functions containing `await`, and verify each has a span. Synchronous functions are not flagged, even when they call I/O APIs. Async functions passed as call arguments, such as an async arrow passed to a retry helper, are not inspected. Edge case: CPU-bound computation that happens to be long-running is not detected by this heuristic. |
 
 #### COV-005: Domain-Specific Attributes Present
 
@@ -290,7 +290,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Scope** | Per-instance |
 | **Impact** | Important |
 | **Classification** | Automatable |
-| **Mechanism** | Check whether manual spans target operations covered by known auto-instrumentation libraries (express, pg, mysql, redis, http, grpc, etc.); flag manual spans on those operations. The OTel contrib repo publishes auto-instrumentation packages with well-defined scope. |
+| **Mechanism** | Check whether manual spans target operations covered by known auto-instrumentation libraries (express, pg, mysql, redis, http, undici for the global `fetch`, grpc, etc.); flag manual spans on those operations. The OTel contrib repo publishes auto-instrumentation packages with well-defined scope. |
 
 ---
 
@@ -327,7 +327,7 @@ The following rules are binary preconditions. If any gate fails, quality scoring
 | **Scope** | Per-instance |
 | **Impact** | Important |
 | **Classification** | Automatable |
-| **Mechanism** | AST: flag spans on functions whose body is a single return statement calling another function (possibly with argument transformation). |
+| **Mechanism** | AST: flag spans on functions whose body is a single return statement calling another function (possibly with argument transformation). The implemented check flags only delegations to a function declared in the same file. A one-line wrapper that delegates to a spanned function in another file is not detected. |
 
 #### RST-004: No Spans on Internal Implementation Details
 

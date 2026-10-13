@@ -4,7 +4,7 @@
 import { basename } from 'node:path';
 
 import { Project, Node } from 'ts-morph';
-import type { CallExpression } from 'ts-morph';
+import type { CallExpression, SourceFile } from 'ts-morph';
 import type { CheckResult } from '../../../validation/types.ts';
 import type { ValidationRule } from '../../types.ts';
 
@@ -16,6 +16,8 @@ import type { ValidationRule } from '../../types.ts';
 const AUTO_INSTRUMENTED_OPERATIONS: Array<{
   pattern: RegExp;
   library: string;
+  /** Match only when the file declares no binding of its own named `fetch`. */
+  requiresGlobalFetch?: true;
 }> = [
   // Express — @opentelemetry/instrumentation-express
   { pattern: /\bapp\.(get|post|put|patch|delete|use|all|options|head)\s*\(/, library: 'express' },
@@ -33,6 +35,13 @@ const AUTO_INSTRUMENTED_OPERATIONS: Array<{
   // Redis — @opentelemetry/instrumentation-redis
   { pattern: /\bredis\.(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop)\s*\(/, library: 'redis' },
 
+  // Global fetch — @opentelemetry/instrumentation-undici (Node's fetch is built on undici).
+  // Matches a bare or globalThis-qualified call that is not a member access, so methods
+  // named fetch (repo.fetch(), repo.globalThis.fetch()) are not mistaken for it. A bare
+  // call counts only when the file declares or imports no `fetch` of its own.
+  { pattern: /(?<![\w$.])globalThis\.fetch\s*\(/, library: 'undici' },
+  { pattern: /(?<![\w$.])fetch\s*\(/, library: 'undici', requiresGlobalFetch: true },
+
   // gRPC — @opentelemetry/instrumentation-grpc
   { pattern: /\b(grpc|client)\.(makeUnaryRequest|makeClientStreamRequest|makeServerStreamRequest|makeBidiStreamRequest)\s*\(/, library: 'grpc' },
 ];
@@ -42,7 +51,7 @@ const AUTO_INSTRUMENTED_OPERATIONS: Array<{
  *
  * Checks whether manual spans (startActiveSpan/startSpan) target operations
  * that are covered by known OTel auto-instrumentation libraries (express, pg,
- * mysql, redis, http, grpc). Manual spans on these operations create duplicate
+ * mysql, redis, http, undici, grpc). Manual spans on these operations create duplicate
  * traces and miss semantic convention attributes that auto-instrumentation provides.
  *
  * This is a blocking check — duplicate spans degrade trace quality.
@@ -59,6 +68,7 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
   const sourceFile = project.createSourceFile(basename(filePath), code);
 
   const flagged: Array<{ line: number; library: string; spanName: string }> = [];
+  const declaresFetch = declaresLocalFetch(sourceFile);
 
   // Find all span creation calls
   sourceFile.forEachDescendant((node) => {
@@ -75,6 +85,7 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
     if (!spanContent) return;
 
     for (const op of AUTO_INSTRUMENTED_OPERATIONS) {
+      if (op.requiresGlobalFetch && declaresFetch) continue;
       if (op.pattern.test(spanContent)) {
         // Per spec: manual spans wrapping a broader operation that includes an
         // auto-instrumented call as a sub-operation are valid business spans.
@@ -116,6 +127,33 @@ export function checkAutoInstrumentationPreference(code: string, filePath: strin
     tier: 2 as const,
     blocking: true,
   }));
+}
+
+/**
+ * Whether the file binds its own `fetch` — a function, class, variable, parameter,
+ * destructured name or import — so a bare `fetch(` call does not refer to the global.
+ */
+function declaresLocalFetch(sourceFile: SourceFile): boolean {
+  let found = false;
+  sourceFile.forEachDescendant((node, traversal) => {
+    if (!Node.isIdentifier(node) || node.getText() !== 'fetch') return;
+    const parent = node.getParent();
+    const isBindingName =
+      ((Node.isVariableDeclaration(parent) ||
+        Node.isFunctionDeclaration(parent) ||
+        Node.isClassDeclaration(parent) ||
+        Node.isParameterDeclaration(parent) ||
+        Node.isBindingElement(parent) ||
+        Node.isImportSpecifier(parent) ||
+        Node.isNamespaceImport(parent)) &&
+        parent.getNameNode() === node) ||
+      (Node.isImportClause(parent) && parent.getDefaultImport() === node);
+    if (isBindingName) {
+      found = true;
+      traversal.stop();
+    }
+  });
+  return found;
 }
 
 /**
