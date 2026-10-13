@@ -40,6 +40,8 @@ Run a commit-story-v2 eval after any change to `src/agent/prompt.ts`, NDS-003 re
 - `commit_story.git.is_merge` is emitted as a boolean;
 - no boolean literal ships on a `string`-declared key, such as `summary_saved`.
 
+In taze's next run, confirm that `taze.write.changes_count`, `taze.io.catalogs_count`, `taze.package.deps_count` and `taze.catalog.count` are emitted as integers with no `String()`.
+
 Count keys whose names don't end in `_count` (for example taze's `packages_loaded`) are still expected to be cast. That's #1091.
 
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.

@@ -98,4 +98,20 @@ describe('SCH-003 sees agent-declared extension types', () => {
     expect(failures[0].blocking).toBe(true);
     expect(failures[0].message).toContain('my_service.journal.reflections_count');
   });
+
+  it('flags a boolean literal on a key the agent declared as string', () => {
+    const config = {
+      resolvedSchema: { groups: [] },
+      declaredSpanExtensions: ['id: my_service.journal.summary_saved\ntype: string\nbrief: Whether the summary was saved'],
+    } as unknown as ValidationConfig;
+    const results = sch003Rule.check({
+      instrumentedCode: spanCode('span.setAttribute("my_service.journal.summary_saved", true);'),
+      originalCode: '',
+      filePath: 'summary-manager.js',
+      config,
+    } as Parameters<typeof sch003Rule.check>[0]);
+    const failures = (results as CheckResult[]).filter(r => !r.passed);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].blocking).toBe(true);
+  });
 });
