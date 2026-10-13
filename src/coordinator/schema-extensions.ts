@@ -114,48 +114,10 @@ export async function tryExtractNamespacePrefix(registryDir: string): Promise<st
   return manifest.name;
 }
 
-/**
- * Parse a schema extension YAML string into a structured attribute object.
- * Each extension string is expected to be a YAML list item (with leading "- ").
- *
- * @param extensionYaml - YAML string for a single attribute definition
- * @returns Parsed attribute object, or null if parsing fails
- */
-export function parseExtension(extensionYaml: string): Record<string, unknown> | null {
-  try {
-    // The extension is a YAML list item — parse it as a list
-    const parsed = parse(extensionYaml) as unknown;
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed[0] as Record<string, unknown>;
-    }
-    // If it parsed as an object directly, use that
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-    // Bare string ID from LLM output (e.g., "myapp.context.collect" or "span.myapp.process_order")
-    // Wrap in a minimal object with the ID and sensible defaults.
-    if (typeof parsed === 'string' && parsed.includes('.')) {
-      if (parsed.startsWith('span.')) {
-        return {
-          id: parsed,
-          type: 'span',
-          stability: 'development',
-          brief: `Agent-discovered span: ${parsed.slice('span.'.length)}`,
-          span_kind: 'internal',
-        };
-      }
-      return {
-        id: parsed,
-        type: 'string',
-        stability: 'development',
-        brief: `Agent-discovered attribute: ${parsed}`,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+// parseExtension lives in the shared extension-types module so SCH-003 can use it
+// without importing coordinator code; re-exported here for existing callers.
+export { parseExtension } from '../validation/tier2/extension-types.ts';
+import { parseExtension } from '../validation/tier2/extension-types.ts';
 
 /**
  * Write agent-requested schema extensions to agent-extensions.yaml.
@@ -234,22 +196,7 @@ export async function writeSchemaExtensions(
       continue;
     }
 
-    // Correct count attribute types: *_count and *.count should be int, not string.
-    // The first file may declare these as string, propagating the wrong type to
-    // all subsequent files via the schema accumulator.
-    if (!isSpan && (id.endsWith('_count') || id.endsWith('.count')) && attr.type === 'string') {
-      attr.type = 'int';
-    }
-
-    // Correct boolean attribute types: names containing is_, has_, should_, or
-    // ending with .force indicate boolean semantics. The schema accumulator
-    // defaults these to string, but they should be boolean.
-    if (!isSpan && attr.type === 'string') {
-      const lastSegment = id.split('.').pop() ?? '';
-      if (/^(is|has|should)_/.test(lastSegment) || lastSegment === 'force') {
-        attr.type = 'boolean';
-      }
-    }
+    // Count and boolean types are already corrected by name in parseExtension().
 
     if (isSpan) {
       validSpans.push(attr);

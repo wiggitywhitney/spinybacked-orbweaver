@@ -27,6 +27,7 @@ import {
   parseExtension,
 } from '../coordinator/schema-extensions.ts';
 import { parseResolvedRegistry, getAllAttributeNames } from '../validation/tier2/registry-types.ts';
+import { appendDeclaredExtensionTypes } from '../validation/tier2/extension-types.ts';
 import type { RegistryEntry } from '../languages/javascript/rules/semantic-dedup.ts';
 
 const require = createRequire(import.meta.url);
@@ -1187,49 +1188,9 @@ function appendAttributeExtensionsToSchema(
   };
 }
 
-/**
- * Append type information from agent-declared schemaExtensions to the resolved schema
- * so fixAttributeTypeCoercions() can coerce values for string-typed attributes that
- * the agent declared but runPerAttemptAutoRegistration intentionally skipped.
- *
- * Each schemaExtension is a YAML string with fields like id, type, brief. Only
- * attribute extensions (type !== 'span') with a string primitive type are included.
- * The id field maps to the attribute name used in setAttribute() calls.
- */
-export function appendDeclaredExtensionTypes(
-  schema: object,
-  schemaExtensions: string[],
-): object {
-  if (schemaExtensions.length === 0) return schema;
-
-  const typedAttrs: Array<{ name: string; type: string }> = [];
-  for (const ext of schemaExtensions) {
-    const parsed = parseExtension(ext);
-    if (!parsed) continue;
-    const id = parsed['id'];
-    const type = parsed['type'];
-    if (typeof id !== 'string' || typeof type !== 'string') continue;
-    if (type === 'span') continue;
-    typedAttrs.push({ name: id, type });
-  }
-
-  if (typedAttrs.length === 0) return schema;
-
-  const existing = (schema as Record<string, unknown>).groups;
-  const existingGroups = Array.isArray(existing) ? existing : [];
-  return {
-    ...schema,
-    groups: [
-      ...existingGroups,
-      {
-        id: 'spiny_orb_declared_extension_types',
-        type: 'attribute_group',
-        brief: 'Type info from agent-declared schema extensions for SCH-003 auto-fix',
-        attributes: typedAttrs,
-      },
-    ],
-  };
-}
+// appendDeclaredExtensionTypes lives in the shared extension-types module (SCH-003
+// uses it too); re-exported here for existing callers.
+export { appendDeclaredExtensionTypes } from '../validation/tier2/extension-types.ts';
 
 async function functionLevelFallback(
   filePath: string,
