@@ -249,6 +249,46 @@ describe('checkAutoInstrumentationPreference (COV-006)', () => {
     });
   });
 
+  describe('global fetch (undici)', () => {
+    const spanAround = (bodyLines: string[]): string => [
+      'const { trace } = require("@opentelemetry/api");',
+      'const tracer = trace.getTracer("svc");',
+      'async function loadWidget(url) {',
+      '  return tracer.startActiveSpan("widget.load", async (span) => {',
+      '    try {',
+      ...bodyLines.map(l => `      ${l}`),
+      '    } finally {',
+      '      span.end();',
+      '    }',
+      '  });',
+      '}',
+    ].join('\n');
+
+    it('flags a manual span whose only work is a global fetch call', () => {
+      const results = checkAutoInstrumentationPreference(spanAround(['return await fetch(url);']), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(false);
+      expect(results[0].message).toContain('undici');
+    });
+
+    it('passes when the span covers domain work around a fetch call', () => {
+      const results = checkAutoInstrumentationPreference(spanAround([
+        'span.setAttribute("widget.url", url);',
+        'const response = await fetch(url, { headers: buildHeaders() });',
+        'const widget = parseWidget(await response.json());',
+        'return widget;',
+      ]), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+
+    it('does not treat a method named fetch as global fetch', () => {
+      const results = checkAutoInstrumentationPreference(spanAround(['return await repo.fetch(url);']), filePath);
+      expect(results).toHaveLength(1);
+      expect(results[0].passed).toBe(true);
+    });
+  });
+
   describe('startSpan content walk upper bound', () => {
     it('does not walk entire function body when span.end() is missing', () => {
       // Without upper bound, getSpanContent walks all remaining statements,

@@ -33,6 +33,11 @@ const AUTO_INSTRUMENTED_OPERATIONS: Array<{
   // Redis — @opentelemetry/instrumentation-redis
   { pattern: /\bredis\.(get|set|del|hget|hset|hdel|lpush|rpush|lpop|rpop)\s*\(/, library: 'redis' },
 
+  // Global fetch — @opentelemetry/instrumentation-undici (Node's fetch is built on undici).
+  // Matches a bare or globalThis-qualified call only, so methods named fetch
+  // (e.g. repo.fetch()) are not mistaken for it.
+  { pattern: /(?:(?<![\w$.])|\bglobalThis\.)fetch\s*\(/, library: 'undici' },
+
   // gRPC — @opentelemetry/instrumentation-grpc
   { pattern: /\b(grpc|client)\.(makeUnaryRequest|makeClientStreamRequest|makeServerStreamRequest|makeBidiStreamRequest)\s*\(/, library: 'grpc' },
 ];
@@ -42,7 +47,7 @@ const AUTO_INSTRUMENTED_OPERATIONS: Array<{
  *
  * Checks whether manual spans (startActiveSpan/startSpan) target operations
  * that are covered by known OTel auto-instrumentation libraries (express, pg,
- * mysql, redis, http, grpc). Manual spans on these operations create duplicate
+ * mysql, redis, http, undici, grpc). Manual spans on these operations create duplicate
  * traces and miss semantic convention attributes that auto-instrumentation provides.
  *
  * This is a blocking check — duplicate spans degrade trace quality.
