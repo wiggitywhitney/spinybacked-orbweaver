@@ -10,6 +10,7 @@ import type { CheckResult } from '../../../validation/types.ts';
 import { parseResolvedRegistry, getAttributeDefinitions, isEnumType } from '../../../validation/tier2/registry-types.ts';
 import type { ValidationRule } from '../../types.ts';
 import type { ResolvedRegistryAttribute } from '../../../validation/tier2/registry-types.ts';
+import { appendDeclaredExtensionTypes } from '../../../validation/tier2/extension-types.ts';
 
 interface TypeViolation {
   key: string;
@@ -475,10 +476,16 @@ export const sch003Rule: ValidationRule = {
         blocking: false,
       }];
     }
+    // Merge the types of agent-declared extensions into the schema. The base schema
+    // does not contain them, so without this an agent-written String(x.length) on a
+    // key the agent declared as a count passes unflagged.
+    const schema = input.config.declaredSpanExtensions?.length
+      ? appendDeclaredExtensionTypes(input.config.resolvedSchema, input.config.declaredSpanExtensions)
+      : input.config.resolvedSchema;
     return checkAttributeValuesConformToTypes(
       input.instrumentedCode,
       input.filePath,
-      input.config.resolvedSchema,
+      schema,
     );
   },
 };
