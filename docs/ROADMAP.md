@@ -44,6 +44,18 @@ In taze's next run, confirm that `taze.write.changes_count`, `taze.io.catalogs_c
 
 Count keys whose names don't end in `_count` (for example taze's `packages_loaded`) are still expected to be cast. That's #1091.
 
+**Eval requested: Prettier-normalized output and NDS-003 reconciler fixes** (PR #1102, issues #1093 and #1082): when the original file is Prettier-compliant, whole-file output is now formatted with the project's Prettier config. The NDS-003 reconcilers also handle more Prettier-split code. In commit-story-v2's next run and release-it's next run, confirm:
+- no file fails LINT because span wrapping pushed a line past Prettier's print width;
+- no file fails NDS-003 on a Prettier-split `const result = await …` capture, or on a literal-comparison attribute guard such as `if (x !== false)`;
+- function-level fallback no longer reformats untouched lines in files that are not Prettier-compliant;
+- failed-file verbose output shows each attempt's validator messages;
+- release-it's `GitBase.js`, `Git.js` and `npm.js`, which failed in run-5, now commit.
+
+**Eval requested: LLM library mapping and generated Traceloop activation** ([PRD #1075](https://github.com/wiggitywhitney/spinybacked-orbweaver/issues/1075) M5): the auto-instrumentation tables in both language prompts changed. MCP now maps only client imports (`@modelcontextprotocol/sdk/client/*`) to `McpInstrumentation`. LangChain also matches `langchain/*` subpaths. `@google/genai` maps to `@traceloop/instrumentation-google-generativeai`. ChromaDB is no longer recommended. The generated SDK setup also changed: each `@traceloop/*` library is now a named `const` with `traceContent` bridged from `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` and an explicit `manuallyInstrument` call, on both the recognized-`NodeSDK` path and the fallback file. In commit-story-v2's next run, confirm:
+- `librariesNeeded` lists `@traceloop/instrumentation-langchain` for the LangChain files and never lists `MCPInstrumentation` or `@traceloop/instrumentation-mcp` for `src/mcp/server.js`, which imports only the MCP server SDK;
+- if the run updates an SDK init file or writes `spiny-orb-instrumentations.js`, each `@traceloop/*` entry has its `const` and `manuallyInstrument` lines, and the run's warnings name any `@traceloop/*` entry spiny-orb left inline or left out;
+- span counts and COV-002 (outbound calls must have spans) results on the LangChain files match run-28, so the mapping change did not push the agent toward manual spans on library-covered calls.
+
 Before opening any PRD that adds, removes, or modifies validation rules or reconcilers: read `docs/rules-reference.md` in full and scan existing reconcilers for conflicts or redundancy. This coherence check catches patch accumulation — individual fixes that look contained in isolation can create an incoherent rule set over time.
 
 ## Path to Python

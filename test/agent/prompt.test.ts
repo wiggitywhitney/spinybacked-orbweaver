@@ -350,8 +350,16 @@ describe('buildSystemPrompt', () => {
 
     // Vector Databases
     expect(prompt).toContain('@traceloop/instrumentation-pinecone');
-    expect(prompt).toContain('@traceloop/instrumentation-chromadb');
     expect(prompt).toContain('@traceloop/instrumentation-qdrant');
+
+    // Google Gen AI SDK
+    expect(prompt).toContain('@traceloop/instrumentation-google-generativeai');
+
+    // ChromaDB's package wraps nothing, so it is not recommended
+    expect(prompt).not.toContain('chromadb');
+    expect(prompt).not.toContain('ChromaDBInstrumentation');
+    // The MCP package exports McpInstrumentation, not MCPInstrumentation
+    expect(prompt).not.toContain('MCPInstrumentation');
   });
 
   it('pairs each framework import with its instrumentation package', () => {
@@ -366,12 +374,12 @@ describe('buildSystemPrompt', () => {
       ['@google-cloud/vertexai', '@traceloop/instrumentation-vertexai', 'VertexAIInstrumentation'],
       ['cohere-ai', '@traceloop/instrumentation-cohere', 'CohereInstrumentation'],
       ['together-ai', '@traceloop/instrumentation-together', 'TogetherInstrumentation'],
-      ['langchain / @langchain/*', '@traceloop/instrumentation-langchain', 'LangChainInstrumentation'],
+      ['langchain, langchain/*, @langchain/*', '@traceloop/instrumentation-langchain', 'LangChainInstrumentation'],
       ['llamaindex', '@traceloop/instrumentation-llamaindex', 'LlamaIndexInstrumentation'],
-      ['@modelcontextprotocol/sdk', '@traceloop/instrumentation-mcp', 'MCPInstrumentation'],
+      ['@modelcontextprotocol/sdk/client/*', '@traceloop/instrumentation-mcp', 'McpInstrumentation'],
       ['@pinecone-database/pinecone', '@traceloop/instrumentation-pinecone', 'PineconeInstrumentation'],
-      ['chromadb', '@traceloop/instrumentation-chromadb', 'ChromaDBInstrumentation'],
       ['@qdrant/js-client-rest', '@traceloop/instrumentation-qdrant', 'QdrantInstrumentation'],
+      ['@google/genai', '@traceloop/instrumentation-google-generativeai', 'GenAIInstrumentation'],
     ];
 
     for (const [framework, instrumentationPkg, importName] of expectedMappings) {

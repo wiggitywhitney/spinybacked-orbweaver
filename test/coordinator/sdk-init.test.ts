@@ -1,12 +1,16 @@
 // ABOUTME: Unit tests for the SDK init file writing module.
-// ABOUTME: Covers NodeSDK pattern detection, instrumentation appending, import insertion, and fallback file writing.
+// ABOUTME: Covers NodeSDK pattern detection, instrumentation appending, import insertion, fallback file writing, and @traceloop/* activation code.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFile, readFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { LibraryRequirement } from '../../src/agent/schema.ts';
 import { updateSdkInitFile } from '../../src/coordinator/sdk-init.ts';
+
+const execFileAsync = promisify(execFile);
 
 let testDir: string;
 
@@ -294,7 +298,7 @@ console.log('setup');
     });
   });
 
-  describe('fallback Traceloop activation comment', () => {
+  describe('Traceloop activation', () => {
     const NO_NODESDK_ESM = `
 import { startTelemetry } from './telemetry';
 startTelemetry();
@@ -303,84 +307,397 @@ startTelemetry();
 const { startTelemetry } = require('./telemetry');
 startTelemetry();
 `;
+    const NODESDK_ESM = `
+import { NodeSDK } from '@opentelemetry/sdk-node';
 
-    /** Generic @traceloop/* block; `scope` is 'package' or 'other package'. */
-    function generic(scope: string, load: (spec: string) => string): string {
-      return [
-        `// If any ${scope} below is a @traceloop/* library, importing this array always activates it.`,
-        '// To gate it behind a flag instead, copy the array into your own setup file without its',
-        '// import and entry, then activate it conditionally:',
-        '//',
-        "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
-        `//     const { SomeInstrumentation } = ${load('@traceloop/...')};`,
-        '//     new SomeInstrumentation().manuallyInstrument();',
-        '//   }',
-      ].join('\n');
-    }
-    /** LangChain block, passing the callback manager module to manuallyInstrument. */
-    function langchainBlock(load: (spec: string) => string): string {
-      return [
-        '// @traceloop/instrumentation-langchain is always active when you import this array.',
-        '// To gate it behind a flag instead, copy the array into your own setup file without its',
-        '// import and `new LangChainInstrumentation()`, then activate it conditionally, passing',
-        "// LangChain's callback manager module:",
-        '//',
-        "//   if (process.env.YOUR_TRACELOOP_FLAG === 'true') {",
-        `//     const { LangChainInstrumentation } = ${load('@traceloop/instrumentation-langchain')};`,
-        `//     const callbackManagerModule = ${load('@langchain/core/callbacks/manager')};`,
-        '//     new LangChainInstrumentation().manuallyInstrument({ callbackManagerModule });',
-        '//   }',
-      ].join('\n');
-    }
-    const esmLoad = (spec: string): string => `await import('${spec}')`;
-    const cjsLoad = (spec: string): string => `require('${spec}')`;
+const sdk = new NodeSDK({
+  instrumentations: [],
+});
+
+sdk.start();
+`;
+    const NODESDK_CJS = `
+const { NodeSDK } = require('@opentelemetry/sdk-node');
+
+const sdk = new NodeSDK({
+  instrumentations: [],
+});
+
+sdk.start();
+`;
+
+    const TRACE_CONTENT = "{ traceContent: process.env.OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT === 'true' }";
+
+    const BRIDGE_COMMENT = [
+      '// Each @traceloop/* constructor below receives traceContent from',
+      '// OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT. Traceloop does not read that variable',
+      "// itself; this code bridges it. Set it to 'true' to capture prompt and completion content.",
+    ].join('\n');
+
+    const FALLBACK_GATE_COMMENT = [
+      '// Each @traceloop/* instance below is always active when you import this array.',
+      '// To gate one behind a flag instead, copy the array into your own setup file without that',
+      "// package's imports, const, manuallyInstrument call and entry. Then add those lines back",
+      "// inside a conditional, such as if (process.env.YOUR_TRACELOOP_FLAG === 'true') { ... }.",
+    ].join('\n');
+
+    const NODESDK_GATE_COMMENT = [
+      '// Each @traceloop/* instance below is always active.',
+      "// To gate one behind a flag instead, move that package's const and manuallyInstrument call",
+      "// inside a conditional, such as if (process.env.YOUR_TRACELOOP_FLAG === 'true') { ... },",
+      '// and add its entry to the instrumentations array only when the flag is set.',
+    ].join('\n');
 
     const REGENERATED_NOTE = [
       '// spiny-orb overwrites this file each time it writes this fallback,',
       '// so make your changes in your own telemetry setup file, not here.',
     ].join('\n');
 
-    const langchain = makeLibrary('@traceloop/instrumentation-langchain', 'LangChainInstrumentation');
-    const openai = makeLibrary('@traceloop/instrumentation-openai', 'OpenAIInstrumentation');
-    const http = makeLibrary('@opentelemetry/instrumentation-http', 'HttpInstrumentation');
-
-    async function fallbackFor(source: string, libraries: LibraryRequirement[]): Promise<string> {
-      const sdkFile = await createSdkInitFile(source);
-      const result = await updateSdkInitFile(sdkFile, libraries);
-      expect(result.fallbackWritten).toBe(true);
-      return readFile(result.fallbackPath!, 'utf-8');
+    /**
+     * Activation shape recorded for each @traceloop/* package by PRD #1075's M2
+     * installed-package check: class name, the module that wraps the SDK, and the
+     * argument manuallyInstrument receives.
+     */
+    interface RecordedActivation {
+      pkg: string;
+      cls: string;
+      instance: string;
+      esmImports: string[];
+      /** Statements that must run before the const in ESM (createRequire loads). */
+      esmStatements: string[];
+      cjsImports: string[];
+      arg: string;
     }
 
-    for (const [format, source, load] of [
-      ['ESM', NO_NODESDK_ESM, esmLoad],
-      ['CommonJS', NO_NODESDK_CJS, cjsLoad],
-    ] as const) {
-      it(`shows LangChain activation with callbackManagerModule in the ${format} fallback`, async () => {
-        const content = await fallbackFor(source, [langchain]);
+    function namespace(pkg: string, cls: string, instance: string, sdk: string, binding: string): RecordedActivation {
+      return {
+        pkg, cls, instance,
+        esmImports: [`import * as ${binding} from '${sdk}';`],
+        esmStatements: [],
+        cjsImports: [`const ${binding} = require('${sdk}');`],
+        arg: binding,
+      };
+    }
+    function defaultExport(pkg: string, cls: string, instance: string, sdk: string, binding: string): RecordedActivation {
+      return {
+        pkg, cls, instance,
+        esmImports: [`import ${binding} from '${sdk}';`],
+        esmStatements: [],
+        cjsImports: [`const ${binding} = require('${sdk}').default;`],
+        arg: binding,
+      };
+    }
 
-        expect(content).toContain(langchainBlock(load));
-        expect(content).not.toContain('manuallyInstrument()');
-      });
+    const RECORDED: RecordedActivation[] = [
+      namespace('@traceloop/instrumentation-anthropic', 'AnthropicInstrumentation', 'anthropicInstrumentation', '@anthropic-ai/sdk', 'anthropicModule'),
+      defaultExport('@traceloop/instrumentation-openai', 'OpenAIInstrumentation', 'openAIInstrumentation', 'openai', 'OpenAI'),
+      namespace('@traceloop/instrumentation-bedrock', 'BedrockInstrumentation', 'bedrockInstrumentation', '@aws-sdk/client-bedrock-runtime', 'bedrockModule'),
+      namespace('@traceloop/instrumentation-vertexai', 'VertexAIInstrumentation', 'vertexAIInstrumentation', '@google-cloud/vertexai', 'vertexAIModule'),
+      namespace('@traceloop/instrumentation-cohere', 'CohereInstrumentation', 'cohereInstrumentation', 'cohere-ai', 'cohereModule'),
+      defaultExport('@traceloop/instrumentation-together', 'TogetherInstrumentation', 'togetherInstrumentation', 'together-ai', 'Together'),
+      {
+        ...namespace('@traceloop/instrumentation-langchain', 'LangChainInstrumentation', 'langChainInstrumentation', '@langchain/core/callbacks/manager', 'callbackManagerModule'),
+        arg: '{ callbackManagerModule }',
+      },
+      namespace('@traceloop/instrumentation-llamaindex', 'LlamaIndexInstrumentation', 'llamaIndexInstrumentation', 'llamaindex', 'llamaindexModule'),
+      {
+        pkg: '@traceloop/instrumentation-mcp',
+        cls: 'McpInstrumentation',
+        instance: 'mcpInstrumentation',
+        esmImports: ["import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';"],
+        esmStatements: [],
+        cjsImports: ["const { Client: McpClient } = require('@modelcontextprotocol/sdk/client/index.js');"],
+        arg: '{ Client: McpClient }',
+      },
+      namespace('@traceloop/instrumentation-pinecone', 'PineconeInstrumentation', 'pineconeInstrumentation', '@pinecone-database/pinecone', 'pineconeModule'),
+      namespace('@traceloop/instrumentation-qdrant', 'QdrantInstrumentation', 'qdrantInstrumentation', '@qdrant/js-client-rest', 'qdrantModule'),
+      {
+        pkg: '@traceloop/instrumentation-google-generativeai',
+        cls: 'GenAIInstrumentation',
+        instance: 'genAIInstrumentation',
+        esmImports: ["import { createRequire } from 'node:module';"],
+        esmStatements: ["const googleGenAIModule = createRequire(import.meta.url)('@google/genai');"],
+        cjsImports: ["const googleGenAIModule = require('@google/genai');"],
+        arg: 'googleGenAIModule',
+      },
+    ];
 
-      it(`shows the generic always-active and copy-without-import-and-entry advice when LangChain is not needed (${format})`, async () => {
-        const content = await fallbackFor(source, [http, openai]);
+    const http = makeLibrary('@opentelemetry/instrumentation-http', 'HttpInstrumentation');
+    const asLibrary = (r: RecordedActivation): LibraryRequirement => makeLibrary(r.pkg, r.cls);
 
-        expect(content).toContain(generic('package', load));
-        expect(content).not.toContain('callbackManagerModule');
-      });
+    /** Contents of the instrumentations array literal (fallback export or NodeSDK option). */
+    function arrayBody(content: string): string {
+      const match = content.match(/instrumentations(?:\s*=|:)\s*\[([\s\S]*?)\]/);
+      expect(match, 'instrumentations array not found').not.toBeNull();
+      return match![1];
+    }
 
-      it(`shows both the LangChain block and the generic block when another @traceloop/* package is needed (${format})`, async () => {
-        const content = await fallbackFor(source, [langchain, openai]);
+    type Path = 'fallback' | 'NodeSDK';
+    type Format = 'ESM' | 'CommonJS';
 
-        expect(content).toContain(`${langchainBlock(load)}\n//\n${generic('other package', load)}`);
-      });
+    function sourceFor(path: Path, format: Format): string {
+      if (path === 'fallback') return format === 'ESM' ? NO_NODESDK_ESM : NO_NODESDK_CJS;
+      return format === 'ESM' ? NODESDK_ESM : NODESDK_CJS;
+    }
 
-      it(`notes in the header that the file is regenerated (${format})`, async () => {
-        const content = await fallbackFor(source, [http]);
+    /** Run updateSdkInitFile and return the generated code for the path under test. */
+    async function generate(
+      path: Path,
+      format: Format,
+      libraries: LibraryRequirement[],
+    ): Promise<{ content: string; warning?: string }> {
+      await writeFile(
+        join(testDir, 'package.json'),
+        JSON.stringify(format === 'ESM' ? { type: 'module' } : { type: 'commonjs' }),
+        'utf-8',
+      );
+      const sdkFile = await createSdkInitFile(sourceFor(path, format));
+      const result = await updateSdkInitFile(sdkFile, libraries, testDir);
+      if (path === 'fallback') {
+        expect(result.fallbackWritten).toBe(true);
+        return { content: await readFile(result.fallbackPath!, 'utf-8'), warning: result.warning };
+      }
+      expect(result.fallbackWritten).toBe(false);
+      return { content: await readFile(sdkFile, 'utf-8'), warning: result.warning };
+    }
+
+    const PATHS: Path[] = ['fallback', 'NodeSDK'];
+    const FORMATS: Format[] = ['ESM', 'CommonJS'];
+
+    for (const path of PATHS) {
+      for (const format of FORMATS) {
+        describe(`${path} path, ${format}`, () => {
+          for (const recorded of RECORDED) {
+            it(`emits the recorded import, const and manuallyInstrument call for ${recorded.pkg}`, async () => {
+              const { content } = await generate(path, format, [asLibrary(recorded)]);
+
+              const classImport = format === 'ESM'
+                ? `import { ${recorded.cls} } from '${recorded.pkg}';`
+                : `const { ${recorded.cls} } = require('${recorded.pkg}');`;
+              expect(content).toContain(classImport);
+              for (const line of format === 'ESM' ? recorded.esmImports : recorded.cjsImports) {
+                expect(content).toContain(line);
+              }
+              for (const line of format === 'ESM' ? recorded.esmStatements : []) {
+                expect(content).toContain(line);
+              }
+              expect(content).toContain(`const ${recorded.instance} = new ${recorded.cls}(${TRACE_CONTENT});`);
+              expect(content).toContain(`${recorded.instance}.manuallyInstrument(${recorded.arg});`);
+            });
+
+            it(`lists the same identifier in the array that receives manuallyInstrument for ${recorded.pkg}`, async () => {
+              const { content } = await generate(path, format, [asLibrary(recorded)]);
+
+              const declared = content.match(new RegExp(`const (\\w+) = new ${recorded.cls}\\(`));
+              expect(declared).not.toBeNull();
+              const name = declared![1];
+              expect(content).toContain(`${name}.manuallyInstrument(`);
+              expect(arrayBody(content)).toMatch(new RegExp(`(^|[\\s,])${name}([\\s,]|$)`));
+              // Exactly one instance: no second `new` inside the array
+              expect(content.match(new RegExp(`new ${recorded.cls}\\(`, 'g'))).toHaveLength(1);
+            });
+          }
+
+          it('emits syntactically valid code for every recorded package together', async () => {
+            const { content } = await generate(path, format, [http, ...RECORDED.map(asLibrary)]);
+
+            const ext = format === 'ESM' ? 'mjs' : 'cjs';
+            const checkFile = join(testDir, `syntax-check.${ext}`);
+            await writeFile(checkFile, content, 'utf-8');
+            await expect(execFileAsync(process.execPath, ['--check', checkFile])).resolves.toBeDefined();
+          });
+
+          it('places the activation code after the imports and before the code that uses the array', async () => {
+            const { content } = await generate(path, format, [asLibrary(RECORDED[0])]);
+
+            const lastImport = format === 'ESM'
+              ? content.lastIndexOf("import * as anthropicModule from '@anthropic-ai/sdk';")
+              : content.lastIndexOf("const anthropicModule = require('@anthropic-ai/sdk');");
+            const declaration = content.indexOf('const anthropicInstrumentation = ');
+            const consumer = path === 'fallback'
+              ? content.search(/instrumentations(\s*=|:)\s*\[/)
+              : content.indexOf('new NodeSDK(');
+            expect(lastImport).toBeGreaterThan(-1);
+            expect(declaration).toBeGreaterThan(lastImport);
+            expect(consumer).toBeGreaterThan(declaration);
+          });
+
+          it('wraps no activation call in try/catch', async () => {
+            const { content } = await generate(path, format, RECORDED.map(asLibrary));
+
+            expect(content).not.toMatch(/\btry\s*\{/);
+            expect(content).not.toMatch(/\bcatch\s*[({]/);
+          });
+
+          it('never emits a bare manuallyInstrument() call', async () => {
+            const { content } = await generate(path, format, RECORDED.map(asLibrary));
+
+            expect(content).not.toContain('manuallyInstrument()');
+          });
+
+          it('explains the traceContent bridge and does not mention OTEL_SEMCONV_STABILITY_OPT_IN', async () => {
+            const { content } = await generate(path, format, RECORDED.map(asLibrary));
+
+            expect(content).toContain(BRIDGE_COMMENT);
+            expect(content).not.toContain('OTEL_SEMCONV_STABILITY_OPT_IN');
+          });
+
+          it('points the gate-behind-a-flag comment at the generated lines instead of showing examples', async () => {
+            const { content } = await generate(path, format, [http, asLibrary(RECORDED[0])]);
+
+            expect(content).toContain(path === 'fallback' ? FALLBACK_GATE_COMMENT : NODESDK_GATE_COMMENT);
+            expect(content).not.toContain('SomeInstrumentation');
+            expect(content).not.toContain('new LangChainInstrumentation().manuallyInstrument');
+          });
+
+          it('emits no Traceloop activation code or comments when no @traceloop/* package is needed', async () => {
+            const { content } = await generate(path, format, [http]);
+
+            expect(content).not.toContain('manuallyInstrument');
+            expect(content).not.toContain('@traceloop/');
+            expect(content).not.toContain('traceContent');
+            expect(content).toContain('new HttpInstrumentation()');
+          });
+
+          it('leaves out a @traceloop/* package with no recorded activation and names it in the warning', async () => {
+            const chromadb = makeLibrary('@traceloop/instrumentation-chromadb', 'ChromaDBInstrumentation');
+            const { content, warning } = await generate(path, format, [http, chromadb]);
+
+            expect(content).not.toContain('chromadb');
+            expect(content).not.toContain('ChromaDBInstrumentation');
+            expect(content).toContain('new HttpInstrumentation()');
+            expect(warning).toContain(
+              'spiny-orb has no recorded activation for @traceloop/instrumentation-chromadb, so it was left out of the generated setup.',
+            );
+          });
+
+          it('uses the recorded class name instead of the agent-provided importName', async () => {
+            const { content } = await generate(path, format, [
+              makeLibrary('@traceloop/instrumentation-mcp', 'MCPInstrumentation'),
+            ]);
+
+            expect(content).toContain('McpInstrumentation');
+            expect(content).not.toContain('MCPInstrumentation');
+          });
+        });
+      }
+    }
+
+    for (const format of FORMATS) {
+      it(`notes in the fallback header that the file is regenerated (${format})`, async () => {
+        const { content } = await generate('fallback', format, [http]);
 
         expect(content).toContain(REGENERATED_NOTE);
       });
     }
+
+    describe('existing entries in the NodeSDK array', () => {
+      const EXISTING_INLINE_ESM = `
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { AnthropicInstrumentation } from '@traceloop/instrumentation-anthropic';
+
+const sdk = new NodeSDK({
+  instrumentations: [
+    new AnthropicInstrumentation({ traceContent: false }),
+  ],
+});
+
+sdk.start();
+`;
+
+      it('leaves an inline @traceloop/* entry unchanged and gives the activation lines in the warning', async () => {
+        await writeFile(join(testDir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf-8');
+        const sdkFile = await createSdkInitFile(EXISTING_INLINE_ESM);
+
+        const result = await updateSdkInitFile(
+          sdkFile,
+          [makeLibrary('@traceloop/instrumentation-anthropic', 'AnthropicInstrumentation')],
+          testDir,
+        );
+
+        expect(result.updated).toBe(false);
+        expect(result.fallbackWritten).toBe(false);
+        expect(await readFile(sdkFile, 'utf-8')).toBe(EXISTING_INLINE_ESM);
+        expect(result.warning).toContain('@traceloop/instrumentation-anthropic');
+        expect(result.warning).toContain('manuallyInstrument');
+        expect(result.warning).toContain("import * as anthropicModule from '@anthropic-ai/sdk';");
+        expect(result.warning).toContain(`const anthropicInstrumentation = new AnthropicInstrumentation(${TRACE_CONTENT});`);
+        expect(result.warning).toContain('anthropicInstrumentation.manuallyInstrument(anthropicModule);');
+      });
+
+      it('matches an existing inline entry by the recorded class name, not the agent-provided importName', async () => {
+        await writeFile(join(testDir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf-8');
+        const source = `
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { McpInstrumentation } from '@traceloop/instrumentation-mcp';
+
+const sdk = new NodeSDK({
+  instrumentations: [
+    new McpInstrumentation(),
+  ],
+});
+
+sdk.start();
+`;
+        const sdkFile = await createSdkInitFile(source);
+
+        const result = await updateSdkInitFile(
+          sdkFile,
+          [makeLibrary('@traceloop/instrumentation-mcp', 'MCPInstrumentation')],
+          testDir,
+        );
+
+        expect(result.updated).toBe(false);
+        expect(await readFile(sdkFile, 'utf-8')).toBe(source);
+        expect(result.warning).toContain('@traceloop/instrumentation-mcp');
+      });
+
+      for (const format of FORMATS) {
+        it(`is a no-op without a warning on a second run over its own generated code (${format})`, async () => {
+          const libraries = [http, ...RECORDED.map(asLibrary)];
+          await writeFile(
+            join(testDir, 'package.json'),
+            JSON.stringify(format === 'ESM' ? { type: 'module' } : { type: 'commonjs' }),
+            'utf-8',
+          );
+          const sdkFile = await createSdkInitFile(sourceFor('NodeSDK', format));
+
+          const first = await updateSdkInitFile(sdkFile, libraries, testDir);
+          expect(first.updated).toBe(true);
+          const afterFirst = await readFile(sdkFile, 'utf-8');
+
+          const second = await updateSdkInitFile(sdkFile, libraries, testDir);
+          expect(second.updated).toBe(false);
+          expect(second.fallbackWritten).toBe(false);
+          expect(second.warning).toBeUndefined();
+          expect(await readFile(sdkFile, 'utf-8')).toBe(afterFirst);
+        });
+      }
+
+      it('does not duplicate an existing createRequire import', async () => {
+        await writeFile(join(testDir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf-8');
+        const sdkFile = await createSdkInitFile(`
+import { createRequire } from 'node:module';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+
+const sdk = new NodeSDK({
+  instrumentations: [],
+});
+
+sdk.start();
+`);
+
+        await updateSdkInitFile(
+          sdkFile,
+          [makeLibrary('@traceloop/instrumentation-google-generativeai', 'GenAIInstrumentation')],
+          testDir,
+        );
+
+        const content = await readFile(sdkFile, 'utf-8');
+        expect(content.match(/import \{ createRequire \}/g)).toHaveLength(1);
+        expect(content).toContain('genAIInstrumentation.manuallyInstrument(googleGenAIModule);');
+      });
+    });
   });
 
   describe('package.json type detection', () => {

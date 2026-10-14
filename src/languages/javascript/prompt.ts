@@ -353,12 +353,12 @@ pg, mysql, mysql2, mongodb, redis, ioredis, express, fastify, koa, @hapi/hapi, @
 | @google-cloud/vertexai | @traceloop/instrumentation-vertexai | VertexAIInstrumentation | Vertex AI API calls. NOT application orchestration. |
 | cohere-ai | @traceloop/instrumentation-cohere | CohereInstrumentation | Cohere API calls. NOT application orchestration. |
 | together-ai | @traceloop/instrumentation-together | TogetherInstrumentation | Together AI API calls. NOT application orchestration. |
-| langchain / @langchain/* | @traceloop/instrumentation-langchain | LangChainInstrumentation | model.invoke(), chain.invoke() calls. NOT custom graph nodes, state transitions, or orchestration functions. |
+| langchain, langchain/*, @langchain/* | @traceloop/instrumentation-langchain | LangChainInstrumentation | model.invoke(), chain.invoke() calls. NOT custom graph nodes, state transitions, or orchestration functions. |
 | llamaindex | @traceloop/instrumentation-llamaindex | LlamaIndexInstrumentation | LlamaIndex query/retrieval calls. NOT application orchestration. |
-| @modelcontextprotocol/sdk | @traceloop/instrumentation-mcp | MCPInstrumentation | MCP tool calls and protocol messages. NOT application handlers. |
+| @modelcontextprotocol/sdk/client/* | @traceloop/instrumentation-mcp | McpInstrumentation | MCP client tool calls and protocol messages. MCP server imports have no instrumentation library. NOT application handlers. |
 | @pinecone-database/pinecone | @traceloop/instrumentation-pinecone | PineconeInstrumentation | Vector DB operations (upsert, query). NOT application logic. |
-| chromadb | @traceloop/instrumentation-chromadb | ChromaDBInstrumentation | Vector DB operations. NOT application logic. |
-| @qdrant/js-client-rest | @traceloop/instrumentation-qdrant | QdrantInstrumentation | Vector DB operations. NOT application logic. |`,
+| @qdrant/js-client-rest | @traceloop/instrumentation-qdrant | QdrantInstrumentation | Vector DB operations. NOT application logic. |
+| @google/genai | @traceloop/instrumentation-google-generativeai | GenAIInstrumentation | Google Gen AI API calls (models.generateContent). NOT application orchestration. |`,
 
     libraryInstallation: `npm install @opentelemetry/api`,
   };

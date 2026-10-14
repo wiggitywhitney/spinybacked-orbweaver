@@ -476,6 +476,67 @@ describe('detectFrameworkLibraries', () => {
     expect(result.some(r => r.package === '@traceloop/instrumentation-openai')).toBe(true);
   });
 
+  describe('LLM library mapping', () => {
+    const LANGCHAIN = { package: '@traceloop/instrumentation-langchain', importName: 'LangChainInstrumentation' };
+    const MCP = { package: '@traceloop/instrumentation-mcp', importName: 'McpInstrumentation' };
+    const GENAI = { package: '@traceloop/instrumentation-google-generativeai', importName: 'GenAIInstrumentation' };
+
+    it.each([
+      ['langchain', LANGCHAIN],
+      ['langchain/chains', LANGCHAIN],
+      ['langchain/chat_models/openai', LANGCHAIN],
+      ['@langchain/anthropic', LANGCHAIN],
+      ['@langchain/core/messages', LANGCHAIN],
+      ['@modelcontextprotocol/sdk/client/index.js', MCP],
+      ['@modelcontextprotocol/sdk/client/stdio.js', MCP],
+      ['@google/genai', GENAI],
+    ])('maps %s to its instrumentation library', (specifier, expected) => {
+      expect(detectFrameworkLibraries([makeImport(specifier)])).toEqual([expected]);
+    });
+
+    it.each([
+      'chromadb',
+      '@modelcontextprotocol/sdk',
+      '@modelcontextprotocol/sdk/server/mcp.js',
+      '@modelcontextprotocol/sdk/server/stdio.js',
+      'langchainjs-helpers',
+      '@langchainfoo/core',
+    ])('maps %s to no instrumentation library', (specifier) => {
+      expect(detectFrameworkLibraries([makeImport(specifier)])).toEqual([]);
+    });
+
+    it('deduplicates langchain subpath and scoped imports to one requirement', () => {
+      const result = detectFrameworkLibraries([
+        makeImport('langchain/chains'),
+        makeImport('@langchain/anthropic'),
+        makeImport('@langchain/core/messages'),
+      ]);
+      expect(result).toEqual([LANGCHAIN]);
+    });
+
+    it.each([
+      ["import { ChatAnthropic } from '@langchain/anthropic';", LANGCHAIN],
+      ["import { LLMChain } from 'langchain/chains';", LANGCHAIN],
+      ["import { Client } from '@modelcontextprotocol/sdk/client/index.js';", MCP],
+      ["import { GoogleGenAI } from '@google/genai';", GENAI],
+    ])('pipeline: detectOTelImports flow reaches detectFrameworkLibraries for %s', (importLine, expected) => {
+      const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+      const sourceFile = project.createSourceFile('f.js', `${importLine}\nexport async function call() { return 1; }`);
+      const { frameworkImports } = detectOTelImports(sourceFile);
+      expect(detectFrameworkLibraries(frameworkImports)).toEqual([expected]);
+    });
+
+    it('pipeline: an MCP server import reaches no instrumentation library', () => {
+      const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
+      const sourceFile = project.createSourceFile(
+        'f.js',
+        "import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';\nexport function start() { return new McpServer(); }",
+      );
+      const { frameworkImports } = detectOTelImports(sourceFile);
+      expect(detectFrameworkLibraries(frameworkImports)).toEqual([]);
+    });
+  });
+
   it('pipeline: detectOTelImports frameworkImports flow reaches detectFrameworkLibraries for @anthropic-ai/sdk', () => {
     const project = new Project({ compilerOptions: { allowJs: true }, useInMemoryFileSystem: true });
     const sourceFile = project.createSourceFile('f.js', "import Anthropic from '@anthropic-ai/sdk';\nexport async function call() { return new Anthropic(); }");

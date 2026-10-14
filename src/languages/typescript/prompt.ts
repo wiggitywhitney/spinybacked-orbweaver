@@ -188,7 +188,9 @@ These framework packages have trusted auto-instrumentation libraries. When detec
 pg, mysql, mysql2, mongodb, redis, ioredis, express, fastify, koa, @hapi/hapi, @grpc/grpc-js, http, https, node:http, node:https, mongoose, kafkajs, pino
 
 **OpenLLMetry (individual @traceloop/instrumentation-* packages):**
-@anthropic-ai/sdk, openai, @aws-sdk/client-bedrock-runtime, @google-cloud/vertexai, cohere-ai, langchain, llamaindex, @modelcontextprotocol/sdk, @pinecone-database/pinecone, chromadb, @qdrant/js-client-rest`,
+@anthropic-ai/sdk, openai, @aws-sdk/client-bedrock-runtime, @google-cloud/vertexai, @google/genai, cohere-ai, together-ai, langchain, langchain/*, @langchain/*, llamaindex, @modelcontextprotocol/sdk/client/*, @pinecone-database/pinecone, @qdrant/js-client-rest
+
+MCP server imports (\`@modelcontextprotocol/sdk/server/*\`) have no instrumentation library.`,
 
     libraryInstallation: `npm install @opentelemetry/api @opentelemetry/semantic-conventions`,
   };

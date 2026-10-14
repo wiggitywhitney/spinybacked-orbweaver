@@ -421,6 +421,19 @@ export async function getUsers(req: Request, res: Response): Promise<void> {
       expect(sections.constraints.toLowerCase()).toMatch(/type annotation|import type/);
     });
 
+    it('otelPatterns lists the recommended OpenLLMetry framework imports', () => {
+      const sections = provider.getSystemPromptSections();
+      const line = sections.otelPatterns.match(/\*\*OpenLLMetry[^\n]*\n([^\n`]+)/);
+      expect(line).not.toBeNull();
+      const imports = line![1].split(',').map(s => s.trim());
+      expect(imports).toEqual([
+        '@anthropic-ai/sdk', 'openai', '@aws-sdk/client-bedrock-runtime', '@google-cloud/vertexai',
+        '@google/genai', 'cohere-ai', 'together-ai', 'langchain', 'langchain/*', '@langchain/*',
+        'llamaindex', '@modelcontextprotocol/sdk/client/*', '@pinecone-database/pinecone',
+        '@qdrant/js-client-rest',
+      ]);
+    });
+
     it('spanCreation includes discriminated union cast guidance', () => {
       const sections = provider.getSystemPromptSections();
       // When a function returns a discriminated-union object literal, startActiveSpan

@@ -160,17 +160,20 @@ const KNOWN_FRAMEWORK_PACKAGES = new Set([
   'winston', 'pino', 'bunyan',
   // Other instrumented packages
   'socket.io', 'openai', 'dataloader', 'aws-sdk', '@aws-sdk/client-s3',
-  // OpenLLMetry instrumented packages
-  '@anthropic-ai/sdk', '@aws-sdk/client-bedrock-runtime', '@google-cloud/vertexai',
-  'cohere-ai', 'together-ai', 'llamaindex', '@modelcontextprotocol/sdk',
-  '@pinecone-database/pinecone', 'chromadb', '@qdrant/js-client-rest',
+  // OpenLLMetry instrumented packages (prefix matches are in FRAMEWORK_PREFIX_TO_LIBRARY)
+  '@anthropic-ai/sdk', '@aws-sdk/client-bedrock-runtime', '@google-cloud/vertexai', '@google/genai',
+  'cohere-ai', 'together-ai', 'langchain', 'llamaindex',
+  '@pinecone-database/pinecone', '@qdrant/js-client-rest',
 ]);
+
+const LANGCHAIN_LIBRARY = { package: '@traceloop/instrumentation-langchain', importName: 'LangChainInstrumentation' };
 
 /**
  * Maps known framework import specifiers to their OTel auto-instrumentation packages.
  * Extracted from the LLM prompt's auto-instrumentation table so detection is deterministic
  * rather than relying on the LLM returning the correct librariesNeeded field.
- * This mapping mirrors the table in src/languages/javascript/prompt.ts exactly.
+ * Together with FRAMEWORK_PREFIX_TO_LIBRARY, this mapping mirrors the table in
+ * src/languages/javascript/prompt.ts exactly.
  */
 export const FRAMEWORK_TO_LIBRARY = new Map<string, { package: string; importName: string }>([
   // Core @opentelemetry/instrumentation-* packages
@@ -199,12 +202,29 @@ export const FRAMEWORK_TO_LIBRARY = new Map<string, { package: string; importNam
   ['@google-cloud/vertexai', { package: '@traceloop/instrumentation-vertexai', importName: 'VertexAIInstrumentation' }],
   ['cohere-ai', { package: '@traceloop/instrumentation-cohere', importName: 'CohereInstrumentation' }],
   ['together-ai', { package: '@traceloop/instrumentation-together', importName: 'TogetherInstrumentation' }],
+  ['langchain', LANGCHAIN_LIBRARY],
   ['llamaindex', { package: '@traceloop/instrumentation-llamaindex', importName: 'LlamaIndexInstrumentation' }],
-  ['@modelcontextprotocol/sdk', { package: '@traceloop/instrumentation-mcp', importName: 'MCPInstrumentation' }],
   ['@pinecone-database/pinecone', { package: '@traceloop/instrumentation-pinecone', importName: 'PineconeInstrumentation' }],
-  ['chromadb', { package: '@traceloop/instrumentation-chromadb', importName: 'ChromaDBInstrumentation' }],
   ['@qdrant/js-client-rest', { package: '@traceloop/instrumentation-qdrant', importName: 'QdrantInstrumentation' }],
+  ['@google/genai', { package: '@traceloop/instrumentation-google-generativeai', importName: 'GenAIInstrumentation' }],
 ]);
+
+/**
+ * Import specifier prefixes that map to an instrumentation library, for packages
+ * imported through subpaths or a scope. MCP maps only client imports: its
+ * instrumentation wraps nothing on the server side that handles incoming calls.
+ */
+const FRAMEWORK_PREFIX_TO_LIBRARY: ReadonlyArray<readonly [string, { package: string; importName: string }]> = [
+  ['langchain/', LANGCHAIN_LIBRARY],
+  ['@langchain/', LANGCHAIN_LIBRARY],
+  ['@modelcontextprotocol/sdk/client/', { package: '@traceloop/instrumentation-mcp', importName: 'McpInstrumentation' }],
+];
+
+/** Find the instrumentation library for an import specifier, by exact match or prefix. */
+function lookupFrameworkLibrary(moduleSpecifier: string): { package: string; importName: string } | undefined {
+  return FRAMEWORK_TO_LIBRARY.get(moduleSpecifier) ??
+    FRAMEWORK_PREFIX_TO_LIBRARY.find(([prefix]) => moduleSpecifier.startsWith(prefix))?.[1];
+}
 
 /**
  * Given a list of framework imports detected in a source file, return the corresponding
@@ -221,7 +241,7 @@ export function detectFrameworkLibraries(frameworkImports: ImportInfo[]): { pack
   const seen = new Set<string>();
   const result: { package: string; importName: string }[] = [];
   for (const imp of frameworkImports) {
-    const lib = FRAMEWORK_TO_LIBRARY.get(imp.moduleSpecifier);
+    const lib = lookupFrameworkLibrary(imp.moduleSpecifier);
     if (lib && !seen.has(lib.package)) {
       seen.add(lib.package);
       result.push(lib);
@@ -246,7 +266,7 @@ export function detectOTelImports(sourceFile: SourceFile): OTelImportDetectionRe
 
     if (moduleSpecifier.startsWith('@opentelemetry/')) {
       otelImports.push(info);
-    } else if (KNOWN_FRAMEWORK_PACKAGES.has(moduleSpecifier)) {
+    } else if (KNOWN_FRAMEWORK_PACKAGES.has(moduleSpecifier) || lookupFrameworkLibrary(moduleSpecifier)) {
       frameworkImports.push(info);
     }
   }
