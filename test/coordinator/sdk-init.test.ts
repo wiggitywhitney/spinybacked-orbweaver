@@ -625,6 +625,38 @@ sdk.start();
         expect(result.warning).toContain('anthropicInstrumentation.manuallyInstrument(anthropicModule);');
       });
 
+      it('starts each warning on its own line so copied activation lines carry no trailing prose', async () => {
+        await writeFile(join(testDir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf-8');
+        const sdkFile = await createSdkInitFile(`
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { AnthropicInstrumentation } from '@traceloop/instrumentation-anthropic';
+import { OpenAIInstrumentation } from '@traceloop/instrumentation-openai';
+
+const sdk = new NodeSDK({
+  instrumentations: [
+    new AnthropicInstrumentation(),
+    new OpenAIInstrumentation(),
+  ],
+});
+
+sdk.start();
+`);
+
+        const result = await updateSdkInitFile(
+          sdkFile,
+          [
+            makeLibrary('@traceloop/instrumentation-anthropic', 'AnthropicInstrumentation'),
+            makeLibrary('@traceloop/instrumentation-openai', 'OpenAIInstrumentation'),
+            makeLibrary('@traceloop/instrumentation-chromadb', 'ChromaDBInstrumentation'),
+          ],
+          testDir,
+        );
+
+        const lines = result.warning!.split('\n');
+        expect(lines).toContain('anthropicInstrumentation.manuallyInstrument(anthropicModule);');
+        expect(lines).toContain('openAIInstrumentation.manuallyInstrument(OpenAI);');
+      });
+
       it('matches an existing inline entry by the recorded class name, not the agent-provided importName', async () => {
         await writeFile(join(testDir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf-8');
         const source = `

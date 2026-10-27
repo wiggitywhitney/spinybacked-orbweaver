@@ -302,9 +302,12 @@ export async function updateSdkInitFile(
   };
 }
 
-/** Combine warnings into one message, or undefined when there are none. */
+/**
+ * Combine warnings into one message, or undefined when there are none.
+ * Each warning starts on its own line, because some end with code lines to copy.
+ */
 function joinWarnings(warnings: string[]): string | undefined {
-  return warnings.length > 0 ? warnings.join(' ') : undefined;
+  return warnings.length > 0 ? warnings.join('\n') : undefined;
 }
 
 /**
